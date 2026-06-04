@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path'); // Added to manage file pathways smoothly
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
@@ -15,12 +15,11 @@ app.get('/health', (req, res) => {
 });
 
 // 2. Main Dashboard UI Endpoint
-// When you visit the main domain link, this sends your index.html visual setup directly to the browser
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// 3. Secure Torn Company Endpoint Data Stream
+// 3. Secure Torn Company Endpoint Data Stream (Fetches both Profile and Employees)
 app.get('/api/company', async (req, res) => {
     try {
         const response = await fetch(`https://api.torn.com/company/?selections=profile,employees&key=${TORN_API_KEY}`);
