@@ -11,10 +11,10 @@
 
     <nav class="bg-gray-800 border-b border-gray-700 p-4 shadow-lg mb-6">
         <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
-            <h1 id="nav-company-name" class="text-xl font-bold tracking-wide text-red-500 uppercase">TORN HQ // MANAGEMENT SYSTEM</h1>
+            <h1 id="nav-company-name" class="text-xl font-bold tracking-wide text-red-500 uppercase">TORN HQ // VERIFIED LEDGER</h1>
             <div class="flex items-center gap-4">
                 <span class="text-xs font-semibold bg-gray-900 px-3 py-1 rounded border border-gray-700 text-gray-300">
-                    Next 02:00 Update in: <span id="reset-countdown" class="text-amber-400 font-mono">--:--:--</span>
+                    Next 18:00 TCT Update in: <span id="reset-countdown" class="text-amber-400 font-mono">--:--:--</span>
                 </span>
                 <span id="connection-status" class="bg-blue-900 text-blue-300 text-xs font-semibold px-2.5 py-0.5 rounded border border-blue-700">SYSTEM READY</span>
             </div>
@@ -24,7 +24,7 @@
     <main class="max-w-7xl mx-auto px-4 space-y-6">
         
         <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
-            <h2 class="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-700 pb-2 mb-4 text-center">Operational Totals</h2>
+            <h2 class="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-700 pb-2 mb-4 text-center">Verified Operational Totals</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm lg:text-base px-2">
                 <div class="space-y-2 border-b md:border-b-0 md:border-r border-gray-700/50 pb-4 md:pb-0 pr-4">
                     <p><span class="text-gray-400 font-medium">Firm Type:</span> <span id="company-type" class="text-white font-semibold">Loading...</span></p>
@@ -37,15 +37,15 @@
                     <p><span class="text-gray-400 font-medium">Vault Bankroll:</span> <span id="company-funds" class="text-blue-400 font-bold">$0</span></p>
                 </div>
                 <div class="space-y-2 md:pl-4">
-                    <p><span class="text-gray-400 font-medium">All-Time High Day:</span> <span id="company-highest-income" class="text-white font-semibold">$0</span></p>
-                    <p><span class="text-gray-400 font-medium">Running Average:</span> <span id="company-avg-income" class="text-white font-semibold">$0</span></p>
-                    <p><span class="text-gray-400 font-medium">Data Points:</span> <span id="history-days" class="text-gray-400 font-semibold">0 Days Logged</span></p>
+                    <p><span class="text-gray-400 font-medium">Logged High Day:</span> <span id="company-highest-income" class="text-white font-semibold">$0</span></p>
+                    <p><span class="text-gray-400 font-medium">Logged Average:</span> <span id="company-avg-income" class="text-white font-semibold">$0</span></p>
+                    <p><span class="text-gray-400 font-medium">Data Points:</span> <span id="history-days" class="text-gray-400 font-semibold">0 Days Found</span></p>
                 </div>
             </div>
         </div>
 
         <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
-            <h3 class="text-sm font-semibold text-gray-400 mb-2 uppercase tracking-wider">Daily Financial Archives</h3>
+            <h3 class="text-sm font-semibold text-gray-400 mb-2 uppercase tracking-wider">Official Daily Income Logs</h3>
             <div class="w-full bg-gray-900 p-4 rounded-lg border border-gray-700 h-[300px] relative">
                 <canvas id="dailyLogChart"></canvas>
             </div>
@@ -85,17 +85,16 @@
     <script>
         let performanceChart = null;
 
-        // 1. AUTOMATED COUNTDOWN CLOCK ENGINE (Targets 02:00 TCT / UTC daily)
+        // 1. TORN CITY TIME COUNTDOWN TIMER (Targets ~18:00 TCT daily update cycle)
         function runCountdownClock() {
             setInterval(() => {
                 const now = new Date();
                 
-                // Establish target point for today at 02:00 UTC
-                let target = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 2, 0, 0);
+                // Establish daily update target point at 18:00 UTC/TCT
+                let target = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 18, 0, 0);
                 
-                // If it's already past 02:00 UTC today, look forward to tomorrow's 02:00 point
                 if (now.getTime() >= target) {
-                    target += 24 * 60 * 60 * 1000;
+                    target += 24 * 60 * 60 * 1000; // Look forward to tomorrow's update window
                 }
                 
                 const timeDiff = target - now.getTime();
@@ -109,24 +108,36 @@
             }, 1000);
         }
 
-        // 2. RETRIEVE HISTORIC DATA
-        function getSavedHistory() {
-            const defaults = { labels: ['May 30', 'May 31', 'June 1', 'June 2', 'June 3'], income: [420000, 485000, 510000, 490000, 530000] };
-            const saved = localStorage.getItem('torn_daily_history');
-            return saved ? JSON.parse(saved) : defaults;
-        }
+        // 2. PARSE LOG STRINGS FROM API NEWS FEED
+        function extractHistoryFromLogs(newsLogs) {
+            let extractedLabels = [];
+            let extractedIncome = [];
 
-        function saveDayToHistory(dateLabel, currentIncome) {
-            let data = getSavedHistory();
-            if (!data.labels.includes(dateLabel)) {
-                data.labels.push(dateLabel);
-                data.income.push(currentIncome);
-                if (data.labels.length > 14) { data.labels.shift(); data.income.shift(); }
-                localStorage.setItem('torn_daily_history', JSON.stringify(data));
+            if (newsLogs && typeof newsLogs === 'object') {
+                Object.values(newsLogs).forEach(log => {
+                    const text = log.news;
+                    // Looks for lines matching company payload records
+                    if (text && text.includes("daily income was")) {
+                        const match = text.match(/\$(\d{1,3}(?:,\d{3})*|\d+)/);
+                        if (match) {
+                            const numericValue = parseInt(match[1].replace(/,/g, ''), 10);
+                            
+                            // Convert log timestamp directly to short calendar date format
+                            const logDate = new Date(log.timestamp * 1000);
+                            const formattedDate = logDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                            
+                            if (!extractedLabels.includes(formattedDate)) {
+                                extractedLabels.unshift(formattedDate);
+                                extractedIncome.unshift(numericValue);
+                            }
+                        }
+                    }
+                });
             }
+            return { labels: extractedLabels, income: extractedIncome };
         }
 
-        // 3. WEEKLY TRAINING STORAGE CONTROLS
+        // 3. RETRIEVE MANAGEMENT DATABASE STATE
         function getTrainingDatabase() {
             const saved = localStorage.getItem('torn_training_db');
             return saved ? JSON.parse(saved) : {};
@@ -135,38 +146,33 @@
         function toggleTrainingState(id) {
             let db = getTrainingDatabase();
             const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            
-            if (db[id] && db[id].trainedThisWeek) {
-                // Untoggle it
-                db[id] = { trainedThisWeek: false, dateString: 'Never This Week' };
-            } else {
-                // Toggle it as complete
-                db[id] = { trainedThisWeek: true, dateString: `Trained on ${todayStr}` };
-            }
-            
+            db[id] = (db[id] && db[id].trainedThisWeek) ? { trainedThisWeek: false, dateString: 'Never This Week' } : { trainedThisWeek: true, dateString: `Trained on ${todayStr}` };
             localStorage.setItem('torn_training_db', JSON.stringify(db));
-            runDataPipeline(); // Refresh visuals immediately
+            runDataPipeline();
         }
 
         function resetAllTraining() {
-            if(confirm("Are you sure you want to reset the weekly checks for everyone?")) {
+            if(confirm("Reset weekly checks for everyone?")) {
                 localStorage.removeItem('torn_training_db');
                 runDataPipeline();
             }
         }
 
-        // 4. GRAPH BUILDER
-        function updateGraphDisplay(historyData) {
+        // 4. CHART BUILD ENGINE
+        function renderGraphBars(labels, dataValues) {
             const ctx = document.getElementById('dailyLogChart').getContext('2d');
             if (performanceChart) performanceChart.destroy();
+
+            const activeLabels = labels.length > 0 ? labels : ['Pending First Log'];
+            const activeData = dataValues.length > 0 ? dataValues : [0];
 
             performanceChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: historyData.labels,
+                    labels: activeLabels,
                     datasets: [{
-                        label: 'Verified Daily Income (02:00 TCT)',
-                        data: historyData.income,
+                        label: 'Official Daily Income (18:00 TCT)',
+                        data: activeData,
                         backgroundColor: '#38bdf8',
                         borderRadius: 4
                     }]
@@ -194,7 +200,7 @@
                     const empCount = Object.keys(employees).length;
                     const liveDailyIncome = comp.daily_profit || 0; 
 
-                    // Render Standard Headers
+                    // Render Standard UI elements
                     document.getElementById('nav-company-name').innerText = `TORN HQ // ${comp.name || 'COMPANY CONTROL'}`;
                     document.getElementById('company-type').innerText = comp.company_type_name || 'Business Operation';
                     document.getElementById('company-employees-count').innerText = `${empCount} Members`;
@@ -203,29 +209,31 @@
                     document.getElementById('company-weekly-income').innerText = `$${Number(liveDailyIncome * 7).toLocaleString()}`;
                     document.getElementById('company-funds').innerText = `$${Number(comp.funds || 0).toLocaleString()}`;
 
-                    // Lock Day Snapshot if past midnight boundaries
-                    const dateLabel = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                    saveDayToHistory(dateLabel, liveDailyIncome);
+                    // Process history metrics from logs
+                    const history = extractHistoryFromLogs(data.news);
+                    
+                    document.getElementById('history-days').innerText = `${history.labels.length} Days Found`;
+                    if (history.income.length > 0) {
+                        const maxIncome = Math.max(...history.income);
+                        const avgIncome = history.income.reduce((a, b) => a + b, 0) / history.income.length;
+                        document.getElementById('company-highest-income').innerText = `$${Math.round(maxIncome).toLocaleString()}`;
+                        document.getElementById('company-avg-income').innerText = `$${Math.round(avgIncome).toLocaleString()}`;
+                    } else {
+                        document.getElementById('company-highest-income').innerText = `$${Number(liveDailyIncome).toLocaleString()}`;
+                        document.getElementById('company-avg-income').innerText = `$${Number(liveDailyIncome).toLocaleString()}`;
+                    }
 
-                    const runningHistory = getSavedHistory();
-                    document.getElementById('history-days').innerText = `${runningHistory.labels.length} Days Logged`;
-                    const maxIncome = Math.max(...runningHistory.income);
-                    const avgIncome = runningHistory.income.reduce((a, b) => a + b, 0) / runningHistory.income.length;
-                    document.getElementById('company-highest-income').innerText = `$${Math.round(maxIncome).toLocaleString()}`;
-                    document.getElementById('company-avg-income').innerText = `$${Math.round(avgIncome).toLocaleString()}`;
-                    updateGraphDisplay(runningHistory);
+                    // Draw chart bars
+                    renderGraphBars(history.labels, history.income);
 
-                    // BUILD TRAINING CHECKLIST DYNAMICALLY
+                    // Rebuild employee tracking table
                     const trContainer = document.getElementById('training-roster-rows');
                     trContainer.innerHTML = ''; 
-                    
                     const trainingDB = getTrainingDatabase();
 
                     Object.keys(employees).forEach(id => {
                         const emp = employees[id];
                         const logRecord = trainingDB[id] || { trainedThisWeek: false, dateString: 'Not Trained Yet' };
-                        
-                        // Status styling based on completion state
                         const textStyle = logRecord.trainedThisWeek ? 'text-green-400 font-semibold' : 'text-amber-500 font-medium animate-pulse';
                         const actionBtnColor = logRecord.trainedThisWeek ? 'bg-green-950 text-green-400 border border-green-800' : 'bg-gray-700 text-gray-200 border border-gray-600 hover:bg-gray-600';
                         const checkmarkIcon = logRecord.trainedThisWeek ? '✅ Done' : '⚠️ Click to Train';
@@ -245,13 +253,13 @@
                         trContainer.insertAdjacentHTML('beforeend', rowHTML);
                     });
 
-                    document.getElementById('connection-status').innerText = "LIVE PIPELINE ONLINE";
+                    document.getElementById('connection-status').innerText = "LIVE LOG READOUT ACTIVE";
                     document.getElementById('connection-status').className = "bg-green-950 text-green-400 text-xs font-semibold px-2.5 py-0.5 rounded border border-green-700";
                 }
             } catch (error) {
-                console.error("Pipeline mapping fail:", error);
-                document.getElementById('connection-status').innerText = "OFFLINE REDIRECT ACTIVE";
-                document.getElementById('connection-status').className = "bg-amber-950 text-amber-400 text-xs font-semibold px-2.5 py-0.5 rounded border border-amber-700";
+                console.error("Pipeline failure:", error);
+                document.getElementById('connection-status').innerText = "DATA ACCESS FAILURE";
+                document.getElementById('connection-status').className = "bg-red-950 text-red-400 text-xs font-semibold px-2.5 py-0.5 rounded border border-red-700";
             }
         }
 
