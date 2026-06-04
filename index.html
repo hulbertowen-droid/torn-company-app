@@ -9,86 +9,455 @@
 </head>
 <body class="bg-gray-900 text-gray-100 font-sans min-h-screen pb-12">
 
-    <!-- Navbar -->
     <nav class="bg-gray-800 border-b border-gray-700 p-4 shadow-lg mb-6">
-        <div class="max-w-7xl mx-auto flex justify-between items-center">
-            <h1 id="nav-company-name" class="text-xl font-bold text-red-500 uppercase">TORN HQ // VERIFIED LEDGER</h1>
-            <span id="connection-status" class="bg-green-950 text-green-400 text-xs font-semibold px-2 py-1 rounded border border-green-700">SYSTEM ONLINE</span>
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+            <h1 id="nav-company-name" class="text-xl font-bold tracking-wide text-red-500 uppercase">TORN HQ // VERIFIED LEDGER</h1>
+            <div class="flex items-center gap-4">
+                <span class="text-xs font-semibold bg-gray-900 px-3 py-1 rounded border border-gray-700 text-gray-300">
+                    Next 18:00 TCT Update in: <span id="reset-countdown" class="text-amber-400 font-mono">--:--:--</span>
+                </span>
+                <span id="connection-status" class="bg-blue-900 text-blue-300 text-xs font-semibold px-2.5 py-0.5 rounded border border-blue-700">SYSTEM READY</span>
+            </div>
         </div>
     </nav>
 
     <main class="max-w-7xl mx-auto px-4 space-y-6">
         
-        <!-- Stats Row -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 bg-gray-800 p-6 rounded-xl border border-gray-700">
-            <div><p class="text-gray-400 text-xs uppercase">Daily Income</p><p id="daily-inc" class="text-green-400 font-bold text-lg">$0</p></div>
-            <div><p class="text-gray-400 text-xs uppercase">Vault Bankroll</p><p id="vault-funds" class="text-blue-400 font-bold text-lg">$0</p></div>
-            <div><p class="text-gray-400 text-xs uppercase">Current Rating</p><p id="comp-rating" class="text-amber-400 font-bold text-lg">1 Star</p></div>
-            <div><p class="text-gray-400 text-xs uppercase">Popularity</p><p id="comp-pop" class="text-purple-400 font-bold text-lg">0%</p></div>
-        </div>
-
-        <!-- Income Graph -->
-        <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 h-[300px]">
-            <canvas id="dailyLogChart"></canvas>
-        </div>
-
-        <!-- Training Tracker -->
-        <div class="bg-gray-800 p-6 rounded-xl border border-gray-700">
-            <h3 class="text-md font-bold text-white mb-4">Automated Training Roster</h3>
-            <table class="w-full text-left">
-                <thead><tr class="text-gray-400 text-xs uppercase"><th>Name</th><th>Status</th><th>Override</th></tr></thead>
-                <tbody id="training-roster-rows"></tbody>
-            </table>
-        </div>
-
-        <!-- AI Director Experimenter (Realistic) -->
-        <div class="bg-gray-900 border border-purple-500 p-6 rounded-xl">
-            <h2 class="text-purple-400 font-bold mb-4 uppercase text-lg">AI Director Sandbox (Wiki-Realistic)</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div class="space-y-4">
-                    <label class="block text-sm">Ad Budget: <input type="range" id="sim-ad" min="0" max="2000000" value="200000" class="w-full" oninput="runSim()"></label>
-                    <label class="block text-sm">Effectiveness: <input type="range" id="sim-eff" min="0" max="100" value="100" class="w-full" oninput="runSim()"></label>
-                    <p id="sim-stats" class="text-xs text-gray-500">Wiki Engine: 40% Ad Cap applied.</p>
+        <!-- 3-COLUMN METRIC HEADER -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
+            <h2 class="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-700 pb-2 mb-4 text-center">Verified Operational Totals</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm lg:text-base px-2">
+                <div class="space-y-2 border-b md:border-b-0 md:border-r border-gray-700/50 pb-4 md:pb-0 pr-4">
+                    <p><span class="text-gray-400 font-medium">Firm Type:</span> <span id="company-type" class="text-white font-semibold">Loading...</span></p>
+                    <p><span class="text-gray-400 font-medium">Active Roster:</span> <span id="company-employees-count" class="text-white font-semibold">Loading...</span></p>
+                    <p><span class="text-gray-400 font-medium">Current Rating:</span> <span id="company-rating" class="text-amber-400 font-bold">Loading...</span></p>
                 </div>
-                <div class="text-center p-4 bg-gray-800 rounded">
-                    <p class="text-sm">30-Day Simulated Net Profit</p>
-                    <h3 id="sim-rev" class="text-4xl font-black text-white">$0</h3>
+                <div class="space-y-2 border-b md:border-b-0 md:border-r border-gray-700/50 pb-4 md:pb-0 md:px-4">
+                    <p><span class="text-gray-400 font-medium">Daily Income:</span> <span id="company-daily-income" class="text-green-400 font-bold">$0</span></p>
+                    <p><span class="text-gray-400 font-medium">Vault Bankroll:</span> <span id="company-funds" class="text-blue-400 font-bold">$0</span></p>
+                    <p><span class="text-gray-400 font-medium">Next Evaluation:</span> <span class="text-purple-400 font-bold">Sunday 18:00 TCT</span></p>
+                </div>
+                <div class="space-y-2 md:pl-4">
+                    <p><span class="text-gray-400 font-medium">Logged High Day:</span> <span id="company-highest-income" class="text-white font-semibold">$0</span></p>
+                    <p><span class="text-gray-400 font-medium">Logged Average:</span> <span id="company-avg-income" class="text-white font-semibold">$0</span></p>
+                    <p><span class="text-gray-400 font-medium">Data Points:</span> <span id="history-days" class="text-gray-400 font-semibold">0 Days Found</span></p>
                 </div>
             </div>
         </div>
+
+        <!-- HISTORICAL DAILY BAR CHART -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
+            <h3 class="text-sm font-semibold text-gray-400 mb-2 uppercase tracking-wider">Official Daily Income Logs</h3>
+            <div class="w-full bg-gray-900 p-4 rounded-lg border border-gray-700 h-[300px] relative">
+                <canvas id="dailyLogChart"></canvas>
+            </div>
+        </div>
+
+        <!-- WEEKLY TRAINING STATUS TRACKER -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
+            <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
+                <div>
+                    <h3 class="text-md font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        Automated Training Roster
+                    </h3>
+                    <p class="text-xs text-gray-400 mt-1">Manual training grants +50 Primary and +25 Secondary stats. Scans logs to auto-detect training events.</p>
+                </div>
+                <button onclick="resetAllTraining()" class="text-xs bg-red-950 text-red-400 border border-red-800 px-3 py-1.5 rounded font-semibold hover:bg-red-900 hover:text-white transition-all cursor-pointer">
+                    Clear Manual Overrides
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider">
+                            <th class="p-3">Employee Name</th>
+                            <th class="p-3">Position</th>
+                            <th class="p-3">Last Detected Training Event</th>
+                            <th class="p-3 text-center">Manual Override</th>
+                        </tr>
+                    </thead>
+                    <tbody id="training-roster-rows" class="divide-y divide-gray-700/60 text-sm">
+                        <tr>
+                            <td colspan="4" class="p-4 text-center text-gray-500 italic">Syncing live roster array...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- AI EXPERIMENTER & SIMULATOR CONSOLE (WIKI ACCURATE) -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6 border-t-4 border-t-purple-500">
+            <div class="border-b border-gray-700 pb-3 mb-6">
+                <h3 class="text-lg font-bold text-purple-400 uppercase tracking-wider flex items-center gap-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                    AI Director Experimenter Console
+                </h3>
+                <p class="text-sm text-gray-400 mt-1 leading-relaxed">Simulate 30-day revenue potential based on exact Torn wiki mechanics, including the 40% competitive advertising cap, 33% environment penalties, and education productivity bonuses.</p>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                
+                <div class="lg:col-span-2 space-y-6">
+                    
+                    <!-- Ad Budget Simulator -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <label class="text-sm font-bold text-gray-300">Daily Advertising Budget</label>
+                            <span id="sim-ad-val" class="text-sm font-mono text-blue-400 font-bold">$200,000</span>
+                        </div>
+                        <input type="range" id="sim-ad-slider" min="0" max="1500000" step="50000" value="200000" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" oninput="runSimulation()">
+                        <p class="text-xs text-gray-500 mt-1">Has a maximum base effect of 40% on a company. Decreases based on competition budgets.</p>
+                    </div>
+
+                    <!-- Environment Simulator -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <label class="text-sm font-bold text-gray-300">Environment Score</label>
+                            <span id="sim-env-val" class="text-sm font-mono text-amber-400 font-bold">100% (Pristine)</span>
+                        </div>
+                        <input type="range" id="sim-env-slider" min="0" max="100" step="5" value="100" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" oninput="runSimulation()">
+                        <p class="text-xs text-gray-500 mt-1">Lowered by inactive/addicted employees. A poor environment score can lower income by up to a third (33%).</p>
+                    </div>
+
+                    <!-- Employee Effectiveness -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <label class="text-sm font-bold text-gray-300">Average Employee Effectiveness</label>
+                            <span id="sim-eff-val" class="text-sm font-mono text-green-400 font-bold">100%</span>
+                        </div>
+                        <input type="range" id="sim-eff-slider" min="50" max="150" step="5" value="100" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" oninput="runSimulation()">
+                        <p class="text-xs text-gray-500 mt-1">Driven by Working Stats, Merits, and "Settled In" bonuses. High efficiency buffers bad employees.</p>
+                    </div>
+
+                    <!-- 10-Star Rating Simulator -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <label class="text-sm font-bold text-gray-300">Target 10-Star Rating</label>
+                            <span id="sim-star-val" class="text-sm font-mono text-purple-400 font-bold">Current</span>
+                        </div>
+                        <input type="range" id="sim-star-slider" min="1" max="10" step="1" value="1" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" oninput="runSimulation()">
+                    </div>
+
+                    <!-- External Modifiers (Stocks & Edu) -->
+                    <div class="bg-gray-900 p-4 rounded-lg border border-gray-700">
+                        <label class="text-sm font-bold text-gray-300 mb-3 block">Director Benefits & External Multipliers</label>
+                        <div class="flex flex-col space-y-3">
+                            <label class="flex items-center space-x-3 cursor-pointer">
+                                <input type="checkbox" id="sim-tgp-stock" class="form-checkbox h-4 w-4 text-purple-500 bg-gray-800 border-gray-600 rounded" onchange="runSimulation()">
+                                <span class="text-sm text-gray-400"><strong class="text-purple-400">TGP Stock:</strong> Boosts advertising effectiveness</span>
+                            </label>
+                            <label class="flex items-center space-x-3 cursor-pointer">
+                                <input type="checkbox" id="sim-ad-edu" class="form-checkbox h-4 w-4 text-blue-500 bg-gray-800 border-gray-600 rounded" onchange="runSimulation()">
+                                <span class="text-sm text-gray-400"><strong class="text-blue-400">BUS2400 & LAW2100 Edu:</strong> Increases Advertising Impact</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Simulation Output Terminal -->
+                <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 flex flex-col justify-center items-center text-center relative overflow-hidden">
+                    <div class="absolute top-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-green-500"></div>
+                    <p class="text-xs text-gray-400 uppercase font-bold tracking-widest mb-4">30-Day Simulated Revenue</p>
+                    
+                    <h2 id="sim-output-revenue" class="text-4xl lg:text-5xl font-black text-white tracking-tight drop-shadow-md">$0</h2>
+                    
+                    <div id="sim-output-change" class="mt-4 px-3 py-1 rounded bg-gray-800 border border-gray-700 text-sm font-bold">
+                        Baseline Loaded
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </main>
 
     <script>
-        let baseline = 0;
         let performanceChart = null;
+        let baselineLiveIncome = 0; 
+        let liveStarRating = 1;
 
-        // Realistic Simulation Math
-        async function runSim() {
-            const ad = parseInt(document.getElementById('sim-ad').value);
-            const eff = parseInt(document.getElementById('sim-eff').value) / 100;
-            
-            // 40% Cap from Wiki + Effectiveness quadratic formula
-            const adImpact = Math.min(0.40, (ad / 1000000) * 0.40);
-            const net = (baseline * (1 + adImpact) * Math.pow(eff, 2)) - ad;
-            
-            document.getElementById('sim-rev').innerText = `$${Math.round(net * 30).toLocaleString()}`;
+        function runCountdownClock() {
+            setInterval(() => {
+                const now = new Date();
+                let target = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 18, 0, 0);
+                if (now.getTime() >= target) target += 24 * 60 * 60 * 1000;
+                
+                const timeDiff = target - now.getTime();
+                const hours = Math.floor((timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
+                
+                document.getElementById('reset-countdown').innerText = 
+                    `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            }, 1000);
         }
 
-        // Standard Pipeline
+        function extractHistoryFromLogs(newsLogs) {
+            let extractedLabels = [];
+            let extractedIncome = [];
+
+            if (newsLogs && typeof newsLogs === 'object') {
+                Object.values(newsLogs).forEach(log => {
+                    const text = log.news;
+                    if (text) {
+                        const lowText = text.toLowerCase();
+                        if (lowText.includes("daily income") || lowText.includes("company cleared") || lowText.includes("profit") || lowText.includes("revenue")) {
+                            const match = text.match(/\$(\d{1,3}(?:,\d{3})*|\d+)/);
+                            if (match) {
+                                const numericValue = parseInt(match[1].replace(/,/g, ''), 10);
+                                const logDate = new Date(log.timestamp * 1000);
+                                const formattedDate = logDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                                
+                                if (!extractedLabels.includes(formattedDate)) {
+                                    extractedLabels.unshift(formattedDate);
+                                    extractedIncome.unshift(numericValue);
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            return { labels: extractedLabels, income: extractedIncome };
+        }
+
+        // WIKI ACCURATE AI EXPERIMENTER ALGORITHM
+        function runSimulation() {
+            if (baselineLiveIncome === 0) return; 
+            
+            const adBudget = parseInt(document.getElementById('sim-ad-slider').value);
+            const envScore = parseInt(document.getElementById('sim-env-slider').value);
+            const effScore = parseInt(document.getElementById('sim-eff-slider').value);
+            const targetStars = parseInt(document.getElementById('sim-star-slider').value);
+            
+            const hasTGP = document.getElementById('sim-tgp-stock').checked;
+            const hasAdEdu = document.getElementById('sim-ad-edu').checked;
+
+            // UI Updates
+            document.getElementById('sim-ad-val').innerText = `$${adBudget.toLocaleString()}`;
+            document.getElementById('sim-env-val').innerText = `${envScore}%`;
+            document.getElementById('sim-eff-val').innerText = `${effScore}%`;
+            
+            const starDiff = targetStars - liveStarRating;
+            if (starDiff === 0) document.getElementById('sim-star-val').innerText = `Current Stars (${targetStars})`;
+            else if (starDiff > 0) document.getElementById('sim-star-val').innerText = `+${starDiff} Stars`;
+            else document.getElementById('sim-star-val').innerText = `${starDiff} Stars`;
+
+            // ALGORITHM START
+            // Strip out assumed baseline factors (Assuming current is 100% env, 100% eff)
+            let theoreticalBase = baselineLiveIncome;
+
+            // 1. Effectiveness Scaling
+            const effMultiplier = effScore / 100;
+            theoreticalBase = theoreticalBase * effMultiplier;
+
+            // 2. Environment Penalty (Max penalty is -33%)
+            // 100 score = 0 penalty. 0 score = 0.33 penalty.
+            const envPenalty = ((100 - envScore) / 100) * 0.33;
+            theoreticalBase = theoreticalBase * (1 - envPenalty);
+
+            // 3. Advertising Competition Scaling
+            // Max base bonus is 40%. We assume 1M budget hits that cap generally.
+            let adBoost = Math.min(0.40, (adBudget / 1000000) * 0.40);
+            if (hasTGP) adBoost *= 1.15; // TGP boosts ad effect
+            if (hasAdEdu) adBoost *= 1.10; // Edu boosts ad effect
+
+            // Assuming baseline had roughly 10% boost baked in, we calculate delta
+            theoreticalBase = theoreticalBase * (1 + adBoost);
+
+            // Subtract literal ad cost differences
+            theoreticalBase = theoreticalBase - (adBudget - 200000); 
+
+            // 4. Star Rating Cap
+            if (starDiff !== 0) {
+                const starMultiplier = 1 + (starDiff * 0.10);
+                theoreticalBase = theoreticalBase * starMultiplier;
+            }
+
+            // Totals
+            const projected30Day = theoreticalBase * 30;
+            const baseline30Day = baselineLiveIncome * 30;
+            const diff = projected30Day - baseline30Day;
+            const diffPercent = (diff / baseline30Day) * 100;
+
+            const outRev = document.getElementById('sim-output-revenue');
+            const outChange = document.getElementById('sim-output-change');
+
+            if (projected30Day > 0) {
+                outRev.innerText = `$${Math.round(projected30Day).toLocaleString()}`;
+                outRev.className = "text-4xl lg:text-5xl font-black text-white tracking-tight drop-shadow-md";
+            } else {
+                outRev.innerText = "BANKRUPT";
+                outRev.className = "text-4xl lg:text-5xl font-black text-red-500 tracking-tight drop-shadow-md animate-pulse";
+            }
+
+            if (diff > 0) {
+                outChange.innerText = `+${diffPercent.toFixed(1)}% vs Current Trajectory`;
+                outChange.className = "mt-4 px-3 py-1 rounded bg-green-950/50 border border-green-800 text-green-400 text-sm font-bold";
+            } else if (diff < 0) {
+                outChange.innerText = `${diffPercent.toFixed(1)}% vs Current Trajectory`;
+                outChange.className = "mt-4 px-3 py-1 rounded bg-red-950/50 border border-red-800 text-red-400 text-sm font-bold";
+            } else {
+                outChange.innerText = "Baseline Trajectory Maintained";
+                outChange.className = "mt-4 px-3 py-1 rounded bg-gray-800 border border-gray-700 text-gray-400 text-sm font-bold";
+            }
+        }
+
+        function autoDetectTrainingLogs(newsLogs, employees, localDB) {
+            const today = new Date();
+            const sevenDaysAgo = today.getTime() - (7 * 24 * 60 * 60 * 1000); 
+
+            if (newsLogs && typeof newsLogs === 'object') {
+                Object.values(newsLogs).forEach(log => {
+                    const logTime = log.timestamp * 1000;
+                    if (logTime >= sevenDaysAgo) {
+                        const text = log.news.toLowerCase();
+                        if (text.includes("train") || text.includes("course")) {
+                            Object.keys(employees).forEach(id => {
+                                const empName = employees[id].name.toLowerCase();
+                                if (text.includes(empName) || text.includes(id.toString())) {
+                                    const logDate = new Date(logTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                                    if (!localDB[id] || !localDB[id].trainedThisWeek || localDB[id].isAuto) {
+                                        localDB[id] = { trainedThisWeek: true, dateString: `Auto-Detected: ${logDate}`, isAuto: true };
+                                    }
+                                }
+                            });
+                        }
+                    }
+                });
+            }
+            return localDB;
+        }
+
+        function getTrainingDatabase() {
+            const saved = localStorage.getItem('torn_training_db');
+            return saved ? JSON.parse(saved) : {};
+        }
+
+        function toggleTrainingState(id) {
+            let db = getTrainingDatabase();
+            const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            db[id] = (db[id] && db[id].trainedThisWeek) ? { trainedThisWeek: false, dateString: 'Not Trained Yet', isAuto: false } : { trainedThisWeek: true, dateString: `Manual Override: ${todayStr}`, isAuto: false };
+            localStorage.setItem('torn_training_db', JSON.stringify(db));
+            runDataPipeline();
+        }
+
+        function resetAllTraining() {
+            if(confirm("Clear manual overrides?")) {
+                localStorage.removeItem('torn_training_db');
+                runDataPipeline();
+            }
+        }
+
+        function renderGraphBars(labels, dataValues) {
+            const ctx = document.getElementById('dailyLogChart').getContext('2d');
+            if (performanceChart) performanceChart.destroy();
+
+            const activeLabels = labels.length > 0 ? labels : ['Pending First Log'];
+            const activeData = dataValues.length > 0 ? dataValues : [0];
+
+            performanceChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: activeLabels,
+                    datasets: [{
+                        label: 'Official Daily Income (18:00 TCT)',
+                        data: activeData,
+                        backgroundColor: '#38bdf8',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#9ca3af' } },
+                        y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af', callback: v => '$' + v.toLocaleString() } }
+                    }
+                }
+            });
+        }
+
         async function runDataPipeline() {
-            const res = await fetch('/api/company');
-            const data = await res.json();
-            const comp = data.company;
-            baseline = comp.daily_income || comp.daily_profit || 0;
-            
-            document.getElementById('daily-inc').innerText = `$${Number(baseline).toLocaleString()}`;
-            document.getElementById('vault-funds').innerText = `$${Number(comp.funds || 0).toLocaleString()}`;
-            document.getElementById('comp-rating').innerText = `${comp.rating} Star`;
-            
-            runSim();
+            try {
+                const response = await fetch('/api/company');
+                const data = await response.json();
+                
+                if (data.company) {
+                    const comp = data.company;
+                    const employees = data.company_employees || {};
+                    const empCount = Object.keys(employees).length;
+                    
+                    const liveDailyIncome = comp.daily_income || comp.daily_profit || 0; 
+                    const vaultFunds = comp.company_bank || comp.bank || comp.funds || 0;
+                    liveStarRating = comp.rating || 1;
+                    
+                    const history = extractHistoryFromLogs(data.news);
+                    baselineLiveIncome = history.income.length > 0 ? history.income[history.income.length - 1] : liveDailyIncome;
+
+                    document.getElementById('nav-company-name').innerText = `TORN HQ // ${comp.name || 'COMPANY CONTROL'}`;
+                    document.getElementById('company-type').innerText = comp.company_type_name || `Type ID: ${comp.company_type || 'Unknown'}`;
+                    document.getElementById('company-employees-count').innerText = `${empCount} Members`;
+                    document.getElementById('company-rating').innerText = `${liveStarRating} Star${liveStarRating > 1 ? 's' : ''}`;
+                    document.getElementById('company-daily-income').innerText = `$${Number(liveDailyIncome).toLocaleString()}`;
+                    document.getElementById('company-funds').innerText = `$${Number(vaultFunds).toLocaleString()}`;
+
+                    document.getElementById('sim-star-slider').value = liveStarRating;
+
+                    document.getElementById('history-days').innerText = `${history.labels.length} Days Found`;
+                    if (history.income.length > 0) {
+                        const maxIncome = Math.max(...history.income);
+                        const avgIncome = history.income.reduce((a, b) => a + b, 0) / history.income.length;
+                        document.getElementById('company-highest-income').innerText = `$${Math.round(maxIncome).toLocaleString()}`;
+                        document.getElementById('company-avg-income').innerText = `$${Math.round(avgIncome).toLocaleString()}`;
+                    } else {
+                        document.getElementById('company-highest-income').innerText = `$${Number(liveDailyIncome).toLocaleString()}`;
+                        document.getElementById('company-avg-income').innerText = `$${Number(liveDailyIncome).toLocaleString()}`;
+                    }
+
+                    renderGraphBars(history.labels, history.income);
+                    runSimulation(); 
+
+                    const trContainer = document.getElementById('training-roster-rows');
+                    trContainer.innerHTML = ''; 
+                    let trainingDB = getTrainingDatabase();
+                    trainingDB = autoDetectTrainingLogs(data.news, employees, trainingDB);
+
+                    Object.keys(employees).forEach(id => {
+                        const emp = employees[id];
+                        const logRecord = trainingDB[id] || { trainedThisWeek: false, dateString: 'Not Trained Yet', isAuto: false };
+                        const textStyle = logRecord.trainedThisWeek ? (logRecord.isAuto ? 'text-blue-400 font-semibold' : 'text-green-400 font-semibold') : 'text-amber-500 font-medium animate-pulse';
+                        const actionBtnColor = logRecord.trainedThisWeek ? 'bg-gray-800 text-gray-500 border border-gray-700' : 'bg-gray-700 text-gray-200 border border-gray-600 hover:bg-gray-600';
+                        const checkmarkIcon = logRecord.trainedThisWeek ? (logRecord.isAuto ? '🔄 Auto-Logged' : '✅ Done') : '⚠️ Force Override';
+
+                        const rowHTML = `
+                            <tr class="hover:bg-gray-800/40 transition-colors">
+                                <td class="p-3 font-medium text-white">${emp.name} <span class="text-gray-500 text-xs">[ID: ${id}]</span></td>
+                                <td class="p-3 text-gray-400 text-xs md:text-sm">${emp.position}</td>
+                                <td class="p-3 text-xs ${textStyle}">${logRecord.dateString}</td>
+                                <td class="p-3 text-center">
+                                    <button onclick="toggleTrainingState('${id}')" class="text-xs ${actionBtnColor} px-3 py-1 rounded font-medium transition-all cursor-pointer">
+                                        ${checkmarkIcon}
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                        trContainer.insertAdjacentHTML('beforeend', rowHTML);
+                    });
+
+                    document.getElementById('connection-status').innerText = "SYSTEM ONLINE";
+                    document.getElementById('connection-status').className = "bg-green-950 text-green-400 text-xs font-semibold px-2.5 py-0.5 rounded border border-green-700";
+                }
+            } catch (error) {
+                console.error("Pipeline failure:", error);
+                document.getElementById('connection-status').innerText = "DATA ACCESS FAILURE";
+                document.getElementById('connection-status').className = "bg-red-950 text-red-400 text-xs font-semibold px-2.5 py-0.5 rounded border border-red-700";
+            }
         }
 
-        window.onload = runDataPipeline;
+        window.onload = function() {
+            runCountdownClock();
+            runDataPipeline();
+        };
     </script>
 </body>
 </html>
