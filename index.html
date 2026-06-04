@@ -77,7 +77,7 @@
                 <div class="bg-gray-900 border border-green-900/50 rounded-lg p-4">
                     <p class="text-xs text-green-500 uppercase font-bold tracking-wide">Scenario C: Optimized</p>
                     <p class="text-2xl font-bold text-green-400 mt-1" id="ai-scenario-opt">Calculating...</p>
-                    <p class="text-xs text-gray-500 mt-2 leading-relaxed">Assumes daily training and no drug addiction, increasing team effectiveness and boosting base revenue by ~5%.</p>
+                    <p class="text-xs text-gray-500 mt-2 leading-relaxed">Assumes daily training and no drug addiction, increasing team effectiveness and boosting base revenue by ~5%. Ensures this scenario executes by tracking training below.</p>
                 </div>
 
                 <div class="bg-gray-900 border border-red-900/50 rounded-lg p-4">
@@ -95,7 +95,7 @@
                         <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                         Automated Training Roster
                     </h3>
-                    <p class="text-xs text-gray-400 mt-1">This panel scans your Torn logs to automatically detect training events from the last 7 days. Manual overrides are available if logs expire.</p>
+                    <p class="text-xs text-gray-400 mt-1">This panel scans your last 100 Torn logs via Player ID to automatically detect training events from the last 7 days. Manual overrides are available if old logs expire off Torn's servers.</p>
                 </div>
                 <button onclick="resetAllTraining()" class="text-xs bg-red-950 text-red-400 border border-red-800 px-3 py-1.5 rounded font-semibold hover:bg-red-900 hover:text-white transition-all cursor-pointer">
                     Clear Manual Overrides
@@ -193,7 +193,7 @@
             document.getElementById('ai-scenario-decay').innerText = `$${Math.round(scenarioDecay).toLocaleString()}`;
         }
 
-        // 4. AUTO-SCANNER FOR TRAINING LOGS
+        // 4. AGGRESSIVE AUTO-SCANNER FOR TRAINING LOGS (ID Matching)
         function autoDetectTrainingLogs(newsLogs, employees, localDB) {
             const today = new Date();
             const sevenDaysAgo = today.getTime() - (7 * 24 * 60 * 60 * 1000); // 7 Days in Milliseconds
@@ -206,16 +206,20 @@
                     if (logTime >= sevenDaysAgo) {
                         const text = log.news.toLowerCase();
                         
-                        // Look for training events in the log string
-                        if (text.includes("trained")) {
+                        // Broadened to catch any variation of "train", "trained", or "course"
+                        if (text.includes("train") || text.includes("course")) {
                             Object.keys(employees).forEach(id => {
                                 const empName = employees[id].name.toLowerCase();
                                 
-                                // If the log contains the word 'trained' AND the employee's name
-                                if (text.includes(empName)) {
+                                // Aggressive Match: Checks for Employee Name OR their Player ID
+                                // (Torn injects the player ID into the hyperlink of the news log)
+                                if (text.includes(empName) || text.includes(id.toString())) {
                                     const logDate = new Date(logTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                                    // Automatically inject the detection into our tracking database
-                                    localDB[id] = { trainedThisWeek: true, dateString: `Auto-Detected: ${logDate}`, isAuto: true };
+                                    
+                                    // Only update if it wasn't already manually verified by the user
+                                    if (!localDB[id] || !localDB[id].trainedThisWeek || localDB[id].isAuto) {
+                                        localDB[id] = { trainedThisWeek: true, dateString: `Auto-Detected: ${logDate}`, isAuto: true };
+                                    }
                                 }
                             });
                         }
@@ -233,6 +237,7 @@
         function toggleTrainingState(id) {
             let db = getTrainingDatabase();
             const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            
             // Manual overrides ignore the auto-detected status
             db[id] = (db[id] && db[id].trainedThisWeek) ? { trainedThisWeek: false, dateString: 'Not Trained Yet', isAuto: false } : { trainedThisWeek: true, dateString: `Manual Override: ${todayStr}`, isAuto: false };
             localStorage.setItem('torn_training_db', JSON.stringify(db));
@@ -314,11 +319,10 @@
 
                     renderGraphBars(history.labels, history.income);
 
-                    // Rebuild Employee Tracker with Auto-Scan Data
+                    // Rebuild Employee Tracker with Aggressive Auto-Scan Data
                     const trContainer = document.getElementById('training-roster-rows');
                     trContainer.innerHTML = ''; 
                     
-                    // First get manual overrides from storage, then layer auto-detected logs on top
                     let trainingDB = getTrainingDatabase();
                     trainingDB = autoDetectTrainingLogs(data.news, employees, trainingDB);
 
@@ -326,7 +330,6 @@
                         const emp = employees[id];
                         const logRecord = trainingDB[id] || { trainedThisWeek: false, dateString: 'Not Trained Yet', isAuto: false };
                         
-                        // Styling changes slightly if it's an auto-detected log vs a manual click
                         const textStyle = logRecord.trainedThisWeek ? (logRecord.isAuto ? 'text-blue-400 font-semibold' : 'text-green-400 font-semibold') : 'text-amber-500 font-medium animate-pulse';
                         const actionBtnColor = logRecord.trainedThisWeek ? 'bg-gray-800 text-gray-500 border border-gray-700' : 'bg-gray-700 text-gray-200 border border-gray-600 hover:bg-gray-600';
                         const checkmarkIcon = logRecord.trainedThisWeek ? (logRecord.isAuto ? '🔄 Auto-Logged' : '✅ Done') : '⚠️ Force Override';
