@@ -3,111 +3,184 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Torn Company Control Panel</title>
+    <title>Torn Operations Center</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
-<body class="bg-gray-900 text-gray-100 font-sans min-h-screen">
+<body class="bg-gray-900 text-gray-100 font-sans min-h-screen pb-12">
 
-    <nav class="bg-gray-800 border-b border-gray-700 p-4 shadow-lg">
+    <nav class="bg-gray-800 border-b border-gray-700 p-4 shadow-lg mb-6">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold tracking-wide text-red-500">TORN HQ // COMPANY DASHBOARD</h1>
+            <h1 class="text-xl font-bold tracking-wide text-red-500">TORN HQ // UNIFIED OPERATIONS</h1>
             <span id="connection-status" class="bg-yellow-900 text-yellow-300 text-xs font-semibold px-2.5 py-0.5 rounded border border-yellow-700 animate-pulse">Connecting API...</span>
         </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
-                <p class="text-gray-400 text-sm font-medium uppercase tracking-wider">Company Name</p>
-                <h3 id="company-name" class="text-2xl font-bold mt-2 text-white">Loading...</h3>
-            </div>
-            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
-                <p class="text-gray-400 text-sm font-medium uppercase tracking-wider">Daily Profit</p>
-                <h3 id="company-profit" class="text-2xl font-bold mt-2 text-green-400">$0</h3>
-            </div>
-            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
-                <p class="text-gray-400 text-sm font-medium uppercase tracking-wider">Weekly Revenue</p>
-                <h3 id="company-funds" class="text-2xl font-bold mt-2 text-blue-400">$0</h3>
+    <main class="max-w-7xl mx-auto px-4 space-y-8">
+        
+        <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
+            <h2 class="text-md font-bold text-gray-400 uppercase tracking-widest mb-4 border-b border-gray-700 pb-2">🏢 Company Briefing</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                    <p class="text-gray-500 text-xs uppercase font-medium">Firm Name</p>
+                    <h3 id="company-name" class="text-xl font-bold text-white mt-1">Loading...</h3>
+                </div>
+                <div>
+                    <p class="text-gray-500 text-xs uppercase font-medium">Daily Profit</p>
+                    <h3 id="company-profit" class="text-xl font-bold text-green-400 mt-1">$0</h3>
+                </div>
+                <div>
+                    <p class="text-gray-500 text-xs uppercase font-medium">Vault Balance</p>
+                    <h3 id="company-funds" class="text-xl font-bold text-blue-400 mt-1">$0</h3>
+                </div>
             </div>
         </div>
 
-        <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md overflow-hidden">
-            <div class="p-6 border-b border-gray-700">
-                <h3 class="text-lg font-bold text-white">Employee Performance Tracker</h3>
+        <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6 space-y-6">
+            <h2 class="text-md font-bold text-gray-400 uppercase tracking-widest border-b border-gray-700 pb-2">🏪 Bazaar & Trading Analytics</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm bg-gray-900/50 p-4 rounded-lg border border-gray-700/50">
+                <div class="space-y-1 border-r border-gray-700/50 pr-4">
+                    <p><span class="text-gray-400 font-medium">Store Status:</span> <span class="text-green-400 font-bold">Open / Active</span></p>
+                    <p><span class="text-gray-400 font-medium">Unique Items Stocked:</span> <span class="text-white font-semibold">142</span></p>
+                    <p><span class="text-gray-400 font-medium">Target Buy Rate:</span> <span class="text-red-400 font-bold">98% Market Value</span></p>
+                    <p><span class="text-gray-400 font-medium">Liquid Cash Reserve:</span> <span class="text-white font-semibold">$24,500,000</span></p>
+                </div>
+                <div class="space-y-1 md:border-r border-gray-700/50 md:px-4">
+                    <p><span class="text-gray-400 font-medium">Daily Income:</span> <span class="text-white font-semibold">$12,450,000</span></p>
+                    <p><span class="text-gray-400 font-medium">Daily Sourced Items:</span> <span class="text-white font-semibold">1,537</span></p>
+                    <p><span class="text-gray-400 font-medium">Weekly Income:</span> <span class="text-white font-semibold">$84,150,000</span></p>
+                    <p><span class="text-gray-400 font-medium">Weekly Sourced Items:</span> <span class="text-white font-semibold">7,523</span></p>
+                </div>
+                <div class="space-y-1 md:pl-4">
+                    <p><span class="text-gray-400 font-medium">Highest Daily Income:</span> <span class="text-white font-semibold">$15,100,000</span></p>
+                    <p><span class="text-gray-400 font-medium">Average Daily Income:</span> <span class="text-white font-semibold">$11,838,659</span></p>
+                    <p><span class="text-gray-400 font-medium">Lowest Daily Income:</span> <span class="text-white font-semibold">$4,210,000</span></p>
+                    <p><span class="text-gray-400 font-medium">Current Month Income:</span> <span class="text-amber-400 font-medium">Tracking...</span></p>
+                </div>
             </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="bg-gray-700/50 text-gray-300 text-sm uppercase">
-                            <th class="p-4">Employee</th>
-                            <th class="p-4">Position</th>
-                            <th class="p-4">Effectiveness</th>
-                            <th class="p-4">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="employee-roster" class="divide-y divide-gray-700 text-sm">
-                        <tr>
-                            <td colspan="4" class="p-4 text-center text-gray-500">Awaiting secure data stream...</td>
-                        </tr>
-                    </tbody>
-                </table>
+
+            <div class="w-full bg-gray-900 p-4 rounded-lg border border-gray-700 h-96 relative">
+                <canvas id="bazaarTrendChart"></canvas>
             </div>
         </div>
+
     </main>
 
     <script>
-        async function loadDashboardData() {
+        // Initialize the Graph on Startup
+        function renderChart() {
+            const ctx = document.getElementById('bazaarTrendChart').getContext('2d');
+            
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['2AM', '9AM', '4PM', '11PM', '6AM', '1PM', '8PM', '3AM', '10AM', '12AM', '7AM', '2PM', '9PM', '4AM', '11AM', '6PM'],
+                    datasets: [
+                        {
+                            label: 'Gross Sales',
+                            data: [20000, 110000, 210000, 260000, 280000, 265000, 255000, 310000, 335000, 330000, 340000, 350000, 345000, 420000, 520000, 560000],
+                            borderColor: '#38bdf8', // Blue line
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            pointRadius: 0,
+                            pointHoverRadius: 6
+                        },
+                        {
+                            label: 'Cash Outflow (98%)',
+                            data: [15000, 80000, 120000, 150000, 160000, 155000, 150000, 195000, 195000, 195000, 195000, 195000, 195000, 200000, 200000, 200000],
+                            borderColor: '#f472b6', // Pink line
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            pointRadius: 0,
+                            pointHoverRadius: 6
+                        },
+                        {
+                            label: 'Inventory Valuation',
+                            data: [-10000, 60000, 100000, 120000, 110000, 95000, 85000, 145000, 170000, 180000, 210000, 230000, 250000, 320000, 410000, 490000],
+                            borderColor: '#fb923c', // Orange line
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            pointRadius: 0,
+                            pointHoverRadius: 6
+                        },
+                        {
+                            label: 'Net Profit Margin',
+                            data: [-20000, -40000, -30000, -50000, -80000, -85000, -90000, -120000, -150000, -180000, -185000, -170000, -155000, -210000, -300000, -340000],
+                            borderColor: '#facc15', // Yellow line
+                            backgroundColor: 'transparent',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            pointRadius: 0,
+                            pointHoverRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { color: '#9ca3af', font: { size: 12 } }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: '#1f2937',
+                            titleColor: '#f9fafb',
+                            bodyColor: '#e5e7eb',
+                            borderColor: '#374151',
+                            borderWidth: 1
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: '#374151', drawOnChartArea: true },
+                            ticks: { color: '#9ca3af' }
+                        },
+                        y: {
+                            grid: { color: '#374151' },
+                            ticks: {
+                                color: '#9ca3af',
+                                callback: function(value) { return '$' + value.toLocaleString(); }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Fetch Company Data API
+        async function fetchCompanySpecs() {
             try {
-                // Fetch data relatively from your live Render server pipeline
                 const response = await fetch('/api/company');
                 const data = await response.json();
                 
-                const profile = data.company;
-                const employees = data.company_employees || {};
+                if (data.company) {
+                    document.getElementById('company-name').innerText = data.company.name || 'N/A';
+                    document.getElementById('company-profit').innerText = `$${Number(data.company.daily_profit || 0).toLocaleString()}`;
+                    document.getElementById('company-funds').innerText = `$${Number(data.company.funds || 0).toLocaleString()}`;
+                }
 
-                // 1. Update Top Stats Cards
-                document.getElementById('company-name').innerText = profile.name || 'No Company Found';
-                document.getElementById('company-profit').innerText = `$${Number(profile.daily_profit || 0).toLocaleString()}`;
-                document.getElementById('company-funds').innerText = `$${Number(profile.funds || 0).toLocaleString()}`;
-
-                // 2. Build out Employee Table Rows dynamically
-                const rosterContainer = document.getElementById('employee-roster');
-                rosterContainer.innerHTML = ''; // Clear loading row
-
-                Object.keys(employees).forEach(id => {
-                    const emp = employees[id];
-                    const effColor = emp.effectiveness?.total >= 100 ? 'text-green-400' : 'text-amber-400';
-                    
-                    const row = `
-                        <tr class="hover:bg-gray-750 transition-colors">
-                            <td class="p-4 font-semibold text-white">${emp.name} <span class="text-gray-500 text-xs">[ID: ${id}]</span></td>
-                            <td class="p-4 text-gray-300">${emp.position}</td>
-                            <td class="p-4 ${effColor} font-mono font-bold">${emp.effectiveness?.total || 0}%</td>
-                            <td class="p-4">
-                                <span class="px-2 py-1 rounded text-xs font-bold ${emp.state === 'Okay' ? 'bg-green-950 text-green-400' : 'bg-red-950 text-red-400'}">
-                                    ${emp.state}
-                                </span>
-                            </td>
-                        </tr>
-                    `;
-                    rosterContainer.insertAdjacentHTML('beforeend', row);
-                });
-
-                // Update Status indicator badge
                 const statusBadge = document.getElementById('connection-status');
-                statusBadge.innerText = "LIVE DATA";
+                statusBadge.innerText = "LIVE PIPELINE DETECTED";
                 statusBadge.className = "bg-green-950 text-green-400 text-xs font-semibold px-2.5 py-0.5 rounded border border-green-700";
-
             } catch (error) {
-                console.error("Error loading dashboard UI:", error);
-                const statusBadge = document.getElementById('connection-status');
-                statusBadge.innerText = "CONNECTION FAILED";
-                statusBadge.className = "bg-red-950 text-red-400 text-xs font-semibold px-2.5 py-0.5 rounded border border-red-700";
+                console.error("Pipeline failure:", error);
+                document.getElementById('connection-status').className = "bg-red-950 text-red-400 text-xs font-semibold px-2.5 py-0.5 rounded border border-red-700";
+                document.getElementById('connection-status').innerText = "OFFLINE BRIDGE DETECTED";
             }
         }
 
-        // Run setup on startup
-        loadDashboardData();
+        // Run Layout Engines on Boot
+        window.onload = function() {
+            fetchCompanySpecs();
+            renderChart();
+        };
     </script>
 </body>
 </html>
