@@ -9,6 +9,7 @@
 </head>
 <body class="bg-gray-900 text-gray-100 font-sans min-h-screen pb-12">
 
+    <!-- Top Status Control -->
     <nav class="bg-gray-800 border-b border-gray-700 p-4 shadow-lg mb-6">
         <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
             <h1 id="nav-company-name" class="text-xl font-bold tracking-wide text-red-500 uppercase">TORN HQ // VERIFIED LEDGER</h1>
@@ -23,6 +24,7 @@
 
     <main class="max-w-7xl mx-auto px-4 space-y-6">
         
+        <!-- 3-COLUMN METRIC HEADER -->
         <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
             <h2 class="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-700 pb-2 mb-4 text-center">Verified Operational Totals</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm lg:text-base px-2">
@@ -44,6 +46,7 @@
             </div>
         </div>
 
+        <!-- HISTORICAL DAILY BAR CHART -->
         <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
             <h3 class="text-sm font-semibold text-gray-400 mb-2 uppercase tracking-wider">Official Daily Income Logs</h3>
             <div class="w-full bg-gray-900 p-4 rounded-lg border border-gray-700 h-[300px] relative">
@@ -51,43 +54,7 @@
             </div>
         </div>
 
-        <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
-            <div class="border-b border-gray-700 pb-3 mb-4">
-                <h3 class="text-md font-bold text-purple-400 uppercase tracking-wider flex items-center gap-2">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                    AI 30-Day Predictive Forecasting
-                </h3>
-                <p class="text-xs text-gray-400 mt-1">Calculates potential 30-day revenue based on Torn mechanics: Employee Effectiveness, Ad Budgets, and Sunday Star Evaluations.</p>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div class="bg-gray-900 border border-gray-700 rounded-lg p-4">
-                    <p class="text-xs text-gray-400 uppercase font-bold tracking-wide">Scenario A: Status Quo</p>
-                    <p class="text-2xl font-bold text-blue-400 mt-1" id="ai-scenario-base">Calculating...</p>
-                    <p class="text-xs text-gray-500 mt-2 leading-relaxed">Assumes no changes to current rating. Effectiveness and ad budget remain identical to today's current payload.</p>
-                </div>
-
-                <div class="bg-gray-900 border border-purple-900/50 rounded-lg p-4 relative overflow-hidden">
-                    <div class="absolute top-0 right-0 bg-purple-900/50 text-purple-300 text-[10px] px-2 py-1 rounded-bl font-bold">HIGH TARGET</div>
-                    <p class="text-xs text-purple-400 uppercase font-bold tracking-wide">Scenario B: Star Upgrade</p>
-                    <p class="text-2xl font-bold text-purple-400 mt-1" id="ai-scenario-star">Calculating...</p>
-                    <p class="text-xs text-gray-500 mt-2 leading-relaxed">Assumes revenue boost from gaining +1 Star during the <span id="ai-sunday-countdown" class="font-bold text-gray-300"></span> evaluation.</p>
-                </div>
-
-                <div class="bg-gray-900 border border-green-900/50 rounded-lg p-4">
-                    <p class="text-xs text-green-500 uppercase font-bold tracking-wide">Scenario C: Optimized</p>
-                    <p class="text-2xl font-bold text-green-400 mt-1" id="ai-scenario-opt">Calculating...</p>
-                    <p class="text-xs text-gray-500 mt-2 leading-relaxed">Assumes daily training and no drug addiction, increasing team effectiveness and boosting base revenue by ~5%. Ensures this scenario executes by tracking training below.</p>
-                </div>
-
-                <div class="bg-gray-900 border border-red-900/50 rounded-lg p-4">
-                    <p class="text-xs text-red-500 uppercase font-bold tracking-wide">Scenario D: Decay Risk</p>
-                    <p class="text-2xl font-bold text-red-400 mt-1" id="ai-scenario-decay">Calculating...</p>
-                    <p class="text-xs text-gray-500 mt-2 leading-relaxed">Assumes missed training, rising addiction levels, and decaying stats dropping daily revenue by ~10%.</p>
-                </div>
-            </div>
-        </div>
-
+        <!-- WEEKLY TRAINING STATUS TRACKER -->
         <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
             <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
                 <div>
@@ -120,10 +87,88 @@
             </div>
         </div>
 
+        <!-- AI EXPERIMENTER & SIMULATOR CONSOLE -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6 border-t-4 border-t-purple-500">
+            <div class="border-b border-gray-700 pb-3 mb-6">
+                <h3 class="text-lg font-bold text-purple-400 uppercase tracking-wider flex items-center gap-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                    AI Director Experimenter Console
+                </h3>
+                <p class="text-sm text-gray-400 mt-1 leading-relaxed">Torn's algorithm settles 3 days after making changes. Slide the variables below to experiment with how altering your business metrics might impact your 30-Day simulated revenue. Popularity (how much you make relative to other Candle Shops) is heavily driven by these balances.</p>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                
+                <!-- Variable Sliders -->
+                <div class="lg:col-span-2 space-y-6">
+                    
+                    <!-- Ad Budget Simulator -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <label class="text-sm font-bold text-gray-300">Daily Advertising Budget</label>
+                            <span id="sim-ad-val" class="text-sm font-mono text-blue-400 font-bold">$200,000</span>
+                        </div>
+                        <input type="range" id="sim-ad-slider" min="0" max="1000000" step="50000" value="200000" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" oninput="runSimulation()">
+                        <p class="text-xs text-gray-500 mt-1">Finding the balance: Too low and customers vanish. Too high and the ad cost eats your margins.</p>
+                    </div>
+
+                    <!-- Employee Effectiveness -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <label class="text-sm font-bold text-gray-300">Average Employee Effectiveness</label>
+                            <span id="sim-eff-val" class="text-sm font-mono text-green-400 font-bold">100%</span>
+                        </div>
+                        <input type="range" id="sim-eff-slider" min="50" max="150" step="5" value="100" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" oninput="runSimulation()">
+                        <p class="text-xs text-gray-500 mt-1">Impacted by missing stats, drug addiction, inactivity, and the settled-in bonus. Max efficiency is a heavy revenue multiplier.</p>
+                    </div>
+
+                    <!-- Price Target (Margin vs Volume) -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <label class="text-sm font-bold text-gray-300">Market Price Strategy</label>
+                            <span id="sim-price-val" class="text-sm font-mono text-amber-400 font-bold">Standard Market Value</span>
+                        </div>
+                        <input type="range" id="sim-price-slider" min="-20" max="20" step="5" value="0" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" oninput="runSimulation()">
+                        <div class="flex justify-between text-[10px] text-gray-500 mt-1 font-bold uppercase">
+                            <span>Deep Discount (High Volume)</span>
+                            <span>Overpriced (Low Volume)</span>
+                        </div>
+                    </div>
+
+                    <!-- Star Rating Multiplier -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <label class="text-sm font-bold text-gray-300">Target Sunday Star Rating</label>
+                            <span id="sim-star-val" class="text-sm font-mono text-purple-400 font-bold">Current</span>
+                        </div>
+                        <input type="range" id="sim-star-slider" min="-2" max="3" step="1" value="0" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" oninput="runSimulation()">
+                        <p class="text-xs text-gray-500 mt-1">Stars evaluate every Sunday at 18:00 TCT. Simulates dropping or gaining stars relative to your current rank.</p>
+                    </div>
+                </div>
+
+                <!-- Simulation Output Terminal -->
+                <div class="bg-gray-900 border border-gray-700 rounded-xl p-6 flex flex-col justify-center items-center text-center relative overflow-hidden">
+                    <div class="absolute top-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-green-500"></div>
+                    <p class="text-xs text-gray-400 uppercase font-bold tracking-widest mb-4">30-Day Simulated Revenue</p>
+                    
+                    <h2 id="sim-output-revenue" class="text-4xl lg:text-5xl font-black text-white tracking-tight drop-shadow-md">$0</h2>
+                    
+                    <div id="sim-output-change" class="mt-4 px-3 py-1 rounded bg-gray-800 border border-gray-700 text-sm font-bold">
+                        Baseline Loaded
+                    </div>
+                    
+                    <p class="text-xs text-gray-500 mt-6 px-4">
+                        *This model isolates variables for experimental strategy. Real Torn algorithms will fluctuate based on live market popularity and competitor pricing.
+                    </p>
+                </div>
+            </div>
+        </div>
+
     </main>
 
     <script>
         let performanceChart = null;
+        let baselineLiveIncome = 0; // Stored to base calculations off of real current data
 
         // 1. TIMING ENGINES
         function runCountdownClock() {
@@ -142,7 +187,7 @@
             }, 1000);
         }
 
-        // 2. PARSE LOG STRINGS FROM API NEWS FEED
+        // 2. LOG EXTRACTOR
         function extractHistoryFromLogs(newsLogs) {
             let extractedLabels = [];
             let extractedIncome = [];
@@ -171,52 +216,101 @@
             return { labels: extractedLabels, income: extractedIncome };
         }
 
-        // 3. AI PREDICTION ENGINE
-        function generateAIProjections(currentIncome) {
-            const today = new Date();
-            const currentDay = today.getUTCDay();
-            const daysUntilSunday = currentDay === 0 ? 7 : 7 - currentDay;
+        // 3. AI EXPERIMENTER SIMULATION ENGINE
+        function runSimulation() {
+            if (baselineLiveIncome === 0) return; // Prevent calc before data loads
             
-            document.getElementById('ai-sunday-countdown').innerText = `upcoming Sunday (in ${daysUntilSunday} days)`;
+            // Get Slider Values
+            const adBudget = parseInt(document.getElementById('sim-ad-slider').value);
+            const effectiveness = parseInt(document.getElementById('sim-eff-slider').value);
+            const priceStrat = parseInt(document.getElementById('sim-price-slider').value);
+            const starTarget = parseInt(document.getElementById('sim-star-slider').value);
 
-            const baseDaily = currentIncome > 0 ? currentIncome : 0;
-            const daysAfterSunday = 30 - daysUntilSunday;
+            // Update UI Labels
+            document.getElementById('sim-ad-val').innerText = `$${adBudget.toLocaleString()}`;
+            document.getElementById('sim-eff-val').innerText = `${effectiveness}%`;
+            
+            if (priceStrat === 0) document.getElementById('sim-price-val').innerText = "Standard Market";
+            else if (priceStrat < 0) document.getElementById('sim-price-val').innerText = `${Math.abs(priceStrat)}% Discount`;
+            else document.getElementById('sim-price-val').innerText = `${priceStrat}% Markup`;
 
-            const scenarioBase = baseDaily * 30;
-            const scenarioStar = (baseDaily * daysUntilSunday) + ((baseDaily * 1.15) * daysAfterSunday);
-            const scenarioOpt = (baseDaily * 1.05) * 30;
-            const scenarioDecay = (baseDaily * 0.90) * 30;
+            if (starTarget === 0) document.getElementById('sim-star-val').innerText = "Current Stars";
+            else if (starTarget > 0) document.getElementById('sim-star-val').innerText = `+${starTarget} Stars`;
+            else document.getElementById('sim-star-val').innerText = `${starTarget} Stars`;
 
-            document.getElementById('ai-scenario-base').innerText = `$${Math.round(scenarioBase).toLocaleString()}`;
-            document.getElementById('ai-scenario-star').innerText = `$${Math.round(scenarioStar).toLocaleString()}`;
-            document.getElementById('ai-scenario-opt').innerText = `$${Math.round(scenarioOpt).toLocaleString()}`;
-            document.getElementById('ai-scenario-decay').innerText = `$${Math.round(scenarioDecay).toLocaleString()}`;
+            // THE SIMULATION MATH ALGORITHM
+            // Baseline 30 day calc
+            let simulatedDaily = baselineLiveIncome;
+
+            // Effectiveness Math: Massive multiplier. Dropping below 100% kills popularity.
+            const effMultiplier = (effectiveness / 100);
+            simulatedDaily = simulatedDaily * (effMultiplier * 1.1); // Penalizes low eff, rewards high eff
+
+            // Ad Budget Math: Standardizes around a baseline assumption.
+            // If ad budget increases, gross revenue increases, but subtract the literal cost of the ad.
+            const adCostDiff = adBudget - 200000; // Assumes 200k baseline for typical shop
+            simulatedDaily = simulatedDaily + (adCostDiff * 0.4) - adCostDiff; 
+
+            // Price Strategy Math:
+            // High discount increases volume but tanks margins. High markup increases margin but tanks volume.
+            // Sweet spot in Torn is generally just slightly under Market Value.
+            if (priceStrat < 0) {
+                simulatedDaily = simulatedDaily * (1 + (Math.abs(priceStrat) * 0.01)); // Volume bump
+                simulatedDaily = simulatedDaily * 0.85; // Margin crush
+            } else if (priceStrat > 0) {
+                simulatedDaily = simulatedDaily * 1.15; // Margin bump
+                simulatedDaily = simulatedDaily * (1 - (priceStrat * 0.03)); // Volume crush
+            }
+
+            // Star Math: Every star generally raises the ceiling of popularity/income by roughly 10-15%
+            const starMultiplier = 1 + (starTarget * 0.12);
+            simulatedDaily = simulatedDaily * starMultiplier;
+
+            // Calculate Totals
+            const projected30Day = simulatedDaily * 30;
+            const baseline30Day = baselineLiveIncome * 30;
+            const diff = projected30Day - baseline30Day;
+            const diffPercent = (diff / baseline30Day) * 100;
+
+            // Output Rendering
+            const outRev = document.getElementById('sim-output-revenue');
+            const outChange = document.getElementById('sim-output-change');
+
+            if (projected30Day > 0) {
+                outRev.innerText = `$${Math.round(projected30Day).toLocaleString()}`;
+                outRev.className = "text-4xl lg:text-5xl font-black text-white tracking-tight drop-shadow-md";
+            } else {
+                outRev.innerText = "BANKRUPT";
+                outRev.className = "text-4xl lg:text-5xl font-black text-red-500 tracking-tight drop-shadow-md animate-pulse";
+            }
+
+            if (diff > 0) {
+                outChange.innerText = `+${diffPercent.toFixed(1)}% vs Current Trajectory`;
+                outChange.className = "mt-4 px-3 py-1 rounded bg-green-950/50 border border-green-800 text-green-400 text-sm font-bold";
+            } else if (diff < 0) {
+                outChange.innerText = `${diffPercent.toFixed(1)}% vs Current Trajectory`;
+                outChange.className = "mt-4 px-3 py-1 rounded bg-red-950/50 border border-red-800 text-red-400 text-sm font-bold";
+            } else {
+                outChange.innerText = "Baseline Trajectory Maintained";
+                outChange.className = "mt-4 px-3 py-1 rounded bg-gray-800 border border-gray-700 text-gray-400 text-sm font-bold";
+            }
         }
 
-        // 4. AGGRESSIVE AUTO-SCANNER FOR TRAINING LOGS (ID Matching)
+        // 4. TRAINING LOGIC
         function autoDetectTrainingLogs(newsLogs, employees, localDB) {
             const today = new Date();
-            const sevenDaysAgo = today.getTime() - (7 * 24 * 60 * 60 * 1000); // 7 Days in Milliseconds
+            const sevenDaysAgo = today.getTime() - (7 * 24 * 60 * 60 * 1000); 
 
             if (newsLogs && typeof newsLogs === 'object') {
                 Object.values(newsLogs).forEach(log => {
                     const logTime = log.timestamp * 1000;
-                    
-                    // Only scan logs generated in the last 7 days
                     if (logTime >= sevenDaysAgo) {
                         const text = log.news.toLowerCase();
-                        
-                        // Broadened to catch any variation of "train", "trained", or "course"
                         if (text.includes("train") || text.includes("course")) {
                             Object.keys(employees).forEach(id => {
                                 const empName = employees[id].name.toLowerCase();
-                                
-                                // Aggressive Match: Checks for Employee Name OR their Player ID
-                                // (Torn injects the player ID into the hyperlink of the news log)
                                 if (text.includes(empName) || text.includes(id.toString())) {
                                     const logDate = new Date(logTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                                    
-                                    // Only update if it wasn't already manually verified by the user
                                     if (!localDB[id] || !localDB[id].trainedThisWeek || localDB[id].isAuto) {
                                         localDB[id] = { trainedThisWeek: true, dateString: `Auto-Detected: ${logDate}`, isAuto: true };
                                     }
@@ -237,21 +331,19 @@
         function toggleTrainingState(id) {
             let db = getTrainingDatabase();
             const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            
-            // Manual overrides ignore the auto-detected status
             db[id] = (db[id] && db[id].trainedThisWeek) ? { trainedThisWeek: false, dateString: 'Not Trained Yet', isAuto: false } : { trainedThisWeek: true, dateString: `Manual Override: ${todayStr}`, isAuto: false };
             localStorage.setItem('torn_training_db', JSON.stringify(db));
             runDataPipeline();
         }
 
         function resetAllTraining() {
-            if(confirm("Clear manual overrides? (Auto-detected logs from the last 7 days will automatically re-populate)")) {
+            if(confirm("Clear manual overrides?")) {
                 localStorage.removeItem('torn_training_db');
                 runDataPipeline();
             }
         }
 
-        // 5. CHART BUILD ENGINE
+        // 5. CHART BUILDER
         function renderGraphBars(labels, dataValues) {
             const ctx = document.getElementById('dailyLogChart').getContext('2d');
             if (performanceChart) performanceChart.destroy();
@@ -281,7 +373,7 @@
             });
         }
 
-        // 6. MASTER SYNC ENGINE
+        // 6. MASTER ENGINE
         async function runDataPipeline() {
             try {
                 const response = await fetch('/api/company');
@@ -294,17 +386,18 @@
                     
                     const liveDailyIncome = comp.daily_income || comp.daily_profit || 0; 
                     const vaultFunds = comp.company_bank || comp.bank || comp.funds || 0;
+                    
+                    // Set Baseline for Simulator
+                    const history = extractHistoryFromLogs(data.news);
+                    baselineLiveIncome = history.income.length > 0 ? history.income[history.income.length - 1] : liveDailyIncome;
 
+                    // UI Data Mapping
                     document.getElementById('nav-company-name').innerText = `TORN HQ // ${comp.name || 'COMPANY CONTROL'}`;
                     document.getElementById('company-type').innerText = comp.company_type_name || `Type ID: ${comp.company_type || 'Unknown'}`;
                     document.getElementById('company-employees-count').innerText = `${empCount} Members`;
                     document.getElementById('company-rating').innerText = `${comp.rating || '0'} Star`;
                     document.getElementById('company-daily-income').innerText = `$${Number(liveDailyIncome).toLocaleString()}`;
                     document.getElementById('company-funds').innerText = `$${Number(vaultFunds).toLocaleString()}`;
-
-                    const history = extractHistoryFromLogs(data.news);
-                    const calculationBase = history.income.length > 0 ? history.income[history.income.length - 1] : liveDailyIncome;
-                    generateAIProjections(calculationBase);
 
                     document.getElementById('history-days').innerText = `${history.labels.length} Days Found`;
                     if (history.income.length > 0) {
@@ -318,18 +411,16 @@
                     }
 
                     renderGraphBars(history.labels, history.income);
+                    runSimulation(); // Trigger first simulation pass
 
-                    // Rebuild Employee Tracker with Aggressive Auto-Scan Data
                     const trContainer = document.getElementById('training-roster-rows');
                     trContainer.innerHTML = ''; 
-                    
                     let trainingDB = getTrainingDatabase();
                     trainingDB = autoDetectTrainingLogs(data.news, employees, trainingDB);
 
                     Object.keys(employees).forEach(id => {
                         const emp = employees[id];
                         const logRecord = trainingDB[id] || { trainedThisWeek: false, dateString: 'Not Trained Yet', isAuto: false };
-                        
                         const textStyle = logRecord.trainedThisWeek ? (logRecord.isAuto ? 'text-blue-400 font-semibold' : 'text-green-400 font-semibold') : 'text-amber-500 font-medium animate-pulse';
                         const actionBtnColor = logRecord.trainedThisWeek ? 'bg-gray-800 text-gray-500 border border-gray-700' : 'bg-gray-700 text-gray-200 border border-gray-600 hover:bg-gray-600';
                         const checkmarkIcon = logRecord.trainedThisWeek ? (logRecord.isAuto ? '🔄 Auto-Logged' : '✅ Done') : '⚠️ Force Override';
