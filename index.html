@@ -9,6 +9,7 @@
 </head>
 <body class="bg-gray-900 text-gray-100 font-sans min-h-screen pb-12">
 
+    <!-- Top Status Control with Countdown Timer targeting 18:00 TCT -->
     <nav class="bg-gray-800 border-b border-gray-700 p-4 shadow-lg mb-6">
         <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
             <h1 id="nav-company-name" class="text-xl font-bold tracking-wide text-red-500 uppercase">TORN HQ // VERIFIED LEDGER</h1>
@@ -23,6 +24,7 @@
 
     <main class="max-w-7xl mx-auto px-4 space-y-6">
         
+        <!-- 3-COLUMN METRIC HEADER -->
         <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
             <h2 class="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-700 pb-2 mb-4 text-center">Verified Operational Totals</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm lg:text-base px-2">
@@ -44,6 +46,7 @@
             </div>
         </div>
 
+        <!-- HISTORICAL DAILY BAR CHART -->
         <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
             <h3 class="text-sm font-semibold text-gray-400 mb-2 uppercase tracking-wider">Official Daily Income Logs</h3>
             <div class="w-full bg-gray-900 p-4 rounded-lg border border-gray-700 h-[300px] relative">
@@ -51,6 +54,7 @@
             </div>
         </div>
 
+        <!-- WEEKLY TRAINING STATUS TRACKER -->
         <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
             <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
                 <div>
@@ -89,16 +93,11 @@
         function runCountdownClock() {
             setInterval(() => {
                 const now = new Date();
-                
-                // Establish daily update target point at 18:00 UTC/TCT
                 let target = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 18, 0, 0);
-                
                 if (now.getTime() >= target) {
-                    target += 24 * 60 * 60 * 1000; // Look forward to tomorrow's update window
+                    target += 24 * 60 * 60 * 1000;
                 }
-                
                 const timeDiff = target - now.getTime();
-                
                 const hours = Math.floor((timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                 const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
                 const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
@@ -108,7 +107,7 @@
             }, 1000);
         }
 
-        // 2. PARSE LOG STRINGS FROM API NEWS FEED
+        // 2. ADAPTIVE PARSE LOG STRINGS FROM API NEWS FEED (Broadened for Candle Shop log types)
         function extractHistoryFromLogs(newsLogs) {
             let extractedLabels = [];
             let extractedIncome = [];
@@ -116,19 +115,23 @@
             if (newsLogs && typeof newsLogs === 'object') {
                 Object.values(newsLogs).forEach(log => {
                     const text = log.news;
-                    // Looks for lines matching company payload records
-                    if (text && text.includes("daily income was")) {
-                        const match = text.match(/\$(\d{1,3}(?:,\d{3})*|\d+)/);
-                        if (match) {
-                            const numericValue = parseInt(match[1].replace(/,/g, ''), 10);
+                    if (text) {
+                        // Checks for all possible variations of daily rollover profit/income entries
+                        const lowText = text.toLowerCase();
+                        if (lowText.includes("daily income") || lowText.includes("company cleared") || lowText.includes("profit") || lowText.includes("revenue")) {
                             
-                            // Convert log timestamp directly to short calendar date format
-                            const logDate = new Date(log.timestamp * 1000);
-                            const formattedDate = logDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                            
-                            if (!extractedLabels.includes(formattedDate)) {
-                                extractedLabels.unshift(formattedDate);
-                                extractedIncome.unshift(numericValue);
+                            // Extract numbers following the '$' symbol
+                            const match = text.match(/\$(\d{1,3}(?:,\d{3})*|\d+)/);
+                            if (match) {
+                                const numericValue = parseInt(match[1].replace(/,/g, ''), 10);
+                                
+                                const logDate = new Date(log.timestamp * 1000);
+                                const formattedDate = logDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                                
+                                if (!extractedLabels.includes(formattedDate)) {
+                                    extractedLabels.unshift(formattedDate);
+                                    extractedIncome.unshift(numericValue);
+                                }
                             }
                         }
                     }
@@ -149,13 +152,6 @@
             db[id] = (db[id] && db[id].trainedThisWeek) ? { trainedThisWeek: false, dateString: 'Never This Week' } : { trainedThisWeek: true, dateString: `Trained on ${todayStr}` };
             localStorage.setItem('torn_training_db', JSON.stringify(db));
             runDataPipeline();
-        }
-
-        function resetAllTraining() {
-            if(confirm("Reset weekly checks for everyone?")) {
-                localStorage.removeItem('torn_training_db');
-                runDataPipeline();
-            }
         }
 
         // 4. CHART BUILD ENGINE
@@ -198,6 +194,8 @@
                     const comp = data.company;
                     const employees = data.company_employees || {};
                     const empCount = Object.keys(employees).length;
+                    
+                    // Directly access Torn's real profit variables from the profile
                     const liveDailyIncome = comp.daily_profit || 0; 
 
                     // Render Standard UI elements
@@ -212,6 +210,7 @@
                     // Process history metrics from logs
                     const history = extractHistoryFromLogs(data.news);
                     
+                    // If history array matches successfully, populate metrics. Otherwise fallback to live baseline values.
                     document.getElementById('history-days').innerText = `${history.labels.length} Days Found`;
                     if (history.income.length > 0) {
                         const maxIncome = Math.max(...history.income);
