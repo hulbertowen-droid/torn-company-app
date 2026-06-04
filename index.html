@@ -9,7 +9,7 @@
 </head>
 <body class="bg-gray-900 text-gray-100 font-sans min-h-screen pb-12">
 
-    <!-- Top Status Control with Countdown Timer targeting 18:00 TCT -->
+    <!-- Top Status Control -->
     <nav class="bg-gray-800 border-b border-gray-700 p-4 shadow-lg mb-6">
         <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
             <h1 id="nav-company-name" class="text-xl font-bold tracking-wide text-red-500 uppercase">TORN HQ // VERIFIED LEDGER</h1>
@@ -36,7 +36,7 @@
                 <div class="space-y-2 border-b md:border-b-0 md:border-r border-gray-700/50 pb-4 md:pb-0 md:px-4">
                     <p><span class="text-gray-400 font-medium">Daily Income:</span> <span id="company-daily-income" class="text-green-400 font-bold">$0</span></p>
                     <p><span class="text-gray-400 font-medium">Vault Bankroll:</span> <span id="company-funds" class="text-blue-400 font-bold">$0</span></p>
-                    <p><span class="text-gray-400 font-medium">AI 30-Day Forecast:</span> <span id="ai-forecast" class="text-purple-400 font-bold">Calculating...</span></p>
+                    <p><span class="text-gray-400 font-medium">Next Evaluation:</span> <span class="text-purple-400 font-bold">Sunday 18:00 TCT</span></p>
                 </div>
                 <div class="space-y-2 md:pl-4">
                     <p><span class="text-gray-400 font-medium">Logged High Day:</span> <span id="company-highest-income" class="text-white font-semibold">$0</span></p>
@@ -54,12 +54,54 @@
             </div>
         </div>
 
+        <!-- AI PREDICTIVE FORECASTING ENGINE -->
+        <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
+            <div class="border-b border-gray-700 pb-3 mb-4">
+                <h3 class="text-md font-bold text-purple-400 uppercase tracking-wider flex items-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    AI 30-Day Predictive Forecasting
+                </h3>
+                <p class="text-xs text-gray-400 mt-1">Calculates potential 30-day revenue based on Torn mechanics: Employee Effectiveness, Ad Budgets, and Sunday Star Evaluations.</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Scenario 1: Status Quo -->
+                <div class="bg-gray-900 border border-gray-700 rounded-lg p-4">
+                    <p class="text-xs text-gray-400 uppercase font-bold tracking-wide">Scenario A: Status Quo</p>
+                    <p class="text-2xl font-bold text-blue-400 mt-1" id="ai-scenario-base">Calculating...</p>
+                    <p class="text-xs text-gray-500 mt-2 leading-relaxed">Assumes no changes to current rating. Effectiveness and ad budget remain identical to today's current payload.</p>
+                </div>
+
+                <!-- Scenario 2: Sunday Star Promotion -->
+                <div class="bg-gray-900 border border-purple-900/50 rounded-lg p-4 relative overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-purple-900/50 text-purple-300 text-[10px] px-2 py-1 rounded-bl font-bold">HIGH TARGET</div>
+                    <p class="text-xs text-purple-400 uppercase font-bold tracking-wide">Scenario B: Star Upgrade</p>
+                    <p class="text-2xl font-bold text-purple-400 mt-1" id="ai-scenario-star">Calculating...</p>
+                    <p class="text-xs text-gray-500 mt-2 leading-relaxed">Assumes revenue boost from gaining +1 Star during the <span id="ai-sunday-countdown" class="font-bold text-gray-300"></span> evaluation.</p>
+                </div>
+
+                <!-- Scenario 3: Efficiency Optimization -->
+                <div class="bg-gray-900 border border-green-900/50 rounded-lg p-4">
+                    <p class="text-xs text-green-500 uppercase font-bold tracking-wide">Scenario C: Optimized</p>
+                    <p class="text-2xl font-bold text-green-400 mt-1" id="ai-scenario-opt">Calculating...</p>
+                    <p class="text-xs text-gray-500 mt-2 leading-relaxed">Assumes daily training and no drug addiction, increasing team effectiveness and boosting base revenue by ~5%.</p>
+                </div>
+
+                <!-- Scenario 4: Decay / Neglect -->
+                <div class="bg-gray-900 border border-red-900/50 rounded-lg p-4">
+                    <p class="text-xs text-red-500 uppercase font-bold tracking-wide">Scenario D: Decay Risk</p>
+                    <p class="text-2xl font-bold text-red-400 mt-1" id="ai-scenario-decay">Calculating...</p>
+                    <p class="text-xs text-gray-500 mt-2 leading-relaxed">Assumes missed training, rising addiction levels, and decaying stats dropping daily revenue by ~10%.</p>
+                </div>
+            </div>
+        </div>
+
         <!-- WEEKLY TRAINING STATUS TRACKER -->
         <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
             <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
                 <div>
                     <h3 class="text-md font-bold text-white uppercase tracking-wider">Weekly Employee Training Status</h3>
-                    <p class="text-xs text-gray-400 mt-1">Make sure every team member is trained at least once every 7 days.</p>
+                    <p class="text-xs text-gray-400 mt-1">Make sure every team member is trained at least once every 7 days to maintain Scenario C.</p>
                 </div>
                 <button onclick="resetAllTraining()" class="text-xs bg-red-950 text-red-400 border border-red-800 px-3 py-1.5 rounded font-semibold hover:bg-red-900 hover:text-white transition-all cursor-pointer">
                     Reset All Weekly Status
@@ -136,25 +178,39 @@
             return { labels: extractedLabels, income: extractedIncome };
         }
 
-        // 3. AI PREDICTION ENGINE
-        function calculateForecast(incomeData, currentLiveIncome) {
-            if (incomeData.length < 2) {
-                // If we don't have enough history, fallback to a flat 30-day projection of today's income
-                return '$' + Math.round(currentLiveIncome).toLocaleString() + ' (Flat Trend)';
-            }
-            // Look at up to the last 7 days of data for the trend
-            const recent = incomeData.slice(-7);
-            const startValue = recent[0];
-            const endValue = recent[recent.length - 1];
+        // 3. MULTI-SCENARIO AI PREDICTION ENGINE
+        function generateAIProjections(currentIncome) {
+            // Calculate days until next Sunday (0 = Sunday in JS Date)
+            const today = new Date();
+            const currentDay = today.getUTCDay();
+            const daysUntilSunday = currentDay === 0 ? 7 : 7 - currentDay;
             
-            // Calculate average daily growth/loss
-            const dailyTrend = (endValue - startValue) / recent.length;
+            document.getElementById('ai-sunday-countdown').innerText = `upcoming Sunday (in ${daysUntilSunday} days)`;
+
+            // Base Math variables
+            const baseDaily = currentIncome > 0 ? currentIncome : 0;
+            const daysAfterSunday = 30 - daysUntilSunday;
+
+            // Scenario A: Flat 30 Days
+            const scenarioBase = baseDaily * 30;
             
-            // Project forward 30 days from the most recent value
-            const projection = endValue + (dailyTrend * 30);
-            
-            // Format to currency, handling potential negative projections
-            return projection > 0 ? '$' + Math.round(projection).toLocaleString() : 'Loss Projected';
+            // Scenario B: Star Upgrade (+ ~15% base income jump after Sunday)
+            const starBoostedDaily = baseDaily * 1.15;
+            const scenarioStar = (baseDaily * daysUntilSunday) + (starBoostedDaily * daysAfterSunday);
+
+            // Scenario C: Optimized Effectiveness (+ ~5% steady growth)
+            const optDaily = baseDaily * 1.05;
+            const scenarioOpt = optDaily * 30;
+
+            // Scenario D: Decay/Neglect (- ~10% loss of effectiveness)
+            const decayDaily = baseDaily * 0.90;
+            const scenarioDecay = decayDaily * 30;
+
+            // Map to Interface
+            document.getElementById('ai-scenario-base').innerText = `$${Math.round(scenarioBase).toLocaleString()}`;
+            document.getElementById('ai-scenario-star').innerText = `$${Math.round(scenarioStar).toLocaleString()}`;
+            document.getElementById('ai-scenario-opt').innerText = `$${Math.round(scenarioOpt).toLocaleString()}`;
+            document.getElementById('ai-scenario-decay').innerText = `$${Math.round(scenarioDecay).toLocaleString()}`;
         }
 
         // 4. RETRIEVE MANAGEMENT DATABASE STATE
@@ -219,7 +275,6 @@
                     const employees = data.company_employees || {};
                     const empCount = Object.keys(employees).length;
                     
-                    // Directly access Torn's real profit variables
                     const liveDailyIncome = comp.daily_income || comp.daily_profit || 0; 
                     const vaultFunds = comp.company_bank || comp.bank || comp.funds || 0;
 
@@ -231,12 +286,15 @@
                     document.getElementById('company-daily-income').innerText = `$${Number(liveDailyIncome).toLocaleString()}`;
                     document.getElementById('company-funds').innerText = `$${Number(vaultFunds).toLocaleString()}`;
 
-                    // Process history metrics from logs
+                    // Extract Logs
                     const history = extractHistoryFromLogs(data.news);
                     
-                    // Render AI Forecast
-                    document.getElementById('ai-forecast').innerText = calculateForecast(history.income, liveDailyIncome);
-                    
+                    // Generate AI Projections
+                    // If no history exists yet, fallback to live daily income. Otherwise use the most recent confirmed day's income.
+                    const calculationBase = history.income.length > 0 ? history.income[history.income.length - 1] : liveDailyIncome;
+                    generateAIProjections(calculationBase);
+
+                    // Update Top Stats
                     document.getElementById('history-days').innerText = `${history.labels.length} Days Found`;
                     if (history.income.length > 0) {
                         const maxIncome = Math.max(...history.income);
