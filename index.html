@@ -3,50 +3,80 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Torn Company Ledger</title>
+    <title>Torn Company Ledger & Tracker</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gray-900 text-gray-100 font-sans min-h-screen pb-12">
 
     <nav class="bg-gray-800 border-b border-gray-700 p-4 shadow-lg mb-6">
-        <div class="max-w-7xl mx-auto flex justify-between items-center">
-            <h1 id="nav-company-name" class="text-xl font-bold tracking-wide text-red-500 uppercase">TORN HQ // REAL-TIME LEDGER</h1>
-            <span id="connection-status" class="bg-blue-900 text-blue-300 text-xs font-semibold px-2.5 py-0.5 rounded border border-blue-700">SYSTEM READY</span>
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+            <h1 id="nav-company-name" class="text-xl font-bold tracking-wide text-red-500 uppercase">TORN HQ // MANAGEMENT SYSTEM</h1>
+            <div class="flex items-center gap-4">
+                <span class="text-xs font-semibold bg-gray-900 px-3 py-1 rounded border border-gray-700 text-gray-300">
+                    Next 02:00 Update in: <span id="reset-countdown" class="text-amber-400 font-mono">--:--:--</span>
+                </span>
+                <span id="connection-status" class="bg-blue-900 text-blue-300 text-xs font-semibold px-2.5 py-0.5 rounded border border-blue-700">SYSTEM READY</span>
+            </div>
         </div>
     </nav>
 
     <main class="max-w-7xl mx-auto px-4 space-y-6">
         
         <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
-            <h2 class="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-700 pb-2 mb-4 text-center">02:00 TCT Daily Operational Totals</h2>
-            
+            <h2 class="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-700 pb-2 mb-4 text-center">Operational Totals</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm lg:text-base px-2">
                 <div class="space-y-2 border-b md:border-b-0 md:border-r border-gray-700/50 pb-4 md:pb-0 pr-4">
                     <p><span class="text-gray-400 font-medium">Firm Type:</span> <span id="company-type" class="text-white font-semibold">Loading...</span></p>
                     <p><span class="text-gray-400 font-medium">Active Roster:</span> <span id="company-employees-count" class="text-white font-semibold">Loading...</span></p>
                     <p><span class="text-gray-400 font-medium">Current Rating:</span> <span id="company-rating" class="text-amber-400 font-bold">Loading...</span></p>
-                    <p><span class="text-gray-400 font-medium">Last Update Point:</span> <span class="text-blue-400 font-semibold">02:00 TCT</span></p>
                 </div>
-                
                 <div class="space-y-2 border-b md:border-b-0 md:border-r border-gray-700/50 pb-4 md:pb-0 md:px-4">
                     <p><span class="text-gray-400 font-medium">Daily Income:</span> <span id="company-daily-income" class="text-green-400 font-bold">$0</span></p>
                     <p><span class="text-gray-400 font-medium">Estimated Weekly:</span> <span id="company-weekly-income" class="text-white font-semibold">$0</span></p>
                     <p><span class="text-gray-400 font-medium">Vault Bankroll:</span> <span id="company-funds" class="text-blue-400 font-bold">$0</span></p>
                 </div>
-                
                 <div class="space-y-2 md:pl-4">
                     <p><span class="text-gray-400 font-medium">All-Time High Day:</span> <span id="company-highest-income" class="text-white font-semibold">$0</span></p>
                     <p><span class="text-gray-400 font-medium">Running Average:</span> <span id="company-avg-income" class="text-white font-semibold">$0</span></p>
-                    <p><span class="text-gray-400 font-medium">Tracking Horizon:</span> <span id="history-days" class="text-gray-400 font-semibold">0 Days Logged</span></p>
+                    <p><span class="text-gray-400 font-medium">Data Points:</span> <span id="history-days" class="text-gray-400 font-semibold">0 Days Logged</span></p>
                 </div>
             </div>
         </div>
 
         <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
-            <h3 class="text-sm font-semibold text-gray-400 mb-2 uppercase tracking-wider">Historical Daily Performance Archive</h3>
-            <div class="w-full bg-gray-900 p-4 rounded-lg border border-gray-700 h-[400px] relative">
+            <h3 class="text-sm font-semibold text-gray-400 mb-2 uppercase tracking-wider">Daily Financial Archives</h3>
+            <div class="w-full bg-gray-900 p-4 rounded-lg border border-gray-700 h-[300px] relative">
                 <canvas id="dailyLogChart"></canvas>
+            </div>
+        </div>
+
+        <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
+            <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
+                <div>
+                    <h3 class="text-md font-bold text-white uppercase tracking-wider">Weekly Employee Training Status</h3>
+                    <p class="text-xs text-gray-400 mt-1">Make sure every team member is trained at least once every 7 days.</p>
+                </div>
+                <button onclick="resetAllTraining()" class="text-xs bg-red-950 text-red-400 border border-red-800 px-3 py-1.5 rounded font-semibold hover:bg-red-900 hover:text-white transition-all cursor-pointer">
+                    Reset All Weekly Status
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider">
+                            <th class="p-3">Employee Name</th>
+                            <th class="p-3">Position</th>
+                            <th class="p-3">Last Manual Training Event</th>
+                            <th class="p-3 text-center">Mark Trained This Week</th>
+                        </tr>
+                    </thead>
+                    <tbody id="training-roster-rows" class="divide-y divide-gray-700/60 text-sm">
+                        <tr>
+                            <td colspan="4" class="p-4 text-center text-gray-500 italic">Syncing live roster array...</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -55,66 +85,95 @@
     <script>
         let performanceChart = null;
 
-        // Pull saved data history or create baseline seed data to avoid empty screens
-        function getSavedHistory() {
-            const defaults = {
-                labels: ['May 30', 'May 31', 'June 1', 'June 2', 'June 3'],
-                income: [420000, 485000, 510000, 490000, 530000]
-            };
-            
-            const saved = localStorage.getItem('torn_daily_history');
-            if (saved) return JSON.parse(saved);
-            
-            localStorage.setItem('torn_daily_history', JSON.stringify(defaults));
-            return defaults;
+        // 1. AUTOMATED COUNTDOWN CLOCK ENGINE (Targets 02:00 TCT / UTC daily)
+        function runCountdownClock() {
+            setInterval(() => {
+                const now = new Date();
+                
+                // Establish target point for today at 02:00 UTC
+                let target = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 2, 0, 0);
+                
+                // If it's already past 02:00 UTC today, look forward to tomorrow's 02:00 point
+                if (now.getTime() >= target) {
+                    target += 24 * 60 * 60 * 1000;
+                }
+                
+                const timeDiff = target - now.getTime();
+                
+                const hours = Math.floor((timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((timeDiff % (1000 * 60)) / 1000);
+                
+                document.getElementById('reset-countdown').innerText = 
+                    `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            }, 1000);
         }
 
-        // Save new operational tracking snapshots
+        // 2. RETRIEVE HISTORIC DATA
+        function getSavedHistory() {
+            const defaults = { labels: ['May 30', 'May 31', 'June 1', 'June 2', 'June 3'], income: [420000, 485000, 510000, 490000, 530000] };
+            const saved = localStorage.getItem('torn_daily_history');
+            return saved ? JSON.parse(saved) : defaults;
+        }
+
         function saveDayToHistory(dateLabel, currentIncome) {
             let data = getSavedHistory();
-            
-            // Avoid duplication of the same tracking day block
             if (!data.labels.includes(dateLabel)) {
                 data.labels.push(dateLabel);
                 data.income.push(currentIncome);
-                
-                // Maintain maximum 14-day trailing horizon window
-                if (data.labels.length > 14) {
-                    data.labels.shift();
-                    data.income.shift();
-                }
+                if (data.labels.length > 14) { data.labels.shift(); data.income.shift(); }
                 localStorage.setItem('torn_daily_history', JSON.stringify(data));
             }
         }
 
-        // Build Daily Bar Graph Framework
+        // 3. WEEKLY TRAINING STORAGE CONTROLS
+        function getTrainingDatabase() {
+            const saved = localStorage.getItem('torn_training_db');
+            return saved ? JSON.parse(saved) : {};
+        }
+
+        function toggleTrainingState(id) {
+            let db = getTrainingDatabase();
+            const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            
+            if (db[id] && db[id].trainedThisWeek) {
+                // Untoggle it
+                db[id] = { trainedThisWeek: false, dateString: 'Never This Week' };
+            } else {
+                // Toggle it as complete
+                db[id] = { trainedThisWeek: true, dateString: `Trained on ${todayStr}` };
+            }
+            
+            localStorage.setItem('torn_training_db', JSON.stringify(db));
+            runDataPipeline(); // Refresh visuals immediately
+        }
+
+        function resetAllTraining() {
+            if(confirm("Are you sure you want to reset the weekly checks for everyone?")) {
+                localStorage.removeItem('torn_training_db');
+                runDataPipeline();
+            }
+        }
+
+        // 4. GRAPH BUILDER
         function updateGraphDisplay(historyData) {
             const ctx = document.getElementById('dailyLogChart').getContext('2d');
-            
-            if (performanceChart) {
-                performanceChart.destroy(); // Clear old memory layers
-            }
+            if (performanceChart) performanceChart.destroy();
 
             performanceChart = new Chart(ctx, {
-                type: 'bar', // Clean individual day blocks, no fake lines in between
+                type: 'bar',
                 data: {
                     labels: historyData.labels,
                     datasets: [{
                         label: 'Verified Daily Income (02:00 TCT)',
                         data: historyData.income,
-                        backgroundColor: '#38bdf8', // Sleek cyan bars
-                        borderColor: '#0284c7',
-                        borderWidth: 1,
+                        backgroundColor: '#38bdf8',
                         borderRadius: 4
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        legend: { labels: { color: '#9ca3af', font: { size: 12, weight: 'bold' } } },
-                        tooltip: { backgroundColor: '#1f2937', titleColor: '#f9fafb', bodyColor: '#e5e7eb' }
-                    },
                     scales: {
                         x: { grid: { display: false }, ticks: { color: '#9ca3af' } },
                         y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af', callback: v => '$' + v.toLocaleString() } }
@@ -123,7 +182,7 @@
             });
         }
 
-        // Load Live Core Data From Pipeline
+        // 5. MASTER SYNC ENGINE
         async function runDataPipeline() {
             try {
                 const response = await fetch('/api/company');
@@ -131,14 +190,75 @@
                 
                 if (data.company) {
                     const comp = data.company;
-                    const empCount = Object.keys(data.company_employees || {}).length;
+                    const employees = data.company_employees || {};
+                    const empCount = Object.keys(employees).length;
                     const liveDailyIncome = comp.daily_profit || 0; 
 
-                    // 1. Map layout elements
+                    // Render Standard Headers
                     document.getElementById('nav-company-name').innerText = `TORN HQ // ${comp.name || 'COMPANY CONTROL'}`;
                     document.getElementById('company-type').innerText = comp.company_type_name || 'Business Operation';
                     document.getElementById('company-employees-count').innerText = `${empCount} Members`;
                     document.getElementById('company-rating').innerText = `${comp.rating || '0'} Star`;
-                    
                     document.getElementById('company-daily-income').innerText = `$${Number(liveDailyIncome).toLocaleString()}`;
-                    document.getElementById('company-weekly-income').innerText = `$${Number(liveDailyIncome * 7
+                    document.getElementById('company-weekly-income').innerText = `$${Number(liveDailyIncome * 7).toLocaleString()}`;
+                    document.getElementById('company-funds').innerText = `$${Number(comp.funds || 0).toLocaleString()}`;
+
+                    // Lock Day Snapshot if past midnight boundaries
+                    const dateLabel = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    saveDayToHistory(dateLabel, liveDailyIncome);
+
+                    const runningHistory = getSavedHistory();
+                    document.getElementById('history-days').innerText = `${runningHistory.labels.length} Days Logged`;
+                    const maxIncome = Math.max(...runningHistory.income);
+                    const avgIncome = runningHistory.income.reduce((a, b) => a + b, 0) / runningHistory.income.length;
+                    document.getElementById('company-highest-income').innerText = `$${Math.round(maxIncome).toLocaleString()}`;
+                    document.getElementById('company-avg-income').innerText = `$${Math.round(avgIncome).toLocaleString()}`;
+                    updateGraphDisplay(runningHistory);
+
+                    // BUILD TRAINING CHECKLIST DYNAMICALLY
+                    const trContainer = document.getElementById('training-roster-rows');
+                    trContainer.innerHTML = ''; 
+                    
+                    const trainingDB = getTrainingDatabase();
+
+                    Object.keys(employees).forEach(id => {
+                        const emp = employees[id];
+                        const logRecord = trainingDB[id] || { trainedThisWeek: false, dateString: 'Not Trained Yet' };
+                        
+                        // Status styling based on completion state
+                        const textStyle = logRecord.trainedThisWeek ? 'text-green-400 font-semibold' : 'text-amber-500 font-medium animate-pulse';
+                        const actionBtnColor = logRecord.trainedThisWeek ? 'bg-green-950 text-green-400 border border-green-800' : 'bg-gray-700 text-gray-200 border border-gray-600 hover:bg-gray-600';
+                        const checkmarkIcon = logRecord.trainedThisWeek ? '✅ Done' : '⚠️ Click to Train';
+
+                        const rowHTML = `
+                            <tr class="hover:bg-gray-800/40 transition-colors">
+                                <td class="p-3 font-medium text-white">${emp.name} <span class="text-gray-500 text-xs">[ID: ${id}]</span></td>
+                                <td class="p-3 text-gray-400 text-xs md:text-sm">${emp.position}</td>
+                                <td class="p-3 text-xs ${textStyle}">${logRecord.dateString}</td>
+                                <td class="p-3 text-center">
+                                    <button onclick="toggleTrainingState('${id}')" class="text-xs ${actionBtnColor} px-3 py-1 rounded font-medium transition-all cursor-pointer">
+                                        ${checkmarkIcon}
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                        trContainer.insertAdjacentHTML('beforeend', rowHTML);
+                    });
+
+                    document.getElementById('connection-status').innerText = "LIVE PIPELINE ONLINE";
+                    document.getElementById('connection-status').className = "bg-green-950 text-green-400 text-xs font-semibold px-2.5 py-0.5 rounded border border-green-700";
+                }
+            } catch (error) {
+                console.error("Pipeline mapping fail:", error);
+                document.getElementById('connection-status').innerText = "OFFLINE REDIRECT ACTIVE";
+                document.getElementById('connection-status').className = "bg-amber-950 text-amber-400 text-xs font-semibold px-2.5 py-0.5 rounded border border-amber-700";
+            }
+        }
+
+        window.onload = function() {
+            runCountdownClock();
+            runDataPipeline();
+        };
+    </script>
+</body>
+</html>
