@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Torn Company Control Panel</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans min-h-screen">
+
+    <nav class="bg-gray-800 border-b border-gray-700 p-4 shadow-lg">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold tracking-wide text-red-500">TORN HQ // COMPANY DASHBOARD</h1>
+            <span id="connection-status" class="bg-yellow-900 text-yellow-300 text-xs font-semibold px-2.5 py-0.5 rounded border border-yellow-700 animate-pulse">Connecting API...</span>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
+                <p class="text-gray-400 text-sm font-medium uppercase tracking-wider">Company Name</p>
+                <h3 id="company-name" class="text-2xl font-bold mt-2 text-white">Loading...</h3>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
+                <p class="text-gray-400 text-sm font-medium uppercase tracking-wider">Daily Profit</p>
+                <h3 id="company-profit" class="text-2xl font-bold mt-2 text-green-400">$0</h3>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
+                <p class="text-gray-400 text-sm font-medium uppercase tracking-wider">Weekly Revenue</p>
+                <h3 id="company-funds" class="text-2xl font-bold mt-2 text-blue-400">$0</h3>
+            </div>
+        </div>
+
+        <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md overflow-hidden">
+            <div class="p-6 border-b border-gray-700">
+                <h3 class="text-lg font-bold text-white">Employee Performance Tracker</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-gray-700/50 text-gray-300 text-sm uppercase">
+                            <th class="p-4">Employee</th>
+                            <th class="p-4">Position</th>
+                            <th class="p-4">Effectiveness</th>
+                            <th class="p-4">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="employee-roster" class="divide-y divide-gray-700 text-sm">
+                        <tr>
+                            <td colspan="4" class="p-4 text-center text-gray-500">Awaiting secure data stream...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        async function loadDashboardData() {
+            try {
+                // Fetch data relatively from your live Render server pipeline
+                const response = await fetch('/api/company');
+                const data = await response.json();
+                
+                const profile = data.company;
+                const employees = data.company_employees || {};
+
+                // 1. Update Top Stats Cards
+                document.getElementById('company-name').innerText = profile.name || 'No Company Found';
+                document.getElementById('company-profit').innerText = `$${Number(profile.daily_profit || 0).toLocaleString()}`;
+                document.getElementById('company-funds').innerText = `$${Number(profile.funds || 0).toLocaleString()}`;
+
+                // 2. Build out Employee Table Rows dynamically
+                const rosterContainer = document.getElementById('employee-roster');
+                rosterContainer.innerHTML = ''; // Clear loading row
+
+                Object.keys(employees).forEach(id => {
+                    const emp = employees[id];
+                    const effColor = emp.effectiveness?.total >= 100 ? 'text-green-400' : 'text-amber-400';
+                    
+                    const row = `
+                        <tr class="hover:bg-gray-750 transition-colors">
+                            <td class="p-4 font-semibold text-white">${emp.name} <span class="text-gray-500 text-xs">[ID: ${id}]</span></td>
+                            <td class="p-4 text-gray-300">${emp.position}</td>
+                            <td class="p-4 ${effColor} font-mono font-bold">${emp.effectiveness?.total || 0}%</td>
+                            <td class="p-4">
+                                <span class="px-2 py-1 rounded text-xs font-bold ${emp.state === 'Okay' ? 'bg-green-950 text-green-400' : 'bg-red-950 text-red-400'}">
+                                    ${emp.state}
+                                </span>
+                            </td>
+                        </tr>
+                    `;
+                    rosterContainer.insertAdjacentHTML('beforeend', row);
+                });
+
+                // Update Status indicator badge
+                const statusBadge = document.getElementById('connection-status');
+                statusBadge.innerText = "LIVE DATA";
+                statusBadge.className = "bg-green-950 text-green-400 text-xs font-semibold px-2.5 py-0.5 rounded border border-green-700";
+
+            } catch (error) {
+                console.error("Error loading dashboard UI:", error);
+                const statusBadge = document.getElementById('connection-status');
+                statusBadge.innerText = "CONNECTION FAILED";
+                statusBadge.className = "bg-red-950 text-red-400 text-xs font-semibold px-2.5 py-0.5 rounded border border-red-700";
+            }
+        }
+
+        // Run setup on startup
+        loadDashboardData();
+    </script>
+</body>
+</html>
