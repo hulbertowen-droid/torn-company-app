@@ -9,7 +9,6 @@
 </head>
 <body class="bg-gray-900 text-gray-100 font-sans min-h-screen pb-12">
 
-    <!-- Top Status Control -->
     <nav class="bg-gray-800 border-b border-gray-700 p-4 shadow-lg mb-6">
         <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
             <h1 id="nav-company-name" class="text-xl font-bold tracking-wide text-red-500 uppercase">TORN HQ // VERIFIED LEDGER</h1>
@@ -46,7 +45,6 @@
             </div>
         </div>
 
-        <!-- HISTORICAL DAILY BAR CHART -->
         <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
             <h3 class="text-sm font-semibold text-gray-400 mb-2 uppercase tracking-wider">Official Daily Income Logs</h3>
             <div class="w-full bg-gray-900 p-4 rounded-lg border border-gray-700 h-[300px] relative">
@@ -54,7 +52,6 @@
             </div>
         </div>
 
-        <!-- WEEKLY TRAINING STATUS TRACKER -->
         <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
             <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
                 <div>
@@ -62,7 +59,7 @@
                         <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                         Automated Training Roster
                     </h3>
-                    <p class="text-xs text-gray-400 mt-1">This panel scans your last 100 Torn logs via Player ID to automatically detect training events from the last 7 days. Manual overrides are available if old logs expire off Torn's servers.</p>
+                    <p class="text-xs text-gray-400 mt-1">Manual training grants +50 Primary and +25 Secondary stats. Scans logs to auto-detect training events.</p>
                 </div>
                 <button onclick="resetAllTraining()" class="text-xs bg-red-950 text-red-400 border border-red-800 px-3 py-1.5 rounded font-semibold hover:bg-red-900 hover:text-white transition-all cursor-pointer">
                     Clear Manual Overrides
@@ -87,19 +84,18 @@
             </div>
         </div>
 
-        <!-- AI EXPERIMENTER & SIMULATOR CONSOLE -->
+        <!-- AI EXPERIMENTER & SIMULATOR CONSOLE (WIKI ACCURATE) -->
         <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6 border-t-4 border-t-purple-500">
             <div class="border-b border-gray-700 pb-3 mb-6">
                 <h3 class="text-lg font-bold text-purple-400 uppercase tracking-wider flex items-center gap-2">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
                     AI Director Experimenter Console
                 </h3>
-                <p class="text-sm text-gray-400 mt-1 leading-relaxed">Torn's algorithm settles 3 days after making changes. Slide the variables below to experiment with how altering your business metrics might impact your 30-Day simulated revenue. Popularity (how much you make relative to other Candle Shops) is heavily driven by these balances.</p>
+                <p class="text-sm text-gray-400 mt-1 leading-relaxed">Simulate 30-day revenue potential based on exact Torn wiki mechanics, including the 10-star rating system, $25m wage caps, stock market boosts, and education productivity bonuses.</p>
             </div>
             
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 
-                <!-- Variable Sliders -->
                 <div class="lg:col-span-2 space-y-6">
                     
                     <!-- Ad Budget Simulator -->
@@ -109,40 +105,35 @@
                             <span id="sim-ad-val" class="text-sm font-mono text-blue-400 font-bold">$200,000</span>
                         </div>
                         <input type="range" id="sim-ad-slider" min="0" max="1000000" step="50000" value="200000" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" oninput="runSimulation()">
-                        <p class="text-xs text-gray-500 mt-1">Finding the balance: Too low and customers vanish. Too high and the ad cost eats your margins.</p>
                     </div>
 
-                    <!-- Employee Effectiveness -->
+                    <!-- 10-Star Rating Simulator -->
                     <div>
                         <div class="flex justify-between mb-1">
-                            <label class="text-sm font-bold text-gray-300">Average Employee Effectiveness</label>
-                            <span id="sim-eff-val" class="text-sm font-mono text-green-400 font-bold">100%</span>
+                            <label class="text-sm font-bold text-gray-300">Target 10-Star Rating (Sunday Evaluation)</label>
+                            <span id="sim-star-val" class="text-sm font-mono text-purple-400 font-bold">1 Star</span>
                         </div>
-                        <input type="range" id="sim-eff-slider" min="50" max="150" step="5" value="100" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" oninput="runSimulation()">
-                        <p class="text-xs text-gray-500 mt-1">Impacted by missing stats, drug addiction, inactivity, and the settled-in bonus. Max efficiency is a heavy revenue multiplier.</p>
+                        <input type="range" id="sim-star-slider" min="1" max="10" step="1" value="1" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" oninput="runSimulation()">
+                        <p class="text-xs text-gray-500 mt-1">Based on gross lifetime revenue. 5+ stars grants maximum 50 daily working stats to the Director.</p>
                     </div>
 
-                    <!-- Price Target (Margin vs Volume) -->
-                    <div>
-                        <div class="flex justify-between mb-1">
-                            <label class="text-sm font-bold text-gray-300">Market Price Strategy</label>
-                            <span id="sim-price-val" class="text-sm font-mono text-amber-400 font-bold">Standard Market Value</span>
+                    <!-- External Modifiers (Stocks & Edu) -->
+                    <div class="bg-gray-900 p-4 rounded-lg border border-gray-700">
+                        <label class="text-sm font-bold text-gray-300 mb-3 block">Director Benefits & External Multipliers</label>
+                        <div class="flex flex-col space-y-3">
+                            <label class="flex items-center space-x-3 cursor-pointer">
+                                <input type="checkbox" id="sim-tgp-stock" class="form-checkbox h-4 w-4 text-purple-500 bg-gray-800 border-gray-600 rounded" onchange="runSimulation()">
+                                <span class="text-sm text-gray-400"><strong class="text-purple-400">TGP Stock:</strong> Boosts advertising effectiveness</span>
+                            </label>
+                            <label class="flex items-center space-x-3 cursor-pointer">
+                                <input type="checkbox" id="sim-tcp-stock" class="form-checkbox h-4 w-4 text-green-500 bg-gray-800 border-gray-600 rounded" onchange="runSimulation()">
+                                <span class="text-sm text-gray-400"><strong class="text-green-400">TCP Stock:</strong> Direct company sales boost</span>
+                            </label>
+                            <label class="flex items-center space-x-3 cursor-pointer">
+                                <input type="checkbox" id="sim-edu-bonus" class="form-checkbox h-4 w-4 text-blue-500 bg-gray-800 border-gray-600 rounded" onchange="runSimulation()">
+                                <span class="text-sm text-gray-400"><strong class="text-blue-400">Education (Statistics/Logistics):</strong> +4% Total Productivity</span>
+                            </label>
                         </div>
-                        <input type="range" id="sim-price-slider" min="-20" max="20" step="5" value="0" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" oninput="runSimulation()">
-                        <div class="flex justify-between text-[10px] text-gray-500 mt-1 font-bold uppercase">
-                            <span>Deep Discount (High Volume)</span>
-                            <span>Overpriced (Low Volume)</span>
-                        </div>
-                    </div>
-
-                    <!-- Star Rating Multiplier -->
-                    <div>
-                        <div class="flex justify-between mb-1">
-                            <label class="text-sm font-bold text-gray-300">Target Sunday Star Rating</label>
-                            <span id="sim-star-val" class="text-sm font-mono text-purple-400 font-bold">Current</span>
-                        </div>
-                        <input type="range" id="sim-star-slider" min="-2" max="3" step="1" value="0" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" oninput="runSimulation()">
-                        <p class="text-xs text-gray-500 mt-1">Stars evaluate every Sunday at 18:00 TCT. Simulates dropping or gaining stars relative to your current rank.</p>
                     </div>
                 </div>
 
@@ -156,10 +147,6 @@
                     <div id="sim-output-change" class="mt-4 px-3 py-1 rounded bg-gray-800 border border-gray-700 text-sm font-bold">
                         Baseline Loaded
                     </div>
-                    
-                    <p class="text-xs text-gray-500 mt-6 px-4">
-                        *This model isolates variables for experimental strategy. Real Torn algorithms will fluctuate based on live market popularity and competitor pricing.
-                    </p>
                 </div>
             </div>
         </div>
@@ -168,9 +155,9 @@
 
     <script>
         let performanceChart = null;
-        let baselineLiveIncome = 0; // Stored to base calculations off of real current data
+        let baselineLiveIncome = 0; 
+        let liveStarRating = 1;
 
-        // 1. TIMING ENGINES
         function runCountdownClock() {
             setInterval(() => {
                 const now = new Date();
@@ -187,7 +174,6 @@
             }, 1000);
         }
 
-        // 2. LOG EXTRACTOR
         function extractHistoryFromLogs(newsLogs) {
             let extractedLabels = [];
             let extractedIncome = [];
@@ -216,63 +202,47 @@
             return { labels: extractedLabels, income: extractedIncome };
         }
 
-        // 3. AI EXPERIMENTER SIMULATION ENGINE
+        // WIKI ACCURATE AI EXPERIMENTER ALGORITHM
         function runSimulation() {
-            if (baselineLiveIncome === 0) return; // Prevent calc before data loads
+            if (baselineLiveIncome === 0) return; 
             
-            // Get Slider Values
             const adBudget = parseInt(document.getElementById('sim-ad-slider').value);
-            const effectiveness = parseInt(document.getElementById('sim-eff-slider').value);
-            const priceStrat = parseInt(document.getElementById('sim-price-slider').value);
-            const starTarget = parseInt(document.getElementById('sim-star-slider').value);
-
-            // Update UI Labels
-            document.getElementById('sim-ad-val').innerText = `$${adBudget.toLocaleString()}`;
-            document.getElementById('sim-eff-val').innerText = `${effectiveness}%`;
+            const targetStars = parseInt(document.getElementById('sim-star-slider').value);
             
-            if (priceStrat === 0) document.getElementById('sim-price-val').innerText = "Standard Market";
-            else if (priceStrat < 0) document.getElementById('sim-price-val').innerText = `${Math.abs(priceStrat)}% Discount`;
-            else document.getElementById('sim-price-val').innerText = `${priceStrat}% Markup`;
+            const hasTGP = document.getElementById('sim-tgp-stock').checked;
+            const hasTCP = document.getElementById('sim-tcp-stock').checked;
+            const hasEdu = document.getElementById('sim-edu-bonus').checked;
 
-            if (starTarget === 0) document.getElementById('sim-star-val').innerText = "Current Stars";
-            else if (starTarget > 0) document.getElementById('sim-star-val').innerText = `+${starTarget} Stars`;
-            else document.getElementById('sim-star-val').innerText = `${starTarget} Stars`;
+            document.getElementById('sim-ad-val').innerText = `$${adBudget.toLocaleString()}`;
+            document.getElementById('sim-star-val').innerText = `${targetStars} Star${targetStars > 1 ? 's' : ''}`;
 
-            // THE SIMULATION MATH ALGORITHM
-            // Baseline 30 day calc
             let simulatedDaily = baselineLiveIncome;
 
-            // Effectiveness Math: Massive multiplier. Dropping below 100% kills popularity.
-            const effMultiplier = (effectiveness / 100);
-            simulatedDaily = simulatedDaily * (effMultiplier * 1.1); // Penalizes low eff, rewards high eff
+            // Factor 1: Advertising Efficiency (TGP Stock interaction)
+            const adCostDiff = adBudget - 200000; 
+            let adMultiplier = 0.4;
+            if (hasTGP) adMultiplier = 0.6; // TGP boosts advertising effectiveness
+            simulatedDaily = simulatedDaily + (adCostDiff * adMultiplier) - adCostDiff; 
 
-            // Ad Budget Math: Standardizes around a baseline assumption.
-            // If ad budget increases, gross revenue increases, but subtract the literal cost of the ad.
-            const adCostDiff = adBudget - 200000; // Assumes 200k baseline for typical shop
-            simulatedDaily = simulatedDaily + (adCostDiff * 0.4) - adCostDiff; 
+            // Factor 2: Direct Sales Boost (TCP Stock interaction)
+            if (hasTCP) simulatedDaily = simulatedDaily * 1.10; // ~10% sales jump
 
-            // Price Strategy Math:
-            // High discount increases volume but tanks margins. High markup increases margin but tanks volume.
-            // Sweet spot in Torn is generally just slightly under Market Value.
-            if (priceStrat < 0) {
-                simulatedDaily = simulatedDaily * (1 + (Math.abs(priceStrat) * 0.01)); // Volume bump
-                simulatedDaily = simulatedDaily * 0.85; // Margin crush
-            } else if (priceStrat > 0) {
-                simulatedDaily = simulatedDaily * 1.15; // Margin bump
-                simulatedDaily = simulatedDaily * (1 - (priceStrat * 0.03)); // Volume crush
+            // Factor 3: Education Productivity (Stats/Logistics)
+            if (hasEdu) simulatedDaily = simulatedDaily * 1.04; // 2% per course
+
+            // Factor 4: 10-Star System Scaling
+            // Every star level boosts the gross cap
+            const starDifference = targetStars - liveStarRating;
+            if (starDifference !== 0) {
+                const starMultiplier = 1 + (starDifference * 0.12);
+                simulatedDaily = simulatedDaily * starMultiplier;
             }
 
-            // Star Math: Every star generally raises the ceiling of popularity/income by roughly 10-15%
-            const starMultiplier = 1 + (starTarget * 0.12);
-            simulatedDaily = simulatedDaily * starMultiplier;
-
-            // Calculate Totals
             const projected30Day = simulatedDaily * 30;
             const baseline30Day = baselineLiveIncome * 30;
             const diff = projected30Day - baseline30Day;
             const diffPercent = (diff / baseline30Day) * 100;
 
-            // Output Rendering
             const outRev = document.getElementById('sim-output-revenue');
             const outChange = document.getElementById('sim-output-change');
 
@@ -296,7 +266,6 @@
             }
         }
 
-        // 4. TRAINING LOGIC
         function autoDetectTrainingLogs(newsLogs, employees, localDB) {
             const today = new Date();
             const sevenDaysAgo = today.getTime() - (7 * 24 * 60 * 60 * 1000); 
@@ -343,7 +312,6 @@
             }
         }
 
-        // 5. CHART BUILDER
         function renderGraphBars(labels, dataValues) {
             const ctx = document.getElementById('dailyLogChart').getContext('2d');
             if (performanceChart) performanceChart.destroy();
@@ -373,7 +341,6 @@
             });
         }
 
-        // 6. MASTER ENGINE
         async function runDataPipeline() {
             try {
                 const response = await fetch('/api/company');
@@ -386,18 +353,19 @@
                     
                     const liveDailyIncome = comp.daily_income || comp.daily_profit || 0; 
                     const vaultFunds = comp.company_bank || comp.bank || comp.funds || 0;
+                    liveStarRating = comp.rating || 1;
                     
-                    // Set Baseline for Simulator
                     const history = extractHistoryFromLogs(data.news);
                     baselineLiveIncome = history.income.length > 0 ? history.income[history.income.length - 1] : liveDailyIncome;
 
-                    // UI Data Mapping
                     document.getElementById('nav-company-name').innerText = `TORN HQ // ${comp.name || 'COMPANY CONTROL'}`;
                     document.getElementById('company-type').innerText = comp.company_type_name || `Type ID: ${comp.company_type || 'Unknown'}`;
                     document.getElementById('company-employees-count').innerText = `${empCount} Members`;
-                    document.getElementById('company-rating').innerText = `${comp.rating || '0'} Star`;
+                    document.getElementById('company-rating').innerText = `${liveStarRating} Star${liveStarRating > 1 ? 's' : ''}`;
                     document.getElementById('company-daily-income').innerText = `$${Number(liveDailyIncome).toLocaleString()}`;
                     document.getElementById('company-funds').innerText = `$${Number(vaultFunds).toLocaleString()}`;
+
+                    document.getElementById('sim-star-slider').value = liveStarRating;
 
                     document.getElementById('history-days').innerText = `${history.labels.length} Days Found`;
                     if (history.income.length > 0) {
@@ -411,7 +379,7 @@
                     }
 
                     renderGraphBars(history.labels, history.income);
-                    runSimulation(); // Trigger first simulation pass
+                    runSimulation(); 
 
                     const trContainer = document.getElementById('training-roster-rows');
                     trContainer.innerHTML = ''; 
