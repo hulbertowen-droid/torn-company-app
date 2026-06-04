@@ -4,12 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Torn Company Ledger & Tracker</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="bg-gray-900 text-gray-100 font-sans min-h-screen pb-12">
 
-    <!-- Top Status Control with Countdown Timer targeting 18:00 TCT -->
     <nav class="bg-gray-800 border-b border-gray-700 p-4 shadow-lg mb-6">
         <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
             <h1 id="nav-company-name" class="text-xl font-bold tracking-wide text-red-500 uppercase">TORN HQ // VERIFIED LEDGER</h1>
@@ -24,12 +23,12 @@
 
     <main class="max-w-7xl mx-auto px-4 space-y-6">
         
-        <!-- 3-COLUMN METRIC HEADER -->
+        <!-- METRICS -->
         <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
             <h2 class="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-700 pb-2 mb-4 text-center">Verified Operational Totals</h2>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm lg:text-base px-2">
                 <div class="space-y-2 border-b md:border-b-0 md:border-r border-gray-700/50 pb-4 md:pb-0 pr-4">
-                    <p><span class="text-gray-400 font-medium">Firm Type:</span> <span id="company-type" class="text-white font-semibold">Loading...</span></p>
+                    <p><span class="text-gray-400 font-medium">Firm Type ID:</span> <span id="company-type" class="text-white font-semibold">Loading...</span></p>
                     <p><span class="text-gray-400 font-medium">Active Roster:</span> <span id="company-employees-count" class="text-white font-semibold">Loading...</span></p>
                     <p><span class="text-gray-400 font-medium">Current Rating:</span> <span id="company-rating" class="text-amber-400 font-bold">Loading...</span></p>
                 </div>
@@ -46,41 +45,18 @@
             </div>
         </div>
 
-        <!-- HISTORICAL DAILY BAR CHART -->
+        <!-- DIAGNOSTIC PANEL (Hidden unless needed) -->
+        <div id="diagnostic-panel" class="hidden bg-red-950/40 border border-red-800 rounded-xl shadow-md p-6">
+            <h3 class="text-sm font-bold text-red-500 mb-2 uppercase tracking-wider">⚠️ Diagnostic Mode: Raw API Logs</h3>
+            <p class="text-xs text-red-300 mb-4">No daily income logs were detected. Showing the last 10 logs directly from Torn below so we can find the exact wording:</p>
+            <ul id="diagnostic-logs" class="text-xs font-mono text-gray-300 space-y-2 list-disc pl-4 bg-gray-900 p-4 rounded border border-gray-700"></ul>
+        </div>
+
+        <!-- CHART -->
         <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
             <h3 class="text-sm font-semibold text-gray-400 mb-2 uppercase tracking-wider">Official Daily Income Logs</h3>
             <div class="w-full bg-gray-900 p-4 rounded-lg border border-gray-700 h-[300px] relative">
                 <canvas id="dailyLogChart"></canvas>
-            </div>
-        </div>
-
-        <!-- WEEKLY TRAINING STATUS TRACKER -->
-        <div class="bg-gray-800 rounded-xl border border-gray-700 shadow-md p-6">
-            <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
-                <div>
-                    <h3 class="text-md font-bold text-white uppercase tracking-wider">Weekly Employee Training Status</h3>
-                    <p class="text-xs text-gray-400 mt-1">Make sure every team member is trained at least once every 7 days.</p>
-                </div>
-                <button onclick="resetAllTraining()" class="text-xs bg-red-950 text-red-400 border border-red-800 px-3 py-1.5 rounded font-semibold hover:bg-red-900 hover:text-white transition-all cursor-pointer">
-                    Reset All Weekly Status
-                </button>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider">
-                            <th class="p-3">Employee Name</th>
-                            <th class="p-3">Position</th>
-                            <th class="p-3">Last Manual Training Event</th>
-                            <th class="p-3 text-center">Mark Trained This Week</th>
-                        </tr>
-                    </thead>
-                    <tbody id="training-roster-rows" class="divide-y divide-gray-700/60 text-sm">
-                        <tr>
-                            <td colspan="4" class="p-4 text-center text-gray-500 italic">Syncing live roster array...</td>
-                        </tr>
-                    </tbody>
-                </table>
             </div>
         </div>
 
@@ -89,14 +65,11 @@
     <script>
         let performanceChart = null;
 
-        // 1. TORN CITY TIME COUNTDOWN TIMER (Targets ~18:00 TCT daily update cycle)
         function runCountdownClock() {
             setInterval(() => {
                 const now = new Date();
                 let target = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 18, 0, 0);
-                if (now.getTime() >= target) {
-                    target += 24 * 60 * 60 * 1000;
-                }
+                if (now.getTime() >= target) target += 24 * 60 * 60 * 1000;
                 const timeDiff = target - now.getTime();
                 const hours = Math.floor((timeDiff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
                 const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
@@ -107,7 +80,6 @@
             }, 1000);
         }
 
-        // 2. ADAPTIVE PARSE LOG STRINGS FROM API NEWS FEED (Broadened for Candle Shop log types)
         function extractHistoryFromLogs(newsLogs) {
             let extractedLabels = [];
             let extractedIncome = [];
@@ -116,14 +88,14 @@
                 Object.values(newsLogs).forEach(log => {
                     const text = log.news;
                     if (text) {
-                        // Checks for all possible variations of daily rollover profit/income entries
                         const lowText = text.toLowerCase();
-                        if (lowText.includes("daily income") || lowText.includes("company cleared") || lowText.includes("profit") || lowText.includes("revenue")) {
+                        if (lowText.includes("daily income") || lowText.includes("profit") || lowText.includes("cleared") || lowText.includes("revenue") || lowText.includes("loss")) {
                             
-                            // Extract numbers following the '$' symbol
-                            const match = text.match(/\$(\d{1,3}(?:,\d{3})*|\d+)/);
+                            // Matches positive and negative money formats
+                            const match = text.match(/[\$-](\d{1,3}(?:,\d{3})*|\d+)/);
                             if (match) {
-                                const numericValue = parseInt(match[1].replace(/,/g, ''), 10);
+                                let numericValue = parseInt(match[1].replace(/,/g, ''), 10);
+                                if (text.includes("loss") || text.includes("-$")) numericValue = -Math.abs(numericValue);
                                 
                                 const logDate = new Date(log.timestamp * 1000);
                                 const formattedDate = logDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -140,21 +112,6 @@
             return { labels: extractedLabels, income: extractedIncome };
         }
 
-        // 3. RETRIEVE MANAGEMENT DATABASE STATE
-        function getTrainingDatabase() {
-            const saved = localStorage.getItem('torn_training_db');
-            return saved ? JSON.parse(saved) : {};
-        }
-
-        function toggleTrainingState(id) {
-            let db = getTrainingDatabase();
-            const todayStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            db[id] = (db[id] && db[id].trainedThisWeek) ? { trainedThisWeek: false, dateString: 'Never This Week' } : { trainedThisWeek: true, dateString: `Trained on ${todayStr}` };
-            localStorage.setItem('torn_training_db', JSON.stringify(db));
-            runDataPipeline();
-        }
-
-        // 4. CHART BUILD ENGINE
         function renderGraphBars(labels, dataValues) {
             const ctx = document.getElementById('dailyLogChart').getContext('2d');
             if (performanceChart) performanceChart.destroy();
@@ -169,7 +126,7 @@
                     datasets: [{
                         label: 'Official Daily Income (18:00 TCT)',
                         data: activeData,
-                        backgroundColor: '#38bdf8',
+                        backgroundColor: activeData.map(val => val < 0 ? '#ef4444' : '#38bdf8'),
                         borderRadius: 4
                     }]
                 },
@@ -184,7 +141,6 @@
             });
         }
 
-        // 5. MASTER SYNC ENGINE
         async function runDataPipeline() {
             try {
                 const response = await fetch('/api/company');
@@ -195,22 +151,21 @@
                     const employees = data.company_employees || {};
                     const empCount = Object.keys(employees).length;
                     
-                    // Directly access Torn's real profit variables from the profile
-                    const liveDailyIncome = comp.daily_profit || 0; 
+                    // Force accurate naming conventions mapped to the Torn API
+                    const liveDailyIncome = comp.daily_income || 0; 
+                    const vaultFunds = comp.company_bank || comp.bank || 0;
 
-                    // Render Standard UI elements
                     document.getElementById('nav-company-name').innerText = `TORN HQ // ${comp.name || 'COMPANY CONTROL'}`;
-                    document.getElementById('company-type').innerText = comp.company_type_name || 'Business Operation';
+                    document.getElementById('company-type').innerText = `Type ID: ${comp.company_type || 'Unknown'}`;
                     document.getElementById('company-employees-count').innerText = `${empCount} Members`;
                     document.getElementById('company-rating').innerText = `${comp.rating || '0'} Star`;
                     document.getElementById('company-daily-income').innerText = `$${Number(liveDailyIncome).toLocaleString()}`;
+                    document.getElementById('company-daily-income').className = liveDailyIncome < 0 ? 'text-red-400 font-bold' : 'text-green-400 font-bold';
                     document.getElementById('company-weekly-income').innerText = `$${Number(liveDailyIncome * 7).toLocaleString()}`;
-                    document.getElementById('company-funds').innerText = `$${Number(comp.funds || 0).toLocaleString()}`;
+                    document.getElementById('company-funds').innerText = `$${Number(vaultFunds).toLocaleString()}`;
 
-                    // Process history metrics from logs
                     const history = extractHistoryFromLogs(data.news);
                     
-                    // If history array matches successfully, populate metrics. Otherwise fallback to live baseline values.
                     document.getElementById('history-days').innerText = `${history.labels.length} Days Found`;
                     if (history.income.length > 0) {
                         const maxIncome = Math.max(...history.income);
@@ -220,37 +175,23 @@
                     } else {
                         document.getElementById('company-highest-income').innerText = `$${Number(liveDailyIncome).toLocaleString()}`;
                         document.getElementById('company-avg-income').innerText = `$${Number(liveDailyIncome).toLocaleString()}`;
+                        
+                        // DIAGNOSTIC PANEL TRIGGER (Fires when 0 logs match)
+                        const diagPanel = document.getElementById('diagnostic-panel');
+                        const diagLogs = document.getElementById('diagnostic-logs');
+                        diagPanel.classList.remove('hidden');
+                        
+                        if (!data.news || Object.keys(data.news).length === 0) {
+                            diagLogs.innerHTML = "<li class='text-red-400 font-bold'>No news logs found in the API response. You must be the Director and your API Key must be set to 'Limited Access' or higher.</li>";
+                        } else {
+                            const rawLogs = Object.values(data.news).map(l => l.news).slice(0, 10);
+                            rawLogs.forEach(logText => {
+                                diagLogs.innerHTML += `<li>${logText}</li>`;
+                            });
+                        }
                     }
 
-                    // Draw chart bars
                     renderGraphBars(history.labels, history.income);
-
-                    // Rebuild employee tracking table
-                    const trContainer = document.getElementById('training-roster-rows');
-                    trContainer.innerHTML = ''; 
-                    const trainingDB = getTrainingDatabase();
-
-                    Object.keys(employees).forEach(id => {
-                        const emp = employees[id];
-                        const logRecord = trainingDB[id] || { trainedThisWeek: false, dateString: 'Not Trained Yet' };
-                        const textStyle = logRecord.trainedThisWeek ? 'text-green-400 font-semibold' : 'text-amber-500 font-medium animate-pulse';
-                        const actionBtnColor = logRecord.trainedThisWeek ? 'bg-green-950 text-green-400 border border-green-800' : 'bg-gray-700 text-gray-200 border border-gray-600 hover:bg-gray-600';
-                        const checkmarkIcon = logRecord.trainedThisWeek ? '✅ Done' : '⚠️ Click to Train';
-
-                        const rowHTML = `
-                            <tr class="hover:bg-gray-800/40 transition-colors">
-                                <td class="p-3 font-medium text-white">${emp.name} <span class="text-gray-500 text-xs">[ID: ${id}]</span></td>
-                                <td class="p-3 text-gray-400 text-xs md:text-sm">${emp.position}</td>
-                                <td class="p-3 text-xs ${textStyle}">${logRecord.dateString}</td>
-                                <td class="p-3 text-center">
-                                    <button onclick="toggleTrainingState('${id}')" class="text-xs ${actionBtnColor} px-3 py-1 rounded font-medium transition-all cursor-pointer">
-                                        ${checkmarkIcon}
-                                    </button>
-                                </td>
-                            </tr>
-                        `;
-                        trContainer.insertAdjacentHTML('beforeend', rowHTML);
-                    });
 
                     document.getElementById('connection-status').innerText = "LIVE LOG READOUT ACTIVE";
                     document.getElementById('connection-status').className = "bg-green-950 text-green-400 text-xs font-semibold px-2.5 py-0.5 rounded border border-green-700";
