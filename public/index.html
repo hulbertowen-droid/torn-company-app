@@ -13,153 +13,169 @@
     <nav class="bg-gray-800 border-b-2 border-red-700 p-4 shadow-lg mb-6">
         <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
             <div class="flex items-center gap-3">
-                <!-- Spider/Target Reticle Icon -->
                 <svg class="w-8 h-8 text-red-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-                <h1 class="text-xl font-bold text-red-500 uppercase tracking-widest">ARACHNID WAR NETWORK // COMMANDER: OWEN777 [3776908]</h1>
+                <h1 class="text-xl font-bold text-red-500 uppercase tracking-widest">ARACHNID WAR NETWORK // COMMANDER: OWEN777</h1>
             </div>
             <div class="flex items-center gap-4">
                 <span class="text-sm font-bold bg-gray-900 px-4 py-1.5 rounded border border-red-800 text-gray-200 flex items-center gap-2">
-                    <span class="relative flex h-3 w-3">
-                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                      <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                    </span>
-                    Chain Drops In: <span id="chain-timer" class="text-red-400 font-mono text-lg">05:00</span>
+                    <span class="relative flex h-3 w-3"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>
+                    Chain Drops In: <span id="chain-timer" class="text-red-400 font-mono text-lg">--:--</span>
                 </span>
-                <span class="bg-red-950 text-red-400 text-xs font-bold px-3 py-1 rounded border border-red-700">RANKED WAR ACTIVE</span>
+                <span id="war-status" class="bg-red-950 text-red-400 text-xs font-bold px-3 py-1 rounded border border-red-700">FETCHING API...</span>
             </div>
         </div>
     </nav>
 
-    <main class="max-w-7xl mx-auto px-4 space-y-6"><!-- War Score Board -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
+    <main class="max-w-7xl mx-auto px-4 space-y-6">
+        <!-- Live War Score Board -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
             <div class="border-b md:border-b-0 md:border-r border-gray-700 pb-4 md:pb-0">
                 <p class="text-gray-400 text-xs uppercase font-bold tracking-wider">Active Chain</p>
-                <p class="text-blue-400 font-black text-4xl mt-1" id="chain-count">249</p>
-                <p class="text-xs text-gray-500 mt-2 font-semibold">Next Bonus: <span class="text-amber-400">250 (160 Resp)</span></p>
+                <p class="text-blue-400 font-black text-4xl mt-1" id="chain-count">0</p>
+                <p class="text-xs text-gray-500 mt-2 font-semibold">Max Hit Multiplier Active</p>
             </div>
             <div class="border-b md:border-b-0 md:border-r border-gray-700 pb-4 md:pb-0 pl-0 md:pl-4">
                 <p class="text-gray-400 text-xs uppercase font-bold tracking-wider">Our Faction Score</p>
-                <p class="text-green-400 font-black text-4xl mt-1">14,250</p>
-                <p class="text-xs text-gray-500 mt-2 font-semibold">Target Score: 20,000</p>
+                <p class="text-green-400 font-black text-4xl mt-1" id="our-score">0</p>
+                <p class="text-xs text-gray-500 mt-2 font-semibold">Tug of War Lead</p>
             </div>
-            <div class="border-b md:border-b-0 md:border-r border-gray-700 pb-4 md:pb-0 pl-0 md:pl-4">
+            <div class="pl-0 md:pl-4">
                 <p class="text-gray-400 text-xs uppercase font-bold tracking-wider">Enemy Score</p>
-                <p class="text-red-400 font-black text-4xl mt-1">11,105</p>
-                <p class="text-xs text-gray-500 mt-2 font-semibold">Opponent: <span class="text-gray-300">The Sinister Six</span></p>
+                <p class="text-red-400 font-black text-4xl mt-1" id="enemy-score">0</p>
+                <p class="text-xs text-gray-500 mt-2 font-semibold">Opponent: <span id="enemy-name" class="text-gray-300">Searching...</span></p>
             </div>
-            <div class="pl-0 md:pl-4 flex flex-col justify-center">
-                <p class="text-gray-400 text-xs uppercase font-bold tracking-wider mb-2">War Dominance</p>
-                <div class="w-full bg-red-900 rounded-full h-4 mb-1 overflow-hidden flex">
-                    <div class="bg-green-500 h-4" style="width: 56%"></div>
-                    <div class="bg-red-500 h-4" style="width: 44%"></div>
-                </div>
-                <div class="flex justify-between text-xs font-bold">
-                    <span class="text-green-400">56%</span>
-                    <span class="text-red-400">44%</span>
-                </div>
-            </div>
-        </div><!-- Enemy Target Roster -->
+        </div><!-- Live Operative Bar Graph -->
         <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
-            <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
-                <div>
-                    <h3 class="text-md font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                        <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                        Priority Target Roster
-                    </h3>
-                    <p class="text-xs text-gray-400 mt-1">Live enemy statuses. Fair Fight (FF) score indicates respect multiplier potential.</p>
-                </div>
-                <button class="text-xs bg-gray-700 text-gray-300 border border-gray-600 px-3 py-1.5 rounded font-semibold hover:bg-gray-600 transition-all">
-                    Refresh API
-                </button>
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider">Operative Combat Records</h3>
+                <button onclick="runWarDataPipeline()" class="text-xs bg-gray-700 text-gray-300 border border-gray-600 px-3 py-1.5 rounded font-semibold hover:bg-gray-600 transition-all">Force Sync</button>
             </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider">
-                            <th class="p-3 rounded-tl">Enemy Operative</th>
-                            <th class="p-3">Level</th>
-                            <th class="p-3 text-center">Status</th>
-                            <th class="p-3 text-center">Est. Fair Fight</th>
-                            <th class="p-3 text-right rounded-tr">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-700/60 text-sm">
-                        <tr class="hover:bg-gray-700/30 transition-colors">
-                            <td class="p-3 font-bold text-white">VenomStrike <span class="text-gray-500 text-xs font-normal">[104829]</span></td>
-                            <td class="p-3 text-gray-300">85</td>
-                            <td class="p-3 text-center"><span class="bg-green-900/50 text-green-400 border border-green-800 px-2 py-1 rounded text-xs font-bold">Okay</span></td>
-                            <td class="p-3 text-center"><span class="text-amber-400 font-bold">3.00x</span> <span class="text-xs text-gray-500">(Max)</span></td>
-                            <td class="p-3 text-right"><button class="bg-red-600 hover:bg-red-500 text-white text-xs font-bold px-4 py-1.5 rounded transition-colors">ATTACK</button></td>
-                        </tr>
-                        <tr class="hover:bg-gray-700/30 transition-colors opacity-60">
-                            <td class="p-3 font-bold text-white">GoblinKing <span class="text-gray-500 text-xs font-normal">[293847]</span></td>
-                            <td class="p-3 text-gray-300">92</td>
-                            <td class="p-3 text-center"><span class="bg-red-900/50 text-red-400 border border-red-800 px-2 py-1 rounded text-xs font-bold flex items-center justify-center gap-1"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg> Hosp (0:45:12)</span></td>
-                            <td class="p-3 text-center"><span class="text-amber-400 font-bold">3.00x</span></td>
-                            <td class="p-3 text-right"><button class="bg-gray-700 text-gray-500 cursor-not-allowed text-xs font-bold px-4 py-1.5 rounded">UNAVAILABLE</button></td>
-                        </tr>
-                        <tr class="hover:bg-gray-700/30 transition-colors">
-                            <td class="p-3 font-bold text-white">DocOct <span class="text-gray-500 text-xs font-normal">[883721]</span></td>
-                            <td class="p-3 text-gray-300">41</td>
-                            <td class="p-3 text-center"><span class="bg-green-900/50 text-green-400 border border-green-800 px-2 py-1 rounded text-xs font-bold">Okay</span></td>
-                            <td class="p-3 text-center"><span class="text-blue-400 font-bold">1.85x</span></td>
-                            <td class="p-3 text-right"><button class="bg-red-600 hover:bg-red-500 text-white text-xs font-bold px-4 py-1.5 rounded transition-colors">ATTACK</button></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- War Respect Log Chart -->
-        <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
-            <h3 class="text-sm font-bold text-gray-400 mb-4 uppercase tracking-wider">Respect Gained (Last 6 Hours)</h3>
-            <div class="w-full bg-gray-900 p-4 rounded-lg border border-gray-700 h-[250px] relative">
-                <canvas id="warRespectChart"></canvas>
+            <div class="w-full bg-gray-900 p-4 rounded-lg border border-gray-700 h-[400px] relative">
+                <canvas id="operativeChart"></canvas>
             </div>
         </div>
     </main><script>
-        // Simulated Chain Timer Logic
-        let timeLeft = 300; // 5 minutes in seconds
-        function updateTimer() {
-            const minutes = Math.floor(timeLeft / 60);
-            const seconds = timeLeft % 60;
-            document.getElementById('chain-timer').innerText = 
-                `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-            
-            if (timeLeft > 0) {
-                timeLeft--;
-            } else {
-                timeLeft = 300; // Reset for simulation
-            }
-        }
-        setInterval(updateTimer, 1000);
+        let liveTimer = null;
+        let opChart = null;
 
-        // Simulated Chart
-        const ctx = document.getElementById('warRespectChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: ['T-6h', 'T-5h', 'T-4h', 'T-3h', 'T-2h', 'T-1h', 'Now'],
-                datasets: [{
-                    label: 'Respect Generated',
-                    data: [450, 800, 1200, 1600, 2500, 1800, 3100],
-                    borderColor: '#ef4444',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    borderWidth: 3,
-                    tension: 0.3,
-                    fill: true
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { grid: { display: false }, ticks: { color: '#9ca3af' } },
-                    y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } }
+        // Chain Countdown Engine
+        function startChainTimer(secondsLeft) {
+            if (liveTimer) clearInterval(liveTimer);
+            let timeLeft = secondsLeft;
+            
+            liveTimer = setInterval(() => {
+                const minutes = Math.floor(timeLeft / 60);
+                const seconds = timeLeft % 60;
+                document.getElementById('chain-timer').innerText = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                
+                if (timeLeft > 0) timeLeft--;
+            }, 1000);
+        }
+
+        // Live API Fetch Engine
+        async function runWarDataPipeline() {
+            try {
+                // Hits your local server which securely holds the API key
+                const response = await fetch('/api/faction');
+                const data = await response.json();
+
+                if (data.success && data.faction) {
+                    const f = data.faction;
+
+                    // 1. Map Chain Data
+                    if (f.chain) {
+                        document.getElementById('chain-count').innerText = f.chain.current;
+                        startChainTimer(f.chain.timeout);
+                    }
+
+                    // 2. Map Ranked War Data
+                    if (f.rankedwars && Object.keys(f.rankedwars).length > 0) {
+                        const warId = Object.keys(f.rankedwars)[0];
+                        const warData = f.rankedwars[warId].factions;
+                        
+                        // Sort out which faction is ours vs the enemy
+                        const ourId = f.ID;
+                        const enemyId = Object.keys(warData).find(id => parseInt(id) !== ourId);
+                        
+                        document.getElementById('our-score').innerText = warData[ourId].score.toLocaleString();
+                        document.getElementById('enemy-score').innerText = warData[enemyId].score.toLocaleString();
+                        document.getElementById('enemy-name').innerText = warData[enemyId].name;
+                        
+                        document.getElementById('war-status').innerText = "WAR DATA SYNCED";
+                        document.getElementById('war-status').className = "bg-green-950 text-green-400 text-xs font-bold px-3 py-1 rounded border border-green-700";
+
+                        // Prep data for Chart
+                        buildBarChart(warData[ourId].members);
+                    } else {
+                        document.getElementById('war-status').innerText = "NO ACTIVE WAR";
+                    }
                 }
+            } catch (error) {
+                console.error("API Fetch Error:", error);
+                document.getElementById('war-status').innerText = "API DISCONNECTED";
+                document.getElementById('war-status').className = "bg-red-950 text-red-400 text-xs font-bold px-3 py-1 rounded border border-red-700";
             }
-        });
+        }function buildBarChart(memberData) {
+            const ctx = document.getElementById('operativeChart').getContext('2d');
+            if (opChart) opChart.destroy();
+
+            let names = [];
+            let hitsMade = [];
+            let respectEarned = [];
+
+            // Loop through all faction members currently engaged in the war
+            Object.values(memberData).forEach(operative => {
+                if(operative.attacks > 0) { // Only graph active combatants
+                    names.push(operative.name);
+                    hitsMade.push(operative.attacks);
+                    respectEarned.push(operative.score);
+                }
+            });
+
+            opChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: names,
+                    datasets: [
+                        {
+                            label: 'Confirmed Hits (Attacks)',
+                            data: hitsMade,
+                            backgroundColor: '#ef4444', // Red for Hits
+                            borderWidth: 1,
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Respect Score Generated',
+                            data: respectEarned,
+                            backgroundColor: '#3b82f6', // Blue for Respect
+                            borderWidth: 1,
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { 
+                            grid: { display: false }, 
+                            ticks: { color: '#9ca3af', maxRotation: 45, minRotation: 45 } 
+                        },
+                        y: { 
+                            grid: { color: '#374151' }, 
+                            ticks: { color: '#9ca3af' },
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#e5e7eb' } }
+                    }
+                }
+            });
+        }
+
+        // Boot system on load
+        window.onload = runWarDataPipeline;
     </script>
 </body>
 </html>
