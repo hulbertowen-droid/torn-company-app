@@ -1,150 +1,170 @@
-function runSimulation() {
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Torn War Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans min-h-screen pb-12">
 
-    if (baselineLiveIncome === 0) return;
+    <!-- Navbar -->
+    <nav class="bg-gray-800 border-b-2 border-red-700 p-4 shadow-lg mb-6">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <!-- Spider/Target Reticle Icon -->
+                <svg class="w-8 h-8 text-red-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                <h1 class="text-xl font-bold text-red-500 uppercase tracking-widest">ARACHNID WAR NETWORK // COMMANDER: OWEN777 [3776908]</h1>
+            </div>
+            <div class="flex items-center gap-4">
+                <span class="text-sm font-bold bg-gray-900 px-4 py-1.5 rounded border border-red-800 text-gray-200 flex items-center gap-2">
+                    <span class="relative flex h-3 w-3">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                    </span>
+                    Chain Drops In: <span id="chain-timer" class="text-red-400 font-mono text-lg">05:00</span>
+                </span>
+                <span class="bg-red-950 text-red-400 text-xs font-bold px-3 py-1 rounded border border-red-700">RANKED WAR ACTIVE</span>
+            </div>
+        </div>
+    </nav>
 
-    const adBudget = parseInt(document.getElementById('sim-ad-slider').value);
-    const envScore = parseInt(document.getElementById('sim-env-slider').value);
-    const effScore = parseInt(document.getElementById('sim-eff-slider').value);
-    const targetStars = parseInt(document.getElementById('sim-star-slider').value);
+    <main class="max-w-7xl mx-auto px-4 space-y-6">
+        <!-- War Score Board -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
+            <div class="border-b md:border-b-0 md:border-r border-gray-700 pb-4 md:pb-0">
+                <p class="text-gray-400 text-xs uppercase font-bold tracking-wider">Active Chain</p>
+                <p class="text-blue-400 font-black text-4xl mt-1" id="chain-count">249</p>
+                <p class="text-xs text-gray-500 mt-2 font-semibold">Next Bonus: <span class="text-amber-400">250 (160 Resp)</span></p>
+            </div>
+            <div class="border-b md:border-b-0 md:border-r border-gray-700 pb-4 md:pb-0 pl-0 md:pl-4">
+                <p class="text-gray-400 text-xs uppercase font-bold tracking-wider">Our Faction Score</p>
+                <p class="text-green-400 font-black text-4xl mt-1">14,250</p>
+                <p class="text-xs text-gray-500 mt-2 font-semibold">Target Score: 20,000</p>
+            </div>
+            <div class="border-b md:border-b-0 md:border-r border-gray-700 pb-4 md:pb-0 pl-0 md:pl-4">
+                <p class="text-gray-400 text-xs uppercase font-bold tracking-wider">Enemy Score</p>
+                <p class="text-red-400 font-black text-4xl mt-1">11,105</p>
+                <p class="text-xs text-gray-500 mt-2 font-semibold">Opponent: <span class="text-gray-300">The Sinister Six</span></p>
+            </div>
+            <div class="pl-0 md:pl-4 flex flex-col justify-center">
+                <p class="text-gray-400 text-xs uppercase font-bold tracking-wider mb-2">War Dominance</p>
+                <div class="w-full bg-red-900 rounded-full h-4 mb-1 overflow-hidden flex">
+                    <div class="bg-green-500 h-4" style="width: 56%"></div>
+                    <div class="bg-red-500 h-4" style="width: 44%"></div>
+                </div>
+                <div class="flex justify-between text-xs font-bold">
+                    <span class="text-green-400">56%</span>
+                    <span class="text-red-400">44%</span>
+                </div>
+            </div>
+        </div>
 
-    const hasTGP = document.getElementById('sim-tgp-stock').checked;
-    const hasAdEdu = document.getElementById('sim-ad-edu').checked;
+        <!-- Enemy Target Roster -->
+        <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
+            <div class="flex justify-between items-center border-b border-gray-700 pb-3 mb-4">
+                <div>
+                    <h3 class="text-md font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        Priority Target Roster
+                    </h3>
+                    <p class="text-xs text-gray-400 mt-1">Live enemy statuses. Fair Fight (FF) score indicates respect multiplier potential.</p>
+                </div>
+                <button class="text-xs bg-gray-700 text-gray-300 border border-gray-600 px-3 py-1.5 rounded font-semibold hover:bg-gray-600 transition-all">
+                    Refresh API
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-gray-900 text-gray-400 text-xs uppercase tracking-wider">
+                            <th class="p-3 rounded-tl">Enemy Operative</th>
+                            <th class="p-3">Level</th>
+                            <th class="p-3 text-center">Status</th>
+                            <th class="p-3 text-center">Est. Fair Fight</th>
+                            <th class="p-3 text-right rounded-tr">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-700/60 text-sm">
+                        <tr class="hover:bg-gray-700/30 transition-colors">
+                            <td class="p-3 font-bold text-white">VenomStrike <span class="text-gray-500 text-xs font-normal">[104829]</span></td>
+                            <td class="p-3 text-gray-300">85</td>
+                            <td class="p-3 text-center"><span class="bg-green-900/50 text-green-400 border border-green-800 px-2 py-1 rounded text-xs font-bold">Okay</span></td>
+                            <td class="p-3 text-center"><span class="text-amber-400 font-bold">3.00x</span> <span class="text-xs text-gray-500">(Max)</span></td>
+                            <td class="p-3 text-right"><button class="bg-red-600 hover:bg-red-500 text-white text-xs font-bold px-4 py-1.5 rounded transition-colors">ATTACK</button></td>
+                        </tr>
+                        <tr class="hover:bg-gray-700/30 transition-colors opacity-60">
+                            <td class="p-3 font-bold text-white">GoblinKing <span class="text-gray-500 text-xs font-normal">[293847]</span></td>
+                            <td class="p-3 text-gray-300">92</td>
+                            <td class="p-3 text-center"><span class="bg-red-900/50 text-red-400 border border-red-800 px-2 py-1 rounded text-xs font-bold flex items-center justify-center gap-1"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg> Hosp (0:45:12)</span></td>
+                            <td class="p-3 text-center"><span class="text-amber-400 font-bold">3.00x</span></td>
+                            <td class="p-3 text-right"><button class="bg-gray-700 text-gray-500 cursor-not-allowed text-xs font-bold px-4 py-1.5 rounded">UNAVAILABLE</button></td>
+                        </tr>
+                        <tr class="hover:bg-gray-700/30 transition-colors">
+                            <td class="p-3 font-bold text-white">DocOct <span class="text-gray-500 text-xs font-normal">[883721]</span></td>
+                            <td class="p-3 text-gray-300">41</td>
+                            <td class="p-3 text-center"><span class="bg-green-900/50 text-green-400 border border-green-800 px-2 py-1 rounded text-xs font-bold">Okay</span></td>
+                            <td class="p-3 text-center"><span class="text-blue-400 font-bold">1.85x</span></td>
+                            <td class="p-3 text-right"><button class="bg-red-600 hover:bg-red-500 text-white text-xs font-bold px-4 py-1.5 rounded transition-colors">ATTACK</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-    document.getElementById('sim-ad-val').innerText =
-        `$${adBudget.toLocaleString()}`;
+        <!-- War Respect Log Chart -->
+        <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
+            <h3 class="text-sm font-bold text-gray-400 mb-4 uppercase tracking-wider">Respect Gained (Last 6 Hours)</h3>
+            <div class="w-full bg-gray-900 p-4 rounded-lg border border-gray-700 h-[250px] relative">
+                <canvas id="warRespectChart"></canvas>
+            </div>
+        </div>
+    </main>
 
-    document.getElementById('sim-env-val').innerText =
-        `${envScore}%`;
-
-    document.getElementById('sim-eff-val').innerText =
-        `${effScore}%`;
-
-    const starDiff = targetStars - liveStarRating;
-
-    if (starDiff === 0)
-        document.getElementById('sim-star-val').innerText =
-            `Current Stars (${targetStars})`;
-    else if (starDiff > 0)
-        document.getElementById('sim-star-val').innerText =
-            `+${starDiff} Stars`;
-    else
-        document.getElementById('sim-star-val').innerText =
-            `${starDiff} Stars`;
-
-    let projectedDaily;
-
-    if (companyHistory.length >= 5) {
-
-        const recent = companyHistory.slice(-7);
-
-        const avg =
-            recent.reduce((a,b)=>a+b,0) /
-            recent.length;
-
-        let trend = 0;
-
-        for (let i = 1; i < recent.length; i++) {
-            trend += recent[i] - recent[i-1];
+    <script>
+        // Simulated Chain Timer Logic
+        let timeLeft = 300; // 5 minutes in seconds
+        function updateTimer() {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            document.getElementById('chain-timer').innerText = 
+                `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            
+            if (timeLeft > 0) {
+                timeLeft--;
+            } else {
+                timeLeft = 300; // Reset for simulation
+            }
         }
+        setInterval(updateTimer, 1000);
 
-        trend /= (recent.length - 1);
-
-        projectedDaily = avg + trend;
-
-    } else {
-
-        projectedDaily = baselineLiveIncome;
-    }
-
-    projectedDaily *= (effScore / 100);
-
-    const envPenalty =
-        ((100 - envScore) / 100) * 0.33;
-
-    projectedDaily *= (1 - envPenalty);
-
-    let adBoost =
-        Math.min(
-            0.40,
-            (adBudget / 1000000) * 0.40
-        );
-
-    if (hasTGP)
-        adBoost *= 1.15;
-
-    if (hasAdEdu)
-        adBoost *= 1.10;
-
-    projectedDaily *= (1 + adBoost);
-
-    const starBoost =
-        1 + ((targetStars - liveStarRating) * 0.08);
-
-    projectedDaily *= starBoost;
-
-    const projected30Day =
-        projectedDaily * 30;
-
-    let confidence = 70;
-
-    if (companyHistory.length >= 7) {
-
-        const avg =
-            companyHistory.reduce((a,b)=>a+b,0) /
-            companyHistory.length;
-
-        const variance =
-            companyHistory.reduce(
-                (s,v)=>s+Math.pow(v-avg,2),
-                0
-            ) / companyHistory.length;
-
-        const volatility =
-            Math.sqrt(variance);
-
-        confidence =
-            Math.max(
-                45,
-                Math.min(
-                    95,
-                    95 - ((volatility/avg)*100)
-                )
-            );
-    }
-
-    const bestCase =
-        projected30Day * 1.12;
-
-    const worstCase =
-        projected30Day * 0.88;
-
-    document.getElementById('sim-output-revenue')
-        .innerText =
-        '$' +
-        Math.round(projected30Day)
-            .toLocaleString();
-
-    let recommendation =
-        "Revenue stable.";
-
-    if (envScore < 80)
-        recommendation =
-            "Environment score is hurting profits.";
-
-    else if (effScore < 90)
-        recommendation =
-            "Employee effectiveness is the main bottleneck.";
-
-    else if (adBudget < 250000)
-        recommendation =
-            "Advertising budget has room for growth.";
-
-    document.getElementById(
-        'sim-output-change'
-    ).innerHTML = `
-        <div>Confidence: ${confidence.toFixed(0)}%</div>
-        <div>Best Case: $${Math.round(bestCase).toLocaleString()}</div>
-        <div>Worst Case: $${Math.round(worstCase).toLocaleString()}</div>
-        <div class="mt-2 text-blue-400">${recommendation}</div>
-    `;
-}
+        // Simulated Chart
+        const ctx = document.getElementById('warRespectChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['T-6h', 'T-5h', 'T-4h', 'T-3h', 'T-2h', 'T-1h', 'Now'],
+                datasets: [{
+                    label: 'Respect Generated',
+                    data: [450, 800, 1200, 1600, 2500, 1800, 3100],
+                    borderColor: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    borderWidth: 3,
+                    tension: 0.3,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: '#9ca3af' } },
+                    y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
