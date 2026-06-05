@@ -9,33 +9,34 @@ const API_KEY = process.env.TORN_API_KEY;
 
 // Middleware
 app.use(cors());
-// This serves your index.html and any other frontend files from the root directory
 app.use(express.static(path.join(__dirname))); 
+
+// ==========================================
+// THE FIX: Render Health Check Endpoint
+// ==========================================
+app.get('/health', (req, res) => {
+    // This tells Render "I am alive and working perfectly!"
+    res.status(200).send('OK');
+});
 
 // Main Faction Combat Data Endpoint
 app.get('/api/faction', async (req, res) => {
-    // Failsafe if the API key isn't loaded
     if (!API_KEY) {
         console.error("CRITICAL: TORN_API_KEY is missing from environment variables.");
         return res.status(500).json({ error: 'API key not configured on server.' });
     }
 
     try {
-        // Pinging the Torn API for live Chain and Ranked War data
-        // https://api.torn.com/faction/?selections=basic,chain,rankedwars&key=YOUR_KEY
         const tornApiUrl = `https://api.torn.com/faction/?selections=basic,chain,rankedwars&key=${API_KEY}`;
         
-        // Native fetch works out of the box in Node 18+ (which Render uses)
         const response = await fetch(tornApiUrl);
         const data = await response.json();
 
-        // Check if Torn kicked back an error (like an invalid key)
         if (data.error) {
             console.error('Torn API Rejected Request:', data.error);
             return res.status(400).json({ success: false, error: data.error });
         }
 
-        // Send the raw combat data straight to your index.html frontend
         res.json({ success: true, faction: data });
 
     } catch (error) {
