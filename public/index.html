@@ -9,7 +9,6 @@
 </head>
 <body class="bg-gray-900 text-gray-100 font-sans min-h-screen pb-12">
 
-    <!-- Navbar -->
     <nav class="bg-gray-800 border-b-2 border-red-700 p-4 shadow-lg mb-6">
         <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
             <div class="flex items-center gap-3">
@@ -27,7 +26,6 @@
     </nav>
 
     <main class="max-w-7xl mx-auto px-4 space-y-6">
-        <!-- Live War Score Board -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
             <div class="border-b md:border-b-0 md:border-r border-gray-700 pb-4 md:pb-0">
                 <p class="text-gray-400 text-xs uppercase font-bold tracking-wider">Active Chain</p>
@@ -44,7 +42,8 @@
                 <p class="text-red-400 font-black text-4xl mt-1" id="enemy-score">0</p>
                 <p class="text-xs text-gray-500 mt-2 font-semibold">Opponent: <span id="enemy-name" class="text-gray-300">Searching...</span></p>
             </div>
-        </div><!-- Live Operative Bar Graph -->
+        </div>
+
         <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider">Operative Combat Records</h3>
@@ -54,7 +53,9 @@
                 <canvas id="operativeChart"></canvas>
             </div>
         </div>
-    </main><script>
+    </main>
+
+    <script>
         let liveTimer = null;
         let opChart = null;
 
@@ -72,7 +73,7 @@
             }, 1000);
         }
 
-// Live API Fetch Engine
+        // Live API Fetch Engine
         async function runWarDataPipeline() {
             try {
                 // Hits your local server which securely holds the API key
@@ -127,34 +128,7 @@
             }
         }
 
-                    // 2. Map Ranked War Data
-                    if (f.rankedwars && Object.keys(f.rankedwars).length > 0) {
-                        const warId = Object.keys(f.rankedwars)[0];
-                        const warData = f.rankedwars[warId].factions;
-                        
-                        // Sort out which faction is ours vs the enemy
-                        const ourId = f.ID;
-                        const enemyId = Object.keys(warData).find(id => parseInt(id) !== ourId);
-                        
-                        document.getElementById('our-score').innerText = warData[ourId].score.toLocaleString();
-                        document.getElementById('enemy-score').innerText = warData[enemyId].score.toLocaleString();
-                        document.getElementById('enemy-name').innerText = warData[enemyId].name;
-                        
-                        document.getElementById('war-status').innerText = "WAR DATA SYNCED";
-                        document.getElementById('war-status').className = "bg-green-950 text-green-400 text-xs font-bold px-3 py-1 rounded border border-green-700";
-
-                        // Prep data for Chart
-                        buildBarChart(warData[ourId].members);
-                    } else {
-                        document.getElementById('war-status').innerText = "NO ACTIVE WAR";
-                    }
-                }
-            } catch (error) {
-                console.error("API Fetch Error:", error);
-                document.getElementById('war-status').innerText = "API DISCONNECTED";
-                document.getElementById('war-status').className = "bg-red-950 text-red-400 text-xs font-bold px-3 py-1 rounded border border-red-700";
-            }
-        }function buildBarChart(memberData) {
+        function buildBarChart(memberData) {
             const ctx = document.getElementById('operativeChart').getContext('2d');
             if (opChart) opChart.destroy();
 
