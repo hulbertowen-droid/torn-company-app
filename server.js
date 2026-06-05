@@ -9,7 +9,7 @@ const API_KEY = process.env.TORN_API_KEY;
 
 // Middleware
 app.use(cors());
-app.use(express.static(path.join(__dirname))); 
+app.use(express.static(path.join(__dirname, 'public')));
 app.get('/health', (req, res) => {
     res.status(200).send('OK');
 });
@@ -23,9 +23,8 @@ app.get('/health', (req, res) => {
 });
 // Explicitly serve the index.html file for the main website address
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
-
 // Main Faction Combat Data Endpoint
 app.get('/api/faction', async (req, res) => {
     if (!API_KEY) {
