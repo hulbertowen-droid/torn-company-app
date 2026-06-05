@@ -59,7 +59,6 @@
         let liveTimer = null;
         let opChart = null;
 
-        // Chain Countdown Engine
         function startChainTimer(secondsLeft) {
             if (liveTimer) clearInterval(liveTimer);
             let timeLeft = secondsLeft;
@@ -73,28 +72,23 @@
             }, 1000);
         }
 
-        // Live API Fetch Engine
         async function runWarDataPipeline() {
             try {
-                // Hits your local server which securely holds the API key
                 const response = await fetch('/api/faction');
                 const data = await response.json();
 
                 if (data.success && data.faction) {
                     const f = data.faction;
 
-                    // 1. Map Chain Data
                     if (f.chain) {
                         document.getElementById('chain-count').innerText = f.chain.current;
                         startChainTimer(f.chain.timeout);
                     }
 
-                    // 2. Map Ranked War Data
                     if (f.rankedwars && Object.keys(f.rankedwars).length > 0) {
                         const warId = Object.keys(f.rankedwars)[0];
                         const warData = f.rankedwars[warId].factions;
                         
-                        // Force ID to be a string to match the JSON keys
                         const ourId = String(f.ID);
                         const enemyId = Object.keys(warData).find(id => id !== ourId);
                         
@@ -102,18 +96,17 @@
                         document.getElementById('enemy-score').innerText = warData[enemyId].score.toLocaleString();
                         document.getElementById('enemy-name').innerText = warData[enemyId].name;
                         
-                        // Set Green Status FIRST
                         document.getElementById('war-status').innerText = "WAR DATA SYNCED";
                         document.getElementById('war-status').className = "bg-green-950 text-green-400 text-xs font-bold px-3 py-1 rounded border border-green-700";
 
-                        // 3. Isolate the Chart Builder in its own safety net
                         try {
                             const memberData = warData[ourId].members;
+                            console.log("Raw Torn Member Data:", memberData);
                             if (memberData) {
                                 buildBarChart(memberData);
                             }
                         } catch (chartError) {
-                            console.error("Chart crashed, but API is fine:", chartError);
+                            console.error("Chart build failed:", chartError);
                         }
                         
                     } else {
@@ -136,9 +129,8 @@
             let hitsMade = [];
             let respectEarned = [];
 
-            // Loop through all faction members currently engaged in the war
             Object.values(memberData).forEach(operative => {
-                if(operative.attacks > 0) { // Only graph active combatants
+                if(operative.attacks > 0) { 
                     names.push(operative.name);
                     hitsMade.push(operative.attacks);
                     respectEarned.push(operative.score);
@@ -153,14 +145,14 @@
                         {
                             label: 'Confirmed Hits (Attacks)',
                             data: hitsMade,
-                            backgroundColor: '#ef4444', // Red for Hits
+                            backgroundColor: '#ef4444',
                             borderWidth: 1,
                             borderRadius: 4
                         },
                         {
                             label: 'Respect Score Generated',
                             data: respectEarned,
-                            backgroundColor: '#3b82f6', // Blue for Respect
+                            backgroundColor: '#3b82f6',
                             borderWidth: 1,
                             borderRadius: 4
                         }
@@ -170,24 +162,14 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        x: { 
-                            grid: { display: false }, 
-                            ticks: { color: '#9ca3af', maxRotation: 45, minRotation: 45 } 
-                        },
-                        y: { 
-                            grid: { color: '#374151' }, 
-                            ticks: { color: '#9ca3af' },
-                            beginAtZero: true
-                        }
+                        x: { grid: { display: false }, ticks: { color: '#9ca3af', maxRotation: 45, minRotation: 45 } },
+                        y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' }, beginAtZero: true }
                     },
-                    plugins: {
-                        legend: { labels: { color: '#e5e7eb' } }
-                    }
+                    plugins: { legend: { labels: { color: '#e5e7eb' } } }
                 }
             });
         }
 
-        // Boot system on load
         window.onload = runWarDataPipeline;
     </script>
 </body>
