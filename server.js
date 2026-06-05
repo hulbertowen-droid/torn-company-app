@@ -21,6 +21,10 @@ app.get('/health', (req, res) => {
     // This tells Render "I am alive and working perfectly!"
     res.status(200).send('OK');
 });
+// Explicitly serve the index.html file for the main website address
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 // Main Faction Combat Data Endpoint
 app.get('/api/faction', async (req, res) => {
