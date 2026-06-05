@@ -15,6 +15,7 @@
         ul { list-style-type: none; padding: 0; }
         li { background-color: #2f3542; margin-bottom: 8px; padding: 10px; border-radius: 4px; display: flex; justify-content: space-between; }
         .timestamp { font-size: 0.8em; color: #a4b0be; text-align: center; margin-top: 20px; }
+        .error { color: #ff4757; text-align: center; }
     </style>
 </head>
 <body>
@@ -41,20 +42,35 @@
     <script>
         async function fetchWarboardData() {
             try {
+                // Fetching from your Render backend
                 const response = await fetch('/api/warboard'); 
                 const data = await response.json();
                 
                 const readyList = document.getElementById('ready-list');
                 const hospList = document.getElementById('hosp-list');
+
+                // Handle backend errors (like a bad API key or missing faction ID)
+                if (data.error) {
+                    readyList.innerHTML = `<li class="error">Server Error: ${data.error}</li>`;
+                    hospList.innerHTML = `<li class="error">Server Error: ${data.error}</li>`;
+                    return;
+                }
                 
+                // Render Ready Targets
                 if (data.ready && data.ready.length > 0) {
-                    readyList.innerHTML = data.ready.map(p => `<li><span>${p.name}</span> <span>[${p.id}]</span></li>`).join('');
+                    // Added a clickable link to the Torn profile using their ID
+                    readyList.innerHTML = data.ready.map(p => 
+                        `<li><span>${p.name}</span> <span>[<a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank" style="color: #2ed573; text-decoration: none;">${p.id}</a>]</span></li>`
+                    ).join('');
                 } else {
                     readyList.innerHTML = '<li>No targets currently available.</li>';
                 }
 
+                // Render Hospitalized Targets (using the outTime your backend already formatted)
                 if (data.hospitalized && data.hospitalized.length > 0) {
-                    hospList.innerHTML = data.hospitalized.map(p => `<li><span>${p.name}</span> <span>Out: ${p.outTime}</span></li>`).join('');
+                    hospList.innerHTML = data.hospitalized.map(p => 
+                        `<li><span>${p.name}</span> <span>Out: ${p.outTime}</span></li>`
+                    ).join('');
                 } else {
                     hospList.innerHTML = '<li>No one in the hospital.</li>';
                 }
@@ -62,11 +78,13 @@
                 document.getElementById('last-updated').innerText = `Last updated: ${new Date().toLocaleTimeString()}`;
             } catch (error) {
                 console.error("Connection error:", error);
+                document.getElementById('last-updated').innerText = `Error fetching data. Retrying...`;
             }
         }
 
+        // Fetch immediately on load, then every 30 seconds
         fetchWarboardData();
-        setInterval(fetchWarboardData, 15000); 
+        setInterval(fetchWarboardData, 30000); 
     </script>
 </body>
 </html>
