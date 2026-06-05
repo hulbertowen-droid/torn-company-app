@@ -72,7 +72,7 @@
             }, 1000);
         }
 
-        // Live API Fetch Engine
+// Live API Fetch Engine
         async function runWarDataPipeline() {
             try {
                 // Hits your local server which securely holds the API key
@@ -87,6 +87,45 @@
                         document.getElementById('chain-count').innerText = f.chain.current;
                         startChainTimer(f.chain.timeout);
                     }
+
+                    // 2. Map Ranked War Data
+                    if (f.rankedwars && Object.keys(f.rankedwars).length > 0) {
+                        const warId = Object.keys(f.rankedwars)[0];
+                        const warData = f.rankedwars[warId].factions;
+                        
+                        // Force ID to be a string to match the JSON keys
+                        const ourId = String(f.ID);
+                        const enemyId = Object.keys(warData).find(id => id !== ourId);
+                        
+                        document.getElementById('our-score').innerText = warData[ourId].score.toLocaleString();
+                        document.getElementById('enemy-score').innerText = warData[enemyId].score.toLocaleString();
+                        document.getElementById('enemy-name').innerText = warData[enemyId].name;
+                        
+                        // Set Green Status FIRST
+                        document.getElementById('war-status').innerText = "WAR DATA SYNCED";
+                        document.getElementById('war-status').className = "bg-green-950 text-green-400 text-xs font-bold px-3 py-1 rounded border border-green-700";
+
+                        // 3. Isolate the Chart Builder in its own safety net
+                        try {
+                            const memberData = warData[ourId].members;
+                            if (memberData) {
+                                buildBarChart(memberData);
+                            }
+                        } catch (chartError) {
+                            console.error("Chart crashed, but API is fine:", chartError);
+                        }
+                        
+                    } else {
+                        document.getElementById('war-status').innerText = "NO ACTIVE WAR";
+                        document.getElementById('war-status').className = "bg-gray-900 text-gray-400 text-xs font-bold px-3 py-1 rounded border border-gray-700";
+                    }
+                }
+            } catch (error) {
+                console.error("API Fetch Error:", error);
+                document.getElementById('war-status').innerText = "API DISCONNECTED";
+                document.getElementById('war-status').className = "bg-red-950 text-red-400 text-xs font-bold px-3 py-1 rounded border border-red-700";
+            }
+        }
 
                     // 2. Map Ranked War Data
                     if (f.rankedwars && Object.keys(f.rankedwars).length > 0) {
