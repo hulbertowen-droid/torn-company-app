@@ -9,12 +9,11 @@
 </head>
 <body class="bg-gray-900 text-gray-100 font-sans min-h-screen pb-12">
 
-    <!-- Navbar -->
     <nav class="bg-gray-800 border-b-2 border-red-700 p-4 shadow-lg mb-6">
         <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
             <div class="flex items-center gap-3">
                 <svg class="w-8 h-8 text-red-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-                <h1 class="text-xl font-bold text-red-500 uppercase tracking-widest">ARACHNID WAR NETWORK // COMMANDER: OWEN777</h1>
+                <h1 id="dynamic-header" class="text-xl font-bold text-red-500 uppercase tracking-widest">LOADING NETWORK... // COMMANDER: OWEN777</h1>
             </div>
             <div class="flex items-center gap-4">
                 <span class="text-sm font-bold bg-gray-900 px-4 py-1.5 rounded border border-red-800 text-gray-200 flex items-center gap-2">
@@ -26,17 +25,14 @@
         </div>
     </nav>
     <main class="max-w-7xl mx-auto px-4 space-y-6">
-        <!-- Live War Score Board -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
             <div class="border-b md:border-b-0 md:border-r border-gray-700 pb-4 md:pb-0">
                 <p class="text-gray-400 text-xs uppercase font-bold tracking-wider">Active Chain</p>
                 <p class="text-blue-400 font-black text-4xl mt-1" id="chain-count">0</p>
-                <p class="text-xs text-gray-500 mt-2 font-semibold">Max Hit Multiplier Active</p>
             </div>
             <div class="border-b md:border-b-0 md:border-r border-gray-700 pb-4 md:pb-0 pl-0 md:pl-4">
                 <p class="text-gray-400 text-xs uppercase font-bold tracking-wider">Our Faction Score</p>
                 <p class="text-green-400 font-black text-4xl mt-1" id="our-score">0</p>
-                <p class="text-xs text-gray-500 mt-2 font-semibold">Tug of War Lead</p>
             </div>
             <div class="pl-0 md:pl-4">
                 <p class="text-gray-400 text-xs uppercase font-bold tracking-wider">Enemy Score</p>
@@ -45,7 +41,6 @@
             </div>
         </div>
 
-        <!-- Live Operative Bar Graph -->
         <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider">Operative Combat Records</h3>
@@ -56,7 +51,7 @@
             </div>
         </div>
     </main>
-        <script>
+    <script>
         let liveTimer = null;
         let opChart = null;
 
@@ -68,19 +63,20 @@
                 const minutes = Math.floor(timeLeft / 60);
                 const seconds = timeLeft % 60;
                 document.getElementById('chain-timer').innerText = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-                
                 if (timeLeft > 0) timeLeft--;
             }, 1000);
         }
 
         async function runWarDataPipeline() {
             try {
-                // This calls your server.js, which securely uses your API key
                 const response = await fetch('/api/faction');
                 const data = await response.json();
 
                 if (data.success && data.faction) {
                     const f = data.faction;
+                    
+                    // This sets your REAL faction name from the API
+                    document.getElementById('dynamic-header').innerText = `${f.name.toUpperCase()} WAR NETWORK // COMMANDER: OWEN777`;
 
                     if (f.chain) {
                         document.getElementById('chain-count').innerText = f.chain.current;
@@ -101,23 +97,21 @@
                         document.getElementById('war-status').innerText = "WAR DATA SYNCED";
                         document.getElementById('war-status').className = "bg-green-950 text-green-400 text-xs font-bold px-3 py-1 rounded border border-green-700";
 
-                        // Send the member data to the chart builder
                         try {
                             const memberData = warData[ourId].members;
                             if (memberData) {
                                 buildBarChart(memberData);
                             }
                         } catch (chartError) {
-                            console.error("Chart build failed:", chartError);
+                            console.error("Chart build error:", chartError);
                         }
-                        
                     } else {
                         document.getElementById('war-status').innerText = "NO ACTIVE WAR";
                         document.getElementById('war-status').className = "bg-gray-900 text-gray-400 text-xs font-bold px-3 py-1 rounded border border-gray-700";
                     }
                 }
             } catch (error) {
-                console.error("API Fetch Error:", error);
+                console.error("Fetch Error:", error);
                 document.getElementById('war-status').innerText = "API DISCONNECTED";
                 document.getElementById('war-status').className = "bg-red-950 text-red-400 text-xs font-bold px-3 py-1 rounded border border-red-700";
             }
@@ -130,7 +124,6 @@
             let hitsMade = [];
             let respectEarned = [];
 
-            // Plucking the exact hits and score for each member
             Object.values(memberData).forEach(operative => {
                 if(operative.attacks > 0) { 
                     names.push(operative.name);
@@ -152,7 +145,7 @@
                             borderRadius: 4
                         },
                         {
-                            label: 'Respect Score Generated',
+                            label: 'Respect Score',
                             data: respectEarned,
                             backgroundColor: '#3b82f6',
                             borderWidth: 1,
