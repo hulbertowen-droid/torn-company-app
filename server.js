@@ -10,6 +10,9 @@ const API_KEY = process.env.TORN_API_KEY;
 // Middleware
 app.use(cors());
 app.use(express.static(path.join(__dirname))); 
+app.get('/health', (req, res) => {
+    res.status(200).send('OK');
+});
 
 // ==========================================
 // THE FIX: Render Health Check Endpoint
