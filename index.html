@@ -5,56 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Faction Warboard</title>
     <style>
-        body {
-            background-color: #121212;
-            color: #ffffff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 20px;
-        }
-        h1 {
-            text-align: center;
-            color: #ff4757;
-            border-bottom: 2px solid #333;
-            padding-bottom: 10px;
-        }
-        .board-container {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 30px;
-        }
-        .column {
-            background-color: #1e1e1e;
-            border-radius: 8px;
-            padding: 20px;
-            width: 45%;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.5);
-        }
-        h2 {
-            margin-top: 0;
-            text-align: center;
-        }
+        body { background-color: #121212; color: #ffffff; font-family: sans-serif; padding: 20px; margin: 0; }
+        h1 { text-align: center; color: #ff4757; border-bottom: 2px solid #333; padding-bottom: 10px; }
+        .board-container { display: flex; justify-content: space-around; margin-top: 30px; }
+        .column { background-color: #1e1e1e; border-radius: 8px; padding: 20px; width: 45%; }
+        h2 { text-align: center; margin-top: 0; }
         .ready-title { color: #2ed573; }
         .hosp-title { color: #7bed9f; opacity: 0.8; }
-        
-        ul {
-            list-style-type: none;
-            padding: 0;
-        }
-        li {
-            background-color: #2f3542;
-            margin-bottom: 8px;
-            padding: 10px;
-            border-radius: 4px;
-            display: flex;
-            justify-content: space-between;
-        }
-        .timestamp {
-            font-size: 0.8em;
-            color: #a4b0be;
-            text-align: center;
-            margin-top: 20px;
-        }
+        ul { list-style-type: none; padding: 0; }
+        li { background-color: #2f3542; margin-bottom: 8px; padding: 10px; border-radius: 4px; display: flex; justify-content: space-between; }
+        .timestamp { font-size: 0.8em; color: #a4b0be; text-align: center; margin-top: 20px; }
     </style>
 </head>
 <body>
@@ -68,7 +28,6 @@
                 <li>Loading targets...</li>
             </ul>
         </div>
-
         <div class="column">
             <h2 class="hosp-title">🏥 In Hospital</h2>
             <ul id="hosp-list">
@@ -77,60 +36,36 @@
         </div>
     </div>
 
-    <div class="timestamp" id="last-updated">Last updated: Waiting for server...</div>
+    <div class="timestamp" id="last-updated">Waiting for server...</div>
 
     <script>
-        // This function asks your server.js for the latest data
         async function fetchWarboardData() {
             try {
-                // We assume your server.js has an endpoint set up at /api/warboard
                 const response = await fetch('/api/warboard'); 
                 const data = await response.json();
+                
+                const readyList = document.getElementById('ready-list');
+                const hospList = document.getElementById('hosp-list');
+                
+                if (data.ready && data.ready.length > 0) {
+                    readyList.innerHTML = data.ready.map(p => `<li><span>${p.name}</span> <span>[${p.id}]</span></li>`).join('');
+                } else {
+                    readyList.innerHTML = '<li>No targets currently available.</li>';
+                }
 
-                updateDashboard(data);
+                if (data.hospitalized && data.hospitalized.length > 0) {
+                    hospList.innerHTML = data.hospitalized.map(p => `<li><span>${p.name}</span> <span>Out: ${p.outTime}</span></li>`).join('');
+                } else {
+                    hospList.innerHTML = '<li>No one in the hospital.</li>';
+                }
+
+                document.getElementById('last-updated').innerText = `Last updated: ${new Date().toLocaleTimeString()}`;
             } catch (error) {
-                console.error("Error fetching data from server:", error);
-                document.getElementById('last-updated').innerText = "Error: Could not connect to server.";
+                console.error("Connection error:", error);
             }
         }
 
-        // This function updates the HTML with the new data
-        function updateDashboard(data) {
-            const readyList = document.getElementById('ready-list');
-            const hospList = document.getElementById('hosp-list');
-            
-            // Clear current lists
-            readyList.innerHTML = '';
-            hospList.innerHTML = '';
-
-            // Populate Ready Targets
-            if (data.ready && data.ready.length > 0) {
-                data.ready.forEach(player => {
-                    readyList.innerHTML += `<li><span>${player.name}</span> <span>[${player.id}]</span></li>`;
-                });
-            } else {
-                readyList.innerHTML = '<li>No targets currently available.</li>';
-            }
-
-            // Populate Hospitalized Targets
-            if (data.hospitalized && data.hospitalized.length > 0) {
-                data.hospitalized.forEach(player => {
-                    hospList.innerHTML += `<li><span>${player.name}</span> <span>Out: ${player.outTime}</span></li>`;
-                });
-            } else {
-                hospList.innerHTML = '<li>No one in the hospital.</li>';
-            }
-
-            // Update timestamp
-            const now = new Date();
-            document.getElementById('last-updated').innerText = `Last updated: ${now.toLocaleTimeString()}`;
-        }
-
-        // Fetch data immediately when the page loads
         fetchWarboardData();
-
-        // Check for new data from the server every 15 seconds
-        // (This doesn't hit the Torn API, it only hits your local server)
         setInterval(fetchWarboardData, 15000); 
     </script>
 </body>
