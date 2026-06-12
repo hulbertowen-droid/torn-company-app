@@ -56,18 +56,31 @@ app.get('/api/warboard', async (req, res) => {
                 const tsRes = await fetch(`https://www.tornstats.com/api/v2/${TORNSTATS_API_KEY}/spy/faction/${FACTION_ID}`);
                 const tsData = await tsRes.json();
                 
-                // INTEGRATED FIX: Handles both raw array lists and labeled object maps automatically
-                if (tsData.status && tsData.faction) {
-                    const membersList = tsData.faction.members || tsData.faction; 
-                    
-                    for (const [key, member] of Object.entries(membersList)) {
-                        // Extract the true player ID whether it is a key, an id, or player_id property
-                        const playerId = member.id || member.player_id || key;
-                        
-                        if (playerId && member.spy && member.spy.total) {
-                            spyData[playerId] = member.spy.total;
+                // === UNIVERSAL SPY EXTRACTOR ===
+                // Recursively searches the entire response for spy stats, ignoring folder names
+                function extractSpies(obj) {
+                    for (const key in obj) {
+                        if (obj[key] !== null && typeof obj[key] === 'object') {
+                            
+                            // If we find the spy data...
+                            if (obj[key].spy && obj[key].spy.total) {
+                                // Grab the ID from whatever property TornStats decided to use
+                                const playerId = obj[key].id || obj[key].player_id || (isNaN(key) ? null : key);
+                                
+                                if (playerId) {
+                                    // Lock it into our map using the exact ID
+                                    spyData[playerId.toString()] = obj[key].spy.total;
+                                }
+                            } else {
+                                // If not found, keep digging deeper
+                                extractSpies(obj[key]);
+                            }
                         }
                     }
+                }
+                
+                if (tsData.status) {
+                    extractSpies(tsData);
                 }
             } catch (e) {
                 console.error("TornStats fetch failed. Skipping spy data this cycle.");
@@ -94,6 +107,7 @@ app.get('/api/warboard', async (req, res) => {
                         until: member.status.until,
                         claimedBy: isEnemy && claims[id] ? claims[id].playerName : null,
                         onlineStatus: lastAction,
+                        // Perfect match: Attaches the spy data if the player's ID was found
                         estStats: isEnemy ? (spyData[id] || null) : null
                     });
                 }
