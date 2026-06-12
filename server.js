@@ -10,14 +10,14 @@ app.use(express.static('public'));
 const PORT = process.env.PORT || 3000;
 const TORN_API_KEY = process.env.TORN_API_KEY;
 const FACTION_ID = process.env.FACTION_ID || ''; 
-const FFSCOUTER_API_KEY = process.env.FFSCOUTER_API_KEY || ''; // Your FF Scouter / YATA Key
+const FFSCOUTER_API_KEY = process.env.FFSCOUTER_API_KEY || ''; 
 
 let claims = {};
 let enemyList = []; 
 let ffEstimates = {}; 
 
 // ==========================================
-// BACKGROUND FF SCOUTER (API DATABASE PULL)
+// BACKGROUND FF SCOUTER (YATA / FF DATABASE PULL)
 // ==========================================
 let currentEnemyIndex = 0;
 
@@ -28,18 +28,27 @@ setInterval(async () => {
     const enemyId = enemyList[currentEnemyIndex];
 
     try {
-        // We use the YATA/FFScouter standard target endpoint. 
-        // This pulls from the crowdsourced attack log database instead of guessing with math.
-        const res = await fetch(`https://yata.yt/api/v1/targets/${enemyId}/?key=${FFSCOUTER_API_KEY}`);
+        // FIXED: The correct YATA endpoint for Battle Stats (bs)
+        const res = await fetch(`https://yata.yt/api/v1/bs/${enemyId}/?key=${FFSCOUTER_API_KEY}`);
         
         if (res.ok) {
             const data = await res.json();
             
-            // If the crowdsourced database has a battle score for them, lock it in!
-            if (data && data.target && data.target.battle_score) {
-                // Battle scores are the square root of stats, so we square it back to get the raw estimate
-                const rawStats = Math.pow(data.target.battle_score, 2);
-                ffEstimates[enemyId] = rawStats;
+            // Smart Extractor: Finds the stats regardless of how YATA nests the data
+            let finalStats = 0;
+            
+            if (data.total) {
+                finalStats = data.total;
+            } else if (data.stats && data.stats.total) {
+                finalStats = data.stats.total;
+            } else if (data.strength && data.speed && data.defense && data.dexterity) {
+                finalStats = data.strength + data.speed + data.defense + data.dexterity;
+            } else if (data.target && data.target.battle_score) {
+                finalStats = Math.pow(data.target.battle_score, 2);
+            }
+            
+            if (finalStats > 0) {
+                ffEstimates[enemyId] = finalStats;
             }
         }
     } catch (e) {
@@ -112,7 +121,7 @@ app.get('/api/warboard', async (req, res) => {
                         until: member.status.until,
                         claimedBy: isEnemy && claims[id] ? claims[id].playerName : null,
                         onlineStatus: lastAction,
-                        // Pulls strictly from the crowdsourced FF database!
+                        // Pulls strictly from the crowdsourced YATA/FF database!
                         estStats: isEnemy ? (ffEstimates[id] || null) : null 
                     });
                 }
