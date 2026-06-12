@@ -5,17 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Faction Warboard</title>
     <style>
-        body { background-color: #121212; color: #ffffff; font-family: sans-serif; padding: 20px; margin: 0; }
+        body { background-color: #121212; color: #ffffff; font-family: 'Segoe UI', sans-serif; padding: 20px; margin: 0; }
         h1 { text-align: center; color: #ff4757; border-bottom: 2px solid #333; padding-bottom: 10px; }
-        .board-container { display: flex; justify-content: space-around; margin-top: 30px; }
-        .column { background-color: #1e1e1e; border-radius: 8px; padding: 20px; width: 45%; }
-        h2 { text-align: center; margin-top: 0; }
-        .ready-title { color: #2ed573; }
-        .hosp-title { color: #7bed9f; opacity: 0.8; }
-        ul { list-style-type: none; padding: 0; }
-        li { background-color: #2f3542; margin-bottom: 8px; padding: 10px; border-radius: 4px; display: flex; justify-content: space-between; }
-        .timestamp { font-size: 0.8em; color: #a4b0be; text-align: center; margin-top: 20px; }
-        .countdown { color: #ffeb3b; font-weight: bold; font-family: monospace; font-size: 1.1em; }
+        .board-container { display: flex; justify-content: space-around; margin-top: 30px; gap: 20px; }
+        .column { background-color: #1e1e1e; border-radius: 8px; padding: 20px; width: 48%; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        h2 { text-align: center; margin-top: 0; padding-bottom: 10px; border-bottom: 1px solid #333; }
+        .friendly-title { color: #3498db; }
+        .enemy-title { color: #e74c3c; }
+        
+        ul { list-style-type: none; padding: 0; margin: 0; }
+        li { background-color: #2f3542; margin-bottom: 8px; padding: 12px 15px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; }
+        
+        /* Status styling */
+        .status-ready { color: #2ed573; font-weight: bold; font-size: 1.1em; }
+        .status-other { color: #a4b0be; font-size: 0.9em; font-style: italic; }
+        
+        /* Bigger, cleaner countdown text */
+        .countdown { color: #ffeb3b; font-weight: bold; font-family: monospace; font-size: 1.4em; letter-spacing: 1px;}
+        
+        .timestamp { font-size: 0.85em; color: #a4b0be; text-align: center; margin-top: 30px; }
     </style>
 </head>
 <body>
@@ -23,16 +31,19 @@
     <h1>🛑 Live Faction Warboard 🛑</h1>
     
     <div class="board-container">
+        <!-- Friendly Column -->
         <div class="column">
-            <h2 class="ready-title">🟢 Ready To Attack</h2>
-            <ul id="ready-list">
-                <li>Loading targets...</li>
+            <h2 class="friendly-title">🛡️ My Faction</h2>
+            <ul id="friendly-list">
+                <li>Loading...</li>
             </ul>
         </div>
+
+        <!-- Enemy Column -->
         <div class="column">
-            <h2 class="hosp-title">🏥 In Hospital</h2>
-            <ul id="hosp-list">
-                <li>Loading patients...</li>
+            <h2 class="enemy-title">⚔️ Enemy Faction</h2>
+            <ul id="enemy-list">
+                <li>Loading...</li>
             </ul>
         </div>
     </div>
@@ -40,67 +51,76 @@
     <div class="timestamp" id="last-updated">Waiting for server...</div>
 
     <script>
-        // We store the hospital data globally so our 1-second timer can read it
-        let hospData = []; 
+        let friendlyData = [];
+        let enemyData = [];
+
+        // Sorting function: Okay first -> Hosp (shortest to longest) -> Traveling/Jail
+        function sortMembers(members) {
+            return members.sort((a, b) => {
+                if (a.state === 'Okay' && b.state !== 'Okay') return -1;
+                if (b.state === 'Okay' && a.state !== 'Okay') return 1;
+                if (a.state === 'Hospital' && b.state === 'Hospital') return a.until - b.until;
+                if (a.state === 'Hospital' && b.state !== 'Hospital') return -1;
+                if (b.state === 'Hospital' && a.state !== 'Hospital') return 1;
+                return 0; 
+            });
+        }
 
         async function fetchWarboardData() {
             try {
                 const response = await fetch('/api/warboard'); 
                 const data = await response.json();
                 
-                hospData = data.hospitalized || [];
-                const readyData = data.ready || [];
-                
-                // Instantly update the Ready list
-                const readyList = document.getElementById('ready-list');
-                if (readyData.length > 0) {
-                    readyList.innerHTML = readyData.map(p => `<li><span>${p.name}</span> <span>[${p.id}]</span></li>`).join('');
-                } else {
-                    readyList.innerHTML = '<li>No targets currently available.</li>';
-                }
+                friendlyData = sortMembers(data.friendly || []);
+                enemyData = sortMembers(data.enemy || []);
 
                 document.getElementById('last-updated').innerText = `Last Server Sync: ${new Date().toLocaleTimeString()}`;
-                
-                // Immediately tick the countdowns so there is no 1-second delay visual glitch
                 tickCountdowns(); 
             } catch (error) {
                 console.error("Connection error:", error);
             }
         }
 
-        function tickCountdowns() {
-            const hospList = document.getElementById('hosp-list');
-            const now = Math.floor(Date.now() / 1000); // Current computer time in seconds
-
-            if (hospData.length > 0) {
-                hospList.innerHTML = hospData.map(p => {
+        function generateHTML(members, now) {
+            if (members.length === 0) return '<li>No members found.</li>';
+            
+            return members.map(p => {
+                if (p.state === 'Okay') {
+                    return `<li><span>🟢 ${p.name}</span> <span class="status-ready">READY</span></li>`;
+                } 
+                else if (p.state === 'Hospital') {
                     let secondsLeft = p.until - now;
                     
-                    // If the timer hits zero or goes negative, mark them as "Getting out now!"
                     if (secondsLeft <= 0) {
-                        return `<li><span>${p.name}</span> <span class="countdown">00h 00m 00s</span></li>`;
+                        return `<li><span>🏥 ${p.name}</span> <span class="status-ready">READY</span></li>`;
                     }
 
-                    // Calculate hours, minutes, and seconds
                     let h = Math.floor(secondsLeft / 3600);
                     let m = Math.floor((secondsLeft % 3600) / 60);
                     let s = secondsLeft % 60;
 
-                    // Pad with zeros so it always looks clean (e.g., 01h 05m 09s)
-                    let formattedTime = `${h.toString().padStart(2, '0')}h ${m.toString().padStart(2, '0')}m ${s.toString().padStart(2, '0')}s`;
+                    // Clean format (e.g., 5:09 or 1:05:09). Removes zero hours and letters.
+                    let timeText = h > 0 
+                        ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}` 
+                        : `${m}:${s.toString().padStart(2, '0')}`;
 
-                    return `<li><span>${p.name}</span> <span class="countdown">${formattedTime}</span></li>`;
-                }).join('');
-            } else {
-                hospList.innerHTML = '<li>No one in the hospital.</li>';
-            }
+                    return `<li><span>🏥 ${p.name}</span> <span class="countdown">${timeText}</span></li>`;
+                } 
+                else {
+                    // Jail, Traveling, etc.
+                    return `<li style="opacity: 0.6;"><span>✈️ ${p.name}</span> <span class="status-other">${p.state}</span></li>`;
+                }
+            }).join('');
         }
 
-        // Fetch fresh data from your server every 15 seconds
+        function tickCountdowns() {
+            const now = Math.floor(Date.now() / 1000);
+            document.getElementById('friendly-list').innerHTML = generateHTML(friendlyData, now);
+            document.getElementById('enemy-list').innerHTML = generateHTML(enemyData, now);
+        }
+
         fetchWarboardData();
         setInterval(fetchWarboardData, 15000); 
-
-        // Update the visual countdown timer every 1 second
         setInterval(tickCountdowns, 1000); 
     </script>
 </body>
