@@ -3,169 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Torn War Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Faction Warboard</title>
+    <style>
+        body { background-color: #121212; color: #ffffff; font-family: sans-serif; padding: 20px; margin: 0; }
+        h1 { text-align: center; color: #ff4757; border-bottom: 2px solid #333; padding-bottom: 10px; }
+        .board-container { display: flex; justify-content: space-around; margin-top: 30px; }
+        .column { background-color: #1e1e1e; border-radius: 8px; padding: 20px; width: 45%; }
+        h2 { text-align: center; margin-top: 0; }
+        .ready-title { color: #2ed573; }
+        .hosp-title { color: #7bed9f; opacity: 0.8; }
+        ul { list-style-type: none; padding: 0; }
+        li { background-color: #2f3542; margin-bottom: 8px; padding: 10px; border-radius: 4px; display: flex; justify-content: space-between; }
+        .timestamp { font-size: 0.8em; color: #a4b0be; text-align: center; margin-top: 20px; }
+    </style>
 </head>
-<body class="bg-gray-900 text-gray-100 font-sans min-h-screen pb-12">
+<body>
 
-    <nav class="bg-gray-800 border-b-2 border-red-700 p-4 shadow-lg mb-6">
-        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
-            <div class="flex items-center gap-3">
-                <svg class="w-8 h-8 text-red-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-                <h1 id="dynamic-header" class="text-xl font-bold text-red-500 uppercase tracking-widest">LOADING NETWORK... // COMMANDER: OWEN777</h1>
-            </div>
-            <div class="flex items-center gap-4">
-                <span class="text-sm font-bold bg-gray-900 px-4 py-1.5 rounded border border-red-800 text-gray-200 flex items-center gap-2">
-                    <span class="relative flex h-3 w-3"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span></span>
-                    Chain Drops In: <span id="chain-timer" class="text-red-400 font-mono text-lg">--:--</span>
-                </span>
-                <span id="war-status" class="bg-red-950 text-red-400 text-xs font-bold px-3 py-1 rounded border border-red-700">FETCHING API...</span>
-            </div>
+    <h1>🛑 Live Faction Warboard 🛑</h1>
+    
+    <div class="board-container">
+        <div class="column">
+            <h2 class="ready-title">🟢 Ready To Attack</h2>
+            <ul id="ready-list">
+                <li>Loading targets...</li>
+            </ul>
         </div>
-    </nav>
-    <main class="max-w-7xl mx-auto px-4 space-y-6">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
-            <div class="border-b md:border-b-0 md:border-r border-gray-700 pb-4 md:pb-0">
-                <p class="text-gray-400 text-xs uppercase font-bold tracking-wider">Active Chain</p>
-                <p class="text-blue-400 font-black text-4xl mt-1" id="chain-count">0</p>
-            </div>
-            <div class="border-b md:border-b-0 md:border-r border-gray-700 pb-4 md:pb-0 pl-0 md:pl-4">
-                <p class="text-gray-400 text-xs uppercase font-bold tracking-wider">Our Faction Score</p>
-                <p class="text-green-400 font-black text-4xl mt-1" id="our-score">0</p>
-            </div>
-            <div class="pl-0 md:pl-4">
-                <p class="text-gray-400 text-xs uppercase font-bold tracking-wider">Enemy Score</p>
-                <p class="text-red-400 font-black text-4xl mt-1" id="enemy-score">0</p>
-                <p class="text-xs text-gray-500 mt-2 font-semibold">Opponent: <span id="enemy-name" class="text-gray-300">Searching...</span></p>
-            </div>
+        <div class="column">
+            <h2 class="hosp-title">🏥 In Hospital</h2>
+            <ul id="hosp-list">
+                <li>Loading patients...</li>
+            </ul>
         </div>
+    </div>
 
-        <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-sm font-bold text-gray-400 uppercase tracking-wider">Operative Combat Records</h3>
-                <button onclick="runWarDataPipeline()" class="text-xs bg-gray-700 text-gray-300 border border-gray-600 px-3 py-1.5 rounded font-semibold hover:bg-gray-600 transition-all">Force Sync</button>
-            </div>
-            <div class="w-full bg-gray-900 p-4 rounded-lg border border-gray-700 h-[400px] relative">
-                <canvas id="operativeChart"></canvas>
-            </div>
-        </div>
-    </main>
+    <div class="timestamp" id="last-updated">Waiting for server...</div>
+
     <script>
-        let liveTimer = null;
-        let opChart = null;
-
-        function startChainTimer(secondsLeft) {
-            if (liveTimer) clearInterval(liveTimer);
-            let timeLeft = secondsLeft;
-            
-            liveTimer = setInterval(() => {
-                const minutes = Math.floor(timeLeft / 60);
-                const seconds = timeLeft % 60;
-                document.getElementById('chain-timer').innerText = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-                if (timeLeft > 0) timeLeft--;
-            }, 1000);
-        }
-
-        async function runWarDataPipeline() {
+        async function fetchWarboardData() {
             try {
-                const response = await fetch('/api/faction');
+                const response = await fetch('/api/warboard'); 
                 const data = await response.json();
-
-                if (data.success && data.faction) {
-                    const f = data.faction;
-                    
-                    // This sets your REAL faction name from the API
-                    document.getElementById('dynamic-header').innerText = `${f.name.toUpperCase()} WAR NETWORK // COMMANDER: OWEN777`;
-
-                    if (f.chain) {
-                        document.getElementById('chain-count').innerText = f.chain.current;
-                        startChainTimer(f.chain.timeout);
-                    }
-
-                    if (f.rankedwars && Object.keys(f.rankedwars).length > 0) {
-                        const warId = Object.keys(f.rankedwars)[0];
-                        const warData = f.rankedwars[warId].factions;
-                        
-                        const ourId = String(f.ID);
-                        const enemyId = Object.keys(warData).find(id => id !== ourId);
-                        
-                        document.getElementById('our-score').innerText = warData[ourId].score.toLocaleString();
-                        document.getElementById('enemy-score').innerText = warData[enemyId].score.toLocaleString();
-                        document.getElementById('enemy-name').innerText = warData[enemyId].name;
-                        
-                        document.getElementById('war-status').innerText = "WAR DATA SYNCED";
-                        document.getElementById('war-status').className = "bg-green-950 text-green-400 text-xs font-bold px-3 py-1 rounded border border-green-700";
-
-                        try {
-                            const memberData = warData[ourId].members;
-                            if (memberData) {
-                                buildBarChart(memberData);
-                            }
-                        } catch (chartError) {
-                            console.error("Chart build error:", chartError);
-                        }
-                    } else {
-                        document.getElementById('war-status').innerText = "NO ACTIVE WAR";
-                        document.getElementById('war-status').className = "bg-gray-900 text-gray-400 text-xs font-bold px-3 py-1 rounded border border-gray-700";
-                    }
+                
+                const readyList = document.getElementById('ready-list');
+                const hospList = document.getElementById('hosp-list');
+                
+                if (data.ready && data.ready.length > 0) {
+                    readyList.innerHTML = data.ready.map(p => `<li><span>${p.name}</span> <span>[${p.id}]</span></li>`).join('');
+                } else {
+                    readyList.innerHTML = '<li>No targets currently available.</li>';
                 }
+
+                if (data.hospitalized && data.hospitalized.length > 0) {
+                    hospList.innerHTML = data.hospitalized.map(p => `<li><span>${p.name}</span> <span>Out: ${p.outTime}</span></li>`).join('');
+                } else {
+                    hospList.innerHTML = '<li>No one in the hospital.</li>';
+                }
+
+                document.getElementById('last-updated').innerText = `Last updated: ${new Date().toLocaleTimeString()}`;
             } catch (error) {
-                console.error("Fetch Error:", error);
-                document.getElementById('war-status').innerText = "API DISCONNECTED";
-                document.getElementById('war-status').className = "bg-red-950 text-red-400 text-xs font-bold px-3 py-1 rounded border border-red-700";
+                console.error("Connection error:", error);
             }
         }
-        function buildBarChart(memberData) {
-            const ctx = document.getElementById('operativeChart').getContext('2d');
-            if (opChart) opChart.destroy();
 
-            let names = [];
-            let hitsMade = [];
-            let respectEarned = [];
-
-            Object.values(memberData).forEach(operative => {
-                if(operative.attacks > 0) { 
-                    names.push(operative.name);
-                    hitsMade.push(operative.attacks);
-                    respectEarned.push(operative.score);
-                }
-            });
-
-            opChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: names,
-                    datasets: [
-                        {
-                            label: 'Confirmed Hits (Attacks)',
-                            data: hitsMade,
-                            backgroundColor: '#ef4444',
-                            borderWidth: 1,
-                            borderRadius: 4
-                        },
-                        {
-                            label: 'Respect Score',
-                            data: respectEarned,
-                            backgroundColor: '#3b82f6',
-                            borderWidth: 1,
-                            borderRadius: 4
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: { grid: { display: false }, ticks: { color: '#9ca3af', maxRotation: 45, minRotation: 45 } },
-                        y: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' }, beginAtZero: true }
-                    },
-                    plugins: { legend: { labels: { color: '#e5e7eb' } } }
-                }
-            });
-        }
-
-        window.onload = runWarDataPipeline;
+        fetchWarboardData();
+        setInterval(fetchWarboardData, 15000); 
     </script>
 </body>
 </html>
