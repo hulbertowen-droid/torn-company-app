@@ -25,6 +25,12 @@
         .profile-link { color: #ffffff; text-decoration: none; transition: 0.2s; font-weight: 500; }
         .profile-link:hover { color: #3498db; text-decoration: underline; }
 
+        /* Activity Dots */
+        .activity-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+        .dot-online { background-color: #2ecc71; box-shadow: 0 0 6px #2ecc71; }
+        .dot-idle { background-color: #f1c40f; }
+        .dot-offline { background-color: #7f8c8d; }
+
         /* Buttons and Badges */
         .btn-claim { background-color: #e67e22; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.85em; transition: 0.2s;}
         .btn-claim:hover { background-color: #d35400; }
@@ -102,7 +108,6 @@
             } catch (error) { console.error("Failed to claim:", error); }
         }
 
-        // New function to release a target
         async function unclaimTarget(enemyId) {
             try {
                 await fetch('/api/unclaim', {
@@ -118,13 +123,17 @@
             if (members.length === 0) return '<li>No members found.</li>';
             
             return members.map(p => {
-                // Wrap the name in a clickable profile link opening in a new tab
-                let nameLink = `<a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank" class="profile-link">${p.name}</a>`;
+                // Determine the correct color dot for their activity status
+                let dotClass = 'dot-offline';
+                if (p.onlineStatus === 'Online') dotClass = 'dot-online';
+                if (p.onlineStatus === 'Idle') dotClass = 'dot-idle';
+
+                // Combine the colored dot and the profile link
+                let nameLink = `<span class="activity-dot ${dotClass}" title="${p.onlineStatus}"></span><a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank" class="profile-link">${p.name}</a>`;
                 
                 let claimUI = '';
                 if (isEnemyColumn && (p.state === 'Okay' || p.state === 'Hospital')) {
                     if (p.claimedBy) {
-                        // If I claimed it, show the badge AND the Undo (X) button
                         if (p.claimedBy === myName) {
                             claimUI = `<span class="claimed-badge">🎯 ${p.claimedBy}</span> <button class="btn-unclaim" title="Undo Claim" onclick="unclaimTarget('${p.id}')">✖ Cancel</button>`;
                         } else {
