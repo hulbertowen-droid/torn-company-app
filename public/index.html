@@ -15,6 +15,7 @@
         ul { list-style-type: none; padding: 0; }
         li { background-color: #2f3542; margin-bottom: 8px; padding: 10px; border-radius: 4px; display: flex; justify-content: space-between; }
         .timestamp { font-size: 0.8em; color: #a4b0be; text-align: center; margin-top: 20px; }
+        .countdown { color: #ffeb3b; font-weight: bold; font-family: monospace; font-size: 1.1em; }
     </style>
 </head>
 <body>
@@ -39,34 +40,68 @@
     <div class="timestamp" id="last-updated">Waiting for server...</div>
 
     <script>
+        // We store the hospital data globally so our 1-second timer can read it
+        let hospData = []; 
+
         async function fetchWarboardData() {
             try {
                 const response = await fetch('/api/warboard'); 
                 const data = await response.json();
                 
-                const readyList = document.getElementById('ready-list');
-                const hospList = document.getElementById('hosp-list');
+                hospData = data.hospitalized || [];
+                const readyData = data.ready || [];
                 
-                if (data.ready && data.ready.length > 0) {
-                    readyList.innerHTML = data.ready.map(p => `<li><span>${p.name}</span> <span>[${p.id}]</span></li>`).join('');
+                // Instantly update the Ready list
+                const readyList = document.getElementById('ready-list');
+                if (readyData.length > 0) {
+                    readyList.innerHTML = readyData.map(p => `<li><span>${p.name}</span> <span>[${p.id}]</span></li>`).join('');
                 } else {
                     readyList.innerHTML = '<li>No targets currently available.</li>';
                 }
 
-                if (data.hospitalized && data.hospitalized.length > 0) {
-                    hospList.innerHTML = data.hospitalized.map(p => `<li><span>${p.name}</span> <span>Out: ${p.outTime}</span></li>`).join('');
-                } else {
-                    hospList.innerHTML = '<li>No one in the hospital.</li>';
-                }
-
-                document.getElementById('last-updated').innerText = `Last updated: ${new Date().toLocaleTimeString()}`;
+                document.getElementById('last-updated').innerText = `Last Server Sync: ${new Date().toLocaleTimeString()}`;
+                
+                // Immediately tick the countdowns so there is no 1-second delay visual glitch
+                tickCountdowns(); 
             } catch (error) {
                 console.error("Connection error:", error);
             }
         }
 
+        function tickCountdowns() {
+            const hospList = document.getElementById('hosp-list');
+            const now = Math.floor(Date.now() / 1000); // Current computer time in seconds
+
+            if (hospData.length > 0) {
+                hospList.innerHTML = hospData.map(p => {
+                    let secondsLeft = p.until - now;
+                    
+                    // If the timer hits zero or goes negative, mark them as "Getting out now!"
+                    if (secondsLeft <= 0) {
+                        return `<li><span>${p.name}</span> <span class="countdown">00h 00m 00s</span></li>`;
+                    }
+
+                    // Calculate hours, minutes, and seconds
+                    let h = Math.floor(secondsLeft / 3600);
+                    let m = Math.floor((secondsLeft % 3600) / 60);
+                    let s = secondsLeft % 60;
+
+                    // Pad with zeros so it always looks clean (e.g., 01h 05m 09s)
+                    let formattedTime = `${h.toString().padStart(2, '0')}h ${m.toString().padStart(2, '0')}m ${s.toString().padStart(2, '0')}s`;
+
+                    return `<li><span>${p.name}</span> <span class="countdown">${formattedTime}</span></li>`;
+                }).join('');
+            } else {
+                hospList.innerHTML = '<li>No one in the hospital.</li>';
+            }
+        }
+
+        // Fetch fresh data from your server every 15 seconds
         fetchWarboardData();
         setInterval(fetchWarboardData, 15000); 
+
+        // Update the visual countdown timer every 1 second
+        setInterval(tickCountdowns, 1000); 
     </script>
 </body>
 </html>
