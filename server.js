@@ -4,8 +4,6 @@ require('dotenv').config();
 
 const app = express();
 app.use(cors());
-
-// CRITICAL: This new line allows the server to understand data sent from the website
 app.use(express.json()); 
 app.use(express.static('public'));
 
@@ -13,15 +11,12 @@ const PORT = process.env.PORT || 3000;
 const TORN_API_KEY = process.env.TORN_API_KEY;
 const FACTION_ID = process.env.FACTION_ID || ''; 
 
-// Temporary server memory to hold target claims
-// Format: { enemyId: { playerName: "Name", time: 123456789 } }
 let claims = {};
 
 app.get('/health', (req, res) => {
     res.status(200).send('OK');
 });
 
-// NEW: Endpoint to claim a target
 app.post('/api/claim', (req, res) => {
     const { enemyId, playerName } = req.body;
     
@@ -29,17 +24,14 @@ app.post('/api/claim', (req, res) => {
         return res.status(400).json({ error: "Missing data" });
     }
 
-    // Check if someone else already claimed it
     if (claims[enemyId] && claims[enemyId].playerName !== playerName) {
         return res.status(400).json({ error: "Already claimed", claimedBy: claims[enemyId].playerName });
     }
 
-    // Lock the claim
     claims[enemyId] = { playerName, time: Date.now() };
     res.json({ success: true });
 });
 
-// The Warboard Data Endpoint
 app.get('/api/warboard', async (req, res) => {
     try {
         const myFactionRes = await fetch(`https://api.torn.com/faction/?selections=basic&key=${TORN_API_KEY}`);
@@ -51,10 +43,10 @@ app.get('/api/warboard', async (req, res) => {
             enemyData = await enemyRes.json();
         }
 
-        // Cleanup: Remove claims older than 5 minutes to prevent AFK locks
+        // Cleanup: Bumped to 15 minutes so hospital claims don't disappear while waiting
         const now = Date.now();
         for (const id in claims) {
-            if (now - claims[id].time > 5 * 60 * 1000) {
+            if (now - claims[id].time > 15 * 60 * 1000) {
                 delete claims[id];
             }
         }
@@ -63,18 +55,11 @@ app.get('/api/warboard', async (req, res) => {
             const list = [];
             if (data.members) {
                 for (const [id, member] of Object.entries(data.members)) {
-                    
-                    // If the enemy is in the hospital, automatically clear their claim
-                    if (isEnemy && member.status.state !== 'Okay' && claims[id]) {
-                        delete claims[id];
-                    }
-
                     list.push({
                         id: id,
                         name: member.name,
                         state: member.status.state,
                         until: member.status.until,
-                        // Attach the claim data if it exists
                         claimedBy: isEnemy && claims[id] ? claims[id].playerName : null
                     });
                 }
