@@ -5,51 +5,86 @@ require('dotenv').config();
 const app = express();
 app.use(cors());
 
-// Tells Render to look inside the "public" folder for your website
+// CRITICAL: This new line allows the server to understand data sent from the website
+app.use(express.json()); 
 app.use(express.static('public'));
 
 const PORT = process.env.PORT || 3000;
 const TORN_API_KEY = process.env.TORN_API_KEY;
-// Make sure this is set to the enemy faction's ID in Render!
 const FACTION_ID = process.env.FACTION_ID || ''; 
+
+// Temporary server memory to hold target claims
+// Format: { enemyId: { playerName: "Name", time: 123456789 } }
+let claims = {};
 
 app.get('/health', (req, res) => {
     res.status(200).send('OK');
 });
 
+// NEW: Endpoint to claim a target
+app.post('/api/claim', (req, res) => {
+    const { enemyId, playerName } = req.body;
+    
+    if (!enemyId || !playerName) {
+        return res.status(400).json({ error: "Missing data" });
+    }
+
+    // Check if someone else already claimed it
+    if (claims[enemyId] && claims[enemyId].playerName !== playerName) {
+        return res.status(400).json({ error: "Already claimed", claimedBy: claims[enemyId].playerName });
+    }
+
+    // Lock the claim
+    claims[enemyId] = { playerName, time: Date.now() };
+    res.json({ success: true });
+});
+
+// The Warboard Data Endpoint
 app.get('/api/warboard', async (req, res) => {
     try {
-        // 1. Fetch your own faction (leaving the ID blank gets your own)
         const myFactionRes = await fetch(`https://api.torn.com/faction/?selections=basic&key=${TORN_API_KEY}`);
         const myData = await myFactionRes.json();
 
-        // 2. Fetch the enemy faction
         let enemyData = { members: {} };
         if (FACTION_ID) {
             const enemyRes = await fetch(`https://api.torn.com/faction/${FACTION_ID}?selections=basic&key=${TORN_API_KEY}`);
             enemyData = await enemyRes.json();
         }
 
-        // Helper function to extract and format members
-        const parseMembers = (data) => {
+        // Cleanup: Remove claims older than 5 minutes to prevent AFK locks
+        const now = Date.now();
+        for (const id in claims) {
+            if (now - claims[id].time > 5 * 60 * 1000) {
+                delete claims[id];
+            }
+        }
+
+        const parseMembers = (data, isEnemy = false) => {
             const list = [];
             if (data.members) {
                 for (const [id, member] of Object.entries(data.members)) {
+                    
+                    // If the enemy is in the hospital, automatically clear their claim
+                    if (isEnemy && member.status.state !== 'Okay' && claims[id]) {
+                        delete claims[id];
+                    }
+
                     list.push({
                         id: id,
                         name: member.name,
                         state: member.status.state,
-                        until: member.status.until
+                        until: member.status.until,
+                        // Attach the claim data if it exists
+                        claimedBy: isEnemy && claims[id] ? claims[id].playerName : null
                     });
                 }
             }
             return list;
         };
 
-        // Send both lists back to the website
         res.json({ 
             friendly: parseMembers(myData), 
-            enemy: parseMembers(enemyData) 
+            enemy: parseMembers(enemyData, true) 
         });
 
     } catch (error) {
