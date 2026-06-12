@@ -10,69 +10,55 @@ app.use(express.static('public'));
 const PORT = process.env.PORT || 3000;
 const TORN_API_KEY = process.env.TORN_API_KEY;
 const FACTION_ID = process.env.FACTION_ID || ''; 
-const TORNSTATS_API_KEY = process.env.TORNSTATS_API_KEY || ''; 
 
 let claims = {};
 let enemyList = []; 
 let ffEstimates = {}; 
 
 // ==========================================
-// BACKGROUND FF SCOUTER (THE "SLOW DRIP")
+// BACKGROUND STAT ESTIMATOR (NO TORNSTATS)
 // ==========================================
 let currentEnemyIndex = 0;
 
 setInterval(async () => {
-    // If there is no enemy faction loaded, do nothing
     if (enemyList.length === 0) return;
 
-    // Grab the next enemy in the list
     const enemyId = enemyList[currentEnemyIndex];
 
     try {
-        // Fetch their personal stats
         const res = await fetch(`https://api.torn.com/user/${enemyId}?selections=personalstats&key=${TORN_API_KEY}`);
         const data = await res.json();
 
         if (data && data.personalstats) {
             const ps = data.personalstats;
             
-            // 1. Calculate approximate total lifetime energy used
-            const energyFromXanax = (ps.xantaken || 0) * 250;
-            const energyFromRefills = (ps.refills || 0) * 150;
-            const energyFromCans = (ps.energydrinkused || 0) * 30;
-            const totalEnergy = energyFromXanax + energyFromRefills + energyFromCans;
-
-            let baseStats = 0;
+            // Advanced Estimation Algorithm based on late-game gym ratios
+            // Xanax: ~80k-90k per pill late game
+            // Refills: ~35k-40k per refill late game
+            // Energy Drinks: ~5k per can
+            const baseFromXanax = (ps.xantaken || 0) * 85000;
+            const baseFromRefills = (ps.refills || 0) * 35000;
+            const baseFromCans = (ps.energydrinkused || 0) * 5000;
+            const baseFromBoosters = (ps.boostersused || 0) * 5000; // EDVDs for happy jumps
             
-            // 2. Progressive Scaling: The more energy you use, the higher your gains get
-            if (totalEnergy <= 50000) {
-                baseStats = totalEnergy * 2000;
-            } else if (totalEnergy <= 150000) {
-                baseStats = (50000 * 2000) + ((totalEnergy - 50000) * 15000);
-            } else if (totalEnergy <= 300000) {
-                baseStats = (50000 * 2000) + (100000 * 15000) + ((totalEnergy - 150000) * 45000);
-            } else {
-                baseStats = (50000 * 2000) + (100000 * 15000) + (150000 * 45000) + ((totalEnergy - 300000) * 85000);
-            }
+            let totalBase = baseFromXanax + baseFromRefills + baseFromCans + baseFromBoosters;
 
-            // 3. Stat Enhancers compound exponentially (~1% per SE)
+            // Stat Enhancers increase stats by exactly 1% per use, compounding.
             const statEnhancers = ps.statenhancersused || 0;
-            const totalEstimate = baseStats * Math.pow(1.01, statEnhancers);
+            const finalEstimate = totalBase * Math.pow(1.01, statEnhancers);
             
-            // Lock the better estimate into memory
-            ffEstimates[enemyId] = totalEstimate;
+            // Lock the estimate into memory
+            ffEstimates[enemyId] = finalEstimate;
         }
     } catch (e) {
-        console.error(`FF Scouter failed for ID ${enemyId}`);
+        console.error(`Estimator failed for ID ${enemyId}`);
     }
 
-    // Move to the next enemy in the list, loop back to 0 if at the end
     currentEnemyIndex++;
     if (currentEnemyIndex >= enemyList.length) {
         currentEnemyIndex = 0;
     }
-
-}, 3000); // Runs once every 3 seconds (20 API calls per minute)
+}, 3000); // Runs once every 3 seconds to protect your API limits
 
 
 // ==========================================
@@ -111,30 +97,8 @@ app.get('/api/warboard', async (req, res) => {
             const enemyRes = await fetch(`https://api.torn.com/faction/${FACTION_ID}?selections=basic&key=${TORN_API_KEY}`);
             enemyData = await enemyRes.json();
             
-            // Update the background scanner's list with the live enemy IDs
             if (enemyData.members) {
                 enemyList = Object.keys(enemyData.members);
-            }
-        }
-
-        let spyData = {};
-        if (TORNSTATS_API_KEY && FACTION_ID) {
-            try {
-                const tsRes = await fetch(`https://www.tornstats.com/api/v2/${TORNSTATS_API_KEY}/spy/faction/${FACTION_ID}`);
-                const tsData = await tsRes.json();
-                
-                if (tsData.status) {
-                    const members = tsData.faction.members || tsData.faction;
-                    for (const [key, member] of Object.entries(members)) {
-                        const playerId = member.id || member.player_id || key;
-                        if (member.spy) {
-                            let total = member.spy.total || (member.spy.strength + member.spy.speed + member.spy.defense + member.spy.dexterity) || 0;
-                            if (total > 0) spyData[playerId.toString()] = total;
-                        }
-                    }
-                }
-            } catch (e) {
-                console.error("TornStats fetch failed.");
             }
         }
 
@@ -149,12 +113,6 @@ app.get('/api/warboard', async (req, res) => {
                 for (const [id, member] of Object.entries(data.members)) {
                     let lastAction = member.last_action && member.last_action.status ? member.last_action.status : 'Offline';
 
-                    // Smart Fallback: Use TornStats if it exists, otherwise use the new FF Scouter estimate!
-                    let finalStats = null;
-                    if (isEnemy) {
-                        finalStats = spyData[id] || ffEstimates[id] || null;
-                    }
-
                     list.push({
                         id: id,
                         name: member.name,
@@ -162,7 +120,8 @@ app.get('/api/warboard', async (req, res) => {
                         until: member.status.until,
                         claimedBy: isEnemy && claims[id] ? claims[id].playerName : null,
                         onlineStatus: lastAction,
-                        estStats: finalStats 
+                        // Pulls strictly from the script's background estimator memory
+                        estStats: isEnemy ? (ffEstimates[id] || null) : null 
                     });
                 }
             }
