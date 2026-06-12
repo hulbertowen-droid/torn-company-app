@@ -21,8 +21,15 @@
         .countdown { color: #ffeb3b; font-weight: bold; font-family: monospace; font-size: 1.3em; letter-spacing: 1px;}
         .timestamp { font-size: 0.85em; color: #a4b0be; text-align: center; margin-top: 30px; }
 
+        /* Profile Links */
+        .profile-link { color: #ffffff; text-decoration: none; transition: 0.2s; font-weight: 500; }
+        .profile-link:hover { color: #3498db; text-decoration: underline; }
+
+        /* Buttons and Badges */
         .btn-claim { background-color: #e67e22; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.85em; transition: 0.2s;}
         .btn-claim:hover { background-color: #d35400; }
+        .btn-unclaim { background-color: #c0392b; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.85em; transition: 0.2s; margin-left: 5px; }
+        .btn-unclaim:hover { background-color: #e74c3c; }
         .claimed-badge { background-color: #8e44ad; color: white; padding: 6px 10px; border-radius: 4px; font-size: 0.85em; font-weight: bold; display: inline-flex; align-items: center; gap: 5px;}
         .action-group { display: flex; align-items: center; gap: 15px; }
     </style>
@@ -83,34 +90,46 @@
 
         async function callTarget(enemyId) {
             if (!myName) return alert("You need to set your name to call targets!");
-            
             try {
                 const response = await fetch('/api/claim', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ enemyId: enemyId, playerName: myName })
                 });
-                
                 const result = await response.json();
-                if (result.error) {
-                    alert(result.error + (result.claimedBy ? ` by ${result.claimedBy}` : ''));
-                }
-                
+                if (result.error) alert(result.error + (result.claimedBy ? ` by ${result.claimedBy}` : ''));
                 fetchWarboardData();
-            } catch (error) {
-                console.error("Failed to claim:", error);
-            }
+            } catch (error) { console.error("Failed to claim:", error); }
+        }
+
+        // New function to release a target
+        async function unclaimTarget(enemyId) {
+            try {
+                await fetch('/api/unclaim', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enemyId: enemyId, playerName: myName })
+                });
+                fetchWarboardData();
+            } catch (error) { console.error("Failed to unclaim:", error); }
         }
 
         function generateHTML(members, now, isEnemyColumn) {
             if (members.length === 0) return '<li>No members found.</li>';
             
             return members.map(p => {
-                // Generate the Claim button or the Badge for enemies
+                // Wrap the name in a clickable profile link opening in a new tab
+                let nameLink = `<a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank" class="profile-link">${p.name}</a>`;
+                
                 let claimUI = '';
                 if (isEnemyColumn && (p.state === 'Okay' || p.state === 'Hospital')) {
                     if (p.claimedBy) {
-                        claimUI = `<span class="claimed-badge">🎯 ${p.claimedBy}</span>`;
+                        // If I claimed it, show the badge AND the Undo (X) button
+                        if (p.claimedBy === myName) {
+                            claimUI = `<span class="claimed-badge">🎯 ${p.claimedBy}</span> <button class="btn-unclaim" title="Undo Claim" onclick="unclaimTarget('${p.id}')">✖ Cancel</button>`;
+                        } else {
+                            claimUI = `<span class="claimed-badge">🎯 ${p.claimedBy}</span>`;
+                        }
                     } else {
                         claimUI = `<button class="btn-claim" onclick="callTarget('${p.id}')">Call Target</button>`;
                     }
@@ -118,7 +137,7 @@
 
                 if (p.state === 'Okay') {
                     return `<li>
-                                <span>🟢 ${p.name}</span> 
+                                <span>🟢 ${nameLink}</span> 
                                 <div class="action-group"><span class="status-ready">READY</span> ${claimUI}</div>
                             </li>`;
                 } 
@@ -126,7 +145,7 @@
                     let secondsLeft = p.until - now;
                     if (secondsLeft <= 0) {
                         return `<li>
-                                    <span>🏥 ${p.name}</span> 
+                                    <span>🏥 ${nameLink}</span> 
                                     <div class="action-group"><span class="status-ready">READY</span> ${claimUI}</div>
                                 </li>`;
                     }
@@ -136,12 +155,12 @@
                     let timeText = h > 0 ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}` : `${m}:${s.toString().padStart(2, '0')}`;
                     
                     return `<li>
-                                <span>🏥 ${p.name}</span> 
+                                <span>🏥 ${nameLink}</span> 
                                 <div class="action-group"><span class="countdown">${timeText}</span> ${claimUI}</div>
                             </li>`;
                 } 
                 else {
-                    return `<li style="opacity: 0.6;"><span>✈️ ${p.name}</span> <span class="status-other">${p.state}</span></li>`;
+                    return `<li style="opacity: 0.6;"><span>✈️ ${nameLink}</span> <span class="status-other">${p.state}</span></li>`;
                 }
             }).join('');
         }
@@ -153,6 +172,7 @@
         }
 
         window.callTarget = callTarget;
+        window.unclaimTarget = unclaimTarget;
 
         fetchWarboardData();
         setInterval(fetchWarboardData, 15000); 
