@@ -10,6 +10,7 @@ app.use(express.static('public'));
 const PORT = process.env.PORT || 3000;
 const TORN_API_KEY = process.env.TORN_API_KEY;
 const FACTION_ID = process.env.FACTION_ID || ''; 
+const TORNSTATS_API_KEY = process.env.TORNSTATS_API_KEY || ''; // New TornStats Key
 
 let claims = {};
 
@@ -19,22 +20,16 @@ app.get('/health', (req, res) => {
 
 app.post('/api/claim', (req, res) => {
     const { enemyId, playerName } = req.body;
-    
-    if (!enemyId || !playerName) {
-        return res.status(400).json({ error: "Missing data" });
-    }
-
+    if (!enemyId || !playerName) return res.status(400).json({ error: "Missing data" });
     if (claims[enemyId] && claims[enemyId].playerName !== playerName) {
         return res.status(400).json({ error: "Already claimed", claimedBy: claims[enemyId].playerName });
     }
-
     claims[enemyId] = { playerName, time: Date.now() };
     res.json({ success: true });
 });
 
 app.post('/api/unclaim', (req, res) => {
     const { enemyId, playerName } = req.body;
-    
     if (claims[enemyId] && claims[enemyId].playerName === playerName) {
         delete claims[enemyId];
         return res.json({ success: true });
@@ -44,6 +39,7 @@ app.post('/api/unclaim', (req, res) => {
 
 app.get('/api/warboard', async (req, res) => {
     try {
+        // 1. Fetch Torn Data
         const myFactionRes = await fetch(`https://api.torn.com/faction/?selections=basic&key=${TORN_API_KEY}`);
         const myData = await myFactionRes.json();
 
@@ -53,18 +49,37 @@ app.get('/api/warboard', async (req, res) => {
             enemyData = await enemyRes.json();
         }
 
-        const now = Date.now();
-        for (const id in claims) {
-            if (now - claims[id].time > 15 * 60 * 1000) {
-                delete claims[id];
+        // 2. Fetch TornStats Estimated Spy Data
+        let spyData = {};
+        if (TORNSTATS_API_KEY && FACTION_ID) {
+            try {
+                const tsRes = await fetch(`https://www.tornstats.com/api/v2/${TORNSTATS_API_KEY}/spy/faction/${FACTION_ID}`);
+                const tsData = await tsRes.json();
+                
+                // If TornStats successfully returns faction spies, map them by Player ID
+                if (tsData.status && tsData.faction && tsData.faction.members) {
+                    for (const [id, member] of Object.entries(tsData.faction.members)) {
+                        if (member.spy && member.spy.total) {
+                            spyData[id] = member.spy.total;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("TornStats fetch failed. Skipping spy data this cycle.");
             }
         }
 
+        // Cleanup stale claims
+        const now = Date.now();
+        for (const id in claims) {
+            if (now - claims[id].time > 15 * 60 * 1000) delete claims[id];
+        }
+
+        // 3. Merge Data Together
         const parseMembers = (data, isEnemy = false) => {
             const list = [];
             if (data.members) {
                 for (const [id, member] of Object.entries(data.members)) {
-                    // Default to offline if the API somehow misses it
                     let lastAction = member.last_action && member.last_action.status ? member.last_action.status : 'Offline';
 
                     list.push({
@@ -73,7 +88,9 @@ app.get('/api/warboard', async (req, res) => {
                         state: member.status.state,
                         until: member.status.until,
                         claimedBy: isEnemy && claims[id] ? claims[id].playerName : null,
-                        onlineStatus: lastAction // <-- We pass the online status here
+                        onlineStatus: lastAction,
+                        // Attach the estimated stats from TornStats (if it exists)
+                        estStats: isEnemy ? (spyData[id] || null) : null
                     });
                 }
             }
