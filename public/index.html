@@ -21,18 +21,17 @@
         .countdown { color: #ffeb3b; font-weight: bold; font-family: monospace; font-size: 1.3em; letter-spacing: 1px;}
         .timestamp { font-size: 0.85em; color: #a4b0be; text-align: center; margin-top: 30px; }
 
-        /* Profile Links & Badges */
         .profile-link { color: #ffffff; text-decoration: none; transition: 0.2s; font-weight: 500; }
         .profile-link:hover { color: #3498db; text-decoration: underline; }
-        .stat-badge { color: #f39c12; font-size: 0.85em; margin-left: 8px; font-weight: bold; background: rgba(243, 156, 18, 0.1); padding: 2px 6px; border-radius: 4px;}
+        
+        /* THIS IS THE MISSING BADGE CSS */
+        .stat-badge { color: #f39c12; font-size: 0.85em; margin-left: 8px; font-weight: bold; background: rgba(243, 156, 18, 0.1); padding: 4px 8px; border-radius: 4px; border: 1px solid #f39c12;}
 
-        /* Activity Dots */
         .activity-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
         .dot-online { background-color: #2ecc71; box-shadow: 0 0 6px #2ecc71; }
         .dot-idle { background-color: #f1c40f; }
         .dot-offline { background-color: #7f8c8d; }
 
-        /* Buttons and Action Group */
         .btn-claim { background-color: #e67e22; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.85em; transition: 0.2s;}
         .btn-claim:hover { background-color: #d35400; }
         .btn-unclaim { background-color: #c0392b; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.85em; transition: 0.2s; margin-left: 5px; }
@@ -80,7 +79,6 @@
             });
         }
 
-        // Formats massive numbers into clean K/M/B readouts
         function formatStats(num) {
             if (!num) return '?';
             if (num >= 1000000000) return (num / 1000000000).toFixed(1) + 'b';
@@ -137,7 +135,7 @@
                 if (p.onlineStatus === 'Online') dotClass = 'dot-online';
                 if (p.onlineStatus === 'Idle') dotClass = 'dot-idle';
 
-                // Display the estimated stats badge if we have data from TornStats
+                // THIS IS WHERE THE BADGE GETS DRAWN ON THE SCREEN
                 let statsUI = isEnemyColumn && p.estStats ? `<span class="stat-badge" title="Estimated Stats">⚔️ ${formatStats(p.estStats)}</span>` : '';
 
                 let nameLink = `<span class="activity-dot ${dotClass}" title="${p.onlineStatus}"></span><a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank" class="profile-link">${p.name}</a> ${statsUI}`;
