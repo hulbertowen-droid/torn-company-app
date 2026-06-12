@@ -5,7 +5,7 @@ require('dotenv').config();
 const app = express();
 app.use(cors());
 
-// CRITICAL: This line tells Render to look inside the "public" folder for your website
+// Tells Render to look inside the "public" folder for your website
 app.use(express.static('public'));
 
 const PORT = process.env.PORT || 3000;
@@ -35,9 +35,8 @@ app.get('/api/warboard', async (req, res) => {
                 if (member.status.state === 'Okay') {
                     ready.push({ name: member.name, id: id });
                 } else if (member.status.state === 'Hospital') {
-                    const date = new Date(member.status.until * 1000);
-                    const outTime = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                    hospitalized.push({ name: member.name, outTime: outTime });
+                    // Send the raw UNIX timestamp directly from Torn's database
+                    hospitalized.push({ name: member.name, until: member.status.until });
                 }
             }
         }
