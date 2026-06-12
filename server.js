@@ -56,13 +56,16 @@ app.get('/api/warboard', async (req, res) => {
                 const tsRes = await fetch(`https://www.tornstats.com/api/v2/${TORNSTATS_API_KEY}/spy/faction/${FACTION_ID}`);
                 const tsData = await tsRes.json();
                 
-                // FIXED: TornStats puts players directly in 'faction', not 'faction.members'
+                // INTEGRATED FIX: Handles both raw array lists and labeled object maps automatically
                 if (tsData.status && tsData.faction) {
                     const membersList = tsData.faction.members || tsData.faction; 
                     
-                    for (const [id, member] of Object.entries(membersList)) {
-                        if (member.spy && member.spy.total) {
-                            spyData[id] = member.spy.total;
+                    for (const [key, member] of Object.entries(membersList)) {
+                        // Extract the true player ID whether it is a key, an id, or player_id property
+                        const playerId = member.id || member.player_id || key;
+                        
+                        if (playerId && member.spy && member.spy.total) {
+                            spyData[playerId] = member.spy.total;
                         }
                     }
                 }
