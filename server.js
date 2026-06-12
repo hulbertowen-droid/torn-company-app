@@ -39,7 +39,6 @@ app.post('/api/unclaim', (req, res) => {
 
 app.get('/api/warboard', async (req, res) => {
     try {
-        // 1. Fetch Torn Data
         const myFactionRes = await fetch(`https://api.torn.com/faction/?selections=basic&key=${TORN_API_KEY}`);
         const myData = await myFactionRes.json();
 
@@ -49,51 +48,33 @@ app.get('/api/warboard', async (req, res) => {
             enemyData = await enemyRes.json();
         }
 
-        // 2. Fetch TornStats Estimated Spy Data
         let spyData = {};
         if (TORNSTATS_API_KEY && FACTION_ID) {
             try {
                 const tsRes = await fetch(`https://www.tornstats.com/api/v2/${TORNSTATS_API_KEY}/spy/faction/${FACTION_ID}`);
                 const tsData = await tsRes.json();
                 
-                // === UNIVERSAL SPY EXTRACTOR ===
-                // Recursively searches the entire response for spy stats, ignoring folder names
-                function extractSpies(obj) {
-                    for (const key in obj) {
-                        if (obj[key] !== null && typeof obj[key] === 'object') {
-                            
-                            // If we find the spy data...
-                            if (obj[key].spy && obj[key].spy.total) {
-                                // Grab the ID from whatever property TornStats decided to use
-                                const playerId = obj[key].id || obj[key].player_id || (isNaN(key) ? null : key);
-                                
-                                if (playerId) {
-                                    // Lock it into our map using the exact ID
-                                    spyData[playerId.toString()] = obj[key].spy.total;
-                                }
-                            } else {
-                                // If not found, keep digging deeper
-                                extractSpies(obj[key]);
+                if (tsData.status && tsData.faction) {
+                    for (const [id, member] of Object.entries(tsData.faction)) {
+                        if (member.spy) {
+                            // If TornStats provides a total, use it. Otherwise, add the individual stats up.
+                            let total = member.spy.total || (member.spy.strength + member.spy.speed + member.spy.defense + member.spy.dexterity) || 0;
+                            if (total > 0) {
+                                spyData[id] = total;
                             }
                         }
                     }
                 }
-                
-                if (tsData.status) {
-                    extractSpies(tsData);
-                }
             } catch (e) {
-                console.error("TornStats fetch failed. Skipping spy data this cycle.");
+                console.error("TornStats fetch failed.");
             }
         }
 
-        // Cleanup stale claims
         const now = Date.now();
         for (const id in claims) {
             if (now - claims[id].time > 15 * 60 * 1000) delete claims[id];
         }
 
-        // 3. Merge Data Together
         const parseMembers = (data, isEnemy = false) => {
             const list = [];
             if (data.members) {
@@ -107,7 +88,6 @@ app.get('/api/warboard', async (req, res) => {
                         until: member.status.until,
                         claimedBy: isEnemy && claims[id] ? claims[id].playerName : null,
                         onlineStatus: lastAction,
-                        // Perfect match: Attaches the spy data if the player's ID was found
                         estStats: isEnemy ? (spyData[id] || null) : null
                     });
                 }
