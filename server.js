@@ -56,14 +56,11 @@ app.get('/api/warboard', async (req, res) => {
                 const tsRes = await fetch(`https://www.tornstats.com/api/v2/${TORNSTATS_API_KEY}/spy/faction/${FACTION_ID}`);
                 const tsData = await tsRes.json();
                 
-                // === DEBUGGING LINE ===
-                // This prints the raw data from TornStats to your Render Logs
-                console.log("\n--- TORNSTATS RAW DATA ---");
-                console.log(JSON.stringify(tsData, null, 2));
-                console.log("--------------------------\n");
-                
-                if (tsData.status && tsData.faction && tsData.faction.members) {
-                    for (const [id, member] of Object.entries(tsData.faction.members)) {
+                // FIXED: TornStats puts players directly in 'faction', not 'faction.members'
+                if (tsData.status && tsData.faction) {
+                    const membersList = tsData.faction.members || tsData.faction; 
+                    
+                    for (const [id, member] of Object.entries(membersList)) {
                         if (member.spy && member.spy.total) {
                             spyData[id] = member.spy.total;
                         }
