@@ -10,7 +10,7 @@ app.use(express.static('public'));
 const PORT = process.env.PORT || 3000;
 const TORN_API_KEY = process.env.TORN_API_KEY;
 const FACTION_ID = process.env.FACTION_ID || ''; 
-const TORNSTATS_API_KEY = process.env.TORNSTATS_API_KEY || ''; // New TornStats Key
+const TORNSTATS_API_KEY = process.env.TORNSTATS_API_KEY || ''; 
 
 let claims = {};
 
@@ -56,7 +56,12 @@ app.get('/api/warboard', async (req, res) => {
                 const tsRes = await fetch(`https://www.tornstats.com/api/v2/${TORNSTATS_API_KEY}/spy/faction/${FACTION_ID}`);
                 const tsData = await tsRes.json();
                 
-                // If TornStats successfully returns faction spies, map them by Player ID
+                // === DEBUGGING LINE ===
+                // This prints the raw data from TornStats to your Render Logs
+                console.log("\n--- TORNSTATS RAW DATA ---");
+                console.log(JSON.stringify(tsData, null, 2));
+                console.log("--------------------------\n");
+                
                 if (tsData.status && tsData.faction && tsData.faction.members) {
                     for (const [id, member] of Object.entries(tsData.faction.members)) {
                         if (member.spy && member.spy.total) {
@@ -89,7 +94,6 @@ app.get('/api/warboard', async (req, res) => {
                         until: member.status.until,
                         claimedBy: isEnemy && claims[id] ? claims[id].playerName : null,
                         onlineStatus: lastAction,
-                        // Attach the estimated stats from TornStats (if it exists)
                         estStats: isEnemy ? (spyData[id] || null) : null
                     });
                 }
