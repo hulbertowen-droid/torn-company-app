@@ -13,8 +13,8 @@ const FACTION_ID = process.env.FACTION_ID || '';
 const TORNSTATS_API_KEY = process.env.TORNSTATS_API_KEY || ''; 
 
 let claims = {};
-let enemyList = []; // Holds enemy IDs for the background scanner
-let ffEstimates = {}; // Holds the calculated FF Scouter stats
+let enemyList = []; 
+let ffEstimates = {}; 
 
 // ==========================================
 // BACKGROUND FF SCOUTER (THE "SLOW DRIP")
@@ -36,16 +36,30 @@ setInterval(async () => {
         if (data && data.personalstats) {
             const ps = data.personalstats;
             
-            // Standard FF Scouter Math Estimation
-            // (Xanax * 45k) + (Refills * 25k) + (SEs * 50m) + (Cans * 5k)
-            const xanax = (ps.xantaken || 0) * 45000;
-            const refills = (ps.refills || 0) * 25000;
-            const statEnhancers = (ps.statenhancersused || 0) * 50000000;
-            const energyDrinks = (ps.energydrinkused || 0) * 5000;
+            // 1. Calculate approximate total lifetime energy used
+            const energyFromXanax = (ps.xantaken || 0) * 250;
+            const energyFromRefills = (ps.refills || 0) * 150;
+            const energyFromCans = (ps.energydrinkused || 0) * 30;
+            const totalEnergy = energyFromXanax + energyFromRefills + energyFromCans;
 
-            const totalEstimate = xanax + refills + statEnhancers + energyDrinks;
+            let baseStats = 0;
             
-            // Lock the estimate into memory
+            // 2. Progressive Scaling: The more energy you use, the higher your gains get
+            if (totalEnergy <= 50000) {
+                baseStats = totalEnergy * 2000;
+            } else if (totalEnergy <= 150000) {
+                baseStats = (50000 * 2000) + ((totalEnergy - 50000) * 15000);
+            } else if (totalEnergy <= 300000) {
+                baseStats = (50000 * 2000) + (100000 * 15000) + ((totalEnergy - 150000) * 45000);
+            } else {
+                baseStats = (50000 * 2000) + (100000 * 15000) + (150000 * 45000) + ((totalEnergy - 300000) * 85000);
+            }
+
+            // 3. Stat Enhancers compound exponentially (~1% per SE)
+            const statEnhancers = ps.statenhancersused || 0;
+            const totalEstimate = baseStats * Math.pow(1.01, statEnhancers);
+            
+            // Lock the better estimate into memory
             ffEstimates[enemyId] = totalEstimate;
         }
     } catch (e) {
@@ -58,7 +72,7 @@ setInterval(async () => {
         currentEnemyIndex = 0;
     }
 
-}, 3000); // Runs once every 3 seconds (20 API calls per minute - completely safe!)
+}, 3000); // Runs once every 3 seconds (20 API calls per minute)
 
 
 // ==========================================
@@ -135,7 +149,7 @@ app.get('/api/warboard', async (req, res) => {
                 for (const [id, member] of Object.entries(data.members)) {
                     let lastAction = member.last_action && member.last_action.status ? member.last_action.status : 'Offline';
 
-                    // Smart Fallback: Use TornStats if it exists, otherwise use FF Scouter estimate!
+                    // Smart Fallback: Use TornStats if it exists, otherwise use the new FF Scouter estimate!
                     let finalStats = null;
                     if (isEnemy) {
                         finalStats = spyData[id] || ffEstimates[id] || null;
