@@ -18,13 +18,13 @@
         
         .status-ready { color: #2ed573; font-weight: bold; font-size: 1.1em; }
         .status-other { color: #a4b0be; font-size: 0.9em; font-style: italic; }
-        .countdown { color: #ffeb3b; font-weight: bold; font-family: monospace; font-size: 1.4em; letter-spacing: 1px;}
+        .countdown { color: #ffeb3b; font-weight: bold; font-family: monospace; font-size: 1.3em; letter-spacing: 1px;}
         .timestamp { font-size: 0.85em; color: #a4b0be; text-align: center; margin-top: 30px; }
 
-        /* Bidding/Calling Styles */
-        .btn-claim { background-color: #e67e22; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.9em; }
+        .btn-claim { background-color: #e67e22; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.85em; transition: 0.2s;}
         .btn-claim:hover { background-color: #d35400; }
-        .claimed-badge { background-color: #8e44ad; color: white; padding: 5px 10px; border-radius: 4px; font-size: 0.9em; font-weight: bold; display: inline-flex; align-items: center; gap: 5px;}
+        .claimed-badge { background-color: #8e44ad; color: white; padding: 6px 10px; border-radius: 4px; font-size: 0.85em; font-weight: bold; display: inline-flex; align-items: center; gap: 5px;}
+        .action-group { display: flex; align-items: center; gap: 15px; }
     </style>
 </head>
 <body>
@@ -46,10 +46,9 @@
     <div class="timestamp" id="last-updated">Waiting for server...</div>
 
     <script>
-        // Set up the user's identity
         let myName = localStorage.getItem('warboard_name');
         if (!myName) {
-            myName = prompt("Welcome to the Warboard!\nEnter your Torn name to call targets:", "Owen");
+            myName = prompt("Welcome to the Warboard!\nEnter your Torn name to call targets:", "");
             if (myName) localStorage.setItem('warboard_name', myName);
         }
 
@@ -82,7 +81,6 @@
             }
         }
 
-        // Action when the claim button is clicked
         async function callTarget(enemyId) {
             if (!myName) return alert("You need to set your name to call targets!");
             
@@ -98,7 +96,6 @@
                     alert(result.error + (result.claimedBy ? ` by ${result.claimedBy}` : ''));
                 }
                 
-                // Immediately fetch fresh data to show the claim to everyone
                 fetchWarboardData();
             } catch (error) {
                 console.error("Failed to claim:", error);
@@ -109,30 +106,39 @@
             if (members.length === 0) return '<li>No members found.</li>';
             
             return members.map(p => {
-                if (p.state === 'Okay') {
-                    // If it's an enemy, handle the claiming UI
-                    let actionUI = '<span class="status-ready">READY</span>';
-                    
-                    if (isEnemyColumn) {
-                        if (p.claimedBy) {
-                            actionUI = `<span class="claimed-badge">🎯 ${p.claimedBy}</span>`;
-                        } else {
-                            actionUI = `<button class="btn-claim" onclick="callTarget('${p.id}')">Call Target</button>`;
-                        }
+                // Generate the Claim button or the Badge for enemies
+                let claimUI = '';
+                if (isEnemyColumn && (p.state === 'Okay' || p.state === 'Hospital')) {
+                    if (p.claimedBy) {
+                        claimUI = `<span class="claimed-badge">🎯 ${p.claimedBy}</span>`;
+                    } else {
+                        claimUI = `<button class="btn-claim" onclick="callTarget('${p.id}')">Call Target</button>`;
                     }
-                    return `<li><span>🟢 ${p.name}</span> ${actionUI}</li>`;
+                }
+
+                if (p.state === 'Okay') {
+                    return `<li>
+                                <span>🟢 ${p.name}</span> 
+                                <div class="action-group"><span class="status-ready">READY</span> ${claimUI}</div>
+                            </li>`;
                 } 
                 else if (p.state === 'Hospital') {
                     let secondsLeft = p.until - now;
                     if (secondsLeft <= 0) {
-                        return `<li><span>🏥 ${p.name}</span> <span class="status-ready">READY</span></li>`;
+                        return `<li>
+                                    <span>🏥 ${p.name}</span> 
+                                    <div class="action-group"><span class="status-ready">READY</span> ${claimUI}</div>
+                                </li>`;
                     }
                     let h = Math.floor(secondsLeft / 3600);
                     let m = Math.floor((secondsLeft % 3600) / 60);
                     let s = secondsLeft % 60;
                     let timeText = h > 0 ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}` : `${m}:${s.toString().padStart(2, '0')}`;
                     
-                    return `<li><span>🏥 ${p.name}</span> <span class="countdown">${timeText}</span></li>`;
+                    return `<li>
+                                <span>🏥 ${p.name}</span> 
+                                <div class="action-group"><span class="countdown">${timeText}</span> ${claimUI}</div>
+                            </li>`;
                 } 
                 else {
                     return `<li style="opacity: 0.6;"><span>✈️ ${p.name}</span> <span class="status-other">${p.state}</span></li>`;
@@ -142,12 +148,10 @@
 
         function tickCountdowns() {
             const now = Math.floor(Date.now() / 1000);
-            // Notice the true/false flags passed to generateHTML so it knows which side gets the buttons
             document.getElementById('friendly-list').innerHTML = generateHTML(friendlyData, now, false);
             document.getElementById('enemy-list').innerHTML = generateHTML(enemyData, now, true);
         }
 
-        // Make functions available globally for inline HTML onclick handlers
         window.callTarget = callTarget;
 
         fetchWarboardData();
