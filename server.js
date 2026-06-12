@@ -1,62 +1,52 @@
 const express = require('express');
 const cors = require('cors');
-const path = require('path');
+require('dotenv').config();
 
-// Initialize Express
 const app = express();
-const PORT = process.env.PORT || 3000;
-const API_KEY = process.env.TORN_API_KEY;
-
-// Middleware
 app.use(cors());
-app.use(express.static(path.join(__dirname, 'public')));
+
+// CRITICAL: This line tells Render to look inside the "public" folder for your website
+app.use(express.static('public'));
+
+const PORT = process.env.PORT || 3000;
+const TORN_API_KEY = process.env.TORN_API_KEY;
+const FACTION_ID = process.env.FACTION_ID || '';
+
+// Render Health Check
 app.get('/health', (req, res) => {
     res.status(200).send('OK');
 });
 
-// ==========================================
-// THE FIX: Render Health Check Endpoint
-// ==========================================
-app.get('/health', (req, res) => {
-    // This tells Render "I am alive and working perfectly!"
-    res.status(200).send('OK');
-});
-// Explicitly serve the index.html file for the main website address
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-// Main Faction Combat Data Endpoint
-app.get('/api/faction', async (req, res) => {
-    if (!API_KEY) {
-        console.error("CRITICAL: TORN_API_KEY is missing from environment variables.");
-        return res.status(500).json({ error: 'API key not configured on server.' });
-    }
-
+// The Warboard Data Endpoint
+app.get('/api/warboard', async (req, res) => {
     try {
-        const tornApiUrl = `https://api.torn.com/faction/?selections=basic,chain,rankedwars&key=${API_KEY}`;
-        
-        const response = await fetch(tornApiUrl);
+        const response = await fetch(`https://api.torn.com/faction/${FACTION_ID}?selections=basic&key=${TORN_API_KEY}`);
         const data = await response.json();
-
+        
         if (data.error) {
-            console.error('Torn API Rejected Request:', data.error);
-            return res.status(400).json({ success: false, error: data.error });
+            return res.status(400).json({ error: data.error.error });
         }
 
-        res.json({ success: true, faction: data });
+        const ready = [];
+        const hospitalized = [];
 
+        if (data.members) {
+            for (const [id, member] of Object.entries(data.members)) {
+                if (member.status.state === 'Okay') {
+                    ready.push({ name: member.name, id: id });
+                } else if (member.status.state === 'Hospital') {
+                    const date = new Date(member.status.until * 1000);
+                    const outTime = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                    hospitalized.push({ name: member.name, outTime: outTime });
+                }
+            }
+        }
+        res.json({ ready, hospitalized });
     } catch (error) {
-        console.error('Arachnid Network Backend Failure:', error);
-        res.status(500).json({ success: false, error: 'Internal server failure communicating with Torn.' });
+        res.status(500).json({ error: 'Failed to fetch data from Torn' });
     }
 });
 
-// Boot the Server
 app.listen(PORT, () => {
-    console.log(`🕷️ ARACHNID WAR NETWORK ONLINE: Listening on port ${PORT}`);
-    if (!API_KEY) {
-        console.log("⚠️ WARNING: No API Key detected in environment!");
-    } else {
-        console.log("✅ API Key loaded securely.");
-    }
+    console.log(`Server running on port ${PORT}`);
 });
