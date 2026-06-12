@@ -17,7 +17,6 @@ app.get('/health', (req, res) => {
     res.status(200).send('OK');
 });
 
-// Endpoint to Claim a target
 app.post('/api/claim', (req, res) => {
     const { enemyId, playerName } = req.body;
     
@@ -33,11 +32,9 @@ app.post('/api/claim', (req, res) => {
     res.json({ success: true });
 });
 
-// NEW: Endpoint to Unclaim a target
 app.post('/api/unclaim', (req, res) => {
     const { enemyId, playerName } = req.body;
     
-    // Only allow the person who claimed it to unclaim it
     if (claims[enemyId] && claims[enemyId].playerName === playerName) {
         delete claims[enemyId];
         return res.json({ success: true });
@@ -67,12 +64,16 @@ app.get('/api/warboard', async (req, res) => {
             const list = [];
             if (data.members) {
                 for (const [id, member] of Object.entries(data.members)) {
+                    // Default to offline if the API somehow misses it
+                    let lastAction = member.last_action && member.last_action.status ? member.last_action.status : 'Offline';
+
                     list.push({
                         id: id,
                         name: member.name,
                         state: member.status.state,
                         until: member.status.until,
-                        claimedBy: isEnemy && claims[id] ? claims[id].playerName : null
+                        claimedBy: isEnemy && claims[id] ? claims[id].playerName : null,
+                        onlineStatus: lastAction // <-- We pass the online status here
                     });
                 }
             }
