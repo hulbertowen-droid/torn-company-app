@@ -10,55 +10,47 @@ app.use(express.static('public'));
 const PORT = process.env.PORT || 3000;
 const TORN_API_KEY = process.env.TORN_API_KEY;
 const FACTION_ID = process.env.FACTION_ID || ''; 
+const FFSCOUTER_API_KEY = process.env.FFSCOUTER_API_KEY || ''; // Your FF Scouter / YATA Key
 
 let claims = {};
 let enemyList = []; 
 let ffEstimates = {}; 
 
 // ==========================================
-// BACKGROUND STAT ESTIMATOR (NO TORNSTATS)
+// BACKGROUND FF SCOUTER (API DATABASE PULL)
 // ==========================================
 let currentEnemyIndex = 0;
 
 setInterval(async () => {
-    if (enemyList.length === 0) return;
+    // If no faction is loaded or no API key is provided, skip the loop
+    if (enemyList.length === 0 || !FFSCOUTER_API_KEY) return;
 
     const enemyId = enemyList[currentEnemyIndex];
 
     try {
-        const res = await fetch(`https://api.torn.com/user/${enemyId}?selections=personalstats&key=${TORN_API_KEY}`);
-        const data = await res.json();
-
-        if (data && data.personalstats) {
-            const ps = data.personalstats;
+        // We use the YATA/FFScouter standard target endpoint. 
+        // This pulls from the crowdsourced attack log database instead of guessing with math.
+        const res = await fetch(`https://yata.yt/api/v1/targets/${enemyId}/?key=${FFSCOUTER_API_KEY}`);
+        
+        if (res.ok) {
+            const data = await res.json();
             
-            // Advanced Estimation Algorithm based on late-game gym ratios
-            // Xanax: ~80k-90k per pill late game
-            // Refills: ~35k-40k per refill late game
-            // Energy Drinks: ~5k per can
-            const baseFromXanax = (ps.xantaken || 0) * 85000;
-            const baseFromRefills = (ps.refills || 0) * 35000;
-            const baseFromCans = (ps.energydrinkused || 0) * 5000;
-            const baseFromBoosters = (ps.boostersused || 0) * 5000; // EDVDs for happy jumps
-            
-            let totalBase = baseFromXanax + baseFromRefills + baseFromCans + baseFromBoosters;
-
-            // Stat Enhancers increase stats by exactly 1% per use, compounding.
-            const statEnhancers = ps.statenhancersused || 0;
-            const finalEstimate = totalBase * Math.pow(1.01, statEnhancers);
-            
-            // Lock the estimate into memory
-            ffEstimates[enemyId] = finalEstimate;
+            // If the crowdsourced database has a battle score for them, lock it in!
+            if (data && data.target && data.target.battle_score) {
+                // Battle scores are the square root of stats, so we square it back to get the raw estimate
+                const rawStats = Math.pow(data.target.battle_score, 2);
+                ffEstimates[enemyId] = rawStats;
+            }
         }
     } catch (e) {
-        console.error(`Estimator failed for ID ${enemyId}`);
+        console.error(`FF Scouter API failed for ID ${enemyId}`);
     }
 
     currentEnemyIndex++;
     if (currentEnemyIndex >= enemyList.length) {
         currentEnemyIndex = 0;
     }
-}, 3000); // Runs once every 3 seconds to protect your API limits
+}, 3000); // 1 enemy every 3 seconds to stay under rate limits
 
 
 // ==========================================
@@ -120,7 +112,7 @@ app.get('/api/warboard', async (req, res) => {
                         until: member.status.until,
                         claimedBy: isEnemy && claims[id] ? claims[id].playerName : null,
                         onlineStatus: lastAction,
-                        // Pulls strictly from the script's background estimator memory
+                        // Pulls strictly from the crowdsourced FF database!
                         estStats: isEnemy ? (ffEstimates[id] || null) : null 
                     });
                 }
