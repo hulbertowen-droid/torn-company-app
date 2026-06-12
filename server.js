@@ -49,25 +49,31 @@ app.get('/api/warboard', async (req, res) => {
         }
 
         let spyData = {};
+        let tsDebug = "Did not run."; // This will capture exactly what happens with TornStats
+
         if (TORNSTATS_API_KEY && FACTION_ID) {
             try {
                 const tsRes = await fetch(`https://www.tornstats.com/api/v2/${TORNSTATS_API_KEY}/spy/faction/${FACTION_ID}`);
                 const tsData = await tsRes.json();
                 
-                if (tsData.status && tsData.faction) {
-                    for (const [id, member] of Object.entries(tsData.faction)) {
+                // Save the raw response to send straight to your browser
+                tsDebug = tsData; 
+
+                if (tsData.status) {
+                    const members = tsData.faction.members || tsData.faction;
+                    for (const [key, member] of Object.entries(members)) {
+                        const playerId = member.id || member.player_id || key;
                         if (member.spy) {
-                            // If TornStats provides a total, use it. Otherwise, add the individual stats up.
                             let total = member.spy.total || (member.spy.strength + member.spy.speed + member.spy.defense + member.spy.dexterity) || 0;
-                            if (total > 0) {
-                                spyData[id] = total;
-                            }
+                            if (total > 0) spyData[playerId.toString()] = total;
                         }
                     }
                 }
             } catch (e) {
-                console.error("TornStats fetch failed.");
+                tsDebug = "TornStats fetch crashed: " + e.message;
             }
+        } else {
+            tsDebug = `Missing Keys! TORNSTATS_API_KEY set? ${!!TORNSTATS_API_KEY} | FACTION_ID set? ${!!FACTION_ID}`;
         }
 
         const now = Date.now();
@@ -97,7 +103,8 @@ app.get('/api/warboard', async (req, res) => {
 
         res.json({ 
             friendly: parseMembers(myData), 
-            enemy: parseMembers(enemyData, true) 
+            enemy: parseMembers(enemyData, true),
+            debug_tornstats: tsDebug // We added the debug payload here
         });
 
     } catch (error) {
