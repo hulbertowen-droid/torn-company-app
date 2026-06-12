@@ -17,6 +17,7 @@ app.get('/health', (req, res) => {
     res.status(200).send('OK');
 });
 
+// Endpoint to Claim a target
 app.post('/api/claim', (req, res) => {
     const { enemyId, playerName } = req.body;
     
@@ -32,6 +33,18 @@ app.post('/api/claim', (req, res) => {
     res.json({ success: true });
 });
 
+// NEW: Endpoint to Unclaim a target
+app.post('/api/unclaim', (req, res) => {
+    const { enemyId, playerName } = req.body;
+    
+    // Only allow the person who claimed it to unclaim it
+    if (claims[enemyId] && claims[enemyId].playerName === playerName) {
+        delete claims[enemyId];
+        return res.json({ success: true });
+    }
+    res.status(400).json({ error: "You cannot unclaim this target." });
+});
+
 app.get('/api/warboard', async (req, res) => {
     try {
         const myFactionRes = await fetch(`https://api.torn.com/faction/?selections=basic&key=${TORN_API_KEY}`);
@@ -43,7 +56,6 @@ app.get('/api/warboard', async (req, res) => {
             enemyData = await enemyRes.json();
         }
 
-        // Cleanup: Bumped to 15 minutes so hospital claims don't disappear while waiting
         const now = Date.now();
         for (const id in claims) {
             if (now - claims[id].time > 15 * 60 * 1000) {
