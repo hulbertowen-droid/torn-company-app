@@ -10,29 +10,13 @@ app.use(express.static('public'));
 const PORT = process.env.PORT || 3000;
 const TORN_API_KEY = process.env.TORN_API_KEY;
 const FACTION_ID = process.env.FACTION_ID || "";
+const FF_SCOUTER_KEY = process.env.FF_SCOUTER_KEY || "";
 
 let claims = {};
 let statsCache = {}; 
 let manualStats = {}; 
 let statQueue = [];
 let isProcessingQueue = false;
-
-function calculateEstimatedStats(pstats) {
-    if (!pstats) return 0;
-    const energyUsed = pstats.energyused || 0;
-    const xanax = pstats.xantaken || 0;
-    const refills = pstats.refills || 0;
-    const cans = pstats.energydrinkused || 0;
-    const ageDays = Math.max(pstats.age || 1, 1);
-    const consumableEnergy = (xanax * 250) + (refills * 150) + (cans * 30);
-    const passiveEnergy = ageDays * 120;
-    let activityScore = energyUsed + consumableEnergy + passiveEnergy;
-    let stats = Math.pow(activityScore, 1.18) * 3.2;
-    stats *= Math.log10(ageDays + 10);
-    stats *= (1 + Math.min(xanax / 2000, 0.25));
-    stats = Math.max(5000, Math.min(stats, 5e9));
-    return Math.floor(stats);
-}
 
 function computeWarIntel(p, cache = {}) {
     let score = 0;
@@ -60,25 +44,39 @@ function computeWarIntel(p, cache = {}) {
     return Math.floor(score * (0.9 + Math.random() * 0.2));
 }
 
+// FF Scouter Batch Processor (Max 20 requests per minute = 1 req every 3+ seconds)
 setInterval(async () => {
-    if (!statQueue.length || isProcessingQueue || !TORN_API_KEY) return;
+    if (!statQueue.length || isProcessingQueue || !FF_SCOUTER_KEY) return;
     isProcessingQueue = true;
-    const id = statQueue.shift();
+
+    // Grab up to 40 IDs at once to stay efficient and within URL length limits
+    const batch = statQueue.splice(0, 40);
+    const targets = batch.join(',');
+
     try {
-        const res = await fetch(`https://api.torn.com/user/${id}?selections=personalstats&key=${TORN_API_KEY}`);
+        const res = await fetch(`https://ffscouter.com/api/v1/get-stats?key=${FF_SCOUTER_KEY}&targets=${targets}`);
         const data = await res.json();
-        if (data?.personalstats) {
-            statsCache[id] = { stats: calculateEstimatedStats(data.personalstats), time: Date.now(), retries: 0 };
-        } else if (data?.error && (data.error.code === 2 || data.error.code === 5)) {
-            const prev = statsCache[id]?.retries || 0;
-            if (prev < 3) {
-                statQueue.push(id);
-                statsCache[id] = { ...statsCache[id], retries: prev + 1 };
-            }
+        
+        if (Array.isArray(data)) {
+            data.forEach(p => {
+                const id = p.player_id.toString();
+                statsCache[id] = { 
+                    stats: p.bs_estimate || 0, // Fallback to 0 if null
+                    time: Date.now() 
+                };
+            });
+        } else {
+            // API returned an error object instead of an array
+            console.error("FF Scouter API Error:", data);
+            statQueue.push(...batch); // Retry later
         }
-    } catch (err) { console.error("Queue error:", err.message); }
+    } catch (err) { 
+        console.error("FF Scouter Queue error:", err.message); 
+        statQueue.push(...batch); 
+    }
+    
     isProcessingQueue = false;
-}, 1500);
+}, 4000); // Runs every 4 seconds (15 req/min, safely under the 20 limit)
 
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
@@ -113,9 +111,12 @@ app.get('/api/warboard', async (req, res) => {
             FACTION_ID ? fetch(`https://api.torn.com/faction/${FACTION_ID}?selections=basic&key=${TORN_API_KEY}`).then(r => r.json()) : { members: {} }
         ]);
 
-        const now = Math.floor(Date.now() / 1000);
-        [...Object.keys(myData.members || {}), ...Object.keys(enemyDataResult.members || {})].forEach(id => {
-            if (!statsCache[id] || now - (statsCache[id].time / 1000) > 1200) {
+        const friendlyIds = new Set(Object.keys(myData.members || {}));
+        const enemyIds = new Set(Object.keys(enemyDataResult.members || {}));
+
+        // Queue IDs that are un-cached or older than 1 hour (3,600,000 ms)
+        [...friendlyIds, ...enemyIds].forEach(id => {
+            if (!statsCache[id] || (Date.now() - statsCache[id].time) > 3600000) {
                 if (!statQueue.includes(id)) statQueue.push(id);
             }
         });
@@ -125,7 +126,18 @@ app.get('/api/warboard', async (req, res) => {
             return Object.entries(data.members).map(([id, m]) => {
                 const est = manualStats[id]?.stats || statsCache[id]?.stats || null;
                 const intelScore = isEnemy ? computeWarIntel({ id, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", estStats: est }, statsCache) : null;
-                return { id, name: m.name, state: m.status?.state, until: m.status?.until, statusDescription: m.status?.description || "", onlineStatus: m.last_action?.status || "Offline", claimedBy: isEnemy ? claims[id]?.playerName || null : null, estStats: est, intelScore, isManual: !!manualStats[id] };
+                return { 
+                    id, 
+                    name: m.name, 
+                    state: m.status?.state, 
+                    until: m.status?.until, 
+                    statusDescription: m.status?.description || "", 
+                    onlineStatus: m.last_action?.status || "Offline", 
+                    claimedBy: isEnemy ? claims[id]?.playerName || null : null, 
+                    estStats: est, 
+                    intelScore, 
+                    isManual: !!manualStats[id] 
+                };
             });
         };
         res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true) });
