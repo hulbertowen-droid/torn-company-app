@@ -28,7 +28,10 @@
         .countdown { color: var(--spidey-red); font-weight: bold; font-family: monospace; font-size: 1.8em; }
         .profile-link { color: var(--spidey-web); text-decoration: none; font-weight: 500; }
         .profile-link:hover { color: var(--spidey-red); text-decoration: underline; }
-        .stat-badge { color: #feca3e; font-size: 0.8em; margin-left: 8px; font-weight: bold; background: rgba(254, 202, 62, 0.1); padding: 2px 6px; border-radius: 4px; border: 1px solid #feca3e;}
+        
+        /* Spidey Badge for FF Scouter Data */
+        .ff-scouter-container { color: #feca3e; font-size: 0.85em; margin-left: 10px; font-weight: bold; background: rgba(254, 202, 62, 0.1); padding: 2px 6px; border-radius: 4px; border: 1px solid #feca3e; }
+        
         .btn-claim { background-color: var(--spidey-red); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
         .btn-claim:hover { background-color: #b71c1c; }
         .btn-unclaim { background-color: var(--spidey-blue); color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; }
@@ -65,21 +68,8 @@
             if (myName) localStorage.setItem('warboard_name', myName);
         }
 
-        let userApiKey = localStorage.getItem('user_api_key');
-        if (!userApiKey) {
-            userApiKey = prompt("To load FF Scouter stats directly from YATA, enter your Torn API Key (Leave blank to skip):", "");
-            if (userApiKey) localStorage.setItem('user_api_key', userApiKey);
-        }
-
         let friendlyData = [];
         let enemyData = [];
-        
-        // WIPE THE BROKEN CACHE FOR TESTING
-        console.warn("[DIAGNOSTIC] Wiping local YATA cache.");
-        localStorage.removeItem('yata_stats_cache');
-        let yataStats = {};
-        let yataQueue = [];
-        let isFetchingYata = false;
 
         function sortMembers(members) {
             return members.sort((a, b) => {
@@ -92,107 +82,28 @@
             });
         }
 
-        function formatStats(num) {
-            if (!num || num === 'Unknown') return '?';
-            if (num >= 1000000000) return (num / 1000000000).toFixed(1) + 'b';
-            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'm';
-            if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
-            return num.toString();
-        }
-
-        // ==========================================
-        // BACKGROUND CLIENT-SIDE YATA FETCHER
-        // ==========================================
-        async function processYataQueue() {
-            if (yataQueue.length > 0) {
-                console.log(`[DIAGNOSTIC] Heartbeat: ${yataQueue.length} enemies waiting in queue.`);
-            }
-
-            if (isFetchingYata || yataQueue.length === 0 || !userApiKey) return;
-            isFetchingYata = true;
-
-            const enemyId = yataQueue.shift();
-
-            if (!yataStats[enemyId]) {
-                console.warn(`[DIAGNOSTIC] Sending YATA request for ID: ${enemyId}...`);
-                try {
-                    const res = await fetch(`https://yata.yt/api/v1/bs/${enemyId}/?key=${userApiKey}`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        let finalStats = 0;
-                        
-                        if (data.total) finalStats = data.total;
-                        else if (data.stats && data.stats.total) finalStats = data.stats.total;
-                        else if (data.target && data.target.battle_score) finalStats = Math.pow(data.target.battle_score, 2);
-                        
-                        if (finalStats > 0) {
-                            console.log(`[DIAGNOSTIC] SUCCESS! Found stats for ${enemyId}: ${finalStats}`);
-                            yataStats[enemyId] = finalStats;
-                        } else {
-                            console.log(`[DIAGNOSTIC] YATA responded, but has no data for ${enemyId}.`);
-                            yataStats[enemyId] = 'Unknown'; 
-                        }
-                    } else {
-                        console.error(`[DIAGNOSTIC] YATA refused connection for ID ${enemyId}. Status: ${res.status}`);
-                        yataStats[enemyId] = 'Unknown';
-                    }
-                } catch (e) {
-                    console.error("[DIAGNOSTIC] Request blocked! Error:", e);
-                    yataStats[enemyId] = 'Unknown';
-                }
-            }
-            
-            isFetchingYata = false;
-            tickCountdowns(); 
-        }
-
-        setInterval(processYataQueue, 2000); 
-
-        // ==========================================
-        // MAIN SERVER FETCHER
-        // ==========================================
         async function fetchWarboardData() {
             try {
                 const response = await fetch('/api/warboard'); 
                 const data = await response.json();
-                
                 friendlyData = sortMembers(data.friendly || []);
                 enemyData = sortMembers(data.enemy || []);
-
-                if (userApiKey) {
-                    enemyData.forEach(e => {
-                        if (!yataStats[e.id] && !yataQueue.includes(e.id)) {
-                            yataQueue.push(e.id);
-                        }
-                    });
-                }
-
                 document.getElementById('last-updated').innerText = `Last Server Sync: ${new Date().toLocaleTimeString()}`;
                 tickCountdowns(); 
-            } catch (error) {
-                console.error("Connection error:", error);
-            }
+            } catch (error) { console.error("Connection error:", error); }
         }
 
         async function callTarget(enemyId) {
             if (!myName) return alert("You need to set your name to call targets!");
             try {
-                await fetch('/api/claim', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enemyId: enemyId, playerName: myName })
-                });
+                await fetch('/api/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enemyId: enemyId, playerName: myName }) });
                 fetchWarboardData();
             } catch (error) {}
         }
 
         async function unclaimTarget(enemyId) {
             try {
-                await fetch('/api/unclaim', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ enemyId: enemyId, playerName: myName })
-                });
+                await fetch('/api/unclaim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enemyId: enemyId, playerName: myName }) });
                 fetchWarboardData();
             } catch (error) {}
         }
@@ -205,10 +116,10 @@
                 if (p.onlineStatus === 'Online') dotClass = 'dot-online';
                 if (p.onlineStatus === 'Idle') dotClass = 'dot-idle';
 
-                let displayStats = isEnemyColumn && yataStats[p.id] && yataStats[p.id] !== 'Unknown' ? yataStats[p.id] : null;
-                let statsUI = isEnemyColumn && displayStats ? `<span class="stat-badge">[Stats: ${formatStats(displayStats)}]</span>` : '';
+                // The FF Scouter Placeholder Box - Userscript will target this by ID
+                let ffPlaceholder = isEnemyColumn ? `<span class="ff-scouter-container" id="ff-stats-${p.id}">[FF: Loading...]</span>` : '';
 
-                let nameLink = `<span class="activity-dot ${dotClass}" title="${p.onlineStatus}"></span><a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank" class="profile-link">${p.name}</a> ${statsUI}`;
+                let nameLink = `<span class="activity-dot ${dotClass}" title="${p.onlineStatus}"></span><a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank" class="profile-link">${p.name}</a> ${ffPlaceholder}`;
                 
                 let claimUI = '';
                 if (isEnemyColumn && (p.state === 'Okay' || p.state === 'Hospital')) {
