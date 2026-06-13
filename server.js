@@ -15,12 +15,69 @@ let claims = {};
 let enemyList = []; 
 
 // ==========================================
+// MATH ESTIMATOR LOGIC & QUEUE
+// ==========================================
+let statsCache = {}; 
+let statQueue = [];
+let isProcessingQueue = false;
+
+function calculateEstimatedStats(pstats) {
+    if (!pstats) return 0;
+    
+    const xanax = pstats.xantaken || 0;
+    const refills = pstats.refills || 0;
+    const cans = pstats.energydrinkused || 0;
+    const se = pstats.statenhancersused || 0;
+    
+    // Calculate total energy from consumables
+    let totalEnergyUsed = (xanax * 250) + (refills * 150) + (cans * 30);
+    
+    // Progressive Multiplier (simulate late-game gym unlocks)
+    let multiplier = 500;
+    if (totalEnergyUsed > 100000) multiplier = 800;
+    if (totalEnergyUsed > 500000) multiplier = 1500;
+    if (totalEnergyUsed > 1000000) multiplier = 3000;
+    if (totalEnergyUsed > 2500000) multiplier = 6000;
+
+    let baseStats = totalEnergyUsed * multiplier;
+    
+    // Apply Stat Enhancers (1% compound per SE)
+    if (se > 0) {
+        baseStats = baseStats * Math.pow(1.01, se);
+    }
+
+    return Math.max(baseStats, 5000); // Give a floor so nobody is at 0
+}
+
+// Background loop to slowly fetch personal stats from Torn (respects API limits)
+setInterval(async () => {
+    if (statQueue.length === 0 || isProcessingQueue || !TORN_API_KEY) return;
+    
+    isProcessingQueue = true;
+    const id = statQueue.shift();
+    
+    try {
+        const res = await fetch(`https://api.torn.com/user/${id}?selections=personalstats&key=${TORN_API_KEY}`);
+        const data = await res.json();
+        
+        if (data && data.personalstats) {
+            const calculatedStats = calculateEstimatedStats(data.personalstats);
+            // Cache it for 24 hours (stats don't jump massively in one day)
+            statsCache[id] = { stats: calculatedStats, time: Date.now() };
+        } else if (data && data.error && (data.error.code === 2 || data.error.code === 5)) {
+            // If rate limited or blocked, push back to queue to try later
+            statQueue.unshift(id);
+        }
+    } catch (e) {
+        console.error("Error fetching personal stats:", e.message);
+    }
+    
+    isProcessingQueue = false;
+}, 1500); // 1.5 seconds between each API call = safe 40 calls per minute
+
+// ==========================================
 // WARBOARD ENDPOINTS
 // ==========================================
-app.get('/health', (req, res) => {
-    res.status(200).send('OK');
-});
-
 app.post('/api/claim', (req, res) => {
     const { enemyId, playerName } = req.body;
     if (!enemyId || !playerName) return res.status(400).json({ error: "Missing data" });
@@ -49,9 +106,21 @@ app.get('/api/warboard', async (req, res) => {
         if (FACTION_ID) {
             const enemyRes = await fetch(`https://api.torn.com/faction/${FACTION_ID}?selections=basic&key=${TORN_API_KEY}`);
             enemyData = await enemyRes.json();
-            if (enemyData.members) enemyList = Object.keys(enemyData.members);
+            
+            if (enemyData.members) {
+                // Queue up enemies for stat calculation if we don't have them
+                const now = Date.now();
+                for (const id of Object.keys(enemyData.members)) {
+                    const cached = statsCache[id];
+                    // Re-fetch if we have no cache, or if cache is older than 24 hours
+                    if (!cached || (now - cached.time > 24 * 60 * 60 * 1000)) {
+                        if (!statQueue.includes(id)) statQueue.push(id);
+                    }
+                }
+            }
         }
 
+        // Clean expired claims
         const now = Date.now();
         for (const id in claims) {
             if (now - claims[id].time > 15 * 60 * 1000) delete claims[id];
@@ -62,13 +131,18 @@ app.get('/api/warboard', async (req, res) => {
             if (data.members) {
                 for (const [id, member] of Object.entries(data.members)) {
                     let lastAction = member.last_action && member.last_action.status ? member.last_action.status : 'Offline';
+                    
+                    let statVal = null;
+                    if (isEnemy && statsCache[id]) statVal = statsCache[id].stats;
+
                     list.push({
                         id: id,
                         name: member.name,
                         state: member.status.state,
                         until: member.status.until,
                         claimedBy: isEnemy && claims[id] ? claims[id].playerName : null,
-                        onlineStatus: lastAction
+                        onlineStatus: lastAction,
+                        estStats: statVal
                     });
                 }
             }
@@ -81,8 +155,7 @@ app.get('/api/warboard', async (req, res) => {
         });
 
     } catch (error) {
-        console.error("API Error:", error);
-        res.status(500).json({ error: 'Failed to fetch data from Torn' });
+        res.status(500).json({ error: 'Failed to fetch data' });
     }
 });
 
