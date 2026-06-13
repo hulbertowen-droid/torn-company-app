@@ -77,7 +77,7 @@
     <div class="container">
         <div id="error-msg"></div>
         <div id="permission-warning">
-            ⚠️ <strong>Limited Access Key Required:</strong> A Public API key will only show your current active war. To retrieve past historical wars, please ensure the API key saved in your settings has Limited Access permissions.
+            ⚠️ <strong>Limited Access Key Required:</strong> To retrieve your faction's entire Ranked War history, please ensure your API key has Limited Access permissions.
         </div>
 
         <h2 class="section-title">Select a Past War</h2>
@@ -148,6 +148,7 @@ function formatMoney(n) {
 // Auto-Load Past Wars directly from Torn's Ranked Wars API
 async function loadPastWars() {
     try {
+        // Fetching the rankedwars selection, which contains the FULL history, not just the basic overview
         const res = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${myKey}`);
         const data = await res.json();
         
@@ -156,8 +157,9 @@ async function loadPastWars() {
             return;
         }
 
-        if (!data.ranked_wars || Object.keys(data.ranked_wars).length === 0) {
-            document.getElementById("war-list").innerHTML = `<div style="text-align:center; color:var(--text-dim);">No ranked wars found. Ensure you are using a Limited Access API key to retrieve historical data.</div>`;
+        // We MUST use data.rankedwars (no underscore). data.ranked_wars is only the active war!
+        if (!data.rankedwars || Object.keys(data.rankedwars).length === 0) {
+            document.getElementById("war-list").innerHTML = `<div style="text-align:center; color:var(--text-dim);">No ranked wars found. Ensure you are using a Limited Access API key.</div>`;
             document.getElementById("permission-warning").style.display = "block";
             return;
         }
@@ -166,29 +168,27 @@ async function loadPastWars() {
         const warListDiv = document.getElementById("war-list");
         let html = "";
 
-        // Convert the war object to an array so we can sort it newest first
-        const warsArray = Object.entries(data.ranked_wars).map(([id, warInfo]) => ({ id, ...warInfo }));
-        warsArray.sort((a, b) => b.war.start - a.war.start);
+        // Convert the full history object to an array and sort it newest first
+        const warsArray = Object.entries(data.rankedwars).map(([id, warInfo]) => ({ id, ...warInfo }));
+        
+        // Filter out ongoing wars (where end time is 0) so we only list past wars that have generated reports
+        const pastWars = warsArray.filter(w => w.war.end > 0);
+        pastWars.sort((a, b) => b.war.start - a.war.start);
 
-        // If only 1 war is returned, it's highly likely they are using a Public key which hides history
-        if (warsArray.length === 1) {
-            document.getElementById("permission-warning").style.display = "block";
-        }
-
-        warsArray.forEach(war => {
+        pastWars.forEach(war => {
             let enemyFacName = "Unknown Faction";
             for (const [facId, facData] of Object.entries(war.factions)) {
                 if (facId !== myFacId) enemyFacName = facData.name;
             }
 
             const startDate = new Date(war.war.start * 1000).toLocaleDateString();
-            const endDate = war.war.end > 0 ? new Date(war.war.end * 1000).toLocaleDateString() : "Ongoing";
+            const endDate = new Date(war.war.end * 1000).toLocaleDateString();
 
             html += `
                 <div class="war-card">
                     <div class="war-card-info">
                         <h3>vs ${enemyFacName}</h3>
-                        <div class="status">Started: ${startDate} | End: ${endDate === 'Ongoing' ? '<span>In Progress</span>' : endDate}</div>
+                        <div class="status">Started: ${startDate} | Ended: ${endDate}</div>
                     </div>
                     <button class="btn-fetch" id="btn-${war.id}" onclick="fetchWarData('${war.id}', '${enemyFacName}')">Calculate Payout</button>
                 </div>
