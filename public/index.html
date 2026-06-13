@@ -17,7 +17,6 @@
 
         body { background-color: var(--bg-dark); color: var(--spidey-web); font-family: 'Segoe UI', sans-serif; padding: 20px; margin: 0; }
         
-        /* Updated Title */
         h1 { text-align: center; color: var(--spidey-red); border-bottom: 3px solid var(--spidey-blue); padding-bottom: 10px; text-transform: uppercase; letter-spacing: 2px; text-shadow: 2px 2px #000; }
         
         .board-container { display: flex; justify-content: space-around; margin-top: 30px; gap: 20px; }
@@ -31,7 +30,6 @@
         li { background-color: var(--item-bg); margin-bottom: 8px; padding: 12px 15px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--spidey-red); }
         
         .status-ready { color: #2ecc71; font-weight: bold; }
-        /* BIGGER HOSPITAL TEXT */
         .countdown { color: var(--spidey-red); font-weight: bold; font-family: monospace; font-size: 1.8em; }
         
         .profile-link { color: var(--spidey-web); text-decoration: none; font-weight: 500; }
@@ -71,14 +69,27 @@
     <div class="timestamp" id="last-updated">Waiting for server...</div>
 
     <script>
+        // 1. Get User Name
         let myName = localStorage.getItem('warboard_name');
         if (!myName) {
             myName = prompt("Welcome to the Warboard!\nEnter your Torn name to call targets:", "");
             if (myName) localStorage.setItem('warboard_name', myName);
         }
 
+        // 2. Get User API Key for YATA (Client-Side Fetching)
+        let userApiKey = localStorage.getItem('user_api_key');
+        if (!userApiKey) {
+            userApiKey = prompt("To load FF Scouter stats directly from YATA, enter your Torn API Key (Leave blank to skip):", "");
+            if (userApiKey) localStorage.setItem('user_api_key', userApiKey);
+        }
+
         let friendlyData = [];
         let enemyData = [];
+        
+        // Caches YATA stats so we don't spam their API on page reloads
+        let yataStats = JSON.parse(localStorage.getItem('yata_stats_cache') || '{}');
+        let yataQueue = [];
+        let isFetchingYata = false;
 
         function sortMembers(members) {
             return members.sort((a, b) => {
@@ -92,13 +103,56 @@
         }
 
         function formatStats(num) {
-            if (!num) return '?';
+            if (!num || num === 'Unknown') return '?';
             if (num >= 1000000000) return (num / 1000000000).toFixed(1) + 'b';
             if (num >= 1000000) return (num / 1000000).toFixed(1) + 'm';
             if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
             return num.toString();
         }
 
+        // ==========================================
+        // BACKGROUND CLIENT-SIDE YATA FETCHER
+        // ==========================================
+        async function processYataQueue() {
+            if (isFetchingYata || yataQueue.length === 0 || !userApiKey) return;
+            isFetchingYata = true;
+
+            const enemyId = yataQueue.shift();
+
+            if (!yataStats[enemyId]) {
+                try {
+                    const res = await fetch(`https://yata.yt/api/v1/bs/${enemyId}/?key=${userApiKey}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        let finalStats = 0;
+                        
+                        if (data.total) finalStats = data.total;
+                        else if (data.stats && data.stats.total) finalStats = data.stats.total;
+                        else if (data.target && data.target.battle_score) finalStats = Math.pow(data.target.battle_score, 2);
+                        
+                        if (finalStats > 0) {
+                            yataStats[enemyId] = finalStats;
+                            localStorage.setItem('yata_stats_cache', JSON.stringify(yataStats));
+                        } else {
+                            yataStats[enemyId] = 'Unknown'; 
+                        }
+                    } else {
+                        console.warn(`YATA refused connection for ID ${enemyId}. Possible CORS block or invalid key.`);
+                    }
+                } catch (e) {
+                    console.error("CORS / Network Error hitting YATA:", e);
+                }
+            }
+            
+            isFetchingYata = false;
+            tickCountdowns(); // Update UI immediately if stat was found
+        }
+
+        setInterval(processYataQueue, 2000); // 1 YATA check every 2 seconds
+
+        // ==========================================
+        // MAIN SERVER FETCHER
+        // ==========================================
         async function fetchWarboardData() {
             try {
                 const response = await fetch('/api/warboard'); 
@@ -106,6 +160,15 @@
                 
                 friendlyData = sortMembers(data.friendly || []);
                 enemyData = sortMembers(data.enemy || []);
+
+                // Add missing enemies to the YATA queue
+                if (userApiKey) {
+                    enemyData.forEach(e => {
+                        if (!yataStats[e.id] && !yataQueue.includes(e.id)) {
+                            yataQueue.push(e.id);
+                        }
+                    });
+                }
 
                 document.getElementById('last-updated').innerText = `Last Server Sync: ${new Date().toLocaleTimeString()}`;
                 tickCountdowns(); 
@@ -147,7 +210,9 @@
                 if (p.onlineStatus === 'Online') dotClass = 'dot-online';
                 if (p.onlineStatus === 'Idle') dotClass = 'dot-idle';
 
-                let statsUI = isEnemyColumn && p.estStats ? `<span class="stat-badge">[Stats: ${formatStats(p.estStats)}]</span>` : '';
+                // Pull stats from our local YATA cache if available
+                let displayStats = isEnemyColumn && yataStats[p.id] && yataStats[p.id] !== 'Unknown' ? yataStats[p.id] : null;
+                let statsUI = isEnemyColumn && displayStats ? `<span class="stat-badge">[Stats: ${formatStats(displayStats)}]</span>` : '';
 
                 let nameLink = `<span class="activity-dot ${dotClass}" title="${p.onlineStatus}"></span><a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank" class="profile-link">${p.name}</a> ${statsUI}`;
                 
