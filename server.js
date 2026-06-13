@@ -60,7 +60,6 @@ function computeWarIntel(p, cache = {}) {
             else score += 10;
         }
     }
-
     const est = cache[p.id]?.stats || p.estStats;
     if (est) {
         if (est < 1e7) score += 120;
@@ -95,13 +94,10 @@ setInterval(async () => {
 }, 1500);
 
 /* =========================
-   HEALTH CHECK
+   ENDPOINTS
 ========================= */
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
-/* =========================
-   CLAIM SYSTEM
-========================= */
 app.post('/api/claim', (req, res) => {
     const { enemyId, playerName } = req.body;
     if (!enemyId || !playerName) return res.status(400).json({ error: "Missing data" });
@@ -119,9 +115,6 @@ app.post('/api/unclaim', (req, res) => {
     res.status(400).json({ error: "Cannot unclaim" });
 });
 
-/* =========================
-   WARBOARD API
-========================= */
 app.get('/api/warboard', async (req, res) => {
     try {
         const myData = await (await fetch(`https://api.torn.com/faction/?selections=basic&key=${TORN_API_KEY}`)).json();
@@ -144,12 +137,8 @@ app.get('/api/warboard', async (req, res) => {
                 return { id, name: m.name, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", claimedBy: isEnemy ? claims[id]?.playerName || null : null, estStats: est, intelScore };
             });
         };
-
         res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyData, true) });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "warboard failed" });
-    }
+    } catch (err) { console.error(err); res.status(500).json({ error: "warboard failed" }); }
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
