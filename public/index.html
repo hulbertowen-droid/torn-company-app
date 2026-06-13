@@ -75,13 +75,19 @@
         .btn-icon:hover { background: rgba(0,0,0,0.6); }
 
         #chart-container { max-width: 1200px; margin: 30px auto; background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #2f3542; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+        .dev-badge { background: rgba(255, 165, 2, 0.15); color: var(--gold); border: 1px solid var(--gold); padding: 4px 8px; border-radius: 6px; font-size: 0.6em; vertical-align: middle; margin-left: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;}
         
         #modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
         #modal-box { background: var(--card); padding: 30px; border-radius: 12px; border: 1px solid #2f3542; width: 90%; max-width: 450px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
         #modal-box h2 { border-bottom: none; color: var(--text-main); margin-bottom: 20px; font-size: 1.5em; }
-        .input-group { margin-bottom: 15px; text-align: left; }
-        .input-group label { display: block; font-size: 0.85em; color: var(--text-dim); margin-bottom: 5px; font-weight: bold; }
+        .input-group { margin-bottom: 15px; text-align: left; display: flex; flex-direction: column; }
+        .input-group label { font-size: 0.85em; color: var(--text-dim); margin-bottom: 5px; font-weight: bold; }
         .input-group input { width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #2f3542; background: #0b0d13; color: white; box-sizing: border-box; font-size: 1em; }
+        
+        .rate-container { display: flex; align-items: center; gap: 10px; }
+        .rate-container input { width: 80px; text-align: center; }
+        .rate-desc { font-size: 0.8em; color: #57606f; }
+
         .btn-save { background: var(--blue); color: white; padding: 12px 20px; font-size: 1.1em; width: 100%; margin-top: 10px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; }
         .btn-save:hover { background: #79c0ff; }
         .privacy-notice { margin-top: 15px; padding: 12px; background: rgba(46, 213, 115, 0.1); border: 1px solid rgba(46, 213, 115, 0.3); border-radius: 8px; font-size: 0.85em; color: #7bed9f; text-align: left; line-height: 1.4; }
@@ -112,8 +118,11 @@
         </div>
     </div>
 
+    <!-- UPDATED GRAPH CONTAINER WITH DISCLAIMER -->
     <div id="chart-container">
-        <h2 id="chart-title" style="border: none; text-align: center; margin-bottom: 20px; font-size: 1.2em; color: var(--text-main);">📊 Ranked War Performance</h2>
+        <h2 id="chart-title" style="border: none; text-align: center; margin-bottom: 20px; font-size: 1.2em; color: var(--text-main);">
+            📊 Ranked War Performance <span class="dev-badge">⚠️ Currently in Development</span>
+        </h2>
         <div id="chart-message" style="text-align:center; color: var(--text-dim); display:none; margin-bottom: 10px;"></div>
         <canvas id="hitsChart"></canvas>
     </div>
@@ -133,6 +142,13 @@
                 <label>Enemy Faction ID <span style="color:#57606f; font-weight:normal;">(Leave blank to auto-detect)</span></label>
                 <input type="text" id="inp-enemy" placeholder="Optional">
             </div>
+            <div class="input-group">
+                <label>API Calls Per Minute <span style="color:#57606f; font-weight:normal;">(Max: 60)</span></label>
+                <div class="rate-container">
+                    <input type="number" id="inp-rate" min="1" max="60" value="4">
+                    <span class="rate-desc" id="rate-helper">Updates every 15s</span>
+                </div>
+            </div>
             
             <div class="privacy-notice">
                 🔒 <strong>Privacy & Security:</strong> Your API Key is stored strictly locally on your device. We do NOT save, log, or store API keys on our server.
@@ -146,14 +162,27 @@
 let myName = localStorage.getItem("warboard_name") || "";
 let myKey = localStorage.getItem("warboard_apikey") || "";
 let enemyFac = localStorage.getItem("warboard_enemy") || "";
+let myRate = parseInt(localStorage.getItem("warboard_rate")) || 4; // Default 4 calls per min (15s)
 let hitsChart; 
+let fetchInterval = null;
 
-if (!myName || !myKey) { openModal(); }
+// Dynamic Helper Text for Call Rate
+document.getElementById("inp-rate").addEventListener("input", function(e) {
+    let val = parseInt(e.target.value);
+    if(val > 0) {
+        let seconds = Math.floor(60 / val);
+        document.getElementById("rate-helper").innerText = `Updates every ${seconds}s`;
+    }
+});
+
+if (!myName || !myKey) { openModal(); } else { startAutoRefresh(); }
 
 function openModal() {
     document.getElementById("inp-name").value = myName;
     document.getElementById("inp-key").value = myKey;
     document.getElementById("inp-enemy").value = enemyFac;
+    document.getElementById("inp-rate").value = myRate;
+    document.getElementById("rate-helper").innerText = `Updates every ${Math.floor(60 / myRate)}s`;
     document.getElementById("modal-overlay").style.display = "flex";
 }
 
@@ -162,16 +191,30 @@ function saveSettings() {
     myKey = document.getElementById("inp-key").value.trim();
     enemyFac = document.getElementById("inp-enemy").value.trim(); 
     
+    let rateInput = parseInt(document.getElementById("inp-rate").value);
+    if (isNaN(rateInput) || rateInput < 1) rateInput = 1;
+    if (rateInput > 60) rateInput = 60;
+    myRate = rateInput;
+    
     if(!myName || !myKey) return alert("Name and API Key are required to load the board.");
     
     localStorage.setItem("warboard_name", myName);
     localStorage.setItem("warboard_apikey", myKey);
     localStorage.setItem("warboard_enemy", enemyFac);
+    localStorage.setItem("warboard_rate", myRate);
     
     document.getElementById("modal-overlay").style.display = "none";
     document.getElementById("friendly").innerHTML = "";
     document.getElementById("enemy").innerHTML = "";
+    
     load(); 
+    startAutoRefresh();
+}
+
+function startAutoRefresh() {
+    if (fetchInterval) clearInterval(fetchInterval);
+    let intervalMs = Math.floor(60000 / myRate);
+    fetchInterval = setInterval(load, intervalMs);
 }
 
 function toggleInfo() { const c = document.getElementById("info-content"); c.style.display = c.style.display === "none" ? "block" : "none"; document.getElementById("arrow").innerText = c.style.display === "none" ? "▼" : "▲"; }
@@ -260,11 +303,14 @@ function renderGraph(graphData, isRankedWar) {
     const canvas = document.getElementById('hitsChart');
     const title = document.getElementById('chart-title');
 
+    // Make sure the disclaimer badge is always attached to the title string
+    const disclaimerBadge = `<span class="dev-badge">⚠️ Currently in Development</span>`;
+
     if (!isRankedWar) {
         msgDiv.style.display = "block";
         msgDiv.innerHTML = "Detailed hit tracking is only available during Official Ranked Wars.";
         canvas.style.display = "none";
-        title.innerText = "📊 Faction Hit Tracker";
+        title.innerHTML = `📊 Faction Hit Tracker ${disclaimerBadge}`;
         return;
     }
 
@@ -272,12 +318,13 @@ function renderGraph(graphData, isRankedWar) {
         msgDiv.style.display = "block";
         msgDiv.innerText = "No hits recorded yet in this Ranked War.";
         canvas.style.display = "none";
+        title.innerHTML = `📊 Ranked War Performance ${disclaimerBadge}`;
         return;
     }
 
     msgDiv.style.display = "none";
     canvas.style.display = "block";
-    title.innerText = "📊 Ranked War Performance";
+    title.innerHTML = `📊 Ranked War Performance ${disclaimerBadge}`;
 
     const ctx = canvas.getContext('2d');
     const labels = graphData.map(d => d.name);
@@ -327,7 +374,7 @@ async function load(){
         syncList("friendly", data.friendly || [], false);
         syncList("enemy", data.enemy || [], true);
         renderGraph(data.graphData, data.isRankedWar);
-    } catch(e) { console.error("Update failed, retrying on next tick...", e); }
+    } catch(e) { console.error("Update failed...", e); }
 }
 
 async function claim(id) { await fetch("/api/claim", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enemyId:id, playerName:myName})}); load(); }
@@ -336,7 +383,6 @@ async function backup(id) { await fetch("/api/backup", {method:"POST", headers:{
 async function unbackup(id) { await fetch("/api/unbackup", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enemyId:id})}); load(); }
 
 load(); 
-setInterval(load, 15000);
 </script>
 </body>
 </html>
