@@ -55,9 +55,7 @@ function autoDetectEnemyFaction(data) {
             if (enemy) return enemy;
         }
     }
-    if (data.wars && Object.keys(data.wars).length > 0) {
-        return Object.keys(data.wars)[0];
-    }
+    if (data.wars && Object.keys(data.wars).length > 0) { return Object.keys(data.wars)[0]; }
     if (data.raid_wars && Object.keys(data.raid_wars).length > 0) {
         for (let warId in data.raid_wars) {
             const factions = Object.keys(data.raid_wars[warId].factions || {});
@@ -75,55 +73,6 @@ function autoDetectEnemyFaction(data) {
     return null;
 }
 
-// NEW: Recursive Time-Travel Fetcher for Attacks
-async function getRecentAttacks(apiKey, hours = 24) {
-    let allAttacks = {};
-    let toTimestamp = Math.floor(Date.now() / 1000);
-    const limitTimestamp = toTimestamp - (hours * 3600);
-    let pages = 0;
-    let hasMore = true;
-    let errorObj = null;
-
-    // Max 15 pages (1,500 attacks) to protect API limits and prevent timeouts
-    while (hasMore && pages < 15) { 
-        pages++;
-        try {
-            const res = await fetch(`https://api.torn.com/faction/?selections=attacks&to=${toTimestamp}&key=${apiKey}`);
-            const data = await res.json();
-            
-            if (data.error) {
-                errorObj = data.error;
-                break;
-            }
-            
-            if (!data.attacks || Object.keys(data.attacks).length === 0) {
-                break;
-            }
-
-            let oldestInBatch = toTimestamp;
-            let foundAnyInRange = false;
-            
-            for (const [id, att] of Object.entries(data.attacks)) {
-                if (att.timestamp >= limitTimestamp) {
-                    allAttacks[id] = att;
-                    foundAnyInRange = true;
-                    if (att.timestamp < oldestInBatch) oldestInBatch = att.timestamp;
-                }
-            }
-            
-            // If we found valid attacks, set the 'to' timestamp just behind the oldest one to grab the next page
-            if (foundAnyInRange && oldestInBatch < toTimestamp) {
-                toTimestamp = oldestInBatch - 1; 
-            } else {
-                hasMore = false; // We hit attacks older than 24h
-            }
-        } catch (err) {
-            break;
-        }
-    }
-    return { attacks: allAttacks, error: errorObj };
-}
-
 setInterval(async () => {
     if (!statQueue.length || isProcessingQueue) return;
     isProcessingQueue = true;
@@ -133,8 +82,7 @@ setInterval(async () => {
 
     if (!FF_SCOUTER_KEY) {
         batch.forEach(id => { statsCache[id] = { stats: null, time: Date.now() }; });
-        isProcessingQueue = false;
-        return;
+        isProcessingQueue = false; return;
     }
 
     const targets = batch.join(',');
@@ -149,12 +97,9 @@ setInterval(async () => {
                 statsCache[id] = { stats: p.bs_estimate, time: Date.now() };
             });
         } else {
-            console.error("❌ FF Scouter API Error:", data);
             batch.forEach(id => { statsCache[id] = { stats: null, time: Date.now() }; });
         }
-    } catch (err) { 
-        statQueue.push(...batch); 
-    }
+    } catch (err) { statQueue.push(...batch); }
     
     isProcessingQueue = false;
 }, 4000);
@@ -164,18 +109,14 @@ app.get('/health', (req, res) => res.status(200).send("OK"));
 app.post('/api/claim', (req, res) => {
     const { enemyId, playerName } = req.body;
     if (!enemyId || !playerName) return res.status(400).json({ error: "Missing data" });
-    if (claims[enemyId] && claims[enemyId].playerName !== playerName) return res.status(400).json({ error: "Already claimed" });
     claims[enemyId] = { playerName, time: Date.now() };
     res.json({ success: true });
 });
 
 app.post('/api/unclaim', (req, res) => {
     const { enemyId, playerName } = req.body;
-    if (claims[enemyId]?.playerName === playerName) {
-        delete claims[enemyId];
-        return res.json({ success: true });
-    }
-    res.status(400).json({ error: "Cannot unclaim" });
+    if (claims[enemyId]?.playerName === playerName) { delete claims[enemyId]; }
+    res.json({ success: true });
 });
 
 app.post('/api/backup', (req, res) => {
@@ -205,11 +146,11 @@ app.get('/api/warboard', async (req, res) => {
 
         if (!userKey) return res.status(400).json({ error: "No API Key provided" });
 
-        // Run the basic fetch and the new recursive attack fetch at the same time
+        // Basic Fetch (Includes Ranked War Data) and Attacks (Fallback)
         let [myData, enemyDataResult, attacksData] = await Promise.all([
             fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })),
             enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} }),
-            getRecentAttacks(userKey, 24) // <--- Plugs in here
+            fetch(`https://api.torn.com/faction/?selections=attacks&key=${userKey}`).then(r => r.json()).catch(() => ({ attacks: {} }))
         ]);
 
         if (myData.error) return res.status(400).json({ error: "Invalid API Key" });
@@ -229,23 +170,41 @@ app.get('/api/warboard', async (req, res) => {
             }
         });
 
+        // --- NEW: INTELLIGENT WAR HIT EXTRACTION ---
         let hitsStats = {};
-        friendlyIds.forEach(id => hitsStats[id] = { made: 0, received: 0, name: myData.members[id].name });
+        friendlyIds.forEach(id => hitsStats[id] = { made: 0, score: 0, name: myData.members[id].name });
+        let isRankedWar = false;
 
-        const now = Math.floor(Date.now() / 1000);
-        if (attacksData.attacks) {
+        // Try to pull exact Ranked War data directly from Torn's official scoreboard
+        if (myData.ranked_wars && Object.keys(myData.ranked_wars).length > 0) {
+            const warId = Object.keys(myData.ranked_wars)[0];
+            const rw = myData.ranked_wars[warId];
+            const myFacId = myData.ID.toString();
+
+            if (rw.factions && rw.factions[myFacId] && rw.factions[myFacId].members) {
+                isRankedWar = true;
+                const membersData = rw.factions[myFacId].members;
+                for (const [memberId, stats] of Object.entries(membersData)) {
+                    if (hitsStats[memberId]) {
+                        hitsStats[memberId].made = stats.attacks || 0;
+                        hitsStats[memberId].score = stats.score || 0;
+                    }
+                }
+            }
+        }
+
+        // Fallback to recent attacks ONLY if not in a ranked war
+        if (!isRankedWar && attacksData.attacks) {
             Object.values(attacksData.attacks).forEach(att => {
-                if (att.timestamp > (now - 86400)) { 
-                    const attacker = att.attacker_id ? att.attacker_id.toString() : null;
-                    const defender = att.defender_id ? att.defender_id.toString() : null;
-
-                    if (attacker && hitsStats[attacker]) hitsStats[attacker].made++;
-                    if (defender && hitsStats[defender]) hitsStats[defender].received++;
+                const attacker = att.attacker_id ? att.attacker_id.toString() : null;
+                if (attacker && hitsStats[attacker]) {
+                    hitsStats[attacker].made++;
                 }
             });
         }
 
-        let graphData = Object.values(hitsStats).filter(p => p.made > 0 || p.received > 0);
+        // Format data for chart
+        let graphData = Object.values(hitsStats).filter(p => p.made > 0 || p.score > 0);
         graphData.sort((a, b) => b.made - a.made); 
         
         let attacksError = attacksData.error ? attacksData.error.error : null;
@@ -271,7 +230,7 @@ app.get('/api/warboard', async (req, res) => {
             });
         };
 
-        res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId, graphData, attacksError });
+        res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId, graphData, attacksError, isRankedWar });
     } catch (err) { 
         res.status(500).json({ error: "warboard failed" }); 
     }
