@@ -139,7 +139,7 @@ app.post('/api/update-stats', (req, res) => {
     res.json({ success: true });
 });
 
-// --- NEW EXACT PAYOUT CALCULATOR LOGIC ---
+// --- CORRECTED PAYOUT CALCULATOR LOGIC ---
 app.get('/api/past-war', async (req, res) => {
     const { apiKey, reportId } = req.query;
     if (!apiKey || !reportId) return res.status(400).json({ error: "Missing API Key or Report ID" });
@@ -166,14 +166,6 @@ app.get('/api/past-war', async (req, res) => {
         const myFactionWarData = reportData.rankedwarreport.factions[myFacId];
         if (!myFactionWarData) return res.status(400).json({ error: "Your faction was not part of this Ranked War Report." });
 
-        // Identify opponent faction for "Outside Hit" filtering
-        const allFactions = Object.keys(reportData.rankedwarreport.factions);
-        const enemyFacId = allFactions.find(id => id !== myFacId);
-
-        // Extract War Timestamps
-        const warStart = reportData.rankedwarreport.war.start;
-        const warEnd = reportData.rankedwarreport.war.end || Math.floor(Date.now() / 1000);
-
         // Value Caches (The Gross Pay)
         let totalCacheValue = 0;
         let cachesWon = [];
@@ -196,43 +188,22 @@ app.get('/api/past-war', async (req, res) => {
             }
         }
 
-        // Step 2: Get Individual Member Contributions via Faction Attacks endpoint
-        const attacksRes = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${apiKey}`);
-        const attacksData = await attacksRes.json();
-
-        let memberContributions = {};
-
-        if (attacksData.attacks) {
-            for (let [attackId, attack] of Object.entries(attacksData.attacks)) {
-                // Filter by the war's start and end timestamps
-                if (attack.timestamp_ended >= warStart && attack.timestamp_ended <= warEnd) {
-                    
-                    // Filter out "Outside Hits" by matching defender to enemy faction
-                    if (attack.attacker_faction.toString() === myFacId && attack.defender_faction.toString() === enemyFacId) {
-                        
-                        // Ensure the hit was successful
-                        if (['Hospitalized', 'Mugged', 'Left'].includes(attack.result)) {
-                            const attackerId = attack.attacker_id.toString();
-                            
-                            if (!memberContributions[attackerId]) {
-                                memberContributions[attackerId] = {
-                                    id: attackerId,
-                                    name: attack.attacker_name,
-                                    attacks: 0,
-                                    score: 0 // This will track Respect
-                                };
-                            }
-                            
-                            // Tally hits and respect
-                            memberContributions[attackerId].attacks += 1;
-                            memberContributions[attackerId].score += (attack.respect || 0);
-                        }
-                    }
-                }
+        // Step 2: Get Individual Member Contributions DIRECTLY from the Report
+        const members = myFactionWarData.members || {};
+        let formattedMembers = [];
+        
+        for (let [id, m] of Object.entries(members)) {
+            if (m.attacks > 0 || m.score > 0) {
+                formattedMembers.push({
+                    id,
+                    name: m.name,
+                    attacks: m.attacks || 0,
+                    score: m.score || 0
+                });
             }
         }
 
-        let formattedMembers = Object.values(memberContributions);
+        // Sort by highest score descending
         formattedMembers.sort((a, b) => b.score - a.score);
 
         res.json({ 
