@@ -113,7 +113,7 @@
     </div>
 
     <div id="chart-container">
-        <h2 id="chart-title" style="border: none; text-align: center; margin-bottom: 20px; font-size: 1.2em; color: var(--text-main);">📊 Current War Performance</h2>
+        <h2 id="chart-title" style="border: none; text-align: center; margin-bottom: 20px; font-size: 1.2em; color: var(--text-main);">📊 Ranked War Performance</h2>
         <div id="chart-message" style="text-align:center; color: var(--text-dim); display:none; margin-bottom: 10px;"></div>
         <canvas id="hitsChart"></canvas>
     </div>
@@ -126,7 +126,7 @@
                 <input type="text" id="inp-name" placeholder="e.g. SpiderMan">
             </div>
             <div class="input-group">
-                <label>Your Torn API Key (Requires Limited Access)</label>
+                <label>Your Torn API Key (Public Access is fine!)</label>
                 <input type="password" id="inp-key" placeholder="16-character key">
             </div>
             <div class="input-group">
@@ -255,43 +255,39 @@ function updateTimers() {
 }
 setInterval(updateTimers, 1000);
 
-function renderGraph(graphData, attacksError, isRankedWar) {
+function renderGraph(graphData, isRankedWar) {
     const msgDiv = document.getElementById('chart-message');
     const canvas = document.getElementById('hitsChart');
     const title = document.getElementById('chart-title');
 
-    if (attacksError && !isRankedWar) {
+    if (!isRankedWar) {
         msgDiv.style.display = "block";
-        msgDiv.innerHTML = `<span style="color: var(--red);">⚠️ API Error: ${attacksError} <br><br> Your API key needs Limited Access to view logs.</span>`;
+        msgDiv.innerHTML = "Detailed hit tracking is only available during Official Ranked Wars.";
         canvas.style.display = "none";
+        title.innerText = "📊 Faction Hit Tracker";
         return;
     }
 
     if (!graphData || graphData.length === 0) {
         msgDiv.style.display = "block";
-        msgDiv.innerText = "No hits recorded yet.";
+        msgDiv.innerText = "No hits recorded yet in this Ranked War.";
         canvas.style.display = "none";
         return;
     }
 
     msgDiv.style.display = "none";
     canvas.style.display = "block";
-
-    title.innerText = isRankedWar ? "📊 Ranked War Performance" : "📊 Recent Activity Tracker";
+    title.innerText = "📊 Ranked War Performance";
 
     const ctx = canvas.getContext('2d');
     const labels = graphData.map(d => d.name);
     const hitsMade = graphData.map(d => d.made);
-    
-    // If it's a Ranked War, show Score. If not, don't show the second bar since we aren't tracking received anymore.
-    const secondaryLabel = isRankedWar ? 'War Score Contributed' : null;
-    const secondaryData = isRankedWar ? graphData.map(d => d.score) : null;
+    const scoreContributed = graphData.map(d => d.score);
 
-    let datasets = [{ label: 'Successful Attacks', data: hitsMade, backgroundColor: '#2ed573', borderRadius: 4 }];
-    
-    if (isRankedWar) {
-        datasets.push({ label: secondaryLabel, data: secondaryData, backgroundColor: '#ffa502', borderRadius: 4 });
-    }
+    let datasets = [
+        { label: 'Successful Attacks', data: hitsMade, backgroundColor: '#2ed573', borderRadius: 4 },
+        { label: 'War Score Contributed', data: scoreContributed, backgroundColor: '#ffa502', borderRadius: 4 }
+    ];
 
     if (hitsChart) {
         hitsChart.data.labels = labels;
@@ -330,7 +326,7 @@ async function load(){
 
         syncList("friendly", data.friendly || [], false);
         syncList("enemy", data.enemy || [], true);
-        renderGraph(data.graphData, data.attacksError, data.isRankedWar);
+        renderGraph(data.graphData, data.isRankedWar);
     } catch(e) { console.error("Update failed, retrying on next tick...", e); }
 }
 
