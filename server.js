@@ -44,12 +44,12 @@ function computeWarIntel(p, cache = {}) {
     return Math.floor(score * (0.9 + Math.random() * 0.2));
 }
 
-// FF Scouter Batch Processor (Max 20 requests per minute = 1 req every 3+ seconds)
+// FF Scouter Batch Processor
 setInterval(async () => {
     if (!statQueue.length || isProcessingQueue || !FF_SCOUTER_KEY) return;
     isProcessingQueue = true;
 
-    // Grab up to 40 IDs at once to stay efficient and within URL length limits
+    // Grab up to 40 IDs at once
     const batch = statQueue.splice(0, 40);
     const targets = batch.join(',');
 
@@ -60,23 +60,17 @@ setInterval(async () => {
         if (Array.isArray(data)) {
             data.forEach(p => {
                 const id = p.player_id.toString();
-                statsCache[id] = { 
-                    stats: p.bs_estimate || 0, // Fallback to 0 if null
-                    time: Date.now() 
-                };
+                statsCache[id] = { stats: p.bs_estimate || 0, time: Date.now() };
             });
         } else {
-            // API returned an error object instead of an array
-            console.error("FF Scouter API Error:", data);
-            statQueue.push(...batch); // Retry later
+            statQueue.push(...batch); // Push back if API rejected
         }
     } catch (err) { 
-        console.error("FF Scouter Queue error:", err.message); 
         statQueue.push(...batch); 
     }
     
     isProcessingQueue = false;
-}, 4000); // Runs every 4 seconds (15 req/min, safely under the 20 limit)
+}, 4000);
 
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
@@ -106,15 +100,20 @@ app.post('/api/update-stats', (req, res) => {
 
 app.get('/api/warboard', async (req, res) => {
     try {
+        // Bulletproofed fetches in case Torn API drops connection
         const [myData, enemyDataResult] = await Promise.all([
-            fetch(`https://api.torn.com/faction/?selections=basic&key=${TORN_API_KEY}`).then(r => r.json()),
-            FACTION_ID ? fetch(`https://api.torn.com/faction/${FACTION_ID}?selections=basic&key=${TORN_API_KEY}`).then(r => r.json()) : { members: {} }
+            fetch(`https://api.torn.com/faction/?selections=basic&key=${TORN_API_KEY}`)
+                .then(r => r.json()).catch(() => ({ members: {} })),
+            FACTION_ID 
+                ? fetch(`https://api.torn.com/faction/${FACTION_ID}?selections=basic&key=${TORN_API_KEY}`)
+                    .then(r => r.json()).catch(() => ({ members: {} })) 
+                : Promise.resolve({ members: {} })
         ]);
 
         const friendlyIds = new Set(Object.keys(myData.members || {}));
         const enemyIds = new Set(Object.keys(enemyDataResult.members || {}));
 
-        // Queue IDs that are un-cached or older than 1 hour (3,600,000 ms)
+        // Queue IDs that are un-cached or older than 1 hour
         [...friendlyIds, ...enemyIds].forEach(id => {
             if (!statsCache[id] || (Date.now() - statsCache[id].time) > 3600000) {
                 if (!statQueue.includes(id)) statQueue.push(id);
@@ -141,7 +140,10 @@ app.get('/api/warboard', async (req, res) => {
             });
         };
         res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true) });
-    } catch (err) { console.error(err); res.status(500).json({ error: "warboard failed" }); }
+    } catch (err) { 
+        console.error(err); 
+        res.status(500).json({ error: "warboard failed" }); 
+    }
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
