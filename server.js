@@ -16,9 +16,9 @@ let statsCache = {};
 let statQueue = [];
 let isProcessingQueue = false;
 
-/**
- * IMPROVED ESTIMATOR (normalized + stable curve)
- */
+/* =========================
+   STAT ESTIMATOR (FIXED)
+========================= */
 function calculateEstimatedStats(pstats) {
     if (!pstats) return 0;
 
@@ -33,23 +33,56 @@ function calculateEstimatedStats(pstats) {
 
     let activityScore = energyUsed + consumableEnergy + passiveEnergy;
 
-    // Smooth growth curve (prevents inflation)
     let stats = Math.pow(activityScore, 1.18) * 3.2;
-
-    // Age scaling (log-based instead of step jumps)
     stats *= Math.log10(ageDays + 10);
-
-    // Small efficiency bump
     stats *= (1 + Math.min(xanax / 2000, 0.25));
 
     return Math.floor(Math.max(5000, Math.min(stats, 5e9)));
 }
 
-/**
- * BACKGROUND QUEUE
- */
+/* =========================
+   WAR INTEL ENGINE
+========================= */
+function computeWarIntel(p, cache = {}) {
+    let score = 0;
+
+    if (p.state === "Okay") score += 120;
+    if (p.state === "Hospital") score += 60;
+
+    if (p.onlineStatus === "Online") score += 35;
+    if (p.onlineStatus === "Idle") score += 15;
+
+    // hospital urgency
+    if (p.state === "Hospital" && p.until) {
+        const now = Math.floor(Date.now() / 1000);
+        const remaining = p.until - now;
+
+        if (remaining > 0) {
+            if (remaining < 300) score += 120;
+            else if (remaining < 900) score += 80;
+            else if (remaining < 3600) score += 40;
+            else score += 10;
+        }
+    }
+
+    // strength weighting
+    const est = cache[p.id]?.stats || p.estStats;
+
+    if (est) {
+        if (est < 1e7) score += 120;
+        else if (est < 5e7) score += 80;
+        else if (est < 2e8) score += 40;
+        else score += 10;
+    }
+
+    return Math.floor(score * (0.9 + Math.random() * 0.2));
+}
+
+/* =========================
+   BACKGROUND QUEUE
+========================= */
 setInterval(async () => {
-    if (statQueue.length === 0 || isProcessingQueue || !TORN_API_KEY) return;
+    if (!statQueue.length || isProcessingQueue || !TORN_API_KEY) return;
 
     isProcessingQueue = true;
     const id = statQueue.shift();
@@ -72,20 +105,15 @@ setInterval(async () => {
             }
         }
     } catch (e) {
-        console.error("Stats fetch error:", e.message);
+        console.error(e.message);
     }
 
     isProcessingQueue = false;
 }, 1500);
 
-/**
- * HEALTH
- */
-app.get('/health', (req, res) => res.status(200).send('OK'));
-
-/**
- * CLAIM SYSTEM
- */
+/* =========================
+   CLAIM SYSTEM
+========================= */
 app.post('/api/claim', (req, res) => {
     const { enemyId, playerName } = req.body;
     if (!enemyId || !playerName) return res.status(400).json({ error: "Missing data" });
@@ -109,9 +137,9 @@ app.post('/api/unclaim', (req, res) => {
     res.status(400).json({ error: "Cannot unclaim" });
 });
 
-/**
- * WARBOARD
- */
+/* =========================
+   WARBOARD
+========================= */
 app.get('/api/warboard', async (req, res) => {
     try {
         const myFactionRes = await fetch(`https://api.torn.com/faction/?selections=basic&key=${TORN_API_KEY}`);
@@ -133,24 +161,31 @@ app.get('/api/warboard', async (req, res) => {
             }
         }
 
-        // cleanup claims
-        const now = Date.now();
-        for (const id in claims) {
-            if (now - claims[id].time > 900000) delete claims[id];
-        }
-
         const parseMembers = (data, isEnemy = false) => {
             if (!data.members) return [];
 
-            return Object.entries(data.members).map(([id, m]) => ({
-                id,
-                name: m.name,
-                state: m.status?.state,
-                until: m.status?.until,
-                onlineStatus: m.last_action?.status || "Offline",
-                claimedBy: isEnemy ? claims[id]?.playerName || null : null,
-                estStats: isEnemy ? statsCache[id]?.stats || null : null
-            }));
+            return Object.entries(data.members).map(([id, m]) => {
+                const est = isEnemy ? statsCache[id]?.stats || null : null;
+
+                const intelScore = isEnemy ? computeWarIntel({
+                    id,
+                    state: m.status?.state,
+                    until: m.status?.until,
+                    onlineStatus: m.last_action?.status || "Offline",
+                    estStats: est
+                }, statsCache) : null;
+
+                return {
+                    id,
+                    name: m.name,
+                    state: m.status?.state,
+                    until: m.status?.until,
+                    onlineStatus: m.last_action?.status || "Offline",
+                    claimedBy: isEnemy ? claims[id]?.playerName || null : null,
+                    estStats: est,
+                    intelScore
+                };
+            });
         };
 
         res.json({
