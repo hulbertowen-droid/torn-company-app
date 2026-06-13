@@ -75,6 +75,55 @@ function autoDetectEnemyFaction(data) {
     return null;
 }
 
+// NEW: Recursive Time-Travel Fetcher for Attacks
+async function getRecentAttacks(apiKey, hours = 24) {
+    let allAttacks = {};
+    let toTimestamp = Math.floor(Date.now() / 1000);
+    const limitTimestamp = toTimestamp - (hours * 3600);
+    let pages = 0;
+    let hasMore = true;
+    let errorObj = null;
+
+    // Max 15 pages (1,500 attacks) to protect API limits and prevent timeouts
+    while (hasMore && pages < 15) { 
+        pages++;
+        try {
+            const res = await fetch(`https://api.torn.com/faction/?selections=attacks&to=${toTimestamp}&key=${apiKey}`);
+            const data = await res.json();
+            
+            if (data.error) {
+                errorObj = data.error;
+                break;
+            }
+            
+            if (!data.attacks || Object.keys(data.attacks).length === 0) {
+                break;
+            }
+
+            let oldestInBatch = toTimestamp;
+            let foundAnyInRange = false;
+            
+            for (const [id, att] of Object.entries(data.attacks)) {
+                if (att.timestamp >= limitTimestamp) {
+                    allAttacks[id] = att;
+                    foundAnyInRange = true;
+                    if (att.timestamp < oldestInBatch) oldestInBatch = att.timestamp;
+                }
+            }
+            
+            // If we found valid attacks, set the 'to' timestamp just behind the oldest one to grab the next page
+            if (foundAnyInRange && oldestInBatch < toTimestamp) {
+                toTimestamp = oldestInBatch - 1; 
+            } else {
+                hasMore = false; // We hit attacks older than 24h
+            }
+        } catch (err) {
+            break;
+        }
+    }
+    return { attacks: allAttacks, error: errorObj };
+}
+
 setInterval(async () => {
     if (!statQueue.length || isProcessingQueue) return;
     isProcessingQueue = true;
@@ -100,6 +149,7 @@ setInterval(async () => {
                 statsCache[id] = { stats: p.bs_estimate, time: Date.now() };
             });
         } else {
+            console.error("❌ FF Scouter API Error:", data);
             batch.forEach(id => { statsCache[id] = { stats: null, time: Date.now() }; });
         }
     } catch (err) { 
@@ -155,18 +205,17 @@ app.get('/api/warboard', async (req, res) => {
 
         if (!userKey) return res.status(400).json({ error: "No API Key provided" });
 
-        // FIX: Swapped to 'let' so we can assign the enemy data dynamically
+        // Run the basic fetch and the new recursive attack fetch at the same time
         let [myData, enemyDataResult, attacksData] = await Promise.all([
             fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })),
             enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} }),
-            fetch(`https://api.torn.com/faction/?selections=attacks&key=${userKey}`).then(r => r.json()).catch(() => ({ attacks: {} }))
+            getRecentAttacks(userKey, 24) // <--- Plugs in here
         ]);
 
         if (myData.error) return res.status(400).json({ error: "Invalid API Key" });
 
         if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
         
-        // FIX: Properly check if the members object is empty
         if (enemyId && Object.keys(enemyDataResult.members || {}).length === 0) {
              enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} }));
         }
@@ -199,7 +248,6 @@ app.get('/api/warboard', async (req, res) => {
         let graphData = Object.values(hitsStats).filter(p => p.made > 0 || p.received > 0);
         graphData.sort((a, b) => b.made - a.made); 
         
-        // Expose attack log permissions error to the frontend if it exists
         let attacksError = attacksData.error ? attacksData.error.error : null;
 
         const parseMembers = (data, isEnemy = false) => {
