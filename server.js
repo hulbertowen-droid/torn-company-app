@@ -12,7 +12,7 @@ const TORN_API_KEY = process.env.TORN_API_KEY;
 const FACTION_ID = process.env.FACTION_ID || "";
 
 let claims = {};
-let statsCache = {}; // { id: { stats, hits, time } }
+let statsCache = {};
 let manualStats = {}; 
 let statQueue = [];
 let isProcessingQueue = false;
@@ -68,7 +68,12 @@ setInterval(async () => {
         const res = await fetch(`https://api.torn.com/user/${id}?selections=personalstats&key=${TORN_API_KEY}`);
         const data = await res.json();
         if (data?.personalstats) {
-            statsCache[id] = { stats: calculateEstimatedStats(data.personalstats), time: Date.now(), retries: 0 };
+            statsCache[id] = { 
+                stats: calculateEstimatedStats(data.personalstats), 
+                hits: data.personalstats.attackswon || 0, 
+                time: Date.now(), 
+                retries: 0 
+            };
         } else if (data?.error && (data.error.code === 2 || data.error.code === 5)) {
             const prev = statsCache[id]?.retries || 0;
             if (prev < 3) {
@@ -115,14 +120,12 @@ app.get('/api/warboard', async (req, res) => {
         ]);
 
         const now = Math.floor(Date.now() / 1000);
-        // Queue both friendlies and enemies
         [...Object.keys(myData.members || {}), ...Object.keys(enemyDataResult.members || {})].forEach(id => {
             if (!statsCache[id] || now - (statsCache[id].time / 1000) > 1200) {
                 if (!statQueue.includes(id)) statQueue.push(id);
             }
         });
 
-        // Count hits only from the last 24 hours (86400 seconds)
         let hitsCount = {};
         if (attacksData.attacks) {
             Object.values(attacksData.attacks).forEach(att => {
@@ -135,7 +138,7 @@ app.get('/api/warboard', async (req, res) => {
         const parseMembers = (data, isEnemy = false) => {
             if (!data.members) return [];
             return Object.entries(data.members).map(([id, m]) => {
-                const est = isEnemy ? (manualStats[id]?.stats || statsCache[id]?.stats || null) : null;
+                const est = manualStats[id]?.stats || statsCache[id]?.stats || null;
                 const intelScore = isEnemy ? computeWarIntel({ id, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", estStats: est }, statsCache) : null;
                 return { 
                     id, 
@@ -145,7 +148,7 @@ app.get('/api/warboard', async (req, res) => {
                     onlineStatus: m.last_action?.status || "Offline", 
                     claimedBy: isEnemy ? claims[id]?.playerName || null : null, 
                     estStats: est, 
-                    hits: hitsCount[id] || 0, 
+                    hits: statsCache[id]?.hits || hitsCount[id] || 0, 
                     intelScore, 
                     isManual: !!manualStats[id] 
                 };
