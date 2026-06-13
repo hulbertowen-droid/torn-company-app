@@ -5,7 +5,7 @@ require('dotenv').config();
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static('public')); // Serves index.html and payout.html
 
 const PORT = process.env.PORT || 3000;
 const TORN_API_KEY = process.env.TORN_API_KEY;
@@ -55,7 +55,7 @@ function autoDetectEnemyFaction(data) {
             if (enemy) return enemy;
         }
     }
-    if (data.wars && Object.keys(data.wars).length > 0) { return Object.keys(data.wars)[0]; }
+    if (data.wars && Object.keys(data.wars).length > 0) return Object.keys(data.wars)[0];
     if (data.raid_wars && Object.keys(data.raid_wars).length > 0) {
         for (let warId in data.raid_wars) {
             const factions = Object.keys(data.raid_wars[warId].factions || {});
@@ -73,6 +73,7 @@ function autoDetectEnemyFaction(data) {
     return null;
 }
 
+// --- FF SCOUTER CACHE ENGINE ---
 setInterval(async () => {
     if (!statQueue.length || isProcessingQueue) return;
     isProcessingQueue = true;
@@ -115,7 +116,7 @@ app.post('/api/claim', (req, res) => {
 
 app.post('/api/unclaim', (req, res) => {
     const { enemyId, playerName } = req.body;
-    if (claims[enemyId]?.playerName === playerName) { delete claims[enemyId]; }
+    if (claims[enemyId]?.playerName === playerName) delete claims[enemyId];
     res.json({ success: true });
 });
 
@@ -139,6 +140,55 @@ app.post('/api/update-stats', (req, res) => {
     res.json({ success: true });
 });
 
+// --- NEW: PAST WAR REPORT ENDPOINT ---
+app.get('/api/past-war', async (req, res) => {
+    const { apiKey, reportId } = req.query;
+    if (!apiKey || !reportId) return res.status(400).json({ error: "Missing API Key or Report ID" });
+
+    try {
+        // 1. Get the user's basic data to find their Faction ID
+        const userRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${apiKey}`);
+        const userData = await userRes.json();
+        
+        if (userData.error) return res.status(400).json({ error: "Invalid API Key." });
+        const myFacId = userData.faction?.faction_id?.toString();
+        if (!myFacId || myFacId === "0") return res.status(400).json({ error: "You are not currently in a faction." });
+
+        // 2. Fetch the specific Ranked War Report from Torn
+        const reportRes = await fetch(`https://api.torn.com/torn/${reportId}?selections=rankedwarreport&key=${apiKey}`);
+        const reportData = await reportRes.json();
+
+        if (reportData.error) return res.status(400).json({ error: "Torn API Error: " + reportData.error.error });
+        if (!reportData.rankedwarreport || !reportData.rankedwarreport.factions) return res.status(400).json({ error: "Invalid Report ID or no data found." });
+
+        // 3. Extract only the data for the user's faction
+        const myFactionWarData = reportData.rankedwarreport.factions[myFacId];
+        if (!myFactionWarData) return res.status(400).json({ error: "Your faction was not part of this Ranked War Report." });
+
+        // 4. Format the members data for the payout calculator
+        const members = myFactionWarData.members || {};
+        let formattedMembers = [];
+        for (let [id, m] of Object.entries(members)) {
+            if (m.attacks > 0 || m.score > 0) {
+                formattedMembers.push({
+                    id,
+                    name: m.name,
+                    attacks: m.attacks || 0,
+                    score: m.score || 0
+                });
+            }
+        }
+
+        // Sort by highest score descending
+        formattedMembers.sort((a, b) => b.score - a.score);
+
+        res.json({ success: true, members: formattedMembers });
+    } catch (err) {
+        res.status(500).json({ error: "Server error fetching past war data." });
+    }
+});
+
+// --- LIVE WARBOARD ENDPOINT ---
 app.get('/api/warboard', async (req, res) => {
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
@@ -146,7 +196,6 @@ app.get('/api/warboard', async (req, res) => {
 
         if (!userKey) return res.status(400).json({ error: "No API Key provided" });
 
-        // Removed the 'attacks' fetch to save API calls and eliminate the need for Limited Access keys
         let [myData, enemyDataResult] = await Promise.all([
             fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })),
             enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} })
@@ -169,7 +218,6 @@ app.get('/api/warboard', async (req, res) => {
             }
         });
 
-        // Exact Ranked War Stats Extraction
         let hitsStats = {};
         friendlyIds.forEach(id => hitsStats[id] = { made: 0, score: 0, name: myData.members[id].name });
         let isRankedWar = false;
@@ -191,9 +239,8 @@ app.get('/api/warboard', async (req, res) => {
             }
         }
 
-        // Only send graph data if it's an active Ranked War
         let graphData = isRankedWar ? Object.values(hitsStats).filter(p => p.made > 0 || p.score > 0) : [];
-        graphData.sort((a, b) => b.score - a.score); // Sort by highest War Score
+        graphData.sort((a, b) => b.score - a.score);
 
         const parseMembers = (data, isEnemy = false) => {
             if (!data.members) return [];
