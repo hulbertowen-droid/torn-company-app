@@ -35,7 +35,7 @@ function computeWarIntel(p, cache = {}) {
         }
     }
     const est = manualStats[p.id]?.stats || cache[p.id]?.stats || p.estStats;
-    if (est) {
+    if (est && typeof est === 'number') {
         if (est < 1e7) score += 120;
         else if (est < 5e7) score += 80;
         else if (est < 2e8) score += 40;
@@ -49,7 +49,6 @@ setInterval(async () => {
     if (!statQueue.length || isProcessingQueue || !FF_SCOUTER_KEY) return;
     isProcessingQueue = true;
 
-    // Grab up to 40 IDs at once
     const batch = statQueue.splice(0, 40);
     const targets = batch.join(',');
 
@@ -60,10 +59,13 @@ setInterval(async () => {
         if (Array.isArray(data)) {
             data.forEach(p => {
                 const id = p.player_id.toString();
-                statsCache[id] = { stats: p.bs_estimate || 0, time: Date.now() };
+                statsCache[id] = { 
+                    stats: p.bs_estimate, // Keeps actual number or null if no data
+                    time: Date.now() 
+                };
             });
         } else {
-            statQueue.push(...batch); // Push back if API rejected
+            statQueue.push(...batch); 
         }
     } catch (err) { 
         statQueue.push(...batch); 
@@ -100,7 +102,6 @@ app.post('/api/update-stats', (req, res) => {
 
 app.get('/api/warboard', async (req, res) => {
     try {
-        // Bulletproofed fetches in case Torn API drops connection
         const [myData, enemyDataResult] = await Promise.all([
             fetch(`https://api.torn.com/faction/?selections=basic&key=${TORN_API_KEY}`)
                 .then(r => r.json()).catch(() => ({ members: {} })),
@@ -113,7 +114,6 @@ app.get('/api/warboard', async (req, res) => {
         const friendlyIds = new Set(Object.keys(myData.members || {}));
         const enemyIds = new Set(Object.keys(enemyDataResult.members || {}));
 
-        // Queue IDs that are un-cached or older than 1 hour
         [...friendlyIds, ...enemyIds].forEach(id => {
             if (!statsCache[id] || (Date.now() - statsCache[id].time) > 3600000) {
                 if (!statQueue.includes(id)) statQueue.push(id);
@@ -123,8 +123,16 @@ app.get('/api/warboard', async (req, res) => {
         const parseMembers = (data, isEnemy = false) => {
             if (!data.members) return [];
             return Object.entries(data.members).map(([id, m]) => {
-                const est = manualStats[id]?.stats || statsCache[id]?.stats || null;
+                const hasCache = statsCache[id] !== undefined;
+                const cachedStats = statsCache[id]?.stats; 
+                
+                // Priority: Manual Overrides -> Cached Stats -> "loading" status string
+                const est = manualStats[id]?.stats !== undefined 
+                    ? manualStats[id].stats 
+                    : (hasCache ? cachedStats : "loading");
+
                 const intelScore = isEnemy ? computeWarIntel({ id, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", estStats: est }, statsCache) : null;
+                
                 return { 
                     id, 
                     name: m.name, 
