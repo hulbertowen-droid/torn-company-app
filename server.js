@@ -10,40 +10,9 @@ app.use(express.static('public'));
 const PORT = process.env.PORT || 3000;
 const TORN_API_KEY = process.env.TORN_API_KEY;
 const FACTION_ID = process.env.FACTION_ID || ''; 
-const YATA_FACTION_KEY = process.env.YATA_FACTION_KEY || ''; 
 
 let claims = {};
 let enemyList = []; 
-let yataEstimates = {};
-
-// ==========================================
-// BACKGROUND YATA FACTION TARGET PULLER
-// ==========================================
-// This pulls your entire Faction Target list from YATA in one swoop.
-setInterval(async () => {
-    if (!YATA_FACTION_KEY) return;
-
-    try {
-        // We use the export endpoint to grab all targets associated with this VIP key
-        const res = await fetch(`https://yata.yt/api/v1/targets/export/?key=${YATA_FACTION_KEY}`);
-        
-        if (res.ok) {
-            const data = await res.json();
-            
-            // Loop through YATA's target list and extract the crowdsourced Battle Scores
-            if (data && data.targets) {
-                for (const [id, targetData] of Object.entries(data.targets)) {
-                    if (targetData.battle_score) {
-                        // Square the battle score to get the raw stat estimate
-                        yataEstimates[id] = Math.pow(targetData.battle_score, 2);
-                    }
-                }
-            }
-        }
-    } catch (e) {
-        console.error("Failed to sync with YATA Faction Targets.");
-    }
-}, 30000); // Syncs the master list once every 30 seconds
 
 // ==========================================
 // WARBOARD ENDPOINTS
@@ -80,10 +49,7 @@ app.get('/api/warboard', async (req, res) => {
         if (FACTION_ID) {
             const enemyRes = await fetch(`https://api.torn.com/faction/${FACTION_ID}?selections=basic&key=${TORN_API_KEY}`);
             enemyData = await enemyRes.json();
-            
-            if (enemyData.members) {
-                enemyList = Object.keys(enemyData.members);
-            }
+            if (enemyData.members) enemyList = Object.keys(enemyData.members);
         }
 
         const now = Date.now();
@@ -96,16 +62,13 @@ app.get('/api/warboard', async (req, res) => {
             if (data.members) {
                 for (const [id, member] of Object.entries(data.members)) {
                     let lastAction = member.last_action && member.last_action.status ? member.last_action.status : 'Offline';
-
                     list.push({
                         id: id,
                         name: member.name,
                         state: member.status.state,
                         until: member.status.until,
                         claimedBy: isEnemy && claims[id] ? claims[id].playerName : null,
-                        onlineStatus: lastAction,
-                        // Pulls strictly from our YATA Faction sync
-                        estStats: isEnemy ? (yataEstimates[id] || null) : null 
+                        onlineStatus: lastAction
                     });
                 }
             }
@@ -123,6 +86,4 @@ app.get('/api/warboard', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
