@@ -29,10 +29,17 @@
         
         .badge { background: #0d1117; padding: 2px 8px; border-radius: 4px; font-size: 11px; color: var(--gold); border: 1px solid #30363d; cursor: pointer; display: inline-block; margin-left: 6px; }
         .manual { border-color: var(--blue); color: var(--blue); }
-        .timer-hosp { font-family: monospace; color: var(--red); font-weight: bold; }
-        .timer-status { font-size: 0.85em; color: #58a6ff; font-weight: 500; }
+        .timer-hosp { font-family: monospace; color: var(--red); font-weight: bold; margin-right: 8px;}
+        .timer-status { font-size: 0.85em; color: #58a6ff; font-weight: 500; margin-right: 8px;}
         
-        button { cursor: pointer; border: none; padding: 5px 12px; border-radius: 4px; font-weight: bold; font-size: 10px; background: var(--red); color: white; }
+        button { cursor: pointer; border: none; padding: 5px 12px; border-radius: 4px; font-weight: bold; font-size: 10px; background: var(--red); color: white; margin-left: 4px; }
+        .unclaim { background: var(--blue); }
+        .btn-sos { background: var(--gold); color: #000; }
+        
+        /* Pulse Animation for SOS */
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 62, 62, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(255, 62, 62, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 62, 62, 0); } }
+        .badge-sos { background: var(--red); color: white; border-color: var(--red); animation: pulse 1.5s infinite; cursor: default; }
+
         @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
     </style>
 </head>
@@ -41,8 +48,10 @@
     <div id="info-box">
         <div id="info-header" onclick="toggleInfo()">Intelligence & Battle Stats <span id="arrow">▼</span></div>
         <div id="info-content">
-            Estimated stats are calculated using an algorithm based on public Torn data like Xanax/refill usage and account age. Please understand these are <strong>not perfect</strong> and should be treated as guidelines rather than absolute truth. Because the system processes players individually to ensure API safety, it may take several minutes for accurate estimates to appear for everyone on the board. 
-            <br><br><strong>Correction System:</strong> If you have an enemy's verified battle stats, click any yellow stat badge to input an enemy's *actual* battle stats to override the estimate.
+            Estimated stats are now provided dynamically via <strong>FF Scouter</strong>. These estimates pull from public data and are refreshed hourly. Please understand that they are guidelines rather than absolute truth. 
+            <br><br><strong>Sorting System:</strong> Members listed as "Okay" jump to the top. Hospitalized players follow, and traveling members sit at the bottom.
+            <br><br><strong>Correction System:</strong> Click any yellow stat badge to manually override the FF Scouter estimate with the real, verified numbers.
+            <br><br><strong>Backup System:</strong> Click the "SOS" button to flag an active enemy if you need a faction member to help you take them down.
         </div>
     </div>
     <div class="grid">
@@ -54,7 +63,11 @@ let myName = localStorage.getItem("warboard_name") || prompt("Torn Name:");
 if(myName) localStorage.setItem("warboard_name", myName);
 function toggleInfo() { const c = document.getElementById("info-content"); c.style.display = c.style.display === "none" ? "block" : "none"; document.getElementById("arrow").innerText = c.style.display === "none" ? "▼" : "▲"; }
 
-function getPriority(p) { return p.state === "Okay" ? 3 : p.state === "Hospital" ? 2 : p.state === "Traveling" ? 1 : 0; }
+function getPriority(p) { 
+    // Prioritize SOS targets if they are Okay
+    if (p.needsBackup && p.state === "Okay") return 4; 
+    return p.state === "Okay" ? 3 : p.state === "Hospital" ? 2 : p.state === "Traveling" ? 1 : 0; 
+}
 
 function sortBoard(list, isEnemy) {
     if (!list || !Array.isArray(list)) return [];
@@ -80,15 +93,9 @@ setInterval(() => {
 function format(n){ if(n>1e9) return (n/1e9).toFixed(1)+"b"; if(n>1e6) return (n/1e6).toFixed(1)+"m"; return (n/1e3).toFixed(1)+"k"; }
 
 function getBadgeHTML(p) {
-    if (p.isManual) {
-        return `<span class="badge manual" onclick="updateStats('${p.id}')">${format(p.estStats)}</span>`;
-    }
-    if (p.estStats === "loading") {
-        return `<span class="badge" style="opacity: 0.5;" onclick="updateStats('${p.id}')">...</span>`;
-    }
-    if (p.estStats === null || p.estStats === 0) {
-        return `<span class="badge" style="color: #8b949e;" onclick="updateStats('${p.id}')">?</span>`;
-    }
+    if (p.isManual) return `<span class="badge manual" onclick="updateStats('${p.id}')">${format(p.estStats)}</span>`;
+    if (p.estStats === "loading") return `<span class="badge" style="opacity: 0.5;" onclick="updateStats('${p.id}')">...</span>`;
+    if (p.estStats === null || p.estStats === 0) return `<span class="badge" style="color: #8b949e;" onclick="updateStats('${p.id}')">?</span>`;
     return `<span class="badge" onclick="updateStats('${p.id}')">${format(p.estStats)}</span>`;
 }
 
@@ -114,7 +121,33 @@ async function load(){
 
         let friendlyHTML = sortBoard(fList, false).map(p => `<li><div><span class="dot dot-${p.onlineStatus.toLowerCase()}"></span><a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a> ${getBadgeHTML(p)}</div> <span class="timer-status">${p.state === "Okay" ? "Okay" : (p.state !== "Hospital" ? p.statusDescription : "")}</span> ${p.state==="Hospital" ? `<span class="timer-hosp" data-until="${p.until}"></span>` : ""}</li>`).join("");
         
-        let enemyHTML = sortBoard(eList, true).map(p => `<li><div><span class="dot dot-${p.onlineStatus.toLowerCase()}"></span><a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a> ${getBadgeHTML(p)}</div><div><span class="timer-status">${p.state === "Okay" ? "Okay" : (p.state !== "Hospital" ? p.statusDescription : "")}</span> ${p.state==="Hospital" ? `<span class="timer-hosp" data-until="${p.until}"></span> ` : ""}<button class="call" onclick="claim('${p.id}')">Call</button></div></li>`).join("");
+        let enemyHTML = sortBoard(eList, true).map(p => {
+            
+            // Backup HTML Logic
+            let backupHTML = "";
+            if (p.needsBackup) {
+                // If it needs backup, show the glaring SOS badge. Anyone can click the X to clear it once resolved.
+                backupHTML = `<span class="badge badge-sos">🆘 ${p.needsBackup} <button class="unclaim" style="background:#8b0000; margin-left:4px; padding: 2px 6px;" onclick="unbackup('${p.id}')">✖</button></span>`;
+            } else if (p.state === "Okay") {
+                // Only allow asking for backup if they are out of the hospital
+                backupHTML = `<button class="btn-sos" onclick="backup('${p.id}')">SOS</button>`;
+            }
+
+            // Claim HTML Logic
+            let claimHTML = p.claimedBy 
+                ? `<span class="badge" style="background:#4c1d95; color:white;">🎯 ${p.claimedBy} ${p.claimedBy===myName ? `<button class="unclaim" style="padding: 2px 6px;" onclick="unclaim('${p.id}')">✖</button>` : ""}</span>`
+                : `<button class="call" onclick="claim('${p.id}')">Call</button>`;
+
+            return `<li>
+                <div><span class="dot dot-${p.onlineStatus.toLowerCase()}"></span><a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a> ${getBadgeHTML(p)}</div>
+                <div style="display:flex; align-items:center;">
+                    <span class="timer-status">${p.state === "Okay" ? "Okay" : (p.state !== "Hospital" ? p.statusDescription : "")}</span> 
+                    ${p.state==="Hospital" ? `<span class="timer-hosp" data-until="${p.until}"></span> ` : ""}
+                    ${backupHTML}
+                    ${claimHTML}
+                </div>
+            </li>`;
+        }).join("");
 
         if(friendlyHTML !== lastFriendly) { document.getElementById("friendly").innerHTML = friendlyHTML; lastFriendly = friendlyHTML; }
         if(enemyHTML !== lastEnemy) { document.getElementById("enemy").innerHTML = enemyHTML; lastEnemy = enemyHTML; }
@@ -123,7 +156,12 @@ async function load(){
     }
 }
 
+// API Calls
 async function claim(id) { await fetch("/api/claim", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enemyId:id, playerName:myName})}); load(); }
+async function unclaim(id) { await fetch("/api/unclaim", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enemyId:id, playerName:myName})}); load(); }
+async function backup(id) { await fetch("/api/backup", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enemyId:id, playerName:myName})}); load(); }
+async function unbackup(id) { await fetch("/api/unbackup", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enemyId:id})}); load(); }
+
 load(); 
 setInterval(load, 15000);
 </script>
