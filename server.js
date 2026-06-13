@@ -12,7 +12,7 @@ const TORN_API_KEY = process.env.TORN_API_KEY;
 const FACTION_ID = process.env.FACTION_ID || "";
 
 let claims = {};
-let statsCache = {};
+let statsCache = {}; // Format: { id: { stats, hits, time } }
 let manualStats = {}; 
 let statQueue = [];
 let isProcessingQueue = false;
@@ -68,7 +68,12 @@ setInterval(async () => {
         const res = await fetch(`https://api.torn.com/user/${id}?selections=personalstats&key=${TORN_API_KEY}`);
         const data = await res.json();
         if (data?.personalstats) {
-            statsCache[id] = { stats: calculateEstimatedStats(data.personalstats), time: Date.now(), retries: 0 };
+            statsCache[id] = { 
+                stats: calculateEstimatedStats(data.personalstats), 
+                hits: data.personalstats.attackswon || 0, // Extract hits
+                time: Date.now(), 
+                retries: 0 
+            };
         } else if (data?.error && (data.error.code === 2 || data.error.code === 5)) {
             const prev = statsCache[id]?.retries || 0;
             if (prev < 3) {
@@ -81,7 +86,6 @@ setInterval(async () => {
 }, 1500);
 
 app.get('/health', (req, res) => res.status(200).send("OK"));
-
 app.post('/api/claim', (req, res) => {
     const { enemyId, playerName } = req.body;
     if (!enemyId || !playerName) return res.status(400).json({ error: "Missing data" });
@@ -89,7 +93,6 @@ app.post('/api/claim', (req, res) => {
     claims[enemyId] = { playerName, time: Date.now() };
     res.json({ success: true });
 });
-
 app.post('/api/unclaim', (req, res) => {
     const { enemyId, playerName } = req.body;
     if (claims[enemyId]?.playerName === playerName) {
@@ -98,7 +101,6 @@ app.post('/api/unclaim', (req, res) => {
     }
     res.status(400).json({ error: "Cannot unclaim" });
 });
-
 app.post('/api/update-stats', (req, res) => {
     const { enemyId, stats } = req.body;
     if (!enemyId || !stats) return res.status(400).json({ error: "Missing data" });
@@ -114,7 +116,8 @@ app.get('/api/warboard', async (req, res) => {
             enemyData = await (await fetch(`https://api.torn.com/faction/${FACTION_ID}?selections=basic&key=${TORN_API_KEY}`)).json();
             const now = Date.now();
             for (const id of Object.keys(enemyData.members || {})) {
-                if (!statsCache[id] || now - statsCache[id].time > 86400000) {
+                // Refresh if stale (older than 20 mins)
+                if (!statsCache[id] || now - statsCache[id].time > 1200000) {
                     if (!statQueue.includes(id)) statQueue.push(id);
                 }
             }
@@ -123,8 +126,9 @@ app.get('/api/warboard', async (req, res) => {
             if (!data.members) return [];
             return Object.entries(data.members).map(([id, m]) => {
                 const est = isEnemy ? (manualStats[id]?.stats || statsCache[id]?.stats || null) : null;
+                const hits = isEnemy ? (statsCache[id]?.hits || null) : null; // Get cached hits
                 const intelScore = isEnemy ? computeWarIntel({ id, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", estStats: est }, statsCache) : null;
-                return { id, name: m.name, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", claimedBy: isEnemy ? claims[id]?.playerName || null : null, estStats: est, intelScore, isManual: !!manualStats[id] };
+                return { id, name: m.name, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", claimedBy: isEnemy ? claims[id]?.playerName || null : null, estStats: est, hits: hits, intelScore, isManual: !!manualStats[id] };
             });
         };
         res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyData, true) });
