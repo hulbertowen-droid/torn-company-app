@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Spider-Verse Warboard</title>
     <style>
-        :root { --bg: #050505; --card: #0d1117; --item: #161b22; --red: #e11d48; --blue: #2563eb; --gold: #fbbf24; }
+        :root { --bg: #050505; --card: #0d1117; --item: #161b22; --red: #e11d48; --blue: #2563eb; --gold: #fbbf24; --gray: #4b5563; }
         body { background: var(--bg); color: #c9d1d9; font-family: 'Inter', system-ui; margin: 0; padding: 20px; }
         h1 { text-align: center; color: var(--red); text-transform: uppercase; letter-spacing: 4px; margin-bottom: 20px; font-size: 1.8rem; }
         
@@ -18,14 +18,12 @@
         h2 { color: #8b949e; border-bottom: 2px solid var(--red); padding-bottom: 10px; margin-top: 0; }
         
         ul { list-style: none; padding: 0; }
-        li { 
-            background: var(--item); margin-bottom: 8px; padding: 12px 16px; border-radius: 8px; 
-            display: flex; justify-content: space-between; align-items: center; border: 1px solid #30363d;
-            transition: transform 0.2s;
-        }
+        li { background: var(--item); margin-bottom: 8px; padding: 12px 16px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #30363d; transition: transform 0.2s; }
         li:hover { transform: scale(1.01); border-color: var(--red); }
+        
         .profile { font-weight: 600; color: #fff; text-decoration: none; }
         .badge { background: #21262d; padding: 2px 8px; border-radius: 6px; font-size: 11px; color: var(--gold); border: 1px solid #444; cursor: pointer; }
+        .hits { color: #94a3b8; border-color: #475569; } /* Gray badge for hits */
         .manual { border: 1px solid var(--blue); color: var(--blue); }
         .timer { font-family: monospace; color: var(--red); font-weight: bold; font-size: 1.1em; }
         
@@ -46,10 +44,11 @@
     <h1>🕷 Spider-Verse Warboard</h1>
 
     <div id="info-box">
-        <div id="info-header" onclick="toggleInfo()">WIP: Battle Stat Estimates <span id="arrow">▼</span></div>
+        <div id="info-header" onclick="toggleInfo()">WIP: Battle Stat Estimates & Intel <span id="arrow">▼</span></div>
         <div id="info-content">
-            Estimated stats are calculated using an algorithm based on public Torn data like Xanax/refill usage and account age. Please understand these are <strong>not perfect</strong> and should be treated as guidelines rather than absolute truth. Because the system processes players individually to ensure API safety, it may take several minutes for accurate estimates to appear for everyone on the board. 
-            <br><br><strong>Correction System:</strong> If you have an enemy's verified battle stats, click their yellow stat badge to manually override the system estimate with real numbers.
+            Stats are calculated via algorithm. Estimates refresh every 20 minutes to save API resources. 
+            <br><strong>System:</strong> Click any yellow stat badge to manually override.
+            <br><em>The "Hits" number shows confirmed attacks won.</em>
         </div>
     </div>
 
@@ -97,7 +96,7 @@ function sortBoard(list, isEnemy) {
 }
 
 async function updateStats(id) {
-    let input = prompt("Enter ACTUAL battle stats for this enemy (e.g. 5000000):");
+    let input = prompt("Enter ACTUAL battle stats:");
     if(input && !isNaN(input)) {
         await fetch("/api/update-stats", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enemyId:id, stats:input})});
         load();
@@ -121,6 +120,7 @@ async function load(){
             <div>
                 <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a>
                 ${p.estStats ? `<span class="badge ${p.isManual ? 'manual' : ''}" onclick="updateStats('${p.id}')">${format(p.estStats)}</span>` : ""}
+                ${p.hits ? `<span class="badge hits">${p.hits} H</span>` : ""}
             </div>
             <div>
                 ${p.state==="Hospital" ? `<span class="timer" data-until="${p.until}"></span> ` : ""}
