@@ -12,7 +12,7 @@ const TORN_API_KEY = process.env.TORN_API_KEY;
 const FACTION_ID = process.env.FACTION_ID || "";
 
 let claims = {};
-let statsCache = {};
+let statsCache = {}; 
 let manualStats = {}; 
 let statQueue = [];
 let isProcessingQueue = false;
@@ -141,7 +141,19 @@ app.get('/api/warboard', async (req, res) => {
             return Object.entries(data.members).map(([id, m]) => {
                 const est = manualStats[id]?.stats || statsCache[id]?.stats || null;
                 const intelScore = isEnemy ? computeWarIntel({ id, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", estStats: est }, statsCache) : null;
-                return { id, name: m.name, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", claimedBy: isEnemy ? claims[id]?.playerName || null : null, estStats: est, hits: hitsCount[id] || 0, intelScore, isManual: !!manualStats[id] };
+                return { 
+                    id, 
+                    name: m.name, 
+                    state: m.status?.state, 
+                    until: m.status?.until, 
+                    statusDescription: m.status?.description || "",
+                    onlineStatus: m.last_action?.status || "Offline", 
+                    claimedBy: isEnemy ? claims[id]?.playerName || null : null, 
+                    estStats: est, 
+                    hits: statsCache[id]?.hits || hitsCount[id] || 0, 
+                    intelScore, 
+                    isManual: !!manualStats[id] 
+                };
             });
         };
         res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true) });
