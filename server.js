@@ -139,13 +139,12 @@ app.post('/api/update-stats', (req, res) => {
     res.json({ success: true });
 });
 
-// --- CORRECTED PAYOUT CALCULATOR LOGIC ---
+// --- ENHANCED PAYOUT CALCULATOR: REPORT MERGED WITH ATTACK LOGS ---
 app.get('/api/past-war', async (req, res) => {
     const { apiKey, reportId } = req.query;
     if (!apiKey || !reportId) return res.status(400).json({ error: "Missing API Key or Report ID" });
 
     try {
-        // Step 1: Get the Total Rewards & War Info
         const [userRes, reportRes, itemsRes] = await Promise.all([
             fetch(`https://api.torn.com/user/?selections=profile&key=${apiKey}`),
             fetch(`https://api.torn.com/torn/${reportId}?selections=rankedwarreport&key=${apiKey}`),
@@ -166,7 +165,7 @@ app.get('/api/past-war', async (req, res) => {
         const myFactionWarData = reportData.rankedwarreport.factions[myFacId];
         if (!myFactionWarData) return res.status(400).json({ error: "Your faction was not part of this Ranked War Report." });
 
-        // Value Caches (The Gross Pay)
+        // Calculate Gross Value
         let totalCacheValue = 0;
         let cachesWon = [];
 
@@ -188,22 +187,63 @@ app.get('/api/past-war', async (req, res) => {
             }
         }
 
-        // Step 2: Get Individual Member Contributions DIRECTLY from the Report
+        // Fetch Recent Attack Logs to scan for Assists and Retaliations
+        let detailedHits = {};
+        try {
+            const attacksRes = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${apiKey}`);
+            const attacksData = await attacksRes.json();
+            
+            if (attacksData.attacks) {
+                const warStart = reportData.rankedwarreport.war.start;
+                const warEnd = reportData.rankedwarreport.war.end || Math.floor(Date.now() / 1000);
+                const allFactions = Object.keys(reportData.rankedwarreport.factions);
+                const enemyFacId = allFactions.find(id => id !== myFacId);
+
+                for (let [attackId, attack] of Object.entries(attacksData.attacks)) {
+                    if (attack.timestamp_ended >= warStart && attack.timestamp_ended <= warEnd) {
+                        if (attack.attacker_faction.toString() === myFacId && attack.defender_faction.toString() === enemyFacId) {
+                            const aId = attack.attacker_id.toString();
+                            if (!detailedHits[aId]) detailedHits[aId] = { assists: 0, retails: 0, full: 0 };
+                            
+                            if (attack.result === 'Assist') {
+                                detailedHits[aId].assists++;
+                            } else if (['Hospitalized', 'Mugged', 'Left'].includes(attack.result)) {
+                                if (attack.modifiers && attack.modifiers.retaliation > 1) {
+                                    detailedHits[aId].retails++;
+                                } else {
+                                    detailedHits[aId].full++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.log("Failed to fetch detailed attack logs, defaulting to standard report.");
+        }
+
+        // Merge Raw Logs with Official Permanent Report
         const members = myFactionWarData.members || {};
         let formattedMembers = [];
         
         for (let [id, m] of Object.entries(members)) {
             if (m.attacks > 0 || m.score > 0) {
+                let details = detailedHits[id] || { assists: 0, retails: 0, full: m.attacks };
+                let hasFullLogs = (details.full + details.retails + details.assists) > 0;
+
                 formattedMembers.push({
                     id,
                     name: m.name,
                     attacks: m.attacks || 0,
-                    score: m.score || 0
+                    score: m.score || 0,
+                    assists: hasFullLogs ? details.assists : 0,
+                    retails: hasFullLogs ? details.retails : 0,
+                    standard: hasFullLogs ? details.full : m.attacks,
+                    logsFound: hasFullLogs
                 });
             }
         }
 
-        // Sort by highest score descending
         formattedMembers.sort((a, b) => b.score - a.score);
 
         res.json({ 
@@ -222,6 +262,7 @@ app.get('/api/past-war', async (req, res) => {
 });
 
 app.get('/api/warboard', async (req, res) => {
+    // ... [Rest of Warboard Code is untouched] ...
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
         let enemyId = req.query.enemyFaction && req.query.enemyFaction !== "null" && req.query.enemyFaction !== "" ? req.query.enemyFaction : null;
@@ -234,9 +275,7 @@ app.get('/api/warboard', async (req, res) => {
         ]);
 
         if (myData.error) return res.status(400).json({ error: "Invalid API Key" });
-
         if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
-        
         if (enemyId && Object.keys(enemyDataResult.members || {}).length === 0) {
              enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} }));
         }
