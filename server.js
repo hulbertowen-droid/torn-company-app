@@ -165,7 +165,6 @@ app.get('/api/past-war', async (req, res) => {
         const myFactionWarData = reportData.rankedwarreport.factions[myFacId];
         if (!myFactionWarData) return res.status(400).json({ error: "Your faction was not part of this Ranked War Report." });
 
-        // Calculate Gross Value
         let totalCacheValue = 0;
         let cachesWon = [];
 
@@ -174,25 +173,26 @@ app.get('/api/past-war', async (req, res) => {
                 const itemMarketData = itemsData.items ? itemsData.items[itemId] : null;
                 const marketValue = itemMarketData ? itemMarketData.market_value : 0;
                 const quantity = itemInfo.quantity || 0;
-                
+
                 const lineTotal = marketValue * quantity;
                 totalCacheValue += lineTotal;
-                
+
                 cachesWon.push({
                     name: itemInfo.name || (itemMarketData ? itemMarketData.name : "Unknown Item"),
-                    quantity: quantity,
-                    marketValue: marketValue,
+                    quantity,
+                    marketValue,
                     totalValue: lineTotal
                 });
             }
         }
 
-        // Fetch Recent Attack Logs to scan for Assists and Retaliations
+        // ✅ FIXED ASSISTS / RETALIATIONS BLOCK
         let detailedHits = {};
+
         try {
             const attacksRes = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${apiKey}`);
             const attacksData = await attacksRes.json();
-            
+
             if (attacksData.attacks) {
                 const warStart = reportData.rankedwarreport.war.start;
                 const warEnd = reportData.rankedwarreport.war.end || Math.floor(Date.now() / 1000);
@@ -200,19 +200,34 @@ app.get('/api/past-war', async (req, res) => {
                 const enemyFacId = allFactions.find(id => id !== myFacId);
 
                 for (let [attackId, attack] of Object.entries(attacksData.attacks)) {
+
                     if (attack.timestamp_ended >= warStart && attack.timestamp_ended <= warEnd) {
-                        if (attack.attacker_faction.toString() === myFacId && attack.defender_faction.toString() === enemyFacId) {
+
+                        if (
+                            attack.attacker_faction?.toString() === myFacId &&
+                            attack.defender_faction?.toString() === enemyFacId
+                        ) {
+
                             const aId = attack.attacker_id.toString();
-                            if (!detailedHits[aId]) detailedHits[aId] = { assists: 0, retails: 0, full: 0 };
-                            
-                            if (attack.result === 'Assist') {
+                            if (!detailedHits[aId]) {
+                                detailedHits[aId] = { assists: 0, retails: 0, full: 0 };
+                            }
+
+                            if (attack.assist === true || attack.result === 'Assist') {
                                 detailedHits[aId].assists++;
-                            } else if (['Hospitalized', 'Mugged', 'Left'].includes(attack.result)) {
-                                if (attack.modifiers && attack.modifiers.retaliation > 1) {
-                                    detailedHits[aId].retails++;
-                                } else {
-                                    detailedHits[aId].full++;
-                                }
+                                continue;
+                            }
+
+                            const isRetaliation =
+                                attack.modifiers?.retaliation > 0 ||
+                                attack.result?.toLowerCase?.().includes('retaliation');
+
+                            if (isRetaliation) {
+                                detailedHits[aId].retails++;
+                            } else if (
+                                ['Hospitalized', 'Mugged', 'Left'].includes(attack.result)
+                            ) {
+                                detailedHits[aId].full++;
                             }
                         }
                     }
@@ -222,10 +237,9 @@ app.get('/api/past-war', async (req, res) => {
             console.log("Failed to fetch detailed attack logs, defaulting to standard report.");
         }
 
-        // Merge Raw Logs with Official Permanent Report
         const members = myFactionWarData.members || {};
         let formattedMembers = [];
-        
+
         for (let [id, m] of Object.entries(members)) {
             if (m.attacks > 0 || m.score > 0) {
                 let details = detailedHits[id] || { assists: 0, retails: 0, full: m.attacks };
@@ -250,12 +264,13 @@ app.get('/api/past-war', async (req, res) => {
             success: true, 
             members: formattedMembers,
             rewards: {
-                totalCacheValue: totalCacheValue,
+                totalCacheValue,
                 caches: cachesWon,
                 points: myFactionWarData.rewards?.points || 0,
                 respect: myFactionWarData.rewards?.respect || 0
             }
         });
+
     } catch (err) {
         res.status(500).json({ error: "Server error fetching past war data." });
     }
@@ -335,6 +350,7 @@ app.get('/api/warboard', async (req, res) => {
         };
 
         res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId, graphData, isRankedWar });
+
     } catch (err) { 
         res.status(500).json({ error: "warboard failed" }); 
     }
