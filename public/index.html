@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Spider-Verse Warboard</title>
-    <!-- Chart.js CDN for Graphs -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { 
@@ -75,10 +74,8 @@
         .btn-icon { background: rgba(0,0,0,0.3); border: none; color: white; border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 0.9em; }
         .btn-icon:hover { background: rgba(0,0,0,0.6); }
 
-        /* GRAPH CONTAINER */
         #chart-container { max-width: 1200px; margin: 30px auto; background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #2f3542; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
         
-        /* MODAL & PRIVACY STYLES */
         #modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
         #modal-box { background: var(--card); padding: 30px; border-radius: 12px; border: 1px solid #2f3542; width: 90%; max-width: 450px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
         #modal-box h2 { border-bottom: none; color: var(--text-main); margin-bottom: 20px; font-size: 1.5em; }
@@ -115,13 +112,13 @@
         </div>
     </div>
 
-    <!-- GRAPH UI -->
+    <!-- GRAPH UI (Added Message Div for Warnings) -->
     <div id="chart-container">
         <h2 style="border: none; text-align: center; margin-bottom: 20px; font-size: 1.2em; color: var(--text-main);">📊 24-Hour Faction Hit Tracker</h2>
+        <div id="chart-message" style="text-align:center; color: var(--text-dim); display:none; margin-bottom: 10px;"></div>
         <canvas id="hitsChart"></canvas>
     </div>
 
-    <!-- SETTINGS MODAL -->
     <div id="modal-overlay">
         <div id="modal-box">
             <h2>Warboard Setup</h2>
@@ -130,7 +127,7 @@
                 <input type="text" id="inp-name" placeholder="e.g. SpiderMan">
             </div>
             <div class="input-group">
-                <label>Your Torn API Key</label>
+                <label>Your Torn API Key (Requires Limited Access)</label>
                 <input type="password" id="inp-key" placeholder="16-character key">
             </div>
             <div class="input-group">
@@ -150,7 +147,7 @@
 let myName = localStorage.getItem("warboard_name") || "";
 let myKey = localStorage.getItem("warboard_apikey") || "";
 let enemyFac = localStorage.getItem("warboard_enemy") || "";
-let hitsChart; // Chart.js instance
+let hitsChart; 
 
 if (!myName || !myKey) {
     openModal();
@@ -281,11 +278,29 @@ function updateTimers() {
 }
 setInterval(updateTimers, 1000);
 
-// --- GRAPH RENDERER ---
-function renderGraph(graphData) {
-    if (!graphData || graphData.length === 0) return;
+// --- GRAPH RENDERER WITH ERROR HANDLING ---
+function renderGraph(graphData, attacksError) {
+    const msgDiv = document.getElementById('chart-message');
+    const canvas = document.getElementById('hitsChart');
 
-    const ctx = document.getElementById('hitsChart').getContext('2d');
+    if (attacksError) {
+        msgDiv.style.display = "block";
+        msgDiv.innerHTML = `<span style="color: var(--red);">⚠️ API Error: ${attacksError} <br><br> Your API key needs Limited/Full Access to view faction attacks.</span>`;
+        canvas.style.display = "none";
+        return;
+    }
+
+    if (!graphData || graphData.length === 0) {
+        msgDiv.style.display = "block";
+        msgDiv.innerText = "No hits recorded by these members in the last 24 hours.";
+        canvas.style.display = "none";
+        return;
+    }
+
+    msgDiv.style.display = "none";
+    canvas.style.display = "block";
+
+    const ctx = canvas.getContext('2d');
     const labels = graphData.map(d => d.name);
     const hitsMade = graphData.map(d => d.made);
     const hitsReceived = graphData.map(d => d.received);
@@ -301,18 +316,8 @@ function renderGraph(graphData) {
             data: {
                 labels: labels,
                 datasets: [
-                    {
-                        label: 'Hits Made',
-                        data: hitsMade,
-                        backgroundColor: '#2ed573',
-                        borderRadius: 4
-                    },
-                    {
-                        label: 'Hits Received',
-                        data: hitsReceived,
-                        backgroundColor: '#ff4757',
-                        borderRadius: 4
-                    }
+                    { label: 'Hits Made', data: hitsMade, backgroundColor: '#2ed573', borderRadius: 4 },
+                    { label: 'Hits Received', data: hitsReceived, backgroundColor: '#ff4757', borderRadius: 4 }
                 ]
             },
             options: {
@@ -352,7 +357,9 @@ async function load(){
 
         syncList("friendly", data.friendly || [], false);
         syncList("enemy", data.enemy || [], true);
-        renderGraph(data.graphData);
+        
+        // Pass both graph data and the error state to the renderer
+        renderGraph(data.graphData, data.attacksError);
         
     } catch(e) { console.error("Update failed, retrying on next tick...", e); }
 }
