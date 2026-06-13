@@ -100,7 +100,6 @@ setInterval(async () => {
                 statsCache[id] = { stats: p.bs_estimate, time: Date.now() };
             });
         } else {
-            console.error("❌ FF Scouter API Error:", data);
             batch.forEach(id => { statsCache[id] = { stats: null, time: Date.now() }; });
         }
     } catch (err) { 
@@ -156,8 +155,8 @@ app.get('/api/warboard', async (req, res) => {
 
         if (!userKey) return res.status(400).json({ error: "No API Key provided" });
 
-        // Added attacks selection to grab hit logs
-        const [myData, enemyDataResult, attacksData] = await Promise.all([
+        // FIX: Swapped to 'let' so we can assign the enemy data dynamically
+        let [myData, enemyDataResult, attacksData] = await Promise.all([
             fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })),
             enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} }),
             fetch(`https://api.torn.com/faction/?selections=attacks&key=${userKey}`).then(r => r.json()).catch(() => ({ attacks: {} }))
@@ -166,7 +165,9 @@ app.get('/api/warboard', async (req, res) => {
         if (myData.error) return res.status(400).json({ error: "Invalid API Key" });
 
         if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
-        if (!enemyDataResult.members && enemyId) {
+        
+        // FIX: Properly check if the members object is empty
+        if (enemyId && Object.keys(enemyDataResult.members || {}).length === 0) {
              enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} }));
         }
 
@@ -179,14 +180,13 @@ app.get('/api/warboard', async (req, res) => {
             }
         });
 
-        // Parse Hits for the Graph (Last 24 Hours)
         let hitsStats = {};
         friendlyIds.forEach(id => hitsStats[id] = { made: 0, received: 0, name: myData.members[id].name });
 
         const now = Math.floor(Date.now() / 1000);
         if (attacksData.attacks) {
             Object.values(attacksData.attacks).forEach(att => {
-                if (att.timestamp > (now - 86400)) { // 24-hour limit
+                if (att.timestamp > (now - 86400)) { 
                     const attacker = att.attacker_id ? att.attacker_id.toString() : null;
                     const defender = att.defender_id ? att.defender_id.toString() : null;
 
@@ -196,9 +196,11 @@ app.get('/api/warboard', async (req, res) => {
             });
         }
 
-        // Format for Chart.js (Only include people with activity to keep the graph clean)
         let graphData = Object.values(hitsStats).filter(p => p.made > 0 || p.received > 0);
-        graphData.sort((a, b) => b.made - a.made); // Sort by highest hitters
+        graphData.sort((a, b) => b.made - a.made); 
+        
+        // Expose attack log permissions error to the frontend if it exists
+        let attacksError = attacksData.error ? attacksData.error.error : null;
 
         const parseMembers = (data, isEnemy = false) => {
             if (!data.members) return [];
@@ -221,7 +223,7 @@ app.get('/api/warboard', async (req, res) => {
             });
         };
 
-        res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId, graphData });
+        res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId, graphData, attacksError });
     } catch (err) { 
         res.status(500).json({ error: "warboard failed" }); 
     }
