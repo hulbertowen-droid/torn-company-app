@@ -10,57 +10,40 @@ app.use(express.static('public'));
 const PORT = process.env.PORT || 3000;
 const TORN_API_KEY = process.env.TORN_API_KEY;
 const FACTION_ID = process.env.FACTION_ID || ''; 
-const FFSCOUTER_API_KEY = process.env.FFSCOUTER_API_KEY || ''; 
+const YATA_FACTION_KEY = process.env.YATA_FACTION_KEY || ''; 
 
 let claims = {};
 let enemyList = []; 
-let ffEstimates = {}; 
+let yataEstimates = {};
 
 // ==========================================
-// BACKGROUND FF SCOUTER (YATA / FF DATABASE PULL)
+// BACKGROUND YATA FACTION TARGET PULLER
 // ==========================================
-let currentEnemyIndex = 0;
-
+// This pulls your entire Faction Target list from YATA in one swoop.
 setInterval(async () => {
-    // If no faction is loaded or no API key is provided, skip the loop
-    if (enemyList.length === 0 || !FFSCOUTER_API_KEY) return;
-
-    const enemyId = enemyList[currentEnemyIndex];
+    if (!YATA_FACTION_KEY) return;
 
     try {
-        // FIXED: The correct YATA endpoint for Battle Stats (bs)
-        const res = await fetch(`https://yata.yt/api/v1/bs/${enemyId}/?key=${FFSCOUTER_API_KEY}`);
+        // We use the export endpoint to grab all targets associated with this VIP key
+        const res = await fetch(`https://yata.yt/api/v1/targets/export/?key=${YATA_FACTION_KEY}`);
         
         if (res.ok) {
             const data = await res.json();
             
-            // Smart Extractor: Finds the stats regardless of how YATA nests the data
-            let finalStats = 0;
-            
-            if (data.total) {
-                finalStats = data.total;
-            } else if (data.stats && data.stats.total) {
-                finalStats = data.stats.total;
-            } else if (data.strength && data.speed && data.defense && data.dexterity) {
-                finalStats = data.strength + data.speed + data.defense + data.dexterity;
-            } else if (data.target && data.target.battle_score) {
-                finalStats = Math.pow(data.target.battle_score, 2);
-            }
-            
-            if (finalStats > 0) {
-                ffEstimates[enemyId] = finalStats;
+            // Loop through YATA's target list and extract the crowdsourced Battle Scores
+            if (data && data.targets) {
+                for (const [id, targetData] of Object.entries(data.targets)) {
+                    if (targetData.battle_score) {
+                        // Square the battle score to get the raw stat estimate
+                        yataEstimates[id] = Math.pow(targetData.battle_score, 2);
+                    }
+                }
             }
         }
     } catch (e) {
-        console.error(`FF Scouter API failed for ID ${enemyId}`);
+        console.error("Failed to sync with YATA Faction Targets.");
     }
-
-    currentEnemyIndex++;
-    if (currentEnemyIndex >= enemyList.length) {
-        currentEnemyIndex = 0;
-    }
-}, 3000); // 1 enemy every 3 seconds to stay under rate limits
-
+}, 30000); // Syncs the master list once every 30 seconds
 
 // ==========================================
 // WARBOARD ENDPOINTS
@@ -121,8 +104,8 @@ app.get('/api/warboard', async (req, res) => {
                         until: member.status.until,
                         claimedBy: isEnemy && claims[id] ? claims[id].playerName : null,
                         onlineStatus: lastAction,
-                        // Pulls strictly from the crowdsourced YATA/FF database!
-                        estStats: isEnemy ? (ffEstimates[id] || null) : null 
+                        // Pulls strictly from our YATA Faction sync
+                        estStats: isEnemy ? (yataEstimates[id] || null) : null 
                     });
                 }
             }
