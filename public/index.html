@@ -1,174 +1,107 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spider-Verse Warboard</title>
-    <style>
-        :root {
-            --spidey-red: #E32832;
-            --spidey-blue: #1B1676;
-            --spidey-web: #ffffff;
-            --bg-dark: #121212;
-            --card-bg: #1a1a2e;
-            --item-bg: #232342;
-        }
+<meta charset="UTF-8">
+<title>Spider-Verse Warboard</title>
 
-        body { background-color: var(--bg-dark); color: var(--spidey-web); font-family: 'Segoe UI', sans-serif; padding: 20px; margin: 0; }
-        h1 { text-align: center; color: var(--spidey-red); border-bottom: 3px solid var(--spidey-blue); padding-bottom: 10px; text-transform: uppercase; letter-spacing: 2px; text-shadow: 2px 2px #000; }
-        .board-container { display: flex; justify-content: space-around; margin-top: 30px; gap: 20px; }
-        .column { background-color: var(--card-bg); border-radius: 8px; padding: 20px; width: 48%; border: 2px solid var(--spidey-blue); }
-        h2 { text-align: center; margin-top: 0; padding-bottom: 10px; border-bottom: 1px solid var(--spidey-blue); }
-        .friendly-title { color: #3498db; }
-        .enemy-title { color: var(--spidey-red); }
-        ul { list-style-type: none; padding: 0; margin: 0; }
-        li { background-color: var(--item-bg); margin-bottom: 8px; padding: 12px 15px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--spidey-red); }
-        
-        .status-ready { color: #2ecc71; font-weight: bold; }
-        .countdown { color: var(--spidey-red); font-weight: bold; font-family: monospace; font-size: 1.8em; }
-        .profile-link { color: var(--spidey-web); text-decoration: none; font-weight: 500; }
-        .profile-link:hover { color: var(--spidey-red); text-decoration: underline; }
-        
-        /* The Math Estimator Badge */
-        .stat-badge { color: #feca3e; font-size: 0.8em; margin-left: 8px; font-weight: bold; background: rgba(254, 202, 62, 0.1); padding: 2px 6px; border-radius: 4px; border: 1px solid #feca3e;}
-        
-        .btn-claim { background-color: var(--spidey-red); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
-        .btn-claim:hover { background-color: #b71c1c; }
-        .btn-unclaim { background-color: var(--spidey-blue); color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; }
-        .timestamp { font-size: 0.85em; color: #a4b0be; text-align: center; margin-top: 30px; }
-        .activity-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
-        .dot-online { background-color: #2ecc71; box-shadow: 0 0 6px #2ecc71; }
-        .dot-idle { background-color: #f1c40f; }
-        .dot-offline { background-color: #7f8c8d; }
-        .claimed-badge { background-color: #8e44ad; color: white; padding: 6px 10px; border-radius: 4px; font-size: 0.85em; font-weight: bold; display: inline-flex; align-items: center; gap: 5px;}
-        .action-group { display: flex; align-items: center; gap: 15px; }
-    </style>
+<style>
+body { background:#121212; color:white; font-family:Arial; }
+h1 { text-align:center; color:#E32832; }
+
+.board-container { display:flex; gap:20px; }
+.column { flex:1; background:#1a1a2e; padding:15px; border-radius:8px; }
+
+li { background:#232342; margin:6px 0; padding:10px; border-radius:6px; display:flex; justify-content:space-between; }
+
+.stat-badge { color:#feca3e; font-size:12px; margin-left:8px; }
+
+.btn-claim { background:#E32832; color:white; border:none; padding:5px; }
+.btn-unclaim { background:#1B1676; color:white; padding:5px; border:none; }
+
+.countdown { font-family:monospace; color:#E32832; }
+</style>
 </head>
+
 <body>
 
-    <h1>🕷️ Spider-Verse Warboard 🕷️</h1>
-    
-    <div class="board-container">
-        <div class="column">
-            <h2 class="friendly-title">🛡️ My Faction</h2>
-            <ul id="friendly-list"><li>Loading...</li></ul>
-        </div>
-        <div class="column">
-            <h2 class="enemy-title">⚔️ Enemy Faction</h2>
-            <ul id="enemy-list"><li>Loading...</li></ul>
-        </div>
+<h1>🕷 Spider-Verse Warboard</h1>
+
+<div class="board-container">
+    <div class="column">
+        <h2>Friendly</h2>
+        <ul id="friendly-list"></ul>
     </div>
 
-    <div class="timestamp" id="last-updated">Waiting for server...</div>
+    <div class="column">
+        <h2>Enemy</h2>
+        <ul id="enemy-list"></ul>
+    </div>
+</div>
 
-    <script>
-        let myName = localStorage.getItem('warboard_name');
-        if (!myName) {
-            myName = prompt("Welcome to the Warboard!\nEnter your Torn name to call targets:", "");
-            if (myName) localStorage.setItem('warboard_name', myName);
-        }
+<script>
+let myName = localStorage.getItem("warboard_name") ||
+prompt("Enter Torn name:");
 
-        let friendlyData = [];
-        let enemyData = [];
+localStorage.setItem("warboard_name", myName);
 
-        function sortMembers(members) {
-            return members.sort((a, b) => {
-                if (a.state === 'Okay' && b.state !== 'Okay') return -1;
-                if (b.state === 'Okay' && a.state !== 'Okay') return 1;
-                if (a.state === 'Hospital' && b.state === 'Hospital') return a.until - b.until;
-                if (a.state === 'Hospital' && b.state !== 'Hospital') return -1;
-                if (b.state === 'Hospital' && a.state !== 'Hospital') return 1;
-                return 0; 
-            });
-        }
+let friendlyData = [];
+let enemyData = [];
 
-        // Formats the math into k, m, or b
-        function formatStats(num) {
-            if (!num) return 'Calc...';
-            if (num >= 1000000000) return (num / 1000000000).toFixed(1) + 'b';
-            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'm';
-            if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
-            return Math.floor(num).toString();
-        }
+function formatStats(n) {
+    if (!n) return "Syncing...";
+    if (n > 1e9) return (n/1e9).toFixed(1)+"b";
+    if (n > 1e6) return (n/1e6).toFixed(1)+"m";
+    if (n > 1e3) return (n/1e3).toFixed(1)+"k";
+    return n;
+}
 
-        async function fetchWarboardData() {
-            try {
-                const response = await fetch('/api/warboard'); 
-                const data = await response.json();
-                friendlyData = sortMembers(data.friendly || []);
-                enemyData = sortMembers(data.enemy || []);
-                document.getElementById('last-updated').innerText = `Last Server Sync: ${new Date().toLocaleTimeString()}`;
-                tickCountdowns(); 
-            } catch (error) { console.error("Connection error:", error); }
-        }
+function sortMembers(m) {
+    return m.sort((a,b)=> {
+        const score = p => {
+            let s = 0;
+            if (p.state === "Okay") s += 100;
+            if (p.state === "Hospital") s += 50;
 
-        async function callTarget(enemyId) {
-            if (!myName) return alert("You need to set your name to call targets!");
-            try {
-                await fetch('/api/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enemyId: enemyId, playerName: myName }) });
-                fetchWarboardData();
-            } catch (error) {}
-        }
+            let remain = (p.until || 0) - Math.floor(Date.now()/1000);
+            if (remain > 0) s -= remain/60;
 
-        async function unclaimTarget(enemyId) {
-            try {
-                await fetch('/api/unclaim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enemyId: enemyId, playerName: myName }) });
-                fetchWarboardData();
-            } catch (error) {}
-        }
+            if (p.onlineStatus === "Online") s += 20;
+            if (p.onlineStatus === "Idle") s += 10;
 
-        function generateHTML(members, now, isEnemyColumn) {
-            if (members.length === 0) return '<li>No members found.</li>';
-            
-            return members.map(p => {
-                let dotClass = 'dot-offline';
-                if (p.onlineStatus === 'Online') dotClass = 'dot-online';
-                if (p.onlineStatus === 'Idle') dotClass = 'dot-idle';
+            return s;
+        };
+        return score(b) - score(a);
+    });
+}
 
-                // Display the estimated stats from the backend
-                let statsUI = isEnemyColumn && p.estStats ? `<span class="stat-badge">[Est: ${formatStats(p.estStats)}]</span>` : (isEnemyColumn ? `<span class="stat-badge" style="opacity: 0.5;">[Calc...]</span>` : '');
+async function fetchData(){
+    const res = await fetch("/api/warboard");
+    const data = await res.json();
 
-                let nameLink = `<span class="activity-dot ${dotClass}" title="${p.onlineStatus}"></span><a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank" class="profile-link">${p.name}</a> ${statsUI}`;
-                
-                let claimUI = '';
-                if (isEnemyColumn && (p.state === 'Okay' || p.state === 'Hospital')) {
-                    if (p.claimedBy) {
-                        claimUI = `<span class="claimed-badge">🎯 ${p.claimedBy}</span>` + (p.claimedBy === myName ? ` <button class="btn-unclaim" onclick="unclaimTarget('${p.id}')">✖ Cancel</button>` : '');
-                    } else {
-                        claimUI = `<button class="btn-claim" onclick="callTarget('${p.id}')">Call Target</button>`;
-                    }
-                }
+    friendlyData = sortMembers(data.friendly || []);
+    enemyData = sortMembers(data.enemy || []);
 
-                let timeText = '';
-                if (p.state === 'Hospital') {
-                    let secondsLeft = p.until - now;
-                    if (secondsLeft > 0) {
-                        let h = Math.floor(secondsLeft / 3600);
-                        let m = Math.floor((secondsLeft % 3600) / 60);
-                        let s = secondsLeft % 60;
-                        timeText = `<span class="countdown">` + (h > 0 ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}` : `${m}:${s.toString().padStart(2, '0')}`) + `</span> `;
-                    }
-                }
+    render();
+}
 
-                if (p.state === 'Okay' || (p.state === 'Hospital' && (p.until - now) <= 0)) {
-                    return `<li><span>${nameLink}</span> <div class="action-group"><span class="status-ready">READY</span> ${claimUI}</div></li>`;
-                } else if (p.state === 'Hospital') {
-                    return `<li><span>${nameLink}</span> <div class="action-group">${timeText} ${claimUI}</div></li>`;
-                } else {
-                    return `<li style="opacity: 0.6;"><span>${nameLink}</span> <span class="status-other">${p.state}</span></li>`;
-                }
-            }).join('');
-        }
+function render(){
+    document.getElementById("friendly-list").innerHTML =
+    friendlyData.map(p => `
+        <li>${p.name}</li>
+    `).join("");
 
-        function tickCountdowns() {
-            const now = Math.floor(Date.now() / 1000);
-            document.getElementById('friendly-list').innerHTML = generateHTML(friendlyData, now, false);
-            document.getElementById('enemy-list').innerHTML = generateHTML(enemyData, now, true);
-        }
+    document.getElementById("enemy-list").innerHTML =
+    enemyData.map(p => `
+        <li>
+            ${p.name}
+            ${p.estStats ? `<span class="stat-badge">Est ${formatStats(p.estStats)}</span>` : `<span class="stat-badge">Syncing...</span>`}
+        </li>
+    `).join("");
+}
 
-        fetchWarboardData();
-        setInterval(fetchWarboardData, 15000); 
-        setInterval(tickCountdowns, 1000); 
-    </script>
+setInterval(fetchData, 15000);
+fetchData();
+</script>
+
 </body>
 </html>
