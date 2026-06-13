@@ -112,9 +112,8 @@
         </div>
     </div>
 
-    <!-- GRAPH UI (Added Message Div for Warnings) -->
     <div id="chart-container">
-        <h2 style="border: none; text-align: center; margin-bottom: 20px; font-size: 1.2em; color: var(--text-main);">📊 24-Hour Faction Hit Tracker</h2>
+        <h2 id="chart-title" style="border: none; text-align: center; margin-bottom: 20px; font-size: 1.2em; color: var(--text-main);">📊 Current War Performance</h2>
         <div id="chart-message" style="text-align:center; color: var(--text-dim); display:none; margin-bottom: 10px;"></div>
         <canvas id="hitsChart"></canvas>
     </div>
@@ -149,9 +148,7 @@ let myKey = localStorage.getItem("warboard_apikey") || "";
 let enemyFac = localStorage.getItem("warboard_enemy") || "";
 let hitsChart; 
 
-if (!myName || !myKey) {
-    openModal();
-}
+if (!myName || !myKey) { openModal(); }
 
 function openModal() {
     document.getElementById("inp-name").value = myName;
@@ -194,14 +191,7 @@ function getBadgeHTML(p) {
 }
 
 function buildPlayerHTML(p, isEnemy) {
-    let leftHTML = `
-        <div class="player-info">
-            <span class="dot dot-${p.onlineStatus.toLowerCase()}"></span>
-            <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a>
-            ${getBadgeHTML(p)}
-        </div>
-    `;
-
+    let leftHTML = `<div class="player-info"><span class="dot dot-${p.onlineStatus.toLowerCase()}"></span><a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a> ${getBadgeHTML(p)}</div>`;
     let statusText = p.state === "Okay" ? "Okay" : (p.state !== "Hospital" ? p.statusDescription : "");
     let timerHTML = p.state === "Hospital" ? `<span class="timer-hosp" data-until="${p.until}"></span>` : "";
     let actionsHTML = "";
@@ -214,16 +204,10 @@ function buildPlayerHTML(p, isEnemy) {
         }
 
         let backupHTML = "";
-        if (p.needsBackup) {
-            backupHTML = `<div class="badge-sos">🆘 ${p.needsBackup} <button class="btn-icon" onclick="unbackup('${p.id}')">✖</button></div>`;
-        } else if (canSOS) {
-            backupHTML = `<button class="btn btn-sos" onclick="backup('${p.id}')">SOS</button>`;
-        }
+        if (p.needsBackup) { backupHTML = `<div class="badge-sos">🆘 ${p.needsBackup} <button class="btn-icon" onclick="unbackup('${p.id}')">✖</button></div>`; } 
+        else if (canSOS) { backupHTML = `<button class="btn btn-sos" onclick="backup('${p.id}')">SOS</button>`; }
 
-        let claimHTML = p.claimedBy 
-            ? `<div class="badge badge-claim">🎯 ${p.claimedBy} ${p.claimedBy===myName ? `<button class="btn-icon" onclick="unclaim('${p.id}')">✖</button>` : ""}</div>`
-            : `<button class="btn btn-call" onclick="claim('${p.id}')">Call</button>`;
-
+        let claimHTML = p.claimedBy ? `<div class="badge badge-claim">🎯 ${p.claimedBy} ${p.claimedBy===myName ? `<button class="btn-icon" onclick="unclaim('${p.id}')">✖</button>` : ""}</div>` : `<button class="btn btn-call" onclick="claim('${p.id}')">Call</button>`;
         actionsHTML = `${backupHTML} ${claimHTML}`;
     }
 
@@ -247,17 +231,10 @@ function syncList(containerId, list, isEnemy) {
         const id = (isEnemy ? 'e-' : 'f-') + p.id;
         let li = currentNodes.get(id);
         
-        if (!li) {
-            li = document.createElement('li');
-            li.id = id;
-            li.className = 'list-item';
-        }
+        if (!li) { li = document.createElement('li'); li.id = id; li.className = 'list-item'; }
 
         const newHTML = buildPlayerHTML(p, isEnemy);
-        if (li.dataset.html !== newHTML) {
-            li.innerHTML = newHTML;
-            li.dataset.html = newHTML; 
-        }
+        if (li.dataset.html !== newHTML) { li.innerHTML = newHTML; li.dataset.html = newHTML; }
         
         container.appendChild(li); 
         currentNodes.delete(id);
@@ -278,21 +255,21 @@ function updateTimers() {
 }
 setInterval(updateTimers, 1000);
 
-// --- GRAPH RENDERER WITH ERROR HANDLING ---
-function renderGraph(graphData, attacksError) {
+function renderGraph(graphData, attacksError, isRankedWar) {
     const msgDiv = document.getElementById('chart-message');
     const canvas = document.getElementById('hitsChart');
+    const title = document.getElementById('chart-title');
 
-    if (attacksError) {
+    if (attacksError && !isRankedWar) {
         msgDiv.style.display = "block";
-        msgDiv.innerHTML = `<span style="color: var(--red);">⚠️ API Error: ${attacksError} <br><br> Your API key needs Limited/Full Access to view faction attacks.</span>`;
+        msgDiv.innerHTML = `<span style="color: var(--red);">⚠️ API Error: ${attacksError} <br><br> Your API key needs Limited Access to view logs.</span>`;
         canvas.style.display = "none";
         return;
     }
 
     if (!graphData || graphData.length === 0) {
         msgDiv.style.display = "block";
-        msgDiv.innerText = "No hits recorded by these members in the last 24 hours.";
+        msgDiv.innerText = "No hits recorded yet.";
         canvas.style.display = "none";
         return;
     }
@@ -300,35 +277,37 @@ function renderGraph(graphData, attacksError) {
     msgDiv.style.display = "none";
     canvas.style.display = "block";
 
+    title.innerText = isRankedWar ? "📊 Ranked War Performance" : "📊 Recent Activity Tracker";
+
     const ctx = canvas.getContext('2d');
     const labels = graphData.map(d => d.name);
     const hitsMade = graphData.map(d => d.made);
-    const hitsReceived = graphData.map(d => d.received);
+    
+    // If it's a Ranked War, show Score. If not, don't show the second bar since we aren't tracking received anymore.
+    const secondaryLabel = isRankedWar ? 'War Score Contributed' : null;
+    const secondaryData = isRankedWar ? graphData.map(d => d.score) : null;
+
+    let datasets = [{ label: 'Successful Attacks', data: hitsMade, backgroundColor: '#2ed573', borderRadius: 4 }];
+    
+    if (isRankedWar) {
+        datasets.push({ label: secondaryLabel, data: secondaryData, backgroundColor: '#ffa502', borderRadius: 4 });
+    }
 
     if (hitsChart) {
         hitsChart.data.labels = labels;
-        hitsChart.data.datasets[0].data = hitsMade;
-        hitsChart.data.datasets[1].data = hitsReceived;
+        hitsChart.data.datasets = datasets;
         hitsChart.update();
     } else {
         hitsChart = new Chart(ctx, {
             type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [
-                    { label: 'Hits Made', data: hitsMade, backgroundColor: '#2ed573', borderRadius: 4 },
-                    { label: 'Hits Received', data: hitsReceived, backgroundColor: '#ff4757', borderRadius: 4 }
-                ]
-            },
+            data: { labels: labels, datasets: datasets },
             options: {
                 responsive: true,
                 scales: {
                     y: { beginAtZero: true, grid: { color: '#2f3542' }, ticks: { color: '#a1aab5' } },
                     x: { grid: { display: false }, ticks: { color: '#a1aab5' } }
                 },
-                plugins: {
-                    legend: { labels: { color: '#f1f2f6', font: { family: "'Segoe UI', sans-serif" } } }
-                }
+                plugins: { legend: { labels: { color: '#f1f2f6', font: { family: "'Segoe UI', sans-serif" } } } }
             }
         });
     }
@@ -336,31 +315,22 @@ function renderGraph(graphData, attacksError) {
 
 async function updateStats(id) { 
     let input = prompt("Enter ACTUAL battle stats:"); 
-    if(input && !isNaN(input)) { 
-        await fetch("/api/update-stats", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enemyId:id, stats:input})}); 
-        load(); 
-    } 
+    if(input && !isNaN(input)) { await fetch("/api/update-stats", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enemyId:id, stats:input})}); load(); } 
 }
 
 async function load(){
     if (!myKey) return; 
-    
     try {
         const res = await fetch(`/api/warboard?apiKey=${myKey}&enemyFaction=${enemyFac}`);
         if (!res.ok) return; 
         const data = await res.json();
         if (data.error) return console.error(data.error); 
 
-        if (data.detectedEnemyId) {
-            document.getElementById("enemy-label").innerText = `(Target: ${data.detectedEnemyId})`;
-        }
+        if (data.detectedEnemyId) { document.getElementById("enemy-label").innerText = `(Target: ${data.detectedEnemyId})`; }
 
         syncList("friendly", data.friendly || [], false);
         syncList("enemy", data.enemy || [], true);
-        
-        // Pass both graph data and the error state to the renderer
-        renderGraph(data.graphData, data.attacksError);
-        
+        renderGraph(data.graphData, data.attacksError, data.isRankedWar);
     } catch(e) { console.error("Update failed, retrying on next tick...", e); }
 }
 
