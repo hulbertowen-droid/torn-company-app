@@ -13,6 +13,7 @@ const FACTION_ID = process.env.FACTION_ID || "";
 const FF_SCOUTER_KEY = process.env.FF_SCOUTER_KEY || "";
 
 let claims = {};
+let backups = {}; // Tracks who called for backup
 let statsCache = {}; 
 let manualStats = {}; 
 let statQueue = [];
@@ -44,19 +45,15 @@ function computeWarIntel(p, cache = {}) {
     return Math.floor(score * (0.9 + Math.random() * 0.2));
 }
 
-// FF Scouter Batch Processor with Error Logging
 setInterval(async () => {
     if (!statQueue.length || isProcessingQueue) return;
     isProcessingQueue = true;
 
     const batch = statQueue.splice(0, 40);
 
-    // If no key exists, fallback to '?' so it doesn't get stuck loading
     if (!FF_SCOUTER_KEY) {
         console.warn("⚠️ No FF_SCOUTER_KEY found. Marking batch as 'no data'.");
-        batch.forEach(id => {
-            statsCache[id] = { stats: null, time: Date.now() };
-        });
+        batch.forEach(id => { statsCache[id] = { stats: null, time: Date.now() }; });
         isProcessingQueue = false;
         return;
     }
@@ -70,20 +67,13 @@ setInterval(async () => {
         if (Array.isArray(data)) {
             data.forEach(p => {
                 const id = p.player_id.toString();
-                statsCache[id] = { 
-                    stats: p.bs_estimate, // Real number or null
-                    time: Date.now() 
-                };
+                statsCache[id] = { stats: p.bs_estimate, time: Date.now() };
             });
         } else {
-            // If FF Scouter returns an error (like Invalid Key), log it and break the loop
             console.error("❌ FF Scouter API Error:", data);
-            batch.forEach(id => {
-                statsCache[id] = { stats: null, time: Date.now() };
-            });
+            batch.forEach(id => { statsCache[id] = { stats: null, time: Date.now() }; });
         }
     } catch (err) { 
-        // Only retry if it was a hard network failure
         console.error("❌ Network error reaching FF Scouter:", err.message);
         statQueue.push(...batch); 
     }
@@ -93,6 +83,7 @@ setInterval(async () => {
 
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
+// --- CLAIM ROUTES ---
 app.post('/api/claim', (req, res) => {
     const { enemyId, playerName } = req.body;
     if (!enemyId || !playerName) return res.status(400).json({ error: "Missing data" });
@@ -108,6 +99,20 @@ app.post('/api/unclaim', (req, res) => {
         return res.json({ success: true });
     }
     res.status(400).json({ error: "Cannot unclaim" });
+});
+
+// --- BACKUP ROUTES ---
+app.post('/api/backup', (req, res) => {
+    const { enemyId, playerName } = req.body;
+    if (!enemyId || !playerName) return res.status(400).json({ error: "Missing data" });
+    backups[enemyId] = { playerName, time: Date.now() };
+    res.json({ success: true });
+});
+
+app.post('/api/unbackup', (req, res) => {
+    const { enemyId } = req.body;
+    delete backups[enemyId]; // Anyone can clear a backup once it's handled, or just the requester. Leaving it open so helpers can clear it.
+    res.json({ success: true });
 });
 
 app.post('/api/update-stats', (req, res) => {
@@ -131,7 +136,6 @@ app.get('/api/warboard', async (req, res) => {
         const friendlyIds = new Set(Object.keys(myData.members || {}));
         const enemyIds = new Set(Object.keys(enemyDataResult.members || {}));
 
-        // Queue IDs that are un-cached or older than 1 hour
         [...friendlyIds, ...enemyIds].forEach(id => {
             if (!statsCache[id] || (Date.now() - statsCache[id].time) > 3600000) {
                 if (!statQueue.includes(id)) statQueue.push(id);
@@ -150,6 +154,11 @@ app.get('/api/warboard', async (req, res) => {
 
                 const intelScore = isEnemy ? computeWarIntel({ id, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", estStats: est }, statsCache) : null;
                 
+                // If they are in the hospital, automatically clear their backup request
+                if (isEnemy && m.status?.state === "Hospital" && backups[id]) {
+                    delete backups[id];
+                }
+                
                 return { 
                     id, 
                     name: m.name, 
@@ -158,6 +167,7 @@ app.get('/api/warboard', async (req, res) => {
                     statusDescription: m.status?.description || "", 
                     onlineStatus: m.last_action?.status || "Offline", 
                     claimedBy: isEnemy ? claims[id]?.playerName || null : null, 
+                    needsBackup: isEnemy ? backups[id]?.playerName || null : null,
                     estStats: est, 
                     intelScore, 
                     isManual: !!manualStats[id] 
