@@ -12,7 +12,7 @@ const TORN_API_KEY = process.env.TORN_API_KEY;
 const FACTION_ID = process.env.FACTION_ID || "";
 
 let claims = {};
-let statsCache = {};
+let statsCache = {}; // { id: { stats, hits, time } }
 let manualStats = {}; 
 let statQueue = [];
 let isProcessingQueue = false;
@@ -68,7 +68,12 @@ setInterval(async () => {
         const res = await fetch(`https://api.torn.com/user/${id}?selections=personalstats&key=${TORN_API_KEY}`);
         const data = await res.json();
         if (data?.personalstats) {
-            statsCache[id] = { stats: calculateEstimatedStats(data.personalstats), time: Date.now(), retries: 0 };
+            statsCache[id] = { 
+                stats: calculateEstimatedStats(data.personalstats), 
+                hits: data.personalstats.attackswon || 0, 
+                time: Date.now(), 
+                retries: 0 
+            };
         } else if (data?.error && (data.error.code === 2 || data.error.code === 5)) {
             const prev = statsCache[id]?.retries || 0;
             if (prev < 3) {
@@ -108,29 +113,20 @@ app.post('/api/update-stats', (req, res) => {
 
 app.get('/api/warboard', async (req, res) => {
     try {
-        // Fetch faction data PLUS attack logs
-        const myData = await (await fetch(`https://api.torn.com/faction/?selections=basic&key=${TORN_API_KEY}`)).json();
-        let enemyData = { members: {} };
-        let attacksData = { attacks: {} };
+        const [myData, enemyDataResult, attacksData] = await Promise.all([
+            fetch(`https://api.torn.com/faction/?selections=basic&key=${TORN_API_KEY}`).then(r => r.json()),
+            FACTION_ID ? fetch(`https://api.torn.com/faction/${FACTION_ID}?selections=basic&key=${TORN_API_KEY}`).then(r => r.json()) : { members: {} },
+            fetch(`https://api.torn.com/faction/?selections=attacks&key=${TORN_API_KEY}`).then(r => r.json())
+        ]);
 
-        if (FACTION_ID) {
-            // Fetch enemy members and latest attack logs
-            const [eData, aData] = await Promise.all([
-                fetch(`https://api.torn.com/faction/${FACTION_ID}?selections=basic&key=${TORN_API_KEY}`),
-                fetch(`https://api.torn.com/faction/?selections=attacks&key=${TORN_API_KEY}`)
-            ]);
-            enemyData = await eData.json();
-            attacksData = await aData.json();
-
-            const now = Date.now();
-            for (const id of Object.keys(enemyData.members || {})) {
-                if (!statsCache[id] || now - statsCache[id].time > 86400000) {
-                    if (!statQueue.includes(id)) statQueue.push(id);
-                }
+        const now = Date.now();
+        // Queue both friendlies and enemies
+        [...Object.keys(myData.members || {}), ...Object.keys(enemyDataResult.members || {})].forEach(id => {
+            if (!statsCache[id] || now - statsCache[id].time > 1200000) {
+                if (!statQueue.includes(id)) statQueue.push(id);
             }
-        }
+        });
 
-        // Count hits from the attack log
         let hitsCount = {};
         if (attacksData.attacks) {
             Object.values(attacksData.attacks).forEach(att => {
@@ -141,23 +137,12 @@ app.get('/api/warboard', async (req, res) => {
         const parseMembers = (data, isEnemy = false) => {
             if (!data.members) return [];
             return Object.entries(data.members).map(([id, m]) => {
-                const est = isEnemy ? (manualStats[id]?.stats || statsCache[id]?.stats || null) : null;
+                const est = manualStats[id]?.stats || statsCache[id]?.stats || null;
                 const intelScore = isEnemy ? computeWarIntel({ id, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", estStats: est }, statsCache) : null;
-                return { 
-                    id, 
-                    name: m.name, 
-                    state: m.status?.state, 
-                    until: m.status?.until, 
-                    onlineStatus: m.last_action?.status || "Offline", 
-                    claimedBy: isEnemy ? claims[id]?.playerName || null : null, 
-                    estStats: est, 
-                    hits: hitsCount[id] || 0, // Attach hits count
-                    intelScore, 
-                    isManual: !!manualStats[id] 
-                };
+                return { id, name: m.name, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", claimedBy: isEnemy ? claims[id]?.playerName || null : null, estStats: est, hits: statsCache[id]?.hits || hitsCount[id] || 0, intelScore, isManual: !!manualStats[id] };
             });
         };
-        res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyData, true) });
+        res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true) });
     } catch (err) { console.error(err); res.status(500).json({ error: "warboard failed" }); }
 });
 
