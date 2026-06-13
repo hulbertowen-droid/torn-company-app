@@ -3,14 +3,18 @@ const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
 const PORT = process.env.PORT || 3000;
 const TORN_API_KEY = process.env.TORN_API_KEY;
-const FACTION_ID = process.env.FACTION_ID || '';
+const FACTION_ID = process.env.FACTION_ID || "";
 
+/* =========================
+   STATE
+========================= */
 let claims = {};
 let statsCache = {};
 let statQueue = [];
@@ -28,16 +32,23 @@ function calculateEstimatedStats(pstats) {
     const cans = pstats.energydrinkused || 0;
     const ageDays = Math.max(pstats.age || 1, 1);
 
-    const consumableEnergy = (xanax * 250) + (refills * 150) + (cans * 30);
+    const consumableEnergy =
+        (xanax * 250) +
+        (refills * 150) +
+        (cans * 30);
+
     const passiveEnergy = ageDays * 120;
 
     let activityScore = energyUsed + consumableEnergy + passiveEnergy;
 
     let stats = Math.pow(activityScore, 1.18) * 3.2;
+
     stats *= Math.log10(ageDays + 10);
     stats *= (1 + Math.min(xanax / 2000, 0.25));
 
-    return Math.floor(Math.max(5000, Math.min(stats, 5e9)));
+    stats = Math.max(5000, Math.min(stats, 5e9));
+
+    return Math.floor(stats);
 }
 
 /* =========================
@@ -99,30 +110,48 @@ setInterval(async () => {
             };
         } else if (data?.error && (data.error.code === 2 || data.error.code === 5)) {
             const prev = statsCache[id]?.retries || 0;
+
             if (prev < 3) {
                 statQueue.push(id);
-                statsCache[id] = { ...statsCache[id], retries: prev + 1 };
+                statsCache[id] = {
+                    ...statsCache[id],
+                    retries: prev + 1
+                };
             }
         }
-    } catch (e) {
-        console.error(e.message);
+    } catch (err) {
+        console.error("Queue error:", err.message);
     }
 
     isProcessingQueue = false;
 }, 1500);
 
 /* =========================
+   HEALTH CHECK
+========================= */
+app.get('/health', (req, res) => {
+    res.status(200).send("OK");
+});
+
+/* =========================
    CLAIM SYSTEM
 ========================= */
 app.post('/api/claim', (req, res) => {
     const { enemyId, playerName } = req.body;
-    if (!enemyId || !playerName) return res.status(400).json({ error: "Missing data" });
+
+    if (!enemyId || !playerName) {
+        return res.status(400).json({ error: "Missing data" });
+    }
 
     if (claims[enemyId] && claims[enemyId].playerName !== playerName) {
         return res.status(400).json({ error: "Already claimed" });
     }
 
-    claims[enemyId] = { playerName, time: Date.now() };
+    claims[enemyId] = {
+        playerName,
+        time: Date.now()
+    };
+
     res.json({ success: true });
 });
 
@@ -138,23 +167,30 @@ app.post('/api/unclaim', (req, res) => {
 });
 
 /* =========================
-   WARBOARD
+   WARBOARD API
 ========================= */
 app.get('/api/warboard', async (req, res) => {
     try {
-        const myFactionRes = await fetch(`https://api.torn.com/faction/?selections=basic&key=${TORN_API_KEY}`);
+        const myFactionRes = await fetch(
+            `https://api.torn.com/faction/?selections=basic&key=${TORN_API_KEY}`
+        );
+
         const myData = await myFactionRes.json();
 
         let enemyData = { members: {} };
 
         if (FACTION_ID) {
-            const enemyRes = await fetch(`https://api.torn.com/faction/${FACTION_ID}?selections=basic&key=${TORN_API_KEY}`);
+            const enemyRes = await fetch(
+                `https://api.torn.com/faction/${FACTION_ID}?selections=basic&key=${TORN_API_KEY}`
+            );
+
             enemyData = await enemyRes.json();
 
             const now = Date.now();
 
             for (const id of Object.keys(enemyData.members || {})) {
                 const cached = statsCache[id];
+
                 if (!cached || now - cached.time > 86400000) {
                     if (!statQueue.includes(id)) statQueue.push(id);
                 }
@@ -167,13 +203,18 @@ app.get('/api/warboard', async (req, res) => {
             return Object.entries(data.members).map(([id, m]) => {
                 const est = isEnemy ? statsCache[id]?.stats || null : null;
 
-                const intelScore = isEnemy ? computeWarIntel({
-                    id,
-                    state: m.status?.state,
-                    until: m.status?.until,
-                    onlineStatus: m.last_action?.status || "Offline",
-                    estStats: est
-                }, statsCache) : null;
+                const intelScore = isEnemy
+                    ? computeWarIntel(
+                          {
+                              id,
+                              state: m.status?.state,
+                              until: m.status?.until,
+                              onlineStatus: m.last_action?.status || "Offline",
+                              estStats: est
+                          },
+                          statsCache
+                      )
+                    : null;
 
                 return {
                     id,
@@ -189,13 +230,16 @@ app.get('/api/warboard', async (req, res) => {
         };
 
         res.json({
-            friendly: parseMembers(myData),
+            friendly: parseMembers(myData, false),
             enemy: parseMembers(enemyData, true)
         });
 
-    } catch (e) {
+    } catch (err) {
+        console.error(err);
         res.status(500).json({ error: "warboard failed" });
     }
 });
 
-app.listen(PORT, () => console.log(`Server running on ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
