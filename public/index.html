@@ -18,9 +18,9 @@
         li { 
             background: var(--item); margin-bottom: 8px; padding: 12px 16px; border-radius: 8px; 
             display: flex; justify-content: space-between; align-items: center; border: 1px solid #30363d;
-            transition: transform 0.2s;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
-        li:hover { transform: scale(1.01); border-color: var(--red); }
+        li:hover { transform: scale(1.02); border-color: var(--red); }
         .profile { font-weight: 600; color: #fff; text-decoration: none; }
         .badge { background: #21262d; padding: 2px 8px; border-radius: 6px; font-size: 11px; color: var(--gold); border: 1px solid #444; }
         .timer { font-family: monospace; color: var(--red); font-weight: bold; font-size: 1.1em; }
@@ -49,7 +49,9 @@ setInterval(() => {
         if(left > 0) {
             let h = Math.floor(left/3600), m = Math.floor((left%3600)/60), s = left%60;
             el.innerText = h > 0 ? `${h}:${m.toString().padStart(2,"0")}:${s.toString().padStart(2,"0")}` : `${m}:${s.toString().padStart(2,"0")}`;
-        } else el.innerText = "Ready";
+        } else {
+            el.innerText = "Ready";
+        }
     });
 }, 1000);
 
@@ -59,28 +61,33 @@ function format(n){
     return (n/1e3).toFixed(1)+"k";
 }
 
-// Unified Sorting: Hospitalized first (soonest out at top), then Intel/Name
 function sortBoard(list, isEnemy) {
     return list.sort((a,b) => {
+        // Hospital sort: Soonest to get out at top
         if(a.state === "Hospital" && b.state === "Hospital") return a.until - b.until;
         if(a.state === "Hospital") return -1;
         if(b.state === "Hospital") return 1;
+        // Then sort by Intel score if enemy, or alphabetical if friendly
         if(isEnemy) return (b.intelScore || 0) - (a.intelScore || 0);
         return a.name.localeCompare(b.name);
     });
 }
 
+// "Shadow Render" prevents flickering by only updating the DOM if the HTML string actually changes
+let lastFriendly = "";
+let lastEnemy = "";
+
 async function load(){
     const res = await fetch("/api/warboard");
     const data = await res.json();
     
-    document.getElementById("friendly").innerHTML = sortBoard(data.friendly, false).map(p => `
+    let friendlyHTML = sortBoard(data.friendly, false).map(p => `
         <li>
             <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a>
             ${p.state==="Hospital" ? `<span class="timer" data-until="${p.until}"></span>` : ""}
         </li>`).join("");
 
-    document.getElementById("enemy").innerHTML = sortBoard(data.enemy, true).map(p => `
+    let enemyHTML = sortBoard(data.enemy, true).map(p => `
         <li>
             <div>
                 <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a>
@@ -93,6 +100,9 @@ async function load(){
                     : `<button class="call" onclick="claim('${p.id}')">Call</button>`}
             </div>
         </li>`).join("");
+
+    if(friendlyHTML !== lastFriendly) { document.getElementById("friendly").innerHTML = friendlyHTML; lastFriendly = friendlyHTML; }
+    if(enemyHTML !== lastEnemy) { document.getElementById("enemy").innerHTML = enemyHTML; lastEnemy = enemyHTML; }
 }
 
 async function claim(id) { await fetch("/api/claim", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enemyId:id, playerName:myName})}); load(); }
