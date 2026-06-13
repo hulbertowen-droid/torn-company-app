@@ -51,6 +51,9 @@
         #rewards-list { color: var(--text-main); font-size: 0.95em; padding-left: 20px; line-height: 1.8; margin: 0; }
         .rewards-note { font-size: 0.8em; color: var(--text-dim); margin-top: 15px; font-style: italic; }
 
+        /* Warning Box Style */
+        .feature-warning { background: rgba(255, 165, 2, 0.1); border: 1px solid var(--gold); color: var(--gold); padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 0.85em; text-align: center; }
+
         .payout-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.95em; display: none; }
         .payout-table th, .payout-table td { padding: 14px; text-align: left; border-bottom: 1px solid #2f3542; }
         .payout-table th { color: var(--gold); font-weight: 700; text-transform: uppercase; font-size: 0.8em; letter-spacing: 1px; }
@@ -127,6 +130,10 @@
                     <option value="score">War Score Contributed (Respect)</option>
                 </select>
             </div>
+        </div>
+
+        <div class="feature-warning">
+            ⚠️ <strong>Notice:</strong> Assist and Retaliation tracking is currently under maintenance and may not reflect accurate data. Please verify these numbers manually before finalizing payouts.
         </div>
 
         <table class="payout-table" id="payout-table">
