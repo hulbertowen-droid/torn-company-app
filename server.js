@@ -13,7 +13,7 @@ const FACTION_ID = process.env.FACTION_ID || "";
 const FF_SCOUTER_KEY = process.env.FF_SCOUTER_KEY || "";
 
 let claims = {};
-let backups = {}; // Tracks who called for backup
+let backups = {}; 
 let statsCache = {}; 
 let manualStats = {}; 
 let statQueue = [];
@@ -52,7 +52,6 @@ setInterval(async () => {
     const batch = statQueue.splice(0, 40);
 
     if (!FF_SCOUTER_KEY) {
-        console.warn("⚠️ No FF_SCOUTER_KEY found. Marking batch as 'no data'.");
         batch.forEach(id => { statsCache[id] = { stats: null, time: Date.now() }; });
         isProcessingQueue = false;
         return;
@@ -74,7 +73,6 @@ setInterval(async () => {
             batch.forEach(id => { statsCache[id] = { stats: null, time: Date.now() }; });
         }
     } catch (err) { 
-        console.error("❌ Network error reaching FF Scouter:", err.message);
         statQueue.push(...batch); 
     }
     
@@ -83,7 +81,7 @@ setInterval(async () => {
 
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
-// --- CLAIM ROUTES ---
+// Claim API
 app.post('/api/claim', (req, res) => {
     const { enemyId, playerName } = req.body;
     if (!enemyId || !playerName) return res.status(400).json({ error: "Missing data" });
@@ -101,7 +99,7 @@ app.post('/api/unclaim', (req, res) => {
     res.status(400).json({ error: "Cannot unclaim" });
 });
 
-// --- BACKUP ROUTES ---
+// Backup (SOS) API
 app.post('/api/backup', (req, res) => {
     const { enemyId, playerName } = req.body;
     if (!enemyId || !playerName) return res.status(400).json({ error: "Missing data" });
@@ -111,7 +109,7 @@ app.post('/api/backup', (req, res) => {
 
 app.post('/api/unbackup', (req, res) => {
     const { enemyId } = req.body;
-    delete backups[enemyId]; // Anyone can clear a backup once it's handled, or just the requester. Leaving it open so helpers can clear it.
+    delete backups[enemyId]; 
     res.json({ success: true });
 });
 
@@ -154,7 +152,7 @@ app.get('/api/warboard', async (req, res) => {
 
                 const intelScore = isEnemy ? computeWarIntel({ id, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", estStats: est }, statsCache) : null;
                 
-                // If they are in the hospital, automatically clear their backup request
+                // Clear SOS automatically if they go to the hospital
                 if (isEnemy && m.status?.state === "Hospital" && backups[id]) {
                     delete backups[id];
                 }
@@ -176,7 +174,6 @@ app.get('/api/warboard', async (req, res) => {
         };
         res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true) });
     } catch (err) { 
-        console.error("Warboard route failed:", err.message); 
         res.status(500).json({ error: "warboard failed" }); 
     }
 });
