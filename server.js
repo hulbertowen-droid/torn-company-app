@@ -44,12 +44,10 @@ function computeWarIntel(p, cache = {}) {
     return Math.floor(score * (0.9 + Math.random() * 0.2));
 }
 
-// Auto-detect the enemy faction ID from the user's basic faction data
 function autoDetectEnemyFaction(data) {
     if (!data || !data.ID) return null;
     const myId = data.ID.toString();
 
-    // 1. Check Ranked Wars (Highest Priority)
     if (data.ranked_wars && Object.keys(data.ranked_wars).length > 0) {
         for (let warId in data.ranked_wars) {
             const factions = Object.keys(data.ranked_wars[warId].factions || {});
@@ -57,11 +55,9 @@ function autoDetectEnemyFaction(data) {
             if (enemy) return enemy;
         }
     }
-    // 2. Check Standard Chains/Wars
     if (data.wars && Object.keys(data.wars).length > 0) {
         return Object.keys(data.wars)[0];
     }
-    // 3. Check Raid Wars
     if (data.raid_wars && Object.keys(data.raid_wars).length > 0) {
         for (let warId in data.raid_wars) {
             const factions = Object.keys(data.raid_wars[warId].factions || {});
@@ -69,7 +65,6 @@ function autoDetectEnemyFaction(data) {
             if (enemy) return enemy;
         }
     }
-    // 4. Check Territory Wars
     if (data.territory_wars && Object.keys(data.territory_wars).length > 0) {
         for (let warId in data.territory_wars) {
             const tw = data.territory_wars[warId];
@@ -84,7 +79,7 @@ setInterval(async () => {
     if (!statQueue.length || isProcessingQueue) return;
     isProcessingQueue = true;
 
-    statQueue = [...new Set(statQueue)]; // Deduplicate the queue
+    statQueue = [...new Set(statQueue)]; 
     const batch = statQueue.splice(0, 40);
 
     if (!FF_SCOUTER_KEY) {
@@ -161,22 +156,18 @@ app.get('/api/warboard', async (req, res) => {
 
         if (!userKey) return res.status(400).json({ error: "No API Key provided" });
 
-        // Step 1: Fetch the friendly faction data
-        const myData = await fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`)
-            .then(r => r.json()).catch(() => ({ members: {} }));
+        // Added attacks selection to grab hit logs
+        const [myData, enemyDataResult, attacksData] = await Promise.all([
+            fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })),
+            enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} }),
+            fetch(`https://api.torn.com/faction/?selections=attacks&key=${userKey}`).then(r => r.json()).catch(() => ({ attacks: {} }))
+        ]);
 
         if (myData.error) return res.status(400).json({ error: "Invalid API Key" });
 
-        // Step 2: Auto-Detect Enemy Faction (If not manually overridden)
-        if (!enemyId) {
-            enemyId = autoDetectEnemyFaction(myData);
-        }
-
-        // Step 3: Fetch the enemy faction data
-        let enemyDataResult = { members: {} };
-        if (enemyId) {
-            enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`)
-                .then(r => r.json()).catch(() => ({ members: {} }));
+        if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
+        if (!enemyDataResult.members && enemyId) {
+             enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} }));
         }
 
         const friendlyIds = new Set(Object.keys(myData.members || {}));
@@ -187,6 +178,27 @@ app.get('/api/warboard', async (req, res) => {
                 if (!statQueue.includes(id)) statQueue.push(id);
             }
         });
+
+        // Parse Hits for the Graph (Last 24 Hours)
+        let hitsStats = {};
+        friendlyIds.forEach(id => hitsStats[id] = { made: 0, received: 0, name: myData.members[id].name });
+
+        const now = Math.floor(Date.now() / 1000);
+        if (attacksData.attacks) {
+            Object.values(attacksData.attacks).forEach(att => {
+                if (att.timestamp > (now - 86400)) { // 24-hour limit
+                    const attacker = att.attacker_id ? att.attacker_id.toString() : null;
+                    const defender = att.defender_id ? att.defender_id.toString() : null;
+
+                    if (attacker && hitsStats[attacker]) hitsStats[attacker].made++;
+                    if (defender && hitsStats[defender]) hitsStats[defender].received++;
+                }
+            });
+        }
+
+        // Format for Chart.js (Only include people with activity to keep the graph clean)
+        let graphData = Object.values(hitsStats).filter(p => p.made > 0 || p.received > 0);
+        graphData.sort((a, b) => b.made - a.made); // Sort by highest hitters
 
         const parseMembers = (data, isEnemy = false) => {
             if (!data.members) return [];
@@ -202,21 +214,14 @@ app.get('/api/warboard', async (req, res) => {
                 }
                 
                 return { 
-                    id, 
-                    name: m.name, 
-                    state: m.status?.state, 
-                    until: m.status?.until, 
-                    statusDescription: m.status?.description || "", 
-                    onlineStatus: m.last_action?.status || "Offline", 
-                    claimedBy: isEnemy ? claims[id]?.playerName || null : null, 
-                    needsBackup: isEnemy ? backups[id]?.playerName || null : null,
-                    estStats: est, 
-                    intelScore, 
-                    isManual: !!manualStats[id] 
+                    id, name: m.name, state: m.status?.state, until: m.status?.until, statusDescription: m.status?.description || "", 
+                    onlineStatus: m.last_action?.status || "Offline", claimedBy: isEnemy ? claims[id]?.playerName || null : null, 
+                    needsBackup: isEnemy ? backups[id]?.playerName || null : null, estStats: est, intelScore, isManual: !!manualStats[id] 
                 };
             });
         };
-        res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId });
+
+        res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId, graphData });
     } catch (err) { 
         res.status(500).json({ error: "warboard failed" }); 
     }
