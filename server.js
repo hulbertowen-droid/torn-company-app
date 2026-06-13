@@ -17,6 +17,8 @@ let manualStats = {};
 let statQueue = [];
 let isProcessingQueue = false;
 
+// ... [Keep calculateEstimatedStats and computeWarIntel functions identical] ...
+
 function calculateEstimatedStats(pstats) {
     if (!pstats) return 0;
     const energyUsed = pstats.energyused || 0;
@@ -150,7 +152,7 @@ app.get('/api/warboard', async (req, res) => {
                     onlineStatus: m.last_action?.status || "Offline", 
                     claimedBy: isEnemy ? claims[id]?.playerName || null : null, 
                     estStats: est, 
-                    hits: statsCache[id]?.hits || hitsCount[id] || 0, 
+                    hits: hitsCount[id] || 0, 
                     intelScore, 
                     isManual: !!manualStats[id] 
                 };
