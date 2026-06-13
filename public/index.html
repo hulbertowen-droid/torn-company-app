@@ -7,22 +7,24 @@
     <style>
         :root {
             --bg: #050505; --card: #0d1117; --item: #161b22;
-            --red: #e11d48; --blue: #2563eb; --gold: #f59e0b;
+            --red: #e11d48; --blue: #2563eb; --gold: #fbbf24;
         }
         body { background: var(--bg); color: #c9d1d9; font-family: 'Inter', system-ui; margin: 0; padding: 20px; }
-        h1 { text-align: center; color: var(--red); text-transform: uppercase; letter-spacing: 4px; margin-bottom: 40px; text-shadow: 0 0 20px rgba(225, 29, 72, 0.3); }
+        h1 { text-align: center; color: var(--red); text-transform: uppercase; letter-spacing: 4px; margin-bottom: 30px; text-shadow: 0 0 10px rgba(225, 29, 72, 0.2); }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1200px; margin: 0 auto; }
         .col { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #30363d; }
-        h2 { color: #8b949e; border-bottom: 1px solid #30363d; padding-bottom: 10px; margin-top: 0; }
-        
+        h2 { color: #8b949e; border-bottom: 2px solid var(--red); padding-bottom: 10px; margin-top: 0; display: flex; align-items: center; gap: 10px; }
         ul { list-style: none; padding: 0; }
-        li { background: var(--item); margin-bottom: 10px; padding: 12px 20px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #30363d; }
-        
+        li { 
+            background: var(--item); margin-bottom: 8px; padding: 10px 16px; border-radius: 8px; 
+            display: flex; justify-content: space-between; align-items: center; border: 1px solid #30363d;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        li:hover { transform: scale(1.02); border-color: var(--red); }
         .profile { font-weight: 600; color: #fff; text-decoration: none; }
-        .badge { background: #21262d; padding: 2px 8px; border-radius: 6px; font-size: 11px; color: var(--gold); border: 1px solid #30363d; }
-        .timer { font-family: monospace; color: var(--red); font-size: 1.1em; font-weight: bold; }
-        
-        button { cursor: pointer; border: none; padding: 6px 14px; border-radius: 6px; font-weight: bold; }
+        .badge { background: #21262d; padding: 2px 6px; border-radius: 4px; font-size: 10px; color: var(--gold); border: 1px solid #444; }
+        .timer { font-family: monospace; color: var(--red); font-weight: bold; }
+        button { cursor: pointer; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; font-size: 11px; }
         .call { background: var(--red); color: white; }
         .unclaim { background: var(--blue); color: white; }
     </style>
@@ -40,21 +42,14 @@
 let myName = localStorage.getItem("warboard_name") || prompt("Torn Name:");
 localStorage.setItem("warboard_name", myName);
 
-// Timer loop: Updates all elements with class 'timer' every second
 setInterval(() => {
     document.querySelectorAll(".timer").forEach(el => {
         let left = parseInt(el.dataset.until) - Math.floor(Date.now()/1000);
-        if(left > 0) {
-            let m=Math.floor(left/60), s=left%60;
-            el.innerText = `${m}:${s.toString().padStart(2,"0")}`;
-        } else {
-            el.innerText = "Ready";
-        }
+        el.innerText = left > 0 ? `${Math.floor(left/60)}:${(left%60).toString().padStart(2,"0")}` : "Ready";
     });
 }, 1000);
 
 function format(n){
-    if(!n) return "";
     if(n>1e9) return (n/1e9).toFixed(1)+"b";
     if(n>1e6) return (n/1e6).toFixed(1)+"m";
     return (n/1e3).toFixed(1)+"k";
@@ -64,14 +59,14 @@ async function load(){
     const res = await fetch("/api/warboard");
     const data = await res.json();
     
-    // Friendly
+    // Update Friendly
     document.getElementById("friendly").innerHTML = data.friendly.map(p => `
         <li>
             <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a>
             ${p.state==="Hospital" ? `<span class="timer" data-until="${p.until}"></span>` : ""}
         </li>`).join("");
 
-    // Enemy
+    // Update Enemy
     document.getElementById("enemy").innerHTML = data.enemy.sort((a,b)=>(b.intelScore||0)-(a.intelScore||0)).map(p => `
         <li>
             <div>
