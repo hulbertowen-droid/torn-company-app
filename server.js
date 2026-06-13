@@ -28,28 +28,32 @@ function calculateEstimatedStats(pstats) {
     const refills = pstats.refills || 0;
     const cans = pstats.energydrinkused || 0;
     const se = pstats.statenhancersused || 0;
+    const ageDays = pstats.age || 1; 
+
+    // Total Energy: Consumables + Passive Regen (480/day)
+    let totalEnergyUsed = (xanax * 250) + (refills * 150) + (cans * 30) + (ageDays * 480);
     
-    // Calculate total energy from consumables
-    let totalEnergyUsed = (xanax * 250) + (refills * 150) + (cans * 30);
-    
-    // Progressive Multiplier (simulate late-game gym unlocks)
-    let multiplier = 500;
-    if (totalEnergyUsed > 100000) multiplier = 800;
-    if (totalEnergyUsed > 500000) multiplier = 1500;
-    if (totalEnergyUsed > 1000000) multiplier = 3000;
-    if (totalEnergyUsed > 2500000) multiplier = 6000;
+    // Account Age Multiplier
+    let multiplier = 800; 
+    if (ageDays > 500) multiplier = 1200;
+    if (ageDays > 1000) multiplier = 2000;
+    if (ageDays > 1500) multiplier = 3500;
+
+    // Scaling Curve
+    if (totalEnergyUsed > 500000) multiplier *= 1.5;
+    if (totalEnergyUsed > 2000000) multiplier *= 2.0;
 
     let baseStats = totalEnergyUsed * multiplier;
     
-    // Apply Stat Enhancers (1% compound per SE)
+    // Stat Enhancer Compound
     if (se > 0) {
-        baseStats = baseStats * Math.pow(1.01, se);
+        baseStats = baseStats * Math.pow(1.02, se);
     }
 
-    return Math.max(baseStats, 5000); // Give a floor so nobody is at 0
+    return Math.floor(Math.max(baseStats, 10000)); 
 }
 
-// Background loop to slowly fetch personal stats from Torn (respects API limits)
+// Background loop to slowly fetch personal stats
 setInterval(async () => {
     if (statQueue.length === 0 || isProcessingQueue || !TORN_API_KEY) return;
     
@@ -62,10 +66,8 @@ setInterval(async () => {
         
         if (data && data.personalstats) {
             const calculatedStats = calculateEstimatedStats(data.personalstats);
-            // Cache it for 24 hours (stats don't jump massively in one day)
             statsCache[id] = { stats: calculatedStats, time: Date.now() };
         } else if (data && data.error && (data.error.code === 2 || data.error.code === 5)) {
-            // If rate limited or blocked, push back to queue to try later
             statQueue.unshift(id);
         }
     } catch (e) {
@@ -73,13 +75,13 @@ setInterval(async () => {
     }
     
     isProcessingQueue = false;
-}, 1500); // 1.5 seconds between each API call = safe 40 calls per minute
+}, 1500); 
 
 // ==========================================
 // WARBOARD ENDPOINTS
 // ==========================================
 
-// --- THE RESTORED HEALTH CHECK ---
+// Health check for Render
 app.get('/health', (req, res) => {
     res.status(200).send('OK');
 });
@@ -114,11 +116,9 @@ app.get('/api/warboard', async (req, res) => {
             enemyData = await enemyRes.json();
             
             if (enemyData.members) {
-                // Queue up enemies for stat calculation if we don't have them
                 const now = Date.now();
                 for (const id of Object.keys(enemyData.members)) {
                     const cached = statsCache[id];
-                    // Re-fetch if we have no cache, or if cache is older than 24 hours
                     if (!cached || (now - cached.time > 24 * 60 * 60 * 1000)) {
                         if (!statQueue.includes(id)) statQueue.push(id);
                     }
@@ -126,7 +126,6 @@ app.get('/api/warboard', async (req, res) => {
             }
         }
 
-        // Clean expired claims
         const now = Date.now();
         for (const id in claims) {
             if (now - claims[id].time > 15 * 60 * 1000) delete claims[id];
@@ -137,7 +136,6 @@ app.get('/api/warboard', async (req, res) => {
             if (data.members) {
                 for (const [id, member] of Object.entries(data.members)) {
                     let lastAction = member.last_action && member.last_action.status ? member.last_action.status : 'Offline';
-                    
                     let statVal = null;
                     if (isEnemy && statsCache[id]) statVal = statsCache[id].stats;
 
