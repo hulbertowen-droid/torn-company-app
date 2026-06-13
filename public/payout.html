@@ -23,6 +23,7 @@
         .container { max-width: 1000px; margin: 0 auto; background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
         
         #error-msg { display: none; background: rgba(255, 71, 87, 0.1); color: var(--red); padding: 15px; border-radius: 8px; border: 1px solid var(--red); margin-bottom: 20px; text-align: center; font-weight: bold; }
+        #permission-warning { display: none; background: rgba(255, 165, 2, 0.1); color: var(--gold); padding: 15px; border-radius: 8px; border: 1px solid var(--gold); margin-bottom: 20px; text-align: center; font-size: 0.9em; }
 
         /* WAR LIST STYLES */
         h2.section-title { color: var(--text-dim); border-bottom: 2px solid var(--red); padding-bottom: 10px; margin-top: 0; font-size: 1.1em; text-transform: uppercase; }
@@ -75,6 +76,9 @@
 
     <div class="container">
         <div id="error-msg"></div>
+        <div id="permission-warning">
+            ⚠️ <strong>Limited Access Key Required:</strong> A Public API key will only show your current active war. To retrieve past historical wars, please ensure the API key saved in your settings has Limited Access permissions.
+        </div>
 
         <h2 class="section-title">Select a Past War</h2>
         <div id="war-list" class="war-list-container">
@@ -141,7 +145,7 @@ function formatMoney(n) {
     return "$" + n.toLocaleString('en-US', {maximumFractionDigits: 0});
 }
 
-// Auto-Load Past Wars natively from Torn's Ranked Wars API
+// Auto-Load Past Wars directly from Torn's Ranked Wars API
 async function loadPastWars() {
     try {
         const res = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${myKey}`);
@@ -153,7 +157,8 @@ async function loadPastWars() {
         }
 
         if (!data.ranked_wars || Object.keys(data.ranked_wars).length === 0) {
-            document.getElementById("war-list").innerHTML = `<div style="text-align:center; color:var(--text-dim);">No past ranked wars found for your faction.</div>`;
+            document.getElementById("war-list").innerHTML = `<div style="text-align:center; color:var(--text-dim);">No ranked wars found. Ensure you are using a Limited Access API key to retrieve historical data.</div>`;
+            document.getElementById("permission-warning").style.display = "block";
             return;
         }
 
@@ -164,6 +169,11 @@ async function loadPastWars() {
         // Convert the war object to an array so we can sort it newest first
         const warsArray = Object.entries(data.ranked_wars).map(([id, warInfo]) => ({ id, ...warInfo }));
         warsArray.sort((a, b) => b.war.start - a.war.start);
+
+        // If only 1 war is returned, it's highly likely they are using a Public key which hides history
+        if (warsArray.length === 1) {
+            document.getElementById("permission-warning").style.display = "block";
+        }
 
         warsArray.forEach(war => {
             let enemyFacName = "Unknown Faction";
@@ -216,13 +226,13 @@ async function fetchWarData(reportId, enemyName) {
             currentWarData = data.members;
             document.getElementById("report-title").innerText = `🎁 Automated Rewards vs ${enemyName}`;
             
-            // Auto-Fill the Caches Logic!
+            // Auto-Fill the Caches Logic
             if (data.rewards && data.rewards.totalCacheValue > 0) {
                 document.getElementById("inp-pool").value = data.rewards.totalCacheValue;
                 
                 let rewardsHTML = "";
                 data.rewards.caches.forEach(c => {
-                    rewardsHTML += `<li>${c.quantity}x <strong>${c.name}</strong> (Est. Value: ${formatMoney(c.marketValue)} each) = <span>${formatMoney(c.totalValue)}</span></li>`;
+                    rewardsHTML += `<li>${c.quantity}x <strong style="color:var(--text-main)">${c.name}</strong> (Est. Value: ${formatMoney(c.marketValue)} each) = <span style="color:var(--green)">${formatMoney(c.totalValue)}</span></li>`;
                 });
                 
                 rewardsHTML += `<li style="margin-top: 10px; color: var(--gold); list-style-type: none;">🏆 Plus <strong>${data.rewards.points.toLocaleString()}</strong> Points and <strong>${data.rewards.respect.toLocaleString()}</strong> Respect earned.</li>`;
@@ -231,7 +241,7 @@ async function fetchWarData(reportId, enemyName) {
                 document.getElementById("rewards-breakdown").style.display = "block";
             } else {
                 document.getElementById("rewards-breakdown").style.display = "none";
-                document.getElementById("inp-pool").value = ""; // Clear if no rewards
+                document.getElementById("inp-pool").value = ""; 
             }
 
             document.getElementById("payout-table").style.display = "table";
