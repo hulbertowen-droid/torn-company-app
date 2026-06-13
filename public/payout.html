@@ -34,6 +34,12 @@
 
         #error-msg { display: none; background: rgba(255, 71, 87, 0.1); color: var(--red); padding: 15px; border-radius: 8px; border: 1px solid var(--red); margin-bottom: 20px; text-align: center; font-weight: bold; }
 
+        /* REWARDS BREAKDOWN STYLES */
+        #rewards-breakdown { display: none; background: #0b0d13; padding: 20px; border-radius: 12px; border: 1px solid #2f3542; margin-bottom: 30px; }
+        #rewards-breakdown h3 { color: var(--gold); margin-top: 0; margin-bottom: 15px; text-transform: uppercase; font-size: 1.1em; letter-spacing: 1px; }
+        #rewards-list { color: var(--text-dim); font-size: 0.95em; padding-left: 20px; line-height: 1.8; margin: 0; }
+        .rewards-note { font-size: 0.8em; color: #57606f; margin-top: 15px; font-style: italic; }
+
         .payout-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.95em; display: none; }
         .payout-table th, .payout-table td { padding: 14px; text-align: left; border-bottom: 1px solid #2f3542; }
         .payout-table th { color: var(--gold); font-weight: 700; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; }
@@ -64,6 +70,18 @@
                 <div class="input-helper">Find this ID in the URL of the official Ranked War Report page (reportID=XXXXX).</div>
             </div>
             
+            <button class="btn-fetch" id="btn-fetch" onclick="fetchWarData()">Fetch War Data & Auto-Value Caches</button>
+        </div>
+
+        <div id="rewards-breakdown">
+            <h3>🎁 Automated War Rewards</h3>
+            <ul id="rewards-list">
+                <!-- Populated via JS -->
+            </ul>
+            <div class="rewards-note">* The total below automatically calculates the estimated market value of your Caches. If you also sold your faction points, be sure to add that extra cash manually!</div>
+        </div>
+
+        <div class="setup-box" style="margin-top: -10px;">
             <div class="input-group">
                 <label>Total Winnings Pool ($)</label>
                 <input type="number" id="inp-pool" placeholder="e.g. 2500000000" oninput="calculatePayouts()">
@@ -81,8 +99,6 @@
                     <option value="attacks">Total Hits Made</option>
                 </select>
             </div>
-
-            <button class="btn-fetch" id="btn-fetch" onclick="fetchWarData()">Fetch War Data & Calculate</button>
         </div>
 
         <table class="payout-table" id="payout-table">
@@ -105,7 +121,6 @@
 let myKey = localStorage.getItem("warboard_apikey") || "";
 let currentWarData = [];
 
-// If they haven't set an API key on the main board, warn them.
 if (!myKey) {
     document.getElementById("error-msg").innerText = "⚠️ Please set your API Key on the Live Warboard Settings page first.";
     document.getElementById("error-msg").style.display = "block";
@@ -128,7 +143,7 @@ async function fetchWarData() {
     }
 
     errorBox.style.display = "none";
-    btn.innerText = "Fetching Data...";
+    btn.innerText = "Scanning Market Values...";
     btn.disabled = true;
 
     try {
@@ -139,8 +154,27 @@ async function fetchWarData() {
             errorBox.innerText = data.error;
             errorBox.style.display = "block";
             document.getElementById("payout-table").style.display = "none";
+            document.getElementById("rewards-breakdown").style.display = "none";
         } else {
             currentWarData = data.members;
+            
+            // Auto-Fill the Caches Logic!
+            if (data.rewards && data.rewards.totalCacheValue > 0) {
+                document.getElementById("inp-pool").value = data.rewards.totalCacheValue;
+                
+                let rewardsHTML = "";
+                data.rewards.caches.forEach(c => {
+                    rewardsHTML += `<li>${c.quantity}x <strong style="color:var(--text-main)">${c.name}</strong> (Est. Value: ${formatMoney(c.marketValue)} each) = <span style="color:var(--green)">${formatMoney(c.totalValue)}</span></li>`;
+                });
+                
+                rewardsHTML += `<li style="margin-top: 10px; color: var(--blue); list-style-type: none;">🏆 Plus <strong>${data.rewards.points.toLocaleString()}</strong> Points and <strong>${data.rewards.respect.toLocaleString()}</strong> Respect earned.</li>`;
+                
+                document.getElementById("rewards-list").innerHTML = rewardsHTML;
+                document.getElementById("rewards-breakdown").style.display = "block";
+            } else {
+                document.getElementById("rewards-breakdown").style.display = "none";
+            }
+
             document.getElementById("payout-table").style.display = "table";
             calculatePayouts();
         }
@@ -149,7 +183,7 @@ async function fetchWarData() {
         errorBox.style.display = "block";
     }
 
-    btn.innerText = "Fetch War Data & Calculate";
+    btn.innerText = "Fetch War Data & Auto-Value Caches";
     btn.disabled = false;
 }
 
@@ -164,7 +198,7 @@ function calculatePayouts() {
     if (isNaN(vaultCutPercent) || vaultCutPercent < 0) vaultCutPercent = 0;
     if (vaultCutPercent > 100) vaultCutPercent = 100;
 
-    const metric = document.getElementById("inp-metric").value; // "attacks" or "score"
+    const metric = document.getElementById("inp-metric").value; 
     const memberPool = totalWinnings * (1 - (vaultCutPercent / 100));
     
     let sumTotal = 0;
@@ -190,7 +224,7 @@ function calculatePayouts() {
             </tr>`;
         });
     } else if (totalWinnings <= 0) {
-         html = `<tr><td colspan="5" style="text-align:center; color:var(--text-dim); padding: 20px;">Enter the total pool amount above to see payouts.</td></tr>`;
+         html = `<tr><td colspan="5" style="text-align:center; color:var(--text-dim); padding: 20px;">The Winnings Pool is currently $0. Please enter your total cash to see payouts.</td></tr>`;
     }
 
     tbody.innerHTML = html;
