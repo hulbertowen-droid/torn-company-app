@@ -74,9 +74,23 @@
         .btn-icon { background: rgba(0,0,0,0.3); border: none; color: white; border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 0.9em; }
         .btn-icon:hover { background: rgba(0,0,0,0.6); }
 
-        #chart-container { max-width: 1200px; margin: 30px auto; background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #2f3542; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+        /* CONTAINERS */
+        .section-container { max-width: 1200px; margin: 30px auto; background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #2f3542; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
         .dev-badge { background: rgba(255, 165, 2, 0.15); color: var(--gold); border: 1px solid var(--gold); padding: 4px 8px; border-radius: 6px; font-size: 0.6em; vertical-align: middle; margin-left: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;}
         
+        /* PAYOUT CALCULATOR STYLES */
+        .payout-controls { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; background: #0b0d13; padding: 15px; border-radius: 10px; border: 1px solid #2f3542; }
+        .calc-group { display: flex; flex-direction: column; flex: 1; min-width: 200px; }
+        .calc-group label { font-size: 0.85em; color: var(--text-dim); margin-bottom: 5px; font-weight: bold; text-transform: uppercase; }
+        .calc-group input, .calc-group select { padding: 10px; border-radius: 6px; border: 1px solid #30363d; background: var(--card); color: white; font-size: 1em; }
+        
+        .payout-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.95em; }
+        .payout-table th, .payout-table td { padding: 12px; text-align: left; border-bottom: 1px solid #2f3542; }
+        .payout-table th { color: var(--gold); font-weight: 700; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; }
+        .payout-table tr:hover td { background: rgba(255,255,255,0.02); }
+        .money-text { color: var(--green); font-weight: bold; font-family: 'Courier New', Courier, monospace; font-size: 1.1em;}
+
+        /* MODAL STYLES */
         #modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(5px); }
         #modal-box { background: var(--card); padding: 30px; border-radius: 12px; border: 1px solid #2f3542; width: 90%; max-width: 450px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
         #modal-box h2 { border-bottom: none; color: var(--text-main); margin-bottom: 20px; font-size: 1.5em; }
@@ -92,7 +106,7 @@
         .btn-save:hover { background: #79c0ff; }
         .privacy-notice { margin-top: 15px; padding: 12px; background: rgba(46, 213, 115, 0.1); border: 1px solid rgba(46, 213, 115, 0.3); border-radius: 8px; font-size: 0.85em; color: #7bed9f; text-align: left; line-height: 1.4; }
 
-        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .list-item { flex-direction: column; align-items: flex-start; gap: 12px; } .actions { width: 100%; justify-content: space-between; } .header-container { flex-direction: column; gap: 15px; } .btn-settings { position: static; } }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .payout-controls { flex-direction: column; } }
     </style>
 </head>
 <body>
@@ -118,13 +132,56 @@
         </div>
     </div>
 
-    <!-- UPDATED GRAPH CONTAINER WITH DISCLAIMER -->
-    <div id="chart-container">
+    <!-- GRAPH SECTION -->
+    <div class="section-container" id="chart-container">
         <h2 id="chart-title" style="border: none; text-align: center; margin-bottom: 20px; font-size: 1.2em; color: var(--text-main);">
             📊 Ranked War Performance <span class="dev-badge">⚠️ Currently in Development</span>
         </h2>
         <div id="chart-message" style="text-align:center; color: var(--text-dim); display:none; margin-bottom: 10px;"></div>
         <canvas id="hitsChart"></canvas>
+    </div>
+
+    <!-- NEW PAYOUT CALCULATOR SECTION -->
+    <div class="section-container" id="payout-container">
+        <h2 style="border: none; text-align: center; margin-bottom: 20px; font-size: 1.2em; color: var(--text-main);">💰 Faction Payout Calculator</h2>
+        <div id="payout-message" style="text-align:center; color: var(--text-dim); margin-bottom: 10px; display: none;">
+            Ranked War data is required to calculate payouts.
+        </div>
+        
+        <div id="payout-content" style="display: none;">
+            <div class="payout-controls">
+                <div class="calc-group">
+                    <label>Total Winnings Pool ($)</label>
+                    <input type="number" id="pay-total" placeholder="e.g. 2500000000" oninput="calculatePayouts()">
+                </div>
+                <div class="calc-group">
+                    <label>Faction Vault Cut (%)</label>
+                    <input type="number" id="pay-cut" min="0" max="100" value="20" oninput="calculatePayouts()">
+                </div>
+                <div class="calc-group">
+                    <label>Distribution Metric</label>
+                    <select id="pay-metric" onchange="calculatePayouts()">
+                        <option value="score">War Score Contributed</option>
+                        <option value="hits">Total Hits Made</option>
+                    </select>
+                </div>
+            </div>
+
+            <table class="payout-table" id="payout-table">
+                <thead>
+                    <tr>
+                        <th>Member</th>
+                        <th>Hits</th>
+                        <th>War Score</th>
+                        <th>% of Member Pool</th>
+                        <th>Payout Amount</th>
+                    </tr>
+                </thead>
+                <tbody id="payout-body">
+                    <!-- Javascript populates this -->
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <div id="modal-overlay">
@@ -162,11 +219,11 @@
 let myName = localStorage.getItem("warboard_name") || "";
 let myKey = localStorage.getItem("warboard_apikey") || "";
 let enemyFac = localStorage.getItem("warboard_enemy") || "";
-let myRate = parseInt(localStorage.getItem("warboard_rate")) || 4; // Default 4 calls per min (15s)
+let myRate = parseInt(localStorage.getItem("warboard_rate")) || 4; 
 let hitsChart; 
 let fetchInterval = null;
+let currentGraphData = []; // Store this globally so the calculator can access it
 
-// Dynamic Helper Text for Call Rate
 document.getElementById("inp-rate").addEventListener("input", function(e) {
     let val = parseInt(e.target.value);
     if(val > 0) {
@@ -225,6 +282,10 @@ function getPriority(p) {
 }
 
 function format(n){ if(n>1e9) return (n/1e9).toFixed(1)+"b"; if(n>1e6) return (n/1e6).toFixed(1)+"m"; return (n/1e3).toFixed(1)+"k"; }
+
+function formatMoney(n) {
+    return "$" + n.toLocaleString('en-US', {maximumFractionDigits: 0});
+}
 
 function getBadgeHTML(p) {
     if (p.isManual) return `<span class="badge manual" onclick="updateStats('${p.id}')">⚙ ${format(p.estStats)}</span>`;
@@ -302,8 +363,6 @@ function renderGraph(graphData, isRankedWar) {
     const msgDiv = document.getElementById('chart-message');
     const canvas = document.getElementById('hitsChart');
     const title = document.getElementById('chart-title');
-
-    // Make sure the disclaimer badge is always attached to the title string
     const disclaimerBadge = `<span class="dev-badge">⚠️ Currently in Development</span>`;
 
     if (!isRankedWar) {
@@ -356,6 +415,53 @@ function renderGraph(graphData, isRankedWar) {
     }
 }
 
+// --- NEW PAYOUT LOGIC ---
+function calculatePayouts() {
+    if (!currentGraphData || currentGraphData.length === 0) return;
+
+    const totalStr = document.getElementById("pay-total").value;
+    const totalWinnings = parseFloat(totalStr) || 0;
+    
+    let vaultCutStr = document.getElementById("pay-cut").value;
+    let vaultCutPercent = parseFloat(vaultCutStr);
+    if (isNaN(vaultCutPercent) || vaultCutPercent < 0) vaultCutPercent = 0;
+    if (vaultCutPercent > 100) vaultCutPercent = 100;
+
+    const metric = document.getElementById("pay-metric").value; // "hits" or "score"
+
+    const memberPool = totalWinnings * (1 - (vaultCutPercent / 100));
+    
+    let sumTotal = 0;
+    currentGraphData.forEach(p => {
+        sumTotal += metric === 'score' ? p.score : p.made;
+    });
+
+    const tbody = document.getElementById("payout-body");
+    let html = "";
+
+    if (sumTotal > 0 && totalWinnings > 0) {
+        currentGraphData.forEach(p => {
+            let myVal = metric === 'score' ? p.score : p.made;
+            let sharePercent = myVal / sumTotal;
+            let myPayout = memberPool * sharePercent;
+
+            html += `<tr>
+                <td><strong>${p.name}</strong></td>
+                <td>${p.made}</td>
+                <td>${p.score}</td>
+                <td>${(sharePercent * 100).toFixed(2)}%</td>
+                <td class="money-text">${formatMoney(myPayout)}</td>
+            </tr>`;
+        });
+    } else if (totalWinnings > 0) {
+         html = `<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">No hitting data available yet to split the pool.</td></tr>`;
+    } else {
+         html = `<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Enter a total winning amount to see payouts.</td></tr>`;
+    }
+
+    tbody.innerHTML = html;
+}
+
 async function updateStats(id) { 
     let input = prompt("Enter ACTUAL battle stats:"); 
     if(input && !isNaN(input)) { await fetch("/api/update-stats", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enemyId:id, stats:input})}); load(); } 
@@ -374,6 +480,19 @@ async function load(){
         syncList("friendly", data.friendly || [], false);
         syncList("enemy", data.enemy || [], true);
         renderGraph(data.graphData, data.isRankedWar);
+        
+        // Payout Calculator Update
+        if (data.isRankedWar && data.graphData.length > 0) {
+            document.getElementById("payout-message").style.display = "none";
+            document.getElementById("payout-content").style.display = "block";
+            currentGraphData = data.graphData;
+            calculatePayouts(); // Re-calculate dynamically on every server fetch
+        } else {
+            document.getElementById("payout-message").style.display = "block";
+            document.getElementById("payout-content").style.display = "none";
+            currentGraphData = [];
+        }
+        
     } catch(e) { console.error("Update failed...", e); }
 }
 
