@@ -17,8 +17,6 @@ let manualStats = {};
 let statQueue = [];
 let isProcessingQueue = false;
 
-// ... [Keep calculateEstimatedStats and computeWarIntel functions identical] ...
-
 function calculateEstimatedStats(pstats) {
     if (!pstats) return 0;
     const energyUsed = pstats.energyused || 0;
@@ -70,7 +68,7 @@ setInterval(async () => {
         const res = await fetch(`https://api.torn.com/user/${id}?selections=personalstats&key=${TORN_API_KEY}`);
         const data = await res.json();
         if (data?.personalstats) {
-            statsCache[id] = { stats: calculateEstimatedStats(data.personalstats), hits: data.personalstats.attackswon || 0, time: Date.now(), retries: 0 };
+            statsCache[id] = { stats: calculateEstimatedStats(data.personalstats), time: Date.now(), retries: 0 };
         } else if (data?.error && (data.error.code === 2 || data.error.code === 5)) {
             const prev = statsCache[id]?.retries || 0;
             if (prev < 3) {
@@ -110,52 +108,24 @@ app.post('/api/update-stats', (req, res) => {
 
 app.get('/api/warboard', async (req, res) => {
     try {
-        const [myData, enemyDataResult, attacksData] = await Promise.all([
+        const [myData, enemyDataResult] = await Promise.all([
             fetch(`https://api.torn.com/faction/?selections=basic&key=${TORN_API_KEY}`).then(r => r.json()),
-            FACTION_ID ? fetch(`https://api.torn.com/faction/${FACTION_ID}?selections=basic&key=${TORN_API_KEY}`).then(r => r.json()) : { members: {} },
-            fetch(`https://api.torn.com/faction/?selections=attacks&key=${TORN_API_KEY}`).then(r => r.json())
+            FACTION_ID ? fetch(`https://api.torn.com/faction/${FACTION_ID}?selections=basic&key=${TORN_API_KEY}`).then(r => r.json()) : { members: {} }
         ]);
 
         const now = Math.floor(Date.now() / 1000);
-        const friendlyIds = new Set(Object.keys(myData.members || {}));
-        const enemyIds = new Set(Object.keys(enemyDataResult.members || {}));
-
-        [...friendlyIds, ...enemyIds].forEach(id => {
+        [...Object.keys(myData.members || {}), ...Object.keys(enemyDataResult.members || {})].forEach(id => {
             if (!statsCache[id] || now - (statsCache[id].time / 1000) > 1200) {
                 if (!statQueue.includes(id)) statQueue.push(id);
             }
         });
-
-        let hitsCount = {};
-        if (attacksData.attacks) {
-            Object.values(attacksData.attacks).forEach(att => {
-                const attacker = att.attacker_id ? att.attacker_id.toString() : null;
-                if(attacker && att.timestamp > (now - 86400)) {
-                    if (friendlyIds.has(attacker) || enemyIds.has(attacker)) {
-                        hitsCount[attacker] = (hitsCount[attacker] || 0) + 1;
-                    }
-                }
-            });
-        }
 
         const parseMembers = (data, isEnemy = false) => {
             if (!data.members) return [];
             return Object.entries(data.members).map(([id, m]) => {
                 const est = manualStats[id]?.stats || statsCache[id]?.stats || null;
                 const intelScore = isEnemy ? computeWarIntel({ id, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", estStats: est }, statsCache) : null;
-                return { 
-                    id, 
-                    name: m.name, 
-                    state: m.status?.state, 
-                    until: m.status?.until, 
-                    statusDescription: m.status?.description || "",
-                    onlineStatus: m.last_action?.status || "Offline", 
-                    claimedBy: isEnemy ? claims[id]?.playerName || null : null, 
-                    estStats: est, 
-                    hits: hitsCount[id] || 0, 
-                    intelScore, 
-                    isManual: !!manualStats[id] 
-                };
+                return { id, name: m.name, state: m.status?.state, until: m.status?.until, statusDescription: m.status?.description || "", onlineStatus: m.last_action?.status || "Offline", claimedBy: isEnemy ? claims[id]?.playerName || null : null, estStats: est, intelScore, isManual: !!manualStats[id] };
             });
         };
         res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true) });
