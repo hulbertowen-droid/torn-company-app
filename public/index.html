@@ -29,8 +29,8 @@
         .profile-link { color: var(--spidey-web); text-decoration: none; font-weight: 500; }
         .profile-link:hover { color: var(--spidey-red); text-decoration: underline; }
         
-        /* Spidey Badge for FF Scouter Data */
-        .ff-scouter-container { color: #feca3e; font-size: 0.85em; margin-left: 10px; font-weight: bold; background: rgba(254, 202, 62, 0.1); padding: 2px 6px; border-radius: 4px; border: 1px solid #feca3e; }
+        /* The Math Estimator Badge */
+        .stat-badge { color: #feca3e; font-size: 0.8em; margin-left: 8px; font-weight: bold; background: rgba(254, 202, 62, 0.1); padding: 2px 6px; border-radius: 4px; border: 1px solid #feca3e;}
         
         .btn-claim { background-color: var(--spidey-red); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
         .btn-claim:hover { background-color: #b71c1c; }
@@ -82,6 +82,15 @@
             });
         }
 
+        // Formats the math into k, m, or b
+        function formatStats(num) {
+            if (!num) return 'Calc...';
+            if (num >= 1000000000) return (num / 1000000000).toFixed(1) + 'b';
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'm';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+            return Math.floor(num).toString();
+        }
+
         async function fetchWarboardData() {
             try {
                 const response = await fetch('/api/warboard'); 
@@ -116,10 +125,10 @@
                 if (p.onlineStatus === 'Online') dotClass = 'dot-online';
                 if (p.onlineStatus === 'Idle') dotClass = 'dot-idle';
 
-                // The FF Scouter Placeholder Box - Userscript will target this by ID
-                let ffPlaceholder = isEnemyColumn ? `<span class="ff-scouter-container" id="ff-stats-${p.id}">[FF: Loading...]</span>` : '';
+                // Display the estimated stats from the backend
+                let statsUI = isEnemyColumn && p.estStats ? `<span class="stat-badge">[Est: ${formatStats(p.estStats)}]</span>` : (isEnemyColumn ? `<span class="stat-badge" style="opacity: 0.5;">[Calc...]</span>` : '');
 
-                let nameLink = `<span class="activity-dot ${dotClass}" title="${p.onlineStatus}"></span><a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank" class="profile-link">${p.name}</a> ${ffPlaceholder}`;
+                let nameLink = `<span class="activity-dot ${dotClass}" title="${p.onlineStatus}"></span><a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank" class="profile-link">${p.name}</a> ${statsUI}`;
                 
                 let claimUI = '';
                 if (isEnemyColumn && (p.state === 'Okay' || p.state === 'Hospital')) {
