@@ -13,7 +13,7 @@ const FACTION_ID = process.env.FACTION_ID || "";
 
 let claims = {};
 let statsCache = {};
-let manualStats = {}; // New: Stores actual stats provided by users
+let manualStats = {}; 
 let statQueue = [];
 let isProcessingQueue = false;
 
@@ -50,7 +50,6 @@ function computeWarIntel(p, cache = {}) {
             else score += 10;
         }
     }
-    // Check manual override first, then cache
     const est = manualStats[p.id]?.stats || cache[p.id]?.stats || p.estStats;
     if (est) {
         if (est < 1e7) score += 120;
@@ -100,7 +99,6 @@ app.post('/api/unclaim', (req, res) => {
     res.status(400).json({ error: "Cannot unclaim" });
 });
 
-// New Endpoint for Manual Stats
 app.post('/api/update-stats', (req, res) => {
     const { enemyId, stats } = req.body;
     if (!enemyId || !stats) return res.status(400).json({ error: "Missing data" });
@@ -124,7 +122,6 @@ app.get('/api/warboard', async (req, res) => {
         const parseMembers = (data, isEnemy = false) => {
             if (!data.members) return [];
             return Object.entries(data.members).map(([id, m]) => {
-                // Priority: Manual > Cache Estimate
                 const est = isEnemy ? (manualStats[id]?.stats || statsCache[id]?.stats || null) : null;
                 const intelScore = isEnemy ? computeWarIntel({ id, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", estStats: est }, statsCache) : null;
                 return { id, name: m.name, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", claimedBy: isEnemy ? claims[id]?.playerName || null : null, estStats: est, intelScore, isManual: !!manualStats[id] };
