@@ -5,42 +5,78 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Spider-Verse Warboard</title>
     <style>
-        :root { --bg: #0a0c10; --card: #161b22; --item: #21262d; --red: #ff3e3e; --blue: #58a6ff; --gold: #e3b341; }
-        body { background: var(--bg); color: #e6edf3; font-family: 'Segoe UI', system-ui; margin: 0; padding: 20px; }
-        h1 { text-align: center; color: var(--red); text-transform: uppercase; letter-spacing: 3px; font-weight: 800; }
+        :root { 
+            --bg: #090a0f; 
+            --card: #11141d; 
+            --item: #1b202e; 
+            --red: #ff4757; 
+            --blue: #3742fa; 
+            --gold: #ffa502;
+            --text-main: #f1f2f6;
+            --text-dim: #747d8c;
+            --green: #2ed573;
+        }
         
-        #info-box { background: rgba(22, 27, 34, 0.8); border: 1px solid #30363d; padding: 15px; border-radius: 12px; margin: 0 auto 20px auto; max-width: 1200px; backdrop-filter: blur(10px); }
-        #info-header { display: flex; justify-content: space-between; cursor: pointer; color: var(--gold); font-weight: bold; }
-        #info-content { display: none; margin-top: 10px; font-size: 0.9em; color: #8b949e; line-height: 1.5; }
+        body { background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px; }
+        h1 { text-align: center; color: var(--red); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; text-shadow: 0 0 10px rgba(255, 71, 87, 0.3); margin-bottom: 25px; }
         
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1200px; margin: 0 auto; }
-        .col { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #30363d; }
-        h2 { color: #8b949e; border-bottom: 2px solid var(--red); padding-bottom: 10px; margin-top: 0; }
+        #info-box { background: rgba(27, 32, 46, 0.7); border: 1px solid #2f3542; padding: 15px 20px; border-radius: 10px; margin: 0 auto 25px auto; max-width: 1200px; backdrop-filter: blur(8px); }
+        #info-header { display: flex; justify-content: space-between; cursor: pointer; color: var(--gold); font-weight: 700; text-transform: uppercase; font-size: 0.9em; letter-spacing: 1px; }
+        #info-content { display: none; margin-top: 15px; font-size: 0.9em; color: var(--text-dim); line-height: 1.6; }
         
-        ul { list-style: none; padding: 0; }
-        li { background: var(--item); margin-bottom: 8px; padding: 10px 16px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #30363d; transition: 0.2s; }
-        li:hover { border-color: #8b949e; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; max-width: 1200px; margin: 0 auto; }
+        .col { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #2f3542; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+        h2 { color: var(--text-dim); border-bottom: 2px solid var(--red); padding-bottom: 12px; margin-top: 0; font-size: 1.2em; text-transform: uppercase; }
         
-        .dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 8px; }
-        .dot-online { background-color: #22c55e; } .dot-idle { background-color: #eab308; } .dot-offline { background-color: #475569; }
+        /* Flicker-Free List Container */
+        .list-container { display: flex; flex-direction: column; gap: 10px; list-style: none; padding: 0; margin: 0; }
         
-        .profile { font-weight: 600; color: #fff; text-decoration: none; }
+        .list-item { background: var(--item); padding: 12px 18px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #2f3542; transition: border-color 0.2s, background 0.2s; }
+        .list-item:hover { border-color: var(--text-dim); background: #232a3b; }
+        
+        .dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 10px; box-shadow: inset 0 0 4px rgba(0,0,0,0.5); }
+        .dot-online { background-color: var(--green); box-shadow: 0 0 8px var(--green); } 
+        .dot-idle { background-color: var(--gold); } 
+        .dot-offline { background-color: #57606f; }
+        
+        .player-info { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+        .profile { font-weight: 700; color: var(--text-main); text-decoration: none; font-size: 1.05em; }
         .profile:hover { text-decoration: underline; color: var(--blue); }
         
-        .badge { background: #0d1117; padding: 2px 8px; border-radius: 4px; font-size: 11px; color: var(--gold); border: 1px solid #30363d; cursor: pointer; display: inline-block; margin-left: 6px; }
-        .manual { border-color: var(--blue); color: var(--blue); }
-        .timer-hosp { font-family: monospace; color: var(--red); font-weight: bold; margin-right: 8px;}
-        .timer-status { font-size: 0.85em; color: #58a6ff; font-weight: 500; margin-right: 8px;}
+        .badge { background: #0b0d13; padding: 4px 10px; border-radius: 6px; font-size: 0.75em; color: var(--gold); border: 1px solid #2f3542; cursor: pointer; font-weight: bold; letter-spacing: 0.5px; }
+        .badge:hover { border-color: var(--gold); }
+        .badge.manual { border-color: var(--blue); color: var(--blue); }
+        .badge.manual:hover { border-color: #70a1ff; color: #70a1ff; }
         
-        button { cursor: pointer; border: none; padding: 5px 12px; border-radius: 4px; font-weight: bold; font-size: 10px; background: var(--red); color: white; margin-left: 4px; }
-        .unclaim { background: var(--blue); }
-        .btn-sos { background: var(--gold); color: #000; }
+        .actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+        .timer-hosp { font-family: 'Courier New', Courier, monospace; color: var(--red); font-weight: 800; font-size: 1.1em; text-shadow: 0 0 5px rgba(255, 71, 87, 0.4); }
+        .timer-status { font-size: 0.85em; color: var(--blue); font-weight: 600; text-transform: uppercase; }
         
-        /* Pulse Animation for SOS */
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(255, 62, 62, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(255, 62, 62, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 62, 62, 0); } }
-        .badge-sos { background: var(--red); color: white; border-color: var(--red); animation: pulse 1.5s infinite; cursor: default; }
+        .btn { cursor: pointer; border: none; padding: 6px 14px; border-radius: 6px; font-weight: bold; font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.5px; transition: transform 0.1s, opacity 0.2s; }
+        .btn:active { transform: scale(0.95); }
+        
+        .btn-call { background: var(--red); color: white; box-shadow: 0 4px 10px rgba(255, 71, 87, 0.3); }
+        .btn-call:hover { background: #ff6b81; }
+        
+        .badge-claim { background: var(--blue); color: white; border-color: var(--blue); cursor: default; display: flex; align-items: center; gap: 6px; }
+        .badge-claim:hover { border-color: var(--blue); }
+        
+        /* SOS SYSTEM STYLES */
+        .btn-sos { background: #ff7f50; color: #fff; box-shadow: 0 4px 10px rgba(255, 127, 80, 0.3); }
+        .btn-sos:hover { background: #ff6348; }
+        
+        @keyframes pulse-sos { 
+            0% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0.7); border-color: #ff4757; } 
+            70% { box-shadow: 0 0 0 8px rgba(255, 71, 87, 0); border-color: #ff6b81; } 
+            100% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0); border-color: #ff4757; } 
+        }
+        .badge-sos { background: rgba(255, 71, 87, 0.1); color: #ff4757; border: 1px solid #ff4757; animation: pulse-sos 1.5s infinite; cursor: default; display: flex; align-items: center; gap: 6px; }
+        .badge-sos:hover { border-color: #ff4757; }
+        
+        .btn-icon { background: rgba(0,0,0,0.3); border: none; color: white; border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 0.9em; }
+        .btn-icon:hover { background: rgba(0,0,0,0.6); }
 
-        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .list-item { flex-direction: column; align-items: flex-start; gap: 12px; } .actions { width: 100%; justify-content: space-between; } }
     </style>
 </head>
 <body>
@@ -48,39 +84,110 @@
     <div id="info-box">
         <div id="info-header" onclick="toggleInfo()">Intelligence & Battle Stats <span id="arrow">▼</span></div>
         <div id="info-content">
-            Estimated stats are now provided dynamically via <strong>FF Scouter</strong>. These estimates pull from public data and are refreshed hourly. Please understand that they are guidelines rather than absolute truth. 
-            <br><br><strong>Sorting System:</strong> Members listed as "Okay" jump to the top. Hospitalized players follow, and traveling members sit at the bottom.
-            <br><br><strong>Correction System:</strong> Click any yellow stat badge to manually override the FF Scouter estimate with the real, verified numbers.
-            <br><br><strong>Backup System:</strong> Click the "SOS" button to flag an active enemy if you need a faction member to help you take them down.
+            Estimated stats are provided dynamically via <strong>FF Scouter</strong> and refresh hourly. Treat these as guidelines rather than absolute truth. 
+            <br><br><strong>Correction System:</strong> Click any yellow stat badge to manually override the FF Scouter estimate with real, verified numbers.
+            <br><br><strong>Backup System:</strong> Click the "SOS" button to flag an active enemy if you need immediate faction backup to take them down.
         </div>
     </div>
     <div class="grid">
-        <div class="col"><h2>🛡 Friendly</h2><ul id="friendly"></ul></div>
-        <div class="col"><h2>⚔ Enemy</h2><ul id="enemy"></ul></div>
+        <div class="col"><h2>🛡 Friendly</h2><ul id="friendly" class="list-container"></ul></div>
+        <div class="col"><h2>⚔ Enemy</h2><ul id="enemy" class="list-container"></ul></div>
     </div>
+
 <script>
 let myName = localStorage.getItem("warboard_name") || prompt("Torn Name:");
 if(myName) localStorage.setItem("warboard_name", myName);
 function toggleInfo() { const c = document.getElementById("info-content"); c.style.display = c.style.display === "none" ? "block" : "none"; document.getElementById("arrow").innerText = c.style.display === "none" ? "▼" : "▲"; }
 
+// Logic: SOS Needs Backup (4) > Okay (3) > Hospital (2) > Traveling (1)
 function getPriority(p) { 
-    // Prioritize SOS targets if they are Okay
-    if (p.needsBackup && p.state === "Okay") return 4; 
+    if (p.needsBackup && p.state === "Okay") return 4;
     return p.state === "Okay" ? 3 : p.state === "Hospital" ? 2 : p.state === "Traveling" ? 1 : 0; 
 }
 
-function sortBoard(list, isEnemy) {
-    if (!list || !Array.isArray(list)) return [];
-    return list.sort((a,b) => {
+function format(n){ if(n>1e9) return (n/1e9).toFixed(1)+"b"; if(n>1e6) return (n/1e6).toFixed(1)+"m"; return (n/1e3).toFixed(1)+"k"; }
+
+function getBadgeHTML(p) {
+    if (p.isManual) return `<span class="badge manual" onclick="updateStats('${p.id}')">⚙ ${format(p.estStats)}</span>`;
+    if (p.estStats === "loading") return `<span class="badge" style="opacity: 0.5;" onclick="updateStats('${p.id}')">...</span>`;
+    if (p.estStats === null || p.estStats === 0) return `<span class="badge" style="color: var(--text-dim);" onclick="updateStats('${p.id}')">?</span>`;
+    return `<span class="badge" onclick="updateStats('${p.id}')">${format(p.estStats)}</span>`;
+}
+
+// Builds the raw HTML string for a single player
+function buildPlayerHTML(p, isEnemy) {
+    let leftHTML = `
+        <div class="player-info">
+            <span class="dot dot-${p.onlineStatus.toLowerCase()}"></span>
+            <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a>
+            ${getBadgeHTML(p)}
+        </div>
+    `;
+
+    let statusText = p.state === "Okay" ? "Okay" : (p.state !== "Hospital" ? p.statusDescription : "");
+    let timerHTML = p.state === "Hospital" ? `<span class="timer-hosp" data-until="${p.until}"></span>` : "";
+    let actionsHTML = "";
+
+    if (isEnemy) {
+        let backupHTML = p.needsBackup 
+            ? `<div class="badge badge-sos">🆘 ${p.needsBackup} <button class="btn-icon" onclick="unbackup('${p.id}')">✖</button></div>`
+            : (p.state === "Okay" ? `<button class="btn btn-sos" onclick="backup('${p.id}')">🆘 SOS</button>` : "");
+
+        let claimHTML = p.claimedBy 
+            ? `<div class="badge badge-claim">🎯 ${p.claimedBy} ${p.claimedBy===myName ? `<button class="btn-icon" onclick="unclaim('${p.id}')">✖</button>` : ""}</div>`
+            : `<button class="btn btn-call" onclick="claim('${p.id}')">Call</button>`;
+
+        actionsHTML = `${backupHTML} ${claimHTML}`;
+    }
+
+    return `${leftHTML} <div class="actions"><span class="timer-status">${statusText}</span> ${timerHTML} ${actionsHTML}</div>`;
+}
+
+// FLICKER-FREE DOM RENDERER
+function syncList(containerId, list, isEnemy) {
+    const container = document.getElementById(containerId);
+    
+    // Sort array in memory
+    list.sort((a,b) => {
         let pA = getPriority(a), pB = getPriority(b);
         if (pA !== pB) return pB - pA;
         if (a.state === "Hospital" && b.state === "Hospital") return a.until - b.until;
         if(isEnemy) return (b.intelScore || 0) - (a.intelScore || 0);
         return a.name.localeCompare(b.name);
     });
+
+    const currentNodes = new Map();
+    Array.from(container.children).forEach(el => currentNodes.set(el.id, el));
+
+    // Append moves existing elements smoothly, creating them if missing
+    list.forEach(p => {
+        const id = (isEnemy ? 'e-' : 'f-') + p.id;
+        let li = currentNodes.get(id);
+        
+        if (!li) {
+            li = document.createElement('li');
+            li.id = id;
+            li.className = 'list-item';
+        }
+
+        const newHTML = buildPlayerHTML(p, isEnemy);
+        // ONLY update innerHTML if data changed to prevent flashing
+        if (li.dataset.html !== newHTML) {
+            li.innerHTML = newHTML;
+            li.dataset.html = newHTML; 
+        }
+        
+        container.appendChild(li); 
+        currentNodes.delete(id);
+    });
+
+    // Remove people no longer in faction
+    currentNodes.forEach(el => el.remove());
+    updateTimers(); 
 }
 
-setInterval(() => {
+// Global Timer Updater
+function updateTimers() {
     document.querySelectorAll(".timer-hosp").forEach(el => {
         let left = parseInt(el.dataset.until) - Math.floor(Date.now()/1000);
         if(left > 0) {
@@ -88,16 +195,8 @@ setInterval(() => {
             el.innerText = h > 0 ? `${h}:${m.toString().padStart(2,"0")}:${s.toString().padStart(2,"0")}` : `${m}:${s.toString().padStart(2,"0")}`;
         } else el.innerText = "Ready";
     });
-}, 1000);
-
-function format(n){ if(n>1e9) return (n/1e9).toFixed(1)+"b"; if(n>1e6) return (n/1e6).toFixed(1)+"m"; return (n/1e3).toFixed(1)+"k"; }
-
-function getBadgeHTML(p) {
-    if (p.isManual) return `<span class="badge manual" onclick="updateStats('${p.id}')">${format(p.estStats)}</span>`;
-    if (p.estStats === "loading") return `<span class="badge" style="opacity: 0.5;" onclick="updateStats('${p.id}')">...</span>`;
-    if (p.estStats === null || p.estStats === 0) return `<span class="badge" style="color: #8b949e;" onclick="updateStats('${p.id}')">?</span>`;
-    return `<span class="badge" onclick="updateStats('${p.id}')">${format(p.estStats)}</span>`;
 }
+setInterval(updateTimers, 1000);
 
 async function updateStats(id) { 
     let input = prompt("Enter ACTUAL battle stats:"); 
@@ -107,8 +206,6 @@ async function updateStats(id) {
     } 
 }
 
-let lastFriendly = "", lastEnemy = "";
-
 async function load(){
     try {
         const res = await fetch("/api/warboard");
@@ -116,47 +213,11 @@ async function load(){
         const data = await res.json();
         if (data.error) return; 
 
-        const fList = data.friendly || [];
-        const eList = data.enemy || [];
-
-        let friendlyHTML = sortBoard(fList, false).map(p => `<li><div><span class="dot dot-${p.onlineStatus.toLowerCase()}"></span><a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a> ${getBadgeHTML(p)}</div> <span class="timer-status">${p.state === "Okay" ? "Okay" : (p.state !== "Hospital" ? p.statusDescription : "")}</span> ${p.state==="Hospital" ? `<span class="timer-hosp" data-until="${p.until}"></span>` : ""}</li>`).join("");
-        
-        let enemyHTML = sortBoard(eList, true).map(p => {
-            
-            // Backup HTML Logic
-            let backupHTML = "";
-            if (p.needsBackup) {
-                // If it needs backup, show the glaring SOS badge. Anyone can click the X to clear it once resolved.
-                backupHTML = `<span class="badge badge-sos">🆘 ${p.needsBackup} <button class="unclaim" style="background:#8b0000; margin-left:4px; padding: 2px 6px;" onclick="unbackup('${p.id}')">✖</button></span>`;
-            } else if (p.state === "Okay") {
-                // Only allow asking for backup if they are out of the hospital
-                backupHTML = `<button class="btn-sos" onclick="backup('${p.id}')">SOS</button>`;
-            }
-
-            // Claim HTML Logic
-            let claimHTML = p.claimedBy 
-                ? `<span class="badge" style="background:#4c1d95; color:white;">🎯 ${p.claimedBy} ${p.claimedBy===myName ? `<button class="unclaim" style="padding: 2px 6px;" onclick="unclaim('${p.id}')">✖</button>` : ""}</span>`
-                : `<button class="call" onclick="claim('${p.id}')">Call</button>`;
-
-            return `<li>
-                <div><span class="dot dot-${p.onlineStatus.toLowerCase()}"></span><a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a> ${getBadgeHTML(p)}</div>
-                <div style="display:flex; align-items:center;">
-                    <span class="timer-status">${p.state === "Okay" ? "Okay" : (p.state !== "Hospital" ? p.statusDescription : "")}</span> 
-                    ${p.state==="Hospital" ? `<span class="timer-hosp" data-until="${p.until}"></span> ` : ""}
-                    ${backupHTML}
-                    ${claimHTML}
-                </div>
-            </li>`;
-        }).join("");
-
-        if(friendlyHTML !== lastFriendly) { document.getElementById("friendly").innerHTML = friendlyHTML; lastFriendly = friendlyHTML; }
-        if(enemyHTML !== lastEnemy) { document.getElementById("enemy").innerHTML = enemyHTML; lastEnemy = enemyHTML; }
-    } catch(e) {
-        console.error("Update failed, retrying on next tick...", e);
-    }
+        syncList("friendly", data.friendly || [], false);
+        syncList("enemy", data.enemy || [], true);
+    } catch(e) { console.error("Update failed, retrying on next tick...", e); }
 }
 
-// API Calls
 async function claim(id) { await fetch("/api/claim", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enemyId:id, playerName:myName})}); load(); }
 async function unclaim(id) { await fetch("/api/unclaim", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enemyId:id, playerName:myName})}); load(); }
 async function backup(id) { await fetch("/api/backup", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enemyId:id, playerName:myName})}); load(); }
