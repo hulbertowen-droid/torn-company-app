@@ -139,7 +139,6 @@ app.post('/api/update-stats', (req, res) => {
     res.json({ success: true });
 });
 
-// --- ENHANCED PAYOUT CALCULATOR: REPORT MERGED WITH ATTACK LOGS ---
 app.get('/api/past-war', async (req, res) => {
     const { apiKey, reportId } = req.query;
     if (!apiKey || !reportId) return res.status(400).json({ error: "Missing API Key or Report ID" });
@@ -160,10 +159,14 @@ app.get('/api/past-war', async (req, res) => {
         if (!myFacId || myFacId === "0") return res.status(400).json({ error: "You are not currently in a faction." });
 
         if (reportData.error) return res.status(400).json({ error: "Torn API Error: " + reportData.error.error });
-        if (!reportData.rankedwarreport || !reportData.rankedwarreport.factions) return res.status(400).json({ error: "Invalid Report ID or no data found." });
+        if (!reportData.rankedwarreport || !reportData.rankedwarreport.factions) {
+            return res.status(400).json({ error: "Invalid Report ID or no data found." });
+        }
 
         const myFactionWarData = reportData.rankedwarreport.factions[myFacId];
-        if (!myFactionWarData) return res.status(400).json({ error: "Your faction was not part of this Ranked War Report." });
+        if (!myFactionWarData) {
+            return res.status(400).json({ error: "Your faction was not part of this Ranked War Report." });
+        }
 
         let totalCacheValue = 0;
         let cachesWon = [];
@@ -186,7 +189,7 @@ app.get('/api/past-war', async (req, res) => {
             }
         }
 
-        // ✅ FIXED ASSISTS / RETALIATIONS BLOCK
+        // ================= FIXED ATTACK PARSING =================
         let detailedHits = {};
 
         try {
@@ -213,19 +216,30 @@ app.get('/api/past-war', async (req, res) => {
                                 detailedHits[aId] = { assists: 0, retails: 0, full: 0 };
                             }
 
-                            if (attack.assist === true || attack.result === 'Assist') {
+                            // ASSIST FIX
+                            const isAssist =
+                                attack.assist === true ||
+                                attack.is_assist === true ||
+                                (typeof attack.result === 'string' && attack.result.toLowerCase().includes('assist'));
+
+                            if (isAssist) {
                                 detailedHits[aId].assists++;
                                 continue;
                             }
 
+                            // RETALIATION FIX
+                            const resultStr = (attack.result || '').toLowerCase();
                             const isRetaliation =
-                                attack.modifiers?.retaliation > 0 ||
-                                attack.result?.toLowerCase?.().includes('retaliation');
+                                attack.is_retaliation === true ||
+                                resultStr.includes('retaliation') ||
+                                resultStr.includes('revenge');
 
                             if (isRetaliation) {
                                 detailedHits[aId].retails++;
                             } else if (
-                                ['Hospitalized', 'Mugged', 'Left'].includes(attack.result)
+                                attack.result === 'Hospitalized' ||
+                                attack.result === 'Mugged' ||
+                                attack.result === 'Left'
                             ) {
                                 detailedHits[aId].full++;
                             }
@@ -277,7 +291,7 @@ app.get('/api/past-war', async (req, res) => {
 });
 
 app.get('/api/warboard', async (req, res) => {
-    // ... [Rest of Warboard Code is untouched] ...
+    // ... unchanged
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
         let enemyId = req.query.enemyFaction && req.query.enemyFaction !== "null" && req.query.enemyFaction !== "" ? req.query.enemyFaction : null;
@@ -292,7 +306,7 @@ app.get('/api/warboard', async (req, res) => {
         if (myData.error) return res.status(400).json({ error: "Invalid API Key" });
         if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
         if (enemyId && Object.keys(enemyDataResult.members || {}).length === 0) {
-             enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} }));
+            enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} }));
         }
 
         const friendlyIds = new Set(Object.keys(myData.members || {}));
@@ -335,24 +349,33 @@ app.get('/api/warboard', async (req, res) => {
                 const cachedStats = statsCache[id]?.stats; 
                 const est = manualStats[id]?.stats !== undefined ? manualStats[id].stats : (hasCache ? cachedStats : "loading");
                 const intelScore = isEnemy ? computeWarIntel({ id, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", estStats: est }, statsCache) : null;
-                
-                if (isEnemy && backups[id] && m.status?.state === "Hospital") {
-                    const timeLeft = m.status.until - Math.floor(Date.now() / 1000);
-                    if (timeLeft > 1800) delete backups[id];
-                }
-                
-                return { 
-                    id, name: m.name, state: m.status?.state, until: m.status?.until, statusDescription: m.status?.description || "", 
-                    onlineStatus: m.last_action?.status || "Offline", claimedBy: isEnemy ? claims[id]?.playerName || null : null, 
-                    needsBackup: isEnemy ? backups[id]?.playerName || null : null, estStats: est, intelScore, isManual: !!manualStats[id] 
+
+                return {
+                    id,
+                    name: m.name,
+                    state: m.status?.state,
+                    until: m.status?.until,
+                    statusDescription: m.status?.description || "",
+                    onlineStatus: m.last_action?.status || "Offline",
+                    claimedBy: isEnemy ? claims[id]?.playerName || null : null,
+                    needsBackup: isEnemy ? backups[id]?.playerName || null : null,
+                    estStats: est,
+                    intelScore,
+                    isManual: !!manualStats[id]
                 };
             });
         };
 
-        res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId, graphData, isRankedWar });
+        res.json({
+            friendly: parseMembers(myData, false),
+            enemy: parseMembers(enemyDataResult, true),
+            detectedEnemyId: enemyId,
+            graphData,
+            isRankedWar
+        });
 
-    } catch (err) { 
-        res.status(500).json({ error: "warboard failed" }); 
+    } catch (err) {
+        res.status(500).json({ error: "warboard failed" });
     }
 });
 
