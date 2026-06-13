@@ -10,10 +10,10 @@
             --card: #11141d; 
             --item: #1b202e; 
             --red: #ff4757; 
-            --blue: #3742fa; 
+            --blue: #58a6ff; /* Lightened this blue significantly */
             --gold: #ffa502;
             --text-main: #f1f2f6;
-            --text-dim: #747d8c;
+            --text-dim: #a1aab5; /* Brightened the dim text */
             --green: #2ed573;
         }
         
@@ -50,7 +50,9 @@
         
         .actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
         .timer-hosp { font-family: 'Courier New', Courier, monospace; color: var(--red); font-weight: 800; font-size: 1.1em; text-shadow: 0 0 5px rgba(255, 71, 87, 0.4); }
-        .timer-status { font-size: 0.85em; color: var(--blue); font-weight: 600; text-transform: uppercase; }
+        
+        /* Fixed text contrast here */
+        .timer-status { font-size: 0.85em; color: #79c0ff; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
         
         .btn { cursor: pointer; border: none; padding: 6px 14px; border-radius: 6px; font-weight: bold; font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.5px; transition: transform 0.1s, opacity 0.2s; }
         .btn:active { transform: scale(0.95); }
@@ -70,7 +72,7 @@
             70% { box-shadow: 0 0 0 8px rgba(255, 71, 87, 0); border-color: #ff6b81; } 
             100% { box-shadow: 0 0 0 0 rgba(255, 71, 87, 0); border-color: #ff4757; } 
         }
-        .badge-sos { background: rgba(255, 71, 87, 0.1); color: #ff4757; border: 1px solid #ff4757; animation: pulse-sos 1.5s infinite; cursor: default; display: flex; align-items: center; gap: 6px; }
+        .badge-sos { background: rgba(255, 71, 87, 0.1); color: #ff4757; border: 1px solid #ff4757; animation: pulse-sos 1.5s infinite; cursor: default; display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 0.8em;}
         .badge-sos:hover { border-color: #ff4757; }
         
         .btn-icon { background: rgba(0,0,0,0.3); border: none; color: white; border-radius: 4px; padding: 2px 6px; cursor: pointer; font-size: 0.9em; }
@@ -99,9 +101,9 @@ let myName = localStorage.getItem("warboard_name") || prompt("Torn Name:");
 if(myName) localStorage.setItem("warboard_name", myName);
 function toggleInfo() { const c = document.getElementById("info-content"); c.style.display = c.style.display === "none" ? "block" : "none"; document.getElementById("arrow").innerText = c.style.display === "none" ? "▼" : "▲"; }
 
-// Logic: SOS Needs Backup (4) > Okay (3) > Hospital (2) > Traveling (1)
+// Priority: SOS Needs Backup (4) > Okay (3) > Hospital (2) > Traveling (1)
 function getPriority(p) { 
-    if (p.needsBackup && p.state === "Okay") return 4;
+    if (p.needsBackup && p.state !== "Hospital") return 4;
     return p.state === "Okay" ? 3 : p.state === "Hospital" ? 2 : p.state === "Traveling" ? 1 : 0; 
 }
 
@@ -129,9 +131,10 @@ function buildPlayerHTML(p, isEnemy) {
     let actionsHTML = "";
 
     if (isEnemy) {
+        // Changed logic: SOS is available as long as they are NOT in the hospital
         let backupHTML = p.needsBackup 
-            ? `<div class="badge badge-sos">🆘 ${p.needsBackup} <button class="btn-icon" onclick="unbackup('${p.id}')">✖</button></div>`
-            : (p.state === "Okay" ? `<button class="btn btn-sos" onclick="backup('${p.id}')">🆘 SOS</button>` : "");
+            ? `<div class="badge-sos">🆘 ${p.needsBackup} <button class="btn-icon" onclick="unbackup('${p.id}')">✖</button></div>`
+            : (p.state !== "Hospital" ? `<button class="btn btn-sos" onclick="backup('${p.id}')">SOS</button>` : "");
 
         let claimHTML = p.claimedBy 
             ? `<div class="badge badge-claim">🎯 ${p.claimedBy} ${p.claimedBy===myName ? `<button class="btn-icon" onclick="unclaim('${p.id}')">✖</button>` : ""}</div>`
@@ -186,7 +189,6 @@ function syncList(containerId, list, isEnemy) {
     updateTimers(); 
 }
 
-// Global Timer Updater
 function updateTimers() {
     document.querySelectorAll(".timer-hosp").forEach(el => {
         let left = parseInt(el.dataset.until) - Math.floor(Date.now()/1000);
