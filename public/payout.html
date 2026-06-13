@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payout Calculator | Spider-Verse</title>
+    <style>
+        :root { 
+            --bg: #090a0f; --card: #11141d; --item: #1b202e; 
+            --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
+            --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
+        }
+        
+        body { background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px; }
+        
+        .top-nav { display: flex; justify-content: center; gap: 20px; max-width: 1200px; margin: 0 auto 20px auto; background: var(--card); padding: 12px; border-radius: 10px; border: 1px solid #2f3542; }
+        .nav-link { color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 6px 12px; border-radius: 6px; transition: 0.2s; text-transform: uppercase; font-size: 0.9em; letter-spacing: 1px; }
+        .nav-link:hover { background: #2f3542; color: white; }
+        .nav-link.active { color: white; background: rgba(88, 166, 255, 0.15); border: 1px solid var(--blue); }
+
+        h1 { text-align: center; color: var(--gold); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
+
+        .container { max-width: 1000px; margin: 0 auto; background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+        
+        .setup-box { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; background: #0b0d13; padding: 20px; border-radius: 12px; border: 1px solid #2f3542; }
+        .input-group { display: flex; flex-direction: column; }
+        .input-group label { font-size: 0.85em; color: var(--text-dim); margin-bottom: 5px; font-weight: bold; text-transform: uppercase; }
+        .input-group input, .input-group select { padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: var(--card); color: white; font-size: 1em; }
+        .input-helper { font-size: 0.75em; color: #57606f; margin-top: 4px; }
+        
+        .btn-fetch { grid-column: span 2; background: var(--blue); color: white; padding: 14px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; font-size: 1.1em; transition: 0.2s; }
+        .btn-fetch:hover { background: #79c0ff; }
+        .btn-fetch:disabled { background: #2f3542; cursor: not-allowed; }
+
+        #error-msg { display: none; background: rgba(255, 71, 87, 0.1); color: var(--red); padding: 15px; border-radius: 8px; border: 1px solid var(--red); margin-bottom: 20px; text-align: center; font-weight: bold; }
+
+        .payout-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.95em; display: none; }
+        .payout-table th, .payout-table td { padding: 14px; text-align: left; border-bottom: 1px solid #2f3542; }
+        .payout-table th { color: var(--gold); font-weight: 700; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; }
+        .payout-table tr:hover td { background: rgba(255,255,255,0.02); }
+        .money-text { color: var(--green); font-weight: bold; font-family: 'Courier New', Courier, monospace; font-size: 1.1em;}
+        
+        .profile { font-weight: 700; color: var(--text-main); text-decoration: none; }
+        .profile:hover { text-decoration: underline; color: var(--blue); }
+
+        @media (max-width: 768px) { .setup-box { grid-template-columns: 1fr; } .btn-fetch { grid-column: span 1; } }
+    </style>
+</head>
+<body>
+    <div class="top-nav">
+        <a href="/" class="nav-link">📡 Live Warboard</a>
+        <a href="/payout.html" class="nav-link active">💰 Payout Calculator</a>
+    </div>
+
+    <h1>Ranked War Payouts</h1>
+
+    <div class="container">
+        <div id="error-msg"></div>
+
+        <div class="setup-box">
+            <div class="input-group" style="grid-column: span 2;">
+                <label>Ranked War Report ID</label>
+                <input type="text" id="inp-report" placeholder="e.g. 12345">
+                <div class="input-helper">Find this ID in the URL of the official Ranked War Report page (reportID=XXXXX).</div>
+            </div>
+            
+            <div class="input-group">
+                <label>Total Winnings Pool ($)</label>
+                <input type="number" id="inp-pool" placeholder="e.g. 2500000000" oninput="calculatePayouts()">
+            </div>
+            
+            <div class="input-group">
+                <label>Faction Vault Cut (%)</label>
+                <input type="number" id="inp-cut" min="0" max="100" value="20" oninput="calculatePayouts()">
+            </div>
+            
+            <div class="input-group" style="grid-column: span 2;">
+                <label>Distribution Metric</label>
+                <select id="inp-metric" onchange="calculatePayouts()">
+                    <option value="score">War Score Contributed</option>
+                    <option value="attacks">Total Hits Made</option>
+                </select>
+            </div>
+
+            <button class="btn-fetch" id="btn-fetch" onclick="fetchWarData()">Fetch War Data & Calculate</button>
+        </div>
+
+        <table class="payout-table" id="payout-table">
+            <thead>
+                <tr>
+                    <th>Member</th>
+                    <th>Hits</th>
+                    <th>War Score</th>
+                    <th>Share %</th>
+                    <th>Payout Amount</th>
+                </tr>
+            </thead>
+            <tbody id="payout-body">
+                <!-- Javascript populates this -->
+            </tbody>
+        </table>
+    </div>
+
+<script>
+let myKey = localStorage.getItem("warboard_apikey") || "";
+let currentWarData = [];
+
+// If they haven't set an API key on the main board, warn them.
+if (!myKey) {
+    document.getElementById("error-msg").innerText = "⚠️ Please set your API Key on the Live Warboard Settings page first.";
+    document.getElementById("error-msg").style.display = "block";
+    document.getElementById("btn-fetch").disabled = true;
+}
+
+function formatMoney(n) {
+    return "$" + n.toLocaleString('en-US', {maximumFractionDigits: 0});
+}
+
+async function fetchWarData() {
+    const reportId = document.getElementById("inp-report").value.trim();
+    const errorBox = document.getElementById("error-msg");
+    const btn = document.getElementById("btn-fetch");
+
+    if (!reportId) {
+        errorBox.innerText = "Please enter a Report ID.";
+        errorBox.style.display = "block";
+        return;
+    }
+
+    errorBox.style.display = "none";
+    btn.innerText = "Fetching Data...";
+    btn.disabled = true;
+
+    try {
+        const res = await fetch(`/api/past-war?apiKey=${myKey}&reportId=${reportId}`);
+        const data = await res.json();
+
+        if (data.error) {
+            errorBox.innerText = data.error;
+            errorBox.style.display = "block";
+            document.getElementById("payout-table").style.display = "none";
+        } else {
+            currentWarData = data.members;
+            document.getElementById("payout-table").style.display = "table";
+            calculatePayouts();
+        }
+    } catch (e) {
+        errorBox.innerText = "Network error while fetching data.";
+        errorBox.style.display = "block";
+    }
+
+    btn.innerText = "Fetch War Data & Calculate";
+    btn.disabled = false;
+}
+
+function calculatePayouts() {
+    if (!currentWarData || currentWarData.length === 0) return;
+
+    const totalStr = document.getElementById("inp-pool").value;
+    const totalWinnings = parseFloat(totalStr) || 0;
+    
+    let vaultCutStr = document.getElementById("inp-cut").value;
+    let vaultCutPercent = parseFloat(vaultCutStr);
+    if (isNaN(vaultCutPercent) || vaultCutPercent < 0) vaultCutPercent = 0;
+    if (vaultCutPercent > 100) vaultCutPercent = 100;
+
+    const metric = document.getElementById("inp-metric").value; // "attacks" or "score"
+    const memberPool = totalWinnings * (1 - (vaultCutPercent / 100));
+    
+    let sumTotal = 0;
+    currentWarData.forEach(p => {
+        sumTotal += p[metric];
+    });
+
+    const tbody = document.getElementById("payout-body");
+    let html = "";
+
+    if (sumTotal > 0 && totalWinnings > 0) {
+        currentWarData.forEach(p => {
+            let myVal = p[metric];
+            let sharePercent = myVal / sumTotal;
+            let myPayout = memberPool * sharePercent;
+
+            html += `<tr>
+                <td><a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a></td>
+                <td>${p.attacks}</td>
+                <td>${p.score}</td>
+                <td>${(sharePercent * 100).toFixed(2)}%</td>
+                <td class="money-text">${formatMoney(myPayout)}</td>
+            </tr>`;
+        });
+    } else if (totalWinnings <= 0) {
+         html = `<tr><td colspan="5" style="text-align:center; color:var(--text-dim); padding: 20px;">Enter the total pool amount above to see payouts.</td></tr>`;
+    }
+
+    tbody.innerHTML = html;
+}
+</script>
+</body>
+</html>
