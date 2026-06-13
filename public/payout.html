@@ -20,14 +20,13 @@
 
         h1 { text-align: center; color: var(--gold); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
 
-        .container { max-width: 1000px; margin: 0 auto; background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+        .container { max-width: 1200px; margin: 0 auto; background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
         
         #error-msg { display: none; background: rgba(255, 71, 87, 0.1); color: var(--red); padding: 15px; border-radius: 8px; border: 1px solid var(--red); margin-bottom: 20px; text-align: center; font-weight: bold; }
         #permission-warning { display: none; background: rgba(255, 165, 2, 0.1); color: var(--gold); padding: 15px; border-radius: 8px; border: 1px solid var(--gold); margin-bottom: 20px; text-align: center; font-size: 0.9em; }
 
-        /* WAR LIST STYLES */
         h2.section-title { color: var(--text-dim); border-bottom: 2px solid var(--red); padding-bottom: 10px; margin-top: 0; font-size: 1.1em; text-transform: uppercase; }
-        .war-list-container { display: flex; flex-direction: column; gap: 12px; margin-bottom: 30px; max-height: 350px; overflow-y: auto; padding-right: 10px; }
+        .war-list-container { display: flex; flex-direction: column; gap: 12px; margin-bottom: 30px; max-height: 250px; overflow-y: auto; padding-right: 10px; }
         .war-list-container::-webkit-scrollbar { width: 8px; }
         .war-list-container::-webkit-scrollbar-track { background: var(--card); border-radius: 4px; }
         .war-list-container::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
@@ -42,13 +41,11 @@
         .btn-fetch:hover { background: #79c0ff; }
         .btn-fetch:disabled { background: #2f3542; cursor: not-allowed; }
 
-        /* CALCULATOR CONTROLS */
-        .setup-box { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; background: #0b0d13; padding: 20px; border-radius: 12px; border: 1px solid #2f3542; }
+        .setup-box { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px; background: #0b0d13; padding: 20px; border-radius: 12px; border: 1px solid #2f3542; }
         .input-group { display: flex; flex-direction: column; }
         .input-group label { font-size: 0.85em; color: var(--text-dim); margin-bottom: 5px; font-weight: bold; text-transform: uppercase; }
         .input-group input, .input-group select { padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: var(--card); color: white; font-size: 1em; }
 
-        /* REWARDS BREAKDOWN STYLES */
         #rewards-breakdown { display: none; background: rgba(46, 213, 115, 0.05); padding: 20px; border-radius: 12px; border: 1px solid rgba(46, 213, 115, 0.3); margin-bottom: 30px; }
         #rewards-breakdown h3 { color: var(--green); margin-top: 0; margin-bottom: 15px; text-transform: uppercase; font-size: 1.1em; letter-spacing: 1px; }
         #rewards-list { color: var(--text-main); font-size: 0.95em; padding-left: 20px; line-height: 1.8; margin: 0; }
@@ -56,14 +53,15 @@
 
         .payout-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.95em; display: none; }
         .payout-table th, .payout-table td { padding: 14px; text-align: left; border-bottom: 1px solid #2f3542; }
-        .payout-table th { color: var(--gold); font-weight: 700; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; }
+        .payout-table th { color: var(--gold); font-weight: 700; text-transform: uppercase; font-size: 0.8em; letter-spacing: 1px; }
         .payout-table tr:hover td { background: rgba(255,255,255,0.02); }
         .money-text { color: var(--green); font-weight: bold; font-family: 'Courier New', Courier, monospace; font-size: 1.1em;}
+        .dim-text { color: var(--text-dim); font-size: 0.85em; }
         
         .profile { font-weight: 700; color: var(--text-main); text-decoration: none; }
         .profile:hover { text-decoration: underline; color: var(--blue); }
 
-        @media (max-width: 768px) { .setup-box { grid-template-columns: 1fr; } .war-card { flex-direction: column; align-items: flex-start; gap: 15px; } .war-card button { width: 100%; } }
+        @media (max-width: 768px) { .war-card { flex-direction: column; align-items: flex-start; gap: 15px; } .war-card button { width: 100%; } }
     </style>
 </head>
 <body>
@@ -87,28 +85,46 @@
 
         <div id="rewards-breakdown">
             <h3 id="report-title">🎁 Automated War Rewards</h3>
-            <ul id="rewards-list">
-                <!-- Populated via JS -->
-            </ul>
-            <div class="rewards-note">* The total below automatically calculates the estimated market value of your Caches based on real-time Torn item prices. If you also sold your faction points, be sure to add that extra cash manually to the total pool!</div>
+            <ul id="rewards-list"></ul>
+            <div class="rewards-note">* Gross item value is automatically calculated. The total pool below applies your specific <strong>Trader Buy Rate</strong> to estimate actual cash generated.</div>
         </div>
 
+        <h2 class="section-title">1. Financial Settings</h2>
         <div class="setup-box">
+            <div class="input-group">
+                <label>Trader Buy Rate (%)</label>
+                <input type="number" id="inp-trader" min="1" max="100" value="95" oninput="applyTraderRate()">
+            </div>
             <div class="input-group">
                 <label>Total Winnings Pool ($)</label>
                 <input type="number" id="inp-pool" placeholder="e.g. 2500000000" oninput="calculatePayouts()">
             </div>
-            
             <div class="input-group">
                 <label>Faction Vault Cut (%)</label>
                 <input type="number" id="inp-cut" min="0" max="100" value="20" oninput="calculatePayouts()">
             </div>
-            
+        </div>
+
+        <h2 class="section-title">2. Hit Modifiers & Distribution</h2>
+        <div class="setup-box">
+            <div class="input-group">
+                <label>Standard Hit Weight</label>
+                <input type="number" id="inp-w-std" step="0.1" value="1.0" oninput="calculatePayouts()">
+            </div>
+            <div class="input-group">
+                <label>Assist Weight</label>
+                <input type="number" id="inp-w-ast" step="0.1" value="0.5" oninput="calculatePayouts()">
+            </div>
+            <div class="input-group">
+                <label>Retaliation Weight</label>
+                <input type="number" id="inp-w-ret" step="0.1" value="1.5" oninput="calculatePayouts()">
+            </div>
             <div class="input-group" style="grid-column: 1 / -1;">
                 <label>Distribution Metric</label>
                 <select id="inp-metric" onchange="calculatePayouts()">
-                    <option value="score">War Score Contributed</option>
-                    <option value="attacks">Total Hits Made</option>
+                    <option value="weighted">Weighted Hits (Standard, Assists, Retails)</option>
+                    <option value="attacks">Total Hits (Flat Rate)</option>
+                    <option value="score">War Score Contributed (Respect)</option>
                 </select>
             </div>
         </div>
@@ -117,7 +133,9 @@
             <thead>
                 <tr>
                     <th>Member</th>
-                    <th>Hits</th>
+                    <th>Total Hits</th>
+                    <th>Assists</th>
+                    <th>Retaliations</th>
                     <th>War Score</th>
                     <th>Share %</th>
                     <th>Payout Amount</th>
@@ -132,6 +150,7 @@
 <script>
 let myKey = localStorage.getItem("warboard_apikey") || "";
 let currentWarData = [];
+window.cacheMarketValue = 0;
 
 if (!myKey) {
     document.getElementById("error-msg").innerText = "⚠️ Please set your API Key on the Live Warboard Settings page first.";
@@ -145,10 +164,8 @@ function formatMoney(n) {
     return "$" + n.toLocaleString('en-US', {maximumFractionDigits: 0});
 }
 
-// Auto-Load Past Wars directly from Torn's Ranked Wars API
 async function loadPastWars() {
     try {
-        // Fetching the rankedwars selection, which contains the FULL history, not just the basic overview
         const res = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${myKey}`);
         const data = await res.json();
         
@@ -157,7 +174,6 @@ async function loadPastWars() {
             return;
         }
 
-        // We MUST use data.rankedwars (no underscore). data.ranked_wars is only the active war!
         if (!data.rankedwars || Object.keys(data.rankedwars).length === 0) {
             document.getElementById("war-list").innerHTML = `<div style="text-align:center; color:var(--text-dim);">No ranked wars found. Ensure you are using a Limited Access API key.</div>`;
             document.getElementById("permission-warning").style.display = "block";
@@ -165,13 +181,9 @@ async function loadPastWars() {
         }
 
         const myFacId = data.ID.toString();
-        const warListDiv = document.getElementById("war-list");
         let html = "";
-
-        // Convert the full history object to an array and sort it newest first
         const warsArray = Object.entries(data.rankedwars).map(([id, warInfo]) => ({ id, ...warInfo }));
         
-        // Filter out ongoing wars (where end time is 0) so we only list past wars that have generated reports
         const pastWars = warsArray.filter(w => w.war.end > 0);
         pastWars.sort((a, b) => b.war.start - a.war.start);
 
@@ -190,27 +202,24 @@ async function loadPastWars() {
                         <h3>vs ${enemyFacName}</h3>
                         <div class="status">Started: ${startDate} | Ended: ${endDate}</div>
                     </div>
-                    <button class="btn-fetch" id="btn-${war.id}" onclick="fetchWarData('${war.id}', '${enemyFacName}')">Calculate Payout</button>
+                    <button class="btn-fetch" id="btn-${war.id}" onclick="fetchWarData('${war.id}', '${enemyFacName}')">Load Data</button>
                 </div>
             `;
         });
 
-        warListDiv.innerHTML = html;
+        document.getElementById("war-list").innerHTML = html;
     } catch (e) {
         document.getElementById("war-list").innerHTML = `<div style="color:var(--red); text-align:center;">Failed to load war history. Check your connection.</div>`;
     }
 }
 
-// Fetch specific war report and trigger the auto-cache valuation backend
 async function fetchWarData(reportId, enemyName) {
     const errorBox = document.getElementById("error-msg");
     const btn = document.getElementById(`btn-${reportId}`);
     
-    // Reset buttons
-    document.querySelectorAll('.btn-fetch').forEach(b => { b.innerText = "Calculate Payout"; b.disabled = false; });
-
+    document.querySelectorAll('.btn-fetch').forEach(b => { b.innerText = "Load Data"; b.disabled = false; });
     errorBox.style.display = "none";
-    btn.innerText = "Scanning Market...";
+    btn.innerText = "Scanning Market & Logs...";
     btn.disabled = true;
 
     try {
@@ -226,9 +235,9 @@ async function fetchWarData(reportId, enemyName) {
             currentWarData = data.members;
             document.getElementById("report-title").innerText = `🎁 Automated Rewards vs ${enemyName}`;
             
-            // Auto-Fill the Caches Logic
             if (data.rewards && data.rewards.totalCacheValue > 0) {
-                document.getElementById("inp-pool").value = data.rewards.totalCacheValue;
+                window.cacheMarketValue = data.rewards.totalCacheValue;
+                applyTraderRate();
                 
                 let rewardsHTML = "";
                 data.rewards.caches.forEach(c => {
@@ -240,6 +249,7 @@ async function fetchWarData(reportId, enemyName) {
                 document.getElementById("rewards-list").innerHTML = rewardsHTML;
                 document.getElementById("rewards-breakdown").style.display = "block";
             } else {
+                window.cacheMarketValue = 0;
                 document.getElementById("rewards-breakdown").style.display = "none";
                 document.getElementById("inp-pool").value = ""; 
             }
@@ -255,6 +265,16 @@ async function fetchWarData(reportId, enemyName) {
     btn.innerText = "Data Loaded ✓";
 }
 
+function applyTraderRate() {
+    if (window.cacheMarketValue > 0) {
+        let rate = parseFloat(document.getElementById("inp-trader").value);
+        if (isNaN(rate) || rate < 0) rate = 0;
+        let actualCash = window.cacheMarketValue * (rate / 100);
+        document.getElementById("inp-pool").value = actualCash;
+        calculatePayouts();
+    }
+}
+
 function calculatePayouts() {
     if (!currentWarData || currentWarData.length === 0) return;
 
@@ -264,35 +284,67 @@ function calculatePayouts() {
     let vaultCutStr = document.getElementById("inp-cut").value;
     let vaultCutPercent = parseFloat(vaultCutStr);
     if (isNaN(vaultCutPercent) || vaultCutPercent < 0) vaultCutPercent = 0;
-    if (vaultCutPercent > 100) vaultCutPercent = 100;
-
+    
     const metric = document.getElementById("inp-metric").value; 
     const memberPool = totalWinnings * (1 - (vaultCutPercent / 100));
     
+    let wStd = parseFloat(document.getElementById("inp-w-std").value) || 1.0;
+    let wAst = parseFloat(document.getElementById("inp-w-ast").value) || 0.5;
+    let wRet = parseFloat(document.getElementById("inp-w-ret").value) || 1.5;
+
     let sumTotal = 0;
-    currentWarData.forEach(p => { sumTotal += p[metric]; });
+    currentWarData.forEach(p => {
+        if (metric === 'score') {
+            sumTotal += p.score;
+        } else if (metric === 'attacks') {
+            sumTotal += p.attacks;
+        } else if (metric === 'weighted') {
+            if (p.logsFound) {
+                sumTotal += (p.standard * wStd) + (p.assists * wAst) + (p.retails * wRet);
+            } else {
+                sumTotal += (p.attacks * wStd); // Fallback if detailed logs expired
+            }
+        }
+    });
 
     const tbody = document.getElementById("payout-body");
     let html = "";
 
     if (sumTotal > 0 && totalWinnings > 0) {
         currentWarData.forEach(p => {
-            let myVal = p[metric];
+            let myVal = 0;
+            if (metric === 'score') {
+                myVal = p.score;
+            } else if (metric === 'attacks') {
+                myVal = p.attacks;
+            } else if (metric === 'weighted') {
+                if (p.logsFound) {
+                    myVal = (p.standard * wStd) + (p.assists * wAst) + (p.retails * wRet);
+                } else {
+                    myVal = (p.attacks * wStd); 
+                }
+            }
+
             let sharePercent = myVal / sumTotal;
             let myPayout = memberPool * sharePercent;
+            
+            let assistStr = p.logsFound ? p.assists : '<span class="dim-text">Expired</span>';
+            let retailStr = p.logsFound ? p.retails : '<span class="dim-text">Expired</span>';
 
             html += `<tr>
                 <td><a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a></td>
                 <td>${p.attacks}</td>
+                <td>${assistStr}</td>
+                <td>${retailStr}</td>
                 <td>${p.score}</td>
                 <td>${(sharePercent * 100).toFixed(2)}%</td>
                 <td class="money-text">${formatMoney(myPayout)}</td>
             </tr>`;
         });
     } else if (totalWinnings <= 0) {
-         html = `<tr><td colspan="5" style="text-align:center; color:var(--text-dim); padding: 20px;">The Winnings Pool is currently $0. Please enter your total cash to see payouts.</td></tr>`;
+         html = `<tr><td colspan="7" style="text-align:center; color:var(--text-dim); padding: 20px;">The Winnings Pool is currently $0. Please adjust your Trader Rate or input cash to see payouts.</td></tr>`;
     } else {
-         html = `<tr><td colspan="5" style="text-align:center; color:var(--text-dim); padding: 20px;">No attack data to calculate payout.</td></tr>`;
+         html = `<tr><td colspan="7" style="text-align:center; color:var(--text-dim); padding: 20px;">No attack data to calculate payout.</td></tr>`;
     }
 
     tbody.innerHTML = html;
