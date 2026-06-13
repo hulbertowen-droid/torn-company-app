@@ -78,6 +78,12 @@ setInterval(async () => {
 // ==========================================
 // WARBOARD ENDPOINTS
 // ==========================================
+
+// --- THE RESTORED HEALTH CHECK ---
+app.get('/health', (req, res) => {
+    res.status(200).send('OK');
+});
+
 app.post('/api/claim', (req, res) => {
     const { enemyId, playerName } = req.body;
     if (!enemyId || !playerName) return res.status(400).json({ error: "Missing data" });
