@@ -6,125 +6,89 @@
     <title>Spider-Verse Warboard</title>
     <style>
         :root {
-            --bg: #0b0e14;
-            --card: #141922;
-            --item: #1c2432;
-            --accent-red: #ff2626;
-            --accent-blue: #3b82f6;
-            --text-main: #e2e8f0;
-            --text-dim: #94a3b8;
+            --bg: #050505; --card: #0d1117; --item: #161b22;
+            --red: #e11d48; --blue: #2563eb; --gold: #f59e0b;
         }
-
-        body { background: var(--bg); color: var(--text-main); font-family: 'Inter', system-ui, sans-serif; margin: 0; padding: 20px; }
-        h1 { text-align: center; color: var(--accent-red); text-transform: uppercase; letter-spacing: 3px; margin-bottom: 30px; }
+        body { background: var(--bg); color: #c9d1d9; font-family: 'Inter', system-ui; margin: 0; padding: 20px; }
+        h1 { text-align: center; color: var(--red); text-transform: uppercase; letter-spacing: 4px; margin-bottom: 40px; text-shadow: 0 0 20px rgba(225, 29, 72, 0.3); }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1200px; margin: 0 auto; }
+        .col { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #30363d; }
+        h2 { color: #8b949e; border-bottom: 1px solid #30363d; padding-bottom: 10px; margin-top: 0; }
         
-        .board-container { display: flex; gap: 20px; max-width: 1200px; margin: 0 auto; }
-        .column { flex: 1; background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2d3748; }
-        h2 { border-bottom: 2px solid var(--item); padding-bottom: 10px; margin-top: 0; display: flex; align-items: center; gap: 10px; }
+        ul { list-style: none; padding: 0; }
+        li { background: var(--item); margin-bottom: 10px; padding: 12px 20px; border-radius: 10px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #30363d; }
         
-        ul { list-style: none; padding: 0; margin: 0; }
-        li {
-            background: var(--item);
-            margin: 8px 0;
-            padding: 12px 16px;
-            border-radius: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-left: 4px solid var(--accent-red);
-            transition: transform 0.1s ease;
-        }
-        li:hover { background: #252f40; }
-
-        .profile-link { color: var(--text-main); text-decoration: none; font-weight: 600; }
-        .profile-link:hover { color: var(--accent-red); }
+        .profile { font-weight: 600; color: #fff; text-decoration: none; }
+        .badge { background: #21262d; padding: 2px 8px; border-radius: 6px; font-size: 11px; color: var(--gold); border: 1px solid #30363d; }
+        .timer { font-family: monospace; color: var(--red); font-size: 1.1em; font-weight: bold; }
         
-        .badge { background: #2d3748; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-left: 6px; color: #fbbf24; border: 1px solid #4a5568; }
-        .timer { color: var(--accent-red); font-weight: bold; font-family: monospace; margin-right: 10px; }
-        
-        .btn-action { 
-            cursor: pointer; border: none; padding: 6px 12px; border-radius: 6px; 
-            font-size: 12px; font-weight: bold; transition: opacity 0.2s;
-        }
-        .btn-call { background: var(--accent-red); color: white; }
-        .btn-unclaim { background: var(--accent-blue); color: white; }
+        button { cursor: pointer; border: none; padding: 6px 14px; border-radius: 6px; font-weight: bold; }
+        .call { background: var(--red); color: white; }
+        .unclaim { background: var(--blue); color: white; }
     </style>
 </head>
 <body>
 
     <h1>🕷 Spider-Verse Warboard</h1>
 
-    <div class="board-container">
-        <div class="column">
-            <h2>🛡 Friendly</h2>
-            <ul id="friendly"></ul>
-        </div>
-        <div class="column">
-            <h2>⚔ Enemy</h2>
-            <ul id="enemy"></ul>
-        </div>
+    <div class="grid">
+        <div class="col"><h2>🛡 Friendly</h2><ul id="friendly"></ul></div>
+        <div class="col"><h2>⚔ Enemy</h2><ul id="enemy"></ul></div>
     </div>
 
 <script>
-let myName = localStorage.getItem("warboard_name") || prompt("Enter Torn name:");
-if(myName) localStorage.setItem("warboard_name", myName);
+let myName = localStorage.getItem("warboard_name") || prompt("Torn Name:");
+localStorage.setItem("warboard_name", myName);
+
+// Timer loop: Updates all elements with class 'timer' every second
+setInterval(() => {
+    document.querySelectorAll(".timer").forEach(el => {
+        let left = parseInt(el.dataset.until) - Math.floor(Date.now()/1000);
+        if(left > 0) {
+            let m=Math.floor(left/60), s=left%60;
+            el.innerText = `${m}:${s.toString().padStart(2,"0")}`;
+        } else {
+            el.innerText = "Ready";
+        }
+    });
+}, 1000);
 
 function format(n){
-    if(!n) return "Syncing...";
+    if(!n) return "";
     if(n>1e9) return (n/1e9).toFixed(1)+"b";
     if(n>1e6) return (n/1e6).toFixed(1)+"m";
-    if(n>1e3) return (n/1e3).toFixed(1)+"k";
-    return n;
-}
-
-function sort(m){
-    return m.sort((a,b)=> (b.intelScore||0)-(a.intelScore||0));
-}
-
-async function callTarget(enemyId) {
-    if (!myName) return;
-    await fetch("/api/claim", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({enemyId, playerName: myName}) });
-    load();
-}
-
-async function unclaimTarget(enemyId) {
-    await fetch("/api/unclaim", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({enemyId, playerName: myName}) });
-    load();
+    return (n/1e3).toFixed(1)+"k";
 }
 
 async function load(){
     const res = await fetch("/api/warboard");
     const data = await res.json();
-    render(data);
-}
+    
+    // Friendly
+    document.getElementById("friendly").innerHTML = data.friendly.map(p => `
+        <li>
+            <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a>
+            ${p.state==="Hospital" ? `<span class="timer" data-until="${p.until}"></span>` : ""}
+        </li>`).join("");
 
-function render(data){
-    const now = Math.floor(Date.now()/1000);
-    document.getElementById("friendly").innerHTML = data.friendly.map(p=>`<li><a class="profile-link" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a></li>`).join("");
-    document.getElementById("enemy").innerHTML = sort(data.enemy).map(p=>{
-        let time = "";
-        if(p.state==="Hospital" && p.until){
-            let left = p.until-now;
-            if(left>0){
-                let m=Math.floor(left/60), s=left%60;
-                time = `<span class="timer">${m}:${s.toString().padStart(2,"0")}</span>`;
-            }
-        }
-        return `
+    // Enemy
+    document.getElementById("enemy").innerHTML = data.enemy.sort((a,b)=>(b.intelScore||0)-(a.intelScore||0)).map(p => `
         <li>
             <div>
-                <a class="profile-link" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a>
+                <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a>
                 ${p.estStats ? `<span class="badge">${format(p.estStats)}</span>` : ""}
             </div>
             <div>
-                ${time}
+                ${p.state==="Hospital" ? `<span class="timer" data-until="${p.until}"></span> ` : ""}
                 ${p.claimedBy 
-                    ? `<span class="badge" style="background:#4c1d95; color:white;">🎯 ${p.claimedBy} ${p.claimedBy === myName ? `<button class="btn-action btn-unclaim" onclick="unclaimTarget('${p.id}')">✖</button>` : ""}</span>`
-                    : `<button class="btn-action btn-call" onclick="callTarget('${p.id}')">Call</button>`}
+                    ? `<span class="badge" style="background:#4c1d95; color:white;">🎯 ${p.claimedBy} ${p.claimedBy===myName ? `<button class="unclaim" onclick="unclaim('${p.id}')">✖</button>` : ""}</span>`
+                    : `<button class="call" onclick="claim('${p.id}')">Call</button>`}
             </div>
-        </li>`;
-    }).join("");
+        </li>`).join("");
 }
+
+async function claim(id) { await fetch("/api/claim", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enemyId:id, playerName:myName})}); load(); }
+async function unclaim(id) { await fetch("/api/unclaim", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enemyId:id, playerName:myName})}); load(); }
 
 load();
 setInterval(load, 15000);
