@@ -6,56 +6,68 @@
     <title>Spider-Verse Warboard</title>
     <style>
         :root {
-            --spidey-red: #E32832;
-            --spidey-blue: #1B1676;
-            --spidey-web: #ffffff;
-            --bg-dark: #121212;
-            --card-bg: #1a1a2e;
-            --item-bg: #232342;
+            --bg: #0b0e14;
+            --card: #141922;
+            --item: #1c2432;
+            --accent-red: #ff2626;
+            --accent-blue: #3b82f6;
+            --text-main: #e2e8f0;
+            --text-dim: #94a3b8;
         }
 
-        body { background-color: var(--bg-dark); color: var(--spidey-web); font-family: 'Segoe UI', sans-serif; padding: 20px; margin: 0; }
-        h1 { text-align: center; color: var(--spidey-red); border-bottom: 3px solid var(--spidey-blue); padding-bottom: 10px; text-transform: uppercase; letter-spacing: 2px; text-shadow: 2px 2px #000; }
-        .board-container { display: flex; justify-content: space-around; margin-top: 30px; gap: 20px; }
-        .column { background-color: var(--card-bg); border-radius: 8px; padding: 20px; width: 48%; border: 2px solid var(--spidey-blue); }
-        h2 { text-align: center; margin-top: 0; padding-bottom: 10px; border-bottom: 1px solid var(--spidey-blue); }
-        .friendly-title { color: #3498db; }
-        .enemy-title { color: var(--spidey-red); }
-        ul { list-style-type: none; padding: 0; margin: 0; }
-        li { background-color: var(--item-bg); margin-bottom: 8px; padding: 12px 15px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--spidey-red); }
+        body { background: var(--bg); color: var(--text-main); font-family: 'Inter', system-ui, sans-serif; margin: 0; padding: 20px; }
+        h1 { text-align: center; color: var(--accent-red); text-transform: uppercase; letter-spacing: 3px; margin-bottom: 30px; }
         
-        .profile-link { color: var(--spidey-web); text-decoration: none; font-weight: 500; }
-        .profile-link:hover { color: var(--spidey-red); text-decoration: underline; }
+        .board-container { display: flex; gap: 20px; max-width: 1200px; margin: 0 auto; }
+        .column { flex: 1; background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2d3748; }
+        h2 { border-bottom: 2px solid var(--item); padding-bottom: 10px; margin-top: 0; display: flex; align-items: center; gap: 10px; }
         
-        .stat-badge { color: #feca3e; font-size: 0.8em; margin-left: 8px; font-weight: bold; background: rgba(254, 202, 62, 0.1); padding: 2px 6px; border-radius: 4px; border: 1px solid #feca3e;}
-        .countdown { color: var(--spidey-red); font-weight: bold; font-family: monospace; font-size: 1.2em; }
+        ul { list-style: none; padding: 0; margin: 0; }
+        li {
+            background: var(--item);
+            margin: 8px 0;
+            padding: 12px 16px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 4px solid var(--accent-red);
+            transition: transform 0.1s ease;
+        }
+        li:hover { background: #252f40; }
+
+        .profile-link { color: var(--text-main); text-decoration: none; font-weight: 600; }
+        .profile-link:hover { color: var(--accent-red); }
         
-        .claim-btn { background-color: var(--spidey-red); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
-        .claim-btn:hover { background-color: #b71c1c; }
-        .unclaim-btn { background-color: var(--spidey-blue); color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; }
+        .badge { background: #2d3748; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-left: 6px; color: #fbbf24; border: 1px solid #4a5568; }
+        .timer { color: var(--accent-red); font-weight: bold; font-family: monospace; margin-right: 10px; }
+        
+        .btn-action { 
+            cursor: pointer; border: none; padding: 6px 12px; border-radius: 6px; 
+            font-size: 12px; font-weight: bold; transition: opacity 0.2s;
+        }
+        .btn-call { background: var(--accent-red); color: white; }
+        .btn-unclaim { background: var(--accent-blue); color: white; }
     </style>
 </head>
 <body>
 
-    <h1>🕷️ Spider-Verse Warboard 🕷️</h1>
-    
+    <h1>🕷 Spider-Verse Warboard</h1>
+
     <div class="board-container">
         <div class="column">
-            <h2 class="friendly-title">🛡️ Friendly</h2>
+            <h2>🛡 Friendly</h2>
             <ul id="friendly"></ul>
         </div>
         <div class="column">
-            <h2 class="enemy-title">⚔️ Enemy</h2>
+            <h2>⚔ Enemy</h2>
             <ul id="enemy"></ul>
         </div>
     </div>
 
 <script>
-let myName = localStorage.getItem("warboard_name");
-if (!myName) {
-    myName = prompt("Enter Torn name:");
-    if(myName) localStorage.setItem("warboard_name", myName);
-}
+let myName = localStorage.getItem("warboard_name") || prompt("Enter Torn name:");
+if(myName) localStorage.setItem("warboard_name", myName);
 
 function format(n){
     if(!n) return "Syncing...";
@@ -70,7 +82,7 @@ function sort(m){
 }
 
 async function callTarget(enemyId) {
-    if (!myName) return alert("Set name first!");
+    if (!myName) return;
     await fetch("/api/claim", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({enemyId, playerName: myName}) });
     load();
 }
@@ -88,37 +100,27 @@ async function load(){
 
 function render(data){
     const now = Math.floor(Date.now()/1000);
-
-    document.getElementById("friendly").innerHTML = data.friendly.map(p=>`
-        <li>
-            <a class="profile-link" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a>
-        </li>
-    `).join("");
-
+    document.getElementById("friendly").innerHTML = data.friendly.map(p=>`<li><a class="profile-link" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a></li>`).join("");
     document.getElementById("enemy").innerHTML = sort(data.enemy).map(p=>{
         let time = "";
         if(p.state==="Hospital" && p.until){
             let left = p.until-now;
             if(left>0){
                 let m=Math.floor(left/60), s=left%60;
-                time = `<span class="countdown">${m}:${s.toString().padStart(2,"0")}</span>`;
+                time = `<span class="timer">${m}:${s.toString().padStart(2,"0")}</span>`;
             }
         }
-
-        let claimUI = p.claimedBy 
-            ? `<span class="stat-badge">🎯 ${p.claimedBy} ${p.claimedBy === myName ? `<button class="unclaim-btn" onclick="unclaimTarget('${p.id}')">✖</button>` : ""}</span>`
-            : `<button class="claim-btn" onclick="callTarget('${p.id}')">Call</button>`;
-
         return `
         <li>
             <div>
                 <a class="profile-link" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a>
-                ${p.estStats ? `<span class="stat-badge">${format(p.estStats)}</span>` : ""}
-                ${p.intelScore ? `<span class="stat-badge" style="color:#00ffcc">I:${p.intelScore}</span>` : ""}
+                ${p.estStats ? `<span class="badge">${format(p.estStats)}</span>` : ""}
             </div>
             <div>
                 ${time}
-                ${claimUI}
+                ${p.claimedBy 
+                    ? `<span class="badge" style="background:#4c1d95; color:white;">🎯 ${p.claimedBy} ${p.claimedBy === myName ? `<button class="btn-action btn-unclaim" onclick="unclaimTarget('${p.id}')">✖</button>` : ""}</span>`
+                    : `<button class="btn-action btn-call" onclick="callTarget('${p.id}')">Call</button>`}
             </div>
         </li>`;
     }).join("");
