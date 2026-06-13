@@ -13,6 +13,7 @@ const FACTION_ID = process.env.FACTION_ID || "";
 
 let claims = {};
 let statsCache = {};
+let manualStats = {}; // New: Stores actual stats provided by users
 let statQueue = [];
 let isProcessingQueue = false;
 
@@ -49,7 +50,8 @@ function computeWarIntel(p, cache = {}) {
             else score += 10;
         }
     }
-    const est = cache[p.id]?.stats || p.estStats;
+    // Check manual override first, then cache
+    const est = manualStats[p.id]?.stats || cache[p.id]?.stats || p.estStats;
     if (est) {
         if (est < 1e7) score += 120;
         else if (est < 5e7) score += 80;
@@ -98,6 +100,14 @@ app.post('/api/unclaim', (req, res) => {
     res.status(400).json({ error: "Cannot unclaim" });
 });
 
+// New Endpoint for Manual Stats
+app.post('/api/update-stats', (req, res) => {
+    const { enemyId, stats } = req.body;
+    if (!enemyId || !stats) return res.status(400).json({ error: "Missing data" });
+    manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() };
+    res.json({ success: true });
+});
+
 app.get('/api/warboard', async (req, res) => {
     try {
         const myData = await (await fetch(`https://api.torn.com/faction/?selections=basic&key=${TORN_API_KEY}`)).json();
@@ -114,9 +124,10 @@ app.get('/api/warboard', async (req, res) => {
         const parseMembers = (data, isEnemy = false) => {
             if (!data.members) return [];
             return Object.entries(data.members).map(([id, m]) => {
-                const est = isEnemy ? statsCache[id]?.stats || null : null;
+                // Priority: Manual > Cache Estimate
+                const est = isEnemy ? (manualStats[id]?.stats || statsCache[id]?.stats || null) : null;
                 const intelScore = isEnemy ? computeWarIntel({ id, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", estStats: est }, statsCache) : null;
-                return { id, name: m.name, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", claimedBy: isEnemy ? claims[id]?.playerName || null : null, estStats: est, intelScore };
+                return { id, name: m.name, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", claimedBy: isEnemy ? claims[id]?.playerName || null : null, estStats: est, intelScore, isManual: !!manualStats[id] };
             });
         };
         res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyData, true) });
