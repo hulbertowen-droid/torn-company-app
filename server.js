@@ -44,12 +44,23 @@ function computeWarIntel(p, cache = {}) {
     return Math.floor(score * (0.9 + Math.random() * 0.2));
 }
 
-// FF Scouter Batch Processor
+// FF Scouter Batch Processor with Error Logging
 setInterval(async () => {
-    if (!statQueue.length || isProcessingQueue || !FF_SCOUTER_KEY) return;
+    if (!statQueue.length || isProcessingQueue) return;
     isProcessingQueue = true;
 
     const batch = statQueue.splice(0, 40);
+
+    // If no key exists, fallback to '?' so it doesn't get stuck loading
+    if (!FF_SCOUTER_KEY) {
+        console.warn("⚠️ No FF_SCOUTER_KEY found. Marking batch as 'no data'.");
+        batch.forEach(id => {
+            statsCache[id] = { stats: null, time: Date.now() };
+        });
+        isProcessingQueue = false;
+        return;
+    }
+
     const targets = batch.join(',');
 
     try {
@@ -60,14 +71,20 @@ setInterval(async () => {
             data.forEach(p => {
                 const id = p.player_id.toString();
                 statsCache[id] = { 
-                    stats: p.bs_estimate, // Keeps actual number or null if no data
+                    stats: p.bs_estimate, // Real number or null
                     time: Date.now() 
                 };
             });
         } else {
-            statQueue.push(...batch); 
+            // If FF Scouter returns an error (like Invalid Key), log it and break the loop
+            console.error("❌ FF Scouter API Error:", data);
+            batch.forEach(id => {
+                statsCache[id] = { stats: null, time: Date.now() };
+            });
         }
     } catch (err) { 
+        // Only retry if it was a hard network failure
+        console.error("❌ Network error reaching FF Scouter:", err.message);
         statQueue.push(...batch); 
     }
     
@@ -114,6 +131,7 @@ app.get('/api/warboard', async (req, res) => {
         const friendlyIds = new Set(Object.keys(myData.members || {}));
         const enemyIds = new Set(Object.keys(enemyDataResult.members || {}));
 
+        // Queue IDs that are un-cached or older than 1 hour
         [...friendlyIds, ...enemyIds].forEach(id => {
             if (!statsCache[id] || (Date.now() - statsCache[id].time) > 3600000) {
                 if (!statQueue.includes(id)) statQueue.push(id);
@@ -126,7 +144,6 @@ app.get('/api/warboard', async (req, res) => {
                 const hasCache = statsCache[id] !== undefined;
                 const cachedStats = statsCache[id]?.stats; 
                 
-                // Priority: Manual Overrides -> Cached Stats -> "loading" status string
                 const est = manualStats[id]?.stats !== undefined 
                     ? manualStats[id].stats 
                     : (hasCache ? cachedStats : "loading");
@@ -149,7 +166,7 @@ app.get('/api/warboard', async (req, res) => {
         };
         res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true) });
     } catch (err) { 
-        console.error(err); 
+        console.error("Warboard route failed:", err.message); 
         res.status(500).json({ error: "warboard failed" }); 
     }
 });
