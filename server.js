@@ -146,11 +146,10 @@ app.get('/api/warboard', async (req, res) => {
 
         if (!userKey) return res.status(400).json({ error: "No API Key provided" });
 
-        // Basic Fetch (Includes Ranked War Data) and Attacks (Fallback)
-        let [myData, enemyDataResult, attacksData] = await Promise.all([
+        // Removed the 'attacks' fetch to save API calls and eliminate the need for Limited Access keys
+        let [myData, enemyDataResult] = await Promise.all([
             fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })),
-            enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} }),
-            fetch(`https://api.torn.com/faction/?selections=attacks&key=${userKey}`).then(r => r.json()).catch(() => ({ attacks: {} }))
+            enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} })
         ]);
 
         if (myData.error) return res.status(400).json({ error: "Invalid API Key" });
@@ -170,12 +169,11 @@ app.get('/api/warboard', async (req, res) => {
             }
         });
 
-        // --- NEW: INTELLIGENT WAR HIT EXTRACTION ---
+        // Exact Ranked War Stats Extraction
         let hitsStats = {};
         friendlyIds.forEach(id => hitsStats[id] = { made: 0, score: 0, name: myData.members[id].name });
         let isRankedWar = false;
 
-        // Try to pull exact Ranked War data directly from Torn's official scoreboard
         if (myData.ranked_wars && Object.keys(myData.ranked_wars).length > 0) {
             const warId = Object.keys(myData.ranked_wars)[0];
             const rw = myData.ranked_wars[warId];
@@ -193,21 +191,9 @@ app.get('/api/warboard', async (req, res) => {
             }
         }
 
-        // Fallback to recent attacks ONLY if not in a ranked war
-        if (!isRankedWar && attacksData.attacks) {
-            Object.values(attacksData.attacks).forEach(att => {
-                const attacker = att.attacker_id ? att.attacker_id.toString() : null;
-                if (attacker && hitsStats[attacker]) {
-                    hitsStats[attacker].made++;
-                }
-            });
-        }
-
-        // Format data for chart
-        let graphData = Object.values(hitsStats).filter(p => p.made > 0 || p.score > 0);
-        graphData.sort((a, b) => b.made - a.made); 
-        
-        let attacksError = attacksData.error ? attacksData.error.error : null;
+        // Only send graph data if it's an active Ranked War
+        let graphData = isRankedWar ? Object.values(hitsStats).filter(p => p.made > 0 || p.score > 0) : [];
+        graphData.sort((a, b) => b.score - a.score); // Sort by highest War Score
 
         const parseMembers = (data, isEnemy = false) => {
             if (!data.members) return [];
@@ -230,7 +216,7 @@ app.get('/api/warboard', async (req, res) => {
             });
         };
 
-        res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId, graphData, attacksError, isRankedWar });
+        res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId, graphData, isRankedWar });
     } catch (err) { 
         res.status(500).json({ error: "warboard failed" }); 
     }
