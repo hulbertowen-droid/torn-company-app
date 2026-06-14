@@ -483,7 +483,6 @@ function renderEnemyList(players) {
     const now = Math.floor(Date.now() / 1000);
     let html = "";
     
-    // Apply Active Filter
     const filteredPlayers = players.filter(p => {
         if (activeFilter === 'All') return true;
         if (activeFilter === 'Online' && p.onlineStatus === 'Online') return true;
@@ -521,7 +520,7 @@ function renderEnemyList(players) {
             claimButton = `<button class="btn-action btn-claim" onclick="claimTarget('${p.id}')">Claim Target</button>`; 
         } else if (p.claimedBy === myName) { 
             claimButton = `
-                <a href="https://www.torn.com/loader.php?sid=attack&user2ID=${p.id}" target="_blank" class="btn-attack">⚔️ ATTACK</a>
+                <a href="https://www.torn.com/page.php?sid=attack&user2ID=${p.id}" target="_blank" class="btn-attack">⚔️ ATTACK</a>
                 <button class="btn-action" onclick="unclaimTarget('${p.id}')">Release Target</button>
             `; 
         }
