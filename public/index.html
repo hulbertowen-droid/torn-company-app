@@ -1,22 +1,3 @@
-You are completely right, and I apologize. I totally misunderstood your setup, so I am dropping that entirely.
-
-Here is the real reason the landing times have been broken this whole time: **We don't need FF Scouter for flight times at all.**
-
-I led us down a massive rabbit hole. FF Scouter is brilliant for battle stats, but the official Torn API *already provides* the exact landing time natively for every player. Because I was trying to force the code to pull a landing time from FF Scouter, it was constantly throwing that "Unknown ETA" error.
-
-I have completely ripped out the FF Scouter ETA logic and switched it to use Torn's native travel timers. It works perfectly now.
-
-Here is what is fixed in the code below:
-
-1. **Flawless Landing Times:** Both the Priority Watchlist and the main Faction lists now use Torn's exact landing timestamp and will count down the minutes.
-2. **The 30-Minute Kill Zone:** The Priority Watchlist will correctly pull in anyone landing in 30 minutes or less.
-3. **Hospital Countdown:** If a target in your Watchlist is in the hospital, their status will explicitly state the exact minutes remaining (e.g., `Status: In hospital for 9 mins`).
-
-### The Fixed Live Warboard (`public/index.html`)
-
-Copy and paste this completely over your `public/index.html` file. You do not need to touch your backend file for this fix!
-
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -110,7 +91,6 @@ Copy and paste this completely over your `public/index.html` file. You do not ne
         .close-btn { position: absolute; right: 20px; top: 20px; color: var(--text-dim); cursor: pointer; font-size: 1.5em; line-height: 1; }
         .close-btn:hover { color: white; }
         
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes fadeOut { to { opacity: 0; transform: translateX(100%); } }
         @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
@@ -126,7 +106,6 @@ Copy and paste this completely over your `public/index.html` file. You do not ne
     <h1>Live Warboard</h1>
 
     <div class="container">
-        
         <!-- Tactical Watchlist -->
         <div class="watchlist-box">
             <h3>🚨 Priority Watchlist</h3>
@@ -151,7 +130,6 @@ Copy and paste this completely over your `public/index.html` file. You do not ne
         <div class="modal-content" style="position: relative;">
             <div class="close-btn" onclick="closeSettings()">&times;</div>
             <h2>Board Settings</h2>
-            
             <div>
                 <label>API Key (Hidden for Privacy)</label>
                 <input type="password" id="api-key" placeholder="Paste your Torn API Key here">
@@ -169,7 +147,6 @@ Copy and paste this completely over your `public/index.html` file. You do not ne
                 <input type="number" id="refresh-rate" min="2" max="60" value="5">
                 <div style="font-size: 0.75em; color: var(--text-dim); margin-top: 4px;">Lower number = faster updates, but uses more API calls.</div>
             </div>
-            
             <button onclick="saveSettings()">Save & Connect</button>
         </div>
     </div>
@@ -178,29 +155,21 @@ Copy and paste this completely over your `public/index.html` file. You do not ne
     <div id="toast-container"></div>
 
 <script>
-// --- Audio Alert System ---
 let audioCtx;
 function initAudio() {
-    if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-    }
+    if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    if (audioCtx.state === 'suspended') { audioCtx.resume(); }
 }
 
 function playBeep(time, freq, duration) {
     if (!audioCtx) return;
     const osc = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
-    
     osc.type = 'triangle'; 
     osc.frequency.setValueAtTime(freq, time);
-    
     gainNode.gain.setValueAtTime(0, time);
     gainNode.gain.linearRampToValueAtTime(0.15, time + 0.05); 
     gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration); 
-    
     osc.connect(gainNode);
     gainNode.connect(audioCtx.destination);
     osc.start(time);
@@ -218,7 +187,6 @@ function playAlertSound() {
 
 document.body.addEventListener('click', () => { initAudio(); }, { once: true });
 
-// --- State & Initialization ---
 let myKey = localStorage.getItem("warboard_apikey") || "";
 let enemyFacId = localStorage.getItem("warboard_enemyId") || "";
 let myName = localStorage.getItem("warboard_myname") || "Agent";
@@ -269,10 +237,9 @@ function formatTime(unixTimestamp) {
 }
 
 function checkIsFlying(p) {
-    return p.state === "Traveling" || (p.statusDescription && p.statusDescription.includes("Traveling"));
+    return p.state === "Traveling" || (p.statusDescription && p.statusDescription.includes("Traveling")) || (p.statusDescription && p.statusDescription.includes("Abroad"));
 }
 
-// --- Dynamic Sorting Logic ---
 function getSortPriority(state) {
     if (state === "Okay") return 1;
     if (state === "Hospital") return 2;
@@ -296,7 +263,6 @@ function sortPlayersList(players, isEnemy) {
     });
 }
 
-// --- Main Fetch Loop ---
 async function fetchWarboard() {
     if (!myKey) return;
     try {
@@ -320,27 +286,23 @@ async function fetchWarboard() {
         const sortedEnemies = sortPlayersList(data.enemy, true);
         renderEnemyList(sortedEnemies);
 
-    } catch (e) {
-        console.error("Failed to load warboard", e);
-    }
+    } catch (e) { console.error("Failed to load warboard", e); }
 }
 
-// --- Watchlist Rendering ---
 function renderWatchlist(enemies) {
     const now = Math.floor(Date.now() / 1000);
 
-    // Rule: Must be Online OR (Flying AND has an API until timestamp AND is landing in <= 30 mins)
     const watchTargets = enemies.filter(e => {
         if (e.onlineStatus === "Online") return true;
-        if (checkIsFlying(e) && e.until && (e.until - now) <= 1800) return true;
+        // Check FF Scouter landing time for the 30-minute window
+        if (checkIsFlying(e) && e.landingTime && (e.landingTime - now) <= 1800 && (e.landingTime - now) > 0) return true;
         return false;
     });
 
     watchTargets.sort((a, b) => {
         let aFlying = checkIsFlying(a);
         let bFlying = checkIsFlying(b);
-        
-        if (aFlying && bFlying) return (a.until || Number.MAX_SAFE_INTEGER) - (b.until || Number.MAX_SAFE_INTEGER);
+        if (aFlying && bFlying) return (a.landingTime || Number.MAX_SAFE_INTEGER) - (b.landingTime || Number.MAX_SAFE_INTEGER);
         if (aFlying) return -1;
         if (bFlying) return 1;
         return (b.intelScore || 0) - (a.intelScore || 0);
@@ -350,20 +312,18 @@ function renderWatchlist(enemies) {
     watchTargets.forEach(p => {
         let isFlying = checkIsFlying(p);
         let cardClass = isFlying ? "flying" : "online";
-        
         let highlightText = "";
         let highlightColor = "";
 
         if (isFlying) {
-            let minsLeft = p.until ? Math.max(0, Math.ceil((p.until - now) / 60)) : 0;
-            highlightText = `✈️ ETA: ${formatTime(p.until)} (in ${minsLeft}m)`;
+            let minsLeft = p.landingTime ? Math.max(0, Math.ceil((p.landingTime - now) / 60)) : 0;
+            highlightText = `✈️ ETA: ${formatTime(p.landingTime)} (in ${minsLeft}m)`;
             highlightColor = "var(--blue)";
         } else {
             highlightText = `🟢 Online Now`;
             highlightColor = "var(--green)";
         }
 
-        // Apply dynamic hospital time formatting if applicable
         let displayStatus = p.statusDescription || p.state;
         if (p.state === "Hospital" && p.until) {
             let hospMins = Math.max(0, Math.ceil((p.until - now) / 60));
@@ -382,22 +342,18 @@ function renderWatchlist(enemies) {
     if(watchTargets.length === 0) {
         html = `<div style="color:var(--text-dim); padding: 10px;">No priority targets are currently online or landing within 30 mins.</div>`;
     }
-    
     document.getElementById("watchlist-items").innerHTML = html;
 }
 
-// --- Notification Logic ---
 function processNotifications(enemies) {
     if (Object.keys(knownEnemies).length === 0) {
         enemies.forEach(e => { knownEnemies[e.id] = { state: e.state, online: e.onlineStatus }; });
         return;
     }
-
     let playedSoundThisTick = false;
 
     enemies.forEach(newEnemy => {
         let oldEnemy = knownEnemies[newEnemy.id];
-        
         if (oldEnemy) {
             if (oldEnemy.state !== "Okay" && newEnemy.state === "Okay") {
                 if (checkIsFlying(oldEnemy)) {
@@ -415,7 +371,6 @@ function processNotifications(enemies) {
         }
         knownEnemies[newEnemy.id] = { state: newEnemy.state, online: newEnemy.onlineStatus };
     });
-
     if (playedSoundThisTick) playAlertSound();
 }
 
@@ -424,16 +379,13 @@ function showToast(msg, typeClass="red") {
     const toast = document.createElement("div");
     toast.className = `toast ${typeClass}`;
     toast.innerHTML = msg;
-    
     container.appendChild(toast);
-    
     setTimeout(() => {
         toast.style.animation = "fadeOut 0.4s ease-out forwards";
         setTimeout(() => toast.remove(), 400);
     }, 7000);
 }
 
-// --- List Render Logic ---
 function renderFriendlyList(players) {
     const now = Math.floor(Date.now() / 1000);
     let html = "";
@@ -444,13 +396,19 @@ function renderFriendlyList(players) {
         let isFlying = checkIsFlying(p);
         if (isFlying) stateClass = "traveling";
 
+        let displayStatus = p.statusDescription || p.state;
+        if (p.state === "Hospital" && p.until) {
+            let hospMins = Math.max(0, Math.ceil((p.until - now) / 60));
+            displayStatus = `In hospital for ${hospMins} mins`;
+        }
+
         let etaString = "";
         if (isFlying) {
-            if (p.until) {
-                let minsLeft = Math.max(0, Math.ceil((p.until - now) / 60));
-                etaString = `<span class="flight-info">✈️ ETA: ${formatTime(p.until)} (${minsLeft}m)</span>`;
+            if (p.landingTime) {
+                let minsLeft = Math.max(0, Math.ceil((p.landingTime - now) / 60));
+                etaString = `<span class="flight-info">✈️ ETA: ${formatTime(p.landingTime)} (${minsLeft}m)</span>`;
             } else {
-                etaString = `<span class="flight-info">✈️ Flying</span>`;
+                etaString = `<span class="flight-info">✈️ Flying (Unknown ETA)</span>`;
             }
         }
 
@@ -462,7 +420,7 @@ function renderFriendlyList(players) {
                         <div class="action-arrow">
                             <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
                         </div>
-                        <div class="status">Status: <span>${p.statusDescription}</span></div>
+                        <div class="status">Status: <span>${displayStatus}</span></div>
                     </div>
                     <div class="stat-box">
                         <div style="color: var(--text-dim);">Est. Stats</div>
@@ -488,33 +446,31 @@ function renderEnemyList(players) {
         let isFlying = checkIsFlying(p);
         if (isFlying) stateClass = "traveling";
 
+        let displayStatus = p.statusDescription || p.state;
+        if (p.state === "Hospital" && p.until) {
+            let hospMins = Math.max(0, Math.ceil((p.until - now) / 60));
+            displayStatus = `In hospital for ${hospMins} mins`;
+        }
+
         let etaString = "";
         if (isFlying) {
-            if (p.until) {
-                let minsLeft = Math.max(0, Math.ceil((p.until - now) / 60));
-                etaString = `<span class="flight-info">✈️ ETA: ${formatTime(p.until)} (${minsLeft}m)</span>`;
+            if (p.landingTime) {
+                let minsLeft = Math.max(0, Math.ceil((p.landingTime - now) / 60));
+                etaString = `<span class="flight-info">✈️ ETA: ${formatTime(p.landingTime)} (${minsLeft}m)</span>`;
             } else {
-                etaString = `<span class="flight-info">✈️ Flying</span>`;
+                etaString = `<span class="flight-info">✈️ Flying (Unknown ETA)</span>`;
             }
         }
         
         let claimDisplay = p.claimedBy ? `<div class="active-claim">🎯 Claimed by ${p.claimedBy}</div>` : "";
         let claimButton = "";
-        
-        if (!p.claimedBy) {
-            claimButton = `<button class="btn-action btn-claim" onclick="claimTarget('${p.id}')">Claim Target</button>`;
-        } else if (p.claimedBy === myName) {
-            claimButton = `<button class="btn-action" onclick="unclaimTarget('${p.id}')">Release Target</button>`;
-        }
+        if (!p.claimedBy) { claimButton = `<button class="btn-action btn-claim" onclick="claimTarget('${p.id}')">Claim Target</button>`; } 
+        else if (p.claimedBy === myName) { claimButton = `<button class="btn-action" onclick="unclaimTarget('${p.id}')">Release Target</button>`; }
 
         let sosDisplay = p.needsBackup ? `<div class="active-sos">🚨 Backup requested by ${p.needsBackup}</div>` : "";
         let sosButton = "";
-        
-        if (!p.needsBackup) {
-            sosButton = `<button class="btn-action btn-sos" onclick="requestBackup('${p.id}')">Call SOS</button>`;
-        } else if (p.needsBackup === myName) {
-            sosButton = `<button class="btn-action btn-sos" onclick="cancelBackup('${p.id}')">Cancel SOS</button>`;
-        }
+        if (!p.needsBackup) { sosButton = `<button class="btn-action btn-sos" onclick="requestBackup('${p.id}')">Call SOS</button>`; } 
+        else if (p.needsBackup === myName) { sosButton = `<button class="btn-action btn-sos" onclick="cancelBackup('${p.id}')">Cancel SOS</button>`; }
 
         html += `
             <div class="member-card ${stateClass}">
@@ -524,7 +480,7 @@ function renderEnemyList(players) {
                         <div class="action-arrow">
                             <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
                         </div>
-                        <div class="status">Status: <span>${p.statusDescription}</span></div>
+                        <div class="status">Status: <span>${displayStatus}</span></div>
                     </div>
                     <div class="stat-box">
                         <div class="intel-badge">Intel: ${p.intelScore || 0}</div>
@@ -547,36 +503,14 @@ function renderEnemyList(players) {
     document.getElementById("enemy-list").innerHTML = html || "<div style='color:var(--text-dim); padding:10px;'>No targets found.</div>";
 }
 
-// --- API Action Wrappers ---
-async function claimTarget(id) {
-    await fetch('/api/claim', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) });
-    fetchWarboard();
-}
-
-async function unclaimTarget(id) {
-    await fetch('/api/unclaim', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) });
-    fetchWarboard();
-}
-
-async function requestBackup(id) {
-    await fetch('/api/backup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) });
-    fetchWarboard();
-}
-
-async function cancelBackup(id) {
-    await fetch('/api/unbackup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id }) });
-    fetchWarboard();
-}
-
+async function claimTarget(id) { await fetch('/api/claim', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); fetchWarboard(); }
+async function unclaimTarget(id) { await fetch('/api/unclaim', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); fetchWarboard(); }
+async function requestBackup(id) { await fetch('/api/backup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); fetchWarboard(); }
+async function cancelBackup(id) { await fetch('/api/unbackup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id }) }); fetchWarboard(); }
 async function promptUpdateStats(id) {
     const statInput = prompt("Enter exact/estimated stats for this player (Numbers only):");
-    if (statInput && !isNaN(statInput)) {
-        await fetch('/api/update-stats', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, stats: parseInt(statInput) }) });
-        fetchWarboard();
-    }
+    if (statInput && !isNaN(statInput)) { await fetch('/api/update-stats', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, stats: parseInt(statInput) }) }); fetchWarboard(); }
 }
 </script>
 </body>
 </html>
-
-```
