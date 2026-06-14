@@ -56,15 +56,19 @@
         .btn-action:hover { background: #57606f; }
         .btn-claim { background: rgba(46, 213, 115, 0.2); color: var(--green); border: 1px solid var(--green); }
         .btn-claim:hover { background: var(--green); color: #000; }
+        .btn-sos { background: rgba(255, 71, 87, 0.2); color: var(--red); border: 1px solid var(--red); }
+        .btn-sos:hover { background: var(--red); color: white; }
 
-        .active-claim { font-size: 0.8em; color: var(--green); font-weight: bold; background: rgba(46,213,115,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; }
+        .active-claim { font-size: 0.8em; color: var(--green); font-weight: bold; background: rgba(46,213,115,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-right: 5px; }
+        .active-sos { font-size: 0.8em; color: var(--red); font-weight: bold; background: rgba(255,71,87,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; animation: pulse 2s infinite; }
 
-        /* Notification Toast Styling */
-        #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
-        .toast { background: var(--card); border-left: 4px solid var(--red); color: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.6); animation: slideIn 0.3s ease-out forwards; font-weight: bold; font-size: 0.9em; pointer-events: auto; }
+        /* BIG Noticeable Notification Toast Styling */
+        #toast-container { position: fixed; top: 25px; right: 25px; z-index: 9999; display: flex; flex-direction: column; gap: 15px; pointer-events: none; }
+        .toast { background: var(--card); border-left: 8px solid var(--red); color: white; padding: 20px 30px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); animation: slideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; font-weight: bold; font-size: 1.2em; pointer-events: auto; letter-spacing: 0.5px; }
         .toast.online { border-left-color: var(--blue); }
         .toast.okay { border-left-color: var(--green); }
         
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes fadeOut { to { opacity: 0; transform: translateX(100%); } }
         @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
@@ -101,6 +105,43 @@
     <div id="toast-container"></div>
 
 <script>
+// --- Audio Alert System ---
+let audioCtx;
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+}
+
+function playBeep(time, freq, duration) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, time);
+    gainNode.gain.setValueAtTime(0.2, time);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, time + duration);
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    osc.start(time);
+    osc.stop(time + duration);
+}
+
+function playAlertSound() {
+    try {
+        if (!audioCtx) initAudio();
+        const now = audioCtx.currentTime;
+        playBeep(now, 880, 0.15);         // First Beep
+        playBeep(now + 0.2, 880, 0.15);   // Second Beep
+    } catch(e) { console.error("Audio block", e); }
+}
+
+// Ensure audio is unlocked on first click anywhere
+document.body.addEventListener('click', () => { initAudio(); }, { once: true });
+
 // --- State & Initialization ---
 let myKey = localStorage.getItem("warboard_apikey") || "";
 let enemyFacId = localStorage.getItem("warboard_enemyId") || "";
@@ -117,6 +158,7 @@ if (myKey) {
 }
 
 function saveSettings() {
+    initAudio(); // Also init audio when saving
     myKey = document.getElementById("api-key").value.trim();
     enemyFacId = document.getElementById("enemy-id").value.trim();
     myName = document.getElementById("my-name").value.trim() || "Agent";
@@ -149,15 +191,12 @@ function sortPlayersList(players, isEnemy) {
         const prioA = getSortPriority(a.state);
         const prioB = getSortPriority(b.state);
 
-        // Sort by state block first (Okay -> Hospital -> Jail -> Traveling)
         if (prioA !== prioB) return prioA - prioB;
 
-        // If both are in the Hospital, sort by whoever gets out first
         if (a.state === "Hospital" && b.state === "Hospital") {
             return (a.until || Number.MAX_SAFE_INTEGER) - (b.until || Number.MAX_SAFE_INTEGER);
         }
 
-        // If both are Okay and it's the enemy list, prioritize highest Intel Score
         if (isEnemy && a.state === "Okay" && b.state === "Okay") {
             return (b.intelScore || 0) - (a.intelScore || 0);
         }
@@ -183,11 +222,9 @@ async function fetchWarboard() {
 
         processNotifications(data.enemy);
 
-        // Sort and Render Friendlies
         const sortedFriendly = sortPlayersList(data.friendly, false);
         renderFriendlyList(sortedFriendly);
         
-        // Sort and Render Enemies
         const sortedEnemies = sortPlayersList(data.enemy, true);
         renderEnemyList(sortedEnemies);
 
@@ -203,6 +240,8 @@ function processNotifications(enemies) {
         return;
     }
 
+    let playedSoundThisTick = false;
+
     enemies.forEach(newEnemy => {
         let oldEnemy = knownEnemies[newEnemy.id];
         
@@ -210,16 +249,21 @@ function processNotifications(enemies) {
             if (oldEnemy.state !== "Okay" && newEnemy.state === "Okay") {
                 if (oldEnemy.state === "Traveling") {
                     showToast(`🛬 ${newEnemy.name} has landed and is Okay!`, "okay");
+                    playedSoundThisTick = true;
                 } else {
                     showToast(`🏥 ${newEnemy.name} left the hospital and is Okay!`, "okay");
+                    playedSoundThisTick = true;
                 }
             }
             if (oldEnemy.online !== "Online" && newEnemy.onlineStatus === "Online") {
                 showToast(`🟢 ${newEnemy.name} just came ONLINE!`, "online");
+                playedSoundThisTick = true;
             }
         }
         knownEnemies[newEnemy.id] = { state: newEnemy.state, online: newEnemy.onlineStatus };
     });
+
+    if (playedSoundThisTick) playAlertSound();
 }
 
 function showToast(msg, typeClass="red") {
@@ -233,7 +277,7 @@ function showToast(msg, typeClass="red") {
     setTimeout(() => {
         toast.style.animation = "fadeOut 0.4s ease-out forwards";
         setTimeout(() => toast.remove(), 400);
-    }, 6000);
+    }, 7000);
 }
 
 // --- Render Logic ---
@@ -290,6 +334,16 @@ function renderEnemyList(players) {
             claimButton = `<button class="btn-action" onclick="unclaimTarget('${p.id}')">Release Target</button>`;
         }
 
+        // ENEMY SOS LOGIC RESTORED
+        let sosDisplay = p.needsBackup ? `<div class="active-sos">🚨 Backup requested by ${p.needsBackup}</div>` : "";
+        let sosButton = "";
+        
+        if (!p.needsBackup) {
+            sosButton = `<button class="btn-action btn-sos" onclick="requestBackup('${p.id}')">Call SOS</button>`;
+        } else if (p.needsBackup === myName) {
+            sosButton = `<button class="btn-action btn-sos" onclick="cancelBackup('${p.id}')">Cancel SOS</button>`;
+        }
+
         html += `
             <div class="member-card ${stateClass}">
                 <div class="card-header">
@@ -306,10 +360,14 @@ function renderEnemyList(players) {
                         <div class="stat-val">${typeof p.estStats === 'number' ? p.estStats.toLocaleString() : p.estStats}</div>
                     </div>
                 </div>
-                ${claimDisplay ? `<div>${claimDisplay}</div>` : ''}
+                <div>
+                    ${claimDisplay}
+                    ${sosDisplay}
+                </div>
                 <div class="card-actions">
                     <button class="btn-action" onclick="promptUpdateStats('${p.id}')">Override Stats</button>
                     ${claimButton}
+                    ${sosButton}
                 </div>
             </div>
         `;
@@ -325,6 +383,16 @@ async function claimTarget(id) {
 
 async function unclaimTarget(id) {
     await fetch('/api/unclaim', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) });
+    fetchWarboard();
+}
+
+async function requestBackup(id) {
+    await fetch('/api/backup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) });
+    fetchWarboard();
+}
+
+async function cancelBackup(id) {
+    await fetch('/api/unbackup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id }) });
     fetchWarboard();
 }
 
