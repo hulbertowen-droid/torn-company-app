@@ -34,7 +34,6 @@ let subscriptions = {};
 let adminFactionId = null;
 let lastEventTimestamp = Math.floor(Date.now() / 1000);
 
-// Load existing subs from file so they survive server restarts
 try {
     if (fs.existsSync('subscriptions.json')) {
         subscriptions = JSON.parse(fs.readFileSync('subscriptions.json'));
@@ -45,7 +44,6 @@ function saveSubs() {
     fs.writeFileSync('subscriptions.json', JSON.stringify(subscriptions));
 }
 
-// Fetch Admin's Faction ID on startup so Owen's team gets free access
 if (ADMIN_API_KEY) {
     fetch(`https://api.torn.com/user/?selections=profile&key=${ADMIN_API_KEY}`)
         .then(r => r.json())
@@ -53,7 +51,6 @@ if (ADMIN_API_KEY) {
         .catch(e => console.error("Failed to load admin profile"));
 }
 
-// The Automated Xanax Payment Gateway
 setInterval(async () => {
     if (!ADMIN_API_KEY) return;
     try {
@@ -69,7 +66,6 @@ setInterval(async () => {
             lastEventTimestamp = ev.timestamp;
 
             const text = ev.event;
-            // Look for Xanax deliveries in the event log
             if (text.toLowerCase().includes('sent you') && text.toLowerCase().includes('xanax')) {
                 const qtyMatch = text.match(/(\d+)\s*[xX]\s*Xanax/i) || text.match(/Xanax\s*[xX]\s*(\d+)/i);
                 let qty = qtyMatch ? parseInt(qtyMatch[1]) : 1;
@@ -88,7 +84,6 @@ setInterval(async () => {
                             let now = Date.now();
                             if (!subscriptions[facId] || subscriptions[facId] < now) subscriptions[facId] = now;
                             
-                            // Add 7 days per 5 Xanax
                             subscriptions[facId] += weeks * 7 * 24 * 60 * 60 * 1000;
                             saveSubs();
                             console.log(`[PAYMENT RECEIVED] Credited Faction ${facId} with ${weeks} weeks of access!`);
@@ -98,12 +93,11 @@ setInterval(async () => {
             }
         }
     } catch (err) { console.error("Event Poller Error:", err); }
-}, 60000); // Checks for new payments every 60 seconds
+}, 60000); 
 
-// Gatekeeper Function
 async function verifySubscription(userKey) {
     if (!userKey) throw new Error("No API Key provided.");
-    if (ADMIN_API_KEY && userKey === ADMIN_API_KEY) return true; // Admin override
+    if (ADMIN_API_KEY && userKey === ADMIN_API_KEY) return true; 
 
     const res = await fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`);
     const data = await res.json();
@@ -112,15 +106,11 @@ async function verifySubscription(userKey) {
     const facId = data.faction?.faction_id;
     if (!facId || facId === 0) throw new Error("You must be in a faction to use these tools.");
 
-    // Admin's faction gets a free pass
     if (adminFactionId && facId === adminFactionId) return true;
-
-    // Check if their faction has paid
     if (subscriptions[facId] && subscriptions[facId] > Date.now()) return true;
 
     throw new Error(`SUBSCRIPTION REQUIRED: Your faction's access has expired or is not active. Send 5x Xanax to Owen777 [3776908] to instantly unlock access for your entire faction for 1 week!`);
 }
-
 
 function computeWarIntel(p, cache = {}) {
     let score = 0;
@@ -528,6 +518,7 @@ app.get('/api/past-war', async (req, res) => {
         if (!correctFacId) correctFacId = userData.faction?.faction_id?.toString();
         const myFactionWarData = reportData.rankedwarreport.factions[correctFacId];
         if (!myFactionWarData) return res.status(400).json({ error: "Your faction was not part of this Ranked War Report." });
+        
         let totalCacheValue = 0; let cachesWon = [];
         if (myFactionWarData.rewards && myFactionWarData.rewards.items) {
             for (let [itemId, itemInfo] of Object.entries(myFactionWarData.rewards.items)) {
@@ -540,7 +531,16 @@ app.get('/api/past-war', async (req, res) => {
         }
         const members = myFactionWarData.members || {}; let formattedMembers = [];
         for (let [id, m] of Object.entries(members)) {
-            if (m.attacks > 0 || m.score > 0) { formattedMembers.push({ id, name: m.name, attacks: m.attacks || 0, score: m.score || 0 }); }
+            if (m.attacks > 0 || m.score > 0) { 
+                formattedMembers.push({ 
+                    id, 
+                    name: m.name, 
+                    attacks: m.attacks || 0, 
+                    assists: m.assists || 0,
+                    clears: m.clears || 0,
+                    score: m.score || 0 
+                }); 
+            }
         }
         formattedMembers.sort((a, b) => b.score - a.score);
         res.json({ success: true, members: formattedMembers, rewards: { totalCacheValue: totalCacheValue, caches: cachesWon, points: myFactionWarData.rewards?.points || 0, respect: myFactionWarData.rewards?.respect || 0 } });
