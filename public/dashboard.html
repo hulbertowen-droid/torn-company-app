@@ -114,7 +114,8 @@
     }
 
     function renderActivity(members) {
-        const list = Object.values(members).sort((a, b) => a.last_action.timestamp - b.last_action.timestamp);
+        // FIXED: Extract the Player ID key from the Torn object and re-attach it to the member data
+        const list = Object.entries(members).map(([id, m]) => ({ id, ...m })).sort((a, b) => a.last_action.timestamp - b.last_action.timestamp);
         document.getElementById("member-count").innerText = list.length;
         
         const now = Math.floor(Date.now() / 1000);
@@ -154,7 +155,7 @@
             html = `<tr><td colspan="3" style="color:var(--text-dim);">No items currently loaned out.</td></tr>`;
         } else {
             loans.forEach(loan => {
-                const borrower = members[loan.loaned_to] ? members[loan.loaned_to].name : "Unknown Player [" + loan.loaned_to + "]";
+                const borrower = members[loan.loaned_to] ? members[loan.loaned_to].name + " [" + loan.loaned_to + "]" : "Unknown Player [" + loan.loaned_to + "]";
                 html += `<tr>
                     <td style="font-weight:bold; color:var(--gold);">${loan.name}</td>
                     <td>${borrower}</td>
@@ -180,7 +181,6 @@
             
             term.innerHTML = `<span style="color: var(--text-main);">${formattedText}</span>`;
         } catch (e) {
-            // This now explicitly prints the backend error string inside the terminal window
             term.innerHTML = `<span style="color: var(--red);">[ERROR] ${e.message}</span>`;
         }
     }
