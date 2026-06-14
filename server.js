@@ -20,7 +20,7 @@ let statsCache = {};
 let manualStats = {}; 
 let flightCache = {}; 
 let activityCache = {}; 
-let warScrapeCache = {}; // CACHE TO PROTECT API LIMITS ON HEAVY SCRAPES
+let warScrapeCache = {}; 
 
 let statQueue = [];
 let flightQueue = [];
@@ -29,6 +29,14 @@ let activityQueue = [];
 let isProcessingStats = false;
 let isProcessingFlights = false;
 let isProcessingActivity = false;
+
+// --- API KEY POOL FOR HEAVY SCRAPING ---
+let apiKeyPool = new Set();
+if (ADMIN_API_KEY) apiKeyPool.add(ADMIN_API_KEY);
+if (TORN_API_KEY) apiKeyPool.add(TORN_API_KEY);
+
+let liveDefends = {}; 
+let lastScrapedAttackTime = Math.floor(Date.now() / 1000) - 3600; // Start looking 1 hour back on boot
 
 // --- SUBSCRIPTION MANAGER ---
 let subscriptions = {};
@@ -48,7 +56,7 @@ function saveSubs() {
 if (ADMIN_API_KEY) {
     fetch(`https://api.torn.com/user/?selections=profile&key=${ADMIN_API_KEY}`)
         .then(r => r.json())
-        .then(d => { if (d.faction) adminFactionId = d.faction.faction_id; })
+        .then(d => { if (d.faction) adminFactionId = d.faction.faction_id?.toString(); })
         .catch(e => console.error("Failed to load admin profile"));
 }
 
@@ -104,8 +112,8 @@ async function verifySubscription(userKey) {
     const data = await res.json();
     if (data.error) throw new Error("Invalid API Key.");
 
-    const facId = data.faction?.faction_id;
-    if (!facId || facId === 0) throw new Error("You must be in a faction to use these tools.");
+    const facId = data.faction?.faction_id?.toString();
+    if (!facId || facId === "0") throw new Error("You must be in a faction to use these tools.");
 
     if (adminFactionId && facId === adminFactionId) return true;
     if (subscriptions[facId] && subscriptions[facId] > Date.now()) return true;
@@ -152,7 +160,7 @@ function autoDetectEnemyFaction(data) {
     return null;
 }
 
-// --- FF SCOUTER ENGINES ---
+// --- ENGINE 1: FF SCOUTER BATTLE STATS ---
 setInterval(async () => {
     if (!statQueue.length || isProcessingStats) return;
     isProcessingStats = true;
@@ -176,6 +184,7 @@ setInterval(async () => {
     isProcessingStats = false;
 }, 4000);
 
+// --- ENGINE 2: FF SCOUTER FLIGHTS ---
 setInterval(async () => {
     if (!flightQueue.length || isProcessingFlights) return;
     isProcessingFlights = true;
@@ -197,6 +206,7 @@ setInterval(async () => {
     isProcessingFlights = false;
 }, 1000); 
 
+// --- ENGINE 3: FF SCOUTER TIMELINES ---
 setInterval(async () => {
     if (!activityQueue.length || isProcessingActivity) return;
     isProcessingActivity = true;
@@ -221,6 +231,40 @@ setInterval(async () => {
     isProcessingActivity = false;
 }, 1500); 
 
+// --- ENGINE 4: LIVE POOLED DEFEND SCRAPER ---
+setInterval(async () => {
+    if (apiKeyPool.size === 0 || !adminFactionId) return;
+
+    // Grab a random key from the pool to spread the API load
+    const keys = Array.from(apiKeyPool);
+    const randomKey = keys[Math.floor(Math.random() * keys.length)];
+
+    try {
+        const res = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${randomKey}`);
+        const data = await res.json();
+        
+        if (data.attacks) {
+            let attacks = Object.values(data.attacks);
+            // Sort oldest to newest so we process in chronological order
+            attacks.sort((a, b) => a.timestamp_ended - b.timestamp_ended);
+
+            for (let atk of attacks) {
+                if (atk.timestamp_ended <= lastScrapedAttackTime) continue;
+                lastScrapedAttackTime = atk.timestamp_ended;
+
+                // Check if our faction was the defender (they got hit)
+                if (atk.defender_faction && atk.defender_faction.toString() === adminFactionId) {
+                    let uId = atk.defender_id.toString();
+                    if (!liveDefends[uId]) liveDefends[uId] = 0;
+                    liveDefends[uId]++;
+                }
+            }
+        }
+    } catch (err) {
+        console.error("Engine 4 Defend Scraper Error");
+    }
+}, 60000); // Runs every 60 seconds
+
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
 // --- SECURED ROUTES ---
@@ -228,7 +272,6 @@ app.get('/api/war-list', async (req, res) => {
     const userKey = req.query.apiKey;
     try {
         await verifySubscription(userKey);
-        
         const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`);
         const facData = await facRes.json();
         if (facData.error) return res.status(400).json({ error: facData.error.error });
@@ -253,7 +296,6 @@ app.get('/api/dashboard-data', async (req, res) => {
     const userKey = req.query.apiKey;
     try {
         await verifySubscription(userKey);
-
         const basicResp = await fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`);
         const basicData = await basicResp.json();
         if (basicData.error) return res.status(400).json({ error: basicData.error.error });
@@ -304,7 +346,6 @@ app.get('/api/scan-recruits', async (req, res) => {
     const { apiKey, reportId } = req.query;
     try {
         await verifySubscription(apiKey);
-
         const userRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${apiKey}`);
         const userData = await userRes.json();
         if (userData.error) return res.status(400).json({ error: "Invalid API Key." });
@@ -499,7 +540,6 @@ app.post('/api/ai-analyze-ongoing', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
-// --- HARDCORE PAYOUT CALCULATOR WITH FACTION ATTACK SCRAPER ---
 app.get('/api/past-war', async (req, res) => {
     const { apiKey, reportId } = req.query;
     try {
@@ -546,10 +586,7 @@ app.get('/api/past-war', async (req, res) => {
             }
         }
 
-        // HEAVY DATA SCRAPER: PULLING ASSISTS & CLEARS
         let advancedStats = {};
-        
-        // Use memory cache so we don't nuke the API limits if the user recalculates
         if (warScrapeCache[reportId]) {
             advancedStats = warScrapeCache[reportId];
         } else {
@@ -574,32 +611,21 @@ app.get('/api/past-war', async (req, res) => {
                 for (let atk of attacks) {
                     if (atk.timestamp_ended < oldestTime) oldestTime = atk.timestamp_ended;
                     
-                    if (atk.timestamp_ended < warStart) {
-                        keepScraping = false;
-                        continue;
-                    }
+                    if (atk.timestamp_ended < warStart) { keepScraping = false; continue; }
                     if (atk.timestamp_ended > warEnd) continue;
                     
                     if (atk.attacker_faction.toString() === correctFacId) {
                         let uId = atk.attacker_id.toString();
                         if (!advancedStats[uId]) advancedStats[uId] = { assists: 0, clears: 0 };
                         
-                        if (atk.result === "Assist") {
-                            advancedStats[uId].assists++;
-                        }
-                        
-                        if (atk.defender_faction.toString() !== enemyFacId) {
-                            advancedStats[uId].clears++;
-                        }
+                        if (atk.result === "Assist") advancedStats[uId].assists++;
+                        if (atk.defender_faction.toString() !== enemyFacId) advancedStats[uId].clears++;
                     }
                 }
-                
                 toTimestamp = oldestTime - 1;
                 pageCount++;
-                // Small delay to prevent hitting the 100/min Torn limit too fast
                 await new Promise(r => setTimeout(r, 250));
             }
-            // Save to memory cache
             warScrapeCache[reportId] = advancedStats;
         }
 
@@ -611,28 +637,14 @@ app.get('/api/past-war', async (req, res) => {
             
             if (m.attacks > 0 || m.score > 0 || playerAdvStats.assists > 0 || playerAdvStats.clears > 0) { 
                 formattedMembers.push({ 
-                    id, 
-                    name: m.name, 
-                    attacks: m.attacks || 0, 
-                    assists: playerAdvStats.assists,
-                    clears: playerAdvStats.clears,
-                    score: m.score || 0 
+                    id, name: m.name, attacks: m.attacks || 0, assists: playerAdvStats.assists, clears: playerAdvStats.clears, score: m.score || 0 
                 }); 
             }
         }
         
         formattedMembers.sort((a, b) => b.score - a.score);
         
-        res.json({ 
-            success: true, 
-            members: formattedMembers, 
-            rewards: { 
-                totalCacheValue: totalCacheValue, 
-                caches: cachesWon, 
-                points: myFactionWarData.rewards?.points || 0, 
-                respect: myFactionWarData.rewards?.respect || 0 
-            } 
-        });
+        res.json({ success: true, members: formattedMembers, rewards: { totalCacheValue: totalCacheValue, caches: cachesWon, points: myFactionWarData.rewards?.points || 0, respect: myFactionWarData.rewards?.respect || 0 } });
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
@@ -642,22 +654,40 @@ app.post('/api/backup', (req, res) => { const { enemyId, playerName } = req.body
 app.post('/api/unbackup', (req, res) => { const { enemyId } = req.body; delete backups[enemyId]; res.json({ success: true }); });
 app.post('/api/update-stats', (req, res) => { const { enemyId, stats } = req.body; manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() }; res.json({ success: true }); });
 
+// --- UPDATED LIVE WARBOARD ENDPOINT WITH API KEY HARVESTING ---
 app.get('/api/warboard', async (req, res) => {
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
         await verifySubscription(userKey);
 
+        // Harvest valid API keys for the scraping pool!
+        if (userKey) apiKeyPool.add(userKey);
+
         let enemyId = req.query.enemyFaction && req.query.enemyFaction !== "null" && req.query.enemyFaction !== "" ? req.query.enemyFaction : null;
+        
         let [myData, enemyDataResult] = await Promise.all([
-            fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })),
+            fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })),
             enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} })
         ]);
+        
         if (myData.error) return res.status(400).json({ error: "Invalid API Key" });
         if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
         if (enemyId && Object.keys(enemyDataResult.members || {}).length === 0) { enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })); }
         
+        let myFacId = myData.ID?.toString();
+        let liveWarStats = {};
+        if (myData.rankedwars) {
+            for (let [id, w] of Object.entries(myData.rankedwars)) {
+                if (w.war && w.war.winner === 0) {
+                    if (w.factions[myFacId] && w.factions[myFacId].members) liveWarStats = w.factions[myFacId].members;
+                    break;
+                }
+            }
+        }
+
         const friendlyIds = new Set(Object.keys(myData.members || {}));
         const enemyIds = new Set(Object.keys(enemyDataResult.members || {}));
+        
         [...friendlyIds, ...enemyIds].forEach(id => {
             if (!statsCache[id] || (Date.now() - statsCache[id].time) > 3600000) { if (!statQueue.includes(id)) statQueue.push(id); }
             const m = myData.members[id] || enemyDataResult.members[id];
@@ -674,7 +704,16 @@ app.get('/api/warboard', async (req, res) => {
                 if (isTraveling) { finalLandingTime = flightCache[id]?.landingTime || null; finalUntil = finalLandingTime; }
                 const intelScore = isEnemy ? computeWarIntel({ id, state: m.status?.state, until: finalUntil, onlineStatus: m.last_action?.status || "Offline", estStats: est }, statsCache) : null;
                 if (isEnemy && backups[id] && m.status?.state === "Hospital") { const timeLeft = m.status.until - Math.floor(Date.now() / 1000); if (timeLeft > 1800) delete backups[id]; }
-                return { id, name: m.name, state: m.status?.state, until: finalUntil, statusDescription: m.status?.description || "", onlineStatus: m.last_action?.status || "Offline", lastActionRelative: m.last_action?.relative || "Unknown", landingTime: finalLandingTime, claimedBy: isEnemy ? claims[id]?.playerName || null : null, needsBackup: isEnemy ? backups[id]?.playerName || null : null, estStats: est, intelScore, isManual: !!manualStats[id] };
+                
+                let attacks = 0; let score = 0;
+                let defends = liveDefends[id] || 0; // Grab the live defend count from Engine 4!
+
+                if (!isEnemy && liveWarStats[id]) {
+                    attacks = liveWarStats[id].attacks || 0;
+                    score = liveWarStats[id].score || 0;
+                }
+
+                return { id, name: m.name, state: m.status?.state, until: finalUntil, statusDescription: m.status?.description || "", onlineStatus: m.last_action?.status || "Offline", lastActionRelative: m.last_action?.relative || "Unknown", landingTime: finalLandingTime, claimedBy: isEnemy ? claims[id]?.playerName || null : null, needsBackup: isEnemy ? backups[id]?.playerName || null : null, estStats: est, intelScore, isManual: !!manualStats[id], attacks, score, defends };
             });
         };
         res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId });
