@@ -21,15 +21,21 @@
 
         .container { max-width: 1000px; margin: 0 auto; background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; }
         
-        /* War Blocks */
+        /* War Blocks with Scroll Fix */
         .dash-card { background: #0b0d13; border: 1px solid #2f3542; padding: 20px; border-radius: 12px; margin-bottom: 20px; }
         .dash-header { margin-top: 0; color: var(--text-dim); text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; border-bottom: 1px solid #2f3542; padding-bottom: 10px; margin-bottom: 15px; font-weight: bold; }
         
+        /* SCROLL FIX STYLES */
+        #war-list-container { max-height: 350px; overflow-y: auto; padding-right: 10px; }
+        #war-list-container::-webkit-scrollbar { width: 8px; }
+        #war-list-container::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
+        #war-list-container::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
+
         .war-block { background: var(--card); border: 1px solid #2f3542; padding: 15px 20px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         .war-details .title { color: var(--gold); font-weight: bold; font-size: 1.1em; margin-bottom: 5px; }
         .war-details .dates { color: var(--text-dim); font-size: 0.85em; }
         
-        .btn-calc { background: var(--blue); color: #000; font-weight: bold; padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; transition: 0.2s; }
+        .btn-calc { background: var(--blue); color: #000; font-weight: bold; padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; transition: 0.2s; flex-shrink: 0; }
         .btn-calc:hover { background: #79c0ff; }
         .btn-loaded { background: #2f3542; color: var(--text-dim); cursor: default; }
         .btn-loaded:hover { background: #2f3542; }
@@ -175,7 +181,6 @@
     async function loadWarData(reportId, enemyName) {
         document.getElementById("error-msg").innerText = "";
         
-        // Reset buttons visually
         currentButtons.forEach(id => {
             const btn = document.getElementById(id);
             if (btn) {
@@ -184,7 +189,6 @@
             }
         });
         
-        // Set clicked button to loading
         const activeBtn = document.getElementById(`btn-${reportId}`);
         activeBtn.innerText = "Loading...";
 
@@ -194,10 +198,8 @@
 
             if (data.error) throw new Error(data.error);
 
-            // Save members data for real-time calculation
             currentMembers = data.members;
             
-            // Populate automated rewards box
             document.getElementById("reward-enemy-name").innerText = enemyName;
             document.getElementById("reward-points").innerText = (data.rewards.points || 0).toLocaleString();
             document.getElementById("reward-respect").innerText = (data.rewards.respect || 0).toLocaleString();
@@ -212,19 +214,15 @@
             }
             document.getElementById("caches-list-ui").innerHTML = cachesHtml;
 
-            // Set Pool Input
             document.getElementById("pool-input").value = data.rewards.totalCacheValue || 0;
 
-            // Show UI
             document.getElementById("rewards-box").style.display = "block";
             document.getElementById("calculator-inputs").style.display = "block";
             document.getElementById("payout-table").style.display = "table";
 
-            // Mark button as loaded
             activeBtn.className = "btn-calc btn-loaded";
             activeBtn.innerText = "Data Loaded ✓";
 
-            // Render table
             renderPayouts();
 
         } catch (e) {
@@ -238,7 +236,6 @@
         const cutPercent = parseFloat(document.getElementById("cut-input").value) || 0;
         const metric = document.getElementById("metric-select").value; 
 
-        // Apply vault cut
         const distributablePool = pool * (1 - (cutPercent / 100));
 
         let totalMetric = 0;
