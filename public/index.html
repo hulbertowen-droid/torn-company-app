@@ -344,13 +344,23 @@ async function fetchWarboard() {
     } catch (e) { console.error("Failed to load warboard", e); }
 }
 
-// --- LIVE GRAPH RENDERER WITH DEFENDS ---
+// --- LIVE GRAPH RENDERER WITH DEFENDS & FALLBACK ---
 function renderChart(friendlyPlayers) {
-    // Only show players who have activity (hits, defends, or score) so the graph stays clean
-    let activeHitters = friendlyPlayers.filter(p => p.attacks > 0 || p.score > 0 || p.defends > 0);
+    // Show players who have activity (hits or defends)
+    let activeHitters = friendlyPlayers.filter(p => p.attacks > 0 || p.defends > 0);
     
-    // Sort by attacks made (highest to lowest)
-    activeHitters.sort((a, b) => b.attacks - a.attacks);
+    // SAFETY FALLBACK: If no one has hit/been hit yet, show top 15 members by stats so the graph isn't blank
+    if (activeHitters.length === 0) {
+        let sortedByStats = [...friendlyPlayers].sort((a, b) => {
+            let statA = typeof a.estStats === 'number' ? a.estStats : 0;
+            let statB = typeof b.estStats === 'number' ? b.estStats : 0;
+            return statB - statA;
+        });
+        activeHitters = sortedByStats.slice(0, 15);
+    } else {
+        // Sort by attacks made (highest to lowest)
+        activeHitters.sort((a, b) => b.attacks - a.attacks);
+    }
 
     const labels = activeHitters.map(p => p.name);
     const attackData = activeHitters.map(p => p.attacks);
