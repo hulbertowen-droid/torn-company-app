@@ -10,7 +10,7 @@ app.use(express.static('public'));
 const PORT = process.env.PORT || 3000;
 const TORN_API_KEY = process.env.TORN_API_KEY;
 const FF_SCOUTER_KEY = process.env.FF_SCOUTER_KEY || "";
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || ""; // NEW: AI Key
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 
 let claims = {};
 let backups = {}; 
@@ -23,7 +23,6 @@ let flightQueue = [];
 let isProcessingStats = false;
 let isProcessingFlights = false;
 
-// --- WAR INTEL & HELPERS ---
 function computeWarIntel(p, cache = {}) {
     let score = 0;
     if (p.state === "Okay") score += 120;
@@ -110,39 +109,68 @@ setInterval(async () => {
 
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
+// --- DROPDOWN LIST FOR PAST WARS ---
+app.get('/api/war-list', async (req, res) => {
+    const userKey = req.query.apiKey;
+    if (!userKey) return res.status(400).json({ error: "Missing API Key" });
+
+    try {
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`);
+        const facData = await facRes.json();
+        if (facData.error) return res.status(400).json({ error: facData.error.error });
+
+        let wars = [];
+        if (facData.rankedwars) {
+            for (let [warId, warInfo] of Object.entries(facData.rankedwars)) {
+                let enemyName = "Unknown Faction";
+                for (let [fId, fInfo] of Object.entries(warInfo.factions)) {
+                    if (fId !== facData.ID.toString()) enemyName = fInfo.name;
+                }
+                wars.push({ id: warId, enemy: enemyName, start: warInfo.war.start });
+            }
+        }
+        wars.sort((a, b) => b.start - a.start);
+        res.json({ success: true, wars });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch war list" });
+    }
+});
+
 // --- DASHBOARD: ACTIVITY & ARMORY LOANS ---
 app.get('/api/dashboard-data', async (req, res) => {
     const userKey = req.query.apiKey;
     if (!userKey) return res.status(400).json({ error: "Missing API Key" });
 
     try {
-        // Fetch basic (for members) + armory selections
-        const resp = await fetch(`https://api.torn.com/faction/?selections=basic,armor,weapons,temporary&key=${userKey}`);
-        const data = await resp.json();
+        // Step 1: Fetch Member List (Always works)
+        const basicResp = await fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`);
+        const basicData = await basicResp.json();
+        if (basicData.error) return res.status(400).json({ error: basicData.error.error });
 
-        if (data.error) return res.status(400).json({ error: data.error.error });
-
+        // Step 2: Fetch Armory (Might be restricted by Faction Roles)
         let loans = [];
-        
-        // Helper to extract loans
-        const extractLoans = (categoryData, typeName) => {
-            if (!categoryData) return;
-            Object.values(categoryData).forEach(items => {
-                // The API groups by item ID, returning an array or object of specific items
-                const itemList = Array.isArray(items) ? items : Object.values(items);
-                itemList.forEach(item => {
-                    if (item.loaned_to) {
-                        loans.push({ name: item.name, loaned_to: item.loaned_to, type: typeName });
-                    }
+        let armoryError = false;
+        const armoryResp = await fetch(`https://api.torn.com/faction/?selections=armor,weapons,temporary&key=${userKey}`);
+        const armoryData = await armoryResp.json();
+
+        if (armoryData.error) {
+            armoryError = true; // Flag the error instead of crashing
+        } else {
+            const extractLoans = (categoryData, typeName) => {
+                if (!categoryData) return;
+                Object.values(categoryData).forEach(items => {
+                    const itemList = Array.isArray(items) ? items : Object.values(items);
+                    itemList.forEach(item => {
+                        if (item.loaned_to) loans.push({ name: item.name, loaned_to: item.loaned_to, type: typeName });
+                    });
                 });
-            });
-        };
+            };
+            extractLoans(armoryData.armor, "Armor");
+            extractLoans(armoryData.weapons, "Weapon");
+            extractLoans(armoryData.temporary, "Temporary");
+        }
 
-        extractLoans(data.armor, "Armor");
-        extractLoans(data.weapons, "Weapon");
-        extractLoans(data.temporary, "Temporary");
-
-        res.json({ success: true, members: data.members || {}, loans: loans });
+        res.json({ success: true, members: basicData.members || {}, loans: loans, armoryError });
     } catch (err) {
         res.status(500).json({ error: "Failed to fetch dashboard data." });
     }
@@ -155,34 +183,29 @@ app.post('/api/ai-analyze', async (req, res) => {
     if (!userKey) return res.status(400).json({ error: "Missing Torn API Key" });
 
     try {
-        // 1. Get the latest Ranked War ID
         const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`);
         const facData = await facRes.json();
         const myFacId = facData.ID?.toString();
         
         let lastWarId = null;
         if (facData.rankedwars) {
-            // Get the most recent war by sorting the keys (IDs)
             const warIds = Object.keys(facData.rankedwars).sort((a, b) => b - a);
             lastWarId = warIds[0];
         }
 
         if (!lastWarId) return res.status(400).json({ error: "No past Ranked Wars found for your faction." });
 
-        // 2. Fetch the actual War Report
         const reportRes = await fetch(`https://api.torn.com/torn/${lastWarId}?selections=rankedwarreport&key=${userKey}`);
         const reportData = await reportRes.json();
         
         const warStats = reportData.rankedwarreport?.factions[myFacId]?.members;
         if (!warStats) return res.status(400).json({ error: "Could not extract member data from the last war report." });
 
-        // 3. Format data to feed the AI (Top 20 members to save tokens)
         let memberArray = Object.values(warStats).map(m => `Name: ${m.name}, Attacks: ${m.attacks}, Assists: ${m.assists}, Clears: ${m.clears}, Score: ${m.score}`);
         memberArray.sort((a, b) => b.score - a.score);
         const slimData = memberArray.slice(0, 20).join("\n");
 
-        // 4. Call Gemini API
-        const prompt = `You are a strict, tactical military advisor for a gaming faction. Review the performance of the top 20 members in our latest war:\n\n${slimData}\n\nProvide 3 specific, actionable pieces of advice to improve our next war. Call out top performers, identify weak links (e.g. high attacks but low score means hitting weak targets; low attacks means inactivity), and be blunt but helpful. Do not use markdown headers, just bolding.`;
+        const prompt = `You are a strict, tactical military advisor for a gaming faction. Review the performance of the top 20 members in our latest war:\n\n${slimData}\n\nProvide 3 specific, actionable pieces of advice to improve our next war. Call out top performers, identify weak links, and be blunt but helpful. Do not use markdown headers, just bolding.`;
 
         const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
             method: 'POST',
@@ -195,8 +218,76 @@ app.post('/api/ai-analyze', async (req, res) => {
 
         res.json({ success: true, analysis });
     } catch (err) {
-        console.error("AI Error:", err);
         res.status(500).json({ error: "Failed to generate AI report." });
+    }
+});
+
+// --- FULL PAYOUT CALCULATOR LOGIC ---
+app.get('/api/past-war', async (req, res) => {
+    const { apiKey, reportId } = req.query;
+    if (!apiKey || !reportId) return res.status(400).json({ error: "Missing API Key or Report ID" });
+
+    try {
+        const [userRes, reportRes, itemsRes] = await Promise.all([
+            fetch(`https://api.torn.com/user/?selections=profile&key=${apiKey}`),
+            fetch(`https://api.torn.com/torn/${reportId}?selections=rankedwarreport&key=${apiKey}`),
+            fetch(`https://api.torn.com/torn/?selections=items&key=${apiKey}`)
+        ]);
+
+        const userData = await userRes.json();
+        const reportData = await reportRes.json();
+        const itemsData = await itemsRes.json();
+
+        if (userData.error) return res.status(400).json({ error: "Invalid API Key." });
+        const myFacId = userData.faction?.faction_id?.toString();
+        if (!myFacId || myFacId === "0") return res.status(400).json({ error: "You are not currently in a faction." });
+
+        if (reportData.error) return res.status(400).json({ error: "Torn API Error: " + reportData.error.error });
+        if (!reportData.rankedwarreport || !reportData.rankedwarreport.factions) return res.status(400).json({ error: "Invalid Report ID or no data found." });
+
+        const myFactionWarData = reportData.rankedwarreport.factions[myFacId];
+        if (!myFactionWarData) return res.status(400).json({ error: "Your faction was not part of this Ranked War Report." });
+
+        let totalCacheValue = 0;
+        let cachesWon = [];
+
+        if (myFactionWarData.rewards && myFactionWarData.rewards.items) {
+            for (let [itemId, itemInfo] of Object.entries(myFactionWarData.rewards.items)) {
+                const itemMarketData = itemsData.items ? itemsData.items[itemId] : null;
+                const marketValue = itemMarketData ? itemMarketData.market_value : 0;
+                const quantity = itemInfo.quantity || 0;
+                
+                const lineTotal = marketValue * quantity;
+                totalCacheValue += lineTotal;
+                
+                cachesWon.push({
+                    name: itemInfo.name || (itemMarketData ? itemMarketData.name : "Unknown Item"),
+                    quantity: quantity,
+                    marketValue: marketValue,
+                    totalValue: lineTotal
+                });
+            }
+        }
+
+        const members = myFactionWarData.members || {};
+        let formattedMembers = [];
+        
+        for (let [id, m] of Object.entries(members)) {
+            if (m.attacks > 0 || m.score > 0) {
+                formattedMembers.push({
+                    id, name: m.name, attacks: m.attacks || 0, assists: m.assists || 0, retaliations: m.retaliations || 0, score: m.score || 0
+                });
+            }
+        }
+
+        formattedMembers.sort((a, b) => b.score - a.score);
+
+        res.json({ 
+            success: true, members: formattedMembers,
+            rewards: { totalCacheValue: totalCacheValue, caches: cachesWon, points: myFactionWarData.rewards?.points || 0, respect: myFactionWarData.rewards?.respect || 0 }
+        });
+    } catch (err) {
+        res.status(500).json({ error: "Server error fetching past war data." });
     }
 });
 
