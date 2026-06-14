@@ -127,7 +127,7 @@ app.get('/api/war-list', async (req, res) => {
                 for (let [fId, fInfo] of Object.entries(warInfo.factions)) {
                     if (fId !== facData.ID.toString()) enemyName = fInfo.name;
                 }
-                wars.push({ id: warId, enemy: enemyName, start: warInfo.war.start });
+                wars.push({ id: warId, enemy: enemyName, start: warInfo.war.start, end: warInfo.war.end });
             }
         }
         wars.sort((a, b) => b.start - a.start);
@@ -137,7 +137,7 @@ app.get('/api/war-list', async (req, res) => {
     }
 });
 
-// --- DASHBOARD: ACTIVITY & ARMORY LOANS ---
+// --- DASHBOARD: ACTIVITY & ARMORY LOANS DEEP-SCAN ---
 app.get('/api/dashboard-data', async (req, res) => {
     const userKey = req.query.apiKey;
     if (!userKey) return res.status(400).json({ error: "Missing API Key" });
@@ -156,12 +156,21 @@ app.get('/api/dashboard-data', async (req, res) => {
             armoryError = true; 
         } else {
             const extractLoans = (categoryData, typeName) => {
-                if (!categoryData || typeof categoryData !== 'object') return; // Fixed crash if armory is empty
+                if (!categoryData || typeof categoryData !== 'object') return; 
                 Object.values(categoryData).forEach(items => {
                     if (!items) return;
+                    // Deep scan array or object structures
                     const itemList = Array.isArray(items) ? items : Object.values(items);
                     itemList.forEach(item => {
-                        if (item && item.loaned_to) loans.push({ name: item.name, loaned_to: item.loaned_to, type: typeName });
+                        if (item && item.loaned_to) {
+                            let loanStr = String(item.loaned_to).trim();
+                            if (loanStr !== "0" && loanStr !== "null" && loanStr !== "") {
+                                // Split by comma in case multiple people are holding the same item ID
+                                loanStr.split(',').forEach(l => {
+                                    loans.push({ name: item.name, loaned_to: l.trim(), type: typeName });
+                                });
+                            }
+                        }
                     });
                 });
             };
@@ -172,7 +181,6 @@ app.get('/api/dashboard-data', async (req, res) => {
 
         res.json({ success: true, members: basicData.members || {}, loans: loans, armoryError });
     } catch (err) {
-        console.error(err);
         res.status(500).json({ error: "Failed to fetch dashboard data." });
     }
 });
@@ -184,27 +192,44 @@ app.post('/api/ai-analyze', async (req, res) => {
     if (!userKey) return res.status(400).json({ error: "Missing Torn API Key" });
 
     try {
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`);
-        const facData = await facRes.json();
-        const myFacId = facData.ID?.toString();
+        // Fetch User and Faction together to get bulletproof faction detection
+        const [facRes, userRes] = await Promise.all([
+            fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`).then(r => r.json()),
+            fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`).then(r => r.json())
+        ]);
+
+        if (facRes.error) throw new Error("Torn API Error: " + facRes.error.error);
+        if (userRes.error) throw new Error("Torn API Error: " + userRes.error.error);
+
+        const myFacId = facRes.ID?.toString();
+        const myUserId = userRes.player_id?.toString();
         
         let lastWarId = null;
-        if (facData.rankedwars) {
-            // Find only completed wars to prevent crash on ongoing wars
-            const completedWars = Object.entries(facData.rankedwars)
+        if (facRes.rankedwars) {
+            const completedWars = Object.entries(facRes.rankedwars)
                 .filter(([id, w]) => w.war && w.war.winner !== 0)
                 .sort((a, b) => b[1].war.end - a[1].war.end);
-            
             if (completedWars.length > 0) lastWarId = completedWars[0][0];
         }
 
-        if (!lastWarId) return res.status(400).json({ error: "No completed Ranked Wars found for your faction." });
+        if (!lastWarId) throw new Error("No completed Ranked Wars found for your faction.");
 
         const reportRes = await fetch(`https://api.torn.com/torn/${lastWarId}?selections=rankedwarreport&key=${userKey}`);
         const reportData = await reportRes.json();
         
-        const warStats = reportData.rankedwarreport?.factions[myFacId]?.members;
-        if (!warStats) return res.status(400).json({ error: "Could not extract member data from the last war report." });
+        // Bulletproof member extraction
+        let warStats = null;
+        if (reportData.rankedwarreport && reportData.rankedwarreport.factions) {
+            for (let [fId, fData] of Object.entries(reportData.rankedwarreport.factions)) {
+                if (fData.members && fData.members[myUserId]) {
+                    warStats = fData.members;
+                    break;
+                }
+            }
+            if (!warStats) warStats = reportData.rankedwarreport.factions[myFacId]?.members;
+        }
+
+        if (!warStats) throw new Error("Could not extract your faction's member data from the last war report.");
 
         let memberArray = Object.values(warStats).map(m => `Name: ${m.name}, Attacks: ${m.attacks}, Assists: ${m.assists}, Clears: ${m.clears}, Score: ${m.score}`);
         memberArray.sort((a, b) => b.score - a.score);
@@ -219,11 +244,12 @@ app.post('/api/ai-analyze', async (req, res) => {
         });
         
         const aiData = await aiRes.json();
-        const analysis = aiData.candidates[0].content.parts[0].text;
+        if (aiData.error) throw new Error("Gemini API Error: " + aiData.error.message);
 
+        const analysis = aiData.candidates[0].content.parts[0].text;
         res.json({ success: true, analysis });
     } catch (err) {
-        res.status(500).json({ error: "Failed to generate AI report." });
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -244,18 +270,13 @@ app.get('/api/past-war', async (req, res) => {
         const itemsData = await itemsRes.json();
 
         if (userData.error) return res.status(400).json({ error: "Invalid API Key." });
-        
         if (reportData.error) return res.status(400).json({ error: "Torn API Error: " + reportData.error.error });
         if (!reportData.rankedwarreport || !reportData.rankedwarreport.factions) return res.status(400).json({ error: "Invalid Report ID or no data found." });
 
-        // Auto-detect which faction in the report belongs to the user
         const myUserId = userData.player_id.toString();
         let correctFacId = null;
         for (let [facId, facData] of Object.entries(reportData.rankedwarreport.factions)) {
-            if (facData.members && facData.members[myUserId]) {
-                correctFacId = facId;
-                break;
-            }
+            if (facData.members && facData.members[myUserId]) { correctFacId = facId; break; }
         }
         if (!correctFacId) correctFacId = userData.faction?.faction_id?.toString();
 
@@ -274,12 +295,7 @@ app.get('/api/past-war', async (req, res) => {
                 const lineTotal = marketValue * quantity;
                 totalCacheValue += lineTotal;
                 
-                cachesWon.push({
-                    name: itemInfo.name || (itemMarketData ? itemMarketData.name : "Unknown Item"),
-                    quantity: quantity,
-                    marketValue: marketValue,
-                    totalValue: lineTotal
-                });
+                cachesWon.push({ name: itemInfo.name || (itemMarketData ? itemMarketData.name : "Unknown Item"), quantity: quantity, marketValue: marketValue, totalValue: lineTotal });
             }
         }
 
@@ -288,9 +304,7 @@ app.get('/api/past-war', async (req, res) => {
         
         for (let [id, m] of Object.entries(members)) {
             if (m.attacks > 0 || m.score > 0) {
-                formattedMembers.push({
-                    id, name: m.name, attacks: m.attacks || 0, assists: m.assists || 0, retaliations: m.retaliations || 0, score: m.score || 0
-                });
+                formattedMembers.push({ id, name: m.name, attacks: m.attacks || 0, score: m.score || 0 });
             }
         }
 
@@ -305,14 +319,12 @@ app.get('/api/past-war', async (req, res) => {
     }
 });
 
-// --- WARBOARD API ROUTES (Claim/Unclaim/Etc) ---
 app.post('/api/claim', (req, res) => { const { enemyId, playerName } = req.body; claims[enemyId] = { playerName, time: Date.now() }; res.json({ success: true }); });
 app.post('/api/unclaim', (req, res) => { const { enemyId, playerName } = req.body; if (claims[enemyId]?.playerName === playerName) delete claims[enemyId]; res.json({ success: true }); });
 app.post('/api/backup', (req, res) => { const { enemyId, playerName } = req.body; backups[enemyId] = { playerName, time: Date.now() }; res.json({ success: true }); });
 app.post('/api/unbackup', (req, res) => { const { enemyId } = req.body; delete backups[enemyId]; res.json({ success: true }); });
 app.post('/api/update-stats', (req, res) => { const { enemyId, stats } = req.body; manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() }; res.json({ success: true }); });
 
-// --- FULL LIVE WARBOARD LOGIC ---
 app.get('/api/warboard', async (req, res) => {
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
@@ -334,15 +346,11 @@ app.get('/api/warboard', async (req, res) => {
         const enemyIds = new Set(Object.keys(enemyDataResult.members || {}));
 
         [...friendlyIds, ...enemyIds].forEach(id => {
-            if (!statsCache[id] || (Date.now() - statsCache[id].time) > 3600000) {
-                if (!statQueue.includes(id)) statQueue.push(id);
-            }
+            if (!statsCache[id] || (Date.now() - statsCache[id].time) > 3600000) { if (!statQueue.includes(id)) statQueue.push(id); }
             const m = myData.members[id] || enemyDataResult.members[id];
             const isTraveling = m.status?.state === "Traveling" || (m.status?.description && m.status?.description.includes("Traveling"));
             if (isTraveling) {
-                if (!flightCache[id] || (Date.now() - flightCache[id].time) > 30000) {
-                    if (!flightQueue.includes(id)) flightQueue.push(id);
-                }
+                if (!flightCache[id] || (Date.now() - flightCache[id].time) > 30000) { if (!flightQueue.includes(id)) flightQueue.push(id); }
             }
         });
 
@@ -354,10 +362,7 @@ app.get('/api/warboard', async (req, res) => {
                 
                 let finalUntil = m.status?.until;
                 let finalLandingTime = null;
-                if (isTraveling) {
-                    finalLandingTime = flightCache[id]?.landingTime || null;
-                    finalUntil = finalLandingTime; 
-                }
+                if (isTraveling) { finalLandingTime = flightCache[id]?.landingTime || null; finalUntil = finalLandingTime; }
 
                 const intelScore = isEnemy ? computeWarIntel({ id, state: m.status?.state, until: finalUntil, onlineStatus: m.last_action?.status || "Offline", estStats: est }, statsCache) : null;
                 if (isEnemy && backups[id] && m.status?.state === "Hospital") {
