@@ -40,7 +40,6 @@
         .profile { font-weight: bold; color: var(--text-main); text-decoration: none; font-size: 1.1em; }
         .profile:hover { text-decoration: underline; color: var(--blue); }
         
-        /* Action & ETA Styling */
         .action-arrow { font-size: 0.85em; color: var(--text-dim); margin-top: 5px; display: flex; align-items: center; gap: 6px; }
         .arrow-icon { color: var(--red); font-weight: bold; }
         .flight-info { color: var(--blue); font-weight: bold; background: rgba(88, 166, 255, 0.1); padding: 2px 6px; border-radius: 4px; }
@@ -63,7 +62,15 @@
         .active-claim { font-size: 0.8em; color: var(--green); font-weight: bold; background: rgba(46,213,115,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; }
         .active-sos { font-size: 0.8em; color: var(--red); font-weight: bold; background: rgba(255,71,87,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; animation: pulse 2s infinite; }
 
+        /* Notification Toast Styling */
+        #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+        .toast { background: var(--card); border-left: 4px solid var(--red); color: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.6); animation: slideIn 0.3s ease-out forwards; font-weight: bold; font-size: 0.9em; }
+        .toast.online { border-left-color: var(--blue); }
+        .toast.okay { border-left-color: var(--green); }
+        
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeOut { to { opacity: 0; transform: translateX(100%); } }
         @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
     </style>
 </head>
@@ -94,11 +101,14 @@
         </div>
     </div>
 
+    <div id="toast-container"></div>
+
 <script>
 // --- State & Initialization ---
 let myKey = localStorage.getItem("warboard_apikey") || "";
 let enemyFacId = localStorage.getItem("warboard_enemyId") || "";
 let myName = localStorage.getItem("warboard_myname") || "Agent";
+let knownEnemies = {}; // Tracks enemy state for notifications
 
 document.getElementById("api-key").value = myKey;
 document.getElementById("enemy-id").value = enemyFacId;
@@ -117,6 +127,9 @@ function saveSettings() {
     localStorage.setItem("warboard_apikey", myKey);
     localStorage.setItem("warboard_enemyId", enemyFacId);
     localStorage.setItem("warboard_myname", myName);
+    
+    // Clear known enemies on manual reconnect to avoid ghost alerts
+    knownEnemies = {}; 
     fetchWarboard();
 }
 
@@ -141,6 +154,9 @@ async function fetchWarboard() {
         document.getElementById("friendly-count").innerText = data.friendly.length;
         document.getElementById("enemy-count").innerText = data.enemy.length;
 
+        // Process Notifications before rendering
+        processNotifications(data.enemy);
+
         renderFriendlyList(data.friendly);
         
         // Sort enemies by Intel Score so priority targets are at the top
@@ -150,6 +166,53 @@ async function fetchWarboard() {
     } catch (e) {
         console.error("Failed to load warboard", e);
     }
+}
+
+// --- Notification Logic ---
+function processNotifications(enemies) {
+    // If this is the very first load, just record the state without alerting
+    if (Object.keys(knownEnemies).length === 0) {
+        enemies.forEach(e => { knownEnemies[e.id] = { state: e.state, online: e.onlineStatus }; });
+        return;
+    }
+
+    enemies.forEach(newEnemy => {
+        let oldEnemy = knownEnemies[newEnemy.id];
+        
+        if (oldEnemy) {
+            // Trigger 1: Medded out or Landed
+            if (oldEnemy.state !== "Okay" && newEnemy.state === "Okay") {
+                if (oldEnemy.state === "Traveling") {
+                    showToast(`🛬 ${newEnemy.name} has landed and is Okay!`, "okay");
+                } else {
+                    showToast(`🏥 ${newEnemy.name} left the hospital and is Okay!`, "okay");
+                }
+            }
+            
+            // Trigger 2: Came Online
+            if (oldEnemy.online !== "Online" && newEnemy.onlineStatus === "Online") {
+                showToast(`🟢 ${newEnemy.name} just came ONLINE!`, "online");
+            }
+        }
+        
+        // Update tracker for the next 5-second tick
+        knownEnemies[newEnemy.id] = { state: newEnemy.state, online: newEnemy.onlineStatus };
+    });
+}
+
+function showToast(msg, typeClass="red") {
+    const container = document.getElementById("toast-container");
+    const toast = document.createElement("div");
+    toast.className = `toast ${typeClass}`;
+    toast.innerHTML = msg;
+    
+    container.appendChild(toast);
+    
+    // Auto-remove after 6 seconds
+    setTimeout(() => {
+        toast.style.animation = "fadeOut 0.4s ease-out forwards";
+        setTimeout(() => toast.remove(), 400);
+    }, 6000);
 }
 
 // --- Render Logic ---
@@ -164,6 +227,8 @@ function renderFriendlyList(players) {
         let etaString = (isFlying && p.landingTime) ? `<span class="flight-info">✈️ ETA: ${formatTime(p.landingTime)}</span>` : "";
         
         let sosDisplay = p.needsBackup ? `<div class="active-sos">🚨 Backup requested by ${p.needsBackup}</div>` : "";
+        
+        // SOS Button Logic: Friendlies can call SOS if they are in the hospital.
         let sosButton = (p.state === "Hospital" && !p.needsBackup) 
             ? `<button class="btn-action btn-sos" onclick="requestBackup('${p.id}')">Call SOS</button>` 
             : (p.needsBackup === myName ? `<button class="btn-action" onclick="cancelBackup('${p.id}')">Cancel SOS</button>` : "");
@@ -207,7 +272,8 @@ function renderEnemyList(players) {
         let claimDisplay = p.claimedBy ? `<div class="active-claim">🎯 Claimed by ${p.claimedBy}</div>` : "";
         let claimButton = "";
         
-        if (!p.claimedBy && p.state === "Okay") {
+        // FIXED CLAIM LOGIC: You can now claim an enemy regardless of their state (Okay, Hospital, Traveling)
+        if (!p.claimedBy) {
             claimButton = `<button class="btn-action btn-claim" onclick="claimTarget('${p.id}')">Claim Target</button>`;
         } else if (p.claimedBy === myName) {
             claimButton = `<button class="btn-action" onclick="unclaimTarget('${p.id}')">Release Target</button>`;
