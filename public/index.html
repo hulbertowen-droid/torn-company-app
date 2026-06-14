@@ -14,7 +14,7 @@
         body { background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px; }
         
         .top-nav { display: flex; justify-content: center; gap: 20px; max-width: 1200px; margin: 0 auto 20px auto; background: var(--card); padding: 12px; border-radius: 10px; border: 1px solid #2f3542; }
-        .nav-link { color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 6px 12px; border-radius: 6px; transition: 0.2s; text-transform: uppercase; font-size: 0.9em; letter-spacing: 1px; }
+        .nav-link { color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 6px 12px; border-radius: 6px; transition: 0.2s; text-transform: uppercase; font-size: 0.9em; letter-spacing: 1px; cursor: pointer; }
         .nav-link:hover { background: #2f3542; color: white; }
         .nav-link.active { color: white; background: rgba(88, 166, 255, 0.15); border: 1px solid var(--blue); }
 
@@ -22,11 +22,23 @@
 
         .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
         
-        .settings-box { grid-column: 1 / -1; background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542; display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; }
-        .settings-box input { padding: 10px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; width: 250px;}
-        .settings-box button { background: var(--blue); color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
-        .settings-box button:hover { background: #79c0ff; }
+        /* Tactical Watchlist (Replaces old settings box) */
+        .watchlist-box { grid-column: 1 / -1; background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542; }
+        .watchlist-box h3 { margin: 0 0 15px 0; color: var(--red); display: flex; align-items: center; gap: 10px; text-transform: uppercase; letter-spacing: 1px; }
+        .watchlist-items { display: flex; gap: 15px; overflow-x: auto; padding-bottom: 10px; }
+        .watchlist-items::-webkit-scrollbar { height: 8px; }
+        .watchlist-items::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
+        .watchlist-items::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
+        
+        .watch-card { background: #0b0d13; border: 1px solid #2f3542; padding: 12px 18px; border-radius: 8px; min-width: 220px; flex-shrink: 0; }
+        .watch-card.online { border-color: var(--green); background: rgba(46, 213, 115, 0.05); }
+        .watch-card.flying { border-color: var(--blue); background: rgba(88, 166, 255, 0.05); }
+        .watch-name { font-weight: bold; font-size: 1.1em; margin-bottom: 4px; }
+        .watch-name a { color: var(--text-main); text-decoration: none; }
+        .watch-name a:hover { text-decoration: underline; }
+        .watch-highlight { font-weight: bold; font-size: 0.95em; margin-bottom: 2px; }
 
+        /* Faction Columns */
         .faction-col { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #2f3542; }
         .faction-col h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; display: flex; justify-content: space-between;}
 
@@ -62,11 +74,22 @@
         .active-claim { font-size: 0.8em; color: var(--green); font-weight: bold; background: rgba(46,213,115,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-right: 5px; }
         .active-sos { font-size: 0.8em; color: var(--red); font-weight: bold; background: rgba(255,71,87,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; animation: pulse 2s infinite; }
 
-        /* BIG Noticeable Notification Toast Styling */
+        /* Notification Toast Styling */
         #toast-container { position: fixed; top: 25px; right: 25px; z-index: 9999; display: flex; flex-direction: column; gap: 15px; pointer-events: none; }
         .toast { background: var(--card); border-left: 8px solid var(--red); color: white; padding: 20px 30px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); animation: slideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; font-weight: bold; font-size: 1.2em; pointer-events: auto; letter-spacing: 0.5px; }
         .toast.online { border-left-color: var(--blue); }
         .toast.okay { border-left-color: var(--green); }
+
+        /* Settings Modal Styling */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 10000; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
+        .modal-content { background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; width: 400px; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.9); }
+        .modal-content h2 { margin: 0 0 10px 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+        .modal-content label { font-size: 0.85em; color: var(--text-dim); font-weight: bold; text-transform: uppercase; }
+        .modal-content input { padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; width: 100%; box-sizing: border-box; }
+        .modal-content button { background: var(--blue); color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.1em; margin-top: 10px; transition: 0.2s; text-transform: uppercase; }
+        .modal-content button:hover { background: #79c0ff; }
+        .close-btn { position: absolute; right: 20px; top: 20px; color: var(--text-dim); cursor: pointer; font-size: 1.5em; line-height: 1; }
+        .close-btn:hover { color: white; }
         
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
@@ -78,16 +101,19 @@
     <div class="top-nav">
         <a href="/" class="nav-link active">📡 Live Warboard</a>
         <a href="/payout.html" class="nav-link">💰 Payout Calculator</a>
+        <a onclick="openSettings()" class="nav-link">⚙️ Settings</a>
     </div>
 
     <h1>Live Warboard</h1>
 
     <div class="container">
-        <div class="settings-box">
-            <input type="text" id="api-key" placeholder="Your API Key">
-            <input type="text" id="enemy-id" placeholder="Enemy Faction ID (Optional)">
-            <input type="text" id="my-name" placeholder="Your Name (For Claims)">
-            <button onclick="saveSettings()">Save & Connect</button>
+        
+        <!-- NEW Tactical Watchlist -->
+        <div class="watchlist-box">
+            <h3>🚨 Priority Watchlist</h3>
+            <div id="watchlist-items" class="watchlist-items">
+                <div style="color:var(--text-dim); padding: 10px;">Waiting for API Data...</div>
+            </div>
         </div>
 
         <div class="faction-col">
@@ -101,11 +127,39 @@
         </div>
     </div>
 
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal-overlay">
+        <div class="modal-content" style="position: relative;">
+            <div class="close-btn" onclick="closeSettings()">&times;</div>
+            <h2>Board Settings</h2>
+            
+            <div>
+                <label>API Key (Hidden for Privacy)</label>
+                <input type="password" id="api-key" placeholder="Paste your Torn API Key here">
+            </div>
+            <div>
+                <label>Enemy Faction ID</label>
+                <input type="text" id="enemy-id" placeholder="Optional (Auto-detects usually)">
+            </div>
+            <div>
+                <label>Your Name (For Targets)</label>
+                <input type="text" id="my-name" placeholder="E.g. Agent">
+            </div>
+            <div>
+                <label>Refresh Rate (Seconds)</label>
+                <input type="number" id="refresh-rate" min="2" max="60" value="5">
+                <div style="font-size: 0.75em; color: var(--text-dim); margin-top: 4px;">Lower number = faster updates, but uses more API calls.</div>
+            </div>
+            
+            <button onclick="saveSettings()">Save & Connect</button>
+        </div>
+    </div>
+
     <!-- Container for Live Alerts -->
     <div id="toast-container"></div>
 
 <script>
-// --- Audio Alert System ---
+// --- Improved Audio Alert System (Softer Chime) ---
 let audioCtx;
 function initAudio() {
     if (!audioCtx) {
@@ -120,10 +174,16 @@ function playBeep(time, freq, duration) {
     if (!audioCtx) return;
     const osc = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
-    osc.type = 'sine';
+    
+    // Triangle wave is softer and less harsh than sine/square for alerts
+    osc.type = 'triangle'; 
     osc.frequency.setValueAtTime(freq, time);
-    gainNode.gain.setValueAtTime(0.2, time);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, time + duration);
+    
+    // Create a pleasant attack and decay envelope
+    gainNode.gain.setValueAtTime(0, time);
+    gainNode.gain.linearRampToValueAtTime(0.15, time + 0.05); // quick fade in
+    gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration); // smooth fade out
+    
     osc.connect(gainNode);
     gainNode.connect(audioCtx.destination);
     osc.start(time);
@@ -134,41 +194,58 @@ function playAlertSound() {
     try {
         if (!audioCtx) initAudio();
         const now = audioCtx.currentTime;
-        playBeep(now, 880, 0.15);         // First Beep
-        playBeep(now + 0.2, 880, 0.15);   // Second Beep
+        // Pleasant ascending double chime (C5 to E5)
+        playBeep(now, 523.25, 0.4);       
+        playBeep(now + 0.15, 659.25, 0.6); 
     } catch(e) { console.error("Audio block", e); }
 }
 
-// Ensure audio is unlocked on first click anywhere
 document.body.addEventListener('click', () => { initAudio(); }, { once: true });
 
 // --- State & Initialization ---
 let myKey = localStorage.getItem("warboard_apikey") || "";
 let enemyFacId = localStorage.getItem("warboard_enemyId") || "";
 let myName = localStorage.getItem("warboard_myname") || "Agent";
-let knownEnemies = {}; 
+let refreshRate = parseInt(localStorage.getItem("warboard_refresh")) || 5;
 
+let knownEnemies = {}; 
+let fetchTimer = null;
+
+// Populate Modal Inputs
 document.getElementById("api-key").value = myKey;
 document.getElementById("enemy-id").value = enemyFacId;
 document.getElementById("my-name").value = myName;
+document.getElementById("refresh-rate").value = refreshRate;
 
-if (myKey) { 
-    fetchWarboard(); 
-    setInterval(fetchWarboard, 5000); 
-}
+// Modal Controls
+function openSettings() { document.getElementById("settings-modal").style.display = "flex"; }
+function closeSettings() { document.getElementById("settings-modal").style.display = "none"; }
+
+if (myKey) { startPolling(); } else { openSettings(); }
 
 function saveSettings() {
-    initAudio(); // Also init audio when saving
+    initAudio(); 
     myKey = document.getElementById("api-key").value.trim();
     enemyFacId = document.getElementById("enemy-id").value.trim();
     myName = document.getElementById("my-name").value.trim() || "Agent";
     
+    let parsedRate = parseInt(document.getElementById("refresh-rate").value);
+    refreshRate = (parsedRate && parsedRate >= 2) ? parsedRate : 5;
+    
     localStorage.setItem("warboard_apikey", myKey);
     localStorage.setItem("warboard_enemyId", enemyFacId);
     localStorage.setItem("warboard_myname", myName);
+    localStorage.setItem("warboard_refresh", refreshRate);
     
     knownEnemies = {}; 
+    closeSettings();
+    startPolling();
+}
+
+function startPolling() {
+    if (fetchTimer) clearInterval(fetchTimer);
     fetchWarboard();
+    fetchTimer = setInterval(fetchWarboard, refreshRate * 1000);
 }
 
 function formatTime(unixTimestamp) {
@@ -190,17 +267,13 @@ function sortPlayersList(players, isEnemy) {
     return players.sort((a, b) => {
         const prioA = getSortPriority(a.state);
         const prioB = getSortPriority(b.state);
-
         if (prioA !== prioB) return prioA - prioB;
-
         if (a.state === "Hospital" && b.state === "Hospital") {
             return (a.until || Number.MAX_SAFE_INTEGER) - (b.until || Number.MAX_SAFE_INTEGER);
         }
-
         if (isEnemy && a.state === "Okay" && b.state === "Okay") {
             return (b.intelScore || 0) - (a.intelScore || 0);
         }
-
         return 0;
     });
 }
@@ -221,6 +294,7 @@ async function fetchWarboard() {
         document.getElementById("enemy-count").innerText = data.enemy.length;
 
         processNotifications(data.enemy);
+        renderWatchlist(data.enemy);
 
         const sortedFriendly = sortPlayersList(data.friendly, false);
         renderFriendlyList(sortedFriendly);
@@ -231,6 +305,42 @@ async function fetchWarboard() {
     } catch (e) {
         console.error("Failed to load warboard", e);
     }
+}
+
+// --- Watchlist Rendering ---
+function renderWatchlist(enemies) {
+    // Filter for targets that are Online OR Flying (with ETA)
+    const watchTargets = enemies.filter(e => e.onlineStatus === "Online" || (e.state === "Traveling" && e.landingTime));
+
+    // Sort: Flying (by ETA) -> Online (by Intel)
+    watchTargets.sort((a, b) => {
+        if (a.state === "Traveling" && b.state === "Traveling") return a.landingTime - b.landingTime;
+        if (a.state === "Traveling") return -1;
+        if (b.state === "Traveling") return 1;
+        return (b.intelScore || 0) - (a.intelScore || 0);
+    });
+
+    let html = "";
+    watchTargets.forEach(p => {
+        let isFlying = p.state === "Traveling";
+        let cardClass = isFlying ? "flying" : "online";
+        let highlightText = isFlying ? `✈️ ETA: ${formatTime(p.landingTime)}` : `🟢 Online Now`;
+        let highlightColor = isFlying ? "var(--blue)" : "var(--green)";
+
+        html += `
+            <div class="watch-card ${cardClass}">
+                <div class="watch-name"><a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a></div>
+                <div class="watch-highlight" style="color: ${highlightColor};">${highlightText}</div>
+                <div style="font-size:0.8em; color:var(--text-dim);">Current State: ${p.state}</div>
+            </div>
+        `;
+    });
+    
+    if(watchTargets.length === 0) {
+        html = `<div style="color:var(--text-dim); padding: 10px;">No priority targets are currently online or landing.</div>`;
+    }
+    
+    document.getElementById("watchlist-items").innerHTML = html;
 }
 
 // --- Notification Logic ---
@@ -280,7 +390,7 @@ function showToast(msg, typeClass="red") {
     }, 7000);
 }
 
-// --- Render Logic ---
+// --- List Render Logic ---
 function renderFriendlyList(players) {
     let html = "";
     players.forEach(p => {
@@ -334,7 +444,6 @@ function renderEnemyList(players) {
             claimButton = `<button class="btn-action" onclick="unclaimTarget('${p.id}')">Release Target</button>`;
         }
 
-        // ENEMY SOS LOGIC RESTORED
         let sosDisplay = p.needsBackup ? `<div class="active-sos">🚨 Backup requested by ${p.needsBackup}</div>` : "";
         let sosButton = "";
         
