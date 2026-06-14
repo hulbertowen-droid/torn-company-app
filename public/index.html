@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Live Warboard | Spider-Verse</title>
+    <!-- Inject Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { 
             --bg: #090a0f; --card: #11141d; --item: #1b202e; 
@@ -124,6 +126,15 @@
     <h1>Live Warboard</h1>
 
     <div class="container">
+        
+        <!-- Live Chart Container -->
+        <div class="dash-card" style="grid-column: 1 / -1; background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542;">
+            <h2 style="margin-top:0; color:var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; font-size:1.1em; text-transform:uppercase;">📊 Live War Performance Tracker</h2>
+            <div style="position: relative; height: 300px; width: 100%;">
+                <canvas id="warChart"></canvas>
+            </div>
+        </div>
+
         <!-- Tactical Watchlist -->
         <div class="watchlist-box">
             <h3>🚨 Priority Watchlist</h3>
@@ -222,6 +233,7 @@ let knownEnemies = {};
 let fetchTimer = null;
 let currentEnemyData = []; 
 let activeFilter = 'All';
+let warChartInstance = null; 
 
 document.getElementById("api-key").value = myKey;
 document.getElementById("enemy-id").value = enemyFacId;
@@ -324,10 +336,73 @@ async function fetchWarboard() {
         const sortedFriendly = sortPlayersList(data.friendly, false);
         renderFriendlyList(sortedFriendly);
         
+        renderChart(data.friendly);
+
         currentEnemyData = sortPlayersList(data.enemy, true);
         renderEnemyList(currentEnemyData);
 
     } catch (e) { console.error("Failed to load warboard", e); }
+}
+
+// --- LIVE GRAPH RENDERER WITH DEFENDS ---
+function renderChart(friendlyPlayers) {
+    // Only show players who have activity (hits, defends, or score) so the graph stays clean
+    let activeHitters = friendlyPlayers.filter(p => p.attacks > 0 || p.score > 0 || p.defends > 0);
+    
+    // Sort by attacks made (highest to lowest)
+    activeHitters.sort((a, b) => b.attacks - a.attacks);
+
+    const labels = activeHitters.map(p => p.name);
+    const attackData = activeHitters.map(p => p.attacks);
+    const defendData = activeHitters.map(p => p.defends); 
+
+    const ctx = document.getElementById('warChart').getContext('2d');
+
+    if (warChartInstance) {
+        warChartInstance.data.labels = labels;
+        warChartInstance.data.datasets[0].data = attackData;
+        warChartInstance.data.datasets[1].data = defendData;
+        warChartInstance.update();
+    } else {
+        warChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Hits Made',
+                        data: attackData,
+                        backgroundColor: '#ff4757', // Var red
+                        borderRadius: 4,
+                    },
+                    {
+                        label: 'Hits Received (Defends)',
+                        data: defendData,
+                        backgroundColor: '#ffa502', // Var gold
+                        borderRadius: 4,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { 
+                        beginAtZero: true, 
+                        grid: { color: 'rgba(47, 53, 66, 0.5)' }, 
+                        ticks: { color: '#a1aab5', stepSize: 1 } 
+                    },
+                    x: { 
+                        grid: { display: false }, 
+                        ticks: { color: '#a1aab5', font: { weight: 'bold' } } 
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: '#f1f2f6', font: { weight: 'bold' } } }
+                }
+            }
+        });
+    }
 }
 
 function renderWatchlist(enemies) {
