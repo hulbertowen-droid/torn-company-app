@@ -20,6 +20,7 @@ let statsCache = {};
 let manualStats = {}; 
 let flightCache = {}; 
 let activityCache = {}; 
+let warScrapeCache = {}; // CACHE TO PROTECT API LIMITS ON HEAVY SCRAPES
 
 let statQueue = [];
 let flightQueue = [];
@@ -498,6 +499,7 @@ app.post('/api/ai-analyze-ongoing', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
+// --- HARDCORE PAYOUT CALCULATOR WITH FACTION ATTACK SCRAPER ---
 app.get('/api/past-war', async (req, res) => {
     const { apiKey, reportId } = req.query;
     try {
@@ -508,18 +510,32 @@ app.get('/api/past-war', async (req, res) => {
             fetch(`https://api.torn.com/torn/${reportId}?selections=rankedwarreport&key=${apiKey}`),
             fetch(`https://api.torn.com/torn/?selections=items&key=${apiKey}`)
         ]);
-        const userData = await userRes.json(); const reportData = await reportRes.json(); const itemsData = await itemsRes.json();
+        const userData = await userRes.json(); 
+        const reportData = await reportRes.json(); 
+        const itemsData = await itemsRes.json();
+        
         if (userData.error) return res.status(400).json({ error: "Invalid API Key." });
         if (reportData.error) return res.status(400).json({ error: "Torn API Error: " + reportData.error.error });
-        const myUserId = userData.player_id.toString(); let correctFacId = null;
+        
+        const myUserId = userData.player_id.toString(); 
+        let correctFacId = null;
+        let enemyFacId = null;
+
         for (let [facId, facData] of Object.entries(reportData.rankedwarreport.factions)) {
-            if (facData.members && facData.members[myUserId]) { correctFacId = facId; break; }
+            if (facData.members && facData.members[myUserId]) { correctFacId = facId; } 
+            else { enemyFacId = facId; }
         }
-        if (!correctFacId) correctFacId = userData.faction?.faction_id?.toString();
+        
+        if (!correctFacId) {
+            correctFacId = userData.faction?.faction_id?.toString();
+            enemyFacId = Object.keys(reportData.rankedwarreport.factions).find(id => id !== correctFacId);
+        }
+
         const myFactionWarData = reportData.rankedwarreport.factions[correctFacId];
         if (!myFactionWarData) return res.status(400).json({ error: "Your faction was not part of this Ranked War Report." });
         
-        let totalCacheValue = 0; let cachesWon = [];
+        let totalCacheValue = 0; 
+        let cachesWon = [];
         if (myFactionWarData.rewards && myFactionWarData.rewards.items) {
             for (let [itemId, itemInfo] of Object.entries(myFactionWarData.rewards.items)) {
                 const itemMarketData = itemsData.items ? itemsData.items[itemId] : null;
@@ -529,21 +545,94 @@ app.get('/api/past-war', async (req, res) => {
                 cachesWon.push({ name: itemInfo.name || (itemMarketData ? itemMarketData.name : "Unknown Item"), quantity: quantity, marketValue: marketValue, totalValue: marketValue * quantity });
             }
         }
-        const members = myFactionWarData.members || {}; let formattedMembers = [];
+
+        // HEAVY DATA SCRAPER: PULLING ASSISTS & CLEARS
+        let advancedStats = {};
+        
+        // Use memory cache so we don't nuke the API limits if the user recalculates
+        if (warScrapeCache[reportId]) {
+            advancedStats = warScrapeCache[reportId];
+        } else {
+            let warStart = reportData.rankedwarreport.war.start;
+            let warEnd = reportData.rankedwarreport.war.end || Math.floor(Date.now() / 1000);
+            
+            let toTimestamp = warEnd;
+            let keepScraping = true;
+            let pageCount = 0;
+            
+            while (keepScraping && pageCount < 30) { 
+                const attackRes = await fetch(`https://api.torn.com/faction/?selections=attacks&to=${toTimestamp}&key=${apiKey}`);
+                const attackData = await attackRes.json();
+                
+                if (attackData.error || !attackData.attacks) break;
+                
+                let attacks = Object.values(attackData.attacks);
+                if (attacks.length === 0) break;
+                
+                let oldestTime = toTimestamp;
+                
+                for (let atk of attacks) {
+                    if (atk.timestamp_ended < oldestTime) oldestTime = atk.timestamp_ended;
+                    
+                    if (atk.timestamp_ended < warStart) {
+                        keepScraping = false;
+                        continue;
+                    }
+                    if (atk.timestamp_ended > warEnd) continue;
+                    
+                    if (atk.attacker_faction.toString() === correctFacId) {
+                        let uId = atk.attacker_id.toString();
+                        if (!advancedStats[uId]) advancedStats[uId] = { assists: 0, clears: 0 };
+                        
+                        if (atk.result === "Assist") {
+                            advancedStats[uId].assists++;
+                        }
+                        
+                        if (atk.defender_faction.toString() !== enemyFacId) {
+                            advancedStats[uId].clears++;
+                        }
+                    }
+                }
+                
+                toTimestamp = oldestTime - 1;
+                pageCount++;
+                // Small delay to prevent hitting the 100/min Torn limit too fast
+                await new Promise(r => setTimeout(r, 250));
+            }
+            // Save to memory cache
+            warScrapeCache[reportId] = advancedStats;
+        }
+
+        const members = myFactionWarData.members || {}; 
+        let formattedMembers = [];
+        
         for (let [id, m] of Object.entries(members)) {
-            if (m.attacks > 0 || m.score > 0) { 
+            let playerAdvStats = advancedStats[id] || { assists: 0, clears: 0 };
+            
+            if (m.attacks > 0 || m.score > 0 || playerAdvStats.assists > 0 || playerAdvStats.clears > 0) { 
                 formattedMembers.push({ 
                     id, 
                     name: m.name, 
                     attacks: m.attacks || 0, 
-                    assists: m.assists || 0,
-                    clears: m.clears || 0,
+                    assists: playerAdvStats.assists,
+                    clears: playerAdvStats.clears,
                     score: m.score || 0 
                 }); 
             }
         }
+        
         formattedMembers.sort((a, b) => b.score - a.score);
-        res.json({ success: true, members: formattedMembers, rewards: { totalCacheValue: totalCacheValue, caches: cachesWon, points: myFactionWarData.rewards?.points || 0, respect: myFactionWarData.rewards?.respect || 0 } });
+        
+        res.json({ 
+            success: true, 
+            members: formattedMembers, 
+            rewards: { 
+                totalCacheValue: totalCacheValue, 
+                caches: cachesWon, 
+                points: myFactionWarData.rewards?.points || 0, 
+                respect: myFactionWarData.rewards?.respect || 0 
+            } 
+        });
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
