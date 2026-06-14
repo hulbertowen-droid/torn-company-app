@@ -35,8 +35,9 @@ let apiKeyPool = new Set();
 if (ADMIN_API_KEY) apiKeyPool.add(ADMIN_API_KEY);
 if (TORN_API_KEY) apiKeyPool.add(TORN_API_KEY);
 
+let liveAttacks = {};
 let liveDefends = {}; 
-let lastScrapedAttackTime = Math.floor(Date.now() / 1000) - 3600; // Start looking 1 hour back on boot
+let lastScrapedAttackTime = Math.floor(Date.now() / 1000) - 86400; // Look back up to 24h for initial population
 
 // --- SUBSCRIPTION MANAGER ---
 let subscriptions = {};
@@ -231,11 +232,10 @@ setInterval(async () => {
     isProcessingActivity = false;
 }, 1500); 
 
-// --- ENGINE 4: LIVE POOLED DEFEND SCRAPER ---
+// --- ENGINE 4: LIVE POOLED ATTACK/DEFEND SCRAPER ---
 setInterval(async () => {
     if (apiKeyPool.size === 0 || !adminFactionId) return;
 
-    // Grab a random key from the pool to spread the API load
     const keys = Array.from(apiKeyPool);
     const randomKey = keys[Math.floor(Math.random() * keys.length)];
 
@@ -244,26 +244,32 @@ setInterval(async () => {
         const data = await res.json();
         
         if (data.attacks) {
-            let attacks = Object.values(data.attacks);
-            // Sort oldest to newest so we process in chronological order
-            attacks.sort((a, b) => a.timestamp_ended - b.timestamp_ended);
+            let attacksLog = Object.values(data.attacks);
+            attacksLog.sort((a, b) => a.timestamp_ended - b.timestamp_ended);
 
-            for (let atk of attacks) {
+            for (let atk of attacksLog) {
                 if (atk.timestamp_ended <= lastScrapedAttackTime) continue;
                 lastScrapedAttackTime = atk.timestamp_ended;
 
-                // Check if our faction was the defender (they got hit)
+                // Track Defends (Hits Received)
                 if (atk.defender_faction && atk.defender_faction.toString() === adminFactionId) {
                     let uId = atk.defender_id.toString();
                     if (!liveDefends[uId]) liveDefends[uId] = 0;
                     liveDefends[uId]++;
+                }
+                
+                // Track Attacks (Hits Made)
+                if (atk.attacker_faction && atk.attacker_faction.toString() === adminFactionId) {
+                    let uId = atk.attacker_id.toString();
+                    if (!liveAttacks[uId]) liveAttacks[uId] = 0;
+                    liveAttacks[uId]++;
                 }
             }
         }
     } catch (err) {
         console.error("Engine 4 Defend Scraper Error");
     }
-}, 60000); // Runs every 60 seconds
+}, 60000); 
 
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
@@ -550,32 +556,18 @@ app.get('/api/past-war', async (req, res) => {
             fetch(`https://api.torn.com/torn/${reportId}?selections=rankedwarreport&key=${apiKey}`),
             fetch(`https://api.torn.com/torn/?selections=items&key=${apiKey}`)
         ]);
-        const userData = await userRes.json(); 
-        const reportData = await reportRes.json(); 
-        const itemsData = await itemsRes.json();
-        
+        const userData = await userRes.json(); const reportData = await reportRes.json(); const itemsData = await itemsRes.json();
         if (userData.error) return res.status(400).json({ error: "Invalid API Key." });
         if (reportData.error) return res.status(400).json({ error: "Torn API Error: " + reportData.error.error });
-        
-        const myUserId = userData.player_id.toString(); 
-        let correctFacId = null;
-        let enemyFacId = null;
-
+        const myUserId = userData.player_id.toString(); let correctFacId = null;
         for (let [facId, facData] of Object.entries(reportData.rankedwarreport.factions)) {
-            if (facData.members && facData.members[myUserId]) { correctFacId = facId; } 
-            else { enemyFacId = facId; }
+            if (facData.members && facData.members[myUserId]) { correctFacId = facId; break; }
         }
-        
-        if (!correctFacId) {
-            correctFacId = userData.faction?.faction_id?.toString();
-            enemyFacId = Object.keys(reportData.rankedwarreport.factions).find(id => id !== correctFacId);
-        }
-
+        if (!correctFacId) correctFacId = userData.faction?.faction_id?.toString();
         const myFactionWarData = reportData.rankedwarreport.factions[correctFacId];
         if (!myFactionWarData) return res.status(400).json({ error: "Your faction was not part of this Ranked War Report." });
         
-        let totalCacheValue = 0; 
-        let cachesWon = [];
+        let totalCacheValue = 0; let cachesWon = [];
         if (myFactionWarData.rewards && myFactionWarData.rewards.items) {
             for (let [itemId, itemInfo] of Object.entries(myFactionWarData.rewards.items)) {
                 const itemMarketData = itemsData.items ? itemsData.items[itemId] : null;
@@ -614,12 +606,12 @@ app.get('/api/past-war', async (req, res) => {
                     if (atk.timestamp_ended < warStart) { keepScraping = false; continue; }
                     if (atk.timestamp_ended > warEnd) continue;
                     
-                    if (atk.attacker_faction.toString() === correctFacId) {
+                    if (atk.attacker_faction && atk.attacker_faction.toString() === correctFacId) {
                         let uId = atk.attacker_id.toString();
                         if (!advancedStats[uId]) advancedStats[uId] = { assists: 0, clears: 0 };
                         
                         if (atk.result === "Assist") advancedStats[uId].assists++;
-                        if (atk.defender_faction.toString() !== enemyFacId) advancedStats[uId].clears++;
+                        if (atk.defender_faction && atk.defender_faction.toString() !== enemyFacId) advancedStats[uId].clears++;
                     }
                 }
                 toTimestamp = oldestTime - 1;
@@ -654,13 +646,12 @@ app.post('/api/backup', (req, res) => { const { enemyId, playerName } = req.body
 app.post('/api/unbackup', (req, res) => { const { enemyId } = req.body; delete backups[enemyId]; res.json({ success: true }); });
 app.post('/api/update-stats', (req, res) => { const { enemyId, stats } = req.body; manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() }; res.json({ success: true }); });
 
-// --- UPDATED LIVE WARBOARD ENDPOINT WITH API KEY HARVESTING ---
+// --- UPDATED LIVE WARBOARD ENDPOINT ---
 app.get('/api/warboard', async (req, res) => {
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
         await verifySubscription(userKey);
 
-        // Harvest valid API keys for the scraping pool!
         if (userKey) apiKeyPool.add(userKey);
 
         let enemyId = req.query.enemyFaction && req.query.enemyFaction !== "null" && req.query.enemyFaction !== "" ? req.query.enemyFaction : null;
@@ -671,6 +662,9 @@ app.get('/api/warboard', async (req, res) => {
         ]);
         
         if (myData.error) return res.status(400).json({ error: "Invalid API Key" });
+        
+        if (!adminFactionId && myData.ID) adminFactionId = myData.ID.toString();
+        
         if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
         if (enemyId && Object.keys(enemyDataResult.members || {}).length === 0) { enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })); }
         
@@ -705,11 +699,12 @@ app.get('/api/warboard', async (req, res) => {
                 const intelScore = isEnemy ? computeWarIntel({ id, state: m.status?.state, until: finalUntil, onlineStatus: m.last_action?.status || "Offline", estStats: est }, statsCache) : null;
                 if (isEnemy && backups[id] && m.status?.state === "Hospital") { const timeLeft = m.status.until - Math.floor(Date.now() / 1000); if (timeLeft > 1800) delete backups[id]; }
                 
-                let attacks = 0; let score = 0;
-                let defends = liveDefends[id] || 0; // Grab the live defend count from Engine 4!
+                let attacks = liveAttacks[id] || 0; 
+                let score = 0;
+                let defends = liveDefends[id] || 0; 
 
                 if (!isEnemy && liveWarStats[id]) {
-                    attacks = liveWarStats[id].attacks || 0;
+                    attacks = liveWarStats[id].attacks !== undefined ? liveWarStats[id].attacks : attacks;
                     score = liveWarStats[id].score || 0;
                 }
 
