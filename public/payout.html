@@ -22,7 +22,7 @@
         .container { max-width: 1000px; margin: 0 auto; background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; }
         
         .input-group { display: flex; gap: 15px; margin-bottom: 30px; align-items: center; justify-content: center; }
-        .input-group input { padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; width: 300px; }
+        .input-group select { padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; width: 350px; cursor: pointer; }
         .input-group button { background: var(--gold); color: #000; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.1em; transition: 0.2s; text-transform: uppercase; }
         .input-group button:hover { background: #ffbe33; }
 
@@ -50,7 +50,9 @@
 
     <div class="container">
         <div class="input-group">
-            <input type="text" id="report-id" placeholder="Enter Ranked War Report ID (e.g., 12345)">
+            <select id="report-id">
+                <option value="">Loading recent wars...</option>
+            </select>
             <button onclick="calculatePayout()">Calculate Split</button>
         </div>
 
@@ -79,20 +81,49 @@
 <script>
     const myKey = localStorage.getItem("warboard_apikey");
 
+    // Auto-fetch the war list on page load
+    async function fetchWarList() {
+        if (!myKey) {
+            document.getElementById("error-msg").innerText = "Please set your API key on the Live Warboard settings first.";
+            return;
+        }
+        try {
+            const res = await fetch(`/api/war-list?apiKey=${myKey}`);
+            const data = await res.json();
+            const select = document.getElementById("report-id");
+            
+            if (data.error) {
+                select.innerHTML = `<option value="">Error: ${data.error}</option>`;
+                return;
+            }
+
+            if (data.wars && data.wars.length > 0) {
+                let html = "";
+                data.wars.forEach(w => {
+                    let d = new Date(w.start * 1000).toLocaleDateString();
+                    html += `<option value="${w.id}">War vs ${w.enemy} (${d})</option>`;
+                });
+                select.innerHTML = html;
+            } else {
+                select.innerHTML = `<option value="">No recent ranked wars found</option>`;
+            }
+        } catch (e) {
+            document.getElementById("report-id").innerHTML = `<option value="">Failed to load wars</option>`;
+        }
+    }
+    
+    fetchWarList();
+
     async function calculatePayout() {
-        const reportId = document.getElementById("report-id").value.trim();
+        const reportId = document.getElementById("report-id").value;
         const errorDiv = document.getElementById("error-msg");
         const summaryBox = document.getElementById("summary-box");
         const table = document.getElementById("payout-table");
         const list = document.getElementById("payout-list");
 
         errorDiv.innerText = "";
-        if (!myKey) {
-            errorDiv.innerText = "Please set your API key on the Live Warboard settings first.";
-            return;
-        }
         if (!reportId) {
-            errorDiv.innerText = "Please enter a valid Report ID.";
+            errorDiv.innerText = "Please select a valid Ranked War from the dropdown.";
             return;
         }
 
@@ -109,7 +140,6 @@
             const totalValue = data.rewards.totalCacheValue || 0;
             document.getElementById("total-pool").innerText = "$" + totalValue.toLocaleString();
             
-            // Calculate total faction score for percentages
             let totalFactionScore = 0;
             data.members.forEach(m => totalFactionScore += m.score);
 
