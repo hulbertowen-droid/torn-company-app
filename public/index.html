@@ -22,7 +22,7 @@
 
         .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
         
-        /* Tactical Watchlist (Replaces old settings box) */
+        /* Tactical Watchlist */
         .watchlist-box { grid-column: 1 / -1; background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542; }
         .watchlist-box h3 { margin: 0 0 15px 0; color: var(--red); display: flex; align-items: center; gap: 10px; text-transform: uppercase; letter-spacing: 1px; }
         .watchlist-items { display: flex; gap: 15px; overflow-x: auto; padding-bottom: 10px; }
@@ -108,7 +108,7 @@
 
     <div class="container">
         
-        <!-- NEW Tactical Watchlist -->
+        <!-- Tactical Watchlist -->
         <div class="watchlist-box">
             <h3>🚨 Priority Watchlist</h3>
             <div id="watchlist-items" class="watchlist-items">
@@ -159,7 +159,7 @@
     <div id="toast-container"></div>
 
 <script>
-// --- Improved Audio Alert System (Softer Chime) ---
+// --- Audio Alert System (Softer Chime) ---
 let audioCtx;
 function initAudio() {
     if (!audioCtx) {
@@ -175,14 +175,12 @@ function playBeep(time, freq, duration) {
     const osc = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
     
-    // Triangle wave is softer and less harsh than sine/square for alerts
     osc.type = 'triangle'; 
     osc.frequency.setValueAtTime(freq, time);
     
-    // Create a pleasant attack and decay envelope
     gainNode.gain.setValueAtTime(0, time);
-    gainNode.gain.linearRampToValueAtTime(0.15, time + 0.05); // quick fade in
-    gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration); // smooth fade out
+    gainNode.gain.linearRampToValueAtTime(0.15, time + 0.05); 
+    gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration); 
     
     osc.connect(gainNode);
     gainNode.connect(audioCtx.destination);
@@ -194,7 +192,6 @@ function playAlertSound() {
     try {
         if (!audioCtx) initAudio();
         const now = audioCtx.currentTime;
-        // Pleasant ascending double chime (C5 to E5)
         playBeep(now, 523.25, 0.4);       
         playBeep(now + 0.15, 659.25, 0.6); 
     } catch(e) { console.error("Audio block", e); }
@@ -211,13 +208,11 @@ let refreshRate = parseInt(localStorage.getItem("warboard_refresh")) || 5;
 let knownEnemies = {}; 
 let fetchTimer = null;
 
-// Populate Modal Inputs
 document.getElementById("api-key").value = myKey;
 document.getElementById("enemy-id").value = enemyFacId;
 document.getElementById("my-name").value = myName;
 document.getElementById("refresh-rate").value = refreshRate;
 
-// Modal Controls
 function openSettings() { document.getElementById("settings-modal").style.display = "flex"; }
 function closeSettings() { document.getElementById("settings-modal").style.display = "none"; }
 
@@ -309,10 +304,8 @@ async function fetchWarboard() {
 
 // --- Watchlist Rendering ---
 function renderWatchlist(enemies) {
-    // Filter for targets that are Online OR Flying (with ETA)
     const watchTargets = enemies.filter(e => e.onlineStatus === "Online" || (e.state === "Traveling" && e.landingTime));
 
-    // Sort: Flying (by ETA) -> Online (by Intel)
     watchTargets.sort((a, b) => {
         if (a.state === "Traveling" && b.state === "Traveling") return a.landingTime - b.landingTime;
         if (a.state === "Traveling") return -1;
@@ -331,7 +324,7 @@ function renderWatchlist(enemies) {
             <div class="watch-card ${cardClass}">
                 <div class="watch-name"><a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a></div>
                 <div class="watch-highlight" style="color: ${highlightColor};">${highlightText}</div>
-                <div style="font-size:0.8em; color:var(--text-dim);">Current State: ${p.state}</div>
+                <div style="font-size:0.8em; color:var(--text-dim);">Status: ${p.statusDescription || p.state}</div>
             </div>
         `;
     });
