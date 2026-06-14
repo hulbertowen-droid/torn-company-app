@@ -232,8 +232,8 @@ app.post('/api/ai-analyze', async (req, res) => {
 
         const prompt = `You are a strict, tactical military advisor for a gaming faction. Review the performance of the top 20 members in our latest war:\n\n${slimData}\n\nProvide 3 specific, actionable pieces of advice to improve our next war. Call out top performers, identify weak links, and be blunt but helpful. Do not use markdown headers, just bolding.`;
 
-        // FIXED: Switched to the production v1 API endpoint to prevent the models/gemini-1.5-flash not found error
-        const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+        // FIXED: Upgraded model to gemini-3.5-flash to replace the deprecated 1.5-flash model
+        const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
