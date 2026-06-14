@@ -30,7 +30,7 @@
         .watchlist-items::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
         .watchlist-items::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
         
-        .watch-card { background: #0b0d13; border: 1px solid #2f3542; padding: 12px 18px; border-radius: 8px; min-width: 220px; flex-shrink: 0; }
+        .watch-card { background: #0b0d13; border: 1px solid #2f3542; padding: 12px 18px; border-radius: 8px; min-width: 240px; flex-shrink: 0; }
         .watch-card.online { border-color: var(--green); background: rgba(46, 213, 115, 0.05); }
         .watch-card.flying { border-color: var(--blue); background: rgba(88, 166, 255, 0.05); }
         .watch-name { font-weight: bold; font-size: 1.1em; margin-bottom: 4px; }
@@ -108,7 +108,6 @@
 
     <div class="container">
         
-        <!-- Tactical Watchlist -->
         <div class="watchlist-box">
             <h3>🚨 Priority Watchlist</h3>
             <div id="watchlist-items" class="watchlist-items">
@@ -127,7 +126,6 @@
         </div>
     </div>
 
-    <!-- Settings Modal -->
     <div id="settings-modal" class="modal-overlay">
         <div class="modal-content" style="position: relative;">
             <div class="close-btn" onclick="closeSettings()">&times;</div>
@@ -155,7 +153,6 @@
         </div>
     </div>
 
-    <!-- Container for Live Alerts -->
     <div id="toast-container"></div>
 
 <script>
@@ -249,7 +246,6 @@ function formatTime(unixTimestamp) {
     return d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 }
 
-// Helper to determine if a player is flying
 function checkIsFlying(p) {
     return p.state === "Traveling" || (p.statusDescription && p.statusDescription.includes("Traveling"));
 }
@@ -309,8 +305,14 @@ async function fetchWarboard() {
 
 // --- Watchlist Rendering ---
 function renderWatchlist(enemies) {
-    // Only show Online enemies OR anyone who is Traveling
-    const watchTargets = enemies.filter(e => e.onlineStatus === "Online" || checkIsFlying(e));
+    const now = Math.floor(Date.now() / 1000);
+
+    // Rule: Must be Online OR (Flying AND has ETA AND ETA is within 30 minutes / 1800 seconds)
+    const watchTargets = enemies.filter(e => {
+        if (e.onlineStatus === "Online") return true;
+        if (checkIsFlying(e) && e.landingTime && (e.landingTime - now) <= 1800) return true;
+        return false;
+    });
 
     watchTargets.sort((a, b) => {
         let aFlying = checkIsFlying(a);
@@ -331,8 +333,8 @@ function renderWatchlist(enemies) {
         let highlightColor = "";
 
         if (isFlying) {
-            // FIXED: Show "Unknown ETA" if FF Scouter hasn't provided a landing time yet
-            highlightText = p.landingTime ? `✈️ ETA: ${formatTime(p.landingTime)}` : `✈️ Flying (Unknown ETA)`;
+            let minsLeft = Math.max(0, Math.ceil((p.landingTime - now) / 60));
+            highlightText = `✈️ ETA: ${formatTime(p.landingTime)} (in ${minsLeft}m)`;
             highlightColor = "var(--blue)";
         } else {
             highlightText = `🟢 Online Now`;
@@ -349,7 +351,7 @@ function renderWatchlist(enemies) {
     });
     
     if(watchTargets.length === 0) {
-        html = `<div style="color:var(--text-dim); padding: 10px;">No priority targets are currently online or flying.</div>`;
+        html = `<div style="color:var(--text-dim); padding: 10px;">No priority targets are currently online or landing within 30 mins.</div>`;
     }
     
     document.getElementById("watchlist-items").innerHTML = html;
