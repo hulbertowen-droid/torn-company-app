@@ -113,105 +113,104 @@
         @keyframes fadeOut { to { opacity: 0; transform: translateX(100%); } }
         @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
     </style>
-</head>
-<body>
-    <div class="top-nav">
-        <a href="/" class="nav-link">📡 Live Warboard</a>
-        <a href="/chain.html" class="nav-link active">🔗 Chain Watcher</a>
-        <a href="/payout.html" class="nav-link">💰 Payouts</a>
-        <a href="/dashboard.html" class="nav-link">🛡️ Dashboard</a>
-        <a href="/recruitment.html" class="nav-link">🎯 Recruitment</a>
-        <a onclick="openSettings()" class="nav-link" style="cursor:pointer; border-left: 1px solid #2f3542; border-radius:0;">⚙️ Settings</a>
-    </div>
+/* --- NEW SIDEBAR LAYOUT CSS --- */
+body { 
+    display: flex; 
+    background: var(--bg); 
+    color: var(--text-main); 
+    font-family: 'Segoe UI', system-ui, sans-serif; 
+    margin: 0; 
+    height: 100vh; 
+    overflow: hidden; 
+}
+
+/* Sidebar Container */
+.sidebar { 
+    width: 260px; 
+    background: var(--card); 
+    border-right: 1px solid #2f3542; 
+    display: flex; 
+    flex-direction: column; 
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+    flex-shrink: 0; 
+    z-index: 100;
+}
+.sidebar.collapsed { width: 75px; }
+
+/* Sidebar Header & Toggle */
+.sidebar-header { 
+    padding: 20px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between; 
+    border-bottom: 1px solid #2f3542; 
+}
+.sidebar-logo { 
+    color: var(--red); 
+    font-weight: 900; 
+    font-size: 1.1em; 
+    text-transform: uppercase; 
+    letter-spacing: 2px; 
+    white-space: nowrap; 
+    transition: opacity 0.2s; 
+}
+.sidebar.collapsed .sidebar-logo { opacity: 0; pointer-events: none; width: 0; display: none; }
+
+.toggle-btn { 
+    background: none; 
+    border: none; 
+    color: var(--text-dim); 
+    cursor: pointer; 
+    font-size: 1.5em; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center;
+    width: 35px; 
+    height: 35px;
+    border-radius: 6px;
+    transition: 0.2s;
+}
+.toggle-btn:hover { color: white; background: #2f3542; }
+
+/* Navigation Links */
+.nav-items { display: flex; flex-direction: column; gap: 8px; padding: 20px 10px; }
+.nav-link { 
+    display: flex; 
+    align-items: center; 
+    gap: 15px; 
+    color: var(--text-dim); 
+    text-decoration: none; 
+    font-weight: bold; 
+    padding: 12px 15px; 
+    border-radius: 8px; 
+    transition: 0.2s; 
+    white-space: nowrap; 
+    overflow: hidden; 
+}
+.nav-link:hover { background: #2f3542; color: white; }
+.nav-link.active { 
+    background: rgba(255, 71, 87, 0.1); 
+    border-left: 4px solid var(--red); 
+    color: white; 
+    border-radius: 0 8px 8px 0; 
+}
+.nav-icon { font-size: 1.3em; flex-shrink: 0; display: flex; justify-content: center; width: 24px; }
+.nav-text { transition: opacity 0.2s; }
+.sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
+
+/* Main Content Area */
+.main-content { 
+    flex-grow: 1; 
+    overflow-y: auto; 
+    padding: 30px; 
+    height: 100vh; 
+    box-sizing: border-box; 
+    background: var(--bg);
+}
+
+.page-title { color: var(--text-main); text-transform: uppercase; letter-spacing: 2px; font-weight: 900; margin-top: 0; margin-bottom: 25px; display: flex; align-items: center; gap: 15px; }
+/* ------------------------------ */ 
     
-
-    <h1>Live Warboard</h1>
-
-    <div class="container">
-        
-        <!-- Live Chart Container -->
-        <div class="dash-card" style="grid-column: 1 / -1; background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542;">
-            <h2 style="margin-top:0; color:var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; font-size:1.1em; text-transform:uppercase;">📊 Live War Performance Tracker</h2>
-            <div style="position: relative; height: 300px; width: 100%;">
-                <canvas id="warChart"></canvas>
-            </div>
-        </div>
-
-        <!-- Tactical Watchlist -->
-        <div class="watchlist-box">
-            <h3>🚨 Priority Watchlist</h3>
-            <div id="watchlist-items" class="watchlist-items">
-                <div style="color:var(--text-dim); padding: 10px;">Waiting for API Data...</div>
-            </div>
-        </div>
-
-        <div class="faction-col">
-            <h2>Friendly Team <span id="friendly-count" style="color:var(--text-dim); font-size: 0.6em;">0</span></h2>
-            <div id="friendly-list"><div style="color:var(--text-dim); padding:20px;">Waiting for API key...</div></div>
-        </div>
-        
-        <div class="faction-col">
-            <h2>
-                Enemy Targets <span id="enemy-count" style="color:var(--text-dim); font-size: 0.6em;">0</span>
-            </h2>
-            <div class="filter-group">
-                <button id="flt-all" class="btn-filter active" onclick="setEnemyFilter('All')">ALL</button>
-                <button id="flt-online" class="btn-filter" onclick="setEnemyFilter('Online')">ONLINE</button>
-                <button id="flt-okay" class="btn-filter" onclick="setEnemyFilter('Okay')">OKAY (OUT Hosp)</button>
-                <button id="flt-flying" class="btn-filter" onclick="setEnemyFilter('Flying')">FLYING</button>
-            </div>
-            <div id="enemy-list"><div style="color:var(--text-dim); padding:20px;">Waiting for API key...</div></div>
-        </div>
-    </div>
-
-    <!-- Settings Modal -->
-    <div id="settings-modal" class="modal-overlay">
-        <div class="modal-content" style="position: relative; max-height: 90vh; overflow-y: auto;">
-            <div class="close-btn" onclick="closeSettings()">&times;</div>
-            <h2>Board Settings</h2>
-            <div>
-                <label>API Key (Hidden for Privacy)</label>
-                <input type="password" id="api-key" placeholder="Paste your Torn API Key here">
-            </div>
-            <div>
-                <label>Enemy Faction ID</label>
-                <input type="text" id="enemy-id" placeholder="Optional (Auto-detects usually)">
-            </div>
-            <div>
-                <label>Your Name (For Targets)</label>
-                <input type="text" id="my-name" placeholder="E.g. Agent">
-            </div>
-            <div>
-                <label>Discord Webhook (Optional)</label>
-                <input type="text" id="discord-webhook" placeholder="Paste your Discord channel webhook URL">
-            </div>
-            
-            <!-- UPGRADED: Discord Toggle Options UI Section -->
-            <div style="border-top: 1px solid #2f3542; padding-top: 10px; margin-top: 5px;">
-                <label style="display:block; margin-bottom: 8px; color: var(--gold);">Discord Notification Triggers</label>
-                
-                <label style="display:flex; align-items:center; gap:8px; font-size:0.85em; text-transform:none; font-weight:normal; margin-bottom:6px; cursor:pointer;">
-                    <input type="checkbox" id="alert-online"> 🟢 Ping when target comes Online
-                </label>
-                <label style="display:flex; align-items:center; gap:8px; font-size:0.85em; text-transform:none; font-weight:normal; margin-bottom:6px; cursor:pointer;">
-                    <input type="checkbox" id="alert-landing"> ✈️ Ping when target Lands from Flight
-                </label>
-                <label style="display:flex; align-items:center; gap:8px; font-size:0.85em; text-transform:none; font-weight:normal; margin-bottom:6px; cursor:pointer;">
-                    <input type="checkbox" id="alert-hospital"> 🏥 Ping when target Leaves Hospital
-                </label>
-            </div>
-
-            <div>
-                <label>Refresh Rate (Seconds)</label>
-                <input type="number" id="refresh-rate" min="2" max="60" value="5">
-            </div>
-            <button onclick="saveSettings()">Save & Connect</button>
-        </div>
-    </div>
-
-    <!-- Container for Live Alerts -->
-    <div id="toast-container"></div>
-
 <script>
 let audioCtx;
 function initAudio() {
