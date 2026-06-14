@@ -122,6 +122,7 @@ app.get('/api/war-list', async (req, res) => {
         let wars = [];
         if (facData.rankedwars) {
             for (let [warId, warInfo] of Object.entries(facData.rankedwars)) {
+                if (warInfo.war && warInfo.war.winner === 0) continue; // Skip ongoing wars
                 let enemyName = "Unknown Faction";
                 for (let [fId, fInfo] of Object.entries(warInfo.factions)) {
                     if (fId !== facData.ID.toString()) enemyName = fInfo.name;
@@ -142,26 +143,25 @@ app.get('/api/dashboard-data', async (req, res) => {
     if (!userKey) return res.status(400).json({ error: "Missing API Key" });
 
     try {
-        // Step 1: Fetch Member List (Always works)
         const basicResp = await fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`);
         const basicData = await basicResp.json();
         if (basicData.error) return res.status(400).json({ error: basicData.error.error });
 
-        // Step 2: Fetch Armory (Might be restricted by Faction Roles)
         let loans = [];
         let armoryError = false;
         const armoryResp = await fetch(`https://api.torn.com/faction/?selections=armor,weapons,temporary&key=${userKey}`);
         const armoryData = await armoryResp.json();
 
         if (armoryData.error) {
-            armoryError = true; // Flag the error instead of crashing
+            armoryError = true; 
         } else {
             const extractLoans = (categoryData, typeName) => {
-                if (!categoryData) return;
+                if (!categoryData || typeof categoryData !== 'object') return; // Fixed crash if armory is empty
                 Object.values(categoryData).forEach(items => {
+                    if (!items) return;
                     const itemList = Array.isArray(items) ? items : Object.values(items);
                     itemList.forEach(item => {
-                        if (item.loaned_to) loans.push({ name: item.name, loaned_to: item.loaned_to, type: typeName });
+                        if (item && item.loaned_to) loans.push({ name: item.name, loaned_to: item.loaned_to, type: typeName });
                     });
                 });
             };
@@ -172,6 +172,7 @@ app.get('/api/dashboard-data', async (req, res) => {
 
         res.json({ success: true, members: basicData.members || {}, loans: loans, armoryError });
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: "Failed to fetch dashboard data." });
     }
 });
@@ -189,11 +190,15 @@ app.post('/api/ai-analyze', async (req, res) => {
         
         let lastWarId = null;
         if (facData.rankedwars) {
-            const warIds = Object.keys(facData.rankedwars).sort((a, b) => b - a);
-            lastWarId = warIds[0];
+            // Find only completed wars to prevent crash on ongoing wars
+            const completedWars = Object.entries(facData.rankedwars)
+                .filter(([id, w]) => w.war && w.war.winner !== 0)
+                .sort((a, b) => b[1].war.end - a[1].war.end);
+            
+            if (completedWars.length > 0) lastWarId = completedWars[0][0];
         }
 
-        if (!lastWarId) return res.status(400).json({ error: "No past Ranked Wars found for your faction." });
+        if (!lastWarId) return res.status(400).json({ error: "No completed Ranked Wars found for your faction." });
 
         const reportRes = await fetch(`https://api.torn.com/torn/${lastWarId}?selections=rankedwarreport&key=${userKey}`);
         const reportData = await reportRes.json();
@@ -239,13 +244,22 @@ app.get('/api/past-war', async (req, res) => {
         const itemsData = await itemsRes.json();
 
         if (userData.error) return res.status(400).json({ error: "Invalid API Key." });
-        const myFacId = userData.faction?.faction_id?.toString();
-        if (!myFacId || myFacId === "0") return res.status(400).json({ error: "You are not currently in a faction." });
-
+        
         if (reportData.error) return res.status(400).json({ error: "Torn API Error: " + reportData.error.error });
         if (!reportData.rankedwarreport || !reportData.rankedwarreport.factions) return res.status(400).json({ error: "Invalid Report ID or no data found." });
 
-        const myFactionWarData = reportData.rankedwarreport.factions[myFacId];
+        // Auto-detect which faction in the report belongs to the user
+        const myUserId = userData.player_id.toString();
+        let correctFacId = null;
+        for (let [facId, facData] of Object.entries(reportData.rankedwarreport.factions)) {
+            if (facData.members && facData.members[myUserId]) {
+                correctFacId = facId;
+                break;
+            }
+        }
+        if (!correctFacId) correctFacId = userData.faction?.faction_id?.toString();
+
+        const myFactionWarData = reportData.rankedwarreport.factions[correctFacId];
         if (!myFactionWarData) return res.status(400).json({ error: "Your faction was not part of this Ranked War Report." });
 
         let totalCacheValue = 0;
