@@ -9,7 +9,6 @@ app.use(express.static('public'));
 
 const PORT = process.env.PORT || 3000;
 const TORN_API_KEY = process.env.TORN_API_KEY;
-// If the key exists in your host's environment variables, it gets picked up here
 const FF_SCOUTER_KEY = process.env.FF_SCOUTER_KEY || "";
 
 let claims = {};
@@ -19,12 +18,18 @@ let manualStats = {};
 let statQueue = [];
 let isProcessingQueue = false;
 
+// =====================
+// NEW: FLIGHT CACHE
+// =====================
+let flightCache = {};
+
 function computeWarIntel(p, cache = {}) {
     let score = 0;
     if (p.state === "Okay") score += 120;
     if (p.state === "Hospital") score += 60;
     if (p.onlineStatus === "Online") score += 35;
     if (p.onlineStatus === "Idle") score += 15;
+
     if (p.state === "Hospital" && p.until) {
         const now = Math.floor(Date.now() / 1000);
         const remaining = p.until - now;
@@ -35,6 +40,7 @@ function computeWarIntel(p, cache = {}) {
             else score += 10;
         }
     }
+
     const est = manualStats[p.id]?.stats || cache[p.id]?.stats || p.estStats;
     if (est && typeof est === 'number') {
         if (est < 1e7) score += 120;
@@ -42,6 +48,7 @@ function computeWarIntel(p, cache = {}) {
         else if (est < 2e8) score += 40;
         else score += 10;
     }
+
     return Math.floor(score * (0.9 + Math.random() * 0.2));
 }
 
@@ -60,17 +67,22 @@ function autoDetectEnemyFaction(data) {
     return null;
 }
 
-// PREMIUM FF SCOUTER POLLING - WITH DIAGNOSTIC DEBUGGER
+// =====================
+// FF SCOUTER POLLING
+// =====================
 setInterval(async () => {
     if (!statQueue.length || isProcessingQueue) return;
     isProcessingQueue = true;
 
-    statQueue = [...new Set(statQueue)]; 
+    statQueue = [...new Set(statQueue)];
     const batch = statQueue.splice(0, 40);
 
     if (!FF_SCOUTER_KEY) {
-        batch.forEach(id => { statsCache[id] = { stats: null, landingTime: null, time: Date.now() }; });
-        isProcessingQueue = false; return;
+        batch.forEach(id => {
+            statsCache[id] = { stats: null, landingTime: null, time: Date.now() };
+        });
+        isProcessingQueue = false;
+        return;
     }
 
     const targets = batch.join(',');
@@ -78,24 +90,54 @@ setInterval(async () => {
     try {
         const res = await fetch(`https://ffscouter.com/api/v1/get-stats?key=${FF_SCOUTER_KEY}&targets=${targets}`);
         const data = await res.json();
-        
-        // --- DIAGNOSTIC LOG (Prints to your host's logs/console) ---
+
         console.log("================================");
         console.log(`Checking ${batch.length} targets with FF Scouter...`);
         console.log("FF SCOUTER RAW RESPONSE:", JSON.stringify(data).substring(0, 400)); 
         console.log("================================");
-        // -----------------------------------------------------------
 
+        // =====================
+        // STATS PARSE (UNCHANGED)
+        // =====================
         if (Array.isArray(data)) {
             data.forEach(p => {
                 const id = p.player_id.toString();
-                // Grabbing landing time. We will verify this key name via the logs.
                 const landing = p.estimated_landing || p.landing_eta || p.landing_time || p.travel_time || null;
-                statsCache[id] = { stats: p.bs_estimate, landingTime: landing, time: Date.now() };
+
+                statsCache[id] = {
+                    stats: p.bs_estimate,
+                    landingTime: landing,
+                    time: Date.now()
+                };
             });
-        } else {
-            batch.forEach(id => { statsCache[id] = { stats: null, landingTime: null, time: Date.now() }; });
         }
+
+        // =====================
+        // NEW: FLIGHT DATA FETCH
+        // =====================
+        await Promise.all(
+            batch.map(id =>
+                fetch(`https://ffscouter.com/api/v1/player-flights?key=${FF_SCOUTER_KEY}&target=${id}`)
+                    .then(r => r.json())
+                    .then(f => {
+                        if (!f || !f.player_id) return;
+
+                        const current = f.current || null;
+
+                        flightCache[id] = {
+                            landingTime:
+                                current?.latest_arrival_time ||
+                                current?.earliest_arrival_time ||
+                                null,
+                            travelMethod: current?.travel_method || null,
+                            status: current?.status_description || null,
+                            time: Date.now()
+                        };
+                    })
+                    .catch(() => null)
+            )
+        );
+
     } catch (err) { 
         console.error("FF Scouter API Error:", err);
         statQueue.push(...batch); 
@@ -113,22 +155,26 @@ app.post('/api/claim', (req, res) => {
     claims[enemyId] = { playerName, time: Date.now() };
     res.json({ success: true });
 });
+
 app.post('/api/unclaim', (req, res) => {
     const { enemyId, playerName } = req.body;
     if (claims[enemyId]?.playerName === playerName) delete claims[enemyId];
     res.json({ success: true });
 });
+
 app.post('/api/backup', (req, res) => {
     const { enemyId, playerName } = req.body;
     if (!enemyId || !playerName) return res.status(400).json({ error: "Missing data" });
     backups[enemyId] = { playerName, time: Date.now() };
     res.json({ success: true });
 });
+
 app.post('/api/unbackup', (req, res) => {
     const { enemyId } = req.body;
     delete backups[enemyId]; 
     res.json({ success: true });
 });
+
 app.post('/api/update-stats', (req, res) => {
     const { enemyId, stats } = req.body;
     if (!enemyId || !stats) return res.status(400).json({ error: "Missing data" });
@@ -136,7 +182,7 @@ app.post('/api/update-stats', (req, res) => {
     res.json({ success: true });
 });
 
-// --- FULL LIVE WARBOARD LOGIC ---
+// --- WARBOARD ---
 app.get('/api/warboard', async (req, res) => {
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
@@ -152,10 +198,6 @@ app.get('/api/warboard', async (req, res) => {
         if (myData.error) return res.status(400).json({ error: "Invalid API Key" });
 
         if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
-        
-        if (enemyId && Object.keys(enemyDataResult.members || {}).length === 0) {
-             enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} }));
-        }
 
         const friendlyIds = new Set(Object.keys(myData.members || {}));
         const enemyIds = new Set(Object.keys(enemyDataResult.members || {}));
@@ -168,40 +210,55 @@ app.get('/api/warboard', async (req, res) => {
 
         const parseMembers = (data, isEnemy = false) => {
             if (!data.members) return [];
+
             return Object.entries(data.members).map(([id, m]) => {
-                const hasCache = statsCache[id] !== undefined;
-                const cachedStats = statsCache[id]?.stats; 
-                // Grabbing landing time from the backend cache
-                const landingTime = statsCache[id]?.landingTime || null; 
-                const est = manualStats[id]?.stats !== undefined ? manualStats[id].stats : (hasCache ? cachedStats : "loading");
-                const intelScore = isEnemy ? computeWarIntel({ id, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", estStats: est }, statsCache) : null;
-                
-                if (isEnemy && backups[id] && m.status?.state === "Hospital") {
-                    const timeLeft = m.status.until - Math.floor(Date.now() / 1000);
-                    if (timeLeft > 1800) delete backups[id];
-                }
-                
-                return { 
-                    id, 
-                    name: m.name, 
-                    state: m.status?.state, 
-                    until: m.status?.until, 
-                    statusDescription: m.status?.description || "", 
-                    onlineStatus: m.last_action?.status || "Offline", 
-                    lastActionRelative: m.last_action?.relative || "Unknown", 
-                    landingTime: landingTime, 
-                    claimedBy: isEnemy ? claims[id]?.playerName || null : null, 
-                    needsBackup: isEnemy ? backups[id]?.playerName || null : null, 
-                    estStats: est, 
-                    intelScore, 
-                    isManual: !!manualStats[id] 
+
+                const cachedStats = statsCache[id]?.stats;
+                const manual = manualStats[id]?.stats;
+
+                const landingTime =
+                    statsCache[id]?.landingTime ||
+                    flightCache[id]?.landingTime ||
+                    null;
+
+                const est = manual ?? cachedStats ?? "loading";
+
+                const intelScore = isEnemy
+                    ? computeWarIntel({
+                        id,
+                        state: m.status?.state,
+                        until: m.status?.until,
+                        onlineStatus: m.last_action?.status || "Offline",
+                        estStats: est
+                    }, statsCache)
+                    : null;
+
+                return {
+                    id,
+                    name: m.name,
+                    state: m.status?.state,
+                    until: m.status?.until,
+                    statusDescription: m.status?.description || "",
+                    onlineStatus: m.last_action?.status || "Offline",
+                    lastActionRelative: m.last_action?.relative || "Unknown",
+                    landingTime,
+                    claimedBy: isEnemy ? claims[id]?.playerName || null : null,
+                    needsBackup: isEnemy ? backups[id]?.playerName || null : null,
+                    estStats: est,
+                    intelScore,
+                    isManual: !!manualStats[id]
                 };
             });
         };
 
-        res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId });
-    } catch (err) { 
-        res.status(500).json({ error: "warboard failed" }); 
+        res.json({
+            friendly: parseMembers(myData, false),
+            enemy: parseMembers(enemyDataResult, true),
+            detectedEnemyId: enemyId
+        });
+
+    } catch (err) {
+        res.status(500).json({ error: "warboard failed" });
     }
 });
 
