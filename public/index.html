@@ -60,6 +60,9 @@
         .profile { font-weight: bold; color: var(--text-main); text-decoration: none; font-size: 1.1em; }
         .profile:hover { text-decoration: underline; color: var(--blue); }
         
+        .badge-bounty { background: rgba(255, 71, 87, 0.15); color: var(--red); border: 1px solid var(--red); padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: bold; text-transform: uppercase; text-decoration: none; margin-left: 8px; transition: 0.2s; vertical-align: middle; }
+        .badge-bounty:hover { background: var(--red); color: white; }
+
         .action-arrow { font-size: 0.85em; color: var(--text-dim); margin-top: 5px; display: flex; align-items: center; gap: 6px; }
         .arrow-icon { color: var(--red); font-weight: bold; }
         .flight-info { color: var(--blue); font-weight: bold; background: rgba(88, 166, 255, 0.1); padding: 2px 6px; border-radius: 4px; }
@@ -68,16 +71,19 @@
         .status span { font-weight: bold; color: var(--text-main); }
         
         .intel-badge { background: rgba(255, 165, 2, 0.15); color: var(--gold); padding: 4px 8px; border-radius: 6px; font-size: 0.8em; font-weight: bold; border: 1px solid var(--gold); }
-        .stat-box { text-align: right; font-size: 0.9em; }
+        .stat-box { text-align: right; font-size: 0.9em; flex-shrink: 0; }
         .stat-val { font-weight: bold; color: var(--gold); font-size: 1.1em; }
 
-        .card-actions { display: flex; gap: 10px; border-top: 1px solid #2f3542; padding-top: 10px; justify-content: flex-end; }
-        .btn-action { background: #2f3542; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold; transition: 0.2s; }
+        .card-actions { display: flex; gap: 10px; border-top: 1px solid #2f3542; padding-top: 10px; justify-content: flex-end; align-items: center; }
+        .btn-action { background: #2f3542; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold; transition: 0.2s; text-decoration: none; }
         .btn-action:hover { background: #57606f; }
         .btn-claim { background: rgba(46, 213, 115, 0.2); color: var(--green); border: 1px solid var(--green); }
         .btn-claim:hover { background: var(--green); color: #000; }
         .btn-sos { background: rgba(255, 71, 87, 0.2); color: var(--red); border: 1px solid var(--red); }
         .btn-sos:hover { background: var(--red); color: white; }
+
+        .btn-attack { background: var(--red); color: white; padding: 6px 16px; border-radius: 4px; font-size: 0.85em; font-weight: bold; text-decoration: none; border: 1px solid #ff2a40; box-shadow: 0 0 10px rgba(255, 71, 87, 0.4); text-transform: uppercase; display: flex; align-items: center; gap: 5px; animation: pulseAttack 2s infinite;}
+        .btn-attack:hover { background: #ff2a40; color: white; transform: scale(1.05); }
 
         .active-claim { font-size: 0.8em; color: var(--green); font-weight: bold; background: rgba(46,213,115,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-right: 5px; }
         .active-sos { font-size: 0.8em; color: var(--red); font-weight: bold; background: rgba(255,71,87,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; animation: pulse 2s infinite; }
@@ -100,13 +106,14 @@
         .close-btn:hover { color: white; }
         
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+        @keyframes pulseAttack { 0% { box-shadow: 0 0 5px rgba(255, 71, 87, 0.4); } 50% { box-shadow: 0 0 15px rgba(255, 71, 87, 0.8); } 100% { box-shadow: 0 0 5px rgba(255, 71, 87, 0.4); } }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes fadeOut { to { opacity: 0; transform: translateX(100%); } }
         @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
-  <div class="top-nav">
+    <div class="top-nav">
         <a href="/" class="nav-link active">📡 Live Warboard</a>
         <a href="/payout.html" class="nav-link">💰 Payout Calculator</a>
         <a href="/dashboard.html" class="nav-link">🛡️ Alliance Dashboard</a>
@@ -213,7 +220,7 @@ let refreshRate = parseInt(localStorage.getItem("warboard_refresh")) || 5;
 
 let knownEnemies = {}; 
 let fetchTimer = null;
-let currentEnemyData = []; // Store globally for filter re-renders
+let currentEnemyData = []; 
 let activeFilter = 'All';
 
 document.getElementById("api-key").value = myKey;
@@ -449,7 +456,10 @@ function renderFriendlyList(players) {
             <div class="member-card ${stateClass}">
                 <div class="card-header">
                     <div>
-                        <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
+                        <div style="display: flex; align-items: center;">
+                            <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
+                            <a href="https://www.torn.com/bounties.php?p=add&XID=${p.id}&amount=150000&reason=WAR" target="_blank" class="badge-bounty" title="Place Bounty to keep in Hospital">🎯 Bounty</a>
+                        </div>
                         <div class="action-arrow">
                             <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
                         </div>
@@ -507,8 +517,14 @@ function renderEnemyList(players) {
         
         let claimDisplay = p.claimedBy ? `<div class="active-claim">🎯 Claimed by ${p.claimedBy}</div>` : "";
         let claimButton = "";
-        if (!p.claimedBy) { claimButton = `<button class="btn-action btn-claim" onclick="claimTarget('${p.id}')">Claim Target</button>`; } 
-        else if (p.claimedBy === myName) { claimButton = `<button class="btn-action" onclick="unclaimTarget('${p.id}')">Release Target</button>`; }
+        if (!p.claimedBy) { 
+            claimButton = `<button class="btn-action btn-claim" onclick="claimTarget('${p.id}')">Claim Target</button>`; 
+        } else if (p.claimedBy === myName) { 
+            claimButton = `
+                <a href="https://www.torn.com/loader.php?sid=attack&user2ID=${p.id}" target="_blank" class="btn-attack">⚔️ ATTACK</a>
+                <button class="btn-action" onclick="unclaimTarget('${p.id}')">Release Target</button>
+            `; 
+        }
 
         let sosDisplay = p.needsBackup ? `<div class="active-sos">🚨 Backup requested by ${p.needsBackup}</div>` : "";
         let sosButton = "";
