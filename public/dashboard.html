@@ -57,7 +57,6 @@
     <h1>Alliance Dashboard</h1>
 
     <div class="container">
-        <!-- AI Insight Terminal -->
         <div class="dash-card ai-section">
             <h2>🧠 Gemini Tactical War Analyst <button class="btn-ai" onclick="generateAIReport()">Run Analysis on Last War</button></h2>
             <div id="ai-output" class="ai-terminal">
@@ -65,7 +64,6 @@
             </div>
         </div>
 
-        <!-- Activity Tracker -->
         <div class="dash-card">
             <h2>👤 Member Activity Tracker <span id="member-count" style="font-size: 0.6em; color: var(--text-dim);">0</span></h2>
             <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
@@ -76,7 +74,6 @@
             </div>
         </div>
 
-        <!-- Armory Loans -->
         <div class="dash-card">
             <h2>🔫 Armory Loans Tracker <span id="loan-count" style="font-size: 0.6em; color: var(--text-dim);">0</span></h2>
             <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
@@ -106,10 +103,10 @@
             if (data.error) throw new Error(data.error);
 
             renderActivity(data.members);
-            renderLoans(data.loans, data.members);
+            renderLoans(data.loans, data.members, data.armoryError);
         } catch (e) {
             console.error(e);
-            alert("Error loading dashboard. Make sure your API key has Faction permissions.");
+            document.getElementById("activity-list").innerHTML = `<tr><td colspan="3" style="color:var(--red);">Failed to connect to Dashboard API.</td></tr>`;
         }
     }
 
@@ -138,7 +135,15 @@
         document.getElementById("activity-list").innerHTML = html;
     }
 
-    function renderLoans(loans, members) {
+    function renderLoans(loans, members, armoryError) {
+        const listContainer = document.getElementById("loans-list");
+        
+        if (armoryError) {
+            document.getElementById("loan-count").innerText = "Locked";
+            listContainer.innerHTML = `<tr><td colspan="3" style="color:var(--red); font-weight:bold;">⚠️ Access Denied: Your API key does not have the faction permissions required to view the Armory.</td></tr>`;
+            return;
+        }
+
         document.getElementById("loan-count").innerText = loans.length;
         let html = "";
         
@@ -154,7 +159,7 @@
                 </tr>`;
             });
         }
-        document.getElementById("loans-list").innerHTML = html;
+        listContainer.innerHTML = html;
     }
 
     async function generateAIReport() {
