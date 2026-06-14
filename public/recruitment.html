@@ -40,7 +40,7 @@
         .btn-loaded { background: #2f3542; color: var(--text-dim); cursor: default; }
         .btn-loaded:hover { background: #2f3542; }
         
-        .btn-msg { background: rgba(88, 166, 255, 0.15); border: 1px solid var(--blue); color: var(--blue); padding: 6px 12px; border-radius: 4px; text-decoration: none; font-size: 0.8em; font-weight: bold; transition: 0.2s; }
+        .btn-msg { background: rgba(88, 166, 255, 0.15); border: 1px solid var(--blue); color: var(--blue); padding: 6px 12px; border-radius: 4px; text-decoration: none; font-size: 0.8em; font-weight: bold; transition: 0.2s; cursor: pointer; }
         .btn-msg:hover { background: var(--blue); color: #000; }
 
         .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold; text-transform: uppercase; display: inline-block;}
@@ -53,6 +53,18 @@
         tr:hover { background: rgba(255,255,255,0.02); }
         
         .score-val { color: var(--blue); font-weight: bold; }
+
+        /* Modal Styling */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 10000; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
+        .modal-content { background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; width: 500px; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.9); position: relative;}
+        .modal-content h2 { margin: 0 0 10px 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+        .modal-content textarea { padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; width: 100%; box-sizing: border-box; min-height: 120px; font-family: inherit; resize: vertical; line-height: 1.5; }
+        .modal-content textarea:focus { outline: 1px solid var(--blue); }
+        .modal-content button { background: var(--green); color: #000; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.1em; margin-top: 10px; transition: 0.2s; text-transform: uppercase; }
+        .modal-content button:hover { background: #26b361; }
+        .modal-content button:disabled { background: #2f3542; color: #57606f; cursor: not-allowed; }
+        .close-btn { position: absolute; right: 20px; top: 20px; color: var(--text-dim); cursor: pointer; font-size: 1.5em; line-height: 1; }
+        .close-btn:hover { color: white; }
     </style>
 </head>
 <body>
@@ -89,9 +101,20 @@
         </table>
     </div>
 
+    <!-- AI Quick Chat Modal -->
+    <div id="msg-modal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="close-btn" onclick="closeMsgModal()">&times;</div>
+            <h2 id="modal-title">Drafting Message...</h2>
+            <textarea id="ai-msg-box" spellcheck="false">Initializing AI uplink...</textarea>
+            <button id="btn-copy-send" onclick="copyAndSend()" disabled>Copy & Open Torn</button>
+        </div>
+    </div>
+
 <script>
     const myKey = localStorage.getItem("warboard_apikey");
     let currentButtons = [];
+    let currentTargetId = null;
 
     async function fetchWarList() {
         if (!myKey) {
@@ -171,7 +194,7 @@
                     <td class="score-val">${r.score}</td>
                     <td>${r.attacks}</td>
                     <td><span class="badge ${badgeClass}">${r.status}${daysText}</span></td>
-                    <td><a href="https://www.torn.com/messages.php?action=send&XID=${r.id}" target="_blank" class="btn-msg">✉️ Message</a></td>
+                    <td><button class="btn-msg" onclick="openMsgModal('${r.id}', '${r.name}', ${r.score}, ${r.attacks}, '${r.status}')">✉️ Auto-Draft Message</button></td>
                 </tr>`;
             });
 
@@ -182,6 +205,56 @@
             list.innerHTML = "";
             table.style.display = "none";
             document.getElementById("error-msg").innerText = "Failed to scan: " + e.message;
+        }
+    }
+
+    // --- QUICK CHAT MODAL LOGIC ---
+    function closeMsgModal() {
+        document.getElementById("msg-modal").style.display = "none";
+    }
+
+    async function openMsgModal(id, name, score, attacks, status) {
+        currentTargetId = id;
+        document.getElementById("modal-title").innerText = `Drafting DM to ${name}`;
+        document.getElementById("ai-msg-box").value = "Analyzing stats and writing recruitment pitch...";
+        document.getElementById("btn-copy-send").disabled = true;
+        document.getElementById("msg-modal").style.display = "flex";
+
+        try {
+            const res = await fetch('/api/generate-recruit-msg', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ playerName: name, score: score, attacks: attacks, status: status })
+            });
+            const data = await res.json();
+            
+            if (data.error) throw new Error(data.error);
+
+            document.getElementById("ai-msg-box").value = data.message;
+            document.getElementById("btn-copy-send").disabled = false;
+
+        } catch (e) {
+            document.getElementById("ai-msg-box").value = `[ERROR] Failed to connect to Gemini API. \n\nReason: ${e.message}\n\nYou can manually write your message here before copying!`;
+            document.getElementById("btn-copy-send").disabled = false; 
+        }
+    }
+
+    async function copyAndSend() {
+        const textToCopy = document.getElementById("ai-msg-box").value;
+        try {
+            await navigator.clipboard.writeText(textToCopy);
+            
+            const btn = document.getElementById("btn-copy-send");
+            btn.innerText = "✓ Copied! Opening Torn...";
+            
+            setTimeout(() => {
+                window.open(`https://www.torn.com/messages.php?action=send&XID=${currentTargetId}`, '_blank');
+                closeMsgModal();
+                btn.innerText = "Copy & Open Torn";
+            }, 800);
+            
+        } catch (err) {
+            alert("Failed to copy message to clipboard.");
         }
     }
 </script>
