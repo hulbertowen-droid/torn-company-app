@@ -122,7 +122,7 @@ app.get('/api/war-list', async (req, res) => {
         let wars = [];
         if (facData.rankedwars) {
             for (let [warId, warInfo] of Object.entries(facData.rankedwars)) {
-                if (warInfo.war && warInfo.war.winner === 0) continue; // Skip ongoing wars
+                if (warInfo.war && warInfo.war.winner === 0) continue; 
                 let enemyName = "Unknown Faction";
                 for (let [fId, fInfo] of Object.entries(warInfo.factions)) {
                     if (fId !== facData.ID.toString()) enemyName = fInfo.name;
@@ -155,28 +155,25 @@ app.get('/api/dashboard-data', async (req, res) => {
         if (armoryData.error) {
             armoryError = true; 
         } else {
-            const extractLoans = (categoryData, typeName) => {
-                if (!categoryData || typeof categoryData !== 'object') return; 
-                Object.values(categoryData).forEach(items => {
-                    if (!items) return;
-                    // Deep scan array or object structures
-                    const itemList = Array.isArray(items) ? items : Object.values(items);
-                    itemList.forEach(item => {
-                        if (item && item.loaned_to) {
-                            let loanStr = String(item.loaned_to).trim();
-                            if (loanStr !== "0" && loanStr !== "null" && loanStr !== "") {
-                                // Split by comma in case multiple people are holding the same item ID
-                                loanStr.split(',').forEach(l => {
-                                    loans.push({ name: item.name, loaned_to: l.trim(), type: typeName });
-                                });
-                            }
-                        }
-                    });
-                });
+            // Recursive deep scan to find loaned_to regardless of Torn's random formatting
+            const findLoans = (obj, typeName) => {
+                if (!obj || typeof obj !== 'object') return;
+                
+                if (obj.loaned_to) {
+                    let loanStr = String(obj.loaned_to).trim();
+                    if (loanStr !== "0" && loanStr !== "null" && loanStr !== "") {
+                        loanStr.split(',').forEach(l => {
+                            loans.push({ name: obj.name || "Unknown Item", loaned_to: l.trim(), type: typeName });
+                        });
+                    }
+                    return; 
+                }
+                Object.values(obj).forEach(val => findLoans(val, typeName));
             };
-            extractLoans(armoryData.armor, "Armor");
-            extractLoans(armoryData.weapons, "Weapon");
-            extractLoans(armoryData.temporary, "Temporary");
+
+            findLoans(armoryData.armor, "Armor");
+            findLoans(armoryData.weapons, "Weapon");
+            findLoans(armoryData.temporary, "Temporary");
         }
 
         res.json({ success: true, members: basicData.members || {}, loans: loans, armoryError });
@@ -192,7 +189,6 @@ app.post('/api/ai-analyze', async (req, res) => {
     if (!userKey) return res.status(400).json({ error: "Missing Torn API Key" });
 
     try {
-        // Fetch User and Faction together to get bulletproof faction detection
         const [facRes, userRes] = await Promise.all([
             fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`).then(r => r.json()),
             fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`).then(r => r.json())
@@ -217,7 +213,6 @@ app.post('/api/ai-analyze', async (req, res) => {
         const reportRes = await fetch(`https://api.torn.com/torn/${lastWarId}?selections=rankedwarreport&key=${userKey}`);
         const reportData = await reportRes.json();
         
-        // Bulletproof member extraction
         let warStats = null;
         if (reportData.rankedwarreport && reportData.rankedwarreport.factions) {
             for (let [fId, fData] of Object.entries(reportData.rankedwarreport.factions)) {
@@ -237,7 +232,8 @@ app.post('/api/ai-analyze', async (req, res) => {
 
         const prompt = `You are a strict, tactical military advisor for a gaming faction. Review the performance of the top 20 members in our latest war:\n\n${slimData}\n\nProvide 3 specific, actionable pieces of advice to improve our next war. Call out top performers, identify weak links, and be blunt but helpful. Do not use markdown headers, just bolding.`;
 
-        const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+        // FIXED: Switched to the production v1 API endpoint to prevent the models/gemini-1.5-flash not found error
+        const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
