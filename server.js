@@ -155,7 +155,6 @@ app.get('/api/dashboard-data', async (req, res) => {
         if (armoryData.error) {
             armoryError = true; 
         } else {
-            // Recursive deep scan to find loaned_to regardless of Torn's random formatting
             const findLoans = (obj, typeName) => {
                 if (!obj || typeof obj !== 'object') return;
                 
@@ -182,7 +181,7 @@ app.get('/api/dashboard-data', async (req, res) => {
     }
 });
 
-// --- DASHBOARD: AI WAR ANALYST ---
+// --- DASHBOARD: AI WAR ANALYST (PAST COMPLETED WARS) ---
 app.post('/api/ai-analyze', async (req, res) => {
     const userKey = req.query.apiKey;
     if (!GEMINI_API_KEY) return res.status(400).json({ error: "Server missing GEMINI_API_KEY in environment variables." });
@@ -232,7 +231,66 @@ app.post('/api/ai-analyze', async (req, res) => {
 
         const prompt = `You are a strict, tactical military advisor for a gaming faction. Review the performance of the top 20 members in our latest war:\n\n${slimData}\n\nProvide 3 specific, actionable pieces of advice to improve our next war. Call out top performers, identify weak links, and be blunt but helpful. Do not use markdown headers, just bolding.`;
 
-        // FIXED: Upgraded model to gemini-3.5-flash to replace the deprecated 1.5-flash model
+        const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+        
+        const aiData = await aiRes.json();
+        if (aiData.error) throw new Error("Gemini API Error: " + aiData.error.message);
+
+        const analysis = aiData.candidates[0].content.parts[0].text;
+        res.json({ success: true, analysis });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- DASHBOARD: AI WAR ANALYST (LIVE ONGOING WAR) ---
+app.post('/api/ai-analyze-ongoing', async (req, res) => {
+    const userKey = req.query.apiKey;
+    if (!GEMINI_API_KEY) return res.status(400).json({ error: "Server missing GEMINI_API_KEY in environment variables." });
+    if (!userKey) return res.status(400).json({ error: "Missing Torn API Key" });
+
+    try {
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`).then(r => r.json());
+        if (facRes.error) throw new Error("Torn API Error: " + facRes.error.error);
+
+        const myFacId = facRes.ID?.toString();
+        let ongoingWarId = null;
+        let warData = null;
+
+        if (facRes.rankedwars) {
+            for (let [id, w] of Object.entries(facRes.rankedwars)) {
+                if (w.war && w.war.winner === 0) { // Winner 0 means the war is active right now
+                    ongoingWarId = id;
+                    warData = w;
+                    break;
+                }
+            }
+        }
+
+        if (!ongoingWarId) throw new Error("You are not currently in an active Ranked War. Use the 'Analyze Last War' button instead.");
+
+        const myFactionWarData = warData.factions[myFacId];
+        if (!myFactionWarData) throw new Error("Could not extract your faction's live data from the ongoing war.");
+
+        let enemyFacId = Object.keys(warData.factions).find(id => id !== myFacId);
+        const enemyFactionWarData = enemyFacId ? warData.factions[enemyFacId] : null;
+        
+        let enemyName = enemyFactionWarData ? enemyFactionWarData.name : "the enemy";
+        let myScore = myFactionWarData.score || 0;
+        let enemyScore = enemyFactionWarData ? (enemyFactionWarData.score || 0) : 0;
+        let targetScore = warData.war.target || 0;
+
+        // Get live member stats
+        let memberArray = Object.values(myFactionWarData.members || {}).map(m => `Name: ${m.name}, Attacks: ${m.attacks || 0}, Score: ${m.score || 0}`);
+        memberArray.sort((a, b) => (b.score || 0) - (a.score || 0));
+        const slimData = memberArray.slice(0, 20).join("\n");
+
+        const prompt = `You are a strict, tactical military advisor for a gaming faction. We are currently in a LIVE Ranked War against ${enemyName}. The current score is Us: ${myScore} vs Them: ${enemyScore} (Target to win: ${targetScore}). Review the live performance of our top 20 active members so far:\n\n${slimData}\n\nProvide 3 specific, urgent, actionable pieces of tactical advice on what we need to do RIGHT NOW to start winning or hold our lead. Identify if we lack hitters, if people are hitting low-value targets (high attacks but low score), and give an urgent battle command. Do not use markdown headers, just bolding.`;
+
         const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
