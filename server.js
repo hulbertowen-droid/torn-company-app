@@ -73,7 +73,7 @@ function autoDetectEnemyFaction(data) {
     return null;
 }
 
-// PREMIUM FF SCOUTER POLLING - NOW WITH ETA TRACKING
+// PREMIUM FF SCOUTER POLLING - WITH DIAGNOSTIC DEBUGGER
 setInterval(async () => {
     if (!statQueue.length || isProcessingQueue) return;
     isProcessingQueue = true;
@@ -92,24 +92,33 @@ setInterval(async () => {
         const res = await fetch(`https://ffscouter.com/api/v1/get-stats?key=${FF_SCOUTER_KEY}&targets=${targets}`);
         const data = await res.json();
         
+        // --- DIAGNOSTIC LOG (Prints to your terminal) ---
+        console.log("================================");
+        console.log(`Checking ${batch.length} targets with FF Scouter...`);
+        console.log("FF SCOUTER RAW RESPONSE:", JSON.stringify(data).substring(0, 400) + "..."); 
+        console.log("================================");
+        // ------------------------------------------------
+
         if (Array.isArray(data)) {
             data.forEach(p => {
                 const id = p.player_id.toString();
-                // Check multiple possible key names for landing time from FF Scouter
                 const landing = p.estimated_landing || p.landing_eta || p.landing_time || null;
                 statsCache[id] = { stats: p.bs_estimate, landingTime: landing, time: Date.now() };
             });
         } else {
             batch.forEach(id => { statsCache[id] = { stats: null, landingTime: null, time: Date.now() }; });
         }
-    } catch (err) { statQueue.push(...batch); }
+    } catch (err) { 
+        console.error("FF Scouter API Error:", err);
+        statQueue.push(...batch); 
+    }
     
     isProcessingQueue = false;
 }, 4000);
 
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
-// --- RESTORED LIVE WARBOARD FEATURES ---
+// --- LIVE WARBOARD ACTIONS ---
 app.post('/api/claim', (req, res) => {
     const { enemyId, playerName } = req.body;
     if (!enemyId || !playerName) return res.status(400).json({ error: "Missing data" });
@@ -282,7 +291,7 @@ app.get('/api/warboard', async (req, res) => {
             return Object.entries(data.members).map(([id, m]) => {
                 const hasCache = statsCache[id] !== undefined;
                 const cachedStats = statsCache[id]?.stats; 
-                const landingTime = statsCache[id]?.landingTime || null; // NEW FF SCOUTER DATA
+                const landingTime = statsCache[id]?.landingTime || null; 
                 const est = manualStats[id]?.stats !== undefined ? manualStats[id].stats : (hasCache ? cachedStats : "loading");
                 const intelScore = isEnemy ? computeWarIntel({ id, state: m.status?.state, until: m.status?.until, onlineStatus: m.last_action?.status || "Offline", estStats: est }, statsCache) : null;
                 
@@ -298,8 +307,8 @@ app.get('/api/warboard', async (req, res) => {
                     until: m.status?.until, 
                     statusDescription: m.status?.description || "", 
                     onlineStatus: m.last_action?.status || "Offline", 
-                    lastActionRelative: m.last_action?.relative || "Unknown", // NEW LAST ACTION DATA
-                    landingTime: landingTime, // NEW ETA DATA
+                    lastActionRelative: m.last_action?.relative || "Unknown", 
+                    landingTime: landingTime, 
                     claimedBy: isEnemy ? claims[id]?.playerName || null : null, 
                     needsBackup: isEnemy ? backups[id]?.playerName || null : null, 
                     estStats: est, 
