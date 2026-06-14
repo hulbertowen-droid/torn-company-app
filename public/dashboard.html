@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alliance Dashboard | Spider-Verse</title>
+    <style>
+        :root { 
+            --bg: #090a0f; --card: #11141d; --item: #1b202e; 
+            --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
+            --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
+        }
+        body { background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px; }
+        
+        .top-nav { display: flex; justify-content: center; gap: 20px; max-width: 1200px; margin: 0 auto 20px auto; background: var(--card); padding: 12px; border-radius: 10px; border: 1px solid #2f3542; }
+        .nav-link { color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 6px 12px; border-radius: 6px; transition: 0.2s; text-transform: uppercase; font-size: 0.9em; letter-spacing: 1px; cursor: pointer; }
+        .nav-link:hover { background: #2f3542; color: white; }
+        .nav-link.active { color: white; background: rgba(88, 166, 255, 0.15); border: 1px solid var(--blue); }
+
+        h1 { text-align: center; color: var(--blue); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
+
+        .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+        
+        /* Dashboard Cards */
+        .dash-card { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #2f3542; }
+        .dash-card h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; }
+        
+        .ai-section { grid-column: 1 / -1; }
+        
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #2f3542; }
+        th { color: var(--text-dim); font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+        
+        .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
+        .dot-online { background: var(--green); box-shadow: 0 0 8px var(--green); }
+        .dot-idle { background: var(--gold); }
+        .dot-offline { background: #57606f; }
+        .text-danger { color: var(--red); font-weight: bold; }
+
+        /* AI Terminal */
+        .ai-terminal { background: #050608; border: 1px solid var(--blue); border-radius: 8px; padding: 20px; font-family: 'Courier New', Courier, monospace; min-height: 150px; line-height: 1.6; }
+        .btn-ai { background: rgba(88, 166, 255, 0.15); color: var(--blue); border: 1px solid var(--blue); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-ai:hover { background: var(--blue); color: #000; }
+        
+        @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="top-nav">
+        <a href="/" class="nav-link">📡 Live Warboard</a>
+        <a href="/payout.html" class="nav-link">💰 Payout Calculator</a>
+        <a href="/dashboard.html" class="nav-link active">🛡️ Alliance Dashboard</a>
+    </div>
+
+    <h1>Alliance Dashboard</h1>
+
+    <div class="container">
+        <!-- AI Insight Terminal -->
+        <div class="dash-card ai-section">
+            <h2>🧠 Gemini Tactical War Analyst <button class="btn-ai" onclick="generateAIReport()">Run Analysis on Last War</button></h2>
+            <div id="ai-output" class="ai-terminal">
+                <span style="color: var(--text-dim);">Awaiting command... Click the button above to feed your latest Ranked War data into the AI.</span>
+            </div>
+        </div>
+
+        <!-- Activity Tracker -->
+        <div class="dash-card">
+            <h2>👤 Member Activity Tracker <span id="member-count" style="font-size: 0.6em; color: var(--text-dim);">0</span></h2>
+            <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
+                <table id="activity-table">
+                    <thead><tr><th>Player</th><th>Last Action</th><th>Status</th></tr></thead>
+                    <tbody id="activity-list"><tr><td colspan="3" style="color:var(--text-dim);">Loading API data...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Armory Loans -->
+        <div class="dash-card">
+            <h2>🔫 Armory Loans Tracker <span id="loan-count" style="font-size: 0.6em; color: var(--text-dim);">0</span></h2>
+            <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
+                <table id="loans-table">
+                    <thead><tr><th>Item</th><th>Loaned To</th><th>Type</th></tr></thead>
+                    <tbody id="loans-list"><tr><td colspan="3" style="color:var(--text-dim);">Loading API data...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const myKey = localStorage.getItem("warboard_apikey");
+
+    if (!myKey) {
+        document.getElementById("activity-list").innerHTML = `<tr><td colspan="3" style="color:var(--red);">Please set your API key on the Live Warboard settings first.</td></tr>`;
+        document.getElementById("loans-list").innerHTML = `<tr><td colspan="3" style="color:var(--red);">Please set your API key on the Live Warboard settings first.</td></tr>`;
+    } else {
+        fetchDashboardData();
+    }
+
+    async function fetchDashboardData() {
+        try {
+            const res = await fetch(`/api/dashboard-data?apiKey=${myKey}`);
+            const data = await res.json();
+            
+            if (data.error) throw new Error(data.error);
+
+            renderActivity(data.members);
+            renderLoans(data.loans, data.members);
+        } catch (e) {
+            console.error(e);
+            alert("Error loading dashboard. Make sure your API key has Faction permissions.");
+        }
+    }
+
+    function renderActivity(members) {
+        const list = Object.values(members).sort((a, b) => a.last_action.timestamp - b.last_action.timestamp);
+        document.getElementById("member-count").innerText = list.length;
+        
+        const now = Math.floor(Date.now() / 1000);
+        let html = "";
+        
+        list.forEach(m => {
+            let dotClass = "dot-offline";
+            if (m.last_action.status === "Online") dotClass = "dot-online";
+            if (m.last_action.status === "Idle") dotClass = "dot-idle";
+
+            let timeDiff = now - m.last_action.timestamp;
+            let timeClass = timeDiff > 172800 ? "text-danger" : ""; // 48 hours
+
+            html += `<tr>
+                <td><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-main); text-decoration:none; font-weight:bold;">${m.name} [${m.id}]</a></td>
+                <td class="${timeClass}">${m.last_action.relative}</td>
+                <td><span class="status-dot ${dotClass}"></span>${m.last_action.status}</td>
+            </tr>`;
+        });
+        
+        document.getElementById("activity-list").innerHTML = html;
+    }
+
+    function renderLoans(loans, members) {
+        document.getElementById("loan-count").innerText = loans.length;
+        let html = "";
+        
+        if (loans.length === 0) {
+            html = `<tr><td colspan="3" style="color:var(--text-dim);">No items currently loaned out.</td></tr>`;
+        } else {
+            loans.forEach(loan => {
+                const borrower = members[loan.loaned_to] ? members[loan.loaned_to].name : "Unknown";
+                html += `<tr>
+                    <td style="font-weight:bold; color:var(--gold);">${loan.name}</td>
+                    <td>${borrower} [${loan.loaned_to}]</td>
+                    <td>${loan.type}</td>
+                </tr>`;
+            });
+        }
+        document.getElementById("loans-list").innerHTML = html;
+    }
+
+    async function generateAIReport() {
+        const term = document.getElementById("ai-output");
+        term.innerHTML = `<span style="color: var(--blue);">[SYSTEM] Initiating secure uplink to Gemini API...<br>[SYSTEM] Extracting latest Ranked War combat data...<br>[SYSTEM] Analyzing faction performance metrics... Please wait.</span>`;
+        
+        try {
+            const res = await fetch(`/api/ai-analyze?apiKey=${myKey}`, { method: 'POST' });
+            const data = await res.json();
+            
+            if (data.error) {
+                term.innerHTML = `<span style="color: var(--red);">[ERROR] ${data.error}</span>`;
+                return;
+            }
+
+            // Convert simple markdown bolding to HTML
+            let formattedText = data.analysis.replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--blue);">$1</strong>');
+            formattedText = formattedText.replace(/\n/g, '<br>');
+            
+            term.innerHTML = `<span style="color: var(--text-main);">${formattedText}</span>`;
+        } catch (e) {
+            term.innerHTML = `<span style="color: var(--red);">[ERROR] Connection to AI server failed. Check your GEMINI_API_KEY on the backend.</span>`;
+        }
+    }
+</script>
+</body>
+</html>
