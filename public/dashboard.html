@@ -23,7 +23,7 @@
         
         /* Dashboard Cards */
         .dash-card { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #2f3542; }
-        .dash-card h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; }
+        .dash-card h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;}
         
         .ai-section { grid-column: 1 / -1; }
         
@@ -44,6 +44,9 @@
         .btn-ai { background: rgba(88, 166, 255, 0.15); color: var(--blue); border: 1px solid var(--blue); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
         .btn-ai:hover { background: var(--blue); color: #000; }
         
+        .btn-ai-live { background: rgba(255, 71, 87, 0.15); color: var(--red); border-color: var(--red); }
+        .btn-ai-live:hover { background: var(--red); color: white; }
+        
         @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
     </style>
 </head>
@@ -59,9 +62,15 @@
     <div class="container">
         <!-- AI Insight Terminal -->
         <div class="dash-card ai-section">
-            <h2>🧠 Gemini Tactical War Analyst <button class="btn-ai" onclick="generateAIReport()">Run Analysis on Last War</button></h2>
+            <h2>
+                <span>🧠 Gemini Tactical War Analyst</span>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn-ai" onclick="generateAIReport('past')">Analyze Last War</button>
+                    <button class="btn-ai btn-ai-live" onclick="generateAIReport('ongoing')">🚨 Analyze LIVE War</button>
+                </div>
+            </h2>
             <div id="ai-output" class="ai-terminal">
-                <span style="color: var(--text-dim);">Awaiting command... Click the button above to feed your latest Ranked War data into the AI.</span>
+                <span style="color: var(--text-dim);">Awaiting command... Click a button above to feed war data into the AI.</span>
             </div>
         </div>
 
@@ -114,7 +123,6 @@
     }
 
     function renderActivity(members) {
-        // FIXED: Extract the Player ID key from the Torn object and re-attach it to the member data
         const list = Object.entries(members).map(([id, m]) => ({ id, ...m })).sort((a, b) => a.last_action.timestamp - b.last_action.timestamp);
         document.getElementById("member-count").innerText = list.length;
         
@@ -166,12 +174,15 @@
         listContainer.innerHTML = html;
     }
 
-    async function generateAIReport() {
+    async function generateAIReport(type) {
         const term = document.getElementById("ai-output");
-        term.innerHTML = `<span style="color: var(--blue);">[SYSTEM] Initiating secure uplink to Gemini API...<br>[SYSTEM] Extracting latest Ranked War combat data...<br>[SYSTEM] Analyzing faction performance metrics... Please wait.</span>`;
+        const endpoint = type === 'ongoing' ? '/api/ai-analyze-ongoing' : '/api/ai-analyze';
+        const statusMsg = type === 'ongoing' ? 'LIVE active war data' : 'latest completed Ranked War data';
+        
+        term.innerHTML = `<span style="color: var(--blue);">[SYSTEM] Initiating secure uplink to Gemini API...<br>[SYSTEM] Extracting ${statusMsg}...<br>[SYSTEM] Analyzing faction performance metrics... Please wait.</span>`;
         
         try {
-            const res = await fetch(`/api/ai-analyze?apiKey=${myKey}`, { method: 'POST' });
+            const res = await fetch(`${endpoint}?apiKey=${myKey}`, { method: 'POST' });
             const data = await res.json();
             
             if (data.error) throw new Error(data.error);
