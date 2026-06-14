@@ -249,7 +249,6 @@ app.get('/api/scan-recruits', async (req, res) => {
         let potentialRecruits = [];
 
         for (let [id, m] of Object.entries(enemyWarData.members || {})) {
-            // Only flag active hitters
             if (m.score > 200 || m.attacks > 10) {
                 let currentStatus = "Left Faction";
                 let position = "None";
@@ -282,6 +281,31 @@ app.get('/api/scan-recruits', async (req, res) => {
 
     } catch (err) {
         res.status(500).json({ error: "Server error scanning for recruits." });
+    }
+});
+
+// --- AI RECRUITMENT MESSAGE DRAFTER ---
+app.post('/api/generate-recruit-msg', async (req, res) => {
+    const { playerName, score, attacks, status } = req.body;
+    if (!GEMINI_API_KEY) return res.status(400).json({ error: "Server missing GEMINI_API_KEY." });
+
+    try {
+        const prompt = `You are a recruiter for a top-tier gaming faction in Torn City. Write a short, personalized, and engaging recruitment DM to a player named ${playerName}. 
+        Context: They recently fought against us in a Ranked War, making ${attacks} attacks and scoring ${score} points. They are a heavy hitter. Their current status is: ${status}. 
+        Make it sound natural, slightly edgy/tactical, and invite them to join our side since they clearly carry their weight. 
+        Keep it strictly under 4 sentences. Do not use placeholder brackets like [Your Name], just leave it open-ended or sign off as "Leadership".`;
+
+        const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+        
+        const aiData = await aiRes.json();
+        if (aiData.error) throw new Error("Gemini API Error: " + aiData.error.message);
+
+        const message = aiData.candidates[0].content.parts[0].text;
+        res.json({ success: true, message: message.trim() });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to generate AI message." });
     }
 });
 
