@@ -56,12 +56,20 @@
             <button onclick="calculatePayout()">Calculate Split</button>
         </div>
 
-        <div id="error-msg" style="color: var(--red); text-align: center; margin-bottom: 20px;"></div>
+        <div id="error-msg" style="color: var(--red); text-align: center; margin-bottom: 20px; font-weight:bold;"></div>
 
         <div id="summary-box" class="summary-box">
             <h3>Total Est. Cache Value</h3>
             <div class="big-money" id="total-pool">$0</div>
-            <p style="color: var(--text-dim); font-size: 0.9em; margin-top: 10px;">Payouts below are calculated proportionally based on each member's total war score.</p>
+            
+            <div style="margin-top:15px; display:flex; justify-content:center; gap:20px; font-size: 1.1em; font-weight:bold;">
+                <span style="color:var(--blue);">💎 Points: <span id="reward-points">0</span></span>
+                <span style="color:var(--gold);">✊ Respect: <span id="reward-respect">0</span></span>
+            </div>
+            
+            <div id="caches-list" style="margin-top:10px; color:var(--text-dim); font-size:0.95em; font-weight:bold;"></div>
+            
+            <p style="color: var(--text-dim); font-size: 0.85em; margin-top: 15px; border-top: 1px solid #2f3542; padding-top: 15px;">Payouts below are calculated proportionally based on each member's total war score.</p>
         </div>
 
         <table id="payout-table">
@@ -81,7 +89,6 @@
 <script>
     const myKey = localStorage.getItem("warboard_apikey");
 
-    // Auto-fetch the war list on page load
     async function fetchWarList() {
         if (!myKey) {
             document.getElementById("error-msg").innerText = "Please set your API key on the Live Warboard settings first.";
@@ -93,7 +100,8 @@
             const select = document.getElementById("report-id");
             
             if (data.error) {
-                select.innerHTML = `<option value="">Error: ${data.error}</option>`;
+                select.innerHTML = `<option value="">API Error: Check Key Permissions</option>`;
+                document.getElementById("error-msg").innerText = "Torn API Error: " + data.error;
                 return;
             }
 
@@ -105,7 +113,7 @@
                 });
                 select.innerHTML = html;
             } else {
-                select.innerHTML = `<option value="">No recent ranked wars found</option>`;
+                select.innerHTML = `<option value="">No recent completed ranked wars found</option>`;
             }
         } catch (e) {
             document.getElementById("report-id").innerHTML = `<option value="">Failed to load wars</option>`;
@@ -137,9 +145,16 @@
 
             if (data.error) throw new Error(data.error);
 
+            // Populate Summary Box
             const totalValue = data.rewards.totalCacheValue || 0;
             document.getElementById("total-pool").innerText = "$" + totalValue.toLocaleString();
+            document.getElementById("reward-points").innerText = (data.rewards.points || 0).toLocaleString();
+            document.getElementById("reward-respect").innerText = (data.rewards.respect || 0).toLocaleString();
             
+            let cachesText = data.rewards.caches.map(c => `${c.quantity}x ${c.name}`).join(" | ");
+            document.getElementById("caches-list").innerText = cachesText ? `Caches Won: ${cachesText}` : "No caches won.";
+            
+            // Calculate Splits
             let totalFactionScore = 0;
             data.members.forEach(m => totalFactionScore += m.score);
 
