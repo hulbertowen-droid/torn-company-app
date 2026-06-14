@@ -109,7 +109,6 @@
             renderLoans(data.loans, data.members, data.armoryError);
         } catch (e) {
             console.error(e);
-            // This exposes the exact error so it doesn't just say "Failed to connect" anymore
             document.getElementById("activity-list").innerHTML = `<tr><td colspan="3" style="color:var(--red);">API Error: ${e.message}</td></tr>`;
         }
     }
@@ -155,10 +154,10 @@
             html = `<tr><td colspan="3" style="color:var(--text-dim);">No items currently loaned out.</td></tr>`;
         } else {
             loans.forEach(loan => {
-                const borrower = members[loan.loaned_to] ? members[loan.loaned_to].name : "Unknown";
+                const borrower = members[loan.loaned_to] ? members[loan.loaned_to].name : "Unknown Player [" + loan.loaned_to + "]";
                 html += `<tr>
                     <td style="font-weight:bold; color:var(--gold);">${loan.name}</td>
-                    <td>${borrower} [${loan.loaned_to}]</td>
+                    <td>${borrower}</td>
                     <td>${loan.type}</td>
                 </tr>`;
             });
@@ -174,17 +173,15 @@
             const res = await fetch(`/api/ai-analyze?apiKey=${myKey}`, { method: 'POST' });
             const data = await res.json();
             
-            if (data.error) {
-                term.innerHTML = `<span style="color: var(--red);">[ERROR] ${data.error}</span>`;
-                return;
-            }
+            if (data.error) throw new Error(data.error);
 
             let formattedText = data.analysis.replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--blue);">$1</strong>');
             formattedText = formattedText.replace(/\n/g, '<br>');
             
             term.innerHTML = `<span style="color: var(--text-main);">${formattedText}</span>`;
         } catch (e) {
-            term.innerHTML = `<span style="color: var(--red);">[ERROR] Connection to AI server failed. Check your GEMINI_API_KEY on the backend.</span>`;
+            // This now explicitly prints the backend error string inside the terminal window
+            term.innerHTML = `<span style="color: var(--red);">[ERROR] ${e.message}</span>`;
         }
     }
 </script>
