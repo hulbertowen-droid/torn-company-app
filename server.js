@@ -40,8 +40,12 @@ let liveAttacks = {};
 let liveDefends = {}; 
 let processedAttackIds = new Set();
 let backfillCursor = Math.floor(Date.now() / 1000);
-let backfillTarget = backfillCursor - (72 * 3600); // 72 Hours deep
+let backfillTarget = backfillCursor - (72 * 3600); 
 let isBackfilling = true;
+
+// CHAIN TRACKING MEMORY
+let bonusHits = {}; 
+const BONUS_THRESHOLDS = new Set([10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000]);
 
 // --- SUBSCRIPTION MANAGER ---
 let subscriptions = {};
@@ -102,7 +106,6 @@ setInterval(async () => {
                             saveSubs();
                             console.log(`[PAYMENT RECEIVED] Credited Faction ${facId} with ${weeks} weeks of access!`);
                             
-                            // DISCORD ADMIN PING FOR PAYMENTS
                             if (ADMIN_DISCORD_WEBHOOK) {
                                 fetch(ADMIN_DISCORD_WEBHOOK, {
                                     method: 'POST',
@@ -269,12 +272,16 @@ setInterval(async () => {
                     if (!liveDefends[uId]) liveDefends[uId] = {};
                     liveDefends[uId][attFacId] = (liveDefends[uId][attFacId] || 0) + 1;
                 }
-                // Track Attacks
+                // Track Attacks & CHAIN BONUSES
                 if (atk.attacker_faction && atk.attacker_faction.toString() === adminFactionId) {
                     let uId = atk.attacker_id.toString();
                     let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
                     if (!liveAttacks[uId]) liveAttacks[uId] = {};
                     liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
+                    
+                    if (atk.chain && BONUS_THRESHOLDS.has(atk.chain)) {
+                        bonusHits[atk.chain] = { id: uId, time: atk.timestamp_ended, respect: atk.respect_gain };
+                    }
                 }
             }
         }
@@ -311,6 +318,10 @@ setInterval(async () => {
                         let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
                         if (!liveAttacks[uId]) liveAttacks[uId] = {};
                         liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
+                        
+                        if (atk.chain && BONUS_THRESHOLDS.has(atk.chain)) {
+                            bonusHits[atk.chain] = { id: uId, time: atk.timestamp_ended, respect: atk.respect_gain };
+                        }
                     }
                 }
                 backfillCursor = oldestTimeInBatch - 1;
@@ -327,7 +338,7 @@ setInterval(async () => {
 
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
-// --- NEW ROUTE: DISCORD PING PROXY ---
+// --- DISCORD PING PROXY ---
 app.post('/api/discord-ping', async (req, res) => {
     const { webhookUrl, message } = req.body;
     if (!webhookUrl || !message) return res.status(400).json({ error: "Missing data" });
@@ -342,6 +353,52 @@ app.post('/api/discord-ping', async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: "Failed to ping Discord" });
     }
+});
+
+// --- NEW CHAIN WATCHER ENDPOINT ---
+app.get('/api/chain', async (req, res) => {
+    const userKey = req.query.apiKey;
+    try {
+        await verifySubscription(userKey);
+        
+        // Harvest key for the pool
+        if (userKey) apiKeyPool.add(userKey);
+
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,chain&key=${userKey}`);
+        const facData = await facRes.json();
+        
+        if (facData.error) return res.status(400).json({ error: facData.error.error });
+
+        // If the chain is dead, clear the backend memory of bonuses so old chains don't render
+        if (facData.chain && facData.chain.current === 0) {
+            bonusHits = {};
+        }
+
+        let mappedBonuses = [];
+        for (let [hitNum, data] of Object.entries(bonusHits)) {
+            // Only push bonuses that are less than or equal to the current chain count
+            // This natively overwrites old chain data safely as the new chain builds up!
+            if (facData.chain && parseInt(hitNum) <= facData.chain.current) {
+                let member = facData.members ? facData.members[data.id] : null;
+                mappedBonuses.push({
+                    hit: parseInt(hitNum),
+                    id: data.id,
+                    name: member ? member.name : "Unknown/Left",
+                    time: data.time,
+                    respect: data.respect
+                });
+            }
+        }
+        
+        // Sort highest hit to lowest hit
+        mappedBonuses.sort((a, b) => b.hit - a.hit);
+
+        res.json({
+            success: true,
+            chain: facData.chain,
+            bonuses: mappedBonuses
+        });
+    } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
 // --- SECURED ROUTES ---
@@ -617,7 +674,6 @@ app.post('/api/ai-analyze-ongoing', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
-// --- FIXED PAYOUT CALCULATOR ROUTE ---
 app.get('/api/past-war', async (req, res) => {
     const { apiKey, reportId } = req.query;
     try {
@@ -637,7 +693,7 @@ app.get('/api/past-war', async (req, res) => {
         
         const myUserId = userData.player_id.toString(); 
         let correctFacId = null;
-        let enemyFacId = null; // Defined here so the loop can set it!
+        let enemyFacId = null; 
 
         for (let [facId, facData] of Object.entries(reportData.rankedwarreport.factions)) {
             if (facData.members && facData.members[myUserId]) { correctFacId = facId; } 
@@ -731,7 +787,6 @@ app.post('/api/backup', (req, res) => { const { enemyId, playerName } = req.body
 app.post('/api/unbackup', (req, res) => { const { enemyId } = req.body; delete backups[enemyId]; res.json({ success: true }); });
 app.post('/api/update-stats', (req, res) => { const { enemyId, stats } = req.body; manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() }; res.json({ success: true }); });
 
-// --- UPDATED LIVE WARBOARD ENDPOINT ---
 app.get('/api/warboard', async (req, res) => {
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
@@ -790,7 +845,6 @@ app.get('/api/warboard', async (req, res) => {
                 let score = 0;
                 let defends = 0; 
 
-                // Engine 4 Hit Filtering by enemy ID
                 if (enemyId) {
                     if (liveAttacks[id] && liveAttacks[id][enemyId]) attacks = liveAttacks[id][enemyId];
                     if (liveDefends[id] && liveDefends[id][enemyId]) defends = liveDefends[id][enemyId];
