@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
 require('dotenv').config();
 
 const app = express();
@@ -11,6 +12,7 @@ const PORT = process.env.PORT || 3000;
 const TORN_API_KEY = process.env.TORN_API_KEY;
 const FF_SCOUTER_KEY = process.env.FF_SCOUTER_KEY || "";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+const ADMIN_API_KEY = process.env.ADMIN_API_KEY || "";
 
 let claims = {};
 let backups = {}; 
@@ -26,6 +28,99 @@ let activityQueue = [];
 let isProcessingStats = false;
 let isProcessingFlights = false;
 let isProcessingActivity = false;
+
+// --- SUBSCRIPTION MANAGER ---
+let subscriptions = {};
+let adminFactionId = null;
+let lastEventTimestamp = Math.floor(Date.now() / 1000);
+
+// Load existing subs from file so they survive server restarts
+try {
+    if (fs.existsSync('subscriptions.json')) {
+        subscriptions = JSON.parse(fs.readFileSync('subscriptions.json'));
+    }
+} catch (e) { console.error("Could not load subscriptions file", e); }
+
+function saveSubs() {
+    fs.writeFileSync('subscriptions.json', JSON.stringify(subscriptions));
+}
+
+// Fetch Admin's Faction ID on startup so Owen's team gets free access
+if (ADMIN_API_KEY) {
+    fetch(`https://api.torn.com/user/?selections=profile&key=${ADMIN_API_KEY}`)
+        .then(r => r.json())
+        .then(d => { if (d.faction) adminFactionId = d.faction.faction_id; })
+        .catch(e => console.error("Failed to load admin profile"));
+}
+
+// The Automated Xanax Payment Gateway
+setInterval(async () => {
+    if (!ADMIN_API_KEY) return;
+    try {
+        const res = await fetch(`https://api.torn.com/user/?selections=events&key=${ADMIN_API_KEY}`);
+        const data = await res.json();
+        if (!data.events) return;
+
+        let events = Object.entries(data.events).map(([id, ev]) => ({ id, ...ev }));
+        events.sort((a, b) => a.timestamp - b.timestamp);
+
+        for (let ev of events) {
+            if (ev.timestamp <= lastEventTimestamp) continue;
+            lastEventTimestamp = ev.timestamp;
+
+            const text = ev.event;
+            // Look for Xanax deliveries in the event log
+            if (text.toLowerCase().includes('sent you') && text.toLowerCase().includes('xanax')) {
+                const qtyMatch = text.match(/(\d+)\s*[xX]\s*Xanax/i) || text.match(/Xanax\s*[xX]\s*(\d+)/i);
+                let qty = qtyMatch ? parseInt(qtyMatch[1]) : 1;
+                const idMatch = text.match(/XID=(\d+)/);
+
+                if (idMatch) {
+                    let senderId = idMatch[1];
+                    let weeks = Math.floor(qty / 5);
+
+                    if (weeks > 0) {
+                        const senderRes = await fetch(`https://api.torn.com/user/${senderId}?selections=profile&key=${ADMIN_API_KEY}`);
+                        const senderData = await senderRes.json();
+                        const facId = senderData.faction?.faction_id;
+
+                        if (facId && facId !== 0) {
+                            let now = Date.now();
+                            if (!subscriptions[facId] || subscriptions[facId] < now) subscriptions[facId] = now;
+                            
+                            // Add 7 days per 5 Xanax
+                            subscriptions[facId] += weeks * 7 * 24 * 60 * 60 * 1000;
+                            saveSubs();
+                            console.log(`[PAYMENT RECEIVED] Credited Faction ${facId} with ${weeks} weeks of access!`);
+                        }
+                    }
+                }
+            }
+        }
+    } catch (err) { console.error("Event Poller Error:", err); }
+}, 60000); // Checks for new payments every 60 seconds
+
+// Gatekeeper Function
+async function verifySubscription(userKey) {
+    if (!userKey) throw new Error("No API Key provided.");
+    if (ADMIN_API_KEY && userKey === ADMIN_API_KEY) return true; // Admin override
+
+    const res = await fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`);
+    const data = await res.json();
+    if (data.error) throw new Error("Invalid API Key.");
+
+    const facId = data.faction?.faction_id;
+    if (!facId || facId === 0) throw new Error("You must be in a faction to use these tools.");
+
+    // Admin's faction gets a free pass
+    if (adminFactionId && facId === adminFactionId) return true;
+
+    // Check if their faction has paid
+    if (subscriptions[facId] && subscriptions[facId] > Date.now()) return true;
+
+    throw new Error(`SUBSCRIPTION REQUIRED: Your faction's access has expired or is not active. Send 5x Xanax to Owen777 [3776908] to instantly unlock access for your entire faction for 1 week!`);
+}
+
 
 function computeWarIntel(p, cache = {}) {
     let score = 0;
@@ -137,10 +232,12 @@ setInterval(async () => {
 
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
+// --- SECURED ROUTES ---
 app.get('/api/war-list', async (req, res) => {
     const userKey = req.query.apiKey;
-    if (!userKey) return res.status(400).json({ error: "Missing API Key" });
     try {
+        await verifySubscription(userKey);
+        
         const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`);
         const facData = await facRes.json();
         if (facData.error) return res.status(400).json({ error: facData.error.error });
@@ -158,14 +255,14 @@ app.get('/api/war-list', async (req, res) => {
         }
         wars.sort((a, b) => b.start - a.start);
         res.json({ success: true, wars });
-    } catch (err) { res.status(500).json({ error: "Failed to fetch war list" }); }
+    } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
 app.get('/api/dashboard-data', async (req, res) => {
     const userKey = req.query.apiKey;
-    if (!userKey) return res.status(400).json({ error: "Missing API Key" });
-
     try {
+        await verifySubscription(userKey);
+
         const basicResp = await fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`);
         const basicData = await basicResp.json();
         if (basicData.error) return res.status(400).json({ error: basicData.error.error });
@@ -209,15 +306,14 @@ app.get('/api/dashboard-data', async (req, res) => {
         }
 
         res.json({ success: true, members: parsedMembers, loans: loans, armoryError });
-    } catch (err) { res.status(500).json({ error: "Failed to fetch dashboard data." }); }
+    } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
-// --- ENHANCED RECRUITMENT SCANNER ---
 app.get('/api/scan-recruits', async (req, res) => {
     const { apiKey, reportId } = req.query;
-    if (!apiKey || !reportId) return res.status(400).json({ error: "Missing API Key or Report ID" });
-
     try {
+        await verifySubscription(apiKey);
+
         const userRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${apiKey}`);
         const userData = await userRes.json();
         if (userData.error) return res.status(400).json({ error: "Invalid API Key." });
@@ -250,7 +346,6 @@ app.get('/api/scan-recruits', async (req, res) => {
 
         for (let [id, m] of Object.entries(enemyWarData.members || {})) {
             if (m.score > 200 || m.attacks > 10) {
-                // Throw recruit into the FFScouter queue so we can get their stats
                 if (!statQueue.includes(id) && !statsCache[id]) statQueue.push(id);
 
                 let currentStatus = "Factionless / Left";
@@ -261,7 +356,6 @@ app.get('/api/scan-recruits', async (req, res) => {
                 if (currentRoster[id]) {
                     position = currentRoster[id].position;
                     daysInFaction = currentRoster[id].days_in_faction;
-                    
                     const role = position.toLowerCase();
                     if (role.includes('leader') || role.includes('co-leader') || role.includes('management') || role.includes('council')) {
                         isPoachable = false; 
@@ -285,12 +379,9 @@ app.get('/api/scan-recruits', async (req, res) => {
         potentialRecruits.sort((a, b) => b.score - a.score);
         res.json({ success: true, recruits: potentialRecruits, enemyName: enemyWarData.name });
 
-    } catch (err) {
-        res.status(500).json({ error: "Server error scanning for recruits." });
-    }
+    } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
-// --- UPDATED AI RECRUITMENT MESSAGE DRAFTER (NO GLAZING) ---
 app.post('/api/generate-recruit-msg', async (req, res) => {
     const { playerName, score, attacks, status } = req.body;
     if (!GEMINI_API_KEY) return res.status(400).json({ error: "Server missing GEMINI_API_KEY." });
@@ -311,18 +402,15 @@ app.post('/api/generate-recruit-msg', async (req, res) => {
 
         const message = aiData.candidates[0].content.parts[0].text;
         res.json({ success: true, message: message.trim() });
-    } catch (err) {
-        res.status(500).json({ error: "Failed to generate AI message." });
-    }
+    } catch (err) { res.status(500).json({ error: "Failed to generate AI message." }); }
 });
 
-// --- AI ANALYSTS ---
 app.post('/api/ai-analyze', async (req, res) => {
     const userKey = req.query.apiKey;
     if (!GEMINI_API_KEY) return res.status(400).json({ error: "Server missing GEMINI_API_KEY in environment variables." });
-    if (!userKey) return res.status(400).json({ error: "Missing Torn API Key" });
-
     try {
+        await verifySubscription(userKey);
+
         const [facRes, userRes] = await Promise.all([
             fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`).then(r => r.json()),
             fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`).then(r => r.json())
@@ -369,15 +457,15 @@ app.post('/api/ai-analyze', async (req, res) => {
 
         const analysis = aiData.candidates[0].content.parts[0].text;
         res.json({ success: true, analysis });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
 app.post('/api/ai-analyze-ongoing', async (req, res) => {
     const userKey = req.query.apiKey;
     if (!GEMINI_API_KEY) return res.status(400).json({ error: "Server missing GEMINI_API_KEY in environment variables." });
-    if (!userKey) return res.status(400).json({ error: "Missing Torn API Key" });
-
     try {
+        await verifySubscription(userKey);
+
         const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`).then(r => r.json());
         if (facRes.error) throw new Error("Torn API Error: " + facRes.error.error);
 
@@ -417,14 +505,14 @@ app.post('/api/ai-analyze-ongoing', async (req, res) => {
 
         const analysis = aiData.candidates[0].content.parts[0].text;
         res.json({ success: true, analysis });
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
-// --- PAYOUT & WARBOARD ---
 app.get('/api/past-war', async (req, res) => {
     const { apiKey, reportId } = req.query;
-    if (!apiKey || !reportId) return res.status(400).json({ error: "Missing API Key or Report ID" });
     try {
+        await verifySubscription(apiKey);
+
         const [userRes, reportRes, itemsRes] = await Promise.all([
             fetch(`https://api.torn.com/user/?selections=profile&key=${apiKey}`),
             fetch(`https://api.torn.com/torn/${reportId}?selections=rankedwarreport&key=${apiKey}`),
@@ -456,7 +544,7 @@ app.get('/api/past-war', async (req, res) => {
         }
         formattedMembers.sort((a, b) => b.score - a.score);
         res.json({ success: true, members: formattedMembers, rewards: { totalCacheValue: totalCacheValue, caches: cachesWon, points: myFactionWarData.rewards?.points || 0, respect: myFactionWarData.rewards?.respect || 0 } });
-    } catch (err) { res.status(500).json({ error: "Server error fetching past war data." }); }
+    } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
 app.post('/api/claim', (req, res) => { const { enemyId, playerName } = req.body; claims[enemyId] = { playerName, time: Date.now() }; res.json({ success: true }); });
@@ -468,8 +556,9 @@ app.post('/api/update-stats', (req, res) => { const { enemyId, stats } = req.bod
 app.get('/api/warboard', async (req, res) => {
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
+        await verifySubscription(userKey);
+
         let enemyId = req.query.enemyFaction && req.query.enemyFaction !== "null" && req.query.enemyFaction !== "" ? req.query.enemyFaction : null;
-        if (!userKey) return res.status(400).json({ error: "No API Key provided" });
         let [myData, enemyDataResult] = await Promise.all([
             fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })),
             enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} })
@@ -500,7 +589,7 @@ app.get('/api/warboard', async (req, res) => {
             });
         };
         res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId });
-    } catch (err) { res.status(500).json({ error: "warboard failed" }); }
+    } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
