@@ -212,7 +212,7 @@ app.get('/api/dashboard-data', async (req, res) => {
     } catch (err) { res.status(500).json({ error: "Failed to fetch dashboard data." }); }
 });
 
-// --- RECRUITMENT SCANNER ---
+// --- ENHANCED RECRUITMENT SCANNER ---
 app.get('/api/scan-recruits', async (req, res) => {
     const { apiKey, reportId } = req.query;
     if (!apiKey || !reportId) return res.status(400).json({ error: "Missing API Key or Report ID" });
@@ -250,7 +250,10 @@ app.get('/api/scan-recruits', async (req, res) => {
 
         for (let [id, m] of Object.entries(enemyWarData.members || {})) {
             if (m.score > 200 || m.attacks > 10) {
-                let currentStatus = "Left Faction";
+                // Throw recruit into the FFScouter queue so we can get their stats
+                if (!statQueue.includes(id) && !statsCache[id]) statQueue.push(id);
+
+                let currentStatus = "Factionless / Left";
                 let position = "None";
                 let daysInFaction = 0;
                 let isPoachable = true;
@@ -268,9 +271,12 @@ app.get('/api/scan-recruits', async (req, res) => {
                 }
 
                 if (isPoachable) {
+                    let efficiency = m.attacks > 0 ? (m.score / m.attacks).toFixed(1) : 0;
+                    let est = statsCache[id] ? statsCache[id].stats : "Scanning...";
+
                     potentialRecruits.push({
-                        id, name: m.name, score: m.score, attacks: m.attacks,
-                        status: currentStatus, days: daysInFaction, stillInFaction: !!currentRoster[id]
+                        id, name: m.name, score: m.score, attacks: m.attacks, efficiency: efficiency,
+                        status: currentStatus, days: daysInFaction, stillInFaction: !!currentRoster[id], estStats: est
                     });
                 }
             }
@@ -284,16 +290,17 @@ app.get('/api/scan-recruits', async (req, res) => {
     }
 });
 
-// --- AI RECRUITMENT MESSAGE DRAFTER ---
+// --- UPDATED AI RECRUITMENT MESSAGE DRAFTER (NO GLAZING) ---
 app.post('/api/generate-recruit-msg', async (req, res) => {
     const { playerName, score, attacks, status } = req.body;
     if (!GEMINI_API_KEY) return res.status(400).json({ error: "Server missing GEMINI_API_KEY." });
 
     try {
-        const prompt = `You are a recruiter for a top-tier gaming faction in Torn City. Write a short, personalized, and engaging recruitment DM to a player named ${playerName}. 
-        Context: They recently fought against us in a Ranked War, making ${attacks} attacks and scoring ${score} points. They are a heavy hitter. Their current status is: ${status}. 
-        Make it sound natural, slightly edgy/tactical, and invite them to join our side since they clearly carry their weight. 
-        Keep it strictly under 4 sentences. Do not use placeholder brackets like [Your Name], just leave it open-ended or sign off as "Leadership".`;
+        const prompt = `You are a recruiter for a tactical gaming faction in Torn City. Write a direct, straightforward, and professional DM to a player named ${playerName}. 
+        Context: They recently fought against us in a Ranked War, making ${attacks} attacks and scoring ${score} points. Their current status is: ${status}. 
+        CRITICAL RULES: Do NOT flatter them excessively. Do NOT 'glaze' them or sound desperate. 
+        State the facts: we saw their solid performance, we are recruiting capable hitters, and ask if they are open to joining our team. 
+        Be concise, serious, and no-nonsense. Maximum 3 sentences. Do not use placeholder brackets like [Your Name].`;
 
         const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
