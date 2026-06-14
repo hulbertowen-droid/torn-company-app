@@ -13,6 +13,11 @@
         
         body { background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px; }
         
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #57606f; }
+
         .top-nav { display: flex; justify-content: center; gap: 20px; max-width: 1200px; margin: 0 auto 20px auto; background: var(--card); padding: 12px; border-radius: 10px; border: 1px solid #2f3542; }
         .nav-link { color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 6px 12px; border-radius: 6px; transition: 0.2s; text-transform: uppercase; font-size: 0.9em; letter-spacing: 1px; cursor: pointer; }
         .nav-link:hover { background: #2f3542; color: white; }
@@ -26,9 +31,6 @@
         .watchlist-box { grid-column: 1 / -1; background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542; }
         .watchlist-box h3 { margin: 0 0 15px 0; color: var(--red); display: flex; align-items: center; gap: 10px; text-transform: uppercase; letter-spacing: 1px; }
         .watchlist-items { display: flex; gap: 15px; overflow-x: auto; padding-bottom: 10px; }
-        .watchlist-items::-webkit-scrollbar { height: 8px; }
-        .watchlist-items::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
-        .watchlist-items::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
         
         .watch-card { background: #0b0d13; border: 1px solid #2f3542; padding: 12px 18px; border-radius: 8px; min-width: 240px; flex-shrink: 0; }
         .watch-card.online { border-color: var(--green); background: rgba(46, 213, 115, 0.05); }
@@ -39,8 +41,14 @@
         .watch-highlight { font-weight: bold; font-size: 0.95em; margin-bottom: 2px; }
 
         /* Faction Columns */
-        .faction-col { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #2f3542; }
-        .faction-col h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; display: flex; justify-content: space-between;}
+        .faction-col { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #2f3542; display: flex; flex-direction: column;}
+        .faction-col h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center;}
+
+        /* Target Filters */
+        .filter-group { display: flex; gap: 8px; margin-bottom: 15px; }
+        .btn-filter { background: #0b0d13; color: var(--text-dim); border: 1px solid #2f3542; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold; transition: 0.2s; }
+        .btn-filter:hover { background: #2f3542; color: white; }
+        .btn-filter.active { background: rgba(88, 166, 255, 0.15); border-color: var(--blue); color: white; }
 
         .member-card { background: #0b0d13; border: 1px solid #2f3542; padding: 15px; border-radius: 10px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; transition: 0.2s; }
         .member-card:hover { border-color: #57606f; }
@@ -91,6 +99,7 @@
         .close-btn { position: absolute; right: 20px; top: 20px; color: var(--text-dim); cursor: pointer; font-size: 1.5em; line-height: 1; }
         .close-btn:hover { color: white; }
         
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes fadeOut { to { opacity: 0; transform: translateX(100%); } }
         @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
@@ -121,7 +130,15 @@
         </div>
         
         <div class="faction-col">
-            <h2>Enemy Targets <span id="enemy-count" style="color:var(--text-dim); font-size: 0.6em;">0</span></h2>
+            <h2>
+                Enemy Targets <span id="enemy-count" style="color:var(--text-dim); font-size: 0.6em;">0</span>
+            </h2>
+            <div class="filter-group">
+                <button id="flt-all" class="btn-filter active" onclick="setEnemyFilter('All')">ALL</button>
+                <button id="flt-online" class="btn-filter" onclick="setEnemyFilter('Online')">ONLINE</button>
+                <button id="flt-okay" class="btn-filter" onclick="setEnemyFilter('Okay')">OKAY (OUT Hosp)</button>
+                <button id="flt-flying" class="btn-filter" onclick="setEnemyFilter('Flying')">FLYING</button>
+            </div>
             <div id="enemy-list"><div style="color:var(--text-dim); padding:20px;">Waiting for API key...</div></div>
         </div>
     </div>
@@ -195,6 +212,8 @@ let refreshRate = parseInt(localStorage.getItem("warboard_refresh")) || 5;
 
 let knownEnemies = {}; 
 let fetchTimer = null;
+let currentEnemyData = []; // Store globally for filter re-renders
+let activeFilter = 'All';
 
 document.getElementById("api-key").value = myKey;
 document.getElementById("enemy-id").value = enemyFacId;
@@ -264,6 +283,19 @@ function sortPlayersList(players, isEnemy) {
     });
 }
 
+function setEnemyFilter(filterType) {
+    activeFilter = filterType;
+    document.getElementById('flt-all').className = "btn-filter";
+    document.getElementById('flt-online').className = "btn-filter";
+    document.getElementById('flt-okay').className = "btn-filter";
+    document.getElementById('flt-flying').className = "btn-filter";
+    document.getElementById('flt-' + filterType.toLowerCase()).className = "btn-filter active";
+    
+    if (currentEnemyData.length > 0) {
+        renderEnemyList(currentEnemyData);
+    }
+}
+
 async function fetchWarboard() {
     if (!myKey) return;
     try {
@@ -284,8 +316,8 @@ async function fetchWarboard() {
         const sortedFriendly = sortPlayersList(data.friendly, false);
         renderFriendlyList(sortedFriendly);
         
-        const sortedEnemies = sortPlayersList(data.enemy, true);
-        renderEnemyList(sortedEnemies);
+        currentEnemyData = sortPlayersList(data.enemy, true);
+        renderEnemyList(currentEnemyData);
 
     } catch (e) { console.error("Failed to load warboard", e); }
 }
@@ -439,7 +471,17 @@ function renderFriendlyList(players) {
 function renderEnemyList(players) {
     const now = Math.floor(Date.now() / 1000);
     let html = "";
-    players.forEach(p => {
+    
+    // Apply Active Filter
+    const filteredPlayers = players.filter(p => {
+        if (activeFilter === 'All') return true;
+        if (activeFilter === 'Online' && p.onlineStatus === 'Online') return true;
+        if (activeFilter === 'Okay' && p.state === 'Okay') return true;
+        if (activeFilter === 'Flying' && checkIsFlying(p)) return true;
+        return false;
+    });
+
+    filteredPlayers.forEach(p => {
         let stateClass = "okay";
         if (p.state === "Hospital" || p.state === "Jail") stateClass = "hospital";
         
@@ -500,7 +542,12 @@ function renderEnemyList(players) {
             </div>
         `;
     });
-    document.getElementById("enemy-list").innerHTML = html || "<div style='color:var(--text-dim); padding:10px;'>No targets found.</div>";
+    
+    if (filteredPlayers.length === 0) {
+        document.getElementById("enemy-list").innerHTML = `<div style='color:var(--text-dim); padding:10px;'>No targets match the "${activeFilter}" filter.</div>`;
+    } else {
+        document.getElementById("enemy-list").innerHTML = html;
+    }
 }
 
 async function claimTarget(id) { await fetch('/api/claim', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); fetchWarboard(); }
