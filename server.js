@@ -13,7 +13,7 @@ const TORN_API_KEY = process.env.TORN_API_KEY;
 const FF_SCOUTER_KEY = process.env.FF_SCOUTER_KEY || "";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || "";
-const ADMIN_DISCORD_WEBHOOK = process.env.ADMIN_DISCORD_WEBHOOK || ""; // New Admin Webhook
+const ADMIN_DISCORD_WEBHOOK = process.env.ADMIN_DISCORD_WEBHOOK || ""; 
 
 let claims = {};
 let backups = {}; 
@@ -262,12 +262,14 @@ setInterval(async () => {
                 if (processedAttackIds.has(atkId)) continue;
                 processedAttackIds.add(atkId);
                 
+                // Track Defends
                 if (atk.defender_faction && atk.defender_faction.toString() === adminFactionId) {
                     let uId = atk.defender_id.toString();
                     let attFacId = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
                     if (!liveDefends[uId]) liveDefends[uId] = {};
                     liveDefends[uId][attFacId] = (liveDefends[uId][attFacId] || 0) + 1;
                 }
+                // Track Attacks
                 if (atk.attacker_faction && atk.attacker_faction.toString() === adminFactionId) {
                     let uId = atk.attacker_id.toString();
                     let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
@@ -615,6 +617,7 @@ app.post('/api/ai-analyze-ongoing', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
+// --- FIXED PAYOUT CALCULATOR ROUTE ---
 app.get('/api/past-war', async (req, res) => {
     const { apiKey, reportId } = req.query;
     try {
@@ -625,14 +628,27 @@ app.get('/api/past-war', async (req, res) => {
             fetch(`https://api.torn.com/torn/${reportId}?selections=rankedwarreport&key=${apiKey}`),
             fetch(`https://api.torn.com/torn/?selections=items&key=${apiKey}`)
         ]);
-        const userData = await userRes.json(); const reportData = await reportRes.json(); const itemsData = await itemsRes.json();
+        const userData = await userRes.json(); 
+        const reportData = await reportRes.json(); 
+        const itemsData = await itemsRes.json();
+        
         if (userData.error) return res.status(400).json({ error: "Invalid API Key." });
         if (reportData.error) return res.status(400).json({ error: "Torn API Error: " + reportData.error.error });
-        const myUserId = userData.player_id.toString(); let correctFacId = null;
+        
+        const myUserId = userData.player_id.toString(); 
+        let correctFacId = null;
+        let enemyFacId = null; // Defined here so the loop can set it!
+
         for (let [facId, facData] of Object.entries(reportData.rankedwarreport.factions)) {
-            if (facData.members && facData.members[myUserId]) { correctFacId = facId; break; }
+            if (facData.members && facData.members[myUserId]) { correctFacId = facId; } 
+            else { enemyFacId = facId; }
         }
-        if (!correctFacId) correctFacId = userData.faction?.faction_id?.toString();
+        
+        if (!correctFacId) {
+            correctFacId = userData.faction?.faction_id?.toString();
+            enemyFacId = Object.keys(reportData.rankedwarreport.factions).find(id => id !== correctFacId);
+        }
+
         const myFactionWarData = reportData.rankedwarreport.factions[correctFacId];
         if (!myFactionWarData) return res.status(400).json({ error: "Your faction was not part of this Ranked War Report." });
         
@@ -774,6 +790,7 @@ app.get('/api/warboard', async (req, res) => {
                 let score = 0;
                 let defends = 0; 
 
+                // Engine 4 Hit Filtering by enemy ID
                 if (enemyId) {
                     if (liveAttacks[id] && liveAttacks[id][enemyId]) attacks = liveAttacks[id][enemyId];
                     if (liveDefends[id] && liveDefends[id][enemyId]) defends = liveDefends[id][enemyId];
