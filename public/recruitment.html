@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recruitment | Spider-Verse</title>
+    <style>
+        :root { 
+            --bg: #090a0f; --card: #11141d; --item: #1b202e; 
+            --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
+            --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
+        }
+        body { background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px; }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #57606f; }
+
+        .top-nav { display: flex; justify-content: center; gap: 20px; max-width: 1200px; margin: 0 auto 20px auto; background: var(--card); padding: 12px; border-radius: 10px; border: 1px solid #2f3542; }
+        .nav-link { color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 6px 12px; border-radius: 6px; transition: 0.2s; text-transform: uppercase; font-size: 0.9em; letter-spacing: 1px; cursor: pointer; }
+        .nav-link:hover { background: #2f3542; color: white; }
+        .nav-link.active { color: white; background: rgba(88, 166, 255, 0.15); border: 1px solid var(--blue); }
+
+        h1 { text-align: center; color: var(--green); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
+
+        .container { max-width: 1000px; margin: 0 auto; background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; }
+        
+        .dash-card { background: #0b0d13; border: 1px solid #2f3542; padding: 20px; border-radius: 12px; margin-bottom: 20px; }
+        .dash-header { margin-top: 0; color: var(--text-dim); text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; border-bottom: 1px solid #2f3542; padding-bottom: 10px; margin-bottom: 15px; font-weight: bold; }
+        
+        #war-list-container { max-height: 250px; overflow-y: auto; padding-right: 10px; }
+
+        .war-block { background: var(--card); border: 1px solid #2f3542; padding: 15px 20px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .war-details .title { color: var(--gold); font-weight: bold; font-size: 1.1em; margin-bottom: 5px; }
+        .war-details .dates { color: var(--text-dim); font-size: 0.85em; }
+        
+        .btn-calc { background: var(--blue); color: #000; font-weight: bold; padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; transition: 0.2s; flex-shrink: 0; }
+        .btn-calc:hover { background: #79c0ff; }
+        .btn-loaded { background: #2f3542; color: var(--text-dim); cursor: default; }
+        .btn-loaded:hover { background: #2f3542; }
+        
+        .btn-msg { background: rgba(88, 166, 255, 0.15); border: 1px solid var(--blue); color: var(--blue); padding: 6px 12px; border-radius: 4px; text-decoration: none; font-size: 0.8em; font-weight: bold; transition: 0.2s; }
+        .btn-msg:hover { background: var(--blue); color: #000; }
+
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold; text-transform: uppercase; display: inline-block;}
+        .badge-gone { background: rgba(46, 213, 115, 0.15); color: var(--green); border: 1px solid var(--green); }
+        .badge-member { background: rgba(255, 165, 2, 0.15); color: var(--gold); border: 1px solid var(--gold); }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; display: none; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #2f3542; }
+        th { color: var(--green); font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+        
+        .score-val { color: var(--blue); font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="top-nav">
+        <a href="/" class="nav-link">📡 Live Warboard</a>
+        <a href="/payout.html" class="nav-link">💰 Payout Calculator</a>
+        <a href="/dashboard.html" class="nav-link">🛡️ Alliance Dashboard</a>
+        <a href="/recruitment.html" class="nav-link active">🎯 Recruitment</a>
+    </div>
+
+    <h1>Enemy Poaching Scanner</h1>
+
+    <div class="container">
+        <div id="error-msg" style="color: var(--red); font-weight: bold; margin-bottom: 15px; text-align: center;"></div>
+
+        <div class="dash-card">
+            <div class="dash-header">Select a Past War to Scan</div>
+            <div id="war-list-container">
+                <div style="color:var(--text-dim);">Loading past wars...</div>
+            </div>
+        </div>
+
+        <table id="recruit-table">
+            <thead>
+                <tr>
+                    <th>Target Player</th>
+                    <th>War Score</th>
+                    <th>Hits</th>
+                    <th>Current Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="recruit-list"></tbody>
+        </table>
+    </div>
+
+<script>
+    const myKey = localStorage.getItem("warboard_apikey");
+    let currentButtons = [];
+
+    async function fetchWarList() {
+        if (!myKey) {
+            document.getElementById("error-msg").innerText = "Please set your API key on the Live Warboard settings first.";
+            document.getElementById("war-list-container").innerHTML = "";
+            return;
+        }
+        try {
+            const res = await fetch(`/api/war-list?apiKey=${myKey}`);
+            const data = await res.json();
+            const container = document.getElementById("war-list-container");
+            
+            if (data.error) { container.innerHTML = `<div style="color:var(--red);">API Error: ${data.error}</div>`; return; }
+
+            if (data.wars && data.wars.length > 0) {
+                let html = "";
+                data.wars.forEach(w => {
+                    let dStart = new Date(w.start * 1000).toLocaleDateString();
+                    html += `
+                        <div class="war-block">
+                            <div class="war-details">
+                                <div class="title">vs ${w.enemy}</div>
+                                <div class="dates">Started: ${dStart}</div>
+                            </div>
+                            <button id="btn-${w.id}" class="btn-calc" onclick="scanRecruits('${w.id}')">Scan Enemy Faction</button>
+                        </div>
+                    `;
+                    currentButtons.push(`btn-${w.id}`);
+                });
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = `<div style="color:var(--text-dim);">No recent completed ranked wars found.</div>`;
+            }
+        } catch (e) {
+            document.getElementById("war-list-container").innerHTML = `<div style="color:var(--red);">Failed to load wars.</div>`;
+        }
+    }
+    
+    fetchWarList();
+
+    async function scanRecruits(reportId) {
+        document.getElementById("error-msg").innerText = "";
+        const table = document.getElementById("recruit-table");
+        const list = document.getElementById("recruit-list");
+        
+        currentButtons.forEach(id => {
+            const btn = document.getElementById(id);
+            if (btn) { btn.className = "btn-calc"; btn.innerText = "Scan Enemy Faction"; }
+        });
+        
+        const activeBtn = document.getElementById(`btn-${reportId}`);
+        activeBtn.innerText = "Scanning...";
+        table.style.display = "table";
+        list.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Fetching live faction data...</td></tr>`;
+
+        try {
+            const res = await fetch(`/api/scan-recruits?apiKey=${myKey}&reportId=${reportId}`);
+            const data = await res.json();
+
+            if (data.error) throw new Error(data.error);
+
+            activeBtn.className = "btn-calc btn-loaded";
+            activeBtn.innerText = "Scan Complete ✓";
+
+            if (data.recruits.length === 0) {
+                list.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">No poachable heavy-hitters found from this war.</td></tr>`;
+                return;
+            }
+
+            let html = "";
+            data.recruits.forEach(r => {
+                let badgeClass = r.stillInFaction ? "badge-member" : "badge-gone";
+                let daysText = r.stillInFaction ? ` (${r.days} Days)` : "";
+
+                html += `<tr>
+                    <td><a href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank" style="color:var(--text-main); text-decoration:none; font-weight:bold;">${r.name} [${r.id}]</a></td>
+                    <td class="score-val">${r.score}</td>
+                    <td>${r.attacks}</td>
+                    <td><span class="badge ${badgeClass}">${r.status}${daysText}</span></td>
+                    <td><a href="https://www.torn.com/messages.php?action=send&XID=${r.id}" target="_blank" class="btn-msg">✉️ Message</a></td>
+                </tr>`;
+            });
+
+            list.innerHTML = html;
+
+        } catch (e) {
+            activeBtn.innerText = "Error";
+            list.innerHTML = "";
+            table.style.display = "none";
+            document.getElementById("error-msg").innerText = "Failed to scan: " + e.message;
+        }
+    }
+</script>
+</body>
+</html>
