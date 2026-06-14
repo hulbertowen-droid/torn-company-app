@@ -57,6 +57,7 @@
     <h1>Alliance Dashboard</h1>
 
     <div class="container">
+        <!-- AI Insight Terminal -->
         <div class="dash-card ai-section">
             <h2>🧠 Gemini Tactical War Analyst <button class="btn-ai" onclick="generateAIReport()">Run Analysis on Last War</button></h2>
             <div id="ai-output" class="ai-terminal">
@@ -64,6 +65,7 @@
             </div>
         </div>
 
+        <!-- Activity Tracker -->
         <div class="dash-card">
             <h2>👤 Member Activity Tracker <span id="member-count" style="font-size: 0.6em; color: var(--text-dim);">0</span></h2>
             <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
@@ -74,6 +76,7 @@
             </div>
         </div>
 
+        <!-- Armory Loans -->
         <div class="dash-card">
             <h2>🔫 Armory Loans Tracker <span id="loan-count" style="font-size: 0.6em; color: var(--text-dim);">0</span></h2>
             <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
@@ -106,7 +109,8 @@
             renderLoans(data.loans, data.members, data.armoryError);
         } catch (e) {
             console.error(e);
-            document.getElementById("activity-list").innerHTML = `<tr><td colspan="3" style="color:var(--red);">Failed to connect to Dashboard API.</td></tr>`;
+            // This exposes the exact error so it doesn't just say "Failed to connect" anymore
+            document.getElementById("activity-list").innerHTML = `<tr><td colspan="3" style="color:var(--red);">API Error: ${e.message}</td></tr>`;
         }
     }
 
@@ -123,7 +127,7 @@
             if (m.last_action.status === "Idle") dotClass = "dot-idle";
 
             let timeDiff = now - m.last_action.timestamp;
-            let timeClass = timeDiff > 172800 ? "text-danger" : ""; // 48 hours
+            let timeClass = timeDiff > 172800 ? "text-danger" : ""; 
 
             html += `<tr>
                 <td><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-main); text-decoration:none; font-weight:bold;">${m.name} [${m.id}]</a></td>
@@ -175,7 +179,6 @@
                 return;
             }
 
-            // Convert simple markdown bolding to HTML
             let formattedText = data.analysis.replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--blue);">$1</strong>');
             formattedText = formattedText.replace(/\n/g, '<br>');
             
