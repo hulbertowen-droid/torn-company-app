@@ -37,7 +37,10 @@ if (TORN_API_KEY) apiKeyPool.add(TORN_API_KEY);
 
 let liveAttacks = {};
 let liveDefends = {}; 
-let lastScrapedAttackTime = Math.floor(Date.now() / 1000) - 86400; // Look back up to 24h for initial population
+let processedAttackIds = new Set();
+let backfillCursor = Math.floor(Date.now() / 1000);
+let backfillTarget = backfillCursor - (72 * 3600); // 72 Hours deep
+let isBackfilling = true;
 
 // --- SUBSCRIPTION MANAGER ---
 let subscriptions = {};
@@ -232,44 +235,76 @@ setInterval(async () => {
     isProcessingActivity = false;
 }, 1500); 
 
-// --- ENGINE 4: LIVE POOLED ATTACK/DEFEND SCRAPER ---
+// --- ENGINE 4: DEEP LOG BACKFILL & LIVE DELTA SCRAPER ---
+// Runs frequently to quickly chew through logs without breaking rate limits
 setInterval(async () => {
     if (apiKeyPool.size === 0 || !adminFactionId) return;
 
     const keys = Array.from(apiKeyPool);
-    const randomKey = keys[Math.floor(Math.random() * keys.length)];
-
+    
+    // 1. LIVE DELTA SCRAPE (Gets the latest hits instantly)
     try {
-        const res = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${randomKey}`);
-        const data = await res.json();
+        let liveKey = keys[Math.floor(Math.random() * keys.length)];
+        const liveRes = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${liveKey}`);
+        const liveData = await liveRes.json();
         
-        if (data.attacks) {
-            let attacksLog = Object.values(data.attacks);
-            attacksLog.sort((a, b) => a.timestamp_ended - b.timestamp_ended);
-
-            for (let atk of attacksLog) {
-                if (atk.timestamp_ended <= lastScrapedAttackTime) continue;
-                lastScrapedAttackTime = atk.timestamp_ended;
-
-                // Track Defends (Hits Received)
+        if (liveData.attacks) {
+            for (let [atkId, atk] of Object.entries(liveData.attacks)) {
+                if (processedAttackIds.has(atkId)) continue;
+                processedAttackIds.add(atkId);
+                
                 if (atk.defender_faction && atk.defender_faction.toString() === adminFactionId) {
                     let uId = atk.defender_id.toString();
-                    if (!liveDefends[uId]) liveDefends[uId] = 0;
-                    liveDefends[uId]++;
+                    liveDefends[uId] = (liveDefends[uId] || 0) + 1;
                 }
-                
-                // Track Attacks (Hits Made)
                 if (atk.attacker_faction && atk.attacker_faction.toString() === adminFactionId) {
                     let uId = atk.attacker_id.toString();
-                    if (!liveAttacks[uId]) liveAttacks[uId] = 0;
-                    liveAttacks[uId]++;
+                    liveAttacks[uId] = (liveAttacks[uId] || 0) + 1;
                 }
             }
         }
-    } catch (err) {
-        console.error("Engine 4 Defend Scraper Error");
+    } catch (err) { console.error("Engine 4 Live Scraper Error"); }
+
+    // 2. DEEP LOG BACKFILL (Pages backward in time up to 72 hours)
+    if (isBackfilling) {
+        try {
+            let bfKey = keys[Math.floor(Math.random() * keys.length)];
+            const bfRes = await fetch(`https://api.torn.com/faction/?selections=attacks&to=${backfillCursor}&key=${bfKey}`);
+            const bfData = await bfRes.json();
+
+            if (bfData.attacks && Object.keys(bfData.attacks).length > 0) {
+                let oldestTimeInBatch = backfillCursor;
+                for (let [atkId, atk] of Object.entries(bfData.attacks)) {
+                    if (atk.timestamp_ended < oldestTimeInBatch) oldestTimeInBatch = atk.timestamp_ended;
+                    
+                    if (processedAttackIds.has(atkId)) continue;
+                    processedAttackIds.add(atkId);
+
+                    if (atk.timestamp_ended < backfillTarget) {
+                        isBackfilling = false;
+                        continue;
+                    }
+
+                    if (atk.defender_faction && atk.defender_faction.toString() === adminFactionId) {
+                        let uId = atk.defender_id.toString();
+                        liveDefends[uId] = (liveDefends[uId] || 0) + 1;
+                    }
+                    if (atk.attacker_faction && atk.attacker_faction.toString() === adminFactionId) {
+                        let uId = atk.attacker_id.toString();
+                        liveAttacks[uId] = (liveAttacks[uId] || 0) + 1;
+                    }
+                }
+                backfillCursor = oldestTimeInBatch - 1;
+                if (backfillCursor <= backfillTarget) {
+                    isBackfilling = false;
+                    console.log("[SYSTEM] Deep log backfill complete. Tracking fully live now.");
+                }
+            } else {
+                isBackfilling = false; 
+            }
+        } catch (err) { console.error("Engine 4 Backfill Error"); }
     }
-}, 60000); 
+}, 20000); // 20 seconds = 6 API calls a minute (super safe for pooled keys)
 
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
@@ -703,8 +738,9 @@ app.get('/api/warboard', async (req, res) => {
                 let score = 0;
                 let defends = liveDefends[id] || 0; 
 
+                // If in a Ranked War, trust the Ranked War API for score, but still use our raw scrapes for attacks/defends.
                 if (!isEnemy && liveWarStats[id]) {
-                    attacks = liveWarStats[id].attacks !== undefined ? liveWarStats[id].attacks : attacks;
+                    attacks = Math.max(attacks, liveWarStats[id].attacks || 0); // Keep whichever is higher
                     score = liveWarStats[id].score || 0;
                 }
 
