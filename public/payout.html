@@ -51,7 +51,6 @@
         #rewards-list { color: var(--text-main); font-size: 0.95em; padding-left: 20px; line-height: 1.8; margin: 0; }
         .rewards-note { font-size: 0.8em; color: var(--text-dim); margin-top: 15px; font-style: italic; }
 
-        /* Warning Box Style */
         .feature-warning { background: rgba(255, 165, 2, 0.1); border: 1px solid var(--gold); color: var(--gold); padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 0.85em; text-align: center; }
 
         .payout-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.95em; display: none; }
@@ -306,11 +305,7 @@ function calculatePayouts() {
         } else if (metric === 'attacks') {
             sumTotal += p.attacks;
         } else if (metric === 'weighted') {
-            if (p.logsFound) {
-                sumTotal += (p.standard * wStd) + (p.assists * wAst) + (p.retails * wRet);
-            } else {
-                sumTotal += (p.attacks * wStd); // Fallback if detailed logs expired
-            }
+            sumTotal += (p.attacks * wStd) + (p.assists * wAst) + (p.retaliations * wRet);
         }
     });
 
@@ -325,24 +320,17 @@ function calculatePayouts() {
             } else if (metric === 'attacks') {
                 myVal = p.attacks;
             } else if (metric === 'weighted') {
-                if (p.logsFound) {
-                    myVal = (p.standard * wStd) + (p.assists * wAst) + (p.retails * wRet);
-                } else {
-                    myVal = (p.attacks * wStd); 
-                }
+                myVal = (p.attacks * wStd) + (p.assists * wAst) + (p.retaliations * wRet);
             }
 
             let sharePercent = myVal / sumTotal;
             let myPayout = memberPool * sharePercent;
-            
-            let assistStr = p.logsFound ? p.assists : '<span class="dim-text">Expired</span>';
-            let retailStr = p.logsFound ? p.retails : '<span class="dim-text">Expired</span>';
 
             html += `<tr>
                 <td><a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a></td>
                 <td>${p.attacks}</td>
-                <td>${assistStr}</td>
-                <td>${retailStr}</td>
+                <td>${p.assists || 0}</td>
+                <td>${p.retaliations || 0}</td>
                 <td>${p.score}</td>
                 <td>${(sharePercent * 100).toFixed(2)}%</td>
                 <td class="money-text">${formatMoney(myPayout)}</td>
