@@ -164,7 +164,7 @@
 
     <!-- Settings Modal -->
     <div id="settings-modal" class="modal-overlay">
-        <div class="modal-content" style="position: relative;">
+        <div class="modal-content" style="position: relative; max-height: 90vh; overflow-y: auto;">
             <div class="close-btn" onclick="closeSettings()">&times;</div>
             <h2>Board Settings</h2>
             <div>
@@ -180,9 +180,13 @@
                 <input type="text" id="my-name" placeholder="E.g. Agent">
             </div>
             <div>
+                <label>Discord Webhook (Optional)</label>
+                <input type="text" id="discord-webhook" placeholder="Paste your Discord channel webhook URL">
+                <div style="font-size: 0.75em; color: var(--text-dim); margin-top: 4px;">Sends target alerts and SOS calls directly to your server.</div>
+            </div>
+            <div>
                 <label>Refresh Rate (Seconds)</label>
                 <input type="number" id="refresh-rate" min="2" max="60" value="5">
-                <div style="font-size: 0.75em; color: var(--text-dim); margin-top: 4px;">Lower number = faster updates, but uses more API calls.</div>
             </div>
             <button onclick="saveSettings()">Save & Connect</button>
         </div>
@@ -227,6 +231,7 @@ document.body.addEventListener('click', () => { initAudio(); }, { once: true });
 let myKey = localStorage.getItem("warboard_apikey") || "";
 let enemyFacId = localStorage.getItem("warboard_enemyId") || "";
 let myName = localStorage.getItem("warboard_myname") || "Agent";
+let discordWebhook = localStorage.getItem("warboard_discord") || "";
 let refreshRate = parseInt(localStorage.getItem("warboard_refresh")) || 5;
 
 let knownEnemies = {}; 
@@ -238,6 +243,7 @@ let warChartInstance = null;
 document.getElementById("api-key").value = myKey;
 document.getElementById("enemy-id").value = enemyFacId;
 document.getElementById("my-name").value = myName;
+document.getElementById("discord-webhook").value = discordWebhook;
 document.getElementById("refresh-rate").value = refreshRate;
 
 function openSettings() { document.getElementById("settings-modal").style.display = "flex"; }
@@ -250,6 +256,7 @@ function saveSettings() {
     myKey = document.getElementById("api-key").value.trim();
     enemyFacId = document.getElementById("enemy-id").value.trim();
     myName = document.getElementById("my-name").value.trim() || "Agent";
+    discordWebhook = document.getElementById("discord-webhook").value.trim();
     
     let parsedRate = parseInt(document.getElementById("refresh-rate").value);
     refreshRate = (parsedRate && parsedRate >= 2) ? parsedRate : 5;
@@ -257,6 +264,7 @@ function saveSettings() {
     localStorage.setItem("warboard_apikey", myKey);
     localStorage.setItem("warboard_enemyId", enemyFacId);
     localStorage.setItem("warboard_myname", myName);
+    localStorage.setItem("warboard_discord", discordWebhook);
     localStorage.setItem("warboard_refresh", refreshRate);
     
     knownEnemies = {}; 
@@ -268,6 +276,20 @@ function startPolling() {
     if (fetchTimer) clearInterval(fetchTimer);
     fetchWarboard();
     fetchTimer = setInterval(fetchWarboard, refreshRate * 1000);
+}
+
+// --- DISCORD PING FUNCTION ---
+async function sendDiscordPing(msg) {
+    if (!discordWebhook) return;
+    try {
+        await fetch('/api/discord-ping', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ webhookUrl: discordWebhook, message: msg })
+        });
+    } catch (err) {
+        console.error("Failed to ping Discord", err);
+    }
 }
 
 function formatTime(unixTimestamp) {
@@ -344,12 +366,9 @@ async function fetchWarboard() {
     } catch (e) { console.error("Failed to load warboard", e); }
 }
 
-// --- LIVE GRAPH RENDERER WITH DEFENDS & FALLBACK ---
 function renderChart(friendlyPlayers) {
-    // Show players who have activity (hits or defends)
     let activeHitters = friendlyPlayers.filter(p => p.attacks > 0 || p.defends > 0);
     
-    // SAFETY FALLBACK: If no one has hit/been hit yet, show top 15 members by stats so the graph isn't blank
     if (activeHitters.length === 0) {
         let sortedByStats = [...friendlyPlayers].sort((a, b) => {
             let statA = typeof a.estStats === 'number' ? a.estStats : 0;
@@ -358,7 +377,6 @@ function renderChart(friendlyPlayers) {
         });
         activeHitters = sortedByStats.slice(0, 15);
     } else {
-        // Sort by attacks made (highest to lowest)
         activeHitters.sort((a, b) => b.attacks - a.attacks);
     }
 
@@ -382,13 +400,13 @@ function renderChart(friendlyPlayers) {
                     {
                         label: 'Hits Made',
                         data: attackData,
-                        backgroundColor: '#ff4757', // Var red
+                        backgroundColor: '#ff4757', 
                         borderRadius: 4,
                     },
                     {
                         label: 'Hits Received (Defends)',
                         data: defendData,
-                        backgroundColor: '#ffa502', // Var gold
+                        backgroundColor: '#ffa502', 
                         borderRadius: 4,
                     }
                 ]
@@ -470,6 +488,7 @@ function renderWatchlist(enemies) {
     document.getElementById("watchlist-items").innerHTML = html;
 }
 
+// --- DISCORD INTEGRATED NOTIFICATIONS ---
 function processNotifications(enemies) {
     if (Object.keys(knownEnemies).length === 0) {
         enemies.forEach(e => { knownEnemies[e.id] = { state: e.state, online: e.onlineStatus }; });
@@ -483,14 +502,17 @@ function processNotifications(enemies) {
             if (oldEnemy.state !== "Okay" && newEnemy.state === "Okay") {
                 if (checkIsFlying(oldEnemy)) {
                     showToast(`🛬 ${newEnemy.name} has landed and is Okay!`, "okay");
+                    sendDiscordPing(`🛬 **${newEnemy.name}** [${newEnemy.id}] just landed from a flight and is completely vulnerable!`);
                     playedSoundThisTick = true;
                 } else {
                     showToast(`🏥 ${newEnemy.name} left the hospital and is Okay!`, "okay");
+                    sendDiscordPing(`🏥 **${newEnemy.name}** [${newEnemy.id}] just left the hospital! Get them back in!`);
                     playedSoundThisTick = true;
                 }
             }
             if (oldEnemy.online !== "Online" && newEnemy.onlineStatus === "Online") {
                 showToast(`🟢 ${newEnemy.name} just came ONLINE!`, "online");
+                sendDiscordPing(`🟢 **${newEnemy.name}** [${newEnemy.id}] just came ONLINE! Watch out for retals!`);
                 playedSoundThisTick = true;
             }
         }
@@ -612,7 +634,7 @@ function renderEnemyList(players) {
 
         let sosDisplay = p.needsBackup ? `<div class="active-sos">🚨 Backup requested by ${p.needsBackup}</div>` : "";
         let sosButton = "";
-        if (!p.needsBackup) { sosButton = `<button class="btn-action btn-sos" onclick="requestBackup('${p.id}')">Call SOS</button>`; } 
+        if (!p.needsBackup) { sosButton = `<button class="btn-action btn-sos" onclick="requestBackup('${p.id}', '${p.name}')">Call SOS</button>`; } 
         else if (p.needsBackup === myName) { sosButton = `<button class="btn-action btn-sos" onclick="cancelBackup('${p.id}')">Cancel SOS</button>`; }
 
         html += `
@@ -653,7 +675,14 @@ function renderEnemyList(players) {
 
 async function claimTarget(id) { await fetch('/api/claim', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); fetchWarboard(); }
 async function unclaimTarget(id) { await fetch('/api/unclaim', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); fetchWarboard(); }
-async function requestBackup(id) { await fetch('/api/backup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); fetchWarboard(); }
+
+// --- DISCORD INTEGRATED SOS ---
+async function requestBackup(id, targetName) { 
+    await fetch('/api/backup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); 
+    sendDiscordPing(`🚨 **SOS CALLED:** ${myName} needs backup on target **${targetName}** [${id}]!`);
+    fetchWarboard(); 
+}
+
 async function cancelBackup(id) { await fetch('/api/unbackup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id }) }); fetchWarboard(); }
 async function promptUpdateStats(id) {
     const statInput = prompt("Enter exact/estimated stats for this player (Numbers only):");
