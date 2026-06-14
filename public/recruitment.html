@@ -24,7 +24,7 @@
 
         h1 { text-align: center; color: var(--green); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
 
-        .container { max-width: 1000px; margin: 0 auto; background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; }
+        .container { max-width: 1200px; margin: 0 auto; background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; }
         
         .dash-card { background: #0b0d13; border: 1px solid #2f3542; padding: 20px; border-radius: 12px; margin-bottom: 20px; }
         .dash-header { margin-top: 0; color: var(--text-dim); text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; border-bottom: 1px solid #2f3542; padding-bottom: 10px; margin-bottom: 15px; font-weight: bold; }
@@ -47,12 +47,20 @@
         .badge-gone { background: rgba(46, 213, 115, 0.15); color: var(--green); border: 1px solid var(--green); }
         .badge-member { background: rgba(255, 165, 2, 0.15); color: var(--gold); border: 1px solid var(--gold); }
 
+        /* Filter Tabs */
+        .filter-group { display: none; gap: 8px; margin-bottom: 15px; align-items: center; justify-content: space-between; border-top: 1px solid #2f3542; padding-top: 20px;}
+        .filter-btn { background: #0b0d13; color: var(--text-dim); border: 1px solid #2f3542; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.85em; font-weight: bold; transition: 0.2s; text-transform: uppercase;}
+        .filter-btn:hover { background: #2f3542; color: white; }
+        .filter-btn.active { background: rgba(46, 213, 115, 0.15); border-color: var(--green); color: white; }
+
         table { width: 100%; border-collapse: collapse; margin-top: 10px; display: none; }
         th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #2f3542; }
         th { color: var(--green); font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; }
         tr:hover { background: rgba(255,255,255,0.02); }
         
         .score-val { color: var(--blue); font-weight: bold; }
+        .eff-val { color: var(--gold); font-weight: bold; }
+        .stat-val { color: var(--text-dim); font-size: 0.9em; font-style: italic;}
 
         /* Modal Styling */
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 10000; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
@@ -87,12 +95,22 @@
             </div>
         </div>
 
+        <div id="filter-bar" class="filter-group">
+            <div style="display:flex; gap:10px;">
+                <button id="flt-all" class="filter-btn active" onclick="setRecruitFilter('All')">All Targets</button>
+                <button id="flt-factionless" class="filter-btn" onclick="setRecruitFilter('Factionless')">🚨 Factionless / Left Only</button>
+            </div>
+            <button class="filter-btn" onclick="rescanStats()" style="border-color:var(--blue); color:var(--blue);">🔄 Refresh FFScouter Stats</button>
+        </div>
+
         <table id="recruit-table">
             <thead>
                 <tr>
                     <th>Target Player</th>
+                    <th>Est. Stats</th>
                     <th>War Score</th>
                     <th>Hits</th>
+                    <th>Efficiency (Score/Hit)</th>
                     <th>Current Status</th>
                     <th>Action</th>
                 </tr>
@@ -115,6 +133,9 @@
     const myKey = localStorage.getItem("warboard_apikey");
     let currentButtons = [];
     let currentTargetId = null;
+    let currentRecruits = [];
+    let activeFilter = 'All';
+    let currentReportId = null;
 
     async function fetchWarList() {
         if (!myKey) {
@@ -156,9 +177,11 @@
     fetchWarList();
 
     async function scanRecruits(reportId) {
+        currentReportId = reportId;
         document.getElementById("error-msg").innerText = "";
         const table = document.getElementById("recruit-table");
         const list = document.getElementById("recruit-list");
+        const filterBar = document.getElementById("filter-bar");
         
         currentButtons.forEach(id => {
             const btn = document.getElementById(id);
@@ -167,8 +190,9 @@
         
         const activeBtn = document.getElementById(`btn-${reportId}`);
         activeBtn.innerText = "Scanning...";
+        filterBar.style.display = "none";
         table.style.display = "table";
-        list.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">Fetching live faction data...</td></tr>`;
+        list.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-dim);">Fetching live faction data and querying FFScouter...</td></tr>`;
 
         try {
             const res = await fetch(`/api/scan-recruits?apiKey=${myKey}&reportId=${reportId}`);
@@ -178,27 +202,16 @@
 
             activeBtn.className = "btn-calc btn-loaded";
             activeBtn.innerText = "Scan Complete ✓";
+            
+            currentRecruits = data.recruits;
 
-            if (data.recruits.length === 0) {
-                list.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-dim);">No poachable heavy-hitters found from this war.</td></tr>`;
+            if (currentRecruits.length === 0) {
+                list.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-dim);">No poachable heavy-hitters found from this war.</td></tr>`;
                 return;
             }
 
-            let html = "";
-            data.recruits.forEach(r => {
-                let badgeClass = r.stillInFaction ? "badge-member" : "badge-gone";
-                let daysText = r.stillInFaction ? ` (${r.days} Days)` : "";
-
-                html += `<tr>
-                    <td><a href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank" style="color:var(--text-main); text-decoration:none; font-weight:bold;">${r.name} [${r.id}]</a></td>
-                    <td class="score-val">${r.score}</td>
-                    <td>${r.attacks}</td>
-                    <td><span class="badge ${badgeClass}">${r.status}${daysText}</span></td>
-                    <td><button class="btn-msg" onclick="openMsgModal('${r.id}', '${r.name}', ${r.score}, ${r.attacks}, '${r.status}')">✉️ Auto-Draft Message</button></td>
-                </tr>`;
-            });
-
-            list.innerHTML = html;
+            filterBar.style.display = "flex";
+            renderTable();
 
         } catch (e) {
             activeBtn.innerText = "Error";
@@ -206,6 +219,55 @@
             table.style.display = "none";
             document.getElementById("error-msg").innerText = "Failed to scan: " + e.message;
         }
+    }
+
+    function setRecruitFilter(filterType) {
+        activeFilter = filterType;
+        document.getElementById('flt-all').className = "filter-btn";
+        document.getElementById('flt-factionless').className = "filter-btn";
+        document.getElementById('flt-' + filterType.toLowerCase()).className = "filter-btn active";
+        renderTable();
+    }
+
+    function rescanStats() {
+        if (currentReportId) {
+            scanRecruits(currentReportId);
+        }
+    }
+
+    function renderTable() {
+        const list = document.getElementById("recruit-list");
+        let html = "";
+        
+        const filteredRecruits = currentRecruits.filter(r => {
+            if (activeFilter === 'All') return true;
+            if (activeFilter === 'Factionless' && !r.stillInFaction) return true;
+            return false;
+        });
+
+        if (filteredRecruits.length === 0) {
+            list.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-dim);">No recruits match the current filter.</td></tr>`;
+            return;
+        }
+
+        filteredRecruits.forEach(r => {
+            let badgeClass = r.stillInFaction ? "badge-member" : "badge-gone";
+            let daysText = r.stillInFaction ? ` (${r.days} Days)` : "";
+            let parsedStats = typeof r.estStats === 'number' ? r.estStats.toLocaleString() : r.estStats;
+            let statDisplayClass = parsedStats === "Scanning..." ? "stat-val" : "score-val";
+
+            html += `<tr>
+                <td><a href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank" style="color:var(--text-main); text-decoration:none; font-weight:bold;">${r.name} [${r.id}]</a></td>
+                <td class="${statDisplayClass}">${parsedStats}</td>
+                <td class="score-val">${r.score}</td>
+                <td>${r.attacks}</td>
+                <td class="eff-val">${r.efficiency}</td>
+                <td><span class="badge ${badgeClass}">${r.status}${daysText}</span></td>
+                <td><button class="btn-msg" onclick="openMsgModal('${r.id}', '${r.name}', ${r.score}, ${r.attacks}, '${r.status}')">✉️ Auto-Draft Message</button></td>
+            </tr>`;
+        });
+
+        list.innerHTML = html;
     }
 
     // --- QUICK CHAT MODAL LOGIC ---
