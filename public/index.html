@@ -159,7 +159,7 @@
     <div id="toast-container"></div>
 
 <script>
-// --- Audio Alert System (Softer Chime) ---
+// --- Audio Alert System ---
 let audioCtx;
 function initAudio() {
     if (!audioCtx) {
@@ -249,6 +249,11 @@ function formatTime(unixTimestamp) {
     return d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 }
 
+// Helper to determine if a player is flying
+function checkIsFlying(p) {
+    return p.state === "Traveling" || (p.statusDescription && p.statusDescription.includes("Traveling"));
+}
+
 // --- Dynamic Sorting Logic ---
 function getSortPriority(state) {
     if (state === "Okay") return 1;
@@ -304,21 +309,35 @@ async function fetchWarboard() {
 
 // --- Watchlist Rendering ---
 function renderWatchlist(enemies) {
-    const watchTargets = enemies.filter(e => e.onlineStatus === "Online" || (e.state === "Traveling" && e.landingTime));
+    // Only show Online enemies OR anyone who is Traveling
+    const watchTargets = enemies.filter(e => e.onlineStatus === "Online" || checkIsFlying(e));
 
     watchTargets.sort((a, b) => {
-        if (a.state === "Traveling" && b.state === "Traveling") return a.landingTime - b.landingTime;
-        if (a.state === "Traveling") return -1;
-        if (b.state === "Traveling") return 1;
+        let aFlying = checkIsFlying(a);
+        let bFlying = checkIsFlying(b);
+        
+        if (aFlying && bFlying) return (a.landingTime || Number.MAX_SAFE_INTEGER) - (b.landingTime || Number.MAX_SAFE_INTEGER);
+        if (aFlying) return -1;
+        if (bFlying) return 1;
         return (b.intelScore || 0) - (a.intelScore || 0);
     });
 
     let html = "";
     watchTargets.forEach(p => {
-        let isFlying = p.state === "Traveling";
+        let isFlying = checkIsFlying(p);
         let cardClass = isFlying ? "flying" : "online";
-        let highlightText = isFlying ? `✈️ ETA: ${formatTime(p.landingTime)}` : `🟢 Online Now`;
-        let highlightColor = isFlying ? "var(--blue)" : "var(--green)";
+        
+        let highlightText = "";
+        let highlightColor = "";
+
+        if (isFlying) {
+            // FIXED: Show "Unknown ETA" if FF Scouter hasn't provided a landing time yet
+            highlightText = p.landingTime ? `✈️ ETA: ${formatTime(p.landingTime)}` : `✈️ Flying (Unknown ETA)`;
+            highlightColor = "var(--blue)";
+        } else {
+            highlightText = `🟢 Online Now`;
+            highlightColor = "var(--green)";
+        }
 
         html += `
             <div class="watch-card ${cardClass}">
@@ -330,7 +349,7 @@ function renderWatchlist(enemies) {
     });
     
     if(watchTargets.length === 0) {
-        html = `<div style="color:var(--text-dim); padding: 10px;">No priority targets are currently online or landing.</div>`;
+        html = `<div style="color:var(--text-dim); padding: 10px;">No priority targets are currently online or flying.</div>`;
     }
     
     document.getElementById("watchlist-items").innerHTML = html;
@@ -350,7 +369,7 @@ function processNotifications(enemies) {
         
         if (oldEnemy) {
             if (oldEnemy.state !== "Okay" && newEnemy.state === "Okay") {
-                if (oldEnemy.state === "Traveling") {
+                if (oldEnemy.state === "Traveling" || (oldEnemy.statusDescription && oldEnemy.statusDescription.includes("Traveling"))) {
                     showToast(`🛬 ${newEnemy.name} has landed and is Okay!`, "okay");
                     playedSoundThisTick = true;
                 } else {
@@ -389,10 +408,14 @@ function renderFriendlyList(players) {
     players.forEach(p => {
         let stateClass = "okay";
         if (p.state === "Hospital" || p.state === "Jail") stateClass = "hospital";
-        if (p.state === "Traveling" || p.statusDescription.includes("In ")) stateClass = "traveling";
+        
+        let isFlying = checkIsFlying(p);
+        if (isFlying) stateClass = "traveling";
 
-        let isFlying = stateClass === "traveling";
-        let etaString = (isFlying && p.landingTime) ? `<span class="flight-info">✈️ ETA: ${formatTime(p.landingTime)}</span>` : "";
+        let etaString = "";
+        if (isFlying) {
+            etaString = p.landingTime ? `<span class="flight-info">✈️ ETA: ${formatTime(p.landingTime)}</span>` : `<span class="flight-info">✈️ Flying</span>`;
+        }
 
         html += `
             <div class="member-card ${stateClass}">
@@ -423,10 +446,14 @@ function renderEnemyList(players) {
     players.forEach(p => {
         let stateClass = "okay";
         if (p.state === "Hospital" || p.state === "Jail") stateClass = "hospital";
-        if (p.state === "Traveling" || p.statusDescription.includes("In ")) stateClass = "traveling";
+        
+        let isFlying = checkIsFlying(p);
+        if (isFlying) stateClass = "traveling";
 
-        let isFlying = stateClass === "traveling";
-        let etaString = (isFlying && p.landingTime) ? `<span class="flight-info">✈️ ETA: ${formatTime(p.landingTime)}</span>` : "";
+        let etaString = "";
+        if (isFlying) {
+            etaString = p.landingTime ? `<span class="flight-info">✈️ ETA: ${formatTime(p.landingTime)}</span>` : `<span class="flight-info">✈️ Flying</span>`;
+        }
         
         let claimDisplay = p.claimedBy ? `<div class="active-claim">🎯 Claimed by ${p.claimedBy}</div>` : "";
         let claimButton = "";
