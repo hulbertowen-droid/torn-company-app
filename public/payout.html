@@ -12,6 +12,11 @@
         }
         body { background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px; }
         
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #57606f; }
+
         .top-nav { display: flex; justify-content: center; gap: 20px; max-width: 1200px; margin: 0 auto 20px auto; background: var(--card); padding: 12px; border-radius: 10px; border: 1px solid #2f3542; }
         .nav-link { color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 6px 12px; border-radius: 6px; transition: 0.2s; text-transform: uppercase; font-size: 0.9em; letter-spacing: 1px; cursor: pointer; }
         .nav-link:hover { background: #2f3542; color: white; }
@@ -21,15 +26,10 @@
 
         .container { max-width: 1000px; margin: 0 auto; background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; }
         
-        /* War Blocks with Scroll Fix */
         .dash-card { background: #0b0d13; border: 1px solid #2f3542; padding: 20px; border-radius: 12px; margin-bottom: 20px; }
         .dash-header { margin-top: 0; color: var(--text-dim); text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; border-bottom: 1px solid #2f3542; padding-bottom: 10px; margin-bottom: 15px; font-weight: bold; }
         
-        /* SCROLL FIX STYLES */
         #war-list-container { max-height: 350px; overflow-y: auto; padding-right: 10px; }
-        #war-list-container::-webkit-scrollbar { width: 8px; }
-        #war-list-container::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
-        #war-list-container::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
 
         .war-block { background: var(--card); border: 1px solid #2f3542; padding: 15px 20px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
         .war-details .title { color: var(--gold); font-weight: bold; font-size: 1.1em; margin-bottom: 5px; }
@@ -40,14 +40,12 @@
         .btn-loaded { background: #2f3542; color: var(--text-dim); cursor: default; }
         .btn-loaded:hover { background: #2f3542; }
 
-        /* Rewards Box */
         .rewards-box { border-color: var(--green); background: rgba(46, 213, 115, 0.05); }
         .rewards-title { color: var(--green); display: flex; align-items: center; gap: 8px; font-size: 1.1em; font-weight: bold; margin-bottom: 15px; }
         .rewards-list { margin-bottom: 15px; padding-left: 20px; color: var(--text-main); }
         .rewards-stats { font-weight: bold; margin-bottom: 15px; padding-left: 20px; }
         .rewards-disclaimer { font-size: 0.8em; color: var(--text-dim); font-style: italic; }
 
-        /* Inputs */
         .input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
         .input-label { display: block; font-weight: bold; font-size: 0.85em; text-transform: uppercase; color: var(--text-main); margin-bottom: 8px; }
         .input-field { width: 100%; padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #050608; color: white; font-size: 1.1em; box-sizing: border-box; }
@@ -60,6 +58,8 @@
         
         .score-val { color: var(--blue); font-weight: bold; }
         .payout-val { color: var(--green); font-weight: bold; }
+        
+        .header-action { display: flex; justify-content: space-between; align-items: center; }
     </style>
 </head>
 <body>
@@ -83,7 +83,7 @@
             </div>
         </div>
 
-        <!-- Block 2: Automated Rewards (Hidden until selected) -->
+        <!-- Block 2: Automated Rewards -->
         <div id="rewards-box" class="dash-card rewards-box" style="display:none;">
             <div class="rewards-title">🎁 AUTOMATED REWARDS VS <span id="reward-enemy-name" style="text-transform: uppercase;"></span></div>
             <ul id="caches-list-ui" class="rewards-list"></ul>
@@ -93,7 +93,7 @@
             <div class="rewards-disclaimer">* The total below automatically calculates the estimated market value of your Caches based on real-time Torn item prices. If you also sold your faction points, be sure to add that extra cash manually to the total pool!</div>
         </div>
 
-        <!-- Block 3: Inputs (Hidden until selected) -->
+        <!-- Block 3: Inputs -->
         <div id="calculator-inputs" class="dash-card" style="display:none;">
             <div class="input-grid">
                 <div>
@@ -105,12 +105,15 @@
                     <input type="number" id="cut-input" value="20" oninput="renderPayouts()" class="input-field">
                 </div>
             </div>
-            <div>
-                <label class="input-label">Distribution Metric</label>
-                <select id="metric-select" onchange="renderPayouts()" class="input-field" style="cursor:pointer;">
-                    <option value="score">War Score Contributed</option>
-                    <option value="attacks">Hits Made</option>
-                </select>
+            <div class="header-action">
+                <div style="flex-grow: 1;">
+                    <label class="input-label">Distribution Metric</label>
+                    <select id="metric-select" onchange="renderPayouts()" class="input-field" style="cursor:pointer; width: 50%;">
+                        <option value="score">War Score Contributed</option>
+                        <option value="attacks">Hits Made</option>
+                    </select>
+                </div>
+                <button id="copy-btn" class="btn-calc" style="background:var(--green); display:none;" onclick="copyToClipboard()">📋 Copy List for Discord</button>
             </div>
         </div>
 
@@ -133,6 +136,7 @@
     const myKey = localStorage.getItem("warboard_apikey");
     let currentMembers = [];
     let currentButtons = [];
+    let clipboardText = "";
 
     async function fetchWarList() {
         if (!myKey) {
@@ -219,6 +223,7 @@
             document.getElementById("rewards-box").style.display = "block";
             document.getElementById("calculator-inputs").style.display = "block";
             document.getElementById("payout-table").style.display = "table";
+            document.getElementById("copy-btn").style.display = "inline-block";
 
             activeBtn.className = "btn-calc btn-loaded";
             activeBtn.innerText = "Data Loaded ✓";
@@ -235,6 +240,7 @@
         const pool = parseFloat(document.getElementById("pool-input").value) || 0;
         const cutPercent = parseFloat(document.getElementById("cut-input").value) || 0;
         const metric = document.getElementById("metric-select").value; 
+        const enemyName = document.getElementById("reward-enemy-name").innerText;
 
         const distributablePool = pool * (1 - (cutPercent / 100));
 
@@ -242,6 +248,8 @@
         currentMembers.forEach(m => totalMetric += (metric === 'score' ? m.score : m.attacks));
 
         let html = "";
+        clipboardText = `**Ranked War Payouts vs ${enemyName}**\nTotal Distributable Pool: $${Math.floor(distributablePool).toLocaleString()}\n\n`;
+
         currentMembers.forEach(m => {
             let mMetric = (metric === 'score' ? m.score : m.attacks);
             let percent = totalMetric > 0 ? (mMetric / totalMetric) : 0;
@@ -254,8 +262,21 @@
                 <td style="color:var(--text-dim);">${(percent * 100).toFixed(2)}%</td>
                 <td class="payout-val">$${Math.floor(payout).toLocaleString()}</td>
             </tr>`;
+            
+            clipboardText += `${m.name}: $${Math.floor(payout).toLocaleString()}\n`;
         });
         document.getElementById("payout-list").innerHTML = html;
+    }
+
+    async function copyToClipboard() {
+        try {
+            await navigator.clipboard.writeText(clipboardText);
+            const btn = document.getElementById("copy-btn");
+            btn.innerText = "✓ Copied!";
+            setTimeout(() => { btn.innerText = "📋 Copy List for Discord"; }, 2000);
+        } catch (err) {
+            alert("Failed to copy list.");
+        }
     }
 </script>
 </body>
