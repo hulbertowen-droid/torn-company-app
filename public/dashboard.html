@@ -21,13 +21,11 @@
 
         .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
         
-        /* Dashboard Cards */
         .dash-card { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #2f3542; }
         .dash-card h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;}
         
         .ai-section { grid-column: 1 / -1; }
         
-        /* Tables */
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #2f3542; }
         th { color: var(--text-dim); font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; }
@@ -39,11 +37,15 @@
         .dot-offline { background: #57606f; }
         .text-danger { color: var(--red); font-weight: bold; }
 
-        /* AI Terminal */
+        /* Timeline block styles mimicking FF Scouter layout */
+        .timeline-container { display: flex; gap: 3px; align-items: center; }
+        .t-block { width: 10px; height: 16px; border-radius: 2px; }
+        .t-active { background: var(--green); box-shadow: 0 0 4px rgba(46, 213, 115, 0.4); }
+        .t-inactive { background: #232731; }
+
         .ai-terminal { background: #050608; border: 1px solid var(--blue); border-radius: 8px; padding: 20px; font-family: 'Courier New', Courier, monospace; min-height: 150px; line-height: 1.6; }
         .btn-ai { background: rgba(88, 166, 255, 0.15); color: var(--blue); border: 1px solid var(--blue); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
         .btn-ai:hover { background: var(--blue); color: #000; }
-        
         .btn-ai-live { background: rgba(255, 71, 87, 0.15); color: var(--red); border-color: var(--red); }
         .btn-ai-live:hover { background: var(--red); color: white; }
         
@@ -79,7 +81,7 @@
             <h2>👤 Member Activity Tracker <span id="member-count" style="font-size: 0.6em; color: var(--text-dim);">0</span></h2>
             <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
                 <table id="activity-table">
-                    <thead><tr><th>Player</th><th>Last Action</th><th>Status</th></tr></thead>
+                    <thead><tr><th>Player</th><th>Status</th><th>Scanner Timeline (Last 12h)</th></tr></thead>
                     <tbody id="activity-list"><tr><td colspan="3" style="color:var(--text-dim);">Loading API data...</td></tr></tbody>
                 </table>
             </div>
@@ -105,13 +107,14 @@
         document.getElementById("loans-list").innerHTML = `<tr><td colspan="3" style="color:var(--red);">Please set your API key on the Live Warboard settings first.</td></tr>`;
     } else {
         fetchDashboardData();
+        // Automatically poll dashboard data every 10 seconds to watch background queue load blocks
+        setInterval(fetchDashboardData, 10000);
     }
 
     async function fetchDashboardData() {
         try {
             const res = await fetch(`/api/dashboard-data?apiKey=${myKey}`);
             const data = await res.json();
-            
             if (data.error) throw new Error(data.error);
 
             renderActivity(data.members);
@@ -126,7 +129,6 @@
         const list = Object.entries(members).map(([id, m]) => ({ id, ...m })).sort((a, b) => a.last_action.timestamp - b.last_action.timestamp);
         document.getElementById("member-count").innerText = list.length;
         
-        const now = Math.floor(Date.now() / 1000);
         let html = "";
         
         list.forEach(m => {
@@ -134,13 +136,22 @@
             if (m.last_action.status === "Online") dotClass = "dot-online";
             if (m.last_action.status === "Idle") dotClass = "dot-idle";
 
-            let timeDiff = now - m.last_action.timestamp;
-            let timeClass = timeDiff > 172800 ? "text-danger" : ""; 
+            // Visual layout parsing for bucket timelines
+            let timelineHtml = `<div class="timeline-container">`;
+            if (m.timeline && Array.isArray(m.timeline) && m.timeline.length > 0) {
+                m.timeline.forEach(score => {
+                    let blockClass = score === 1 ? "t-active" : "t-inactive";
+                    timelineHtml += `<div class="t-block ${blockClass}"></div>`;
+                });
+            } else {
+                timelineHtml += `<span style="color:var(--text-dim); font-size:0.85em; font-style:italic;">⏳ Scanner synchronization in progress...</span>`;
+            }
+            timelineHtml += `</div>`;
 
             html += `<tr>
                 <td><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-main); text-decoration:none; font-weight:bold;">${m.name} [${m.id}]</a></td>
-                <td class="${timeClass}">${m.last_action.relative}</td>
-                <td><span class="status-dot ${dotClass}"></span>${m.last_action.status}</td>
+                <td><span class="status-dot ${dotClass}"></span>${m.last_action.status} (${m.last_action.relative})</td>
+                <td>${timelineHtml}</td>
             </tr>`;
         });
         
@@ -149,7 +160,6 @@
 
     function renderLoans(loans, members, armoryError) {
         const listContainer = document.getElementById("loans-list");
-        
         if (armoryError) {
             document.getElementById("loan-count").innerText = "Locked";
             listContainer.innerHTML = `<tr><td colspan="3" style="color:var(--red); font-weight:bold;">⚠️ Access Denied: Your API key does not have the faction permissions required to view the Armory.</td></tr>`;
@@ -184,12 +194,10 @@
         try {
             const res = await fetch(`${endpoint}?apiKey=${myKey}`, { method: 'POST' });
             const data = await res.json();
-            
             if (data.error) throw new Error(data.error);
 
             let formattedText = data.analysis.replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--blue);">$1</strong>');
             formattedText = formattedText.replace(/\n/g, '<br>');
-            
             term.innerHTML = `<span style="color: var(--text-main);">${formattedText}</span>`;
         } catch (e) {
             term.innerHTML = `<span style="color: var(--red);">[ERROR] ${e.message}</span>`;
