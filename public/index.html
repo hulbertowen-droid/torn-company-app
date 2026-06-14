@@ -100,6 +100,7 @@
     <div class="top-nav">
         <a href="/" class="nav-link active">📡 Live Warboard</a>
         <a href="/payout.html" class="nav-link">💰 Payout Calculator</a>
+        <a href="/dashboard.html" class="nav-link">🛡️ Alliance Dashboard</a>
         <a onclick="openSettings()" class="nav-link">⚙️ Settings</a>
     </div>
 
@@ -294,7 +295,6 @@ function renderWatchlist(enemies) {
 
     const watchTargets = enemies.filter(e => {
         if (e.onlineStatus === "Online") return true;
-        // Check FF Scouter landing time for the 30-minute window
         if (checkIsFlying(e) && e.landingTime && (e.landingTime - now) <= 1800 && (e.landingTime - now) > 0) return true;
         return false;
     });
