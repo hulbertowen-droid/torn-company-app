@@ -13,6 +13,7 @@ const TORN_API_KEY = process.env.TORN_API_KEY;
 const FF_SCOUTER_KEY = process.env.FF_SCOUTER_KEY || "";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || "";
+const ADMIN_DISCORD_WEBHOOK = process.env.ADMIN_DISCORD_WEBHOOK || ""; // New Admin Webhook
 
 let claims = {};
 let backups = {}; 
@@ -35,10 +36,8 @@ let apiKeyPool = new Set();
 if (ADMIN_API_KEY) apiKeyPool.add(ADMIN_API_KEY);
 if (TORN_API_KEY) apiKeyPool.add(TORN_API_KEY);
 
-// UPGRADED: These now store data by Target Faction ID to filter out Outside Hits
-let liveAttacks = {}; // Format: { userId: { targetFactionId: count } }
-let liveDefends = {}; // Format: { userId: { attackerFactionId: count } }
-
+let liveAttacks = {};
+let liveDefends = {}; 
 let processedAttackIds = new Set();
 let backfillCursor = Math.floor(Date.now() / 1000);
 let backfillTarget = backfillCursor - (72 * 3600); // 72 Hours deep
@@ -102,6 +101,15 @@ setInterval(async () => {
                             subscriptions[facId] += weeks * 7 * 24 * 60 * 60 * 1000;
                             saveSubs();
                             console.log(`[PAYMENT RECEIVED] Credited Faction ${facId} with ${weeks} weeks of access!`);
+                            
+                            // DISCORD ADMIN PING FOR PAYMENTS
+                            if (ADMIN_DISCORD_WEBHOOK) {
+                                fetch(ADMIN_DISCORD_WEBHOOK, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ content: `💰 **PAYMENT RECEIVED:** Faction \`${facId}\` paid ${qty}x Xanax for ${weeks} weeks of Warboard access!` })
+                                }).catch(e => console.error("Admin Discord Ping failed."));
+                            }
                         }
                     }
                 }
@@ -254,14 +262,12 @@ setInterval(async () => {
                 if (processedAttackIds.has(atkId)) continue;
                 processedAttackIds.add(atkId);
                 
-                // Track Defends (Grouped by Attacker Faction)
                 if (atk.defender_faction && atk.defender_faction.toString() === adminFactionId) {
                     let uId = atk.defender_id.toString();
                     let attFacId = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
                     if (!liveDefends[uId]) liveDefends[uId] = {};
                     liveDefends[uId][attFacId] = (liveDefends[uId][attFacId] || 0) + 1;
                 }
-                // Track Attacks (Grouped by Target Faction)
                 if (atk.attacker_faction && atk.attacker_faction.toString() === adminFactionId) {
                     let uId = atk.attacker_id.toString();
                     let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
@@ -318,6 +324,23 @@ setInterval(async () => {
 }, 20000); 
 
 app.get('/health', (req, res) => res.status(200).send("OK"));
+
+// --- NEW ROUTE: DISCORD PING PROXY ---
+app.post('/api/discord-ping', async (req, res) => {
+    const { webhookUrl, message } = req.body;
+    if (!webhookUrl || !message) return res.status(400).json({ error: "Missing data" });
+
+    try {
+        await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: message })
+        });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to ping Discord" });
+    }
+});
 
 // --- SECURED ROUTES ---
 app.get('/api/war-list', async (req, res) => {
@@ -692,7 +715,7 @@ app.post('/api/backup', (req, res) => { const { enemyId, playerName } = req.body
 app.post('/api/unbackup', (req, res) => { const { enemyId } = req.body; delete backups[enemyId]; res.json({ success: true }); });
 app.post('/api/update-stats', (req, res) => { const { enemyId, stats } = req.body; manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() }; res.json({ success: true }); });
 
-// --- UPDATED LIVE WARBOARD ENDPOINT (FILTERS OUTSIDE HITS) ---
+// --- UPDATED LIVE WARBOARD ENDPOINT ---
 app.get('/api/warboard', async (req, res) => {
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
@@ -751,7 +774,6 @@ app.get('/api/warboard', async (req, res) => {
                 let score = 0;
                 let defends = 0; 
 
-                // ONLY count hits and defends if the target/attacker matches the specific Enemy Faction ID!
                 if (enemyId) {
                     if (liveAttacks[id] && liveAttacks[id][enemyId]) attacks = liveAttacks[id][enemyId];
                     if (liveDefends[id] && liveDefends[id][enemyId]) defends = liveDefends[id][enemyId];
