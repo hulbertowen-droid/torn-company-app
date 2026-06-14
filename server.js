@@ -17,11 +17,15 @@ let backups = {};
 let statsCache = {}; 
 let manualStats = {}; 
 let flightCache = {}; 
+let activityCache = {}; // Cache for historical FF Scouter timeline data
 
 let statQueue = [];
 let flightQueue = [];
+let activityQueue = [];
+
 let isProcessingStats = false;
 let isProcessingFlights = false;
+let isProcessingActivity = false;
 
 function computeWarIntel(p, cache = {}) {
     let score = 0;
@@ -62,7 +66,7 @@ function autoDetectEnemyFaction(data) {
     return null;
 }
 
-// --- FF SCOUTER ENGINES ---
+// --- ENGINE 1: BATTLE STATS ---
 setInterval(async () => {
     if (!statQueue.length || isProcessingStats) return;
     isProcessingStats = true;
@@ -86,6 +90,7 @@ setInterval(async () => {
     isProcessingStats = false;
 }, 4000);
 
+// --- ENGINE 2: FLIGHT TRACKING ---
 setInterval(async () => {
     if (!flightQueue.length || isProcessingFlights) return;
     isProcessingFlights = true;
@@ -107,18 +112,50 @@ setInterval(async () => {
     isProcessingFlights = false;
 }, 1000); 
 
+// --- ENGINE 3: FF SCOUTER HISTORICAL ACTIVITY SCANNER ---
+setInterval(async () => {
+    if (!activityQueue.length || isProcessingActivity) return;
+    isProcessingActivity = true;
+
+    activityQueue = [...new Set(activityQueue)];
+    const targetId = activityQueue.shift();
+
+    if (!FF_SCOUTER_KEY || !targetId) {
+        isProcessingActivity = false;
+        return;
+    }
+
+    const end = Math.floor(Date.now() / 1000);
+    const start = end - (12 * 3600); // Lookback window: Last 12 Hours
+
+    try {
+        const res = await fetch(`https://ffscouter.com/api/v1/activity/player?key=${FF_SCOUTER_KEY}&target=${targetId}&start=${start}&end=${end}&bucket=3600`);
+        const data = await res.json();
+
+        if (data.code === 0 && Array.isArray(data.buckets)) {
+            // Map timeline to a clean list of scores (0 or 1)
+            const timeline = data.buckets.map(b => b.activity_score);
+            activityCache[targetId] = { timeline: timeline, time: Date.now() };
+        } else {
+            activityCache[targetId] = { timeline: [], time: Date.now() };
+        }
+    } catch (err) {
+        console.error("Activity Scanner Error:", err);
+        activityQueue.push(targetId);
+    }
+    isProcessingActivity = false;
+}, 1500); // 1.5s delay maps to 40 req/min, perfectly under the 60 req/min limit
+
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
 // --- DROPDOWN LIST FOR PAST WARS ---
 app.get('/api/war-list', async (req, res) => {
     const userKey = req.query.apiKey;
     if (!userKey) return res.status(400).json({ error: "Missing API Key" });
-
     try {
         const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`);
         const facData = await facRes.json();
         if (facData.error) return res.status(400).json({ error: facData.error.error });
-
         let wars = [];
         if (facData.rankedwars) {
             for (let [warId, warInfo] of Object.entries(facData.rankedwars)) {
@@ -132,12 +169,10 @@ app.get('/api/war-list', async (req, res) => {
         }
         wars.sort((a, b) => b.start - a.start);
         res.json({ success: true, wars });
-    } catch (err) {
-        res.status(500).json({ error: "Failed to fetch war list" });
-    }
+    } catch (err) { res.status(500).json({ error: "Failed to fetch war list" }); }
 });
 
-// --- DASHBOARD: ACTIVITY & ARMORY LOANS DEEP-SCAN ---
+// --- DASHBOARD: FULL METRICS ---
 app.get('/api/dashboard-data', async (req, res) => {
     const userKey = req.query.apiKey;
     if (!userKey) return res.status(400).json({ error: "Missing API Key" });
@@ -146,6 +181,15 @@ app.get('/api/dashboard-data', async (req, res) => {
         const basicResp = await fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`);
         const basicData = await basicResp.json();
         if (basicData.error) return res.status(400).json({ error: basicData.error.error });
+
+        // Push members into the activity scanner queue if uncached or stale (> 10 mins)
+        if (basicData.members) {
+            Object.keys(basicData.members).forEach(id => {
+                if (!activityCache[id] || (Date.now() - activityCache[id].time) > 600000) {
+                    if (!activityQueue.includes(id)) activityQueue.push(id);
+                }
+            });
+        }
 
         let loans = [];
         let armoryError = false;
@@ -157,7 +201,6 @@ app.get('/api/dashboard-data', async (req, res) => {
         } else {
             const findLoans = (obj, typeName) => {
                 if (!obj || typeof obj !== 'object') return;
-                
                 if (obj.loaned_to) {
                     let loanStr = String(obj.loaned_to).trim();
                     if (loanStr !== "0" && loanStr !== "null" && loanStr !== "") {
@@ -169,16 +212,24 @@ app.get('/api/dashboard-data', async (req, res) => {
                 }
                 Object.values(obj).forEach(val => findLoans(val, typeName));
             };
-
             findLoans(armoryData.armor, "Armor");
             findLoans(armoryData.weapons, "Weapon");
             findLoans(armoryData.temporary, "Temporary");
         }
 
-        res.json({ success: true, members: basicData.members || {}, loans: loans, armoryError });
-    } catch (err) {
-        res.status(500).json({ error: "Failed to fetch dashboard data." });
-    }
+        // Attach cached timeline arrays directly into the member data payload
+        let parsedMembers = {};
+        if (basicData.members) {
+            Object.entries(basicData.members).forEach(([id, m]) => {
+                parsedMembers[id] = {
+                    ...m,
+                    timeline: activityCache[id]?.timeline || null
+                };
+            });
+        }
+
+        res.json({ success: true, members: parsedMembers, loans: loans, armoryError });
+    } catch (err) { res.status(500).json({ error: "Failed to fetch dashboard data." }); }
 });
 
 // --- DASHBOARD: AI WAR ANALYST (PAST COMPLETED WARS) ---
@@ -215,10 +266,7 @@ app.post('/api/ai-analyze', async (req, res) => {
         let warStats = null;
         if (reportData.rankedwarreport && reportData.rankedwarreport.factions) {
             for (let [fId, fData] of Object.entries(reportData.rankedwarreport.factions)) {
-                if (fData.members && fData.members[myUserId]) {
-                    warStats = fData.members;
-                    break;
-                }
+                if (fData.members && fData.members[myUserId]) { warStats = fData.members; break; }
             }
             if (!warStats) warStats = reportData.rankedwarreport.factions[myFacId]?.members;
         }
@@ -242,9 +290,7 @@ app.post('/api/ai-analyze', async (req, res) => {
 
         const analysis = aiData.candidates[0].content.parts[0].text;
         res.json({ success: true, analysis });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // --- DASHBOARD: AI WAR ANALYST (LIVE ONGOING WAR) ---
@@ -263,11 +309,7 @@ app.post('/api/ai-analyze-ongoing', async (req, res) => {
 
         if (facRes.rankedwars) {
             for (let [id, w] of Object.entries(facRes.rankedwars)) {
-                if (w.war && w.war.winner === 0) { // Winner 0 means the war is active right now
-                    ongoingWarId = id;
-                    warData = w;
-                    break;
-                }
+                if (w.war && w.war.winner === 0) { ongoingWarId = id; warData = w; break; }
             }
         }
 
@@ -284,12 +326,11 @@ app.post('/api/ai-analyze-ongoing', async (req, res) => {
         let enemyScore = enemyFactionWarData ? (enemyFactionWarData.score || 0) : 0;
         let targetScore = warData.war.target || 0;
 
-        // Get live member stats
         let memberArray = Object.values(myFactionWarData.members || {}).map(m => `Name: ${m.name}, Attacks: ${m.attacks || 0}, Score: ${m.score || 0}`);
         memberArray.sort((a, b) => (b.score || 0) - (a.score || 0));
         const slimData = memberArray.slice(0, 20).join("\n");
 
-        const prompt = `You are a strict, tactical military advisor for a gaming faction. We are currently in a LIVE Ranked War against ${enemyName}. The current score is Us: ${myScore} vs Them: ${enemyScore} (Target to win: ${targetScore}). Review the live performance of our top 20 active members so far:\n\n${slimData}\n\nProvide 3 specific, urgent, actionable pieces of tactical advice on what we need to do RIGHT NOW to start winning or hold our lead. Identify if we lack hitters, if people are hitting low-value targets (high attacks but low score), and give an urgent battle command. Do not use markdown headers, just bolding.`;
+        const prompt = `You are a strict, tactical military advisor for a gaming faction. We are currently in a LIVE Ranked War against ${enemyName}. The current score is Us: ${myScore} vs Them: ${enemyScore} (Target to win: ${targetScore}). Review the live performance of our top 20 active members so far:\n\n${slimData}\n\nProvide 3 specific, urgent, actionable pieces of tactical advice on what we need to do RIGHT NOW to start winning or hold our lead. Identify if we lack hitters, if people are hitting low-value targets, and give an urgent battle command. Do not use markdown headers, just bolding.`;
 
         const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-3.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
             method: 'POST',
@@ -302,75 +343,49 @@ app.post('/api/ai-analyze-ongoing', async (req, res) => {
 
         const analysis = aiData.candidates[0].content.parts[0].text;
         res.json({ success: true, analysis });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // --- FULL PAYOUT CALCULATOR LOGIC ---
 app.get('/api/past-war', async (req, res) => {
     const { apiKey, reportId } = req.query;
     if (!apiKey || !reportId) return res.status(400).json({ error: "Missing API Key or Report ID" });
-
     try {
         const [userRes, reportRes, itemsRes] = await Promise.all([
             fetch(`https://api.torn.com/user/?selections=profile&key=${apiKey}`),
             fetch(`https://api.torn.com/torn/${reportId}?selections=rankedwarreport&key=${apiKey}`),
             fetch(`https://api.torn.com/torn/?selections=items&key=${apiKey}`)
         ]);
-
         const userData = await userRes.json();
         const reportData = await reportRes.json();
         const itemsData = await itemsRes.json();
-
         if (userData.error) return res.status(400).json({ error: "Invalid API Key." });
         if (reportData.error) return res.status(400).json({ error: "Torn API Error: " + reportData.error.error });
-        if (!reportData.rankedwarreport || !reportData.rankedwarreport.factions) return res.status(400).json({ error: "Invalid Report ID or no data found." });
-
         const myUserId = userData.player_id.toString();
         let correctFacId = null;
         for (let [facId, facData] of Object.entries(reportData.rankedwarreport.factions)) {
             if (facData.members && facData.members[myUserId]) { correctFacId = facId; break; }
         }
         if (!correctFacId) correctFacId = userData.faction?.faction_id?.toString();
-
         const myFactionWarData = reportData.rankedwarreport.factions[correctFacId];
         if (!myFactionWarData) return res.status(400).json({ error: "Your faction was not part of this Ranked War Report." });
-
-        let totalCacheValue = 0;
-        let cachesWon = [];
-
+        let totalCacheValue = 0; let cachesWon = [];
         if (myFactionWarData.rewards && myFactionWarData.rewards.items) {
             for (let [itemId, itemInfo] of Object.entries(myFactionWarData.rewards.items)) {
                 const itemMarketData = itemsData.items ? itemsData.items[itemId] : null;
                 const marketValue = itemMarketData ? itemMarketData.market_value : 0;
                 const quantity = itemInfo.quantity || 0;
-                
-                const lineTotal = marketValue * quantity;
-                totalCacheValue += lineTotal;
-                
+                const lineTotal = marketValue * quantity; totalCacheValue += lineTotal;
                 cachesWon.push({ name: itemInfo.name || (itemMarketData ? itemMarketData.name : "Unknown Item"), quantity: quantity, marketValue: marketValue, totalValue: lineTotal });
             }
         }
-
-        const members = myFactionWarData.members || {};
-        let formattedMembers = [];
-        
+        const members = myFactionWarData.members || {}; let formattedMembers = [];
         for (let [id, m] of Object.entries(members)) {
-            if (m.attacks > 0 || m.score > 0) {
-                formattedMembers.push({ id, name: m.name, attacks: m.attacks || 0, score: m.score || 0 });
-            }
+            if (m.attacks > 0 || m.score > 0) { formattedMembers.push({ id, name: m.name, attacks: m.attacks || 0, score: m.score || 0 }); }
         }
-
         formattedMembers.sort((a, b) => b.score - a.score);
-
-        res.json({ 
-            success: true, members: formattedMembers,
-            rewards: { totalCacheValue: totalCacheValue, caches: cachesWon, points: myFactionWarData.rewards?.points || 0, respect: myFactionWarData.rewards?.respect || 0 }
-        });
-    } catch (err) {
-        res.status(500).json({ error: "Server error fetching past war data." });
-    }
+        res.json({ success: true, members: formattedMembers, rewards: { totalCacheValue: totalCacheValue, caches: cachesWon, points: myFactionWarData.rewards?.points || 0, respect: myFactionWarData.rewards?.respect || 0 } });
+    } catch (err) { res.status(500).json({ error: "Server error fetching past war data." }); }
 });
 
 app.post('/api/claim', (req, res) => { const { enemyId, playerName } = req.body; claims[enemyId] = { playerName, time: Date.now() }; res.json({ success: true }); });
@@ -384,55 +399,33 @@ app.get('/api/warboard', async (req, res) => {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
         let enemyId = req.query.enemyFaction && req.query.enemyFaction !== "null" && req.query.enemyFaction !== "" ? req.query.enemyFaction : null;
         if (!userKey) return res.status(400).json({ error: "No API Key provided" });
-
         let [myData, enemyDataResult] = await Promise.all([
             fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })),
             enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} })
         ]);
-
         if (myData.error) return res.status(400).json({ error: "Invalid API Key" });
         if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
-        if (enemyId && Object.keys(enemyDataResult.members || {}).length === 0) {
-             enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} }));
-        }
-
+        if (enemyId && Object.keys(enemyDataResult.members || {}).length === 0) { enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })); }
         const friendlyIds = new Set(Object.keys(myData.members || {}));
         const enemyIds = new Set(Object.keys(enemyDataResult.members || {}));
-
         [...friendlyIds, ...enemyIds].forEach(id => {
             if (!statsCache[id] || (Date.now() - statsCache[id].time) > 3600000) { if (!statQueue.includes(id)) statQueue.push(id); }
             const m = myData.members[id] || enemyDataResult.members[id];
             const isTraveling = m.status?.state === "Traveling" || (m.status?.description && m.status?.description.includes("Traveling"));
-            if (isTraveling) {
-                if (!flightCache[id] || (Date.now() - flightCache[id].time) > 30000) { if (!flightQueue.includes(id)) flightQueue.push(id); }
-            }
+            if (isTraveling) { if (!flightCache[id] || (Date.now() - flightCache[id].time) > 30000) { if (!flightQueue.includes(id)) flightQueue.push(id); } }
         });
-
         const parseMembers = (data, isEnemy = false) => {
             if (!data.members) return [];
             return Object.entries(data.members).map(([id, m]) => {
                 const est = manualStats[id]?.stats !== undefined ? manualStats[id].stats : (statsCache[id]?.stats !== undefined ? statsCache[id].stats : "loading");
                 const isTraveling = m.status?.state === "Traveling" || (m.status?.description && m.status?.description.includes("Traveling"));
-                
-                let finalUntil = m.status?.until;
-                let finalLandingTime = null;
+                let finalUntil = m.status?.until; let finalLandingTime = null;
                 if (isTraveling) { finalLandingTime = flightCache[id]?.landingTime || null; finalUntil = finalLandingTime; }
-
                 const intelScore = isEnemy ? computeWarIntel({ id, state: m.status?.state, until: finalUntil, onlineStatus: m.last_action?.status || "Offline", estStats: est }, statsCache) : null;
-                if (isEnemy && backups[id] && m.status?.state === "Hospital") {
-                    const timeLeft = m.status.until - Math.floor(Date.now() / 1000);
-                    if (timeLeft > 1800) delete backups[id];
-                }
-                
-                return { 
-                    id, name: m.name, state: m.status?.state, until: finalUntil, statusDescription: m.status?.description || "", 
-                    onlineStatus: m.last_action?.status || "Offline", lastActionRelative: m.last_action?.relative || "Unknown", 
-                    landingTime: finalLandingTime, claimedBy: isEnemy ? claims[id]?.playerName || null : null, 
-                    needsBackup: isEnemy ? backups[id]?.playerName || null : null, estStats: est, intelScore, isManual: !!manualStats[id] 
-                };
+                if (isEnemy && backups[id] && m.status?.state === "Hospital") { const timeLeft = m.status.until - Math.floor(Date.now() / 1000); if (timeLeft > 1800) delete backups[id]; }
+                return { id, name: m.name, state: m.status?.state, until: finalUntil, statusDescription: m.status?.description || "", onlineStatus: m.last_action?.status || "Offline", lastActionRelative: m.last_action?.relative || "Unknown", landingTime: finalLandingTime, claimedBy: isEnemy ? claims[id]?.playerName || null : null, needsBackup: isEnemy ? backups[id]?.playerName || null : null, estStats: est, intelScore, isManual: !!manualStats[id] };
             });
         };
-
         res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId });
     } catch (err) { res.status(500).json({ error: "warboard failed" }); }
 });
