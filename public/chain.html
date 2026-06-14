@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chain Watcher | Spider-Verse</title>
+    <style>
+        :root { 
+            --bg: #090a0f; --card: #11141d; --item: #1b202e; 
+            --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
+            --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
+        }
+        
+        body { background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px; }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #57606f; }
+
+        .top-nav { display: flex; justify-content: center; gap: 20px; max-width: 1200px; margin: 0 auto 20px auto; background: var(--card); padding: 12px; border-radius: 10px; border: 1px solid #2f3542; flex-wrap: wrap;}
+        .nav-link { color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 6px 12px; border-radius: 6px; transition: 0.2s; text-transform: uppercase; font-size: 0.9em; letter-spacing: 1px; cursor: pointer; }
+        .nav-link:hover { background: #2f3542; color: white; }
+        .nav-link.active { color: white; background: rgba(88, 166, 255, 0.15); border: 1px solid var(--blue); }
+
+        h1 { text-align: center; color: var(--gold); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
+
+        .container { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 30px; }
+        
+        .dash-card { background: var(--card); border: 1px solid #2f3542; padding: 30px; border-radius: 12px; text-align: center; position: relative; overflow: hidden; }
+        
+        .chain-title { color: var(--text-dim); font-size: 1.2em; text-transform: uppercase; letter-spacing: 2px; font-weight: bold; margin-bottom: 10px; }
+        .chain-count { font-size: 4em; font-weight: 900; color: var(--blue); line-height: 1; text-shadow: 0 0 20px rgba(88,166,255,0.4); margin-bottom: 20px; }
+        
+        .timer-box { background: #0b0d13; border: 2px solid #2f3542; padding: 25px; border-radius: 12px; max-width: 400px; margin: 0 auto; transition: 0.3s; }
+        .timer-title { color: var(--text-dim); text-transform: uppercase; font-weight: bold; letter-spacing: 1px; margin-bottom: 5px; }
+        .timer-time { font-size: 4.5em; font-weight: bold; font-family: monospace; color: var(--text-main); }
+        
+        /* Danger state for the timer */
+        .timer-box.danger { border-color: var(--red); background: rgba(255,71,87,0.1); }
+        .timer-box.danger .timer-time { color: var(--red); text-shadow: 0 0 15px rgba(255,71,87,0.8); }
+        .timer-box.pulse { animation: pulseDanger 1s infinite; }
+
+        .progress-container { width: 100%; max-width: 600px; margin: 25px auto 10px auto; background: #0b0d13; height: 12px; border-radius: 6px; border: 1px solid #2f3542; overflow: hidden; }
+        .progress-bar { height: 100%; background: var(--gold); width: 0%; transition: width 0.5s ease-out; box-shadow: 0 0 10px rgba(255,165,2,0.5); }
+        .bonus-text { color: var(--text-dim); font-size: 0.9em; font-weight: bold; text-transform: uppercase; }
+
+        /* Bonus Table */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; text-align: left; }
+        th, td { padding: 12px 15px; border-bottom: 1px solid #2f3542; }
+        th { color: var(--gold); text-transform: uppercase; letter-spacing: 1px; font-size: 0.9em; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+        .hit-num { font-weight: bold; color: var(--blue); font-size: 1.1em; }
+        
+        @keyframes pulseDanger { 0% { box-shadow: 0 0 0px rgba(255,71,87,0.8); } 50% { box-shadow: 0 0 30px rgba(255,71,87,0.8); } 100% { box-shadow: 0 0 0px rgba(255,71,87,0.8); } }
+    </style>
+</head>
+<body>
+    <div class="top-nav">
+        <a href="/" class="nav-link">📡 Live Warboard</a>
+        <a href="/chain.html" class="nav-link active">🔗 Chain Watcher</a>
+        <a href="/payout.html" class="nav-link">💰 Payouts</a>
+        <a href="/dashboard.html" class="nav-link">🛡️ Dashboard</a>
+        <a href="/recruitment.html" class="nav-link">🎯 Recruitment</a>
+    </div>
+
+    <h1>Live Chain Tracker</h1>
+
+    <div class="container">
+        
+        <div id="error-msg" style="color: var(--red); font-weight: bold; text-align: center;"></div>
+
+        <!-- MAIN DASHBOARD -->
+        <div class="dash-card">
+            <div class="chain-title">Current Chain</div>
+            <div class="chain-count" id="chain-count">0 / 0</div>
+            
+            <div class="timer-box" id="timer-box">
+                <div class="timer-title">Time Remaining</div>
+                <div class="timer-time" id="timer-time">00:00</div>
+            </div>
+
+            <div class="progress-container">
+                <div class="progress-bar" id="chain-progress"></div>
+            </div>
+            <div class="bonus-text" id="next-bonus-text">Waiting for chain to start...</div>
+        </div>
+
+        <!-- BONUS LEDGER -->
+        <div class="dash-card" style="text-align: left; padding: 20px;">
+            <h2 style="margin-top:0; color:var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; font-size:1.1em; text-transform:uppercase;">🏆 Bonus Hit Ledger</h2>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Milestone</th>
+                            <th>Player</th>
+                            <th>Time Secured</th>
+                            <th>Respect Generated</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bonus-list">
+                        <tr><td colspan="4" style="text-align: center; color: var(--text-dim);">No bonus hits logged in the current chain yet.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+<script>
+    const myKey = localStorage.getItem("warboard_apikey");
+    const discordWebhook = localStorage.getItem("warboard_discord") || "";
+    
+    const BONUS_MILESTONES = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
+    
+    let timerInterval = null;
+    let targetExpirationTime = 0;
+    let discordPingSent = false;
+
+    function formatTime(unixTimestamp) {
+        if (!unixTimestamp) return "";
+        let d = new Date(unixTimestamp * 1000);
+        return d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+    }
+
+    async function sendDiscordPing(msg) {
+        if (!discordWebhook) return;
+        try {
+            await fetch('/api/discord-ping', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ webhookUrl: discordWebhook, message: msg })
+            });
+        } catch (err) { console.error("Failed to ping Discord"); }
+    }
+
+    // SMOOTH COUNTDOWN RENDERER
+    function startTimerDisplay() {
+        if (timerInterval) clearInterval(timerInterval);
+        
+        timerInterval = setInterval(() => {
+            let secondsLeft = Math.floor((targetExpirationTime - Date.now()) / 1000);
+            if (secondsLeft < 0) secondsLeft = 0;
+            
+            let m = Math.floor(secondsLeft / 60);
+            let s = secondsLeft % 60;
+            document.getElementById("timer-time").innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+
+            const box = document.getElementById("timer-box");
+            
+            // Pulse Red if under 90 seconds
+            if (secondsLeft <= 90 && secondsLeft > 0) {
+                box.classList.add("danger");
+                if (secondsLeft <= 45) box.classList.add("pulse");
+                else box.classList.remove("pulse");
+
+                // Trigger Discord Ping once per drop-window!
+                if (!discordPingSent && discordWebhook) {
+                    sendDiscordPing(`🚨 **CHAIN DROPPING:** The chain timer is under 90 seconds! Someone make a hit!`);
+                    discordPingSent = true;
+                }
+            } else {
+                box.classList.remove("danger", "pulse");
+                if (secondsLeft > 120) discordPingSent = false; // Reset ping block if time gets built back up
+            }
+
+        }, 200);
+    }
+
+    async function fetchChainData() {
+        if (!myKey) {
+            document.getElementById("error-msg").innerText = "Please set your API key on the Live Warboard settings first.";
+            return;
+        }
+        
+        try {
+            const res = await fetch(`/api/chain?apiKey=${myKey}`);
+            const data = await res.json();
+            
+            if (data.error) {
+                document.getElementById("error-msg").innerText = "API Error: " + data.error;
+                return;
+            }
+
+            const chain = data.chain;
+            
+            if (chain.current === 0) {
+                document.getElementById("chain-count").innerText = "0 / 0";
+                document.getElementById("chain-progress").style.width = "0%";
+                document.getElementById("next-bonus-text").innerText = "Waiting for chain to start...";
+                document.getElementById("timer-time").innerText = "00:00";
+                document.getElementById("timer-box").classList.remove("danger", "pulse");
+                return;
+            }
+
+            document.getElementById("chain-count").innerText = `${chain.current.toLocaleString()} / ${chain.max.toLocaleString()}`;
+            
+            // Sync expiration time (Server gives integer seconds remaining)
+            targetExpirationTime = Date.now() + (chain.timeout * 1000);
+            
+            // Find the next upcoming bonus milestone
+            let nextBonus = BONUS_MILESTONES.find(m => m > chain.current) || "MAXED";
+            let prevBonus = BONUS_MILESTONES.slice().reverse().find(m => m <= chain.current) || 0;
+            
+            let progressPercent = 100;
+            if (nextBonus !== "MAXED") {
+                let hitsNeeded = nextBonus - prevBonus;
+                let hitsMade = chain.current - prevBonus;
+                progressPercent = (hitsMade / hitsNeeded) * 100;
+                document.getElementById("next-bonus-text").innerText = `Next Bonus Hit: ${nextBonus.toLocaleString()} (${nextBonus - chain.current} hits away)`;
+            } else {
+                document.getElementById("next-bonus-text").innerText = `MAXIMUM BONUS REACHED`;
+            }
+            document.getElementById("chain-progress").style.width = `${progressPercent}%`;
+
+            // Render Bonus Hits Ledger
+            let html = "";
+            if (data.bonuses && data.bonuses.length > 0) {
+                data.bonuses.forEach(b => {
+                    html += `<tr>
+                        <td class="hit-num"># ${b.hit.toLocaleString()}</td>
+                        <td><a href="https://www.torn.com/profiles.php?XID=${b.id}" target="_blank" style="color:var(--text-main); font-weight:bold; text-decoration:none;">${b.name}</a></td>
+                        <td style="color:var(--text-dim);">${formatTime(b.time)}</td>
+                        <td style="color:var(--green); font-weight:bold;">+${b.respect.toFixed(2)}</td>
+                    </tr>`;
+                });
+                document.getElementById("bonus-list").innerHTML = html;
+            } else {
+                document.getElementById("bonus-list").innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-dim);">No bonus hits logged yet. Give the server 30 seconds to scrape logs if the chain is currently running.</td></tr>`;
+            }
+
+        } catch (e) { console.error("Chain fetch failed."); }
+    }
+
+    if (myKey) {
+        startTimerDisplay();
+        fetchChainData();
+        setInterval(fetchChainData, 5000); // Poll API every 5 seconds to sync timer & hits
+    }
+
+</script>
+</body>
+</html>
