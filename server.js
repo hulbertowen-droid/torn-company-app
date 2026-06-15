@@ -13,7 +13,7 @@ const TORN_API_KEY = process.env.TORN_API_KEY;
 const FF_SCOUTER_KEY = process.env.FF_SCOUTER_KEY || "";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || "";
-const ADMIN_DISCORD_WEBHOOK = process.env.ADMIN_DISCORD_WEBHOOK || ""; // New Admin Webhook
+const ADMIN_DISCORD_WEBHOOK = process.env.ADMIN_DISCORD_WEBHOOK || ""; 
 
 let claims = {};
 let backups = {}; 
@@ -31,7 +31,6 @@ let isProcessingStats = false;
 let isProcessingFlights = false;
 let isProcessingActivity = false;
 
-// --- API KEY POOL FOR HEAVY SCRAPING ---
 let apiKeyPool = new Set();
 if (ADMIN_API_KEY) apiKeyPool.add(ADMIN_API_KEY);
 if (TORN_API_KEY) apiKeyPool.add(TORN_API_KEY);
@@ -40,23 +39,34 @@ let liveAttacks = {};
 let liveDefends = {}; 
 let processedAttackIds = new Set();
 let backfillCursor = Math.floor(Date.now() / 1000);
-let backfillTarget = backfillCursor - (72 * 3600); // 72 Hours deep
+let backfillTarget = backfillCursor - (72 * 3600); 
 let isBackfilling = true;
 
-// --- SUBSCRIPTION MANAGER ---
+let bonusHits = {}; 
+const BONUS_THRESHOLDS = new Set([10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000]);
+
 let subscriptions = {};
 let adminFactionId = null;
 let lastEventTimestamp = Math.floor(Date.now() / 1000);
 
-try {
-    if (fs.existsSync('subscriptions.json')) {
-        subscriptions = JSON.parse(fs.readFileSync('subscriptions.json'));
-    }
-} catch (e) { console.error("Could not load subscriptions file", e); }
+// Background State Machine memory trackers
+let lastChainTimeoutAlertState = false;
+let backgroundEnemyTrackingState = {};
+let discordConfig = {
+    webhookUrl: "",
+    targetOnline: true,
+    targetLanded: true,
+    targetOutHosp: true,
+    chainUnder90: true,
+    chainMilestone: true,
+    friendlyAttacked: true
+};
 
-function saveSubs() {
-    fs.writeFileSync('subscriptions.json', JSON.stringify(subscriptions));
-}
+try { if (fs.existsSync('subscriptions.json')) subscriptions = JSON.parse(fs.readFileSync('subscriptions.json')); } catch (e) { console.error("Could not load subscriptions file", e); }
+try { if (fs.existsSync('discord_config.json')) discordConfig = JSON.parse(fs.readFileSync('discord_config.json')); } catch(e) { console.error("Could not load background discord config file", e); }
+
+function saveSubs() { fs.writeFileSync('subscriptions.json', JSON.stringify(subscriptions)); }
+function saveDiscordConfig() { fs.writeFileSync('discord_config.json', JSON.stringify(discordConfig)); }
 
 if (ADMIN_API_KEY) {
     fetch(`https://api.torn.com/user/?selections=profile&key=${ADMIN_API_KEY}`)
@@ -102,7 +112,6 @@ setInterval(async () => {
                             saveSubs();
                             console.log(`[PAYMENT RECEIVED] Credited Faction ${facId} with ${weeks} weeks of access!`);
                             
-                            // DISCORD ADMIN PING FOR PAYMENTS
                             if (ADMIN_DISCORD_WEBHOOK) {
                                 fetch(ADMIN_DISCORD_WEBHOOK, {
                                     method: 'POST',
@@ -267,12 +276,34 @@ setInterval(async () => {
                     let attFacId = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
                     if (!liveDefends[uId]) liveDefends[uId] = {};
                     liveDefends[uId][attFacId] = (liveDefends[uId][attFacId] || 0) + 1;
+
+                    // 24/7 BACKGROUND TRIGGER: FRIENDLY ATTACKED
+                    if (discordConfig.friendlyAttacked && discordConfig.webhookUrl) {
+                        fetch(discordConfig.webhookUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ content: `🛡️ **WALL WATCHER:** Faction member \`${atk.defender_name || uId}\` is taking incoming fire from Faction \`${atk.attacker_faction_name || attFacId}\`!` })
+                        }).catch(() => {});
+                    }
                 }
                 if (atk.attacker_faction && atk.attacker_faction.toString() === adminFactionId) {
                     let uId = atk.attacker_id.toString();
                     let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
                     if (!liveAttacks[uId]) liveAttacks[uId] = {};
                     liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
+                    
+                    if (atk.chain && BONUS_THRESHOLDS.has(atk.chain)) {
+                        bonusHits[atk.chain] = { id: uId, time: atk.timestamp_ended, respect: atk.respect_gain };
+                        
+                        // 24/7 BACKGROUND TRIGGER: MILESTONE REACHED
+                        if (discordConfig.chainMilestone && discordConfig.webhookUrl) {
+                            fetch(discordConfig.webhookUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ content: `🏆 **CHAIN MILESTONE SECURED:** Hit #**${atk.chain}** executed by \`${atk.attacker_name || uId}\` (+${atk.respect_gain || 0} Respect)!` })
+                            }).catch(() => {});
+                        }
+                    }
                 }
             }
         }
@@ -309,6 +340,10 @@ setInterval(async () => {
                         let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
                         if (!liveAttacks[uId]) liveAttacks[uId] = {};
                         liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
+                        
+                        if (atk.chain && BONUS_THRESHOLDS.has(atk.chain)) {
+                            bonusHits[atk.chain] = { id: uId, time: atk.timestamp_ended, respect: atk.respect_gain };
+                        }
                     }
                 }
                 backfillCursor = oldestTimeInBatch - 1;
@@ -323,13 +358,84 @@ setInterval(async () => {
     }
 }, 20000); 
 
+// --- NEW CRITICAL BLOCK: 24/7 BACKGROUND MONITORING ENGINE ---
+setInterval(async () => {
+    if (!ADMIN_API_KEY || !adminFactionId) return;
+    try {
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,chain&key=${ADMIN_API_KEY}`);
+        const facData = await facRes.json();
+        if (facData.error) return;
+
+        // A. BACKGROUND SURVEILLANCE: CHAIN TIME CRITICAL WARNING
+        if (facData.chain && facData.chain.current > 0) {
+            let secondsLeft = facData.chain.timeout;
+            if (secondsLeft <= 90 && secondsLeft > 0 && !lastChainTimeoutAlertState && discordConfig.chainUnder90 && discordConfig.webhookUrl) {
+                fetch(discordConfig.webhookUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content: `⚠️ **BACKGROUND ALERT: CHAIN DROPPING!** The countdown has slipped below 90s (${secondsLeft}s left)! Hit a target immediately!` })
+                }).catch(() => {});
+                lastChainTimeoutAlertState = true;
+            } else if (secondsLeft > 120) {
+                lastChainTimeoutAlertState = false;
+            }
+        }
+
+        // B. BACKGROUND SURVEILLANCE: ENEMY TARGET STATUS ENGINES
+        let activeEnemyId = autoDetectEnemyFaction(facData);
+        if (activeEnemyId && discordConfig.webhookUrl) {
+            const enemyRes = await fetch(`https://api.torn.com/faction/${activeEnemyId}?selections=basic&key=${ADMIN_API_KEY}`);
+            const enemyData = await enemyRes.json();
+            
+            if (enemyData.members) {
+                Object.entries(enemyData.members).forEach(([id, m]) => {
+                    let oldRecord = backgroundEnemyTrackingState[id];
+                    let newRecord = { state: m.status?.state, online: m.last_action?.status, description: m.status?.description };
+                    
+                    if (oldRecord) {
+                        // Online Alert
+                        if (oldRecord.online !== "Online" && newRecord.online === "Online" && discordConfig.targetOnline) {
+                            fetch(discordConfig.webhookUrl, {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ content: `🟢 **TARGET ONLINE:** ${m.name} [${id}] has established connection!` })
+                            }).catch(() => {});
+                        }
+                        // Status State shifts to Okay
+                        if (oldRecord.state !== "Okay" && newRecord.state === "Okay") {
+                            let oldDesc = oldRecord.description || "";
+                            if ((oldRecord.state === "Traveling" || oldDesc.includes("Traveling") || oldDesc.includes("Abroad")) && discordConfig.targetLanded) {
+                                fetch(discordConfig.webhookUrl, {
+                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ content: `✈️ **TARGET LANDED:** ${m.name} [${id}] finished flight operations!` })
+                                }).catch(() => {});
+                            } else if (oldRecord.state === "Hospital" && discordConfig.targetOutHosp) {
+                                fetch(discordConfig.webhookUrl, {
+                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ content: `🏥 **TARGET OUT OF HOSP:** ${m.name} [${id}] has dropped medical state!` })
+                                }).catch(() => {});
+                            }
+                        }
+                    }
+                    backgroundEnemyTrackingState[id] = newRecord;
+                });
+            }
+        }
+    } catch (err) { console.error("24/7 Monitoring Loop Error:", err); }
+}, 30000);
+
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
-// --- NEW ROUTE: DISCORD PING PROXY ---
+// --- NEW CONFIGURATION PERSISTENCE ENDPOINTS ---
+app.get('/api/get-discord-config', (req, res) => { res.json(discordConfig); });
+app.post('/api/save-discord-config', (req, res) => {
+    discordConfig = { ...discordConfig, ...req.body };
+    saveDiscordConfig();
+    res.json({ success: true });
+});
+
 app.post('/api/discord-ping', async (req, res) => {
     const { webhookUrl, message } = req.body;
     if (!webhookUrl || !message) return res.status(400).json({ error: "Missing data" });
-
     try {
         await fetch(webhookUrl, {
             method: 'POST',
@@ -337,9 +443,7 @@ app.post('/api/discord-ping', async (req, res) => {
             body: JSON.stringify({ content: message })
         });
         res.json({ success: true });
-    } catch (err) {
-        res.status(500).json({ error: "Failed to ping Discord" });
-    }
+    } catch (err) { res.status(500).json({ error: "Failed to ping Discord" }); }
 });
 
 // --- SECURED ROUTES ---
@@ -715,7 +819,6 @@ app.post('/api/backup', (req, res) => { const { enemyId, playerName } = req.body
 app.post('/api/unbackup', (req, res) => { const { enemyId } = req.body; delete backups[enemyId]; res.json({ success: true }); });
 app.post('/api/update-stats', (req, res) => { const { enemyId, stats } = req.body; manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() }; res.json({ success: true }); });
 
-// --- UPDATED LIVE WARBOARD ENDPOINT ---
 app.get('/api/warboard', async (req, res) => {
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
