@@ -732,9 +732,21 @@ app.get('/api/past-war', async (req, res) => {
         const userData = await userRes.json(); const reportData = await reportRes.json(); const itemsData = await itemsRes.json();
         if (userData.error) return res.status(400).json({ error: "Invalid API Key." });
         if (reportData.error) return res.status(400).json({ error: "Torn API Error: " + reportData.error.error });
-        const myUserId = userData.player_id.toString(); let correctFacId = null;
+       const myUserId = userData.player_id.toString(); 
+        let correctFacId = null;
+        let enemyFacId = null; 
+
         for (let [facId, facData] of Object.entries(reportData.rankedwarreport.factions)) {
-            if (facData.members && facData.members[myUserId]) { correctFacId = facId; break; }
+            if (facData.members && facData.members[myUserId]) { 
+                correctFacId = facId; 
+            } else { 
+                enemyFacId = facId; 
+            }
+        }
+        
+        if (!correctFacId) { 
+            correctFacId = userData.faction?.faction_id?.toString(); 
+            enemyFacId = Object.keys(reportData.rankedwarreport.factions).find(id => id !== correctFacId); 
         }
         if (!correctFacId) correctFacId = userData.faction?.faction_id?.toString();
         const myFactionWarData = reportData.rankedwarreport.factions[correctFacId];
