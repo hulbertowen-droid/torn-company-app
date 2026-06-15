@@ -43,7 +43,6 @@ let backfillCursor = Math.floor(Date.now() / 1000);
 let backfillTarget = backfillCursor - (72 * 3600); 
 let isBackfilling = true;
 
-// CHAIN TRACKING MEMORY
 let bonusHits = {}; 
 const BONUS_THRESHOLDS = new Set([10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000]);
 
@@ -265,14 +264,12 @@ setInterval(async () => {
                 if (processedAttackIds.has(atkId)) continue;
                 processedAttackIds.add(atkId);
                 
-                // Track Defends
                 if (atk.defender_faction && atk.defender_faction.toString() === adminFactionId) {
                     let uId = atk.defender_id.toString();
                     let attFacId = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
                     if (!liveDefends[uId]) liveDefends[uId] = {};
                     liveDefends[uId][attFacId] = (liveDefends[uId][attFacId] || 0) + 1;
                 }
-                // Track Attacks & CHAIN BONUSES
                 if (atk.attacker_faction && atk.attacker_faction.toString() === adminFactionId) {
                     let uId = atk.attacker_id.toString();
                     let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
@@ -355,13 +352,12 @@ app.post('/api/discord-ping', async (req, res) => {
     }
 });
 
-// --- NEW CHAIN WATCHER ENDPOINT ---
+// --- CHAIN WATCHER ENDPOINT ---
 app.get('/api/chain', async (req, res) => {
     const userKey = req.query.apiKey;
     try {
         await verifySubscription(userKey);
         
-        // Harvest key for the pool
         if (userKey) apiKeyPool.add(userKey);
 
         const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,chain&key=${userKey}`);
@@ -369,15 +365,12 @@ app.get('/api/chain', async (req, res) => {
         
         if (facData.error) return res.status(400).json({ error: facData.error.error });
 
-        // If the chain is dead, clear the backend memory of bonuses so old chains don't render
         if (facData.chain && facData.chain.current === 0) {
             bonusHits = {};
         }
 
         let mappedBonuses = [];
         for (let [hitNum, data] of Object.entries(bonusHits)) {
-            // Only push bonuses that are less than or equal to the current chain count
-            // This natively overwrites old chain data safely as the new chain builds up!
             if (facData.chain && parseInt(hitNum) <= facData.chain.current) {
                 let member = facData.members ? facData.members[data.id] : null;
                 mappedBonuses.push({
@@ -390,7 +383,6 @@ app.get('/api/chain', async (req, res) => {
             }
         }
         
-        // Sort highest hit to lowest hit
         mappedBonuses.sort((a, b) => b.hit - a.hit);
 
         res.json({
@@ -684,14 +676,11 @@ app.get('/api/past-war', async (req, res) => {
             fetch(`https://api.torn.com/torn/${reportId}?selections=rankedwarreport&key=${apiKey}`),
             fetch(`https://api.torn.com/torn/?selections=items&key=${apiKey}`)
         ]);
-        const userData = await userRes.json(); 
-        const reportData = await reportRes.json(); 
-        const itemsData = await itemsRes.json();
-        
+        const userData = await userRes.json(); const reportData = await reportRes.json(); const itemsData = await itemsRes.json();
         if (userData.error) return res.status(400).json({ error: "Invalid API Key." });
         if (reportData.error) return res.status(400).json({ error: "Torn API Error: " + reportData.error.error });
-        
         const myUserId = userData.player_id.toString(); 
+        
         let correctFacId = null;
         let enemyFacId = null; 
 
