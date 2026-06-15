@@ -4,26 +4,74 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chain Watcher | Spider-Verse</title>
-    <link rel="stylesheet" href="/style.css">
+    <style>
+        :root { 
+            --bg: #090a0f; --card: #11141d; --item: #1b202e; 
+            --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
+            --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
+        }
+        
+        body { background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px; }
+        
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #57606f; }
+
+        .top-nav { display: flex; justify-content: center; gap: 20px; max-width: 1200px; margin: 0 auto 20px auto; background: var(--card); padding: 12px; border-radius: 10px; border: 1px solid #2f3542; flex-wrap: wrap;}
+        .nav-link { color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 6px 12px; border-radius: 6px; transition: 0.2s; text-transform: uppercase; font-size: 0.9em; letter-spacing: 1px; cursor: pointer; }
+        .nav-link:hover { background: #2f3542; color: white; }
+        .nav-link.active { color: white; background: rgba(88, 166, 255, 0.15); border: 1px solid var(--blue); }
+
+        h1 { text-align: center; color: var(--gold); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
+
+        .container { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 30px; }
+        
+        .dash-card { background: var(--card); border: 1px solid #2f3542; padding: 30px; border-radius: 12px; text-align: center; position: relative; overflow: hidden; }
+        
+        .chain-title { color: var(--text-dim); font-size: 1.2em; text-transform: uppercase; letter-spacing: 2px; font-weight: bold; margin-bottom: 10px; }
+        .chain-count { font-size: 4em; font-weight: 900; color: var(--blue); line-height: 1; text-shadow: 0 0 20px rgba(88,166,255,0.4); margin-bottom: 20px; }
+        
+        .timer-box { background: #0b0d13; border: 2px solid #2f3542; padding: 25px; border-radius: 12px; max-width: 400px; margin: 0 auto; transition: 0.3s; }
+        .timer-title { color: var(--text-dim); text-transform: uppercase; font-weight: bold; letter-spacing: 1px; margin-bottom: 5px; }
+        .timer-time { font-size: 4.5em; font-weight: bold; font-family: monospace; color: var(--text-main); }
+        
+        /* Danger state for the timer */
+        .timer-box.danger { border-color: var(--red); background: rgba(255,71,87,0.1); }
+        .timer-box.danger .timer-time { color: var(--red); text-shadow: 0 0 15px rgba(255,71,87,0.8); }
+        .timer-box.pulse { animation: pulseDanger 1s infinite; }
+
+        .progress-container { width: 100%; max-width: 600px; margin: 25px auto 10px auto; background: #0b0d13; height: 12px; border-radius: 6px; border: 1px solid #2f3542; overflow: hidden; }
+        .progress-bar { height: 100%; background: var(--gold); width: 0%; transition: width 0.5s ease-out; box-shadow: 0 0 10px rgba(255,165,2,0.5); }
+        .bonus-text { color: var(--text-dim); font-size: 0.9em; font-weight: bold; text-transform: uppercase; }
+
+        /* Bonus Table */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; text-align: left; }
+        th, td { padding: 12px 15px; border-bottom: 1px solid #2f3542; }
+        th { color: var(--gold); text-transform: uppercase; letter-spacing: 1px; font-size: 0.9em; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+        .hit-num { font-weight: bold; color: var(--blue); font-size: 1.1em; }
+        
+        @keyframes pulseDanger { 0% { box-shadow: 0 0 0px rgba(255,71,87,0.8); } 50% { box-shadow: 0 0 30px rgba(255,71,87,0.8); } 100% { box-shadow: 0 0 0px rgba(255,71,87,0.8); } }
+    </style>
 </head>
 <body>
-
     <div class="top-nav">
         <a href="/" class="nav-link">📡 Live Warboard</a>
-        <a href="/chain.html" class="nav-link">🔗 Chain Watcher</a>
-        <a href="/payout.html" class="nav-link">💰 Payout Calculator</a>
-        <a href="/dashboard.html" class="nav-link">🛡️ Alliance Dashboard</a>
+        <a href="/chain.html" class="nav-link active">🔗 Chain Watcher</a>
+        <a href="/payout.html" class="nav-link">💰 Payouts</a>
+        <a href="/dashboard.html" class="nav-link">🛡️ Dashboard</a>
         <a href="/recruitment.html" class="nav-link">🎯 Recruitment</a>
-        <a onclick="openSettings()" class="nav-link" style="cursor:pointer; border-left: 1px solid #2f3542; border-radius:0;">⚙️ Settings</a>
     </div>
 
-    <h1 style="color: var(--gold);">Live Chain Tracker</h1>
+    <h1>Live Chain Tracker</h1>
 
-    <div class="container" style="display: flex; flex-direction: column; max-width: 1000px;">
+    <div class="container">
         
         <div id="error-msg" style="color: var(--red); font-weight: bold; text-align: center;"></div>
 
-        <div class="dash-card" style="text-align: center; position: relative; overflow: hidden;">
+        <!-- MAIN DASHBOARD -->
+        <div class="dash-card">
             <div class="chain-title">Current Chain</div>
             <div class="chain-count" id="chain-count">0 / 0</div>
             
@@ -38,6 +86,7 @@
             <div class="bonus-text" id="next-bonus-text">Waiting for chain to start...</div>
         </div>
 
+        <!-- BONUS LEDGER -->
         <div class="dash-card" style="text-align: left; padding: 20px;">
             <h2 style="margin-top:0; color:var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; font-size:1.1em; text-transform:uppercase;">🏆 Bonus Hit Ledger</h2>
             <div style="overflow-x: auto;">
@@ -60,17 +109,6 @@
     </div>
 
 <script>
-    // --- SMART NAV HIGHLIGHTER ---
-    document.addEventListener("DOMContentLoaded", function() {
-        let currentUrl = window.location.pathname;
-        if (currentUrl === "/index.html") currentUrl = "/"; 
-        let links = document.querySelectorAll(".top-nav .nav-link");
-        links.forEach(link => {
-            link.classList.remove("active"); 
-            if (link.getAttribute("href") === currentUrl) link.classList.add("active"); 
-        });
-    });
-
     const myKey = localStorage.getItem("warboard_apikey");
     const discordWebhook = localStorage.getItem("warboard_discord") || "";
     
@@ -97,6 +135,7 @@
         } catch (err) { console.error("Failed to ping Discord"); }
     }
 
+    // SMOOTH COUNTDOWN RENDERER
     function startTimerDisplay() {
         if (timerInterval) clearInterval(timerInterval);
         
@@ -110,19 +149,22 @@
 
             const box = document.getElementById("timer-box");
             
+            // Pulse Red if under 90 seconds
             if (secondsLeft <= 90 && secondsLeft > 0) {
                 box.classList.add("danger");
                 if (secondsLeft <= 45) box.classList.add("pulse");
                 else box.classList.remove("pulse");
 
+                // Trigger Discord Ping once per drop-window!
                 if (!discordPingSent && discordWebhook) {
                     sendDiscordPing(`🚨 **CHAIN DROPPING:** The chain timer is under 90 seconds! Someone make a hit!`);
                     discordPingSent = true;
                 }
             } else {
                 box.classList.remove("danger", "pulse");
-                if (secondsLeft > 120) discordPingSent = false; 
+                if (secondsLeft > 120) discordPingSent = false; // Reset ping block if time gets built back up
             }
+
         }, 200);
     }
 
@@ -153,8 +195,11 @@
             }
 
             document.getElementById("chain-count").innerText = `${chain.current.toLocaleString()} / ${chain.max.toLocaleString()}`;
+            
+            // Sync expiration time (Server gives integer seconds remaining)
             targetExpirationTime = Date.now() + (chain.timeout * 1000);
             
+            // Find the next upcoming bonus milestone
             let nextBonus = BONUS_MILESTONES.find(m => m > chain.current) || "MAXED";
             let prevBonus = BONUS_MILESTONES.slice().reverse().find(m => m <= chain.current) || 0;
             
@@ -169,6 +214,7 @@
             }
             document.getElementById("chain-progress").style.width = `${progressPercent}%`;
 
+            // Render Bonus Hits Ledger
             let html = "";
             if (data.bonuses && data.bonuses.length > 0) {
                 data.bonuses.forEach(b => {
@@ -183,14 +229,16 @@
             } else {
                 document.getElementById("bonus-list").innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-dim);">No bonus hits logged yet. Give the server 30 seconds to scrape logs if the chain is currently running.</td></tr>`;
             }
+
         } catch (e) { console.error("Chain fetch failed."); }
     }
 
     if (myKey) {
         startTimerDisplay();
         fetchChainData();
-        setInterval(fetchChainData, 5000); 
+        setInterval(fetchChainData, 5000); // Poll API every 5 seconds to sync timer & hits
     }
+
 </script>
 </body>
 </html>
