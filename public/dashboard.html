@@ -4,236 +4,125 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Alliance Dashboard | Spider-Verse</title>
-    <style>
-        :root { 
-            --bg: #090a0f; --card: #11141d; --item: #1b202e; 
-            --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
-            --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
-        }
-        body { background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px; }
-        
-        /* Custom Scrollbars */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #57606f; }
-
-        .top-nav { display: flex; justify-content: center; gap: 20px; max-width: 1200px; margin: 0 auto 20px auto; background: var(--card); padding: 12px; border-radius: 10px; border: 1px solid #2f3542; }
-        .nav-link { color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 6px 12px; border-radius: 6px; transition: 0.2s; text-transform: uppercase; font-size: 0.9em; letter-spacing: 1px; cursor: pointer; }
-        .nav-link:hover { background: #2f3542; color: white; }
-        .nav-link.active { color: white; background: rgba(88, 166, 255, 0.15); border: 1px solid var(--blue); }
-
-        h1 { text-align: center; color: var(--blue); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
-
-        .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
-        
-        .dash-card { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #2f3542; }
-        .dash-card h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;}
-        
-        .ai-section { grid-column: 1 / -1; }
-        
-        .table-wrapper { max-height: 600px; overflow-y: auto; overflow-x: hidden; padding-right: 5px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #2f3542; }
-        th { color: var(--text-dim); font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; position: sticky; top: 0; background: var(--card); z-index: 10;}
-        tr:hover { background: rgba(255,255,255,0.02); }
-        
-        .status-cell { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-        .time-faded { color: var(--text-dim); font-size: 0.85em; font-style: italic; }
-        
-        .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; flex-shrink: 0; }
-        .dot-online { background: var(--green); box-shadow: 0 0 8px var(--green); }
-        .dot-idle { background: var(--gold); }
-        .dot-offline { background: #57606f; }
-        .text-danger { color: var(--red); font-weight: bold; }
-
-        .timeline-container { display: flex; gap: 3px; align-items: center; }
-        .t-block { width: 10px; height: 16px; border-radius: 2px; }
-        .t-active { background: var(--green); box-shadow: 0 0 4px rgba(46, 213, 115, 0.4); }
-        .t-inactive { background: #232731; }
-
-        /* Badges for Armory */
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold; text-transform: uppercase; display: inline-block;}
-        .badge-armor { background: rgba(88, 166, 255, 0.15); color: var(--blue); border: 1px solid var(--blue); }
-        .badge-weapon { background: rgba(255, 71, 87, 0.15); color: var(--red); border: 1px solid var(--red); }
-        .badge-temp { background: rgba(255, 165, 2, 0.15); color: var(--gold); border: 1px solid var(--gold); }
-
-        .ai-terminal { background: #050608; border: 1px solid var(--blue); border-radius: 8px; padding: 20px; font-family: 'Courier New', Courier, monospace; min-height: 150px; line-height: 1.6; }
-        .btn-ai { background: rgba(88, 166, 255, 0.15); color: var(--blue); border: 1px solid var(--blue); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
-        .btn-ai:hover { background: var(--blue); color: #000; }
-        .btn-ai-live { background: rgba(255, 71, 87, 0.15); color: var(--red); border-color: var(--red); }
-        .btn-ai-live:hover { background: var(--red); color: white; }
-        
-        @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
-    </style>
+    <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <div class="top-nav">
+
+    <!-- The Smart Nav Bar -->
+    <div class="top-nav">
         <a href="/" class="nav-link">📡 Live Warboard</a>
-        <a href="/chain.html" class="nav-link active">🔗 Chain Watcher</a>
-        <a href="/payout.html" class="nav-link">💰 Payouts</a>
-        <a href="/dashboard.html" class="nav-link">🛡️ Dashboard</a>
+        <a href="/chain.html" class="nav-link">🔗 Chain Watcher</a>
+        <a href="/payout.html" class="nav-link">💰 Payout Calculator</a>
+        <a href="/dashboard.html" class="nav-link">🛡️ Alliance Dashboard</a>
         <a href="/recruitment.html" class="nav-link">🎯 Recruitment</a>
+        <a onclick="openSettings()" class="nav-link" style="cursor:pointer; border-left: 1px solid #2f3542; border-radius:0;">⚙️ Settings</a>
     </div>
 
     <h1>Alliance Dashboard</h1>
 
     <div class="container">
-        <!-- AI Insight Terminal -->
-        <div class="dash-card ai-section">
-            <h2>
-                <span>🧠 Gemini Tactical War Analyst</span>
-                <div style="display:flex; gap:10px;">
-                    <button class="btn-ai" onclick="generateAIReport('past')">Analyze Last War</button>
-                    <button class="btn-ai btn-ai-live" onclick="generateAIReport('ongoing')">🚨 Analyze LIVE War</button>
-                </div>
-            </h2>
-            <div id="ai-output" class="ai-terminal">
-                <span style="color: var(--text-dim);">Awaiting command... Click a button above to feed war data into the AI.</span>
-            </div>
-        </div>
-
-        <!-- Activity Tracker -->
-        <div class="dash-card">
-            <h2>👤 Member Activity Tracker <span id="member-count" style="font-size: 0.6em; color: var(--text-dim);">0</span></h2>
-            <div class="table-wrapper">
-                <table id="activity-table">
-                    <thead><tr><th>Player</th><th>Status</th><th>Scanner Timeline (12H)</th></tr></thead>
-                    <tbody id="activity-list"><tr><td colspan="3" style="color:var(--text-dim);">Loading API data...</td></tr></tbody>
-                </table>
-            </div>
+        
+        <!-- Member Status & Timelines -->
+        <div class="faction-col">
+            <h2>Faction Roster</h2>
+            <div id="roster-list"><div style="color:var(--text-dim); padding:20px;">Loading Faction Data...</div></div>
         </div>
 
         <!-- Armory Loans -->
-        <div class="dash-card">
-            <h2>🔫 Armory Loans Tracker <span id="loan-count" style="font-size: 0.6em; color: var(--text-dim);">0</span></h2>
-            <div class="table-wrapper">
-                <table id="loans-table">
-                    <thead><tr><th>Item</th><th>Loaned To</th><th>Type</th></tr></thead>
-                    <tbody id="loans-list"><tr><td colspan="3" style="color:var(--text-dim);">Loading API data...</td></tr></tbody>
-                </table>
-            </div>
+        <div class="faction-col">
+            <h2>Armory Loans</h2>
+            <div id="loan-error" style="color: var(--red); font-weight: bold; margin-bottom: 10px; display: none;">Warning: API Key does not have Armory access. Cannot fetch loans.</div>
+            <div id="loan-list"><div style="color:var(--text-dim); padding:20px;">Loading Armory Data...</div></div>
         </div>
+
     </div>
 
 <script>
+    // --- SMART NAV HIGHLIGHTER ---
+    document.addEventListener("DOMContentLoaded", function() {
+        let currentUrl = window.location.pathname;
+        if (currentUrl === "/index.html") currentUrl = "/"; 
+        let links = document.querySelectorAll(".top-nav .nav-link");
+        links.forEach(link => {
+            link.classList.remove("active"); 
+            if (link.getAttribute("href") === currentUrl) link.classList.add("active"); 
+        });
+    });
+
     const myKey = localStorage.getItem("warboard_apikey");
 
-    if (!myKey) {
-        document.getElementById("activity-list").innerHTML = `<tr><td colspan="3" style="color:var(--red);">Please set your API key on the Live Warboard settings first.</td></tr>`;
-        document.getElementById("loans-list").innerHTML = `<tr><td colspan="3" style="color:var(--red);">Please set your API key on the Live Warboard settings first.</td></tr>`;
-    } else {
-        fetchDashboardData();
-        setInterval(fetchDashboardData, 10000);
-    }
-
-    async function fetchDashboardData() {
-        try {
-            const res = await fetch(`/api/dashboard-data?apiKey=${myKey}`);
-            const data = await res.json();
-            if (data.error) throw new Error(data.error);
-
-            renderActivity(data.members);
-            renderLoans(data.loans, data.members, data.armoryError);
-        } catch (e) {
-            console.error(e);
-            document.getElementById("activity-list").innerHTML = `<tr><td colspan="3" style="color:var(--red);">API Error: ${e.message}</td></tr>`;
-        }
-    }
-
-    function renderActivity(members) {
-        const list = Object.entries(members).map(([id, m]) => ({ id, ...m })).sort((a, b) => a.last_action.timestamp - b.last_action.timestamp);
-        document.getElementById("member-count").innerText = list.length;
-        
-        const now = Math.floor(Date.now() / 1000);
-        let html = "";
-        
-        list.forEach(m => {
-            let dotClass = "dot-offline";
-            let timeClass = "time-faded";
-            if (m.last_action.status === "Online") dotClass = "dot-online";
-            if (m.last_action.status === "Idle") dotClass = "dot-idle";
-
-            let timeDiff = now - m.last_action.timestamp;
-            if (timeDiff > 172800) timeClass += " text-danger"; 
-
-            let timelineHtml = `<div class="timeline-container">`;
-            if (m.timeline && Array.isArray(m.timeline) && m.timeline.length > 0) {
-                m.timeline.forEach(score => {
-                    let blockClass = score === 1 ? "t-active" : "t-inactive";
-                    timelineHtml += `<div class="t-block ${blockClass}"></div>`;
-                });
-            } else {
-                timelineHtml += `<span style="color:var(--text-dim); font-size:0.85em; font-style:italic;">⏳ Scanner synchronization in progress...</span>`;
-            }
-            timelineHtml += `</div>`;
-
-            html += `<tr>
-                <td><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-main); text-decoration:none; font-weight:bold;">${m.name} [${m.id}]</a></td>
-                <td>
-                    <div class="status-cell">
-                        <span class="status-dot ${dotClass}"></span>
-                        ${m.last_action.status} 
-                        <span class="${timeClass}">(${m.last_action.relative})</span>
-                    </div>
-                </td>
-                <td>${timelineHtml}</td>
-            </tr>`;
-        });
-        
-        document.getElementById("activity-list").innerHTML = html;
-    }
-
-    function renderLoans(loans, members, armoryError) {
-        const listContainer = document.getElementById("loans-list");
-        if (armoryError) {
-            document.getElementById("loan-count").innerText = "Locked";
-            listContainer.innerHTML = `<tr><td colspan="3" style="color:var(--red); font-weight:bold;">⚠️ Access Denied: Your API key does not have the faction permissions required to view the Armory.</td></tr>`;
+    async function loadDashboard() {
+        if (!myKey) {
+            document.getElementById("roster-list").innerHTML = "<div style='color:var(--red); padding:10px;'>Please set your API key on the Live Warboard settings first.</div>";
+            document.getElementById("loan-list").innerHTML = "";
             return;
         }
 
-        document.getElementById("loan-count").innerText = loans.length;
-        let html = "";
-        
-        if (loans.length === 0) {
-            html = `<tr><td colspan="3" style="color:var(--text-dim);">No items currently loaned out.</td></tr>`;
-        } else {
-            loans.forEach(loan => {
-                const borrower = members[loan.loaned_to] ? members[loan.loaned_to].name + " [" + loan.loaned_to + "]" : "Unknown Player [" + loan.loaned_to + "]";
-                
-                let badgeClass = "badge-temp";
-                if (loan.type === "Armor") badgeClass = "badge-armor";
-                if (loan.type === "Weapon") badgeClass = "badge-weapon";
-
-                html += `<tr>
-                    <td style="font-weight:bold; color:var(--gold);">${loan.name}</td>
-                    <td>${borrower}</td>
-                    <td><span class="badge ${badgeClass}">${loan.type}</span></td>
-                </tr>`;
-            });
-        }
-        listContainer.innerHTML = html;
-    }
-
-    async function generateAIReport(type) {
-        const term = document.getElementById("ai-output");
-        const endpoint = type === 'ongoing' ? '/api/ai-analyze-ongoing' : '/api/ai-analyze';
-        const statusMsg = type === 'ongoing' ? 'LIVE active war data' : 'latest completed Ranked War data';
-        
-        term.innerHTML = `<span style="color: var(--blue);">[SYSTEM] Initiating secure uplink to Gemini API...<br>[SYSTEM] Extracting ${statusMsg}...<br>[SYSTEM] Analyzing faction performance metrics... Please wait.</span>`;
-        
         try {
-            const res = await fetch(`${endpoint}?apiKey=${myKey}`, { method: 'POST' });
+            const res = await fetch(`/api/dashboard-data?apiKey=${myKey}`);
             const data = await res.json();
-            if (data.error) throw new Error(data.error);
 
-            let formattedText = data.analysis.replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--blue);">$1</strong>');
-            formattedText = formattedText.replace(/\n/g, '<br>');
-            term.innerHTML = `<span style="color: var(--text-main);">${formattedText}</span>`;
-        } catch (e) {
-            term.innerHTML = `<span style="color: var(--red);">[ERROR] ${e.message}</span>`;
+            if (data.error) {
+                document.getElementById("roster-list").innerHTML = `<div style='color:var(--red); padding:10px;'>API Error: ${data.error}</div>`;
+                return;
+            }
+
+            if (data.armoryError) {
+                document.getElementById("loan-error").style.display = "block";
+                document.getElementById("loan-list").innerHTML = "";
+            } else {
+                let loanHtml = "";
+                if (data.loans && data.loans.length > 0) {
+                    data.loans.forEach(loan => {
+                        let badgeColor = loan.type === "Armor" ? "var(--blue)" : (loan.type === "Weapon" ? "var(--red)" : "var(--gold)");
+                        loanHtml += `
+                            <div class="member-card">
+                                <div class="card-header">
+                                    <div style="font-weight: bold; color: var(--text-main);">${loan.name}</div>
+                                    <div style="background: rgba(255,255,255,0.1); border: 1px solid ${badgeColor}; color: ${badgeColor}; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; font-weight: bold;">${loan.type}</div>
+                                </div>
+                                <div style="color: var(--text-dim); font-size: 0.9em; margin-top: 5px;">Loaned to: <span style="color: var(--gold); font-weight: bold;">[${loan.loaned_to}]</span></div>
+                            </div>
+                        `;
+                    });
+                } else {
+                    loanHtml = `<div style="color:var(--text-dim); padding:10px;">No items are currently loaned out.</div>`;
+                }
+                document.getElementById("loan-list").innerHTML = loanHtml;
+            }
+
+            let rosterHtml = "";
+            if (data.members) {
+                Object.entries(data.members).forEach(([id, m]) => {
+                    let activityScore = 0;
+                    if (m.timeline && m.timeline.length > 0) {
+                        activityScore = m.timeline.reduce((a,b) => a+b, 0);
+                    }
+                    
+                    let actColor = activityScore > 50 ? "var(--green)" : (activityScore > 10 ? "var(--gold)" : "var(--red)");
+                    
+                    rosterHtml += `
+                        <div class="member-card">
+                            <div class="card-header">
+                                <a class="profile" href="https://www.torn.com/profiles.php?XID=${id}" target="_blank">${m.name}</a>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 0.8em; color: var(--text-dim);">12h Activity Score</div>
+                                    <div style="font-weight: bold; color: ${actColor};">${activityScore}</div>
+                                </div>
+                            </div>
+                            <div class="status">Last Action: <span>${m.last_action?.relative || "Unknown"}</span></div>
+                        </div>
+                    `;
+                });
+            }
+            document.getElementById("roster-list").innerHTML = rosterHtml;
+
+        } catch (err) {
+            console.error(err);
         }
     }
+
+    loadDashboard();
 </script>
 </body>
 </html>
