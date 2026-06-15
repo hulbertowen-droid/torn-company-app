@@ -4,138 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Live Warboard | Spider-Verse</title>
-    <!-- Inject Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        :root { 
-            --bg: #090a0f; --card: #11141d; --item: #1b202e; 
-            --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
-            --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
-        }
-        
-        body { background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px; }
-        
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #57606f; }
-
-        .top-nav { display: flex; justify-content: center; gap: 20px; max-width: 1200px; margin: 0 auto 20px auto; background: var(--card); padding: 12px; border-radius: 10px; border: 1px solid #2f3542; }
-        .nav-link { color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 6px 12px; border-radius: 6px; transition: 0.2s; text-transform: uppercase; font-size: 0.9em; letter-spacing: 1px; cursor: pointer; }
-        .nav-link:hover { background: #2f3542; color: white; }
-        .nav-link.active { color: white; background: rgba(88, 166, 255, 0.15); border: 1px solid var(--blue); }
-
-        h1 { text-align: center; color: var(--red); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
-
-        .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
-        
-        /* Tactical Watchlist */
-        .watchlist-box { grid-column: 1 / -1; background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542; }
-        .watchlist-box h3 { margin: 0 0 15px 0; color: var(--red); display: flex; align-items: center; gap: 10px; text-transform: uppercase; letter-spacing: 1px; }
-        .watchlist-items { display: flex; gap: 15px; overflow-x: auto; padding-bottom: 10px; }
-        
-        .watch-card { background: #0b0d13; border: 1px solid #2f3542; padding: 12px 18px; border-radius: 8px; min-width: 240px; flex-shrink: 0; }
-        .watch-card.online { border-color: var(--green); background: rgba(46, 213, 115, 0.05); }
-        .watch-card.flying { border-color: var(--blue); background: rgba(88, 166, 255, 0.05); }
-        .watch-name { font-weight: bold; font-size: 1.1em; margin-bottom: 4px; }
-        .watch-name a { color: var(--text-main); text-decoration: none; }
-        .watch-name a:hover { text-decoration: underline; }
-        .watch-highlight { font-weight: bold; font-size: 0.95em; margin-bottom: 2px; }
-
-        /* Faction Columns */
-        .faction-col { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #2f3542; display: flex; flex-direction: column;}
-        .faction-col h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center;}
-
-        /* Target Filters */
-        .filter-group { display: flex; gap: 8px; margin-bottom: 15px; }
-        .btn-filter { background: #0b0d13; color: var(--text-dim); border: 1px solid #2f3542; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold; transition: 0.2s; }
-        .btn-filter:hover { background: #2f3542; color: white; }
-        .btn-filter.active { background: rgba(88, 166, 255, 0.15); border-color: var(--blue); color: white; }
-
-        .member-card { background: #0b0d13; border: 1px solid #2f3542; padding: 15px; border-radius: 10px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; transition: 0.2s; }
-        .member-card:hover { border-color: #57606f; }
-        .member-card.okay { border-left: 4px solid var(--green); }
-        .member-card.hospital { border-left: 4px solid var(--red); opacity: 0.85; }
-        .member-card.traveling { border-left: 4px solid var(--blue); }
-
-        .card-header { display: flex; justify-content: space-between; align-items: flex-start; }
-        .profile { font-weight: bold; color: var(--text-main); text-decoration: none; font-size: 1.1em; }
-        .profile:hover { text-decoration: underline; color: var(--blue); }
-        
-        .badge-bounty { background: rgba(255, 71, 87, 0.15); color: var(--red); border: 1px solid var(--red); padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: bold; text-transform: uppercase; text-decoration: none; margin-left: 8px; transition: 0.2s; vertical-align: middle; }
-        .badge-bounty:hover { background: var(--red); color: white; }
-
-        .action-arrow { font-size: 0.85em; color: var(--text-dim); margin-top: 5px; display: flex; align-items: center; gap: 6px; }
-        .arrow-icon { color: var(--red); font-weight: bold; }
-        .flight-info { color: var(--blue); font-weight: bold; background: rgba(88, 166, 255, 0.1); padding: 2px 6px; border-radius: 4px; }
-
-        .status { font-size: 0.85em; color: var(--text-dim); margin-top: 4px; }
-        .status span { font-weight: bold; color: var(--text-main); }
-        
-        .intel-badge { background: rgba(255, 165, 2, 0.15); color: var(--gold); padding: 4px 8px; border-radius: 6px; font-size: 0.8em; font-weight: bold; border: 1px solid var(--gold); }
-        .stat-box { text-align: right; font-size: 0.9em; flex-shrink: 0; }
-        .stat-val { font-weight: bold; color: var(--gold); font-size: 1.1em; }
-
-        .card-actions { display: flex; gap: 10px; border-top: 1px solid #2f3542; padding-top: 10px; justify-content: flex-end; align-items: center; }
-        .btn-action { background: #2f3542; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold; transition: 0.2s; text-decoration: none; }
-        .btn-action:hover { background: #57606f; }
-        .btn-claim { background: rgba(46, 213, 115, 0.2); color: var(--green); border: 1px solid var(--green); }
-        .btn-claim:hover { background: var(--green); color: #000; }
-        .btn-sos { background: rgba(255, 71, 87, 0.2); color: var(--red); border: 1px solid var(--red); }
-        .btn-sos:hover { background: var(--red); color: white; }
-
-        .btn-attack { background: var(--red); color: white; padding: 6px 16px; border-radius: 4px; font-size: 0.85em; font-weight: bold; text-decoration: none; border: 1px solid #ff2a40; box-shadow: 0 0 10px rgba(255, 71, 87, 0.4); text-transform: uppercase; display: flex; align-items: center; gap: 5px; animation: pulseAttack 2s infinite;}
-        .btn-attack:hover { background: #ff2a40; color: white; transform: scale(1.05); }
-
-        .active-claim { font-size: 0.8em; color: var(--green); font-weight: bold; background: rgba(46,213,115,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-right: 5px; }
-        .active-sos { font-size: 0.8em; color: var(--red); font-weight: bold; background: rgba(255,71,87,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; animation: pulse 2s infinite; }
-
-        /* Notification Toast Styling */
-        #toast-container { position: fixed; top: 25px; right: 25px; z-index: 9999; display: flex; flex-direction: column; gap: 15px; pointer-events: none; }
-        .toast { background: var(--card); border-left: 8px solid var(--red); color: white; padding: 20px 30px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); animation: slideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; font-weight: bold; font-size: 1.2em; pointer-events: auto; letter-spacing: 0.5px; }
-        .toast.online { border-left-color: var(--blue); }
-        .toast.okay { border-left-color: var(--green); }
-
-        /* Settings Modal Styling */
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 10000; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
-        .modal-content { background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; width: 400px; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.9); }
-        .modal-content h2 { margin: 0 0 10px 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
-        .modal-content label { font-size: 0.85em; color: var(--text-dim); font-weight: bold; text-transform: uppercase; }
-        .modal-content input { padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; width: 100%; box-sizing: border-box; }
-        .modal-content button { background: var(--blue); color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.1em; margin-top: 10px; transition: 0.2s; text-transform: uppercase; }
-        .modal-content button:hover { background: #79c0ff; }
-        .close-btn { position: absolute; right: 20px; top: 20px; color: var(--text-dim); cursor: pointer; font-size: 1.5em; line-height: 1; }
-        .close-btn:hover { color: white; }
-        
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
-        @keyframes pulseAttack { 0% { box-shadow: 0 0 5px rgba(255, 71, 87, 0.4); } 50% { box-shadow: 0 0 15px rgba(255, 71, 87, 0.8); } 100% { box-shadow: 0 0 5px rgba(255, 71, 87, 0.4); } }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        @keyframes fadeOut { to { opacity: 0; transform: translateX(100%); } }
-        @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
-    </style>
+    
+    <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <body>
+    
     <div class="top-nav">
         <a href="/" class="nav-link">📡 Live Warboard</a>
-        <a href="/chain.html" class="nav-link active">🔗 Chain Watcher</a>
-        <a href="/payout.html" class="nav-link">💰 Payouts</a>
-        <a href="/dashboard.html" class="nav-link">🛡️ Dashboard</a>
+        <a href="/chain.html" class="nav-link">🔗 Chain Watcher</a>
+        <a href="/payout.html" class="nav-link">💰 Payout Calculator</a>
+        <a href="/dashboard.html" class="nav-link">🛡️ Alliance Dashboard</a>
         <a href="/recruitment.html" class="nav-link">🎯 Recruitment</a>
+        <a onclick="openSettings()" class="nav-link" style="cursor:pointer; border-left: 1px solid #2f3542; border-radius:0;">⚙️ Settings</a>
     </div>
+
     <h1>Live Warboard</h1>
 
     <div class="container">
-        
-        <!-- Live Chart Container -->
-        <div class="dash-card" style="grid-column: 1 / -1; background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542;">
+        <div class="dash-card" style="grid-column: 1 / -1;">
             <h2 style="margin-top:0; color:var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; font-size:1.1em; text-transform:uppercase;">📊 Live War Performance Tracker</h2>
             <div style="position: relative; height: 300px; width: 100%;">
                 <canvas id="warChart"></canvas>
             </div>
         </div>
 
-        <!-- Tactical Watchlist -->
         <div class="watchlist-box">
             <h3>🚨 Priority Watchlist</h3>
             <div id="watchlist-items" class="watchlist-items">
@@ -149,9 +42,7 @@
         </div>
         
         <div class="faction-col">
-            <h2>
-                Enemy Targets <span id="enemy-count" style="color:var(--text-dim); font-size: 0.6em;">0</span>
-            </h2>
+            <h2>Enemy Targets <span id="enemy-count" style="color:var(--text-dim); font-size: 0.6em;">0</span></h2>
             <div class="filter-group">
                 <button id="flt-all" class="btn-filter active" onclick="setEnemyFilter('All')">ALL</button>
                 <button id="flt-online" class="btn-filter" onclick="setEnemyFilter('Online')">ONLINE</button>
@@ -162,9 +53,8 @@
         </div>
     </div>
 
-    <!-- Settings Modal -->
     <div id="settings-modal" class="modal-overlay">
-        <div class="modal-content" style="position: relative; max-height: 90vh; overflow-y: auto;">
+        <div class="modal-content">
             <div class="close-btn" onclick="closeSettings()">&times;</div>
             <h2>Board Settings</h2>
             <div>
@@ -183,11 +73,8 @@
                 <label>Discord Webhook (Optional)</label>
                 <input type="text" id="discord-webhook" placeholder="Paste your Discord channel webhook URL">
             </div>
-            
-            <!-- UPGRADED: Discord Toggle Options UI Section -->
             <div style="border-top: 1px solid #2f3542; padding-top: 10px; margin-top: 5px;">
                 <label style="display:block; margin-bottom: 8px; color: var(--gold);">Discord Notification Triggers</label>
-                
                 <label style="display:flex; align-items:center; gap:8px; font-size:0.85em; text-transform:none; font-weight:normal; margin-bottom:6px; cursor:pointer;">
                     <input type="checkbox" id="alert-online"> 🟢 Ping when target comes Online
                 </label>
@@ -198,7 +85,6 @@
                     <input type="checkbox" id="alert-hospital"> 🏥 Ping when target Leaves Hospital
                 </label>
             </div>
-
             <div>
                 <label>Refresh Rate (Seconds)</label>
                 <input type="number" id="refresh-rate" min="2" max="60" value="5">
@@ -207,530 +93,446 @@
         </div>
     </div>
 
-    <!-- Container for Live Alerts -->
     <div id="toast-container"></div>
 
 <script>
-let audioCtx;
-function initAudio() {
-    if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
-    if (audioCtx.state === 'suspended') { audioCtx.resume(); }
-}
-
-function playBeep(time, freq, duration) {
-    if (!audioCtx) return;
-    const osc = audioCtx.createOscillator();
-    const gainNode = audioCtx.createGain();
-    osc.type = 'triangle'; 
-    osc.frequency.setValueAtTime(freq, time);
-    gainNode.gain.setValueAtTime(0, time);
-    gainNode.gain.linearRampToValueAtTime(0.15, time + 0.05); 
-    gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration); 
-    osc.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-    osc.start(time);
-    osc.stop(time + duration);
-}
-
-function playAlertSound() {
-    try {
-        if (!audioCtx) initAudio();
-        const now = audioCtx.currentTime;
-        playBeep(now, 523.25, 0.4);       
-        playBeep(now + 0.15, 659.25, 0.6); 
-    } catch(e) { console.error("Audio block", e); }
-}
-
-document.body.addEventListener('click', () => { initAudio(); }, { once: true });
-
-let myKey = localStorage.getItem("warboard_apikey") || "";
-let enemyFacId = localStorage.getItem("warboard_enemyId") || "";
-let myName = localStorage.getItem("warboard_myname") || "Agent";
-let discordWebhook = localStorage.getItem("warboard_discord") || "";
-let refreshRate = parseInt(localStorage.getItem("warboard_refresh")) || 5;
-
-// Load Discord notification filters (default to true if not set yet)
-let dAlertOnline = localStorage.getItem("warboard_alert_online") !== "false";
-let dAlertLanding = localStorage.getItem("warboard_alert_landing") !== "false";
-let dAlertHospital = localStorage.getItem("warboard_alert_hospital") !== "false";
-
-let knownEnemies = {}; 
-let fetchTimer = null;
-let currentEnemyData = []; 
-let activeFilter = 'All';
-let warChartInstance = null; 
-
-document.getElementById("api-key").value = myKey;
-document.getElementById("enemy-id").value = enemyFacId;
-document.getElementById("my-name").value = myName;
-document.getElementById("discord-webhook").value = discordWebhook;
-document.getElementById("refresh-rate").value = refreshRate;
-
-// Sync checkboxes with stored settings
-document.getElementById("alert-online").checked = dAlertOnline;
-document.getElementById("alert-landing").checked = dAlertLanding;
-document.getElementById("alert-hospital").checked = dAlertHospital;
-
-function openSettings() { document.getElementById("settings-modal").style.display = "flex"; }
-function closeSettings() { document.getElementById("settings-modal").style.display = "none"; }
-
-if (myKey) { startPolling(); } else { openSettings(); }
-
-function saveSettings() {
-    initAudio(); 
-    myKey = document.getElementById("api-key").value.trim();
-    enemyFacId = document.getElementById("enemy-id").value.trim();
-    myName = document.getElementById("my-name").value.trim() || "Agent";
-    discordWebhook = document.getElementById("discord-webhook").value.trim();
-    
-    // Read notification filters from UI checkboxes
-    dAlertOnline = document.getElementById("alert-online").checked;
-    dAlertLanding = document.getElementById("alert-landing").checked;
-    dAlertHospital = document.getElementById("alert-hospital").checked;
-    
-    let parsedRate = parseInt(document.getElementById("refresh-rate").value);
-    refreshRate = (parsedRate && parsedRate >= 2) ? parsedRate : 5;
-    
-    localStorage.setItem("warboard_apikey", myKey);
-    localStorage.setItem("warboard_enemyId", enemyFacId);
-    localStorage.setItem("warboard_myname", myName);
-    localStorage.setItem("warboard_discord", discordWebhook);
-    localStorage.setItem("warboard_refresh", refreshRate);
-    
-    // Save notification triggers to disk
-    localStorage.setItem("warboard_alert_online", dAlertOnline);
-    localStorage.setItem("warboard_alert_landing", dAlertLanding);
-    localStorage.setItem("warboard_alert_hospital", dAlertHospital);
-    
-    knownEnemies = {}; 
-    closeSettings();
-    startPolling();
-}
-
-function startPolling() {
-    if (fetchTimer) clearInterval(fetchTimer);
-    fetchWarboard();
-    fetchTimer = setInterval(fetchWarboard, refreshRate * 1000);
-}
-
-async function sendDiscordPing(msg) {
-    if (!discordWebhook) return;
-    try {
-        await fetch('/api/discord-ping', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ webhookUrl: discordWebhook, message: msg })
+    // --- SMART NAV HIGHLIGHTER ---
+    document.addEventListener("DOMContentLoaded", function() {
+        let currentUrl = window.location.pathname;
+        if (currentUrl === "/index.html") currentUrl = "/"; 
+        let links = document.querySelectorAll(".top-nav .nav-link");
+        links.forEach(link => {
+            link.classList.remove("active"); 
+            if (link.getAttribute("href") === currentUrl) link.classList.add("active"); 
         });
-    } catch (err) {
-        console.error("Failed to ping Discord", err);
-    }
-}
-
-function formatTime(unixTimestamp) {
-    if (!unixTimestamp) return "";
-    let d = new Date(unixTimestamp * 1000);
-    return d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-}
-
-function checkIsFlying(p) {
-    return p.state === "Traveling" || (p.statusDescription && p.statusDescription.includes("Traveling")) || (p.statusDescription && p.statusDescription.includes("Abroad"));
-}
-
-function getSortPriority(state) {
-    if (state === "Okay") return 1;
-    if (state === "Hospital") return 2;
-    if (state === "Jail") return 3;
-    if (state === "Traveling" || state?.includes("In ")) return 4;
-    return 5;
-}
-
-function sortPlayersList(players, isEnemy) {
-    return players.sort((a, b) => {
-        const prioA = getSortPriority(a.state);
-        const prioB = getSortPriority(b.state);
-        if (prioA !== prioB) return prioA - prioB;
-        if (a.state === "Hospital" && b.state === "Hospital") {
-            return (a.until || Number.MAX_SAFE_INTEGER) - (b.until || Number.MAX_SAFE_INTEGER);
-        }
-        if (isEnemy && a.state === "Okay" && b.state === "Okay") {
-            return (b.intelScore || 0) - (a.intelScore || 0);
-        }
-        return 0;
     });
-}
 
-function setEnemyFilter(filterType) {
-    activeFilter = filterType;
-    document.getElementById('flt-all').className = "btn-filter";
-    document.getElementById('flt-online').className = "btn-filter";
-    document.getElementById('flt-okay').className = "btn-filter";
-    document.getElementById('flt-flying').className = "btn-filter";
-    document.getElementById('flt-' + filterType.toLowerCase()).className = "btn-filter active";
-    
-    if (currentEnemyData.length > 0) {
-        renderEnemyList(currentEnemyData);
+    let audioCtx;
+    function initAudio() {
+        if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+        if (audioCtx.state === 'suspended') { audioCtx.resume(); }
     }
-}
 
-async function fetchWarboard() {
-    if (!myKey) return;
-    try {
-        const res = await fetch(`/api/warboard?apiKey=${myKey}&enemyFaction=${enemyFacId}`);
-        const data = await res.json();
+    function playBeep(time, freq, duration) {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        osc.type = 'triangle'; 
+        osc.frequency.setValueAtTime(freq, time);
+        gainNode.gain.setValueAtTime(0, time);
+        gainNode.gain.linearRampToValueAtTime(0.15, time + 0.05); 
+        gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration); 
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        osc.start(time);
+        osc.stop(time + duration);
+    }
+
+    function playAlertSound() {
+        try {
+            if (!audioCtx) initAudio();
+            const now = audioCtx.currentTime;
+            playBeep(now, 523.25, 0.4);       
+            playBeep(now + 0.15, 659.25, 0.6); 
+        } catch(e) { console.error("Audio block", e); }
+    }
+
+    document.body.addEventListener('click', () => { initAudio(); }, { once: true });
+
+    let myKey = localStorage.getItem("warboard_apikey") || "";
+    let enemyFacId = localStorage.getItem("warboard_enemyId") || "";
+    let myName = localStorage.getItem("warboard_myname") || "Agent";
+    let discordWebhook = localStorage.getItem("warboard_discord") || "";
+    let refreshRate = parseInt(localStorage.getItem("warboard_refresh")) || 5;
+
+    let dAlertOnline = localStorage.getItem("warboard_alert_online") !== "false";
+    let dAlertLanding = localStorage.getItem("warboard_alert_landing") !== "false";
+    let dAlertHospital = localStorage.getItem("warboard_alert_hospital") !== "false";
+
+    let knownEnemies = {}; 
+    let fetchTimer = null;
+    let currentEnemyData = []; 
+    let activeFilter = 'All';
+    let warChartInstance = null; 
+
+    document.getElementById("api-key").value = myKey;
+    document.getElementById("enemy-id").value = enemyFacId;
+    document.getElementById("my-name").value = myName;
+    document.getElementById("discord-webhook").value = discordWebhook;
+    document.getElementById("refresh-rate").value = refreshRate;
+    document.getElementById("alert-online").checked = dAlertOnline;
+    document.getElementById("alert-landing").checked = dAlertLanding;
+    document.getElementById("alert-hospital").checked = dAlertHospital;
+
+    function openSettings() { document.getElementById("settings-modal").style.display = "flex"; }
+    function closeSettings() { document.getElementById("settings-modal").style.display = "none"; }
+
+    if (myKey) { startPolling(); } else { openSettings(); }
+
+    function saveSettings() {
+        initAudio(); 
+        myKey = document.getElementById("api-key").value.trim();
+        enemyFacId = document.getElementById("enemy-id").value.trim();
+        myName = document.getElementById("my-name").value.trim() || "Agent";
+        discordWebhook = document.getElementById("discord-webhook").value.trim();
         
-        if (data.error) {
-            document.getElementById("friendly-list").innerHTML = `<div style="color:var(--red); padding:10px;">${data.error}</div>`;
+        dAlertOnline = document.getElementById("alert-online").checked;
+        dAlertLanding = document.getElementById("alert-landing").checked;
+        dAlertHospital = document.getElementById("alert-hospital").checked;
+        
+        let parsedRate = parseInt(document.getElementById("refresh-rate").value);
+        refreshRate = (parsedRate && parsedRate >= 2) ? parsedRate : 5;
+        
+        localStorage.setItem("warboard_apikey", myKey);
+        localStorage.setItem("warboard_enemyId", enemyFacId);
+        localStorage.setItem("warboard_myname", myName);
+        localStorage.setItem("warboard_discord", discordWebhook);
+        localStorage.setItem("warboard_refresh", refreshRate);
+        localStorage.setItem("warboard_alert_online", dAlertOnline);
+        localStorage.setItem("warboard_alert_landing", dAlertLanding);
+        localStorage.setItem("warboard_alert_hospital", dAlertHospital);
+        
+        knownEnemies = {}; 
+        closeSettings();
+        startPolling();
+    }
+
+    function startPolling() {
+        if (fetchTimer) clearInterval(fetchTimer);
+        fetchWarboard();
+        fetchTimer = setInterval(fetchWarboard, refreshRate * 1000);
+    }
+
+    async function sendDiscordPing(msg) {
+        if (!discordWebhook) return;
+        try {
+            await fetch('/api/discord-ping', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ webhookUrl: discordWebhook, message: msg })
+            });
+        } catch (err) { console.error("Failed to ping Discord", err); }
+    }
+
+    function formatTime(unixTimestamp) {
+        if (!unixTimestamp) return "";
+        let d = new Date(unixTimestamp * 1000);
+        return d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    }
+
+    function checkIsFlying(p) { return p.state === "Traveling" || (p.statusDescription && p.statusDescription.includes("Traveling")) || (p.statusDescription && p.statusDescription.includes("Abroad")); }
+
+    function getSortPriority(state) {
+        if (state === "Okay") return 1;
+        if (state === "Hospital") return 2;
+        if (state === "Jail") return 3;
+        if (state === "Traveling" || state?.includes("In ")) return 4;
+        return 5;
+    }
+
+    function sortPlayersList(players, isEnemy) {
+        return players.sort((a, b) => {
+            const prioA = getSortPriority(a.state);
+            const prioB = getSortPriority(b.state);
+            if (prioA !== prioB) return prioA - prioB;
+            if (a.state === "Hospital" && b.state === "Hospital") return (a.until || Number.MAX_SAFE_INTEGER) - (b.until || Number.MAX_SAFE_INTEGER);
+            if (isEnemy && a.state === "Okay" && b.state === "Okay") return (b.intelScore || 0) - (a.intelScore || 0);
+            return 0;
+        });
+    }
+
+    function setEnemyFilter(filterType) {
+        activeFilter = filterType;
+        document.getElementById('flt-all').className = "btn-filter";
+        document.getElementById('flt-online').className = "btn-filter";
+        document.getElementById('flt-okay').className = "btn-filter";
+        document.getElementById('flt-flying').className = "btn-filter";
+        document.getElementById('flt-' + filterType.toLowerCase()).className = "btn-filter active";
+        if (currentEnemyData.length > 0) renderEnemyList(currentEnemyData);
+    }
+
+    async function fetchWarboard() {
+        if (!myKey) return;
+        try {
+            const res = await fetch(`/api/warboard?apiKey=${myKey}&enemyFaction=${enemyFacId}`);
+            const data = await res.json();
+            if (data.error) {
+                document.getElementById("friendly-list").innerHTML = `<div style="color:var(--red); padding:10px;">${data.error}</div>`;
+                return;
+            }
+            document.getElementById("friendly-count").innerText = data.friendly.length;
+            document.getElementById("enemy-count").innerText = data.enemy.length;
+            processNotifications(data.enemy);
+            renderWatchlist(data.enemy);
+            const sortedFriendly = sortPlayersList(data.friendly, false);
+            renderFriendlyList(sortedFriendly);
+            renderChart(data.friendly);
+            currentEnemyData = sortPlayersList(data.enemy, true);
+            renderEnemyList(currentEnemyData);
+        } catch (e) { console.error("Failed to load warboard", e); }
+    }
+
+    function renderChart(friendlyPlayers) {
+        let activeHitters = friendlyPlayers.filter(p => p.attacks > 0 || p.defends > 0);
+        if (activeHitters.length === 0) {
+            let sortedByStats = [...friendlyPlayers].sort((a, b) => {
+                let statA = typeof a.estStats === 'number' ? a.estStats : 0;
+                let statB = typeof b.estStats === 'number' ? b.estStats : 0;
+                return statB - statA;
+            });
+            activeHitters = sortedByStats.slice(0, 15);
+        } else {
+            activeHitters.sort((a, b) => b.attacks - a.attacks);
+        }
+
+        const labels = activeHitters.map(p => p.name);
+        const attackData = activeHitters.map(p => p.attacks);
+        const defendData = activeHitters.map(p => p.defends); 
+
+        const ctx = document.getElementById('warChart').getContext('2d');
+        if (warChartInstance) {
+            warChartInstance.data.labels = labels;
+            warChartInstance.data.datasets[0].data = attackData;
+            warChartInstance.data.datasets[1].data = defendData;
+            warChartInstance.update();
+        } else {
+            warChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Hits Made', data: attackData, backgroundColor: '#ff4757', borderRadius: 4 },
+                        { label: 'Hits Received (Defends)', data: defendData, backgroundColor: '#ffa502', borderRadius: 4 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(47, 53, 66, 0.5)' }, ticks: { color: '#a1aab5', stepSize: 1 } },
+                        x: { grid: { display: false }, ticks: { color: '#a1aab5', font: { weight: 'bold' } } }
+                    },
+                    plugins: { legend: { labels: { color: '#f1f2f6', font: { weight: 'bold' } } } }
+                }
+            });
+        }
+    }
+
+    function renderWatchlist(enemies) {
+        const now = Math.floor(Date.now() / 1000);
+        const watchTargets = enemies.filter(e => {
+            if (e.onlineStatus === "Online") return true;
+            if (checkIsFlying(e) && e.landingTime && (e.landingTime - now) <= 1800 && (e.landingTime - now) > 0) return true;
+            return false;
+        });
+        watchTargets.sort((a, b) => {
+            let aFlying = checkIsFlying(a); let bFlying = checkIsFlying(b);
+            if (aFlying && bFlying) return (a.landingTime || Number.MAX_SAFE_INTEGER) - (b.landingTime || Number.MAX_SAFE_INTEGER);
+            if (aFlying) return -1; if (bFlying) return 1;
+            return (b.intelScore || 0) - (a.intelScore || 0);
+        });
+
+        let html = "";
+        watchTargets.forEach(p => {
+            let isFlying = checkIsFlying(p);
+            let cardClass = isFlying ? "flying" : "online";
+            let highlightText = ""; let highlightColor = "";
+
+            if (isFlying) {
+                let minsLeft = p.landingTime ? Math.max(0, Math.ceil((p.landingTime - now) / 60)) : 0;
+                highlightText = `✈️ ETA: ${formatTime(p.landingTime)} (in ${minsLeft}m)`; highlightColor = "var(--blue)";
+            } else {
+                highlightText = `🟢 Online Now`; highlightColor = "var(--green)";
+            }
+            let displayStatus = p.statusDescription || p.state;
+            if (p.state === "Hospital" && p.until) {
+                let hospMins = Math.max(0, Math.ceil((p.until - now) / 60));
+                displayStatus = `In hospital for ${hospMins} mins`;
+            }
+
+            html += `
+                <div class="watch-card ${cardClass}">
+                    <div class="watch-name"><a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a></div>
+                    <div class="watch-highlight" style="color: ${highlightColor};">${highlightText}</div>
+                    <div style="font-size:0.8em; color:var(--text-dim);">Status: ${displayStatus}</div>
+                </div>
+            `;
+        });
+        if(watchTargets.length === 0) html = `<div style="color:var(--text-dim); padding: 10px;">No priority targets are currently online or landing within 30 mins.</div>`;
+        document.getElementById("watchlist-items").innerHTML = html;
+    }
+
+    function processNotifications(enemies) {
+        if (Object.keys(knownEnemies).length === 0) {
+            enemies.forEach(e => { knownEnemies[e.id] = { state: e.state, online: e.onlineStatus }; });
             return;
         }
+        let playedSoundThisTick = false;
 
-        document.getElementById("friendly-count").innerText = data.friendly.length;
-        document.getElementById("enemy-count").innerText = data.enemy.length;
-
-        processNotifications(data.enemy);
-        renderWatchlist(data.enemy);
-
-        const sortedFriendly = sortPlayersList(data.friendly, false);
-        renderFriendlyList(sortedFriendly);
-        
-        renderChart(data.friendly);
-
-        currentEnemyData = sortPlayersList(data.enemy, true);
-        renderEnemyList(currentEnemyData);
-
-    } catch (e) { console.error("Failed to load warboard", e); }
-}
-
-function renderChart(friendlyPlayers) {
-    let activeHitters = friendlyPlayers.filter(p => p.attacks > 0 || p.defends > 0);
-    
-    if (activeHitters.length === 0) {
-        let sortedByStats = [...friendlyPlayers].sort((a, b) => {
-            let statA = typeof a.estStats === 'number' ? a.estStats : 0;
-            let statB = typeof b.estStats === 'number' ? b.estStats : 0;
-            return statB - statA;
-        });
-        activeHitters = sortedByStats.slice(0, 15);
-    } else {
-        activeHitters.sort((a, b) => b.attacks - a.attacks);
-    }
-
-    const labels = activeHitters.map(p => p.name);
-    const attackData = activeHitters.map(p => p.attacks);
-    const defendData = activeHitters.map(p => p.defends); 
-
-    const ctx = document.getElementById('warChart').getContext('2d');
-
-    if (warChartInstance) {
-        warChartInstance.data.labels = labels;
-        warChartInstance.data.datasets[0].data = attackData;
-        warChartInstance.data.datasets[1].data = defendData;
-        warChartInstance.update();
-    } else {
-        warChartInstance = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: 'Hits Made',
-                        data: attackData,
-                        backgroundColor: '#ff4757', 
-                        borderRadius: 4,
-                    },
-                    {
-                        label: 'Hits Received (Defends)',
-                        data: defendData,
-                        backgroundColor: '#ffa502', 
-                        borderRadius: 4,
+        enemies.forEach(newEnemy => {
+            let oldEnemy = knownEnemies[newEnemy.id];
+            if (oldEnemy) {
+                if (oldEnemy.state !== "Okay" && newEnemy.state === "Okay") {
+                    if (checkIsFlying(oldEnemy)) {
+                        showToast(`🛬 ${newEnemy.name} has landed and is Okay!`, "okay");
+                        if (dAlertLanding) sendDiscordPing(`✈️ **TARGET LANDED:** ${newEnemy.name} [${newEnemy.id}] has landed back in Torn!`);
+                        playedSoundThisTick = true;
+                    } else {
+                        showToast(`🏥 ${newEnemy.name} left the hospital and is Okay!`, "okay");
+                        if (dAlertHospital) sendDiscordPing(`🏥 **TARGET OUT OF HOSP:** ${newEnemy.name} [${newEnemy.id}] is back on the streets!`);
+                        playedSoundThisTick = true;
                     }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { 
-                        beginAtZero: true, 
-                        grid: { color: 'rgba(47, 53, 66, 0.5)' }, 
-                        ticks: { color: '#a1aab5', stepSize: 1 } 
-                    },
-                    x: { 
-                        grid: { display: false }, 
-                        ticks: { color: '#a1aab5', font: { weight: 'bold' } } 
-                    }
-                },
-                plugins: {
-                    legend: { labels: { color: '#f1f2f6', font: { weight: 'bold' } } }
                 }
-            }
-        });
-    }
-}
-
-function renderWatchlist(enemies) {
-    const now = Math.floor(Date.now() / 1000);
-
-    const watchTargets = enemies.filter(e => {
-        if (e.onlineStatus === "Online") return true;
-        if (checkIsFlying(e) && e.landingTime && (e.landingTime - now) <= 1800 && (e.landingTime - now) > 0) return true;
-        return false;
-    });
-
-    watchTargets.sort((a, b) => {
-        let aFlying = checkIsFlying(a);
-        let bFlying = checkIsFlying(b);
-        if (aFlying && bFlying) return (a.landingTime || Number.MAX_SAFE_INTEGER) - (b.landingTime || Number.MAX_SAFE_INTEGER);
-        if (aFlying) return -1;
-        if (bFlying) return 1;
-        return (b.intelScore || 0) - (a.intelScore || 0);
-    });
-
-    let html = "";
-    watchTargets.forEach(p => {
-        let isFlying = checkIsFlying(p);
-        let cardClass = isFlying ? "flying" : "online";
-        let highlightText = "";
-        let highlightColor = "";
-
-        if (isFlying) {
-            let minsLeft = p.landingTime ? Math.max(0, Math.ceil((p.landingTime - now) / 60)) : 0;
-            highlightText = `✈️ ETA: ${formatTime(p.landingTime)} (in ${minsLeft}m)`;
-            highlightColor = "var(--blue)";
-        } else {
-            highlightText = `🟢 Online Now`;
-            highlightColor = "var(--green)";
-        }
-
-        let displayStatus = p.statusDescription || p.state;
-        if (p.state === "Hospital" && p.until) {
-            let hospMins = Math.max(0, Math.ceil((p.until - now) / 60));
-            displayStatus = `In hospital for ${hospMins} mins`;
-        }
-
-        html += `
-            <div class="watch-card ${cardClass}">
-                <div class="watch-name"><a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a></div>
-                <div class="watch-highlight" style="color: ${highlightColor};">${highlightText}</div>
-                <div style="font-size:0.8em; color:var(--text-dim);">Status: ${displayStatus}</div>
-            </div>
-        `;
-    });
-    
-    if(watchTargets.length === 0) {
-        html = `<div style="color:var(--text-dim); padding: 10px;">No priority targets are currently online or landing within 30 mins.</div>`;
-    }
-    document.getElementById("watchlist-items").innerHTML = html;
-}
-
-// --- UPGRADED: NOTIFICATION DISPATCHER WITH CONFIGURABLE DISCORD TRIGGERS ---
-function processNotifications(enemies) {
-    if (Object.keys(knownEnemies).length === 0) {
-        enemies.forEach(e => { knownEnemies[e.id] = { state: e.state, online: e.onlineStatus }; });
-        return;
-    }
-    let playedSoundThisTick = false;
-
-    enemies.forEach(newEnemy => {
-        let oldEnemy = knownEnemies[newEnemy.id];
-        if (oldEnemy) {
-            if (oldEnemy.state !== "Okay" && newEnemy.state === "Okay") {
-                if (checkIsFlying(oldEnemy)) {
-                    showToast(`🛬 ${newEnemy.name} has landed and is Okay!`, "okay");
-                    // Conditional flight alert trigger
-                    if (dAlertLanding) {
-                        sendDiscordPing(`✈️ **TARGET LANDED:** ${newEnemy.name} [${newEnemy.id}] has landed back in Torn!`);
-                    }
-                    playedSoundThisTick = true;
-                } else {
-                    showToast(`🏥 ${newEnemy.name} left the hospital and is Okay!`, "okay");
-                    // Conditional out-of-hospital alert trigger
-                    if (dAlertHospital) {
-                        sendDiscordPing(`🏥 **TARGET OUT OF HOSP:** ${newEnemy.name} [${newEnemy.id}] is back on the streets!`);
-                    }
+                if (oldEnemy.online !== "Online" && newEnemy.onlineStatus === "Online") {
+                    showToast(`🟢 ${newEnemy.name} just came ONLINE!`, "online");
+                    if (dAlertOnline) sendDiscordPing(`🟢 **TARGET ONLINE:** ${newEnemy.name} [${newEnemy.id}] just opened the app!`);
                     playedSoundThisTick = true;
                 }
             }
-            if (oldEnemy.online !== "Online" && newEnemy.onlineStatus === "Online") {
-                showToast(`🟢 ${newEnemy.name} just came ONLINE!`, "online");
-                // Conditional online status alert trigger
-                if (dAlertOnline) {
-                    sendDiscordPing(`🟢 **TARGET ONLINE:** ${newEnemy.name} [${newEnemy.id}] just opened the app!`);
-                }
-                playedSoundThisTick = true;
+            knownEnemies[newEnemy.id] = { state: newEnemy.state, online: newEnemy.onlineStatus };
+        });
+        if (playedSoundThisTick) playAlertSound();
+    }
+
+    function showToast(msg, typeClass="red") {
+        const container = document.getElementById("toast-container");
+        const toast = document.createElement("div");
+        toast.className = `toast ${typeClass}`; toast.innerHTML = msg;
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.style.animation = "fadeOut 0.4s ease-out forwards";
+            setTimeout(() => toast.remove(), 400);
+        }, 7000);
+    }
+
+    function renderFriendlyList(players) {
+        const now = Math.floor(Date.now() / 1000);
+        let html = "";
+        players.forEach(p => {
+            let stateClass = "okay";
+            if (p.state === "Hospital" || p.state === "Jail") stateClass = "hospital";
+            let isFlying = checkIsFlying(p);
+            if (isFlying) stateClass = "traveling";
+
+            let displayStatus = p.statusDescription || p.state;
+            if (p.state === "Hospital" && p.until) {
+                let hospMins = Math.max(0, Math.ceil((p.until - now) / 60));
+                displayStatus = `In hospital for ${hospMins} mins`;
             }
-        }
-        knownEnemies[newEnemy.id] = { state: newEnemy.state, online: newEnemy.onlineStatus };
-    });
-    if (playedSoundThisTick) playAlertSound();
-}
+            let etaString = "";
+            if (isFlying) {
+                if (p.landingTime) {
+                    let minsLeft = Math.max(0, Math.ceil((p.landingTime - now) / 60));
+                    etaString = `<span class="flight-info">✈️ ETA: ${formatTime(p.landingTime)} (${minsLeft}m)</span>`;
+                } else etaString = `<span class="flight-info">✈️ Flying (Unknown ETA)</span>`;
+            }
 
-function showToast(msg, typeClass="red") {
-    const container = document.getElementById("toast-container");
-    const toast = document.createElement("div");
-    toast.className = `toast ${typeClass}`;
-    toast.innerHTML = msg;
-    container.appendChild(toast);
-    setTimeout(() => {
-        toast.style.animation = "fadeOut 0.4s ease-out forwards";
-        setTimeout(() => toast.remove(), 400);
-    }, 7000);
-}
+            html += `
+                <div class="member-card ${stateClass}">
+                    <div class="card-header">
+                        <div>
+                            <div style="display: flex; align-items: center;">
+                                <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
+                                <a href="https://www.torn.com/bounties.php?p=add&XID=${p.id}&amount=150000&reason=WAR" target="_blank" class="badge-bounty" title="Place Bounty to keep in Hospital">🎯 Bounty</a>
+                            </div>
+                            <div class="action-arrow"><span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}</div>
+                            <div class="status">Status: <span>${displayStatus}</span></div>
+                        </div>
+                        <div class="stat-box">
+                            <div style="color: var(--text-dim);">Est. Stats</div>
+                            <div class="stat-val">${typeof p.estStats === 'number' ? p.estStats.toLocaleString() : p.estStats}</div>
+                        </div>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn-action" onclick="promptUpdateStats('${p.id}')">Update Stats</button>
+                    </div>
+                </div>
+            `;
+        });
+        document.getElementById("friendly-list").innerHTML = html || "<div style='color:var(--text-dim); padding:10px;'>No members found.</div>";
+    }
 
-function renderFriendlyList(players) {
-    const now = Math.floor(Date.now() / 1000);
-    let html = "";
-    players.forEach(p => {
-        let stateClass = "okay";
-        if (p.state === "Hospital" || p.state === "Jail") stateClass = "hospital";
+    function renderEnemyList(players) {
+        const now = Math.floor(Date.now() / 1000);
+        let html = "";
         
-        let isFlying = checkIsFlying(p);
-        if (isFlying) stateClass = "traveling";
+        const filteredPlayers = players.filter(p => {
+            if (activeFilter === 'All') return true;
+            if (activeFilter === 'Online' && p.onlineStatus === 'Online') return true;
+            if (activeFilter === 'Okay' && p.state === 'Okay') return true;
+            if (activeFilter === 'Flying' && checkIsFlying(p)) return true;
+            return false;
+        });
 
-        let displayStatus = p.statusDescription || p.state;
-        if (p.state === "Hospital" && p.until) {
-            let hospMins = Math.max(0, Math.ceil((p.until - now) / 60));
-            displayStatus = `In hospital for ${hospMins} mins`;
-        }
+        filteredPlayers.forEach(p => {
+            let stateClass = "okay";
+            if (p.state === "Hospital" || p.state === "Jail") stateClass = "hospital";
+            let isFlying = checkIsFlying(p);
+            if (isFlying) stateClass = "traveling";
 
-        let etaString = "";
-        if (isFlying) {
-            if (p.landingTime) {
-                let minsLeft = Math.max(0, Math.ceil((p.landingTime - now) / 60));
-                etaString = `<span class="flight-info">✈️ ETA: ${formatTime(p.landingTime)} (${minsLeft}m)</span>`;
-            } else {
-                etaString = `<span class="flight-info">✈️ Flying (Unknown ETA)</span>`;
+            let displayStatus = p.statusDescription || p.state;
+            if (p.state === "Hospital" && p.until) {
+                let hospMins = Math.max(0, Math.ceil((p.until - now) / 60));
+                displayStatus = `In hospital for ${hospMins} mins`;
             }
-        }
 
-        html += `
-            <div class="member-card ${stateClass}">
-                <div class="card-header">
-                    <div>
-                        <div style="display: flex; align-items: center;">
+            let etaString = "";
+            if (isFlying) {
+                if (p.landingTime) {
+                    let minsLeft = Math.max(0, Math.ceil((p.landingTime - now) / 60));
+                    etaString = `<span class="flight-info">✈️ ETA: ${formatTime(p.landingTime)} (${minsLeft}m)</span>`;
+                } else etaString = `<span class="flight-info">✈️ Flying (Unknown ETA)</span>`;
+            }
+            
+            let claimDisplay = p.claimedBy ? `<div class="active-claim">🎯 Claimed by ${p.claimedBy}</div>` : "";
+            let claimButton = "";
+            if (!p.claimedBy) { claimButton = `<button class="btn-action btn-claim" onclick="claimTarget('${p.id}')">Claim Target</button>`; } 
+            else if (p.claimedBy === myName) { claimButton = `<a href="https://www.torn.com/page.php?sid=attack&user2ID=${p.id}" target="_blank" class="btn-attack">⚔️ ATTACK</a><button class="btn-action" onclick="unclaimTarget('${p.id}')">Release Target</button>`; }
+
+            let sosDisplay = p.needsBackup ? `<div class="active-sos">🚨 Backup requested by ${p.needsBackup}</div>` : "";
+            let sosButton = "";
+            if (!p.needsBackup) { sosButton = `<button class="btn-action btn-sos" onclick="requestBackup('${p.id}', '${p.name}')">Call SOS</button>`; } 
+            else if (p.needsBackup === myName) { sosButton = `<button class="btn-action btn-sos" onclick="cancelBackup('${p.id}')">Cancel SOS</button>`; }
+
+            html += `
+                <div class="member-card ${stateClass}">
+                    <div class="card-header">
+                        <div>
                             <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
-                            <a href="https://www.torn.com/bounties.php?p=add&XID=${p.id}&amount=150000&reason=WAR" target="_blank" class="badge-bounty" title="Place Bounty to keep in Hospital">🎯 Bounty</a>
+                            <div class="action-arrow"><span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}</div>
+                            <div class="status">Status: <span>${displayStatus}</span></div>
                         </div>
-                        <div class="action-arrow">
-                            <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
+                        <div class="stat-box">
+                            <div class="intel-badge">Intel: ${p.intelScore || 0}</div>
+                            <div style="color: var(--text-dim); margin-top: 5px;">Est. Stats</div>
+                            <div class="stat-val">${typeof p.estStats === 'number' ? p.estStats.toLocaleString() : p.estStats}</div>
                         </div>
-                        <div class="status">Status: <span>${displayStatus}</span></div>
                     </div>
-                    <div class="stat-box">
-                        <div style="color: var(--text-dim);">Est. Stats</div>
-                        <div class="stat-val">${typeof p.estStats === 'number' ? p.estStats.toLocaleString() : p.estStats}</div>
+                    <div>${claimDisplay}${sosDisplay}</div>
+                    <div class="card-actions">
+                        <button class="btn-action" onclick="promptUpdateStats('${p.id}')">Override Stats</button>
+                        ${claimButton}
+                        ${sosButton}
                     </div>
                 </div>
-                <div class="card-actions">
-                    <button class="btn-action" onclick="promptUpdateStats('${p.id}')">Update Stats</button>
-                </div>
-            </div>
-        `;
-    });
-    document.getElementById("friendly-list").innerHTML = html || "<div style='color:var(--text-dim); padding:10px;'>No members found.</div>";
-}
-
-function renderEnemyList(players) {
-    const now = Math.floor(Date.now() / 1000);
-    let html = "";
-    
-    const filteredPlayers = players.filter(p => {
-        if (activeFilter === 'All') return true;
-        if (activeFilter === 'Online' && p.onlineStatus === 'Online') return true;
-        if (activeFilter === 'Okay' && p.state === 'Okay') return true;
-        if (activeFilter === 'Flying' && checkIsFlying(p)) return true;
-        return false;
-    });
-
-    filteredPlayers.forEach(p => {
-        let stateClass = "okay";
-        if (p.state === "Hospital" || p.state === "Jail") stateClass = "hospital";
+            `;
+        });
         
-        let isFlying = checkIsFlying(p);
-        if (isFlying) stateClass = "traveling";
-
-        let displayStatus = p.statusDescription || p.state;
-        if (p.state === "Hospital" && p.until) {
-            let hospMins = Math.max(0, Math.ceil((p.until - now) / 60));
-            displayStatus = `In hospital for ${hospMins} mins`;
-        }
-
-        let etaString = "";
-        if (isFlying) {
-            if (p.landingTime) {
-                let minsLeft = Math.max(0, Math.ceil((p.landingTime - now) / 60));
-                etaString = `<span class="flight-info">✈️ ETA: ${formatTime(p.landingTime)} (${minsLeft}m)</span>`;
-            } else {
-                etaString = `<span class="flight-info">✈️ Flying (Unknown ETA)</span>`;
-            }
-        }
-        
-        let claimDisplay = p.claimedBy ? `<div class="active-claim">🎯 Claimed by ${p.claimedBy}</div>` : "";
-        let claimButton = "";
-        if (!p.claimedBy) { 
-            claimButton = `<button class="btn-action btn-claim" onclick="claimTarget('${p.id}')">Claim Target</button>`; 
-        } else if (p.claimedBy === myName) { 
-            claimButton = `
-                <a href="https://www.torn.com/page.php?sid=attack&user2ID=${p.id}" target="_blank" class="btn-attack">⚔️ ATTACK</a>
-                <button class="btn-action" onclick="unclaimTarget('${p.id}')">Release Target</button>
-            `; 
-        }
-
-        let sosDisplay = p.needsBackup ? `<div class="active-sos">🚨 Backup requested by ${p.needsBackup}</div>` : "";
-        let sosButton = "";
-        if (!p.needsBackup) { sosButton = `<button class="btn-action btn-sos" onclick="requestBackup('${p.id}', '${p.name}')">Call SOS</button>`; } 
-        else if (p.needsBackup === myName) { sosButton = `<button class="btn-action btn-sos" onclick="cancelBackup('${p.id}')">Cancel SOS</button>`; }
-
-        html += `
-            <div class="member-card ${stateClass}">
-                <div class="card-header">
-                    <div>
-                        <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
-                        <div class="action-arrow">
-                            <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
-                        </div>
-                        <div class="status">Status: <span>${displayStatus}</span></div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="intel-badge">Intel: ${p.intelScore || 0}</div>
-                        <div style="color: var(--text-dim); margin-top: 5px;">Est. Stats</div>
-                        <div class="stat-val">${typeof p.estStats === 'number' ? p.estStats.toLocaleString() : p.estStats}</div>
-                    </div>
-                </div>
-                <div>
-                    ${claimDisplay}
-                    ${sosDisplay}
-                </div>
-                <div class="card-actions">
-                    <button class="btn-action" onclick="promptUpdateStats('${p.id}')">Override Stats</button>
-                    ${claimButton}
-                    ${sosButton}
-                </div>
-            </div>
-        `;
-    });
-    
-    if (filteredPlayers.length === 0) {
-        document.getElementById("enemy-list").innerHTML = `<div style='color:var(--text-dim); padding:10px;'>No targets match the "${activeFilter}" filter.</div>`;
-    } else {
-        document.getElementById("enemy-list").innerHTML = html;
+        if (filteredPlayers.length === 0) document.getElementById("enemy-list").innerHTML = `<div style='color:var(--text-dim); padding:10px;'>No targets match the "${activeFilter}" filter.</div>`;
+        else document.getElementById("enemy-list").innerHTML = html;
     }
-}
 
-async function claimTarget(id) { await fetch('/api/claim', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); fetchWarboard(); }
-async function unclaimTarget(id) { await fetch('/api/unclaim', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); fetchWarboard(); }
-
-async function requestBackup(id, targetName) { 
-    await fetch('/api/backup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); 
-    // SOS Alerts always fire to override status filters in a tactical emergency
-    sendDiscordPing(`🚨 **SOS CALL FROM ${myName.toUpperCase()}:** Requesting immediate fire support on target **${targetName}** [${id}]!`);
-    fetchWarboard(); 
-}
-
-async function cancelBackup(id) { await fetch('/api/unbackup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id }) }); fetchWarboard(); }
-async function promptUpdateStats(id) {
-    const statInput = prompt("Enter exact/estimated stats for this player (Numbers only):");
-    if (statInput && !isNaN(statInput)) { await fetch('/api/update-stats', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, stats: parseInt(statInput) }) }); fetchWarboard(); }
-}
+    async function claimTarget(id) { await fetch('/api/claim', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); fetchWarboard(); }
+    async function unclaimTarget(id) { await fetch('/api/unclaim', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); fetchWarboard(); }
+    async function requestBackup(id, targetName) { 
+        await fetch('/api/backup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); 
+        sendDiscordPing(`🚨 **SOS CALL FROM ${myName.toUpperCase()}:** Requesting immediate fire support on target **${targetName}** [${id}]!`);
+        fetchWarboard(); 
+    }
+    async function cancelBackup(id) { await fetch('/api/unbackup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id }) }); fetchWarboard(); }
+    async function promptUpdateStats(id) {
+        const statInput = prompt("Enter exact/estimated stats for this player (Numbers only):");
+        if (statInput && !isNaN(statInput)) { await fetch('/api/update-stats', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, stats: parseInt(statInput) }) }); fetchWarboard(); }
+    }
 </script>
 </body>
 </html>
