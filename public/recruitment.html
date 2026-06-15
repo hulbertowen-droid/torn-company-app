@@ -10,17 +10,27 @@
             --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
             --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
         }
-        body { background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px; }
         
+        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; height: 100vh; overflow: hidden; }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
         ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #57606f; }
 
-        .top-nav { display: flex; justify-content: center; gap: 20px; max-width: 1200px; margin: 0 auto 20px auto; background: var(--card); padding: 12px; border-radius: 10px; border: 1px solid #2f3542; }
-        .nav-link { color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 6px 12px; border-radius: 6px; transition: 0.2s; text-transform: uppercase; font-size: 0.9em; letter-spacing: 1px; cursor: pointer; }
+        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; z-index: 100; }
+        .sidebar.collapsed { width: 75px; }
+        .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2f3542; }
+        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 1.1em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
+        .sidebar.collapsed .sidebar-logo { opacity: 0; width: 0; display: none; }
+        .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
+        .toggle-btn:hover { color: white; background: #2f3542; }
+        .nav-items { display: flex; flex-direction: column; gap: 8px; padding: 20px 10px; }
+        .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
         .nav-link:hover { background: #2f3542; color: white; }
-        .nav-link.active { color: white; background: rgba(88, 166, 255, 0.15); border: 1px solid var(--blue); }
+        .nav-link.active { background: rgba(255, 71, 87, 0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
+        .nav-text { transition: opacity 0.2s; }
+        .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
 
         h1 { text-align: center; color: var(--green); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
 
@@ -76,250 +86,283 @@
     </style>
 </head>
 <body>
-     <div class="top-nav">
-        <a href="/" class="nav-link">📡 Live Warboard</a>
-        <a href="/chain.html" class="nav-link active">🔗 Chain Watcher</a>
-        <a href="/payout.html" class="nav-link">💰 Payouts</a>
-        <a href="/dashboard.html" class="nav-link">🛡️ Dashboard</a>
-        <a href="/recruitment.html" class="nav-link">🎯 Recruitment</a>
-    </div>
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">Spider-Verse</div>
+            <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
+        </div>
+        <div class="nav-items">
+            <a href="/" class="nav-link">📡 <span class="nav-text">Live Warboard</span></a>
+            <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
+            <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
+            <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
+            <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
+            <a onclick="openSettings()" class="nav-link" style="margin-top: 15px; border-top: 1px solid #2f3542; border-radius: 0; padding-top: 15px;">
+                ⚙️ <span class="nav-text">Settings</span>
+            </a>
+        </div>
+    </nav>
 
-    <h1>Enemy Poaching Scanner</h1>
+    <main class="main-content">
+        <h1>Enemy Poaching Scanner</h1>
 
-    <div class="container">
-        <div id="error-msg" style="color: var(--red); font-weight: bold; margin-bottom: 15px; text-align: center;"></div>
+        <div class="container">
+            <div id="error-msg" style="color: var(--red); font-weight: bold; margin-bottom: 15px; text-align: center;"></div>
 
-        <div class="dash-card">
-            <div class="dash-header">Select a Past War to Scan</div>
-            <div id="war-list-container">
-                <div style="color:var(--text-dim);">Loading past wars...</div>
+            <div class="dash-card">
+                <div class="dash-header">Select a Past War to Scan</div>
+                <div id="war-list-container">
+                    <div style="color:var(--text-dim);">Loading past wars...</div>
+                </div>
+            </div>
+
+            <div id="filter-bar" class="filter-group">
+                <div style="display:flex; gap:10px;">
+                    <button id="flt-all" class="filter-btn active" onclick="setRecruitFilter('All')">All Targets</button>
+                    <button id="flt-factionless" class="filter-btn" onclick="setRecruitFilter('Factionless')">🚨 Factionless / Left Only</button>
+                </div>
+                <button class="filter-btn" onclick="rescanStats()" style="border-color:var(--blue); color:var(--blue);">🔄 Refresh FFScouter Stats</button>
+            </div>
+
+            <table id="recruit-table">
+                <thead>
+                    <tr>
+                        <th>Target Player</th>
+                        <th>Est. Stats</th>
+                        <th>War Score</th>
+                        <th>Hits</th>
+                        <th>Efficiency (Score/Hit)</th>
+                        <th>Current Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="recruit-list"></tbody>
+            </table>
+        </div>
+
+        <!-- AI Quick Chat Modal -->
+        <div id="msg-modal" class="modal-overlay">
+            <div class="modal-content">
+                <div class="close-btn" onclick="closeMsgModal()">&times;</div>
+                <h2 id="modal-title">Drafting Message...</h2>
+                <textarea id="ai-msg-box" spellcheck="false">Initializing AI uplink...</textarea>
+                <button id="btn-copy-send" onclick="copyAndSend()" disabled>Copy & Open Torn</button>
             </div>
         </div>
-
-        <div id="filter-bar" class="filter-group">
-            <div style="display:flex; gap:10px;">
-                <button id="flt-all" class="filter-btn active" onclick="setRecruitFilter('All')">All Targets</button>
-                <button id="flt-factionless" class="filter-btn" onclick="setRecruitFilter('Factionless')">🚨 Factionless / Left Only</button>
-            </div>
-            <button class="filter-btn" onclick="rescanStats()" style="border-color:var(--blue); color:var(--blue);">🔄 Refresh FFScouter Stats</button>
-        </div>
-
-        <table id="recruit-table">
-            <thead>
-                <tr>
-                    <th>Target Player</th>
-                    <th>Est. Stats</th>
-                    <th>War Score</th>
-                    <th>Hits</th>
-                    <th>Efficiency (Score/Hit)</th>
-                    <th>Current Status</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody id="recruit-list"></tbody>
-        </table>
-    </div>
-
-    <!-- AI Quick Chat Modal -->
-    <div id="msg-modal" class="modal-overlay">
-        <div class="modal-content">
-            <div class="close-btn" onclick="closeMsgModal()">&times;</div>
-            <h2 id="modal-title">Drafting Message...</h2>
-            <textarea id="ai-msg-box" spellcheck="false">Initializing AI uplink...</textarea>
-            <button id="btn-copy-send" onclick="copyAndSend()" disabled>Copy & Open Torn</button>
-        </div>
-    </div>
+    </main>
 
 <script>
-    const myKey = localStorage.getItem("warboard_apikey");
-    let currentButtons = [];
-    let currentTargetId = null;
-    let currentRecruits = [];
-    let activeFilter = 'All';
-    let currentReportId = null;
+// --- SIDEBAR & SMART NAV LOGIC ---
+document.addEventListener("DOMContentLoaded", function() {
+    let currentUrl = window.location.pathname;
+    if (currentUrl === "/index.html" || currentUrl === "") currentUrl = "/"; 
+    let links = document.querySelectorAll(".nav-items .nav-link");
+    links.forEach(link => {
+        link.classList.remove("active"); 
+        if (link.getAttribute("href") === currentUrl) link.classList.add("active"); 
+    });
 
-    async function fetchWarList() {
-        if (!myKey) {
-            document.getElementById("error-msg").innerText = "Please set your API key on the Live Warboard settings first.";
-            document.getElementById("war-list-container").innerHTML = "";
-            return;
-        }
-        try {
-            const res = await fetch(`/api/war-list?apiKey=${myKey}`);
-            const data = await res.json();
-            const container = document.getElementById("war-list-container");
-            
-            if (data.error) { container.innerHTML = `<div style="color:var(--red);">API Error: ${data.error}</div>`; return; }
+    const sidebar = document.getElementById('app-sidebar');
+    if (localStorage.getItem('sidebar_collapsed') === 'true') {
+        sidebar.classList.add('collapsed');
+    }
+});
 
-            if (data.wars && data.wars.length > 0) {
-                let html = "";
-                data.wars.forEach(w => {
-                    let dStart = new Date(w.start * 1000).toLocaleDateString();
-                    html += `
-                        <div class="war-block">
-                            <div class="war-details">
-                                <div class="title">vs ${w.enemy}</div>
-                                <div class="dates">Started: ${dStart}</div>
-                            </div>
-                            <button id="btn-${w.id}" class="btn-calc" onclick="scanRecruits('${w.id}')">Scan Enemy Faction</button>
+function toggleSidebar() {
+    const sidebar = document.getElementById('app-sidebar');
+    sidebar.classList.toggle('collapsed');
+    localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+}
+
+// --- ORIGINAL RECRUITMENT LOGIC ---
+const myKey = localStorage.getItem("warboard_apikey");
+let currentButtons = [];
+let currentTargetId = null;
+let currentRecruits = [];
+let activeFilter = 'All';
+let currentReportId = null;
+
+async function fetchWarList() {
+    if (!myKey) {
+        document.getElementById("error-msg").innerText = "Please set your API key on the Live Warboard settings first.";
+        document.getElementById("war-list-container").innerHTML = "";
+        return;
+    }
+    try {
+        const res = await fetch(`/api/war-list?apiKey=${myKey}`);
+        const data = await res.json();
+        const container = document.getElementById("war-list-container");
+        
+        if (data.error) { container.innerHTML = `<div style="color:var(--red);">API Error: ${data.error}</div>`; return; }
+
+        if (data.wars && data.wars.length > 0) {
+            let html = "";
+            data.wars.forEach(w => {
+                let dStart = new Date(w.start * 1000).toLocaleDateString();
+                html += `
+                    <div class="war-block">
+                        <div class="war-details">
+                            <div class="title">vs ${w.enemy}</div>
+                            <div class="dates">Started: ${dStart}</div>
                         </div>
-                    `;
-                    currentButtons.push(`btn-${w.id}`);
-                });
-                container.innerHTML = html;
-            } else {
-                container.innerHTML = `<div style="color:var(--text-dim);">No recent completed ranked wars found.</div>`;
-            }
-        } catch (e) {
-            document.getElementById("war-list-container").innerHTML = `<div style="color:var(--red);">Failed to load wars.</div>`;
+                        <button id="btn-${w.id}" class="btn-calc" onclick="scanRecruits('${w.id}')">Scan Enemy Faction</button>
+                    </div>
+                `;
+                currentButtons.push(`btn-${w.id}`);
+            });
+            container.innerHTML = html;
+        } else {
+            container.innerHTML = `<div style="color:var(--text-dim);">No recent completed ranked wars found.</div>`;
         }
+    } catch (e) {
+        document.getElementById("war-list-container").innerHTML = `<div style="color:var(--red);">Failed to load wars.</div>`;
     }
+}
+
+fetchWarList();
+
+async function scanRecruits(reportId) {
+    currentReportId = reportId;
+    document.getElementById("error-msg").innerText = "";
+    const table = document.getElementById("recruit-table");
+    const list = document.getElementById("recruit-list");
+    const filterBar = document.getElementById("filter-bar");
     
-    fetchWarList();
+    currentButtons.forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) { btn.className = "btn-calc"; btn.innerText = "Scan Enemy Faction"; }
+    });
+    
+    const activeBtn = document.getElementById(`btn-${reportId}`);
+    activeBtn.innerText = "Scanning...";
+    filterBar.style.display = "none";
+    table.style.display = "table";
+    list.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-dim);">Fetching live faction data and querying FFScouter...</td></tr>`;
 
-    async function scanRecruits(reportId) {
-        currentReportId = reportId;
-        document.getElementById("error-msg").innerText = "";
-        const table = document.getElementById("recruit-table");
-        const list = document.getElementById("recruit-list");
-        const filterBar = document.getElementById("filter-bar");
+    try {
+        const res = await fetch(`/api/scan-recruits?apiKey=${myKey}&reportId=${reportId}`);
+        const data = await res.json();
+
+        if (data.error) throw new Error(data.error);
+
+        activeBtn.className = "btn-calc btn-loaded";
+        activeBtn.innerText = "Scan Complete ✓";
         
-        currentButtons.forEach(id => {
-            const btn = document.getElementById(id);
-            if (btn) { btn.className = "btn-calc"; btn.innerText = "Scan Enemy Faction"; }
-        });
-        
-        const activeBtn = document.getElementById(`btn-${reportId}`);
-        activeBtn.innerText = "Scanning...";
-        filterBar.style.display = "none";
-        table.style.display = "table";
-        list.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-dim);">Fetching live faction data and querying FFScouter...</td></tr>`;
+        currentRecruits = data.recruits;
 
-        try {
-            const res = await fetch(`/api/scan-recruits?apiKey=${myKey}&reportId=${reportId}`);
-            const data = await res.json();
-
-            if (data.error) throw new Error(data.error);
-
-            activeBtn.className = "btn-calc btn-loaded";
-            activeBtn.innerText = "Scan Complete ✓";
-            
-            currentRecruits = data.recruits;
-
-            if (currentRecruits.length === 0) {
-                list.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-dim);">No poachable heavy-hitters found from this war.</td></tr>`;
-                return;
-            }
-
-            filterBar.style.display = "flex";
-            renderTable();
-
-        } catch (e) {
-            activeBtn.innerText = "Error";
-            list.innerHTML = "";
-            table.style.display = "none";
-            document.getElementById("error-msg").innerText = "Failed to scan: " + e.message;
-        }
-    }
-
-    function setRecruitFilter(filterType) {
-        activeFilter = filterType;
-        document.getElementById('flt-all').className = "filter-btn";
-        document.getElementById('flt-factionless').className = "filter-btn";
-        document.getElementById('flt-' + filterType.toLowerCase()).className = "filter-btn active";
-        renderTable();
-    }
-
-    function rescanStats() {
-        if (currentReportId) {
-            scanRecruits(currentReportId);
-        }
-    }
-
-    function renderTable() {
-        const list = document.getElementById("recruit-list");
-        let html = "";
-        
-        const filteredRecruits = currentRecruits.filter(r => {
-            if (activeFilter === 'All') return true;
-            if (activeFilter === 'Factionless' && !r.stillInFaction) return true;
-            return false;
-        });
-
-        if (filteredRecruits.length === 0) {
-            list.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-dim);">No recruits match the current filter.</td></tr>`;
+        if (currentRecruits.length === 0) {
+            list.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-dim);">No poachable heavy-hitters found from this war.</td></tr>`;
             return;
         }
 
-        filteredRecruits.forEach(r => {
-            let badgeClass = r.stillInFaction ? "badge-member" : "badge-gone";
-            let daysText = r.stillInFaction ? ` (${r.days} Days)` : "";
-            let parsedStats = typeof r.estStats === 'number' ? r.estStats.toLocaleString() : r.estStats;
-            let statDisplayClass = parsedStats === "Scanning..." ? "stat-val" : "score-val";
+        filterBar.style.display = "flex";
+        renderTable();
 
-            html += `<tr>
-                <td><a href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank" style="color:var(--text-main); text-decoration:none; font-weight:bold;">${r.name} [${r.id}]</a></td>
-                <td class="${statDisplayClass}">${parsedStats}</td>
-                <td class="score-val">${r.score}</td>
-                <td>${r.attacks}</td>
-                <td class="eff-val">${r.efficiency}</td>
-                <td><span class="badge ${badgeClass}">${r.status}${daysText}</span></td>
-                <td><button class="btn-msg" onclick="openMsgModal('${r.id}', '${r.name}', ${r.score}, ${r.attacks}, '${r.status}')">✉️ Auto-Draft Message</button></td>
-            </tr>`;
+    } catch (e) {
+        activeBtn.innerText = "Error";
+        list.innerHTML = "";
+        table.style.display = "none";
+        document.getElementById("error-msg").innerText = "Failed to scan: " + e.message;
+    }
+}
+
+function setRecruitFilter(filterType) {
+    activeFilter = filterType;
+    document.getElementById('flt-all').className = "filter-btn";
+    document.getElementById('flt-factionless').className = "filter-btn";
+    document.getElementById('flt-' + filterType.toLowerCase()).className = "filter-btn active";
+    renderTable();
+}
+
+function rescanStats() {
+    if (currentReportId) {
+        scanRecruits(currentReportId);
+    }
+}
+
+function renderTable() {
+    const list = document.getElementById("recruit-list");
+    let html = "";
+    
+    const filteredRecruits = currentRecruits.filter(r => {
+        if (activeFilter === 'All') return true;
+        if (activeFilter === 'Factionless' && !r.stillInFaction) return true;
+        return false;
+    });
+
+    if (filteredRecruits.length === 0) {
+        list.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-dim);">No recruits match the current filter.</td></tr>`;
+        return;
+    }
+
+    filteredRecruits.forEach(r => {
+        let badgeClass = r.stillInFaction ? "badge-member" : "badge-gone";
+        let daysText = r.stillInFaction ? ` (${r.days} Days)` : "";
+        let parsedStats = typeof r.estStats === 'number' ? r.estStats.toLocaleString() : r.estStats;
+        let statDisplayClass = parsedStats === "Scanning..." ? "stat-val" : "score-val";
+
+        html += `<tr>
+            <td><a href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank" style="color:var(--text-main); text-decoration:none; font-weight:bold;">${r.name} [${r.id}]</a></td>
+            <td class="${statDisplayClass}">${parsedStats}</td>
+            <td class="score-val">${r.score}</td>
+            <td>${r.attacks}</td>
+            <td class="eff-val">${r.efficiency}</td>
+            <td><span class="badge ${badgeClass}">${r.status}${daysText}</span></td>
+            <td><button class="btn-msg" onclick="openMsgModal('${r.id}', '${r.name}', ${r.score}, ${r.attacks}, '${r.status}')">✉️ Auto-Draft Message</button></td>
+        </tr>`;
+    });
+
+    list.innerHTML = html;
+}
+
+function closeMsgModal() {
+    document.getElementById("msg-modal").style.display = "none";
+}
+
+async function openMsgModal(id, name, score, attacks, status) {
+    currentTargetId = id;
+    document.getElementById("modal-title").innerText = `Drafting DM to ${name}`;
+    document.getElementById("ai-msg-box").value = "Analyzing stats and writing recruitment pitch...";
+    document.getElementById("btn-copy-send").disabled = true;
+    document.getElementById("msg-modal").style.display = "flex";
+
+    try {
+        const res = await fetch('/api/generate-recruit-msg', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ playerName: name, score: score, attacks: attacks, status: status })
         });
+        const data = await res.json();
+        
+        if (data.error) throw new Error(data.error);
 
-        list.innerHTML = html;
+        document.getElementById("ai-msg-box").value = data.message;
+        document.getElementById("btn-copy-send").disabled = false;
+
+    } catch (e) {
+        document.getElementById("ai-msg-box").value = `[ERROR] Failed to connect to Gemini API. \n\nReason: ${e.message}\n\nYou can manually write your message here before copying!`;
+        document.getElementById("btn-copy-send").disabled = false; 
     }
+}
 
-    // --- QUICK CHAT MODAL LOGIC ---
-    function closeMsgModal() {
-        document.getElementById("msg-modal").style.display = "none";
+async function copyAndSend() {
+    const textToCopy = document.getElementById("ai-msg-box").value;
+    try {
+        await navigator.clipboard.writeText(textToCopy);
+        
+        const btn = document.getElementById("btn-copy-send");
+        btn.innerText = "✓ Copied! Opening Torn...";
+        
+        setTimeout(() => {
+            window.open(`https://www.torn.com/messages.php?action=send&XID=${currentTargetId}`, '_blank');
+            closeMsgModal();
+            btn.innerText = "Copy & Open Torn";
+        }, 800);
+        
+    } catch (err) {
+        alert("Failed to copy message to clipboard.");
     }
-
-    async function openMsgModal(id, name, score, attacks, status) {
-        currentTargetId = id;
-        document.getElementById("modal-title").innerText = `Drafting DM to ${name}`;
-        document.getElementById("ai-msg-box").value = "Analyzing stats and writing recruitment pitch...";
-        document.getElementById("btn-copy-send").disabled = true;
-        document.getElementById("msg-modal").style.display = "flex";
-
-        try {
-            const res = await fetch('/api/generate-recruit-msg', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ playerName: name, score: score, attacks: attacks, status: status })
-            });
-            const data = await res.json();
-            
-            if (data.error) throw new Error(data.error);
-
-            document.getElementById("ai-msg-box").value = data.message;
-            document.getElementById("btn-copy-send").disabled = false;
-
-        } catch (e) {
-            document.getElementById("ai-msg-box").value = `[ERROR] Failed to connect to Gemini API. \n\nReason: ${e.message}\n\nYou can manually write your message here before copying!`;
-            document.getElementById("btn-copy-send").disabled = false; 
-        }
-    }
-
-    async function copyAndSend() {
-        const textToCopy = document.getElementById("ai-msg-box").value;
-        try {
-            await navigator.clipboard.writeText(textToCopy);
-            
-            const btn = document.getElementById("btn-copy-send");
-            btn.innerText = "✓ Copied! Opening Torn...";
-            
-            setTimeout(() => {
-                window.open(`https://www.torn.com/messages.php?action=send&XID=${currentTargetId}`, '_blank');
-                closeMsgModal();
-                btn.innerText = "Copy & Open Torn";
-            }, 800);
-            
-        } catch (err) {
-            alert("Failed to copy message to clipboard.");
-        }
-    }
+}
 </script>
 </body>
 </html>
