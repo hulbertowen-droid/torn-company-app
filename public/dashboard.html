@@ -10,18 +10,27 @@
             --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
             --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
         }
-        body { background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 20px; }
         
-        /* Custom Scrollbars */
+        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; height: 100vh; overflow: hidden; }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
         ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #57606f; }
 
-        .top-nav { display: flex; justify-content: center; gap: 20px; max-width: 1200px; margin: 0 auto 20px auto; background: var(--card); padding: 12px; border-radius: 10px; border: 1px solid #2f3542; }
-        .nav-link { color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 6px 12px; border-radius: 6px; transition: 0.2s; text-transform: uppercase; font-size: 0.9em; letter-spacing: 1px; cursor: pointer; }
+        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; z-index: 100; }
+        .sidebar.collapsed { width: 75px; }
+        .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2f3542; }
+        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 1.1em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
+        .sidebar.collapsed .sidebar-logo { opacity: 0; width: 0; display: none; }
+        .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
+        .toggle-btn:hover { color: white; background: #2f3542; }
+        .nav-items { display: flex; flex-direction: column; gap: 8px; padding: 20px 10px; }
+        .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
         .nav-link:hover { background: #2f3542; color: white; }
-        .nav-link.active { color: white; background: rgba(88, 166, 255, 0.15); border: 1px solid var(--blue); }
+        .nav-link.active { background: rgba(255, 71, 87, 0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
+        .nav-text { transition: opacity 0.2s; }
+        .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
 
         h1 { text-align: center; color: var(--blue); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
 
@@ -68,172 +77,206 @@
     </style>
 </head>
 <body>
-      <div class="top-nav">
-        <a href="/" class="nav-link">📡 Live Warboard</a>
-        <a href="/chain.html" class="nav-link active">🔗 Chain Watcher</a>
-        <a href="/payout.html" class="nav-link">💰 Payouts</a>
-        <a href="/dashboard.html" class="nav-link">🛡️ Dashboard</a>
-        <a href="/recruitment.html" class="nav-link">🎯 Recruitment</a>
-    </div>
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">Spider-Verse</div>
+            <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
+        </div>
+        <div class="nav-items">
+            <a href="/" class="nav-link">📡 <span class="nav-text">Live Warboard</span></a>
+            <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
+            <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
+            <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
+            <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
+            <a onclick="openSettings()" class="nav-link" style="margin-top: 15px; border-top: 1px solid #2f3542; border-radius: 0; padding-top: 15px;">
+                ⚙️ <span class="nav-text">Settings</span>
+            </a>
+        </div>
+    </nav>
 
-    <h1>Alliance Dashboard</h1>
+    <main class="main-content">
+        <h1>Alliance Dashboard</h1>
 
-    <div class="container">
-        <!-- AI Insight Terminal -->
-        <div class="dash-card ai-section">
-            <h2>
-                <span>🧠 Gemini Tactical War Analyst</span>
-                <div style="display:flex; gap:10px;">
-                    <button class="btn-ai" onclick="generateAIReport('past')">Analyze Last War</button>
-                    <button class="btn-ai btn-ai-live" onclick="generateAIReport('ongoing')">🚨 Analyze LIVE War</button>
+        <div class="container">
+            <!-- AI Insight Terminal -->
+            <div class="dash-card ai-section">
+                <h2>
+                    <span>🧠 Gemini Tactical War Analyst</span>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn-ai" onclick="generateAIReport('past')">Analyze Last War</button>
+                        <button class="btn-ai btn-ai-live" onclick="generateAIReport('ongoing')">🚨 Analyze LIVE War</button>
+                    </div>
+                </h2>
+                <div id="ai-output" class="ai-terminal">
+                    <span style="color: var(--text-dim);">Awaiting command... Click a button above to feed war data into the AI.</span>
                 </div>
-            </h2>
-            <div id="ai-output" class="ai-terminal">
-                <span style="color: var(--text-dim);">Awaiting command... Click a button above to feed war data into the AI.</span>
             </div>
-        </div>
 
-        <!-- Activity Tracker -->
-        <div class="dash-card">
-            <h2>👤 Member Activity Tracker <span id="member-count" style="font-size: 0.6em; color: var(--text-dim);">0</span></h2>
-            <div class="table-wrapper">
-                <table id="activity-table">
-                    <thead><tr><th>Player</th><th>Status</th><th>Scanner Timeline (12H)</th></tr></thead>
-                    <tbody id="activity-list"><tr><td colspan="3" style="color:var(--text-dim);">Loading API data...</td></tr></tbody>
-                </table>
+            <!-- Activity Tracker -->
+            <div class="dash-card">
+                <h2>👤 Member Activity Tracker <span id="member-count" style="font-size: 0.6em; color: var(--text-dim);">0</span></h2>
+                <div class="table-wrapper">
+                    <table id="activity-table">
+                        <thead><tr><th>Player</th><th>Status</th><th>Scanner Timeline (12H)</th></tr></thead>
+                        <tbody id="activity-list"><tr><td colspan="3" style="color:var(--text-dim);">Loading API data...</td></tr></tbody>
+                    </table>
+                </div>
             </div>
-        </div>
 
-        <!-- Armory Loans -->
-        <div class="dash-card">
-            <h2>🔫 Armory Loans Tracker <span id="loan-count" style="font-size: 0.6em; color: var(--text-dim);">0</span></h2>
-            <div class="table-wrapper">
-                <table id="loans-table">
-                    <thead><tr><th>Item</th><th>Loaned To</th><th>Type</th></tr></thead>
-                    <tbody id="loans-list"><tr><td colspan="3" style="color:var(--text-dim);">Loading API data...</td></tr></tbody>
-                </table>
+            <!-- Armory Loans -->
+            <div class="dash-card">
+                <h2>🔫 Armory Loans Tracker <span id="loan-count" style="font-size: 0.6em; color: var(--text-dim);">0</span></h2>
+                <div class="table-wrapper">
+                    <table id="loans-table">
+                        <thead><tr><th>Item</th><th>Loaned To</th><th>Type</th></tr></thead>
+                        <tbody id="loans-list"><tr><td colspan="3" style="color:var(--text-dim);">Loading API data...</td></tr></tbody>
+                    </table>
+                </div>
             </div>
         </div>
-    </div>
+    </main>
 
 <script>
-    const myKey = localStorage.getItem("warboard_apikey");
+// --- SIDEBAR & SMART NAV LOGIC ---
+document.addEventListener("DOMContentLoaded", function() {
+    let currentUrl = window.location.pathname;
+    if (currentUrl === "/index.html" || currentUrl === "") currentUrl = "/"; 
+    let links = document.querySelectorAll(".nav-items .nav-link");
+    links.forEach(link => {
+        link.classList.remove("active"); 
+        if (link.getAttribute("href") === currentUrl) link.classList.add("active"); 
+    });
 
-    if (!myKey) {
-        document.getElementById("activity-list").innerHTML = `<tr><td colspan="3" style="color:var(--red);">Please set your API key on the Live Warboard settings first.</td></tr>`;
-        document.getElementById("loans-list").innerHTML = `<tr><td colspan="3" style="color:var(--red);">Please set your API key on the Live Warboard settings first.</td></tr>`;
-    } else {
-        fetchDashboardData();
-        setInterval(fetchDashboardData, 10000);
+    const sidebar = document.getElementById('app-sidebar');
+    if (localStorage.getItem('sidebar_collapsed') === 'true') {
+        sidebar.classList.add('collapsed');
     }
+});
 
-    async function fetchDashboardData() {
-        try {
-            const res = await fetch(`/api/dashboard-data?apiKey=${myKey}`);
-            const data = await res.json();
-            if (data.error) throw new Error(data.error);
+function toggleSidebar() {
+    const sidebar = document.getElementById('app-sidebar');
+    sidebar.classList.toggle('collapsed');
+    localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+}
 
-            renderActivity(data.members);
-            renderLoans(data.loans, data.members, data.armoryError);
-        } catch (e) {
-            console.error(e);
-            document.getElementById("activity-list").innerHTML = `<tr><td colspan="3" style="color:var(--red);">API Error: ${e.message}</td></tr>`;
+// --- ORIGINAL DASHBOARD LOGIC ---
+const myKey = localStorage.getItem("warboard_apikey");
+
+if (!myKey) {
+    document.getElementById("activity-list").innerHTML = `<tr><td colspan="3" style="color:var(--red);">Please set your API key on the Live Warboard settings first.</td></tr>`;
+    document.getElementById("loans-list").innerHTML = `<tr><td colspan="3" style="color:var(--red);">Please set your API key on the Live Warboard settings first.</td></tr>`;
+} else {
+    fetchDashboardData();
+    setInterval(fetchDashboardData, 10000);
+}
+
+async function fetchDashboardData() {
+    try {
+        const res = await fetch(`/api/dashboard-data?apiKey=${myKey}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        renderActivity(data.members);
+        renderLoans(data.loans, data.members, data.armoryError);
+    } catch (e) {
+        console.error(e);
+        document.getElementById("activity-list").innerHTML = `<tr><td colspan="3" style="color:var(--red);">API Error: ${e.message}</td></tr>`;
+    }
+}
+
+function renderActivity(members) {
+    const list = Object.entries(members).map(([id, m]) => ({ id, ...m })).sort((a, b) => a.last_action.timestamp - b.last_action.timestamp);
+    document.getElementById("member-count").innerText = list.length;
+    
+    const now = Math.floor(Date.now() / 1000);
+    let html = "";
+    
+    list.forEach(m => {
+        let dotClass = "dot-offline";
+        let timeClass = "time-faded";
+        if (m.last_action.status === "Online") dotClass = "dot-online";
+        if (m.last_action.status === "Idle") dotClass = "dot-idle";
+
+        let timeDiff = now - m.last_action.timestamp;
+        if (timeDiff > 172800) timeClass += " text-danger"; 
+
+        let timelineHtml = `<div class="timeline-container">`;
+        if (m.timeline && Array.isArray(m.timeline) && m.timeline.length > 0) {
+            m.timeline.forEach(score => {
+                let blockClass = score === 1 ? "t-active" : "t-inactive";
+                timelineHtml += `<div class="t-block ${blockClass}"></div>`;
+            });
+        } else {
+            timelineHtml += `<span style="color:var(--text-dim); font-size:0.85em; font-style:italic;">⏳ Scanner synchronization in progress...</span>`;
         }
+        timelineHtml += `</div>`;
+
+        html += `<tr>
+            <td><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-main); text-decoration:none; font-weight:bold;">${m.name} [${m.id}]</a></td>
+            <td>
+                <div class="status-cell">
+                    <span class="status-dot ${dotClass}"></span>
+                    ${m.last_action.status} 
+                    <span class="${timeClass}">(${m.last_action.relative})</span>
+                </div>
+            </td>
+            <td>${timelineHtml}</td>
+        </tr>`;
+    });
+    
+    document.getElementById("activity-list").innerHTML = html;
+}
+
+function renderLoans(loans, members, armoryError) {
+    const listContainer = document.getElementById("loans-list");
+    if (armoryError) {
+        document.getElementById("loan-count").innerText = "Locked";
+        listContainer.innerHTML = `<tr><td colspan="3" style="color:var(--red); font-weight:bold;">⚠️ Access Denied: Your API key does not have the faction permissions required to view the Armory.</td></tr>`;
+        return;
     }
 
-    function renderActivity(members) {
-        const list = Object.entries(members).map(([id, m]) => ({ id, ...m })).sort((a, b) => a.last_action.timestamp - b.last_action.timestamp);
-        document.getElementById("member-count").innerText = list.length;
-        
-        const now = Math.floor(Date.now() / 1000);
-        let html = "";
-        
-        list.forEach(m => {
-            let dotClass = "dot-offline";
-            let timeClass = "time-faded";
-            if (m.last_action.status === "Online") dotClass = "dot-online";
-            if (m.last_action.status === "Idle") dotClass = "dot-idle";
-
-            let timeDiff = now - m.last_action.timestamp;
-            if (timeDiff > 172800) timeClass += " text-danger"; 
-
-            let timelineHtml = `<div class="timeline-container">`;
-            if (m.timeline && Array.isArray(m.timeline) && m.timeline.length > 0) {
-                m.timeline.forEach(score => {
-                    let blockClass = score === 1 ? "t-active" : "t-inactive";
-                    timelineHtml += `<div class="t-block ${blockClass}"></div>`;
-                });
-            } else {
-                timelineHtml += `<span style="color:var(--text-dim); font-size:0.85em; font-style:italic;">⏳ Scanner synchronization in progress...</span>`;
-            }
-            timelineHtml += `</div>`;
+    document.getElementById("loan-count").innerText = loans.length;
+    let html = "";
+    
+    if (loans.length === 0) {
+        html = `<tr><td colspan="3" style="color:var(--text-dim);">No items currently loaned out.</td></tr>`;
+    } else {
+        loans.forEach(loan => {
+            const borrower = members[loan.loaned_to] ? members[loan.loaned_to].name + " [" + loan.loaned_to + "]" : "Unknown Player [" + loan.loaned_to + "]";
+            
+            let badgeClass = "badge-temp";
+            if (loan.type === "Armor") badgeClass = "badge-armor";
+            if (loan.type === "Weapon") badgeClass = "badge-weapon";
 
             html += `<tr>
-                <td><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-main); text-decoration:none; font-weight:bold;">${m.name} [${m.id}]</a></td>
-                <td>
-                    <div class="status-cell">
-                        <span class="status-dot ${dotClass}"></span>
-                        ${m.last_action.status} 
-                        <span class="${timeClass}">(${m.last_action.relative})</span>
-                    </div>
-                </td>
-                <td>${timelineHtml}</td>
+                <td style="font-weight:bold; color:var(--gold);">${loan.name}</td>
+                <td>${borrower}</td>
+                <td><span class="badge ${badgeClass}">${loan.type}</span></td>
             </tr>`;
         });
-        
-        document.getElementById("activity-list").innerHTML = html;
     }
+    listContainer.innerHTML = html;
+}
 
-    function renderLoans(loans, members, armoryError) {
-        const listContainer = document.getElementById("loans-list");
-        if (armoryError) {
-            document.getElementById("loan-count").innerText = "Locked";
-            listContainer.innerHTML = `<tr><td colspan="3" style="color:var(--red); font-weight:bold;">⚠️ Access Denied: Your API key does not have the faction permissions required to view the Armory.</td></tr>`;
-            return;
-        }
+async function generateAIReport(type) {
+    const term = document.getElementById("ai-output");
+    const endpoint = type === 'ongoing' ? '/api/ai-analyze-ongoing' : '/api/ai-analyze';
+    const statusMsg = type === 'ongoing' ? 'LIVE active war data' : 'latest completed Ranked War data';
+    
+    term.innerHTML = `<span style="color: var(--blue);">[SYSTEM] Initiating secure uplink to Gemini API...<br>[SYSTEM] Extracting ${statusMsg}...<br>[SYSTEM] Analyzing faction performance metrics... Please wait.</span>`;
+    
+    try {
+        const res = await fetch(`${endpoint}?apiKey=${myKey}`, { method: 'POST' });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
 
-        document.getElementById("loan-count").innerText = loans.length;
-        let html = "";
-        
-        if (loans.length === 0) {
-            html = `<tr><td colspan="3" style="color:var(--text-dim);">No items currently loaned out.</td></tr>`;
-        } else {
-            loans.forEach(loan => {
-                const borrower = members[loan.loaned_to] ? members[loan.loaned_to].name + " [" + loan.loaned_to + "]" : "Unknown Player [" + loan.loaned_to + "]";
-                
-                let badgeClass = "badge-temp";
-                if (loan.type === "Armor") badgeClass = "badge-armor";
-                if (loan.type === "Weapon") badgeClass = "badge-weapon";
-
-                html += `<tr>
-                    <td style="font-weight:bold; color:var(--gold);">${loan.name}</td>
-                    <td>${borrower}</td>
-                    <td><span class="badge ${badgeClass}">${loan.type}</span></td>
-                </tr>`;
-            });
-        }
-        listContainer.innerHTML = html;
+        let formattedText = data.analysis.replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--blue);">$1</strong>');
+        formattedText = formattedText.replace(/\n/g, '<br>');
+        term.innerHTML = `<span style="color: var(--text-main);">${formattedText}</span>`;
+    } catch (e) {
+        term.innerHTML = `<span style="color: var(--red);">[ERROR] ${e.message}</span>`;
     }
-
-    async function generateAIReport(type) {
-        const term = document.getElementById("ai-output");
-        const endpoint = type === 'ongoing' ? '/api/ai-analyze-ongoing' : '/api/ai-analyze';
-        const statusMsg = type === 'ongoing' ? 'LIVE active war data' : 'latest completed Ranked War data';
-        
-        term.innerHTML = `<span style="color: var(--blue);">[SYSTEM] Initiating secure uplink to Gemini API...<br>[SYSTEM] Extracting ${statusMsg}...<br>[SYSTEM] Analyzing faction performance metrics... Please wait.</span>`;
-        
-        try {
-            const res = await fetch(`${endpoint}?apiKey=${myKey}`, { method: 'POST' });
-            const data = await res.json();
-            if (data.error) throw new Error(data.error);
-
-            let formattedText = data.analysis.replace(/\*\*(.*?)\*\*/g, '<strong style="color:var(--blue);">$1</strong>');
-            formattedText = formattedText.replace(/\n/g, '<br>');
-            term.innerHTML = `<span style="color: var(--text-main);">${formattedText}</span>`;
-        } catch (e) {
-            term.innerHTML = `<span style="color: var(--red);">[ERROR] ${e.message}</span>`;
-        }
-    }
+}
 </script>
 </body>
 </html>
