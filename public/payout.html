@@ -10,17 +10,27 @@
             --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
             --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
         }
-        body { background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; padding: 15px; }
         
+        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; height: 100vh; overflow: hidden; }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
         ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #57606f; }
 
-        .top-nav { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; max-width: 1200px; margin: 0 auto 20px auto; background: var(--card); padding: 12px; border-radius: 10px; border: 1px solid #2f3542; }
-        .nav-link { color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 6px 12px; border-radius: 6px; transition: 0.2s; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; cursor: pointer; white-space: nowrap; }
+        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; z-index: 100; }
+        .sidebar.collapsed { width: 75px; }
+        .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2f3542; }
+        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 1.1em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
+        .sidebar.collapsed .sidebar-logo { opacity: 0; width: 0; display: none; }
+        .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
+        .toggle-btn:hover { color: white; background: #2f3542; }
+        .nav-items { display: flex; flex-direction: column; gap: 8px; padding: 20px 10px; }
+        .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
         .nav-link:hover { background: #2f3542; color: white; }
-        .nav-link.active { color: #000; background: var(--gold); border: 1px solid var(--gold); }
+        .nav-link.active { background: rgba(255, 71, 87, 0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
+        .nav-text { transition: opacity 0.2s; }
+        .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
 
         h1 { text-align: center; color: var(--gold); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; font-size: 1.5em; }
 
@@ -85,369 +95,404 @@
     </style>
 </head>
 <body>
-     <div class="top-nav">
-        <a href="/" class="nav-link">📡 Live Warboard</a>
-        <a href="/chain.html" class="nav-link active">🔗 Chain Watcher</a>
-        <a href="/payout.html" class="nav-link">💰 Payouts</a>
-        <a href="/dashboard.html" class="nav-link">🛡️ Dashboard</a>
-        <a href="/recruitment.html" class="nav-link">🎯 Recruitment</a>
-    </div>
-    <h1>War Payout Calculator</h1>
-
-    <div class="container">
-        <div id="error-msg" style="color: var(--red); font-weight: bold; text-align: center;"></div>
-
-        <!-- Block 1: Past Wars -->
-        <div class="dash-card">
-            <div class="dash-header">Select a Past War</div>
-            <div id="war-list-container">
-                <div style="color:var(--text-dim);">Loading past wars...</div>
-            </div>
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">Spider-Verse</div>
+            <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
         </div>
+        <div class="nav-items">
+            <a href="/" class="nav-link">📡 <span class="nav-text">Live Warboard</span></a>
+            <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
+            <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
+            <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
+            <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
+            <a onclick="openSettings()" class="nav-link" style="margin-top: 15px; border-top: 1px solid #2f3542; border-radius: 0; padding-top: 15px;">
+                ⚙️ <span class="nav-text">Settings</span>
+            </a>
+        </div>
+    </nav>
 
-        <div id="main-calculator" style="display:none;">
-            <!-- Block 2: Rewards Box -->
-            <div class="dash-card rewards-box" style="margin-bottom: 20px;">
-                <div class="rewards-title">🎁 War Summary vs <span id="reward-enemy-name"></span></div>
-                <div class="rewards-stats" style="color:var(--gold);">
-                    🏆 Points: <span id="reward-points">0</span> | ✊ Respect: <span id="reward-respect">0</span>
+    <main class="main-content">
+        <h1>War Payout Calculator</h1>
+
+        <div class="container">
+            <div id="error-msg" style="color: var(--red); font-weight: bold; text-align: center;"></div>
+
+            <!-- Block 1: Past Wars -->
+            <div class="dash-card">
+                <div class="dash-header">Select a Past War</div>
+                <div id="war-list-container">
+                    <div style="color:var(--text-dim);">Loading past wars...</div>
                 </div>
-                <div id="caches-list-ui" style="font-size: 0.9em;"></div>
             </div>
 
-            <!-- Block 3: Settings Grid -->
-            <div class="settings-grid">
-                
-                <!-- Left Column: The Money -->
-                <div class="setting-group">
-                    <div class="setting-group-title">The Pot & Deductions</div>
+            <div id="main-calculator" style="display:none;">
+                <!-- Block 2: Rewards Box -->
+                <div class="dash-card rewards-box" style="margin-bottom: 20px;">
+                    <div class="rewards-title">🎁 War Summary vs <span id="reward-enemy-name"></span></div>
+                    <div class="rewards-stats" style="color:var(--gold);">
+                        🏆 Points: <span id="reward-points">0</span> | ✊ Respect: <span id="reward-respect">0</span>
+                    </div>
+                    <div id="caches-list-ui" style="font-size: 0.9em;"></div>
+                </div>
+
+                <!-- Block 3: Settings Grid -->
+                <div class="settings-grid">
                     
-                    <div class="input-row">
-                        <label class="input-label">Cache Sales / Total Winnings</label>
-                        <div style="display:flex; align-items:center; gap:5px;">
-                            <span style="color:var(--green); font-weight:bold;">$</span>
-                            <input type="number" id="gross-pool" oninput="renderPayouts()" class="input-field" style="border-color:var(--green);">
-                        </div>
-                    </div>
-                    <hr style="border: 0; border-top: 1px solid #2f3542; margin: 15px 0;">
-                    <div class="input-row">
-                        <label class="input-label">Consumables Cost</label>
-                        <input type="number" id="deduct-consumables" value="0" oninput="renderPayouts()" class="input-field">
-                    </div>
-                    <div class="input-row">
-                        <label class="input-label">Spies / Mercenaries</label>
-                        <input type="number" id="deduct-spies" value="0" oninput="renderPayouts()" class="input-field">
-                    </div>
-                    <div class="input-row">
-                        <label class="input-label">Bounties / Bails</label>
-                        <input type="number" id="deduct-bounties" value="0" oninput="renderPayouts()" class="input-field">
-                    </div>
-                    <div class="input-row">
-                        <label class="input-label">Other Deductions</label>
-                        <input type="number" id="deduct-other" value="0" oninput="renderPayouts()" class="input-field">
-                    </div>
-                </div>
-
-                <!-- Right Column: The Logic -->
-                <div>
+                    <!-- Left Column: The Money -->
                     <div class="setting-group">
-                        <div class="setting-group-title">Calculation Mode</div>
-                        <div class="radio-group">
-                            <label><input type="radio" name="calc_mode" value="cut" checked onchange="toggleMode()"> Ratio Based (Faction Cut %)</label>
-                            <label><input type="radio" name="calc_mode" value="pph" onchange="toggleMode()"> Flat Pay-Per-Hit</label>
-                        </div>
-                        <div class="input-row" id="ui-mode-cut">
-                            <label class="input-label">Faction Vault Cut (%)</label>
-                            <input type="number" id="val-cut" value="20" oninput="renderPayouts()" class="input-field">
-                        </div>
-                        <div class="input-row" id="ui-mode-pph" style="display:none;">
-                            <label class="input-label">Pay Per War Hit ($)</label>
-                            <input type="number" id="val-pph" value="1000000" oninput="renderPayouts()" class="input-field">
-                        </div>
-                    </div>
-
-                    <div class="setting-group">
-                        <div class="setting-group-title">Advanced Payout Options</div>
-                        <div class="input-row">
-                            <label class="input-label"><input type="checkbox" id="pay-assists" checked onchange="renderPayouts()"> Pay Assists</label>
-                            <div style="display:flex; align-items:center; gap:5px;"><span class="text-dim">Multiplier:</span> <input type="number" id="mult-assists" value="0.25" step="0.05" oninput="renderPayouts()" class="input-field" style="width:60px;"></div>
-                        </div>
-                        <div class="input-row">
-                            <label class="input-label"><input type="checkbox" id="pay-clears" onchange="renderPayouts()"> Pay Clears (Outside Hit)</label>
-                            <div style="display:flex; align-items:center; gap:5px;"><span class="text-dim">Multiplier:</span> <input type="number" id="mult-clears" value="0.10" step="0.05" oninput="renderPayouts()" class="input-field" style="width:60px;"></div>
-                        </div>
+                        <div class="setting-group-title">The Pot & Deductions</div>
                         
-                        <!-- Locked Advanced Log Data -->
-                        <div class="input-row locked-setting" title="Requires massive external Faction Attacks API parser to function.">
-                            <label class="input-label"><input type="checkbox" disabled> Pay Retals <span class="locked-label">Requires Log API</span></label>
-                            <div style="display:flex; align-items:center; gap:5px;"><span class="text-dim">Multiplier:</span> <input type="number" disabled value="0.5" class="input-field" style="width:60px;"></div>
+                        <div class="input-row">
+                            <label class="input-label">Cache Sales / Total Winnings</label>
+                            <div style="display:flex; align-items:center; gap:5px;">
+                                <span style="color:var(--green); font-weight:bold;">$</span>
+                                <input type="number" id="gross-pool" oninput="renderPayouts()" class="input-field" style="border-color:var(--green);">
+                            </div>
                         </div>
-                        <div class="input-row locked-setting" title="Requires massive external Faction Attacks API parser to function.">
-                            <label class="input-label"><input type="checkbox" disabled> Filter Low Fair Fight <span class="locked-label">Requires Log API</span></label>
-                            <div style="display:flex; align-items:center; gap:5px;"><span class="text-dim">Min FF:</span> <input type="number" disabled value="2.0" class="input-field" style="width:60px;"></div>
+                        <hr style="border: 0; border-top: 1px solid #2f3542; margin: 15px 0;">
+                        <div class="input-row">
+                            <label class="input-label">Consumables Cost</label>
+                            <input type="number" id="deduct-consumables" value="0" oninput="renderPayouts()" class="input-field">
+                        </div>
+                        <div class="input-row">
+                            <label class="input-label">Spies / Mercenaries</label>
+                            <input type="number" id="deduct-spies" value="0" oninput="renderPayouts()" class="input-field">
+                        </div>
+                        <div class="input-row">
+                            <label class="input-label">Bounties / Bails</label>
+                            <input type="number" id="deduct-bounties" value="0" oninput="renderPayouts()" class="input-field">
+                        </div>
+                        <div class="input-row">
+                            <label class="input-label">Other Deductions</label>
+                            <input type="number" id="deduct-other" value="0" oninput="renderPayouts()" class="input-field">
                         </div>
                     </div>
 
-                    <div class="setting-group">
-                        <div class="setting-group-title">Hit Thresholds</div>
-                        <div class="input-row">
-                            <label class="input-label"><input type="checkbox" id="use-thresholds" onchange="renderPayouts()"> Enable Min/Max Caps</label>
+                    <!-- Right Column: The Logic -->
+                    <div>
+                        <div class="setting-group">
+                            <div class="setting-group-title">Calculation Mode</div>
+                            <div class="radio-group">
+                                <label><input type="radio" name="calc_mode" value="cut" checked onchange="toggleMode()"> Ratio Based (Faction Cut %)</label>
+                                <label><input type="radio" name="calc_mode" value="pph" onchange="toggleMode()"> Flat Pay-Per-Hit</label>
+                            </div>
+                            <div class="input-row" id="ui-mode-cut">
+                                <label class="input-label">Faction Vault Cut (%)</label>
+                                <input type="number" id="val-cut" value="20" oninput="renderPayouts()" class="input-field">
+                            </div>
+                            <div class="input-row" id="ui-mode-pph" style="display:none;">
+                                <label class="input-label">Pay Per War Hit ($)</label>
+                                <input type="number" id="val-pph" value="1000000" oninput="renderPayouts()" class="input-field">
+                            </div>
                         </div>
-                        <div class="input-row">
-                            <label class="input-label">Minimum Hits Required</label>
-                            <input type="number" id="thresh-min" value="10" oninput="renderPayouts()" class="input-field">
+
+                        <div class="setting-group">
+                            <div class="setting-group-title">Advanced Payout Options</div>
+                            <div class="input-row">
+                                <label class="input-label"><input type="checkbox" id="pay-assists" checked onchange="renderPayouts()"> Pay Assists</label>
+                                <div style="display:flex; align-items:center; gap:5px;"><span class="text-dim">Multiplier:</span> <input type="number" id="mult-assists" value="0.25" step="0.05" oninput="renderPayouts()" class="input-field" style="width:60px;"></div>
+                            </div>
+                            <div class="input-row">
+                                <label class="input-label"><input type="checkbox" id="pay-clears" onchange="renderPayouts()"> Pay Clears (Outside Hit)</label>
+                                <div style="display:flex; align-items:center; gap:5px;"><span class="text-dim">Multiplier:</span> <input type="number" id="mult-clears" value="0.10" step="0.05" oninput="renderPayouts()" class="input-field" style="width:60px;"></div>
+                            </div>
+                            
+                            <!-- Locked Advanced Log Data -->
+                            <div class="input-row locked-setting" title="Requires massive external Faction Attacks API parser to function.">
+                                <label class="input-label"><input type="checkbox" disabled> Pay Retals <span class="locked-label">Requires Log API</span></label>
+                                <div style="display:flex; align-items:center; gap:5px;"><span class="text-dim">Multiplier:</span> <input type="number" disabled value="0.5" class="input-field" style="width:60px;"></div>
+                            </div>
+                            <div class="input-row locked-setting" title="Requires massive external Faction Attacks API parser to function.">
+                                <label class="input-label"><input type="checkbox" disabled> Filter Low Fair Fight <span class="locked-label">Requires Log API</span></label>
+                                <div style="display:flex; align-items:center; gap:5px;"><span class="text-dim">Min FF:</span> <input type="number" disabled value="2.0" class="input-field" style="width:60px;"></div>
+                            </div>
                         </div>
-                        <div class="input-row">
-                            <label class="input-label">Maximum Hits Paid</label>
-                            <input type="number" id="thresh-max" value="100" oninput="renderPayouts()" class="input-field">
+
+                        <div class="setting-group">
+                            <div class="setting-group-title">Hit Thresholds</div>
+                            <div class="input-row">
+                                <label class="input-label"><input type="checkbox" id="use-thresholds" onchange="renderPayouts()"> Enable Min/Max Caps</label>
+                            </div>
+                            <div class="input-row">
+                                <label class="input-label">Minimum Hits Required</label>
+                                <input type="number" id="thresh-min" value="10" oninput="renderPayouts()" class="input-field">
+                            </div>
+                            <div class="input-row">
+                                <label class="input-label">Maximum Hits Paid</label>
+                                <input type="number" id="thresh-max" value="100" oninput="renderPayouts()" class="input-field">
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Summary Footer -->
-            <div class="summary-footer">
-                <div>
-                    <div style="color:var(--text-dim); font-size:0.85em; text-transform:uppercase; font-weight:bold;">Net Distributable Pool</div>
-                    <div class="big-money" id="display-net-pool">$0</div>
+                <!-- Summary Footer -->
+                <div class="summary-footer">
+                    <div>
+                        <div style="color:var(--text-dim); font-size:0.85em; text-transform:uppercase; font-weight:bold;">Net Distributable Pool</div>
+                        <div class="big-money" id="display-net-pool">$0</div>
+                    </div>
+                    <div>
+                        <div style="color:var(--text-dim); font-size:0.85em; text-transform:uppercase; font-weight:bold;">Faction Vault Profit</div>
+                        <div class="big-money" id="display-vault-profit" style="color:var(--gold);">$0</div>
+                    </div>
+                    <button id="copy-btn" class="btn-calc" style="background:var(--green);" onclick="copyToClipboard()">📋 Copy List</button>
                 </div>
-                <div>
-                    <div style="color:var(--text-dim); font-size:0.85em; text-transform:uppercase; font-weight:bold;">Faction Vault Profit</div>
-                    <div class="big-money" id="display-vault-profit" style="color:var(--gold);">$0</div>
-                </div>
-                <button id="copy-btn" class="btn-calc" style="background:var(--green);" onclick="copyToClipboard()">📋 Copy List</button>
-            </div>
 
-            <!-- Block 4: Table -->
-            <div class="dash-card" style="margin-top: 20px;">
-                <div class="table-wrapper">
-                    <table id="payout-table">
-                        <thead>
-                            <tr>
-                                <th>Member</th>
-                                <th>Score</th>
-                                <th>Hits</th>
-                                <th>Assists</th>
-                                <th>Clears</th>
-                                <th>Weighted Total</th>
-                                <th>Payout Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody id="payout-list"></tbody>
-                    </table>
+                <!-- Block 4: Table -->
+                <div class="dash-card" style="margin-top: 20px;">
+                    <div class="table-wrapper">
+                        <table id="payout-table">
+                            <thead>
+                                <tr>
+                                    <th>Member</th>
+                                    <th>Score</th>
+                                    <th>Hits</th>
+                                    <th>Assists</th>
+                                    <th>Clears</th>
+                                    <th>Weighted Total</th>
+                                    <th>Payout Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody id="payout-list"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
+    </main>
 
 <script>
-    const myKey = localStorage.getItem("warboard_apikey");
-    let currentMembers = [];
-    let currentButtons = [];
-    let clipboardText = "";
+// --- SIDEBAR & SMART NAV LOGIC ---
+document.addEventListener("DOMContentLoaded", function() {
+    let currentUrl = window.location.pathname;
+    if (currentUrl === "/index.html" || currentUrl === "") currentUrl = "/"; 
+    let links = document.querySelectorAll(".nav-items .nav-link");
+    links.forEach(link => {
+        link.classList.remove("active"); 
+        if (link.getAttribute("href") === currentUrl) link.classList.add("active"); 
+    });
 
-    async function fetchWarList() {
-        if (!myKey) {
-            document.getElementById("error-msg").innerText = "Please set your API key on the Live Warboard settings first.";
-            document.getElementById("war-list-container").innerHTML = "";
+    const sidebar = document.getElementById('app-sidebar');
+    if (localStorage.getItem('sidebar_collapsed') === 'true') {
+        sidebar.classList.add('collapsed');
+    }
+});
+
+function toggleSidebar() {
+    const sidebar = document.getElementById('app-sidebar');
+    sidebar.classList.toggle('collapsed');
+    localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+}
+
+// --- ORIGINAL PAYOUT LOGIC ---
+const myKey = localStorage.getItem("warboard_apikey");
+let currentMembers = [];
+let currentButtons = [];
+let clipboardText = "";
+
+async function fetchWarList() {
+    if (!myKey) {
+        document.getElementById("error-msg").innerText = "Please set your API key on the Live Warboard settings first.";
+        document.getElementById("war-list-container").innerHTML = "";
+        return;
+    }
+    try {
+        const res = await fetch(`/api/war-list?apiKey=${myKey}`);
+        const data = await res.json();
+        const container = document.getElementById("war-list-container");
+        
+        if (data.error) {
+            container.innerHTML = `<div style="color:var(--red);">API Error: ${data.error}</div>`;
             return;
         }
-        try {
-            const res = await fetch(`/api/war-list?apiKey=${myKey}`);
-            const data = await res.json();
-            const container = document.getElementById("war-list-container");
-            
-            if (data.error) {
-                container.innerHTML = `<div style="color:var(--red);">API Error: ${data.error}</div>`;
-                return;
-            }
 
-            if (data.wars && data.wars.length > 0) {
-                let html = "";
-                data.wars.forEach(w => {
-                    let dStart = new Date(w.start * 1000).toLocaleDateString();
-                    html += `
-                        <div class="war-block">
-                            <div class="war-details">
-                                <div class="title">vs ${w.enemy}</div>
-                                <div class="dates">Started: ${dStart}</div>
-                            </div>
-                            <button id="btn-${w.id}" class="btn-calc" onclick="loadWarData('${w.id}', '${w.enemy}')">Calculate</button>
+        if (data.wars && data.wars.length > 0) {
+            let html = "";
+            data.wars.forEach(w => {
+                let dStart = new Date(w.start * 1000).toLocaleDateString();
+                html += `
+                    <div class="war-block">
+                        <div class="war-details">
+                            <div class="title">vs ${w.enemy}</div>
+                            <div class="dates">Started: ${dStart}</div>
                         </div>
-                    `;
-                    currentButtons.push(`btn-${w.id}`);
-                });
-                container.innerHTML = html;
-            } else {
-                container.innerHTML = `<div style="color:var(--text-dim);">No recent completed ranked wars found.</div>`;
-            }
-        } catch (e) {
-            document.getElementById("war-list-container").innerHTML = `<div style="color:var(--red);">Failed to load wars.</div>`;
-        }
-    }
-    
-    fetchWarList();
-
-    function toggleMode() {
-        const mode = document.querySelector('input[name="calc_mode"]:checked').value;
-        if (mode === 'cut') {
-            document.getElementById('ui-mode-cut').style.display = 'flex';
-            document.getElementById('ui-mode-pph').style.display = 'none';
+                        <button id="btn-${w.id}" class="btn-calc" onclick="loadWarData('${w.id}', '${w.enemy}')">Calculate</button>
+                    </div>
+                `;
+                currentButtons.push(`btn-${w.id}`);
+            });
+            container.innerHTML = html;
         } else {
-            document.getElementById('ui-mode-cut').style.display = 'none';
-            document.getElementById('ui-mode-pph').style.display = 'flex';
+            container.innerHTML = `<div style="color:var(--text-dim);">No recent completed ranked wars found.</div>`;
         }
+    } catch (e) {
+        document.getElementById("war-list-container").innerHTML = `<div style="color:var(--red);">Failed to load wars.</div>`;
+    }
+}
+
+fetchWarList();
+
+function toggleMode() {
+    const mode = document.querySelector('input[name="calc_mode"]:checked').value;
+    if (mode === 'cut') {
+        document.getElementById('ui-mode-cut').style.display = 'flex';
+        document.getElementById('ui-mode-pph').style.display = 'none';
+    } else {
+        document.getElementById('ui-mode-cut').style.display = 'none';
+        document.getElementById('ui-mode-pph').style.display = 'flex';
+    }
+    renderPayouts();
+}
+
+async function loadWarData(reportId, enemyName) {
+    document.getElementById("error-msg").innerText = "";
+    
+    currentButtons.forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) { btn.className = "btn-calc"; btn.innerText = "Calculate"; }
+    });
+    
+    const activeBtn = document.getElementById(`btn-${reportId}`);
+    activeBtn.innerText = "Loading...";
+
+    try {
+        const res = await fetch(`/api/past-war?apiKey=${myKey}&reportId=${reportId}`);
+        const data = await res.json();
+
+        if (data.error) throw new Error(data.error);
+
+        currentMembers = data.members;
+        
+        document.getElementById("reward-enemy-name").innerText = enemyName;
+        document.getElementById("reward-points").innerText = (data.rewards.points || 0).toLocaleString();
+        document.getElementById("reward-respect").innerText = (data.rewards.respect || 0).toLocaleString();
+        
+        let cachesHtml = "";
+        if (data.rewards.caches && data.rewards.caches.length > 0) {
+            data.rewards.caches.forEach(c => {
+                cachesHtml += `<div>${c.quantity}x ${c.name} <span class="text-dim">($${c.marketValue.toLocaleString()} ea)</span></div>`;
+            });
+        } else {
+            cachesHtml = `<div class="text-dim">No caches won.</div>`;
+        }
+        document.getElementById("caches-list-ui").innerHTML = cachesHtml;
+
+        document.getElementById("gross-pool").value = data.rewards.totalCacheValue || 0;
+        document.getElementById("main-calculator").style.display = "block";
+
+        activeBtn.className = "btn-calc btn-loaded";
+        activeBtn.innerText = "Loaded ✓";
+
         renderPayouts();
+
+    } catch (e) {
+        activeBtn.innerText = "Error";
+        document.getElementById("error-msg").innerText = "Failed to load: " + e.message;
     }
+}
 
-    async function loadWarData(reportId, enemyName) {
-        document.getElementById("error-msg").innerText = "";
+function renderPayouts() {
+    if(currentMembers.length === 0) return;
+
+    // Money Settings
+    const gross = parseFloat(document.getElementById("gross-pool").value) || 0;
+    const dConsumables = parseFloat(document.getElementById("deduct-consumables").value) || 0;
+    const dSpies = parseFloat(document.getElementById("deduct-spies").value) || 0;
+    const dBounties = parseFloat(document.getElementById("deduct-bounties").value) || 0;
+    const dOther = parseFloat(document.getElementById("deduct-other").value) || 0;
+    
+    const netPool = gross - (dConsumables + dSpies + dBounties + dOther);
+    document.getElementById("display-net-pool").innerText = "$" + netPool.toLocaleString();
+
+    // Logic Settings
+    const mode = document.querySelector('input[name="calc_mode"]:checked').value;
+    const valCut = parseFloat(document.getElementById("val-cut").value) || 0;
+    const valPPH = parseFloat(document.getElementById("val-pph").value) || 0;
+
+    const doAssists = document.getElementById("pay-assists").checked;
+    const multAssists = parseFloat(document.getElementById("mult-assists").value) || 0;
+    
+    const doClears = document.getElementById("pay-clears").checked;
+    const multClears = parseFloat(document.getElementById("mult-clears").value) || 0;
+
+    const useThresh = document.getElementById("use-thresholds").checked;
+    const minHits = parseFloat(document.getElementById("thresh-min").value) || 0;
+    const maxHits = parseFloat(document.getElementById("thresh-max").value) || 0;
+
+    // Calculate weighted totals for everyone
+    let totalWeightedHitsAll = 0;
+    let processedMembers = currentMembers.map(m => {
+        let weighted = m.attacks;
+        if (doAssists) weighted += (m.assists * multAssists);
+        if (doClears) weighted += (m.clears * multClears);
+
+        let meetsThresh = true;
+        if (useThresh) {
+            if (weighted < minHits) { meetsThresh = false; weighted = 0; }
+            if (weighted > maxHits) { weighted = maxHits; }
+        }
+
+        totalWeightedHitsAll += weighted;
+
+        return { ...m, weightedHits: weighted, meetsThresh };
+    });
+
+    let html = "";
+    let totalPaidOut = 0;
+    const enemyName = document.getElementById("reward-enemy-name").innerText;
+    clipboardText = `**War Payouts vs ${enemyName}**\nTotal Distributable: $${netPool.toLocaleString()}\n\n`;
+
+    processedMembers.forEach(m => {
+        let payout = 0;
         
-        currentButtons.forEach(id => {
-            const btn = document.getElementById(id);
-            if (btn) { btn.className = "btn-calc"; btn.innerText = "Calculate"; }
-        });
-        
-        const activeBtn = document.getElementById(`btn-${reportId}`);
-        activeBtn.innerText = "Loading...";
-
-        try {
-            const res = await fetch(`/api/past-war?apiKey=${myKey}&reportId=${reportId}`);
-            const data = await res.json();
-
-            if (data.error) throw new Error(data.error);
-
-            currentMembers = data.members;
-            
-            document.getElementById("reward-enemy-name").innerText = enemyName;
-            document.getElementById("reward-points").innerText = (data.rewards.points || 0).toLocaleString();
-            document.getElementById("reward-respect").innerText = (data.rewards.respect || 0).toLocaleString();
-            
-            let cachesHtml = "";
-            if (data.rewards.caches && data.rewards.caches.length > 0) {
-                data.rewards.caches.forEach(c => {
-                    cachesHtml += `<div>${c.quantity}x ${c.name} <span class="text-dim">($${c.marketValue.toLocaleString()} ea)</span></div>`;
-                });
+        if (m.meetsThresh && m.weightedHits > 0) {
+            if (mode === 'cut') {
+                // Ratio based
+                let playerSharePool = netPool * (1 - (valCut / 100));
+                payout = totalWeightedHitsAll > 0 ? playerSharePool * (m.weightedHits / totalWeightedHitsAll) : 0;
             } else {
-                cachesHtml = `<div class="text-dim">No caches won.</div>`;
+                // Flat Pay Per Hit
+                payout = m.weightedHits * valPPH;
             }
-            document.getElementById("caches-list-ui").innerHTML = cachesHtml;
-
-            document.getElementById("gross-pool").value = data.rewards.totalCacheValue || 0;
-            document.getElementById("main-calculator").style.display = "block";
-
-            activeBtn.className = "btn-calc btn-loaded";
-            activeBtn.innerText = "Loaded ✓";
-
-            renderPayouts();
-
-        } catch (e) {
-            activeBtn.innerText = "Error";
-            document.getElementById("error-msg").innerText = "Failed to load: " + e.message;
         }
-    }
 
-    function renderPayouts() {
-        if(currentMembers.length === 0) return;
+        totalPaidOut += payout;
 
-        // Money Settings
-        const gross = parseFloat(document.getElementById("gross-pool").value) || 0;
-        const dConsumables = parseFloat(document.getElementById("deduct-consumables").value) || 0;
-        const dSpies = parseFloat(document.getElementById("deduct-spies").value) || 0;
-        const dBounties = parseFloat(document.getElementById("deduct-bounties").value) || 0;
-        const dOther = parseFloat(document.getElementById("deduct-other").value) || 0;
+        let rowStyle = !m.meetsThresh ? "opacity: 0.5;" : "";
         
-        const netPool = gross - (dConsumables + dSpies + dBounties + dOther);
-        document.getElementById("display-net-pool").innerText = "$" + netPool.toLocaleString();
-
-        // Logic Settings
-        const mode = document.querySelector('input[name="calc_mode"]:checked').value;
-        const valCut = parseFloat(document.getElementById("val-cut").value) || 0;
-        const valPPH = parseFloat(document.getElementById("val-pph").value) || 0;
-
-        const doAssists = document.getElementById("pay-assists").checked;
-        const multAssists = parseFloat(document.getElementById("mult-assists").value) || 0;
+        html += `<tr style="${rowStyle}">
+            <td><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-main); text-decoration:none; font-weight:bold;">${m.name} [${m.id}]</a></td>
+            <td class="score-val">${m.score}</td>
+            <td>${m.attacks}</td>
+            <td class="text-dim">${m.assists}</td>
+            <td class="text-dim">${m.clears}</td>
+            <td style="color:var(--gold); font-weight:bold;">${m.weightedHits.toFixed(2)}</td>
+            <td class="payout-val">$${Math.floor(payout).toLocaleString()}</td>
+        </tr>`;
         
-        const doClears = document.getElementById("pay-clears").checked;
-        const multClears = parseFloat(document.getElementById("mult-clears").value) || 0;
-
-        const useThresh = document.getElementById("use-thresholds").checked;
-        const minHits = parseFloat(document.getElementById("thresh-min").value) || 0;
-        const maxHits = parseFloat(document.getElementById("thresh-max").value) || 0;
-
-        // Calculate weighted totals for everyone
-        let totalWeightedHitsAll = 0;
-        let processedMembers = currentMembers.map(m => {
-            let weighted = m.attacks;
-            if (doAssists) weighted += (m.assists * multAssists);
-            if (doClears) weighted += (m.clears * multClears);
-
-            let meetsThresh = true;
-            if (useThresh) {
-                if (weighted < minHits) { meetsThresh = false; weighted = 0; }
-                if (weighted > maxHits) { weighted = maxHits; }
-            }
-
-            totalWeightedHitsAll += weighted;
-
-            return { ...m, weightedHits: weighted, meetsThresh };
-        });
-
-        let html = "";
-        let totalPaidOut = 0;
-        const enemyName = document.getElementById("reward-enemy-name").innerText;
-        clipboardText = `**War Payouts vs ${enemyName}**\nTotal Distributable: $${netPool.toLocaleString()}\n\n`;
-
-        processedMembers.forEach(m => {
-            let payout = 0;
-            
-            if (m.meetsThresh && m.weightedHits > 0) {
-                if (mode === 'cut') {
-                    // Ratio based
-                    let playerSharePool = netPool * (1 - (valCut / 100));
-                    payout = totalWeightedHitsAll > 0 ? playerSharePool * (m.weightedHits / totalWeightedHitsAll) : 0;
-                } else {
-                    // Flat Pay Per Hit
-                    payout = m.weightedHits * valPPH;
-                }
-            }
-
-            totalPaidOut += payout;
-
-            let rowStyle = !m.meetsThresh ? "opacity: 0.5;" : "";
-            
-            html += `<tr style="${rowStyle}">
-                <td><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-main); text-decoration:none; font-weight:bold;">${m.name} [${m.id}]</a></td>
-                <td class="score-val">${m.score}</td>
-                <td>${m.attacks}</td>
-                <td class="text-dim">${m.assists}</td>
-                <td class="text-dim">${m.clears}</td>
-                <td style="color:var(--gold); font-weight:bold;">${m.weightedHits.toFixed(2)}</td>
-                <td class="payout-val">$${Math.floor(payout).toLocaleString()}</td>
-            </tr>`;
-            
-            if(payout > 0) {
-                clipboardText += `${m.name}: $${Math.floor(payout).toLocaleString()}\n`;
-            }
-        });
-
-        document.getElementById("payout-list").innerHTML = html;
-        
-        // Calculate Vault Profit (Net Pool minus whatever was paid out to members)
-        let vaultProfit = netPool - totalPaidOut;
-        document.getElementById("display-vault-profit").innerText = "$" + Math.floor(vaultProfit).toLocaleString();
-    }
-
-    async function copyToClipboard() {
-        try {
-            await navigator.clipboard.writeText(clipboardText);
-            const btn = document.getElementById("copy-btn");
-            btn.innerText = "✓ Copied!";
-            setTimeout(() => { btn.innerText = "📋 Copy List"; }, 2000);
-        } catch (err) {
-            alert("Failed to copy list.");
+        if(payout > 0) {
+            clipboardText += `${m.name}: $${Math.floor(payout).toLocaleString()}\n`;
         }
+    });
+
+    document.getElementById("payout-list").innerHTML = html;
+    
+    // Calculate Vault Profit (Net Pool minus whatever was paid out to members)
+    let vaultProfit = netPool - totalPaidOut;
+    document.getElementById("display-vault-profit").innerText = "$" + Math.floor(vaultProfit).toLocaleString();
+}
+
+async function copyToClipboard() {
+    try {
+        await navigator.clipboard.writeText(clipboardText);
+        const btn = document.getElementById("copy-btn");
+        btn.innerText = "✓ Copied!";
+        setTimeout(() => { btn.innerText = "📋 Copy List"; }, 2000);
+    } catch (err) {
+        alert("Failed to copy list.");
     }
+}
 </script>
 </body>
 </html>
