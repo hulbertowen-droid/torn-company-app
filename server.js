@@ -13,7 +13,7 @@ const TORN_API_KEY = process.env.TORN_API_KEY;
 const FF_SCOUTER_KEY = process.env.FF_SCOUTER_KEY || "";
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || "";
-const ADMIN_DISCORD_WEBHOOK = process.env.ADMIN_DISCORD_WEBHOOK || ""; 
+const ADMIN_DISCORD_WEBHOOK = process.env.ADMIN_DISCORD_WEBHOOK || ""; // New Admin Webhook
 
 let claims = {};
 let backups = {}; 
@@ -40,11 +40,8 @@ let liveAttacks = {};
 let liveDefends = {}; 
 let processedAttackIds = new Set();
 let backfillCursor = Math.floor(Date.now() / 1000);
-let backfillTarget = backfillCursor - (72 * 3600); 
+let backfillTarget = backfillCursor - (72 * 3600); // 72 Hours deep
 let isBackfilling = true;
-
-let bonusHits = {}; 
-const BONUS_THRESHOLDS = new Set([10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000]);
 
 // --- SUBSCRIPTION MANAGER ---
 let subscriptions = {};
@@ -105,6 +102,7 @@ setInterval(async () => {
                             saveSubs();
                             console.log(`[PAYMENT RECEIVED] Credited Faction ${facId} with ${weeks} weeks of access!`);
                             
+                            // DISCORD ADMIN PING FOR PAYMENTS
                             if (ADMIN_DISCORD_WEBHOOK) {
                                 fetch(ADMIN_DISCORD_WEBHOOK, {
                                     method: 'POST',
@@ -275,10 +273,6 @@ setInterval(async () => {
                     let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
                     if (!liveAttacks[uId]) liveAttacks[uId] = {};
                     liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
-                    
-                    if (atk.chain && BONUS_THRESHOLDS.has(atk.chain)) {
-                        bonusHits[atk.chain] = { id: uId, time: atk.timestamp_ended, respect: atk.respect_gain };
-                    }
                 }
             }
         }
@@ -315,10 +309,6 @@ setInterval(async () => {
                         let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
                         if (!liveAttacks[uId]) liveAttacks[uId] = {};
                         liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
-                        
-                        if (atk.chain && BONUS_THRESHOLDS.has(atk.chain)) {
-                            bonusHits[atk.chain] = { id: uId, time: atk.timestamp_ended, respect: atk.respect_gain };
-                        }
                     }
                 }
                 backfillCursor = oldestTimeInBatch - 1;
@@ -335,7 +325,7 @@ setInterval(async () => {
 
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
-// --- DISCORD PING PROXY ---
+// --- NEW ROUTE: DISCORD PING PROXY ---
 app.post('/api/discord-ping', async (req, res) => {
     const { webhookUrl, message } = req.body;
     if (!webhookUrl || !message) return res.status(400).json({ error: "Missing data" });
@@ -350,47 +340,6 @@ app.post('/api/discord-ping', async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: "Failed to ping Discord" });
     }
-});
-
-// --- CHAIN WATCHER ENDPOINT ---
-app.get('/api/chain', async (req, res) => {
-    const userKey = req.query.apiKey;
-    try {
-        await verifySubscription(userKey);
-        
-        if (userKey) apiKeyPool.add(userKey);
-
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,chain&key=${userKey}`);
-        const facData = await facRes.json();
-        
-        if (facData.error) return res.status(400).json({ error: facData.error.error });
-
-        if (facData.chain && facData.chain.current === 0) {
-            bonusHits = {};
-        }
-
-        let mappedBonuses = [];
-        for (let [hitNum, data] of Object.entries(bonusHits)) {
-            if (facData.chain && parseInt(hitNum) <= facData.chain.current) {
-                let member = facData.members ? facData.members[data.id] : null;
-                mappedBonuses.push({
-                    hit: parseInt(hitNum),
-                    id: data.id,
-                    name: member ? member.name : "Unknown/Left",
-                    time: data.time,
-                    respect: data.respect
-                });
-            }
-        }
-        
-        mappedBonuses.sort((a, b) => b.hit - a.hit);
-
-        res.json({
-            success: true,
-            chain: facData.chain,
-            bonuses: mappedBonuses
-        });
-    } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
 // --- SECURED ROUTES ---
@@ -679,21 +628,11 @@ app.get('/api/past-war', async (req, res) => {
         const userData = await userRes.json(); const reportData = await reportRes.json(); const itemsData = await itemsRes.json();
         if (userData.error) return res.status(400).json({ error: "Invalid API Key." });
         if (reportData.error) return res.status(400).json({ error: "Torn API Error: " + reportData.error.error });
-        const myUserId = userData.player_id.toString(); 
-        
-        let correctFacId = null;
-        let enemyFacId = null; 
-
+        const myUserId = userData.player_id.toString(); let correctFacId = null;
         for (let [facId, facData] of Object.entries(reportData.rankedwarreport.factions)) {
-            if (facData.members && facData.members[myUserId]) { correctFacId = facId; } 
-            else { enemyFacId = facId; }
+            if (facData.members && facData.members[myUserId]) { correctFacId = facId; break; }
         }
-        
-        if (!correctFacId) {
-            correctFacId = userData.faction?.faction_id?.toString();
-            enemyFacId = Object.keys(reportData.rankedwarreport.factions).find(id => id !== correctFacId);
-        }
-
+        if (!correctFacId) correctFacId = userData.faction?.faction_id?.toString();
         const myFactionWarData = reportData.rankedwarreport.factions[correctFacId];
         if (!myFactionWarData) return res.status(400).json({ error: "Your faction was not part of this Ranked War Report." });
         
@@ -776,6 +715,7 @@ app.post('/api/backup', (req, res) => { const { enemyId, playerName } = req.body
 app.post('/api/unbackup', (req, res) => { const { enemyId } = req.body; delete backups[enemyId]; res.json({ success: true }); });
 app.post('/api/update-stats', (req, res) => { const { enemyId, stats } = req.body; manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() }; res.json({ success: true }); });
 
+// --- UPDATED LIVE WARBOARD ENDPOINT ---
 app.get('/api/warboard', async (req, res) => {
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
