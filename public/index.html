@@ -31,13 +31,13 @@
         .nav-link.active { background: rgba(255, 71, 87, 0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
         .nav-text { transition: opacity 0.2s; }
         .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
+        
         .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
 
         h1 { text-align: center; color: var(--red); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
 
         .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
         
-        /* Tactical Watchlist */
         .watchlist-box { grid-column: 1 / -1; background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542; }
         .watchlist-box h3 { margin: 0 0 15px 0; color: var(--red); display: flex; align-items: center; gap: 10px; text-transform: uppercase; letter-spacing: 1px; }
         .watchlist-items { display: flex; gap: 15px; overflow-x: auto; padding-bottom: 10px; }
@@ -50,11 +50,9 @@
         .watch-name a:hover { text-decoration: underline; }
         .watch-highlight { font-weight: bold; font-size: 0.95em; margin-bottom: 2px; }
 
-        /* Faction Columns */
         .faction-col { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #2f3542; display: flex; flex-direction: column;}
         .faction-col h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center;}
 
-        /* Target Filters */
         .filter-group { display: flex; gap: 8px; margin-bottom: 15px; }
         .btn-filter { background: #0b0d13; color: var(--text-dim); border: 1px solid #2f3542; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold; transition: 0.2s; }
         .btn-filter:hover { background: #2f3542; color: white; }
@@ -98,13 +96,11 @@
         .active-claim { font-size: 0.8em; color: var(--green); font-weight: bold; background: rgba(46,213,115,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-right: 5px; }
         .active-sos { font-size: 0.8em; color: var(--red); font-weight: bold; background: rgba(255,71,87,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; animation: pulse 2s infinite; }
 
-        /* Notification Toast Styling */
         #toast-container { position: fixed; top: 25px; right: 25px; z-index: 9999; display: flex; flex-direction: column; gap: 15px; pointer-events: none; }
         .toast { background: var(--card); border-left: 8px solid var(--red); color: white; padding: 20px 30px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); animation: slideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; font-weight: bold; font-size: 1.2em; pointer-events: auto; letter-spacing: 0.5px; }
         .toast.online { border-left-color: var(--blue); }
         .toast.okay { border-left-color: var(--green); }
 
-        /* Settings Modal Styling */
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 10000; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
         .modal-content { background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; width: 400px; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.9); }
         .modal-content h2 { margin: 0 0 10px 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
@@ -129,15 +125,15 @@
             <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
         </div>
         <div class="nav-items">
-            <a href="/" class="nav-link">📡 <span class="nav-text">Live Warboard</span></a>
+            <a href="/" class="nav-link active">📡 <span class="nav-text">Live Warboard</span></a>
             <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
             <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
             <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
             <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
             <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
             <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>
+            <a href="/admin.html" class="nav-link">👑 <span class="nav-text">Admin Panel</span></a>
             <a onclick="openSettings()" class="nav-link" style="margin-top: 15px; border-top: 1px solid #2f3542; border-radius: 0; padding-top: 15px; cursor: pointer;">
-                <a href="/admin.html">
                 ⚙️ <span class="nav-text">Settings</span>
             </a>
         </div>
@@ -167,9 +163,7 @@
             </div>
             
             <div class="faction-col">
-                <h2>
-                    Enemy Targets <span id="enemy-count" style="color:var(--text-dim); font-size: 0.6em;">0</span>
-                </h2>
+                <h2>Enemy Targets <span id="enemy-count" style="color:var(--text-dim); font-size: 0.6em;">0</span></h2>
                 <div class="filter-group">
                     <button id="flt-all" class="btn-filter active" onclick="setEnemyFilter('All')">ALL</button>
                     <button id="flt-online" class="btn-filter" onclick="setEnemyFilter('Online')">ONLINE</button>
@@ -212,7 +206,6 @@
     </main>
 
 <script>
-// --- SIDEBAR & SMART NAV LOGIC ---
 document.addEventListener("DOMContentLoaded", function() {
     let currentUrl = window.location.pathname;
     if (currentUrl === "/index.html" || currentUrl === "") currentUrl = "/"; 
@@ -234,7 +227,6 @@ function toggleSidebar() {
     localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
 }
 
-// --- ORIGINAL BOARD LOGIC ---
 let audioCtx;
 function initAudio() {
     if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
@@ -271,7 +263,7 @@ let myKey = localStorage.getItem("warboard_apikey") || "";
 let enemyFacId = localStorage.getItem("warboard_enemyId") || "";
 let myName = localStorage.getItem("warboard_myname") || "Agent";
 let discordWebhook = localStorage.getItem("warboard_discord") || "";
-let cpm = parseInt(localStorage.getItem("warboard_cpm")) || 12; // 12 calls/min = 5 seconds
+let cpm = parseInt(localStorage.getItem("warboard_cpm")) || 12; 
 
 let knownEnemies = {}; 
 let fetchTimer = null;
@@ -306,7 +298,6 @@ function saveSettings() {
     localStorage.setItem("warboard_discord", discordWebhook);
     localStorage.setItem("warboard_cpm", cpm);
 
-    // Auto-sync Discord webhook to background engines so it shows up in Discord/Bazaar tabs instantly
     if (discordWebhook) {
         fetch('/api/save-discord-config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ webhookUrl: discordWebhook }) }).catch(()=>{});
         fetch('/api/save-market-config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ webhookUrl: discordWebhook }) }).catch(()=>{});
@@ -324,7 +315,6 @@ function startPolling() {
     fetchTimer = setInterval(fetchWarboard, refreshMs);
 }
 
-// Ensure SOS alarms still trigger front-end ping in emergencies
 async function sendDiscordPing(msg) {
     if (!discordWebhook) return;
     try {
