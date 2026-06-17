@@ -15,6 +15,9 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || "";
 const ADMIN_DISCORD_WEBHOOK = process.env.ADMIN_DISCORD_WEBHOOK || ""; 
 
+const VIP_FACTIONS = (process.env.VIP_FACTIONS || "").split(',').map(id => id.trim());
+const VIP_PLAYERS = (process.env.VIP_PLAYERS || "").split(',').map(id => id.trim());
+
 let claims = {};
 let backups = {}; 
 let statsCache = {}; 
@@ -55,14 +58,17 @@ let backgroundEnemyTrackingState = {};
 let discordConfig = { webhookUrl: "", targetOnline: true, targetLanded: true, targetOutHosp: true, chainUnder90: true, chainMilestone: true, friendlyAttacked: true };
 let marketConfig = { webhookUrl: "", autoDefense: false, sniperTargets: [] };
 let marketMemory = { defense: {}, sniper: {} };
+let vipConfig = { factions: [], players: [] }; // New Dynamic VIP Storage
 
 try { if (fs.existsSync('subscriptions.json')) subscriptions = JSON.parse(fs.readFileSync('subscriptions.json')); } catch (e) {}
 try { if (fs.existsSync('discord_config.json')) discordConfig = { ...discordConfig, ...JSON.parse(fs.readFileSync('discord_config.json')) }; } catch(e) {}
 try { if (fs.existsSync('market_config.json')) marketConfig = { ...marketConfig, ...JSON.parse(fs.readFileSync('market_config.json')) }; } catch(e) {}
+try { if (fs.existsSync('vip_config.json')) vipConfig = { ...vipConfig, ...JSON.parse(fs.readFileSync('vip_config.json')) }; } catch(e) {}
 
 function saveSubs() { fs.writeFileSync('subscriptions.json', JSON.stringify(subscriptions)); }
 function saveDiscordConfig() { fs.writeFileSync('discord_config.json', JSON.stringify(discordConfig)); }
 function saveMarketConfig() { fs.writeFileSync('market_config.json', JSON.stringify(marketConfig)); }
+function saveVipConfig() { fs.writeFileSync('vip_config.json', JSON.stringify(vipConfig)); }
 
 if (ADMIN_API_KEY) {
     fetch(`https://api.torn.com/user/?selections=profile&key=${ADMIN_API_KEY}`)
@@ -129,10 +135,16 @@ async function verifySubscription(userKey) {
     const data = await res.json();
     if (data.error) throw new Error("Invalid API Key.");
 
+    // Check specific player VIPs (from Render AND Admin Panel)
+    const playerId = data.player_id?.toString();
+    if (playerId && (VIP_PLAYERS.includes(playerId) || vipConfig.players.includes(playerId))) return true;
+
     const facId = data.faction?.faction_id?.toString();
     if (!facId || facId === "0") throw new Error("You must be in a faction to use these tools.");
 
+    // Check faction VIPs (from Render AND Admin Panel)
     if (adminFactionId && facId === adminFactionId) return true;
+    if (VIP_FACTIONS.includes(facId) || vipConfig.factions.includes(facId)) return true;
     if (subscriptions[facId] && subscriptions[facId] > Date.now()) return true;
 
     throw new Error(`SUBSCRIPTION REQUIRED: Your faction's access has expired. Send 5x Xanax to Owen777 [3776908] to instantly unlock access for your entire faction for 1 week!`);
@@ -164,7 +176,6 @@ function computeWarIntel(p, cache = {}) {
     return Math.floor(score * (0.9 + Math.random() * 0.2));
 }
 
-// BUG FIXED: Now exclusively targets an ONGOING war (winner === 0)
 function autoDetectEnemyFaction(data) {
     if (!data || !data.ID) return null;
     const myId = data.ID.toString();
@@ -492,7 +503,19 @@ setInterval(async () => {
 
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
-// --- CONFIGURATION ENDPOINTS ---
+// --- NEW VIP CONFIGURATION ENDPOINTS ---
+app.get('/api/admin/vips', (req, res) => {
+    if (req.query.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied. You must be using the Master Admin Key."});
+    res.json(vipConfig);
+});
+
+app.post('/api/admin/vips', (req, res) => {
+    if (req.body.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied. You must be using the Master Admin Key."});
+    vipConfig = { factions: req.body.factions || [], players: req.body.players || [] };
+    saveVipConfig();
+    res.json({ success: true });
+});
+
 app.get('/api/get-discord-config', (req, res) => { res.json(discordConfig); });
 app.post('/api/save-discord-config', (req, res) => { discordConfig = { ...discordConfig, ...req.body }; saveDiscordConfig(); res.json({ success: true }); });
 
