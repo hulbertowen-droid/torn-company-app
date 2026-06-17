@@ -148,6 +148,19 @@ async function verifySubscription(userKey) {
     throw new Error(`SUBSCRIPTION REQUIRED: Your faction's access has expired. Send 5x Xanax to Owen777 [3776908] to instantly unlock access for your entire faction for 1 week!`);
 }
 
+async function verifyFfScouterPremium(ffKey, testId) {
+    if (!ffKey || ffKey === "null" || ffKey === "") return false;
+    try {
+        const res = await fetch(`https://ffscouter.com/api/v1/get-stats?key=${ffKey}&targets=${testId}`);
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) return true; 
+        return false;
+    } catch (e) {
+        return false;
+    }
+}
+
+// THE FIX: Removed Math.random() jitter. Output is now 100% predictable.
 function computeWarIntel(p, cache = {}) {
     let score = 0;
     if (p.state === "Okay") score += 120;
@@ -171,7 +184,7 @@ function computeWarIntel(p, cache = {}) {
         else if (est < 2e8) score += 40;
         else score += 10;
     }
-    return Math.floor(score * (0.9 + Math.random() * 0.2));
+    return score;
 }
 
 function autoDetectEnemyFaction(data) {
@@ -477,10 +490,8 @@ app.get('/api/dashboard-data', async (req, res) => {
     const userKey = req.query.apiKey;
     const ffKey = req.query.ffKey || null;
     try {
-        await verifySubscription(userKey);
-        
-        // Remove DDOS verification. Just check if a key exists to unlock the UI.
-        const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
+        const myUserId = await verifySubscription(userKey);
+        const isPremium = await verifyFfScouterPremium(ffKey, myUserId);
 
         const basicResp = await fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`);
         const basicData = await basicResp.json();
@@ -532,7 +543,7 @@ app.get('/api/scan-recruits', async (req, res) => {
     const { apiKey, reportId, ffKey } = req.query;
     try {
         const myUserId = await verifySubscription(apiKey);
-        const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
+        const isPremium = await verifyFfScouterPremium(ffKey, myUserId);
 
         const reportRes = await fetch(`https://api.torn.com/torn/${reportId}?selections=rankedwarreport&key=${apiKey}`);
         const reportData = await reportRes.json();
@@ -668,14 +679,20 @@ app.get('/api/past-war', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
+app.post('/api/claim', (req, res) => { const { enemyId, playerName } = req.body; claims[enemyId] = { playerName, time: Date.now() }; res.json({ success: true }); });
+app.post('/api/unclaim', (req, res) => { const { enemyId, playerName } = req.body; if (claims[enemyId]?.playerName === playerName) delete claims[enemyId]; res.json({ success: true }); });
+app.post('/api/backup', (req, res) => { const { enemyId, playerName } = req.body; backups[enemyId] = { playerName, time: Date.now() }; res.json({ success: true }); });
+app.post('/api/unbackup', (req, res) => { const { enemyId } = req.body; delete backups[enemyId]; res.json({ success: true }); });
+app.post('/api/update-stats', (req, res) => { const { enemyId, stats } = req.body; manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() }; res.json({ success: true }); });
+
 app.get('/api/warboard', async (req, res) => {
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
         const ffKey = req.query.ffKey && req.query.ffKey !== "null" && req.query.ffKey !== "" ? req.query.ffKey : null;
-        await verifySubscription(userKey);
+        const myUserId = await verifySubscription(userKey);
         if (userKey) apiKeyPool.add(userKey);
 
-        const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
+        const isPremium = await verifyFfScouterPremium(ffKey, myUserId);
         let enemyId = req.query.enemyFaction || null;
         
         let [myData, enemyDataResult] = await Promise.all([
@@ -695,12 +712,8 @@ app.get('/api/warboard', async (req, res) => {
                 if (isPremium && !statQueue.has(id)) statQueue.set(id, ffKey); 
             }
             const m = myData.members[id] || enemyDataResult.members[id];
-            const isTraveling = m.status?.state === "Traveling" || (m.status?.description && m.status?.description.includes("Traveling"));
-            if (isTraveling) { 
-                if (!flightCache[id] || (Date.now() - flightCache[id].time) > 30000) { 
-                    if (isPremium && !flightQueue.has(id)) flightQueue.set(id, ffKey); 
-                } 
-            }
+            const isTraveling = m.status?.state === "Traveling" || m.status?.description?.includes("Traveling");
+            if (isTraveling) { if (!flightCache[id] || (Date.now() - flightCache[id].time) > 30000) { if (isPremium && !flightQueue.has(id)) flightQueue.set(id, ffKey); } }
         });
 
         const parseMembers = (data, isEnemy = false) => {
