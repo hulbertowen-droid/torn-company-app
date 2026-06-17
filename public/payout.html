@@ -37,9 +37,11 @@
         .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
 
         .fetch-box { background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542; display: flex; gap: 15px; align-items: center; }
-        .fetch-box input { flex-grow: 1; padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; }
+        .fetch-box select { flex-grow: 1; padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; cursor: pointer; }
+        .fetch-box select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 8px rgba(88,166,255,0.2); }
+        .fetch-box input { padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; flex-grow: 1; display: none; }
         .fetch-box input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 8px rgba(88,166,255,0.2); }
-        .fetch-box button { background: var(--green); color: #000; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em; text-transform: uppercase; transition: 0.2s; }
+        .fetch-box button { background: var(--green); color: #000; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em; text-transform: uppercase; transition: 0.2s; flex-shrink: 0; }
         .fetch-box button:hover { background: #21a556; box-shadow: 0 0 12px rgba(46, 213, 115, 0.4); }
 
         .config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; }
@@ -104,7 +106,10 @@
         
         <div class="container">
             <div class="fetch-box">
-                <input type="text" id="report-id" placeholder="Paste Ranked War Report ID (e.g., 12345)">
+                <select id="war-selector" onchange="handleWarSelection()">
+                    <option value="">Loading past wars...</option>
+                </select>
+                <input type="text" id="report-id" placeholder="Paste Manual Report ID">
                 <button onclick="fetchWarReport()">Fetch Data</button>
             </div>
 
@@ -210,7 +215,7 @@
                     <div style="text-align: right;">Total Payout</div>
                 </div>
                 <div id="payout-list">
-                    <div style="color:var(--text-dim); padding:20px; text-align: center; font-style: italic;">Enter a Report ID and click Fetch Data...</div>
+                    <div style="color:var(--text-dim); padding:20px; text-align: center; font-style: italic;">Select a past war from the dropdown or enter an ID to fetch data.</div>
                 </div>
             </div>
 
@@ -218,9 +223,18 @@
     </main>
 
 <script>
+const myKey = localStorage.getItem("warboard_apikey") || "";
+let rawMembersData = []; 
+
 document.addEventListener("DOMContentLoaded", function() {
     const sidebar = document.getElementById('app-sidebar');
     if (localStorage.getItem('sidebar_collapsed') === 'true') { sidebar.classList.add('collapsed'); }
+    
+    if (myKey) {
+        fetchWarList();
+    } else {
+        document.getElementById("war-selector").innerHTML = `<option value="">API Key Required in Settings</option>`;
+    }
 });
 
 function toggleSidebar() {
@@ -229,13 +243,53 @@ function toggleSidebar() {
     localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
 }
 
-const myKey = localStorage.getItem("warboard_apikey") || "";
-let rawMembersData = []; 
+async function fetchWarList() {
+    const selector = document.getElementById("war-selector");
+    try {
+        const res = await fetch(`/api/war-list?apiKey=${myKey}`);
+        const data = await res.json();
+        
+        if (data.success && data.wars && data.wars.length > 0) {
+            let opts = `<option value="">-- Select a Past War --</option>`;
+            data.wars.forEach(w => {
+                let date = new Date(w.start * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                opts += `<option value="${w.id}">${date} vs ${w.enemy}</option>`;
+            });
+            opts += `<option value="manual">Enter Manual Report ID...</option>`;
+            selector.innerHTML = opts;
+        } else {
+            selector.innerHTML = `<option value="manual">No recent wars found. Enter Manual ID...</option>`;
+            handleWarSelection();
+        }
+    } catch (e) {
+        selector.innerHTML = `<option value="manual">Failed to load wars. Enter Manual ID...</option>`;
+        handleWarSelection();
+    }
+}
+
+function handleWarSelection() {
+    const val = document.getElementById("war-selector").value;
+    const manualInp = document.getElementById("report-id");
+    if (val === "manual") {
+        manualInp.style.display = "block";
+        manualInp.value = "";
+        manualInp.focus();
+    } else {
+        manualInp.style.display = "none";
+        manualInp.value = "";
+    }
+}
 
 async function fetchWarReport() {
-    const reportId = document.getElementById("report-id").value.trim();
+    let reportId = document.getElementById("report-id").value.trim();
+    const selectorVal = document.getElementById("war-selector").value;
+    
+    if (selectorVal !== "manual" && selectorVal !== "") {
+        reportId = selectorVal;
+    }
+
     if (!reportId || !myKey) {
-        alert("Please enter a valid Report ID and ensure your API key is saved in Settings.");
+        alert("Please select a war from the dropdown or enter a valid Report ID.");
         return;
     }
 
