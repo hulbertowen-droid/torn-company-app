@@ -119,7 +119,6 @@
         details > summary { list-style: none; outline: none; }
         details > summary::-webkit-details-marker { display: none; }
 
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
         @keyframes scanPulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
         @keyframes pulseAttack { 0% { box-shadow: 0 0 5px rgba(255, 71, 87, 0.4); } 50% { box-shadow: 0 0 15px rgba(255, 71, 87, 0.8); } 100% { box-shadow: 0 0 5px rgba(255, 71, 87, 0.4); } }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
@@ -412,7 +411,6 @@ function getSortPriority(state) {
     return 5;
 }
 
-// THE FIX: Added a strict tie-breaker. If scores match exactly, sort alphabetically so they NEVER swap randomly.
 function sortPlayersList(players, isEnemy) {
     return players.sort((a, b) => {
         const prioA = getSortPriority(a.state);
@@ -424,7 +422,6 @@ function sortPlayersList(players, isEnemy) {
         if (isEnemy && a.state === "Okay" && b.state === "Okay") {
             if (a.intelScore !== b.intelScore) return (b.intelScore || 0) - (a.intelScore || 0);
         }
-        // Strict deterministic fallback
         return a.name.localeCompare(b.name);
     });
 }
@@ -568,16 +565,26 @@ function updateListDOM(containerId, players, prefix, generateCardHTML, emptyMess
     });
 }
 
+// FIX: Strictly handles the precise null/hidden value return and shortens the lock badge
 function formatEstStats(estValue, premiumActive) {
-    if (typeof estValue === 'number') {
-        let formatted = estValue.toLocaleString();
-        if (estValue > 100000000) return `<div class="stat-val" style="color: var(--blue); text-shadow: 0 0 5px rgba(88,166,255,0.4);">${formatted}</div>`;
-        return `<div class="stat-val">${formatted}</div>`;
+    if (estValue === "🔒 Requires FF Scouter") {
+        return `<div class="stat-val lock-badge">🔒 FF Scouter</div>`;
     }
     if (estValue === "Scanning...") {
         return `<div class="stat-val" style="color: var(--text-dim); font-size: 0.8em; animation: scanPulse 1.5s infinite;">${estValue}</div>`;
     }
-    return `<div class="stat-val lock-badge">🔒 Requires FF Scouter</div>`;
+    if (estValue === null || estValue === undefined || estValue === "") {
+        return `<div class="stat-val" style="color: var(--text-dim); font-size: 0.85em; font-style: italic;">Stats Hidden</div>`;
+    }
+    
+    let num = Number(estValue);
+    if (!isNaN(num)) {
+        let formatted = num.toLocaleString();
+        if (num > 100000000) return `<div class="stat-val" style="color: var(--blue); text-shadow: 0 0 5px rgba(88,166,255,0.4);">${formatted}</div>`;
+        return `<div class="stat-val">${formatted}</div>`;
+    }
+
+    return `<div class="stat-val" style="color: var(--text-dim); font-size: 0.85em;">Unknown</div>`;
 }
 
 function renderWatchlist(enemies) {
@@ -595,8 +602,7 @@ function renderWatchlist(enemies) {
         if (aFlying && bFlying) return (a.landingTime || Number.MAX_SAFE_INTEGER) - (b.landingTime || Number.MAX_SAFE_INTEGER);
         if (aFlying) return -1;
         if (bFlying) return 1;
-        if (a.intelScore !== b.intelScore) return (b.intelScore || 0) - (a.intelScore || 0);
-        return a.name.localeCompare(b.name);
+        return (b.intelScore || 0) - (a.intelScore || 0);
     });
 
     updateListDOM("watchlist-items", watchTargets, "w-card", (p) => {
