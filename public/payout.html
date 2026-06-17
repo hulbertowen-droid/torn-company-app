@@ -114,7 +114,6 @@
             </div>
 
             <div class="config-grid">
-                <!-- FINANCES CARD -->
                 <div class="config-card">
                     <h3>🏦 Faction Finances</h3>
                     <div class="input-row">
@@ -151,7 +150,6 @@
                     </div>
                 </div>
 
-                <!-- MODIFIERS CARD -->
                 <div class="config-card">
                     <h3>⚖️ Hit Multipliers</h3>
                     <div class="input-row" title="Base attacks executed. Default is 1.0x">
@@ -161,6 +159,10 @@
                     <div class="input-row" title="Assists logic. Typically paid out at 25% to 50%">
                         <label>Assist Multiplier</label>
                         <div class="input-group"><input type="number" id="inp-mult-assist" value="0.25" step="0.05" onchange="recalculate()"><span>x</span></div>
+                    </div>
+                    <div class="input-row" title="Clears / Outside Hits (Attacking people not in the war).">
+                        <label>Outside Clear Multiplier</label>
+                        <div class="input-group"><input type="number" id="inp-mult-clear" value="0.5" step="0.05" onchange="recalculate()"><span>x</span></div>
                     </div>
                     
                     <h3 style="margin-top: 20px;">🛑 Thresholds & Caps</h3>
@@ -175,7 +177,6 @@
                     <div class="warning-text" id="threshold-warn">Hit calculations adjusted by thresholds.</div>
                 </div>
 
-                <!-- SUMMARY CARD -->
                 <div class="summary-card">
                     <h2>Payout Summary</h2>
                     <div class="summary-grid">
@@ -203,15 +204,14 @@
                 </div>
             </div>
 
-            <!-- RESULTS TABLE -->
             <div class="table-card">
                 <button class="btn-copy" onclick="copyToClipboard()">📋 Copy Payout List</button>
                 <h3 style="margin: 0 0 15px 0; color: var(--blue); text-transform: uppercase;">Member Breakdown</h3>
                 <div class="table-header">
                     <div>Player</div>
-                    <div>Attacks</div>
-                    <div>Assists</div>
-                    <div>Effective Hits</div>
+                    <div style="text-align: center;">Attacks</div>
+                    <div style="text-align: center;">Assists</div>
+                    <div style="text-align: center;">Outside Clears</div>
                     <div style="text-align: right;">Total Payout</div>
                 </div>
                 <div id="payout-list">
@@ -293,7 +293,7 @@ async function fetchWarReport() {
         return;
     }
 
-    document.getElementById("payout-list").innerHTML = `<div style="color:var(--text-dim); padding:20px; text-align: center;">Fetching secure report logs...</div>`;
+    document.getElementById("payout-list").innerHTML = `<div style="color:var(--text-dim); padding:20px; text-align: center;">Fetching secure report logs and scanning deep battle history...</div>`;
 
     try {
         const res = await fetch(`/api/past-war?apiKey=${myKey}&reportId=${reportId}`);
@@ -337,6 +337,7 @@ function recalculate() {
     // 2. Gather Modifiers & Thresholds
     const multAttack = parseFloat(document.getElementById("inp-mult-attack").value) || 1.0;
     const multAssist = parseFloat(document.getElementById("inp-mult-assist").value) || 0.25;
+    const multClear = parseFloat(document.getElementById("inp-mult-clear").value) || 0.5;
     
     const minHits = parseInt(document.getElementById("inp-min-hits").value) || 0;
     const maxHits = parseInt(document.getElementById("inp-max-hits").value) || 99999;
@@ -350,14 +351,15 @@ function recalculate() {
     rawMembersData.forEach(m => {
         let rawAttacks = m.attacks || 0;
         let rawAssists = m.assists || 0;
-        let totalRawActivity = rawAttacks + rawAssists;
+        let rawClears = m.clears || 0;
+        let totalRawActivity = rawAttacks + rawAssists + rawClears;
 
         let effectiveHits = 0;
         
         // Threshold Logic
         if (totalRawActivity >= minHits) {
             // Calculate base effective hits based on multipliers
-            effectiveHits = (rawAttacks * multAttack) + (rawAssists * multAssist);
+            effectiveHits = (rawAttacks * multAttack) + (rawAssists * multAssist) + (rawClears * multClear);
             
             // Apply Max Cap to the effective hits directly
             if (effectiveHits > maxHits) {
@@ -371,6 +373,7 @@ function recalculate() {
             ...m,
             rawAttacks,
             rawAssists,
+            rawClears,
             totalRawActivity,
             effectiveHits
         });
@@ -408,8 +411,9 @@ function recalculate() {
                 <div>
                     <a class="p-name" href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank">${m.name} [${m.id}]</a>
                 </div>
-                <div>${m.rawAttacks}</div>
-                <div>${m.rawAssists}</div>
+                <div style="text-align: center;">${m.rawAttacks}</div>
+                <div style="text-align: center; color: var(--gold);">${m.rawAssists}</div>
+                <div style="text-align: center; color: var(--blue);">${m.rawClears}</div>
                 <div class="val-hits">${m.effectiveHits.toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:2})} ${warningIcon}</div>
                 <div style="text-align: right;" class="val-money">$${payout.toLocaleString()}</div>
             </div>
@@ -428,6 +432,7 @@ function copyToClipboard() {
     // Quick recalc just for the copy data
     const multAttack = parseFloat(document.getElementById("inp-mult-attack").value) || 1.0;
     const multAssist = parseFloat(document.getElementById("inp-mult-assist").value) || 0.25;
+    const multClear = parseFloat(document.getElementById("inp-mult-clear").value) || 0.5;
     const minHits = parseInt(document.getElementById("inp-min-hits").value) || 0;
     const maxHits = parseInt(document.getElementById("inp-max-hits").value) || 99999;
 
@@ -435,11 +440,12 @@ function copyToClipboard() {
     rawMembersData.forEach(m => {
         let rawAttacks = m.attacks || 0;
         let rawAssists = m.assists || 0;
-        let totalRawActivity = rawAttacks + rawAssists;
+        let rawClears = m.clears || 0;
+        let totalRawActivity = rawAttacks + rawAssists + rawClears;
         let effectiveHits = 0;
         
         if (totalRawActivity >= minHits) {
-            effectiveHits = (rawAttacks * multAttack) + (rawAssists * multAssist);
+            effectiveHits = (rawAttacks * multAttack) + (rawAssists * multAssist) + (rawClears * multClear);
             if (effectiveHits > maxHits) effectiveHits = maxHits;
         }
 
