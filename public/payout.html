@@ -68,7 +68,7 @@
 
         .table-card { background: var(--card); border: 1px solid #2f3542; border-radius: 12px; padding: 20px; margin-top: 10px; }
         
-        /* FIX: Adjusted grid columns to accurately fit 6 distinct columns without wrapping */
+        /* STRICT ALIGNMENT: 6 rigid columns, all data pushed right for readability */
         .table-header { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1.2fr 1.5fr; gap: 10px; color: var(--text-dim); font-weight: bold; font-size: 0.85em; text-transform: uppercase; border-bottom: 2px solid #2f3542; padding-bottom: 10px; margin-bottom: 10px; }
         .table-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1.2fr 1.5fr; gap: 10px; padding: 12px 0; border-bottom: 1px solid #1b202e; align-items: center; font-size: 0.95em; }
         
@@ -215,13 +215,12 @@
                 <button class="btn-copy" onclick="copyToClipboard()">📋 Copy Payout List</button>
                 <h3 style="margin: 0 0 15px 0; color: var(--blue); text-transform: uppercase;">Member Breakdown</h3>
                 
-                <!-- FIX: All 6 columns properly defined in header -->
                 <div class="table-header">
                     <div>Player</div>
-                    <div style="text-align: center;">Attacks</div>
-                    <div style="text-align: center;">Assists</div>
-                    <div style="text-align: center;">Outside Clears</div>
-                    <div style="text-align: center;">Effective Hits</div>
+                    <div style="text-align: right;">Attacks</div>
+                    <div style="text-align: right;">Assists</div>
+                    <div style="text-align: right;">Outside Clears</div>
+                    <div style="text-align: right;">Effective Hits</div>
                     <div style="text-align: right;">Total Payout</div>
                 </div>
                 
@@ -328,7 +327,6 @@ async function fetchWarReport() {
 function recalculate() {
     if (rawMembersData.length === 0) return;
 
-    // 1. Gather Finance Inputs
     const cacheVal = parseFloat(document.getElementById("inp-cache").value) || 0;
     const facCutPct = parseFloat(document.getElementById("inp-fac-cut").value) || 0;
     
@@ -345,7 +343,6 @@ function recalculate() {
     const facCutAmount = netPool * (facCutPct / 100);
     const memberPool = netPool - facCutAmount;
 
-    // 2. Gather Modifiers & Thresholds
     const multAttack = parseFloat(document.getElementById("inp-mult-attack").value) || 1.0;
     const multAssist = parseFloat(document.getElementById("inp-mult-assist").value) || 0.25;
     const multClear = parseFloat(document.getElementById("inp-mult-clear").value) || 0.5;
@@ -355,7 +352,6 @@ function recalculate() {
 
     document.getElementById("threshold-warn").style.display = (minHits > 0 || maxHits < 9999) ? "block" : "none";
 
-    // 3. Process Members and Calculate "Effective Hits"
     let totalValidHits = 0;
     let processedMembers = [];
 
@@ -386,17 +382,14 @@ function recalculate() {
         });
     });
 
-    // 4. Calculate Pay Per Hit
     const payPerHit = totalValidHits > 0 ? (memberPool / totalValidHits) : 0;
 
-    // 5. Update Summary UI
     document.getElementById("sum-expenses").innerText = `$${totalExpenses.toLocaleString()}`;
     document.getElementById("sum-fac-cut").innerText = `$${Math.floor(facCutAmount).toLocaleString()}`;
     document.getElementById("sum-member-pool").innerText = `$${Math.floor(memberPool).toLocaleString()}`;
     document.getElementById("sum-valid-hits").innerText = totalValidHits.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2});
     document.getElementById("sum-pph").innerText = `$${Math.floor(payPerHit).toLocaleString()}`;
 
-    // 6. Render Table
     processedMembers.sort((a, b) => b.effectiveHits - a.effectiveHits);
 
     let html = "";
@@ -417,10 +410,10 @@ function recalculate() {
                 <div>
                     <a class="p-name" href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank">${m.name} [${m.id}]</a>
                 </div>
-                <div style="text-align: center;">${m.rawAttacks}</div>
-                <div style="text-align: center; color: var(--gold);">${m.rawAssists}</div>
-                <div style="text-align: center; color: var(--blue);">${m.rawClears}</div>
-                <div class="val-hits" style="text-align: center;">${m.effectiveHits.toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:2})} ${warningIcon}</div>
+                <div style="text-align: right;">${m.rawAttacks}</div>
+                <div style="text-align: right; color: var(--gold);">${m.rawAssists}</div>
+                <div style="text-align: right; color: var(--blue);">${m.rawClears}</div>
+                <div class="val-hits" style="text-align: right;">${m.effectiveHits.toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:2})} ${warningIcon}</div>
                 <div style="text-align: right;" class="val-money">$${payout.toLocaleString()}</div>
             </div>
         `;
