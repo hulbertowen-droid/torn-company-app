@@ -73,13 +73,13 @@
 
         .action-arrow { font-size: 0.85em; color: var(--text-dim); margin-top: 5px; display: flex; align-items: center; gap: 6px; }
         .arrow-icon { color: var(--red); font-weight: bold; }
-        .flight-info { color: var(--blue); font-weight: bold; background: rgba(88, 166, 255, 0.1); padding: 2px 6px; border-radius: 4px; }
+        .flight-info { color: var(--blue); font-weight: bold; background: rgba(88, 166, 255, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-block; }
 
         .status { font-size: 0.85em; color: var(--text-dim); margin-top: 4px; }
         .status span { font-weight: bold; color: var(--text-main); }
         
         .intel-badge { background: rgba(255, 165, 2, 0.15); color: var(--gold); padding: 4px 8px; border-radius: 6px; font-size: 0.8em; font-weight: bold; border: 1px solid var(--gold); }
-        .stat-box { text-align: right; font-size: 0.9em; flex-shrink: 0; }
+        .stat-box { text-align: right; font-size: 0.9em; flex-shrink: 0; max-width: 150px; }
         .stat-val { font-weight: bold; color: var(--gold); font-size: 1.1em; }
 
         .card-actions { display: flex; gap: 10px; border-top: 1px solid #2f3542; padding-top: 10px; justify-content: flex-end; align-items: center; }
@@ -111,7 +111,6 @@
         .close-btn { position: absolute; right: 20px; top: 20px; color: var(--text-dim); cursor: pointer; font-size: 1.5em; line-height: 1; }
         .close-btn:hover { color: white; }
         
-        /* Details Summary specific CSS to remove default arrow in webkit */
         details > summary { list-style: none; outline: none; }
         details > summary::-webkit-details-marker { display: none; }
 
@@ -146,7 +145,6 @@
     <main class="main-content">
         <h1>Live Warboard</h1>
 
-        <!-- POP-DOWN BOX (Credits & FF Scouter Info) -->
         <details style="background: rgba(88, 166, 255, 0.05); border: 1px solid var(--blue); border-radius: 8px; margin-bottom: 25px; cursor: pointer; transition: 0.2s;">
             <summary style="padding: 12px 20px; font-weight: bold; color: var(--blue); display: flex; align-items: center; justify-content: space-between;">
                 <span>ℹ️ Advanced Features & Credits</span>
@@ -198,6 +196,10 @@
                 <div>
                     <label>API Key (Hidden for Privacy)</label>
                     <input type="password" id="api-key" placeholder="Paste your Torn API Key here">
+                </div>
+                <div>
+                    <label>FF Scouter Premium Key</label>
+                    <input type="password" id="ff-key" placeholder="Optional: Unlocks advanced stats & radar">
                 </div>
                 <div>
                     <label>Enemy Faction ID</label>
@@ -277,6 +279,7 @@ function playAlertSound() {
 document.body.addEventListener('click', () => { initAudio(); }, { once: true });
 
 let myKey = localStorage.getItem("warboard_apikey") || "";
+let ffKey = localStorage.getItem("warboard_ffkey") || "";
 let enemyFacId = localStorage.getItem("warboard_enemyId") || "";
 let myName = localStorage.getItem("warboard_myname") || "Agent";
 let discordWebhook = localStorage.getItem("warboard_discord") || "";
@@ -289,6 +292,7 @@ let activeFilter = 'All';
 let warChartInstance = null; 
 
 document.getElementById("api-key").value = myKey;
+document.getElementById("ff-key").value = ffKey;
 document.getElementById("enemy-id").value = enemyFacId;
 document.getElementById("my-name").value = myName;
 document.getElementById("discord-webhook").value = discordWebhook;
@@ -302,6 +306,7 @@ if (myKey) { startPolling(); } else { openSettings(); }
 function saveSettings() {
     initAudio(); 
     myKey = document.getElementById("api-key").value.trim();
+    ffKey = document.getElementById("ff-key").value.trim();
     enemyFacId = document.getElementById("enemy-id").value.trim();
     myName = document.getElementById("my-name").value.trim() || "Agent";
     discordWebhook = document.getElementById("discord-webhook").value.trim();
@@ -310,6 +315,7 @@ function saveSettings() {
     cpm = (parsedCpm && parsedCpm > 0 && parsedCpm <= 60) ? parsedCpm : 12;
     
     localStorage.setItem("warboard_apikey", myKey);
+    localStorage.setItem("warboard_ffkey", ffKey);
     localStorage.setItem("warboard_enemyId", enemyFacId);
     localStorage.setItem("warboard_myname", myName);
     localStorage.setItem("warboard_discord", discordWebhook);
@@ -330,17 +336,6 @@ function startPolling() {
     fetchWarboard();
     let refreshMs = Math.floor(60000 / cpm);
     fetchTimer = setInterval(fetchWarboard, refreshMs);
-}
-
-async function sendDiscordPing(msg) {
-    if (!discordWebhook) return;
-    try {
-        await fetch('/api/discord-ping', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ webhookUrl: discordWebhook, message: msg })
-        });
-    } catch (err) { console.error("Failed to ping Discord"); }
 }
 
 function formatTime(unixTimestamp) {
@@ -384,15 +379,13 @@ function setEnemyFilter(filterType) {
     document.getElementById('flt-flying').className = "btn-filter";
     document.getElementById('flt-' + filterType.toLowerCase()).className = "btn-filter active";
     
-    if (currentEnemyData.length > 0) {
-        renderEnemyList(currentEnemyData);
-    }
+    if (currentEnemyData.length > 0) { renderEnemyList(currentEnemyData); }
 }
 
 async function fetchWarboard() {
     if (!myKey) return;
     try {
-        const res = await fetch(`/api/warboard?apiKey=${myKey}&enemyFaction=${enemyFacId}`);
+        const res = await fetch(`/api/warboard?apiKey=${myKey}&enemyFaction=${enemyFacId}&ffKey=${ffKey}`);
         const data = await res.json();
         
         if (data.error) {
@@ -448,37 +441,17 @@ function renderChart(friendlyPlayers) {
             data: {
                 labels: labels,
                 datasets: [
-                    {
-                        label: 'Hits Made',
-                        data: attackData,
-                        backgroundColor: '#ff4757', 
-                        borderRadius: 4,
-                    },
-                    {
-                        label: 'Hits Received (Defends)',
-                        data: defendData,
-                        backgroundColor: '#ffa502', 
-                        borderRadius: 4,
-                    }
+                    { label: 'Hits Made', data: attackData, backgroundColor: '#ff4757', borderRadius: 4 },
+                    { label: 'Hits Received (Defends)', data: defendData, backgroundColor: '#ffa502', borderRadius: 4 }
                 ]
             },
             options: {
-                responsive: true,
-                maintainAspectRatio: false,
+                responsive: true, maintainAspectRatio: false,
                 scales: {
-                    y: { 
-                        beginAtZero: true, 
-                        grid: { color: 'rgba(47, 53, 66, 0.5)' }, 
-                        ticks: { color: '#a1aab5', stepSize: 1 } 
-                    },
-                    x: { 
-                        grid: { display: false }, 
-                        ticks: { color: '#a1aab5', font: { weight: 'bold' } } 
-                    }
+                    y: { beginAtZero: true, grid: { color: 'rgba(47, 53, 66, 0.5)' }, ticks: { color: '#a1aab5', stepSize: 1 } },
+                    x: { grid: { display: false }, ticks: { color: '#a1aab5', font: { weight: 'bold' } } }
                 },
-                plugins: {
-                    legend: { labels: { color: '#f1f2f6', font: { weight: 'bold' } } }
-                }
+                plugins: { legend: { labels: { color: '#f1f2f6', font: { weight: 'bold' } } } }
             }
         });
     }
@@ -598,12 +571,22 @@ function renderFriendlyList(players) {
 
         let etaString = "";
         if (isFlying) {
-            if (p.landingTime) {
+            if (p.needsFfScouterForFlights) {
+                etaString = `<span class="flight-info" style="background: rgba(255, 71, 87, 0.1); color: var(--red);">🔒 Premium Radar Req.</span>`;
+            } else if (p.landingTime) {
                 let minsLeft = Math.max(0, Math.ceil((p.landingTime - now) / 60));
                 etaString = `<span class="flight-info">✈️ ETA: ${formatTime(p.landingTime)} (${minsLeft}m)</span>`;
             } else {
-                etaString = `<span class="flight-info">✈️ Flying (Unknown ETA)</span>`;
+                etaString = `<span class="flight-info" style="background: rgba(161, 170, 181, 0.1); color: var(--text-dim);">✈️ Scanning Radar...</span>`;
             }
+        }
+
+        let estValue = p.estStats;
+        let estHtml = `<div class="stat-val">${typeof estValue === 'number' ? estValue.toLocaleString() : estValue}</div>`;
+        if (estValue === "🔒 Requires FF Scouter") {
+            estHtml = `<div class="stat-val" style="color: var(--red); font-size: 0.8em; border: 1px dashed var(--red); padding: 2px 4px; border-radius: 4px; margin-top: 4px; display: inline-block;">${estValue}</div>`;
+        } else if (estValue === "Scanning...") {
+            estHtml = `<div class="stat-val" style="color: var(--text-dim); font-size: 0.8em;">${estValue}</div>`;
         }
 
         html += `
@@ -615,13 +598,13 @@ function renderFriendlyList(players) {
                             <a href="https://www.torn.com/bounties.php?p=add&XID=${p.id}&amount=150000&reason=WAR" target="_blank" class="badge-bounty" title="Place Bounty to keep in Hospital">🎯 Bounty</a>
                         </div>
                         <div class="action-arrow">
-                            <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
+                            <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} <span style="margin-left: 5px;">${etaString}</span>
                         </div>
                         <div class="status">Status: <span>${displayStatus}</span></div>
                     </div>
                     <div class="stat-box">
                         <div style="color: var(--text-dim);">Est. Stats</div>
-                        <div class="stat-val">${typeof p.estStats === 'number' ? p.estStats.toLocaleString() : p.estStats}</div>
+                        ${estHtml}
                     </div>
                 </div>
                 <div class="card-actions">
@@ -660,11 +643,13 @@ function renderEnemyList(players) {
 
         let etaString = "";
         if (isFlying) {
-            if (p.landingTime) {
+            if (p.needsFfScouterForFlights) {
+                etaString = `<span class="flight-info" style="background: rgba(255, 71, 87, 0.1); color: var(--red);">🔒 Premium Radar Req.</span>`;
+            } else if (p.landingTime) {
                 let minsLeft = Math.max(0, Math.ceil((p.landingTime - now) / 60));
                 etaString = `<span class="flight-info">✈️ ETA: ${formatTime(p.landingTime)} (${minsLeft}m)</span>`;
             } else {
-                etaString = `<span class="flight-info">✈️ Flying (Unknown ETA)</span>`;
+                etaString = `<span class="flight-info" style="background: rgba(161, 170, 181, 0.1); color: var(--text-dim);">✈️ Scanning Radar...</span>`;
             }
         }
         
@@ -684,20 +669,28 @@ function renderEnemyList(players) {
         if (!p.needsBackup) { sosButton = `<button class="btn-action btn-sos" onclick="requestBackup('${p.id}', '${p.name}')">Call SOS</button>`; } 
         else if (p.needsBackup === myName) { sosButton = `<button class="btn-action btn-sos" onclick="cancelBackup('${p.id}')">Cancel SOS</button>`; }
 
+        let estValue = p.estStats;
+        let estHtml = `<div class="stat-val">${typeof estValue === 'number' ? estValue.toLocaleString() : estValue}</div>`;
+        if (estValue === "🔒 Requires FF Scouter") {
+            estHtml = `<div class="stat-val" style="color: var(--red); font-size: 0.8em; border: 1px dashed var(--red); padding: 2px 4px; border-radius: 4px; margin-top: 4px; display: inline-block;">${estValue}</div>`;
+        } else if (estValue === "Scanning...") {
+            estHtml = `<div class="stat-val" style="color: var(--text-dim); font-size: 0.8em;">${estValue}</div>`;
+        }
+
         html += `
             <div class="member-card ${stateClass}">
                 <div class="card-header">
                     <div>
                         <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
                         <div class="action-arrow">
-                            <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
+                            <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} <span style="margin-left: 5px;">${etaString}</span>
                         </div>
                         <div class="status">Status: <span>${displayStatus}</span></div>
                     </div>
                     <div class="stat-box">
                         <div class="intel-badge">Intel: ${p.intelScore || 0}</div>
                         <div style="color: var(--text-dim); margin-top: 5px;">Est. Stats</div>
-                        <div class="stat-val">${typeof p.estStats === 'number' ? p.estStats.toLocaleString() : p.estStats}</div>
+                        ${estHtml}
                     </div>
                 </div>
                 <div>
