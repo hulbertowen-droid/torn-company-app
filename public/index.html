@@ -34,7 +34,6 @@
         
         .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; position: relative; }
 
-        /* LIVE REFRESH PROGRESS BAR */
         #refresh-bar-container { position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: #0b0d13; z-index: 50; }
         #refresh-bar { height: 100%; width: 0%; background: var(--blue); box-shadow: 0 0 8px var(--blue); transition: width 0.1s linear; }
 
@@ -198,7 +197,6 @@
             </div>
         </div>
 
-        <!-- UPGRADED SETTINGS MODAL -->
         <div id="settings-modal" class="modal-overlay">
             <div class="modal-content" style="position: relative; max-height: 90vh; overflow-y: auto;">
                 <div class="close-btn" onclick="closeSettings()">&times;</div>
@@ -396,16 +394,6 @@ function startPolling() {
     }, refreshMs);
 }
 
-async function sendDiscordPing(msg) {
-    if (!discordWebhook) return;
-    try {
-        await fetch('/api/discord-ping', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ webhookUrl: discordWebhook, message: msg })
-        });
-    } catch (err) { console.error("Failed to ping Discord"); }
-}
-
 function formatTime(unixTimestamp) {
     if (!unixTimestamp) return "";
     let d = new Date(unixTimestamp * 1000);
@@ -531,6 +519,7 @@ function renderChart(friendlyPlayers) {
 }
 
 function renderWatchlist(enemies) {
+    const container = document.getElementById("watchlist-items");
     const now = Math.floor(Date.now() / 1000);
 
     const watchTargets = enemies.filter(e => {
@@ -548,8 +537,17 @@ function renderWatchlist(enemies) {
         return (b.intelScore || 0) - (a.intelScore || 0);
     });
 
-    let html = "";
+    if(watchTargets.length === 0) {
+        container.innerHTML = `<div style="color:var(--text-dim); padding: 10px; font-style: italic;">No priority targets are currently online or landing within 30 mins.</div>`;
+        return;
+    }
+
+    if (container.innerHTML.includes("No priority targets")) container.innerHTML = "";
+
+    const validIds = new Set();
+
     watchTargets.forEach(p => {
+        validIds.add(p.id);
         let isFlying = checkIsFlying(p);
         let cardClass = isFlying ? "flying" : "online";
         let highlightText = "";
@@ -570,19 +568,32 @@ function renderWatchlist(enemies) {
             displayStatus = `In hospital for ${hospMins} mins`;
         }
 
-        html += `
-            <div class="watch-card ${cardClass}">
-                <div class="watch-name"><a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a></div>
-                <div class="watch-highlight" style="color: ${highlightColor};">${highlightText}</div>
-                <div style="font-size:0.8em; color:var(--text-dim);">Status: ${displayStatus}</div>
-            </div>
+        let fullClass = `watch-card ${cardClass}`;
+        let innerContent = `
+            <div class="watch-name"><a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a></div>
+            <div class="watch-highlight" style="color: ${highlightColor};">${highlightText}</div>
+            <div style="font-size:0.8em; color:var(--text-dim);">Status: ${displayStatus}</div>
         `;
+
+        let card = document.getElementById(`w-card-${p.id}`);
+        if (!card) {
+            card = document.createElement('div');
+            card.id = `w-card-${p.id}`;
+            card.className = fullClass;
+            card.innerHTML = innerContent;
+            container.appendChild(card);
+        } else {
+            if (card.className !== fullClass) card.className = fullClass;
+            if (card.innerHTML !== innerContent) card.innerHTML = innerContent;
+            container.appendChild(card);
+        }
     });
-    
-    if(watchTargets.length === 0) {
-        html = `<div style="color:var(--text-dim); padding: 10px; font-style: italic;">No priority targets are currently online or landing within 30 mins.</div>`;
-    }
-    document.getElementById("watchlist-items").innerHTML = html;
+
+    Array.from(container.children).forEach(child => {
+        if (child.id && child.id.startsWith('w-card-')) {
+            if (!validIds.has(child.id.replace('w-card-', ''))) container.removeChild(child);
+        }
+    });
 }
 
 function processNotifications(enemies) {
@@ -635,19 +646,33 @@ function formatEstStats(estValue, premiumActive) {
     if (estValue === "Scanning...") {
         return `<div class="stat-val" style="color: var(--text-dim); font-size: 0.8em; animation: scanPulse 1.5s infinite;">${estValue}</div>`;
     }
-    // Lock badge logic
     return `<div class="stat-val lock-badge">🔒 Requires FF Scouter</div>`;
 }
 
 function renderFriendlyList(players, premiumActive) {
+    const container = document.getElementById("friendly-list");
     const now = Math.floor(Date.now() / 1000);
-    let html = "";
+    
+    if (players.length === 0) {
+        container.innerHTML = "<div style='color:var(--text-dim); padding:10px; font-style: italic; text-align: center;'>No friendly members found.</div>";
+        return;
+    }
+
+    if (container.innerHTML.includes("No friendly members found.") || container.innerHTML.includes("Connecting to Torn API...")) {
+        container.innerHTML = "";
+    }
+
+    const validIds = new Set();
+
     players.forEach(p => {
+        validIds.add(p.id);
         let stateClass = "okay";
         if (p.state === "Hospital" || p.state === "Jail") stateClass = "hospital";
         
         let isFlying = checkIsFlying(p);
         if (isFlying) stateClass = "traveling";
+
+        let fullClass = `member-card ${stateClass}`;
 
         let displayStatus = p.statusDescription || p.state;
         if (p.state === "Hospital" && p.until) {
@@ -669,36 +694,52 @@ function renderFriendlyList(players, premiumActive) {
 
         let estHtml = formatEstStats(p.estStats, premiumActive);
 
-        html += `
-            <div class="member-card ${stateClass}">
-                <div class="card-header">
-                    <div>
-                        <div style="display: flex; align-items: center;">
-                            <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
-                            <a href="https://www.torn.com/bounties.php?p=add&XID=${p.id}&amount=150000&reason=WAR" target="_blank" class="badge-bounty" title="Place Bounty to keep in Hospital">🎯 Bounty</a>
-                        </div>
-                        <div class="action-arrow">
-                            <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
-                        </div>
-                        <div class="status">Status: <span>${displayStatus}</span></div>
+        let innerContent = `
+            <div class="card-header">
+                <div>
+                    <div style="display: flex; align-items: center;">
+                        <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
+                        <a href="https://www.torn.com/bounties.php?p=add&XID=${p.id}&amount=150000&reason=WAR" target="_blank" class="badge-bounty" title="Place Bounty to keep in Hospital">🎯 Bounty</a>
                     </div>
-                    <div class="stat-box">
-                        <div style="color: var(--text-dim);">Est. Stats</div>
-                        ${estHtml}
+                    <div class="action-arrow">
+                        <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
                     </div>
+                    <div class="status">Status: <span>${displayStatus}</span></div>
                 </div>
-                <div class="card-actions">
-                    <button class="btn-action" onclick="promptUpdateStats('${p.id}')">Update Stats</button>
+                <div class="stat-box">
+                    <div style="color: var(--text-dim);">Est. Stats</div>
+                    ${estHtml}
                 </div>
             </div>
+            <div class="card-actions">
+                <button class="btn-action" onclick="promptUpdateStats('${p.id}')">Update Stats</button>
+            </div>
         `;
+
+        let card = document.getElementById(`f-card-${p.id}`);
+        if (!card) {
+            card = document.createElement('div');
+            card.id = `f-card-${p.id}`;
+            card.className = fullClass;
+            card.innerHTML = innerContent;
+            container.appendChild(card);
+        } else {
+            if (card.className !== fullClass) card.className = fullClass;
+            if (card.innerHTML !== innerContent) card.innerHTML = innerContent;
+            container.appendChild(card);
+        }
     });
-    document.getElementById("friendly-list").innerHTML = html || "<div style='color:var(--text-dim); padding:10px; font-style: italic;'>No friendly members found.</div>";
+
+    Array.from(container.children).forEach(child => {
+        if (child.id && child.id.startsWith('f-card-')) {
+            if (!validIds.has(child.id.replace('f-card-', ''))) container.removeChild(child);
+        }
+    });
 }
 
 function renderEnemyList(players, premiumActive) {
+    const container = document.getElementById("enemy-list");
     const now = Math.floor(Date.now() / 1000);
-    let html = "";
     
     const filteredPlayers = players.filter(p => {
         if (activeFilter === 'All') return true;
@@ -708,12 +749,26 @@ function renderEnemyList(players, premiumActive) {
         return false;
     });
 
+    if (filteredPlayers.length === 0) {
+        container.innerHTML = `<div style='color:var(--text-dim); padding:10px; font-style: italic; text-align: center;'>No targets match the "${activeFilter}" filter.</div>`;
+        return;
+    }
+
+    if (container.innerHTML.includes("No targets match") || container.innerHTML.includes("Connecting to Torn API...")) {
+        container.innerHTML = "";
+    }
+
+    const validIds = new Set();
+
     filteredPlayers.forEach(p => {
+        validIds.add(p.id);
         let stateClass = "okay";
         if (p.state === "Hospital" || p.state === "Jail") stateClass = "hospital";
         
         let isFlying = checkIsFlying(p);
         if (isFlying) stateClass = "traveling";
+
+        let fullClass = `member-card ${stateClass}`;
 
         let displayStatus = p.statusDescription || p.state;
         if (p.state === "Hospital" && p.until) {
@@ -751,40 +806,51 @@ function renderEnemyList(players, premiumActive) {
 
         let estHtml = formatEstStats(p.estStats, premiumActive);
 
-        html += `
-            <div class="member-card ${stateClass}">
-                <div class="card-header">
-                    <div>
-                        <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
-                        <div class="action-arrow">
-                            <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
-                        </div>
-                        <div class="status">Status: <span>${displayStatus}</span></div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="intel-badge">Intel: ${p.intelScore || 0}</div>
-                        <div style="color: var(--text-dim); margin-top: 5px;">Est. Stats</div>
-                        ${estHtml}
-                    </div>
-                </div>
+        let innerContent = `
+            <div class="card-header">
                 <div>
-                    ${claimDisplay}
-                    ${sosDisplay}
+                    <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
+                    <div class="action-arrow">
+                        <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
+                    </div>
+                    <div class="status">Status: <span>${displayStatus}</span></div>
                 </div>
-                <div class="card-actions">
-                    <button class="btn-action" onclick="promptUpdateStats('${p.id}')">Override Stats</button>
-                    ${claimButton}
-                    ${sosButton}
+                <div class="stat-box">
+                    <div class="intel-badge">Intel: ${p.intelScore || 0}</div>
+                    <div style="color: var(--text-dim); margin-top: 5px;">Est. Stats</div>
+                    ${estHtml}
                 </div>
             </div>
+            <div>
+                ${claimDisplay}
+                ${sosDisplay}
+            </div>
+            <div class="card-actions">
+                <button class="btn-action" onclick="promptUpdateStats('${p.id}')">Override Stats</button>
+                ${claimButton}
+                ${sosButton}
+            </div>
         `;
+
+        let card = document.getElementById(`e-card-${p.id}`);
+        if (!card) {
+            card = document.createElement('div');
+            card.id = `e-card-${p.id}`;
+            card.className = fullClass;
+            card.innerHTML = innerContent;
+            container.appendChild(card);
+        } else {
+            if (card.className !== fullClass) card.className = fullClass;
+            if (card.innerHTML !== innerContent) card.innerHTML = innerContent;
+            container.appendChild(card);
+        }
     });
     
-    if (filteredPlayers.length === 0) {
-        document.getElementById("enemy-list").innerHTML = `<div style='color:var(--text-dim); padding:10px; font-style: italic;'>No targets match the "${activeFilter}" filter.</div>`;
-    } else {
-        document.getElementById("enemy-list").innerHTML = html;
-    }
+    Array.from(container.children).forEach(child => {
+        if (child.id && child.id.startsWith('e-card-')) {
+            if (!validIds.has(child.id.replace('e-card-', ''))) container.removeChild(child);
+        }
+    });
 }
 
 async function claimTarget(id) { await fetch('/api/claim', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); fetchWarboard(); }
