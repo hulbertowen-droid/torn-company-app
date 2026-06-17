@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chain Watcher | Spider-Verse</title>
+    <title>Live Chain Tracker | Spider-Verse</title>
     <style>
         :root { 
             --bg: #090a0f; --card: #11141d; --item: #1b202e; 
             --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
             --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
         }
-        
         body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; height: 100vh; overflow: hidden; }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
@@ -30,61 +29,58 @@
         .nav-link.active { background: rgba(255, 71, 87, 0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
         .nav-text { transition: opacity 0.2s; }
         .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
+        
         .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
-
         h1 { text-align: center; color: var(--gold); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
 
-        .container { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 30px; }
+        .container { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 30px; }
         
-        .dash-card { background: var(--card); border: 1px solid #2f3542; padding: 30px; border-radius: 12px; text-align: center; position: relative; overflow: hidden; }
-        
+        .dash-card { background: var(--card); border: 1px solid #2f3542; padding: 40px; border-radius: 12px; text-align: center; position: relative;}
         .chain-title { color: var(--text-dim); font-size: 1.2em; text-transform: uppercase; letter-spacing: 2px; font-weight: bold; margin-bottom: 10px; }
-        .chain-count { font-size: 4em; font-weight: 900; color: var(--blue); line-height: 1; text-shadow: 0 0 20px rgba(88,166,255,0.4); margin-bottom: 20px; }
+        .chain-count { font-size: 5em; font-weight: 900; color: var(--blue); line-height: 1; text-shadow: 0 0 20px rgba(88,166,255,0.4); margin-bottom: 30px;}
         
-        .timer-box { background: #0b0d13; border: 2px solid #2f3542; padding: 25px; border-radius: 12px; max-width: 400px; margin: 0 auto; transition: 0.3s; }
-        .timer-title { color: var(--text-dim); text-transform: uppercase; font-weight: bold; letter-spacing: 1px; margin-bottom: 5px; }
-        .timer-time { font-size: 4.5em; font-weight: bold; font-family: monospace; color: var(--text-main); }
+        .timer-box { background: #0b0d13; border: 2px solid #2f3542; padding: 20px; border-radius: 12px; max-width: 400px; margin: 0 auto; }
+        .timer-title { color: var(--text-dim); text-transform: uppercase; font-weight: bold; letter-spacing: 1px; margin-bottom: 10px; }
+        .timer-time { font-size: 3.5em; font-weight: bold; font-family: monospace; color: var(--text-main); transition: color 0.3s; }
         
-        /* Danger state for the timer */
-        .timer-box.danger { border-color: var(--red); background: rgba(255,71,87,0.1); }
-        .timer-box.danger .timer-time { color: var(--red); text-shadow: 0 0 15px rgba(255,71,87,0.8); }
-        .timer-box.pulse { animation: pulseDanger 1s infinite; }
+        .waiting-text { color: var(--text-dim); font-style: italic; margin-top: 20px; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; }
 
-        .progress-container { width: 100%; max-width: 600px; margin: 25px auto 10px auto; background: #0b0d13; height: 12px; border-radius: 6px; border: 1px solid #2f3542; overflow: hidden; }
-        .progress-bar { height: 100%; background: var(--gold); width: 0%; transition: width 0.5s ease-out; box-shadow: 0 0 10px rgba(255,165,2,0.5); }
-        .bonus-text { color: var(--text-dim); font-size: 0.9em; font-weight: bold; text-transform: uppercase; }
-
-        /* Bonus Table */
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; text-align: left; }
-        th, td { padding: 12px 15px; border-bottom: 1px solid #2f3542; }
-        th { color: var(--gold); text-transform: uppercase; letter-spacing: 1px; font-size: 0.9em; }
-        tr:hover { background: rgba(255,255,255,0.02); }
-        .hit-num { font-weight: bold; color: var(--blue); font-size: 1.1em; }
+        .ledger-card { background: var(--card); border: 1px solid #2f3542; padding: 30px; border-radius: 12px; }
+        .ledger-card h3 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; display: flex; align-items: center; gap: 10px; }
         
-        @keyframes pulseDanger { 0% { box-shadow: 0 0 0px rgba(255,71,87,0.8); } 50% { box-shadow: 0 0 30px rgba(255,71,87,0.8); } 100% { box-shadow: 0 0 0px rgba(255,71,87,0.8); } }
+        .ledger-grid { display: grid; grid-template-columns: 1fr 2fr 1.5fr 1.5fr; gap: 10px; color: var(--gold); font-weight: bold; font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #2f3542; padding-bottom: 10px; margin-bottom: 15px; }
+        .ledger-row { display: grid; grid-template-columns: 1fr 2fr 1.5fr 1.5fr; gap: 10px; padding: 12px 0; border-bottom: 1px solid #1b202e; font-size: 0.9em; align-items: center;}
+        .ledger-row:last-child { border-bottom: none; }
+        .milestone-badge { background: rgba(255, 165, 2, 0.15); color: var(--gold); padding: 4px 8px; border-radius: 4px; font-weight: bold; display: inline-block; text-align: center; }
+
+        .danger .timer-box { border-color: var(--red); box-shadow: 0 0 15px rgba(255,71,87,0.3); }
+        .danger .timer-time { color: var(--red); animation: pulse 1s infinite; }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
-   <nav class="sidebar" id="app-sidebar">
-    <div class="sidebar-header">
-        <div class="sidebar-logo">Spider-Verse</div>
-        <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
-    </div>
-  <div class="nav-items">
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">Spider-Verse</div>
+            <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
+        </div>
+        <div class="nav-items">
             <a href="/" class="nav-link">📡 <span class="nav-text">Live Warboard</span></a>
-            <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
+            <a href="/chain.html" class="nav-link active">🔗 <span class="nav-text">Chain Watcher</span></a>
             <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
             <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
             <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
             <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
             <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>
-            <a onclick="openSettings()" class="nav-link" style="margin-top: 15px; border-top: 1px solid #2f3542; border-radius: 0; padding-top: 15px;">
+            <a href="/admin.html" class="nav-link">👑 <span class="nav-text">Admin Panel</span></a>
+            <a onclick="openSettings()" class="nav-link" style="margin-top: 15px; border-top: 1px solid #2f3542; border-radius: 0; padding-top: 15px; cursor: pointer;">
                 ⚙️ <span class="nav-text">Settings</span>
             </a>
         </div>
-</nav>
+    </nav>
 
-   </nav> <main class="main-content">
+    <main class="main-content">
         <h1>Live Chain Tracker</h1>
 
         <div style="background: rgba(255, 165, 2, 0.1); border: 1px solid var(--gold); color: var(--gold); padding: 12px 20px; border-radius: 8px; margin-bottom: 25px; text-align: center; font-weight: bold; font-size: 0.9em; box-shadow: 0 4px 15px rgba(255, 165, 2, 0.15);">
@@ -92,61 +88,37 @@
         </div>
 
         <div class="container">
-            
-            <div id="error-msg" style="color: var(--red); font-weight: bold; text-align: center;"></div>
-
-            <div class="dash-card">
+            <div class="dash-card" id="chain-card">
                 <div class="chain-title">Current Chain</div>
-                <div class="chain-count" id="chain-count">0 / 0</div>
+                <div class="chain-count" id="chain-display">0 / 0</div>
                 
-                <div class="timer-box" id="timer-box">
+                <div class="timer-box">
                     <div class="timer-title">Time Remaining</div>
-                    <div class="timer-time" id="timer-time">00:00</div>
+                    <div class="timer-time" id="timer-display">00:00</div>
                 </div>
-
-                <div class="progress-container">
-                    <div class="progress-bar" id="chain-progress"></div>
-                </div>
-                <div class="bonus-text" id="next-bonus-text">Waiting for chain to start...</div>
+                
+                <div class="waiting-text" id="waiting-msg">WAITING FOR CHAIN TO START...</div>
             </div>
 
-            <!-- BONUS LEDGER -->
-            <div class="dash-card" style="text-align: left; padding: 20px;">
-                <h2 style="margin-top:0; color:var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; font-size:1.1em; text-transform:uppercase;">🏆 Bonus Hit Ledger</h2>
-                <div style="overflow-x: auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Milestone</th>
-                                <th>Player</th>
-                                <th>Time Secured</th>
-                                <th>Respect Generated</th>
-                            </tr>
-                        </thead>
-                        <tbody id="bonus-list">
-                            <tr><td colspan="4" style="text-align: center; color: var(--text-dim);">No bonus hits logged in the current chain yet.</td></tr>
-                        </tbody>
-                    </table>
+            <div class="ledger-card">
+                <h3>🏆 Bonus Hit Ledger</h3>
+                <div class="ledger-grid">
+                    <div>Milestone</div>
+                    <div>Player</div>
+                    <div>Time Secured</div>
+                    <div>Respect Generated</div>
+                </div>
+                <div id="ledger-content">
+                    <div style="text-align: center; color: var(--text-dim); padding: 20px; font-style: italic;">No bonus hits logged in the current chain yet.</div>
                 </div>
             </div>
         </div>
     </main>
 
 <script>
-// --- SIDEBAR & SMART NAV LOGIC ---
 document.addEventListener("DOMContentLoaded", function() {
-    let currentUrl = window.location.pathname;
-    if (currentUrl === "/index.html" || currentUrl === "") currentUrl = "/"; 
-    let links = document.querySelectorAll(".nav-items .nav-link");
-    links.forEach(link => {
-        link.classList.remove("active"); 
-        if (link.getAttribute("href") === currentUrl) link.classList.add("active"); 
-    });
-
     const sidebar = document.getElementById('app-sidebar');
-    if (localStorage.getItem('sidebar_collapsed') === 'true') {
-        sidebar.classList.add('collapsed');
-    }
+    if (localStorage.getItem('sidebar_collapsed') === 'true') { sidebar.classList.add('collapsed'); }
 });
 
 function toggleSidebar() {
@@ -155,129 +127,94 @@ function toggleSidebar() {
     localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
 }
 
-// --- ORIGINAL CHAIN LOGIC ---
-const myKey = localStorage.getItem("warboard_apikey");
-const discordWebhook = localStorage.getItem("warboard_discord") || "";
-
-const BONUS_MILESTONES = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
-
-let timerInterval = null;
-let targetExpirationTime = 0;
-let discordPingSent = false;
-
-function formatTime(unixTimestamp) {
-    if (!unixTimestamp) return "";
-    let d = new Date(unixTimestamp * 1000);
-    return d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+function openSettings() {
+    window.location.href = "/";
 }
 
-async function sendDiscordPing(msg) {
-    if (!discordWebhook) return;
-    try {
-        await fetch('/api/discord-ping', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ webhookUrl: discordWebhook, message: msg })
-        });
-    } catch (err) { console.error("Failed to ping Discord"); }
+const myKey = localStorage.getItem("warboard_apikey") || "";
+let currentSeconds = 0;
+let localTimer = null;
+
+const MILESTONES = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
+
+function getNextMilestone(current) {
+    for (let m of MILESTONES) {
+        if (current < m) return m;
+    }
+    return current + 1;
 }
 
-function startTimerDisplay() {
-    if (timerInterval) clearInterval(timerInterval);
+function updateTimerDisplay() {
+    if (currentSeconds <= 0) {
+        document.getElementById("timer-display").innerText = "00:00";
+        document.getElementById("chain-card").classList.remove("danger");
+        return;
+    }
     
-    timerInterval = setInterval(() => {
-        let secondsLeft = Math.floor((targetExpirationTime - Date.now()) / 1000);
-        if (secondsLeft < 0) secondsLeft = 0;
-        
-        let m = Math.floor(secondsLeft / 60);
-        let s = secondsLeft % 60;
-        document.getElementById("timer-time").innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    let m = Math.floor(currentSeconds / 60);
+    let s = currentSeconds % 60;
+    let formatted = (m < 10 ? "0" + m : m) + ":" + (s < 10 ? "0" + s : s);
+    
+    document.getElementById("timer-display").innerText = formatted;
+    
+    if (currentSeconds <= 90) {
+        document.getElementById("chain-card").classList.add("danger");
+    } else {
+        document.getElementById("chain-card").classList.remove("danger");
+    }
+}
 
-        const box = document.getElementById("timer-box");
-        
-        if (secondsLeft <= 90 && secondsLeft > 0) {
-            box.classList.add("danger");
-            if (secondsLeft <= 45) box.classList.add("pulse");
-            else box.classList.remove("pulse");
-
-            if (!discordPingSent && discordWebhook) {
-                sendDiscordPing(`🚨 **CHAIN DROPPING:** The chain timer is under 90 seconds! Someone make a hit!`);
-                discordPingSent = true;
-            }
-        } else {
-            box.classList.remove("danger", "pulse");
-            if (secondsLeft > 120) discordPingSent = false; 
+function startLocalTimer() {
+    if (localTimer) clearInterval(localTimer);
+    localTimer = setInterval(() => {
+        if (currentSeconds > 0) {
+            currentSeconds--;
+            updateTimerDisplay();
         }
-
-    }, 200);
+    }, 1000);
 }
 
 async function fetchChainData() {
     if (!myKey) {
-        document.getElementById("error-msg").innerText = "Please set your API key on the Live Warboard settings first.";
+        document.getElementById("waiting-msg").innerText = "API KEY REQUIRED. GO TO WARBOARD SETTINGS.";
         return;
     }
     
     try {
-        const res = await fetch(`/api/chain?apiKey=${myKey}`);
+        const res = await fetch(`https://api.torn.com/faction/?selections=chain&key=${myKey}`);
         const data = await res.json();
         
-        if (data.error) {
-            document.getElementById("error-msg").innerText = "API Error: " + data.error;
-            return;
-        }
+        if (data.error) return;
 
-        const chain = data.chain;
-        
-        if (chain.current === 0) {
-            document.getElementById("chain-count").innerText = "0 / 0";
-            document.getElementById("chain-progress").style.width = "0%";
-            document.getElementById("next-bonus-text").innerText = "Waiting for chain to start...";
-            document.getElementById("timer-time").innerText = "00:00";
-            document.getElementById("timer-box").classList.remove("danger", "pulse");
-            return;
-        }
-
-        document.getElementById("chain-count").innerText = `${chain.current.toLocaleString()} / ${chain.max.toLocaleString()}`;
-        
-        targetExpirationTime = Date.now() + (chain.timeout * 1000);
-        
-        let nextBonus = BONUS_MILESTONES.find(m => m > chain.current) || "MAXED";
-        let prevBonus = BONUS_MILESTONES.slice().reverse().find(m => m <= chain.current) || 0;
-        
-        let progressPercent = 100;
-        if (nextBonus !== "MAXED") {
-            let hitsNeeded = nextBonus - prevBonus;
-            let hitsMade = chain.current - prevBonus;
-            progressPercent = (hitsMade / hitsNeeded) * 100;
-            document.getElementById("next-bonus-text").innerText = `Next Bonus Hit: ${nextBonus.toLocaleString()} (${nextBonus - chain.current} hits away)`;
+        if (data.chain && data.chain.current > 0) {
+            let current = data.chain.current;
+            let max = getNextMilestone(current);
+            
+            document.getElementById("chain-display").innerText = `${current} / ${max}`;
+            document.getElementById("waiting-msg").style.display = "none";
+            
+            currentSeconds = data.chain.timeout;
+            updateTimerDisplay();
+            
         } else {
-            document.getElementById("next-bonus-text").innerText = `MAXIMUM BONUS REACHED`;
+            document.getElementById("chain-display").innerText = "0 / 0";
+            document.getElementById("timer-display").innerText = "00:00";
+            document.getElementById("waiting-msg").style.display = "block";
+            document.getElementById("chain-card").classList.remove("danger");
+            currentSeconds = 0;
         }
-        document.getElementById("chain-progress").style.width = `${progressPercent}%`;
-
-        let html = "";
-        if (data.bonuses && data.bonuses.length > 0) {
-            data.bonuses.forEach(b => {
-                html += `<tr>
-                    <td class="hit-num"># ${b.hit.toLocaleString()}</td>
-                    <td><a href="https://www.torn.com/profiles.php?XID=${b.id}" target="_blank" style="color:var(--text-main); font-weight:bold; text-decoration:none;">${b.name}</a></td>
-                    <td style="color:var(--text-dim);">${formatTime(b.time)}</td>
-                    <td style="color:var(--green); font-weight:bold;">+${b.respect.toFixed(2)}</td>
-                </tr>`;
-            });
-            document.getElementById("bonus-list").innerHTML = html;
-        } else {
-            document.getElementById("bonus-list").innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-dim);">No bonus hits logged yet. Give the server 30 seconds to scrape logs if the chain is currently running.</td></tr>`;
-        }
-
-    } catch (e) { console.error("Chain fetch failed."); }
+    } catch (e) {
+        console.error("Chain fetch failed", e);
+    }
 }
 
 if (myKey) {
-    startTimerDisplay();
     fetchChainData();
-    setInterval(fetchChainData, 5000); 
+    startLocalTimer();
+    
+    let cpm = parseInt(localStorage.getItem("warboard_cpm")) || 12;
+    let refreshMs = Math.floor(60000 / cpm);
+    setInterval(fetchChainData, Math.max(refreshMs, 2000));
 }
 </script>
 </body>
