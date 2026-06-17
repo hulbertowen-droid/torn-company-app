@@ -126,7 +126,6 @@ setInterval(async () => {
     } catch (err) {}
 }, 60000); 
 
-// MODIFIED: Now returns the user's Player ID so we can use it to test their FF Scouter key
 async function verifySubscription(userKey) {
     if (!userKey) throw new Error("No API Key provided.");
     
@@ -137,7 +136,6 @@ async function verifySubscription(userKey) {
     const playerId = data.player_id?.toString();
     const facId = data.faction?.faction_id?.toString();
 
-    // Check VIP Overrides for access (Returns ID if allowed)
     if (ADMIN_API_KEY && userKey === ADMIN_API_KEY) return playerId;
     if (playerId && (VIP_PLAYERS.includes(playerId) || vipConfig.players.includes(playerId))) return playerId;
     
@@ -150,14 +148,11 @@ async function verifySubscription(userKey) {
     throw new Error(`SUBSCRIPTION REQUIRED: Your faction's access has expired. Send 5x Xanax to Owen777 [3776908] to instantly unlock access for your entire faction for 1 week!`);
 }
 
-// NEW: Strictly tests the FF Scouter key by pulling the user's own stats. 
-// If it succeeds, they have premium. If it fails, they are locked out.
 async function verifyFfScouterPremium(ffKey, testId) {
     if (!ffKey || ffKey === "null" || ffKey === "") return false;
     try {
         const res = await fetch(`https://ffscouter.com/api/v1/get-stats?key=${ffKey}&targets=${testId}`);
         const data = await res.json();
-        // A valid premium key will return an array of stats. Invalid returns an error object.
         if (Array.isArray(data) && data.length > 0) return true; 
         return false;
     } catch (e) {
@@ -444,7 +439,8 @@ setInterval(async () => {
         const facData = await facRes.json();
         if (facData.error) return;
 
-        if (facData.chain && facData.chain.current > 0) {
+        // ONLY alert Discord if the chain is officially active (>= 10 hits)
+        if (facData.chain && facData.chain.current >= 10) {
             let secondsLeft = facData.chain.timeout;
             if (secondsLeft <= 90 && secondsLeft > 0 && !lastChainTimeoutAlertState && discordConfig.chainUnder90 && discordConfig.webhookUrl) {
                 fetch(discordConfig.webhookUrl, {
@@ -455,6 +451,9 @@ setInterval(async () => {
             } else if (secondsLeft > 120) {
                 lastChainTimeoutAlertState = false;
             }
+        } else {
+            // Reset the alert memory if the chain drops or is in the building phase (< 10)
+            lastChainTimeoutAlertState = false;
         }
 
         let activeEnemyId = autoDetectEnemyFaction(facData);
@@ -922,7 +921,6 @@ app.get('/api/warboard', async (req, res) => {
         const myUserId = await verifySubscription(userKey);
         if (userKey) apiKeyPool.add(userKey);
 
-        // Run validation against the FF Scouter endpoint live
         const isPremium = await verifyFfScouterPremium(ffKey, myUserId);
 
         let enemyId = req.query.enemyFaction && req.query.enemyFaction !== "null" && req.query.enemyFaction !== "" ? req.query.enemyFaction : null;
