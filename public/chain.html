@@ -101,7 +101,6 @@
                 
                 <div class="chain-count" id="chain-display">0 / 0</div>
                 
-                <!-- NEW: Visual Progress Bar -->
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill" id="chain-progress-fill"></div>
                 </div>
@@ -114,7 +113,6 @@
                 <div class="waiting-text" id="waiting-msg">WAITING FOR CHAIN TO START...</div>
             </div>
 
-            <!-- UPGRADED: Functional Bonus Hit Ledger -->
             <div class="ledger-card">
                 <h3>🏆 Bonus Hit Ledger</h3>
                 <div class="ledger-grid">
@@ -124,7 +122,7 @@
                     <div>Respect Generated</div>
                 </div>
                 <div id="ledger-content">
-                    <div style="text-align: center; color: var(--text-dim); padding: 20px; font-style: italic;">Waiting for API Data...</div>
+                    <div style="text-align: center; color: var(--text-dim); padding: 20px; font-style: italic;">Waiting for chain data...</div>
                 </div>
             </div>
         </div>
@@ -144,7 +142,6 @@ function toggleSidebar() {
 
 function openSettings() { window.location.href = "/"; }
 
-// Local Audio Context for the 90s Warning
 let audioCtx;
 function initAudio() {
     if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
@@ -233,37 +230,40 @@ async function fetchChainData() {
         return;
     }
     
+    // FETCH 1: Strictly get the basic Chain status (Cannot fail due to limited access keys)
     try {
-        // Optimized to fetch chain basic data and recent attacks in a single pull
-        const res = await fetch(`https://api.torn.com/faction/?selections=chain,basic,attacks&key=${myKey}`);
-        const data = await res.json();
+        const chainRes = await fetch(`https://api.torn.com/faction/?selections=chain&key=${myKey}`);
+        const chainData = await chainRes.json();
         
-        if (data.error) return;
+        if (chainData.error) {
+            document.getElementById("waiting-msg").innerText = "API ERROR: " + chainData.error.error;
+            document.getElementById("waiting-msg").style.display = "block";
+            return;
+        }
 
-        // 1. UPDATE THE MAIN CHAIN DISPLAY
-        if (data.chain && data.chain.current > 0) {
-            let current = data.chain.current;
+        if (chainData.chain && chainData.chain.timeout > 0) {
+            let current = chainData.chain.current;
             let max = getNextMilestone(current);
             let prev = getPrevMilestone(current);
             
             document.getElementById("chain-display").innerText = `${current} / ${max}`;
-            document.getElementById("chain-modifier").innerText = `${data.chain.modifier}x`;
+            document.getElementById("chain-modifier").innerText = `${chainData.chain.modifier}x`;
             document.getElementById("waiting-msg").style.display = "none";
             
-            // Progress Bar Math
             let progressPercent = ((current - prev) / (max - prev)) * 100;
             document.getElementById("chain-progress-fill").style.width = `${Math.min(100, Math.max(0, progressPercent))}%`;
 
-            // Fix the bouncing timer: Only accept API timeout if a new hit landed OR the timer jumped up (chain saver)
+            // Anti-Bounce Timer Logic (Ignores 60s cache bounces, strictly catches hits & savers)
             if (current > lastChainCount) {
-                currentSeconds = data.chain.timeout;
+                currentSeconds = chainData.chain.timeout;
                 lastChainCount = current;
                 warned90 = false; 
-            } else if (data.chain.timeout > currentSeconds + 5) {
-                currentSeconds = data.chain.timeout;
+            } else if (chainData.chain.timeout > currentSeconds + 45) {
+                // If API is 45+ seconds higher than local, a Chain Saver was popped
+                currentSeconds = chainData.chain.timeout;
                 warned90 = false;
-            } else if (currentSeconds === 0 && data.chain.timeout > 0) {
-                currentSeconds = data.chain.timeout;
+            } else if (currentSeconds === 0 && chainData.chain.timeout > 0) {
+                currentSeconds = chainData.chain.timeout;
             }
             
             updateTimerDisplay();
@@ -272,16 +272,24 @@ async function fetchChainData() {
             document.getElementById("chain-modifier").innerText = "1.0x";
             document.getElementById("chain-progress-fill").style.width = "0%";
             document.getElementById("timer-display").innerText = "00:00";
+            document.getElementById("waiting-msg").innerText = "WAITING FOR CHAIN TO START...";
             document.getElementById("waiting-msg").style.display = "block";
             document.getElementById("chain-card").classList.remove("danger");
             currentSeconds = 0;
             lastChainCount = -1;
         }
+    } catch (e) {
+        console.error("Chain basic fetch failed", e);
+    }
 
-        // 2. GENERATE THE BONUS HIT LEDGER
-        if (data.attacks && data.ID) {
-            let myFacId = data.ID;
-            let attacks = Object.values(data.attacks).filter(a => a.attacker_faction === myFacId && a.chain > 0);
+    // FETCH 2: Attempt to pull the attack ledger separately so it doesn't break the tracker if it errors
+    try {
+        const atkRes = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${myKey}`);
+        const atkData = await atkRes.json();
+        
+        if (atkData.attacks && atkData.ID) {
+            let myFacId = atkData.ID;
+            let attacks = Object.values(atkData.attacks).filter(a => a.attacker_faction === myFacId && a.chain > 0);
             
             attacks.sort((a, b) => b.chain - a.chain);
             
@@ -316,7 +324,7 @@ async function fetchChainData() {
             }
         }
     } catch (e) {
-        console.error("Chain fetch failed", e);
+        console.error("Ledger fetch failed", e);
     }
 }
 
