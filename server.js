@@ -160,7 +160,6 @@ async function verifyFfScouterPremium(ffKey, testId) {
     }
 }
 
-// THE FIX: Removed Math.random() jitter. Output is now 100% predictable.
 function computeWarIntel(p, cache = {}) {
     let score = 0;
     if (p.state === "Okay") score += 120;
@@ -203,7 +202,6 @@ function autoDetectEnemyFaction(data) {
     return null;
 }
 
-// --- ENGINE 1: FF SCOUTER BATTLE STATS (USER-KEYED) ---
 setInterval(async () => {
     if (statQueue.size === 0 || isProcessingStats) return;
     isProcessingStats = true;
@@ -229,7 +227,6 @@ setInterval(async () => {
     isProcessingStats = false;
 }, 4000);
 
-// --- ENGINE 2: FF SCOUTER FLIGHTS (USER-KEYED) ---
 setInterval(async () => {
     if (flightQueue.size === 0 || isProcessingFlights) return;
     isProcessingFlights = true;
@@ -249,7 +246,6 @@ setInterval(async () => {
     isProcessingFlights = false;
 }, 1000); 
 
-// --- ENGINE 3: FF SCOUTER TIMELINES (USER-KEYED) ---
 setInterval(async () => {
     if (activityQueue.size === 0 || isProcessingActivity) return;
     isProcessingActivity = true;
@@ -273,7 +269,6 @@ setInterval(async () => {
     isProcessingActivity = false;
 }, 1500); 
 
-// --- ENGINE 4: DEEP LOG BACKFILL & LIVE DELTA SCRAPER ---
 setInterval(async () => {
     if (apiKeyPool.size === 0 || !adminFactionId) return;
     const keys = Array.from(apiKeyPool);
@@ -321,7 +316,6 @@ setInterval(async () => {
     } catch (err) {}
 }, 20000); 
 
-// --- ENGINE 5: BACKGROUND MARKET WATCHER ---
 setInterval(async () => {
     if (!marketConfig.webhookUrl || apiKeyPool.size === 0) return;
     const keys = Array.from(apiKeyPool);
@@ -372,7 +366,6 @@ setInterval(async () => {
     } catch (err) {}
 }, 45000); 
 
-// --- ENGINE 6: BACKGROUND WAR SURVEILLANCE ---
 setInterval(async () => {
     if (!ADMIN_API_KEY || !adminFactionId) return;
     try {
@@ -490,8 +483,8 @@ app.get('/api/dashboard-data', async (req, res) => {
     const userKey = req.query.apiKey;
     const ffKey = req.query.ffKey || null;
     try {
-        const myUserId = await verifySubscription(userKey);
-        const isPremium = await verifyFfScouterPremium(ffKey, myUserId);
+        await verifySubscription(userKey);
+        const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
 
         const basicResp = await fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`);
         const basicData = await basicResp.json();
@@ -543,7 +536,7 @@ app.get('/api/scan-recruits', async (req, res) => {
     const { apiKey, reportId, ffKey } = req.query;
     try {
         const myUserId = await verifySubscription(apiKey);
-        const isPremium = await verifyFfScouterPremium(ffKey, myUserId);
+        const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
 
         const reportRes = await fetch(`https://api.torn.com/torn/${reportId}?selections=rankedwarreport&key=${apiKey}`);
         const reportData = await reportRes.json();
@@ -653,6 +646,7 @@ app.post('/api/ai-analyze-ongoing', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
+// THE FIX: Fully restored the Deep Log Scraper to correctly pull Assists and Clears
 app.get('/api/past-war', async (req, res) => {
     const { apiKey, reportId } = req.query;
     try {
@@ -663,9 +657,29 @@ app.get('/api/past-war', async (req, res) => {
             fetch(`https://api.torn.com/torn/?selections=items&key=${apiKey}`)
         ]);
         const userData = await userRes.json(); const reportData = await reportRes.json(); const itemsData = await itemsRes.json();
-        let correctFacId = userData.faction?.faction_id?.toString();
+        if (userData.error) return res.status(400).json({ error: "Invalid API Key." });
+        if (reportData.error) return res.status(400).json({ error: "Torn API Error: " + reportData.error.error });
+
+        let correctFacId = null;
+        let enemyFacId = null;
+        const myUserId = userData.player_id.toString();
+
+        for (let [facId, facData] of Object.entries(reportData.rankedwarreport.factions)) {
+            if (facData.members && facData.members[myUserId]) {
+                correctFacId = facId;
+            } else {
+                enemyFacId = facId;
+            }
+        }
+
+        if (!correctFacId) {
+            correctFacId = userData.faction?.faction_id?.toString();
+            enemyFacId = Object.keys(reportData.rankedwarreport.factions).find(id => id !== correctFacId);
+        }
+
         const myFactionWarData = reportData.rankedwarreport?.factions[correctFacId];
-        
+        if (!myFactionWarData) return res.status(400).json({ error: "Your faction was not part of this Ranked War Report." });
+
         let totalCacheValue = 0; let cachesWon = [];
         if (myFactionWarData?.rewards?.items) {
             for (let [itemId, itemInfo] of Object.entries(myFactionWarData.rewards.items)) {
@@ -674,7 +688,64 @@ app.get('/api/past-war', async (req, res) => {
                 cachesWon.push({ name: itemInfo.name || "Cache", quantity: itemInfo.quantity, marketValue: iv, totalValue: iv * itemInfo.quantity });
             }
         }
-        let formattedMembers = Object.entries(myFactionWarData?.members || {}).map(([id, m]) => ({ id, name: m.name, attacks: m.attacks||0, assists:0, clears:0, score: m.score||0 }));
+
+        let advancedStats = {};
+        if (warScrapeCache[reportId]) {
+            advancedStats = warScrapeCache[reportId];
+        } else {
+            let warStart = reportData.rankedwarreport.war.start;
+            let warEnd = reportData.rankedwarreport.war.end || Math.floor(Date.now() / 1000);
+            
+            let toTimestamp = warEnd;
+            let keepScraping = true;
+            let pageCount = 0;
+            
+            while (keepScraping && pageCount < 30) { 
+                const attackRes = await fetch(`https://api.torn.com/faction/?selections=attacks&to=${toTimestamp}&key=${apiKey}`);
+                const attackData = await attackRes.json();
+                
+                if (attackData.error || !attackData.attacks) break;
+                
+                let attacks = Object.values(attackData.attacks);
+                if (attacks.length === 0) break;
+                
+                let oldestTime = toTimestamp;
+                
+                for (let atk of attacks) {
+                    if (atk.timestamp_ended < oldestTime) oldestTime = atk.timestamp_ended;
+                    
+                    if (atk.timestamp_ended < warStart) { keepScraping = false; continue; }
+                    if (atk.timestamp_ended > warEnd) continue;
+                    
+                    if (atk.attacker_faction && atk.attacker_faction.toString() === correctFacId) {
+                        let uId = atk.attacker_id.toString();
+                        if (!advancedStats[uId]) advancedStats[uId] = { assists: 0, clears: 0 };
+                        
+                        if (atk.result === "Assist") advancedStats[uId].assists++;
+                        if (atk.defender_faction && atk.defender_faction.toString() !== enemyFacId) advancedStats[uId].clears++;
+                    }
+                }
+                toTimestamp = oldestTime - 1;
+                pageCount++;
+                await new Promise(r => setTimeout(r, 250)); 
+            }
+            warScrapeCache[reportId] = advancedStats;
+        }
+
+        let formattedMembers = [];
+        const members = myFactionWarData.members || {};
+        for (let [id, m] of Object.entries(members)) {
+            let pStats = advancedStats[id] || { assists: 0, clears: 0 };
+            formattedMembers.push({
+                id,
+                name: m.name,
+                attacks: m.attacks || 0,
+                assists: pStats.assists,
+                clears: pStats.clears,
+                score: m.score || 0
+            });
+        }
+
         res.json({ success: true, members: formattedMembers, rewards: { totalCacheValue, caches: cachesWon, points: myFactionWarData?.rewards?.points||0, respect: myFactionWarData?.rewards?.respect||0 } });
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
@@ -689,10 +760,10 @@ app.get('/api/warboard', async (req, res) => {
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
         const ffKey = req.query.ffKey && req.query.ffKey !== "null" && req.query.ffKey !== "" ? req.query.ffKey : null;
-        const myUserId = await verifySubscription(userKey);
+        await verifySubscription(userKey);
         if (userKey) apiKeyPool.add(userKey);
 
-        const isPremium = await verifyFfScouterPremium(ffKey, myUserId);
+        const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
         let enemyId = req.query.enemyFaction || null;
         
         let [myData, enemyDataResult] = await Promise.all([
