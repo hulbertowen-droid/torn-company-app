@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bazaar Watcher | Spider-Verse</title>
+    <style>
+        :root { 
+            --bg: #090a0f; --card: #11141d; --item: #1b202e; 
+            --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
+            --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
+        }
+        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; height: 100vh; overflow: hidden; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #57606f; }
+
+        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; z-index: 100; }
+        .sidebar.collapsed { width: 75px; }
+        .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2f3542; }
+        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 1.1em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
+        .sidebar.collapsed .sidebar-logo { opacity: 0; width: 0; display: none; }
+        .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
+        .toggle-btn:hover { color: white; background: #2f3542; }
+        .nav-items { display: flex; flex-direction: column; gap: 8px; padding: 20px 10px; }
+        .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
+        .nav-link:hover { background: #2f3542; color: white; }
+        .nav-link.active { background: rgba(255, 71, 87, 0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
+        .nav-text { transition: opacity 0.2s; }
+        .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
+        
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
+        h1 { text-align: center; color: var(--green); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
+        
+        .container { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 25px; }
+        .dash-card { background: var(--card); padding: 25px; border-radius: 16px; border: 1px solid #2f3542; }
+        .dash-card h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; font-size: 1.1em; letter-spacing: 1px;}
+        
+        .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; }
+        .form-group label { font-size: 0.85em; color: var(--text-dim); font-weight: bold; text-transform: uppercase; }
+        .form-group input { padding: 10px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; width: 100%; box-sizing: border-box; }
+        .form-group input:focus { outline: 1px solid var(--gold); }
+        
+        .flex-row { display: flex; gap: 15px; align-items: flex-end; }
+        .flex-row .form-group { flex: 1; margin-bottom: 0; }
+        
+        /* Checkbox Customization */
+        .trigger-item { display: flex; align-items: center; justify-content: space-between; padding: 15px; background: #0b0d13; border: 1px solid #2f3542; border-radius: 8px; margin-bottom: 20px;}
+        .trigger-info { display: flex; flex-direction: column; gap: 4px; }
+        .trigger-title { font-weight: bold; color: var(--text-main); font-size: 1.1em; }
+        .trigger-desc { font-size: 0.85em; color: var(--text-dim); }
+        
+        .switch { position: relative; display: inline-block; width: 46px; height: 22px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #2f3542; transition: .3s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--green); }
+        input:checked + .slider:before { transform: translateX(24px); }
+
+        .btn { background: var(--blue); color: #000; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.9em; text-transform: uppercase; transition: 0.2s; white-space: nowrap;}
+        .btn:hover { background: #79c0ff; }
+        .btn-add { background: var(--green); }
+        .btn-add:hover { background: #26b361; }
+        .btn-remove { background: rgba(255, 71, 87, 0.15); color: var(--red); border: 1px solid var(--red); padding: 6px 12px; }
+        .btn-remove:hover { background: var(--red); color: white; }
+
+        .target-list { display: flex; flex-direction: column; gap: 10px; margin-top: 15px; }
+        .target-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: #0b0d13; border: 1px solid #2f3542; border-radius: 8px; }
+        .target-name { color: var(--gold); font-weight: bold; font-size: 1.1em;}
+        .target-id { color: var(--text-dim); font-size: 0.85em; }
+        .target-price { color: var(--green); font-weight: bold; }
+        
+        #status-msg { text-align: center; font-weight: bold; font-size: 0.95em; margin-top: 15px; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">Spider-Verse</div>
+            <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
+        </div>
+        <div class="nav-items">
+            <a href="/" class="nav-link">📡 <span class="nav-text">Live Warboard</span></a>
+            <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
+            <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
+            <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
+            <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
+            <a href="/bazaar.html" class="nav-link active">🛒 <span class="nav-text">Bazaar Watcher</span></a>
+            <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>
+            <a onclick="openSettings()" class="nav-link" style="margin-top: 15px; border-top: 1px solid #2f3542; border-radius: 0; padding-top: 15px; display: none;">
+                ⚙️ <span class="nav-text">Settings</span>
+            </a>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <h1>Bazaar & Market Automator</h1>
+        <div class="container">
+
+            <div class="dash-card">
+                <h2>Trading Post Webhook</h2>
+                <div class="form-group">
+                    <label>Discord Webhook URL (Where to send Trade Alerts)</label>
+                    <input type="text" id="trade-webhook" placeholder="https://discord.com/api/webhooks/... (Can be same as Warboard)">
+                </div>
+            </div>
+
+            <div class="dash-card">
+                <h2>📉 Defense: Auto-Undercut Scanner</h2>
+                <div class="trigger-item">
+                    <div class="trigger-info">
+                        <span class="trigger-title">Protect Personal Bazaar</span>
+                        <span class="trigger-desc">Automatically scans your bazaar inventory and alerts you if anyone on the global market lists the same items for a lower price.</span>
+                    </div>
+                    <label class="switch"><input type="checkbox" id="auto-defense"><span class="slider"></span></label>
+                </div>
+            </div>
+
+            <div class="dash-card">
+                <h2>🎯 Sniper: Auto-Buy Alerts</h2>
+                <p style="color: var(--text-dim); font-size: 0.9em; margin-top: -5px; margin-bottom: 15px;">Enter specific items you want to flip. The server will ping you instantly if they are listed below your target price.</p>
+                
+                <div class="flex-row" style="background: #0b0d13; padding: 15px; border-radius: 8px; border: 1px solid #2f3542;">
+                    <div class="form-group">
+                        <label>Item Name</label>
+                        <input type="text" id="add-name" placeholder="e.g. Xanax">
+                    </div>
+                    <div class="form-group">
+                        <label>Item ID</label>
+                        <input type="number" id="add-id" placeholder="e.g. 206">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Buy Price ($)</label>
+                        <input type="number" id="add-price" placeholder="e.g. 830000">
+                    </div>
+                    <button class="btn btn-add" onclick="addSniperTarget()">+ Add Target</button>
+                </div>
+
+                <div class="target-list" id="sniper-list">
+                    <div style="color: var(--text-dim); text-align: center; padding: 10px;">Loading targets...</div>
+                </div>
+            </div>
+
+            <button class="btn" style="width: 100%; padding: 15px; font-size: 1.1em;" onclick="saveMarketConfig()">Commit Trading Config to Server</button>
+            <div id="status-msg"></div>
+
+        </div>
+    </main>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function() {
+    const sidebar = document.getElementById('app-sidebar');
+    if (localStorage.getItem('sidebar_collapsed') === 'true') { sidebar.classList.add('collapsed'); }
+
+    // Load server-wide config on boot
+    try {
+        const res = await fetch('/api/get-market-config');
+        const config = await res.json();
+        
+        document.getElementById('trade-webhook').value = config.webhookUrl || "";
+        document.getElementById('auto-defense').checked = config.autoDefense === true;
+        sniperTargets = config.sniperTargets || [];
+        renderTargets();
+    } catch(e) { console.error("Could not fetch server market configuration."); }
+});
+
+function toggleSidebar() {
+    const sidebar = document.getElementById('app-sidebar');
+    sidebar.classList.toggle('collapsed');
+    localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+}
+
+let sniperTargets = [];
+
+function addSniperTarget() {
+    const name = document.getElementById('add-name').value.trim();
+    const id = parseInt(document.getElementById('add-id').value);
+    const price = parseInt(document.getElementById('add-price').value);
+
+    if (!name || isNaN(id) || isNaN(price)) { alert("Please fill out all fields correctly."); return; }
+
+    sniperTargets.push({ name, id, price });
+    document.getElementById('add-name').value = '';
+    document.getElementById('add-id').value = '';
+    document.getElementById('add-price').value = '';
+    renderTargets();
+}
+
+function removeTarget(index) {
+    sniperTargets.splice(index, 1);
+    renderTargets();
+}
+
+function renderTargets() {
+    const list = document.getElementById('sniper-list');
+    if (sniperTargets.length === 0) {
+        list.innerHTML = `<div style="color: var(--text-dim); text-align: center; padding: 10px;">No sniper targets configured.</div>`;
+        return;
+    }
+
+    let html = "";
+    sniperTargets.forEach((t, i) => {
+        html += `
+            <div class="target-item">
+                <div>
+                    <div class="target-name">${t.name}</div>
+                    <div class="target-id">Item ID: ${t.id}</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 20px;">
+                    <div class="target-price">Alert if ≤ $${t.price.toLocaleString()}</div>
+                    <button class="btn btn-remove" onclick="removeTarget(${i})">Remove</button>
+                </div>
+            </div>
+        `;
+    });
+    list.innerHTML = html;
+}
+
+async function saveMarketConfig() {
+    const status = document.getElementById('status-msg');
+    status.style.color = "var(--blue)";
+    status.innerText = "Transmitting trading protocols to backend...";
+
+    const payload = {
+        webhookUrl: document.getElementById('trade-webhook').value.trim(),
+        autoDefense: document.getElementById('auto-defense').checked,
+        sniperTargets: sniperTargets
+    };
+
+    try {
+        const res = await fetch('/api/save-market-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if(data.success) {
+            status.style.color = "var(--green)";
+            status.innerText = "✓ Trading Config Saved. Market engines are scraping.";
+        } else { throw new Error(); }
+    } catch(e) {
+        status.style.color = "var(--red)";
+        status.innerText = "❌ Sync failed. Check server terminal logs.";
+    }
+}
+</script>
+</body>
+</html>
