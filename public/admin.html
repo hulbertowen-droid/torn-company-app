@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Master Admin Panel | Spider-Verse</title>
+    <style>
+        :root { 
+            --bg: #090a0f; --card: #11141d; --item: #1b202e; 
+            --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
+            --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
+        }
+        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; height: 100vh; overflow: hidden; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
+        
+        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; z-index: 100; }
+        .sidebar.collapsed { width: 75px; }
+        .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2f3542; }
+        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 1.1em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
+        .sidebar.collapsed .sidebar-logo { opacity: 0; width: 0; display: none; }
+        .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
+        .toggle-btn:hover { color: white; background: #2f3542; }
+        .nav-items { display: flex; flex-direction: column; gap: 8px; padding: 20px 10px; }
+        .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
+        .nav-link:hover { background: #2f3542; color: white; }
+        .nav-link.active { background: rgba(255, 71, 87, 0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
+        .nav-text { transition: opacity 0.2s; }
+        .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
+        
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
+        h1 { text-align: center; color: var(--gold); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
+        
+        .container { max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 25px; }
+        .dash-card { background: var(--card); padding: 25px; border-radius: 16px; border: 1px solid #2f3542; display: none; flex-direction: column; gap: 15px;}
+        .dash-card h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; font-size: 1.1em; letter-spacing: 1px;}
+        
+        .form-group { display: flex; flex-direction: column; gap: 8px; }
+        .form-group label { font-size: 0.85em; color: var(--text-dim); font-weight: bold; text-transform: uppercase; }
+        .form-group textarea { padding: 15px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; width: 100%; box-sizing: border-box; min-height: 100px; font-family: monospace; resize: vertical;}
+        .form-group textarea:focus { outline: 1px solid var(--gold); }
+        
+        .btn-save { background: var(--green); color: #000; border: none; padding: 15px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.1em; text-transform: uppercase; transition: 0.2s; width: 100%; margin-top: 10px;}
+        .btn-save:hover { background: #26b361; }
+        
+        #error-msg { text-align: center; font-weight: bold; font-size: 1.1em; color: var(--red); padding: 50px; background: #0b0d13; border: 1px solid var(--red); border-radius: 12px;}
+        #status-msg { text-align: center; font-weight: bold; font-size: 0.95em; color: var(--green); margin-top: 10px;}
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">Spider-Verse</div>
+            <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
+        </div>
+        <div class="nav-items">
+            <a href="/" class="nav-link">📡 <span class="nav-text">Live Warboard</span></a>
+            <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
+            <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
+            <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
+            <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
+            <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
+            <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>
+            <a href="/admin.html" class="nav-link active">👑 <span class="nav-text">Admin Panel</span></a>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <h1>Master Admin Control</h1>
+        <div class="container">
+            <div id="error-msg">Checking security credentials...</div>
+            
+            <div class="dash-card" id="admin-panel">
+                <h2>Bypass Subscription Permissions (VIPs)</h2>
+                <p style="color: var(--text-dim); font-size: 0.9em; margin-top: -5px;">Add IDs separated by commas. These users will never be asked to pay the Xanax fee.</p>
+                
+                <div class="form-group">
+                    <label>VIP Faction IDs</label>
+                    <textarea id="vip-factions" placeholder="e.g. 12345, 67890"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>VIP Player IDs (Solo Mercs/Allies)</label>
+                    <textarea id="vip-players" placeholder="e.g. 9876543, 1122334"></textarea>
+                </div>
+
+                <button class="btn-save" onclick="saveVips()">Update VIP Lists</button>
+                <div id="status-msg"></div>
+            </div>
+        </div>
+    </main>
+
+<script>
+const myKey = localStorage.getItem("warboard_apikey") || "";
+
+document.addEventListener("DOMContentLoaded", async function() {
+    const sidebar = document.getElementById('app-sidebar');
+    if (localStorage.getItem('sidebar_collapsed') === 'true') { sidebar.classList.add('collapsed'); }
+
+    if (!myKey) {
+        document.getElementById("error-msg").innerText = "Access Denied: You must input the Master Admin API Key in the Settings tab first.";
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/admin/vips?apiKey=${myKey}`);
+        const data = await res.json();
+        
+        if (data.error) {
+            document.getElementById("error-msg").innerText = "Access Denied: Your API key does not match the Master Admin Key.";
+            return;
+        }
+
+        document.getElementById("error-msg").style.display = "none";
+        document.getElementById("admin-panel").style.display = "flex";
+
+        document.getElementById("vip-factions").value = data.factions ? data.factions.join(', ') : "";
+        document.getElementById("vip-players").value = data.players ? data.players.join(', ') : "";
+    } catch(e) { 
+        document.getElementById("error-msg").innerText = "Server Error: Could not verify credentials.";
+    }
+});
+
+function toggleSidebar() {
+    const sidebar = document.getElementById('app-sidebar');
+    sidebar.classList.toggle('collapsed');
+    localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+}
+
+async function saveVips() {
+    const status = document.getElementById('status-msg');
+    status.innerText = "Saving to server...";
+
+    const parseList = (str) => str.split(',').map(s => s.trim()).filter(s => s !== "");
+    const factions = parseList(document.getElementById("vip-factions").value);
+    const players = parseList(document.getElementById("vip-players").value);
+
+    try {
+        const res = await fetch('/api/admin/vips', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiKey: myKey, factions, players })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            status.innerText = "✓ VIP Database Updated Successfully.";
+            setTimeout(() => status.innerText = "", 3000);
+        } else { throw new Error(data.error); }
+    } catch(e) {
+        status.style.color = "var(--red)";
+        status.innerText = "❌ Failed to save: " + e.message;
+    }
+}
+</script>
+</body>
+</html>
