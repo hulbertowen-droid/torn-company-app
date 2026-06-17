@@ -111,6 +111,10 @@
         .close-btn { position: absolute; right: 20px; top: 20px; color: var(--text-dim); cursor: pointer; font-size: 1.5em; line-height: 1; }
         .close-btn:hover { color: white; }
         
+        /* Details Summary specific CSS to remove default arrow in webkit */
+        details > summary { list-style: none; outline: none; }
+        details > summary::-webkit-details-marker { display: none; }
+
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
         @keyframes pulseAttack { 0% { box-shadow: 0 0 5px rgba(255, 71, 87, 0.4); } 50% { box-shadow: 0 0 15px rgba(255, 71, 87, 0.8); } 100% { box-shadow: 0 0 5px rgba(255, 71, 87, 0.4); } }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
@@ -141,6 +145,19 @@
 
     <main class="main-content">
         <h1>Live Warboard</h1>
+
+        <!-- POP-DOWN BOX (Credits & FF Scouter Info) -->
+        <details style="background: rgba(88, 166, 255, 0.05); border: 1px solid var(--blue); border-radius: 8px; margin-bottom: 25px; cursor: pointer; transition: 0.2s;">
+            <summary style="padding: 12px 20px; font-weight: bold; color: var(--blue); display: flex; align-items: center; justify-content: space-between;">
+                <span>ℹ️ Advanced Features & Credits</span>
+                <span style="font-size: 0.85em; color: var(--text-dim); border: 1px solid #2f3542; padding: 2px 8px; border-radius: 4px; background: #0b0d13;">Click to Expand ▼</span>
+            </summary>
+            <div style="padding: 0 20px 20px 20px; color: var(--text-main); font-size: 0.9em; line-height: 1.6; border-top: 1px solid rgba(88, 166, 255, 0.2); margin-top: 5px; padding-top: 15px;">
+                Certain tactical features on this dashboard—such as exact battle stat estimates, player activity timelines, and live flight landing ETAs—require an active <a href="https://ffscouter.com" target="_blank" style="color: var(--blue); text-decoration: underline;">FF Scouter Premium</a> subscription and API Key linked to the backend server.
+                <br><br>
+                <span style="color: var(--gold); font-weight: bold;">Spider-Verse Dashboard engineered and created by <a href="https://www.torn.com/profiles.php?XID=3776908" target="_blank" style="color: var(--gold); text-decoration: underline;">Owen777 [3776908]</a>.</span>
+            </div>
+        </details>
 
         <div class="container">
             <div class="dash-card" style="grid-column: 1 / -1; background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542;">
