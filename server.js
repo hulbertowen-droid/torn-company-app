@@ -25,7 +25,6 @@ let flightCache = {};
 let activityCache = {}; 
 let warScrapeCache = {}; 
 
-// Upgraded to Maps to track which User Key requested which Target ID
 let statQueue = new Map();
 let flightQueue = new Map();
 let activityQueue = new Map();
@@ -148,6 +147,20 @@ async function verifySubscription(userKey) {
     throw new Error(`SUBSCRIPTION REQUIRED: Your faction's access has expired. Send 5x Xanax to Owen777 [3776908] to instantly unlock access for your entire faction for 1 week!`);
 }
 
+// NEW: Helper function to strictly check if the user's key is actually Premium on FF Scouter
+async function verifyFfScouterPremium(ffKey) {
+    if (!ffKey) return false;
+    try {
+        // We ping a basic lightweight endpoint to see if the key returns a valid response or an auth error
+        const res = await fetch(`https://ffscouter.com/api/v1/get-stats?key=${ffKey}&targets=1`);
+        const data = await res.json();
+        if (data && data.error) return false;
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
 function computeWarIntel(p, cache = {}) {
     let score = 0;
     if (p.state === "Okay") score += 120;
@@ -263,7 +276,6 @@ setInterval(async () => {
 // --- ENGINE 4: DEEP LOG BACKFILL & LIVE DELTA SCRAPER ---
 setInterval(async () => {
     if (apiKeyPool.size === 0 || !adminFactionId) return;
-
     const keys = Array.from(apiKeyPool);
     
     try {
@@ -317,7 +329,7 @@ setInterval(async () => {
                         let uId = atk.attacker_id.toString();
                         let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
                         if (!liveAttacks[uId]) liveAttacks[uId] = {};
-                        liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
+                        liveAttacks[uId][defFacId] = (liveDefends[uId][defFacId] || 0) + 1;
                     }
                 }
                 backfillCursor = oldestTimeInBatch - 1;
@@ -480,8 +492,6 @@ setInterval(async () => {
     } catch (err) {}
 }, 30000);
 
-app.get('/health', (req, res) => res.status(200).send("OK"));
-
 // --- ADMIN API ROUTES ---
 app.get('/api/admin/vips', (req, res) => {
     if (req.query.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
@@ -539,6 +549,10 @@ app.get('/api/dashboard-data', async (req, res) => {
     const ffKey = req.query.ffKey || null;
     try {
         await verifySubscription(userKey);
+        
+        // Check if the user's provided key actually passes premium validation
+        const isPremium = await verifyFfScouterPremium(ffKey);
+
         const basicResp = await fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`);
         const basicData = await basicResp.json();
         if (basicData.error) return res.status(400).json({ error: basicData.error.error });
@@ -546,7 +560,7 @@ app.get('/api/dashboard-data', async (req, res) => {
         if (basicData.members) {
             Object.keys(basicData.members).forEach(id => {
                 if (!activityCache[id] || (Date.now() - activityCache[id].time) > 600000) {
-                    if (ffKey && !activityQueue.has(id)) activityQueue.set(id, ffKey);
+                    if (isPremium && !activityQueue.has(id)) activityQueue.set(id, ffKey);
                 }
             });
         }
@@ -577,11 +591,11 @@ app.get('/api/dashboard-data', async (req, res) => {
         let parsedMembers = {};
         if (basicData.members) {
             Object.entries(basicData.members).forEach(([id, m]) => {
-                parsedMembers[id] = { ...m, timeline: activityCache[id]?.timeline || null };
+                parsedMembers[id] = { ...m, timeline: isPremium ? (activityCache[id]?.timeline || null) : null };
             });
         }
 
-        res.json({ success: true, members: parsedMembers, loans: loans, armoryError });
+        res.json({ success: true, members: parsedMembers, loans: loans, armoryError, premiumActive: isPremium });
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
@@ -589,6 +603,9 @@ app.get('/api/scan-recruits', async (req, res) => {
     const { apiKey, reportId, ffKey } = req.query;
     try {
         await verifySubscription(apiKey);
+        
+        const isPremium = await verifyFfScouterPremium(ffKey);
+
         const userRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${apiKey}`);
         const userData = await userRes.json();
         if (userData.error) return res.status(400).json({ error: "Invalid API Key." });
@@ -621,7 +638,7 @@ app.get('/api/scan-recruits', async (req, res) => {
 
         for (let [id, m] of Object.entries(enemyWarData.members || {})) {
             if (m.score > 200 || m.attacks > 10) {
-                if (ffKey && ffKey !== "null" && !statQueue.has(id) && !statsCache[id]) statQueue.set(id, ffKey);
+                if (isPremium && !statQueue.has(id) && !statsCache[id]) statQueue.set(id, ffKey);
 
                 let currentStatus = "Factionless / Left";
                 let position = "None";
@@ -641,7 +658,7 @@ app.get('/api/scan-recruits', async (req, res) => {
 
                 if (isPoachable) {
                     let efficiency = m.attacks > 0 ? (m.score / m.attacks).toFixed(1) : 0;
-                    let est = statsCache[id] ? statsCache[id].stats : (ffKey && ffKey !== "null" ? "Scanning..." : "🔒 FF Scouter Req.");
+                    let est = statsCache[id] ? statsCache[id].stats : (isPremium ? "Scanning..." : "🔒 FF Scouter Req.");
 
                     potentialRecruits.push({
                         id, name: m.name, score: m.score, attacks: m.attacks, efficiency: efficiency,
@@ -896,7 +913,7 @@ app.post('/api/backup', (req, res) => { const { enemyId, playerName } = req.body
 app.post('/api/unbackup', (req, res) => { const { enemyId } = req.body; delete backups[enemyId]; res.json({ success: true }); });
 app.post('/api/update-stats', (req, res) => { const { enemyId, stats } = req.body; manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() }; res.json({ success: true }); });
 
-// --- MAIN WARBOARD ROUTE ---
+// --- MAIN WARBOARD ROUTE (STRICT VALIDATION) ---
 app.get('/api/warboard', async (req, res) => {
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
@@ -904,6 +921,9 @@ app.get('/api/warboard', async (req, res) => {
         
         await verifySubscription(userKey);
         if (userKey) apiKeyPool.add(userKey);
+
+        // Run validation against the FF Scouter endpoint live
+        const isPremium = await verifyFfScouterPremium(ffKey);
 
         let enemyId = req.query.enemyFaction && req.query.enemyFaction !== "null" && req.query.enemyFaction !== "" ? req.query.enemyFaction : null;
         
@@ -936,13 +956,13 @@ app.get('/api/warboard', async (req, res) => {
         
         [...friendlyIds, ...enemyIds].forEach(id => {
             if (!statsCache[id] || (Date.now() - statsCache[id].time) > 3600000) { 
-                if (ffKey && !statQueue.has(id)) statQueue.set(id, ffKey); 
+                if (isPremium && !statQueue.has(id)) statQueue.set(id, ffKey); 
             }
             const m = myData.members[id] || enemyDataResult.members[id];
             const isTraveling = m.status?.state === "Traveling" || (m.status?.description && m.status?.description.includes("Traveling"));
             if (isTraveling) { 
                 if (!flightCache[id] || (Date.now() - flightCache[id].time) > 30000) { 
-                    if (ffKey && !flightQueue.has(id)) flightQueue.set(id, ffKey); 
+                    if (isPremium && !flightQueue.has(id)) flightQueue.set(id, ffKey); 
                 } 
             }
         });
@@ -953,7 +973,7 @@ app.get('/api/warboard', async (req, res) => {
                 
                 const est = manualStats[id]?.stats !== undefined ? manualStats[id].stats : 
                             (statsCache[id]?.stats !== undefined ? statsCache[id].stats : 
-                            (ffKey ? "Scanning..." : "🔒 Requires FF Scouter"));
+                            (isPremium ? "Scanning..." : "🔒 Requires FF Scouter"));
 
                 const isTraveling = m.status?.state === "Traveling" || (m.status?.description && m.status?.description.includes("Traveling"));
                 
@@ -966,7 +986,7 @@ app.get('/api/warboard', async (req, res) => {
                         finalLandingTime = flightCache[id].landingTime;
                         finalUntil = finalLandingTime;
                     } else {
-                        if (!ffKey) needsFfScouterForFlights = true;
+                        if (!isPremium) needsFfScouterForFlights = true;
                     }
                 }
 
@@ -995,7 +1015,7 @@ app.get('/api/warboard', async (req, res) => {
                 };
             });
         };
-        res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId });
+        res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId, premiumActive: isPremium });
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
