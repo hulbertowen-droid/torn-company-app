@@ -32,7 +32,10 @@
         .nav-text { transition: opacity 0.2s; }
         .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
         
-        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; position: relative; }
+
+        #refresh-bar-container { position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: #0b0d13; z-index: 50; }
+        #refresh-bar { height: 100%; width: 0%; background: var(--blue); box-shadow: 0 0 8px var(--blue); transition: width 0.1s linear; }
 
         h1 { text-align: center; color: var(--red); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
 
@@ -56,10 +59,10 @@
         .filter-group { display: flex; gap: 8px; margin-bottom: 15px; }
         .btn-filter { background: #0b0d13; color: var(--text-dim); border: 1px solid #2f3542; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold; transition: 0.2s; }
         .btn-filter:hover { background: #2f3542; color: white; }
-        .btn-filter.active { background: rgba(88, 166, 255, 0.15); border-color: var(--blue); color: white; }
+        .btn-filter.active { background: rgba(88, 166, 255, 0.15); border-color: var(--blue); color: white; box-shadow: inset 0 0 10px rgba(88, 166, 255, 0.1); }
 
         .member-card { background: #0b0d13; border: 1px solid #2f3542; padding: 15px; border-radius: 10px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; transition: 0.2s; }
-        .member-card:hover { border-color: #57606f; }
+        .member-card:hover { border-color: #57606f; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
         .member-card.okay { border-left: 4px solid var(--green); }
         .member-card.hospital { border-left: 4px solid var(--red); opacity: 0.85; }
         .member-card.traveling { border-left: 4px solid var(--blue); }
@@ -69,7 +72,7 @@
         .profile:hover { text-decoration: underline; color: var(--blue); }
         
         .badge-bounty { background: rgba(255, 71, 87, 0.15); color: var(--red); border: 1px solid var(--red); padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: bold; text-transform: uppercase; text-decoration: none; margin-left: 8px; transition: 0.2s; vertical-align: middle; }
-        .badge-bounty:hover { background: var(--red); color: white; }
+        .badge-bounty:hover { background: var(--red); color: white; box-shadow: 0 0 8px rgba(255,71,87,0.5); }
 
         .action-arrow { font-size: 0.85em; color: var(--text-dim); margin-top: 5px; display: flex; align-items: center; gap: 6px; }
         .arrow-icon { color: var(--red); font-weight: bold; }
@@ -80,22 +83,22 @@
         
         .intel-badge { background: rgba(255, 165, 2, 0.15); color: var(--gold); padding: 4px 8px; border-radius: 6px; font-size: 0.8em; font-weight: bold; border: 1px solid var(--gold); }
         .stat-box { text-align: right; font-size: 0.9em; flex-shrink: 0; }
-        .stat-val { font-weight: bold; color: var(--gold); font-size: 1.1em; }
+        .stat-val { font-weight: bold; color: var(--gold); font-size: 1.1em; letter-spacing: 0.5px; }
         .stat-val.lock-badge { color: var(--red); font-size: 0.85em; border: 1px dashed var(--red); padding: 2px 6px; border-radius: 4px; display: inline-block; font-weight: bold; }
 
         .card-actions { display: flex; gap: 10px; border-top: 1px solid #2f3542; padding-top: 10px; justify-content: flex-end; align-items: center; }
         .btn-action { background: #2f3542; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold; transition: 0.2s; text-decoration: none; }
         .btn-action:hover { background: #57606f; }
         .btn-claim { background: rgba(46, 213, 115, 0.2); color: var(--green); border: 1px solid var(--green); }
-        .btn-claim:hover { background: var(--green); color: #000; }
+        .btn-claim:hover { background: var(--green); color: #000; box-shadow: 0 0 8px rgba(46,213,115,0.4); }
         .btn-sos { background: rgba(255, 71, 87, 0.2); color: var(--red); border: 1px solid var(--red); }
-        .btn-sos:hover { background: var(--red); color: white; }
+        .btn-sos:hover { background: var(--red); color: white; box-shadow: 0 0 8px rgba(255,71,87,0.4); }
 
         .btn-attack { background: var(--red); color: white; padding: 6px 16px; border-radius: 4px; font-size: 0.85em; font-weight: bold; text-decoration: none; border: 1px solid #ff2a40; box-shadow: 0 0 10px rgba(255, 71, 87, 0.4); text-transform: uppercase; display: flex; align-items: center; gap: 5px; animation: pulseAttack 2s infinite;}
         .btn-attack:hover { background: #ff2a40; color: white; transform: scale(1.05); }
 
-        .active-claim { font-size: 0.8em; color: var(--green); font-weight: bold; background: rgba(46,213,115,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-right: 5px; }
-        .active-sos { font-size: 0.8em; color: var(--red); font-weight: bold; background: rgba(255,71,87,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; animation: pulse 2s infinite; }
+        .active-claim { font-size: 0.8em; color: var(--green); font-weight: bold; background: rgba(46,213,115,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-right: 5px; border: 1px solid rgba(46,213,115,0.3); }
+        .active-sos { font-size: 0.8em; color: var(--red); font-weight: bold; background: rgba(255,71,87,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; border: 1px solid rgba(255,71,87,0.3); animation: pulse 2s infinite; }
 
         #toast-container { position: fixed; top: 25px; right: 25px; z-index: 9999; display: flex; flex-direction: column; gap: 15px; pointer-events: none; }
         .toast { background: var(--card); border-left: 8px solid var(--red); color: white; padding: 20px 30px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); animation: slideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; font-weight: bold; font-size: 1.2em; pointer-events: auto; letter-spacing: 0.5px; }
@@ -106,11 +109,10 @@
         .modal-content { background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; width: 400px; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.9); }
         .modal-content h2 { margin: 0 0 10px 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
         .modal-content label { font-size: 0.85em; color: var(--text-dim); font-weight: bold; text-transform: uppercase; }
-        .modal-content input { padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; width: 100%; box-sizing: border-box; }
+        .modal-content input { padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; width: 100%; box-sizing: border-box; transition: 0.2s; }
+        .modal-content input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 8px rgba(88,166,255,0.2); }
         .modal-content button.btn-save { background: var(--blue); color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.1em; margin-top: 10px; transition: 0.2s; text-transform: uppercase; }
-        .modal-content button.btn-save:hover { background: #79c0ff; }
-        .modal-content button.btn-action { background: #2f3542; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s; margin-top: 5px; width: 100%; }
-        .modal-content button.btn-action:hover { background: #57606f; }
+        .modal-content button.btn-save:hover { background: #79c0ff; box-shadow: 0 0 12px rgba(88,166,255,0.4); }
         .close-btn { position: absolute; right: 20px; top: 20px; color: var(--text-dim); cursor: pointer; font-size: 1.5em; line-height: 1; }
         .close-btn:hover { color: white; }
         
@@ -118,6 +120,7 @@
         details > summary::-webkit-details-marker { display: none; }
 
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+        @keyframes scanPulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
         @keyframes pulseAttack { 0% { box-shadow: 0 0 5px rgba(255, 71, 87, 0.4); } 50% { box-shadow: 0 0 15px rgba(255, 71, 87, 0.8); } 100% { box-shadow: 0 0 5px rgba(255, 71, 87, 0.4); } }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes fadeOut { to { opacity: 0; transform: translateX(100%); } }
@@ -146,6 +149,8 @@
     </nav>
 
     <main class="main-content">
+        <div id="refresh-bar-container"><div id="refresh-bar"></div></div>
+        
         <h1>Live Warboard</h1>
 
         <details style="background: rgba(88, 166, 255, 0.05); border: 1px solid var(--blue); border-radius: 8px; margin-bottom: 25px; cursor: pointer; transition: 0.2s;">
@@ -292,6 +297,7 @@ let cpm = parseInt(localStorage.getItem("warboard_cpm")) || 12;
 
 let knownEnemies = {}; 
 let fetchTimer = null;
+let progressTimer = null;
 let currentEnemyData = []; 
 let activeFilter = 'All';
 let warChartInstance = null; 
@@ -357,12 +363,34 @@ function saveSettings() {
     startPolling();
 }
 
+function startRefreshProgressBar(refreshMs) {
+    if (progressTimer) clearInterval(progressTimer);
+    const bar = document.getElementById("refresh-bar");
+    let startTime = Date.now();
+    
+    bar.style.transition = "none";
+    bar.style.width = "0%";
+    
+    setTimeout(() => { bar.style.transition = "width 0.1s linear"; }, 50);
+
+    progressTimer = setInterval(() => {
+        let elapsed = Date.now() - startTime;
+        let percent = (elapsed / refreshMs) * 100;
+        if (percent > 100) percent = 100;
+        bar.style.width = `${percent}%`;
+    }, 100);
+}
+
 function startPolling() {
     if (fetchTimer) clearInterval(fetchTimer);
     let refreshMs = Math.floor(60000 / cpm);
+    
     fetchWarboard();
+    startRefreshProgressBar(refreshMs);
+    
     fetchTimer = setInterval(() => {
         fetchWarboard();
+        startRefreshProgressBar(refreshMs);
     }, refreshMs);
 }
 
@@ -419,7 +447,7 @@ async function fetchWarboard() {
         const data = await res.json();
         
         if (data.error) {
-            document.getElementById("friendly-list").innerHTML = `<div style="color:var(--red); padding:20px; font-weight: bold;">${data.error}</div>`;
+            document.getElementById("friendly-list").innerHTML = `<div style="color:var(--red); padding:20px; font-weight: bold; text-align: center;">${data.error}</div>`;
             return;
         }
 
@@ -491,8 +519,7 @@ function renderChart(friendlyPlayers) {
 }
 
 // -------------------------------------------------------------
-// NEW: SMART DOM RECONCILIATION ENGINE 
-// Stops the lists from completely wiping out and resetting scans
+// SECURE DOM NODE RECONCILIATION ENGINE
 // -------------------------------------------------------------
 function updateListDOM(containerId, players, prefix, generateCardHTML, emptyMessage) {
     const container = document.getElementById(containerId);
@@ -503,28 +530,25 @@ function updateListDOM(containerId, players, prefix, generateCardHTML, emptyMess
         return;
     }
 
-    if (container.innerHTML.includes(emptyMessage) || container.innerHTML.includes("Connecting to Torn API...")) {
+    // STRICT wipe of the placeholder text to prevent the duplication bug
+    if (container.innerHTML.includes("Waiting") || container.innerHTML.includes("Connecting") || container.innerHTML.includes(emptyMessage)) {
         container.innerHTML = "";
     }
 
-    // Identify which IDs are still in the active list
     const validIds = new Set(players.map(p => `${prefix}-${p.id}`));
 
-    // Purge elements that are no longer in the list (e.g. someone left faction)
     Array.from(container.children).forEach(child => {
         if (child.id && child.id.startsWith(prefix + '-') && !validIds.has(child.id)) {
             container.removeChild(child);
         }
     });
 
-    // Update or Insert elements securely without replacing the whole DOM
     players.forEach((p, index) => {
         const cardData = generateCardHTML(p);
         const cardId = `${prefix}-${p.id}`;
         let card = document.getElementById(cardId);
 
         if (!card) {
-            // New card, inject it into the precise index spot
             card = document.createElement('div');
             card.id = cardId;
             card.className = cardData.fullClass;
@@ -536,11 +560,9 @@ function updateListDOM(containerId, players, prefix, generateCardHTML, emptyMess
                 container.appendChild(card);
             }
         } else {
-            // Existing card, quietly update the text/classes behind the scenes
             if (card.className !== cardData.fullClass) card.className = cardData.fullClass;
             if (card.innerHTML !== cardData.innerContent) card.innerHTML = cardData.innerContent;
             
-            // Reorder visually if the priority changed (e.g. player landed, moved up list)
             if (container.children[index] !== card) {
                 container.insertBefore(card, container.children[index]);
             }
@@ -551,10 +573,11 @@ function updateListDOM(containerId, players, prefix, generateCardHTML, emptyMess
 function formatEstStats(estValue, premiumActive) {
     if (typeof estValue === 'number') {
         let formatted = estValue.toLocaleString();
+        if (estValue > 100000000) return `<div class="stat-val" style="color: var(--blue); text-shadow: 0 0 5px rgba(88,166,255,0.4);">${formatted}</div>`;
         return `<div class="stat-val">${formatted}</div>`;
     }
     if (estValue === "Scanning...") {
-        return `<div class="stat-val" style="color: var(--text-dim); font-size: 0.8em;">${estValue}</div>`;
+        return `<div class="stat-val" style="color: var(--text-dim); font-size: 0.8em; animation: scanPulse 1.5s infinite;">${estValue}</div>`;
     }
     return `<div class="stat-val lock-badge">🔒 Requires FF Scouter</div>`;
 }
