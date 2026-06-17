@@ -89,10 +89,6 @@
     <main class="main-content">
         <h1>Live Chain Tracker</h1>
 
-        <div style="background: rgba(255, 165, 2, 0.1); border: 1px solid var(--gold); color: var(--gold); padding: 12px 20px; border-radius: 8px; margin-bottom: 25px; text-align: center; font-weight: bold; font-size: 0.9em; box-shadow: 0 4px 15px rgba(255, 165, 2, 0.15);">
-            ⚠️ WORK IN PROGRESS: This tool is currently in active development and may not function to its fullest potential. Please report any bugs or suggestions to <a href="https://www.torn.com/profiles.php?XID=3776908" target="_blank" style="color: var(--text-main); text-decoration: underline;">Owen777 [3776908]</a>.
-        </div>
-
         <div class="container">
             <div class="dash-card" id="chain-card">
                 <div class="chain-title">
@@ -106,7 +102,7 @@
                 </div>
                 
                 <div class="timer-box">
-                    <div class="timer-title">Time Remaining</div>
+                    <div class="timer-title" id="timer-title">Time Remaining</div>
                     <div class="timer-time" id="timer-display">00:00</div>
                 </div>
                 
@@ -172,6 +168,7 @@ let currentSeconds = 0;
 let localTimer = null;
 let lastChainCount = -1;
 let warned90 = false; 
+let isCooldown = false;
 
 const MILESTONES = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
 
@@ -202,14 +199,19 @@ function updateTimerDisplay() {
     
     document.getElementById("timer-display").innerText = formatted;
     
-    if (currentSeconds <= 90) {
-        document.getElementById("chain-card").classList.add("danger");
-        if (!warned90 && currentSeconds === 90) {
-            playAlertSound();
-            warned90 = true;
-        }
-    } else {
+    if (isCooldown) {
         document.getElementById("chain-card").classList.remove("danger");
+    } else {
+        if (currentSeconds <= 90) {
+            document.getElementById("chain-card").classList.add("danger");
+            // Only beep if the chain is an actual chain (>=10 hits)
+            if (!warned90 && currentSeconds === 90 && lastChainCount >= 10) {
+                playAlertSound();
+                warned90 = true;
+            }
+        } else {
+            document.getElementById("chain-card").classList.remove("danger");
+        }
     }
 }
 
@@ -230,7 +232,6 @@ async function fetchChainData() {
         return;
     }
     
-    // FETCH 1: Strictly get the basic Chain status (Cannot fail due to limited access keys)
     try {
         const chainRes = await fetch(`https://api.torn.com/faction/?selections=chain&key=${myKey}`);
         const chainData = await chainRes.json();
@@ -241,37 +242,61 @@ async function fetchChainData() {
             return;
         }
 
-        if (chainData.chain && chainData.chain.timeout > 0) {
+        // COOLDOWN STATE
+        if (chainData.chain && chainData.chain.cooldown > 0) {
+            isCooldown = true;
+            document.getElementById("chain-display").innerText = "COOLDOWN";
+            document.getElementById("chain-modifier").style.display = "none";
+            document.getElementById("waiting-msg").innerText = "CHAIN DROPPED / ON COOLDOWN...";
+            document.getElementById("waiting-msg").style.display = "block";
+            document.getElementById("chain-progress-fill").style.width = "0%";
+            document.getElementById("timer-title").innerText = "COOLDOWN REMAINING";
+            document.getElementById("chain-card").classList.remove("danger");
+
+            if (Math.abs(chainData.chain.cooldown - currentSeconds) > 5) {
+                currentSeconds = chainData.chain.cooldown;
+            }
+            updateTimerDisplay();
+        } 
+        // ACTIVE CHAIN STATE
+        else if (chainData.chain && chainData.chain.current > 0) {
+            isCooldown = false;
             let current = chainData.chain.current;
             let max = getNextMilestone(current);
             let prev = getPrevMilestone(current);
             
             document.getElementById("chain-display").innerText = `${current} / ${max}`;
             document.getElementById("chain-modifier").innerText = `${chainData.chain.modifier}x`;
+            document.getElementById("chain-modifier").style.display = "inline-block";
             document.getElementById("waiting-msg").style.display = "none";
+            document.getElementById("timer-title").innerText = "TIME REMAINING";
             
             let progressPercent = ((current - prev) / (max - prev)) * 100;
             document.getElementById("chain-progress-fill").style.width = `${Math.min(100, Math.max(0, progressPercent))}%`;
 
-            // Anti-Bounce Timer Logic (Ignores 60s cache bounces, strictly catches hits & savers)
             if (current > lastChainCount) {
                 currentSeconds = chainData.chain.timeout;
                 lastChainCount = current;
                 warned90 = false; 
             } else if (chainData.chain.timeout > currentSeconds + 45) {
-                // If API is 45+ seconds higher than local, a Chain Saver was popped
                 currentSeconds = chainData.chain.timeout;
                 warned90 = false;
-            } else if (currentSeconds === 0 && chainData.chain.timeout > 0) {
+            } else if (currentSeconds === 0 && chainData.chain.timeout > 290) {
+                // Completely ignores the ghost 17s bounce; only resurrects on fresh hits > 290s
                 currentSeconds = chainData.chain.timeout;
             }
             
             updateTimerDisplay();
-        } else {
+        } 
+        // NO CHAIN STATE
+        else {
+            isCooldown = false;
             document.getElementById("chain-display").innerText = "0 / 0";
             document.getElementById("chain-modifier").innerText = "1.0x";
+            document.getElementById("chain-modifier").style.display = "inline-block";
             document.getElementById("chain-progress-fill").style.width = "0%";
             document.getElementById("timer-display").innerText = "00:00";
+            document.getElementById("timer-title").innerText = "TIME REMAINING";
             document.getElementById("waiting-msg").innerText = "WAITING FOR CHAIN TO START...";
             document.getElementById("waiting-msg").style.display = "block";
             document.getElementById("chain-card").classList.remove("danger");
@@ -282,7 +307,7 @@ async function fetchChainData() {
         console.error("Chain basic fetch failed", e);
     }
 
-    // FETCH 2: Attempt to pull the attack ledger separately so it doesn't break the tracker if it errors
+    // LEDGER FETCH
     try {
         const atkRes = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${myKey}`);
         const atkData = await atkRes.json();
