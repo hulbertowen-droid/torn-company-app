@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Live Warboard | Spider-Verse</title>
-    <!-- Inject Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root { 
@@ -124,12 +123,12 @@
     </style>
 </head>
 <body>
-   <nav class="sidebar" id="app-sidebar">
-    <div class="sidebar-header">
-        <div class="sidebar-logo">Spider-Verse</div>
-        <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
-    </div>
-   <div class="nav-items">
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">Spider-Verse</div>
+            <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
+        </div>
+        <div class="nav-items">
             <a href="/" class="nav-link">📡 <span class="nav-text">Live Warboard</span></a>
             <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
             <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
@@ -137,17 +136,16 @@
             <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
             <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
             <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>
-            <a onclick="openSettings()" class="nav-link" style="margin-top: 15px; border-top: 1px solid #2f3542; border-radius: 0; padding-top: 15px;">
+            <a onclick="openSettings()" class="nav-link" style="margin-top: 15px; border-top: 1px solid #2f3542; border-radius: 0; padding-top: 15px; cursor: pointer;">
                 ⚙️ <span class="nav-text">Settings</span>
             </a>
         </div>
-</nav>
+    </nav>
 
     <main class="main-content">
         <h1>Live Warboard</h1>
 
         <div class="container">
-            <!-- Live Chart Container -->
             <div class="dash-card" style="grid-column: 1 / -1; background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542;">
                 <h2 style="margin-top:0; color:var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; font-size:1.1em; text-transform:uppercase;">📊 Live War Performance Tracker</h2>
                 <div style="position: relative; height: 300px; width: 100%;">
@@ -155,7 +153,6 @@
                 </div>
             </div>
 
-            <!-- Tactical Watchlist -->
             <div class="watchlist-box">
                 <h3>🚨 Priority Watchlist</h3>
                 <div id="watchlist-items" class="watchlist-items">
@@ -182,7 +179,6 @@
             </div>
         </div>
 
-        <!-- Settings Modal -->
         <div id="settings-modal" class="modal-overlay">
             <div class="modal-content" style="position: relative; max-height: 90vh; overflow-y: auto;">
                 <div class="close-btn" onclick="closeSettings()">&times;</div>
@@ -200,34 +196,17 @@
                     <input type="text" id="my-name" placeholder="E.g. Agent">
                 </div>
                 <div>
-                    <label>Discord Webhook (Optional)</label>
-                    <input type="text" id="discord-webhook" placeholder="Paste your Discord channel webhook URL">
+                    <label>Global Discord Webhook (Optional)</label>
+                    <input type="text" id="discord-webhook" placeholder="Will sync across all tabs automatically">
                 </div>
-                
-                <!-- UPGRADED: Discord Toggle Options UI Section -->
-                <div style="border-top: 1px solid #2f3542; padding-top: 10px; margin-top: 5px;">
-                    <label style="display:block; margin-bottom: 8px; color: var(--gold);">Discord Notification Triggers</label>
-                    
-                    <label style="display:flex; align-items:center; gap:8px; font-size:0.85em; text-transform:none; font-weight:normal; margin-bottom:6px; cursor:pointer;">
-                        <input type="checkbox" id="alert-online"> 🟢 Ping when target comes Online
-                    </label>
-                    <label style="display:flex; align-items:center; gap:8px; font-size:0.85em; text-transform:none; font-weight:normal; margin-bottom:6px; cursor:pointer;">
-                        <input type="checkbox" id="alert-landing"> ✈️ Ping when target Lands from Flight
-                    </label>
-                    <label style="display:flex; align-items:center; gap:8px; font-size:0.85em; text-transform:none; font-weight:normal; margin-bottom:6px; cursor:pointer;">
-                        <input type="checkbox" id="alert-hospital"> 🏥 Ping when target Leaves Hospital
-                    </label>
-                </div>
-
                 <div>
-                    <label>Refresh Rate (Seconds)</label>
-                    <input type="number" id="refresh-rate" min="2" max="60" value="5">
+                    <label>API Calls Per Minute (Max 60)</label>
+                    <input type="number" id="api-cpm" min="1" max="60" value="12" placeholder="e.g. 12 calls/min = 1 refresh every 5s">
                 </div>
                 <button onclick="saveSettings()">Save & Connect</button>
             </div>
         </div>
 
-        <!-- Container for Live Alerts -->
         <div id="toast-container"></div>
     </main>
 
@@ -291,11 +270,7 @@ let myKey = localStorage.getItem("warboard_apikey") || "";
 let enemyFacId = localStorage.getItem("warboard_enemyId") || "";
 let myName = localStorage.getItem("warboard_myname") || "Agent";
 let discordWebhook = localStorage.getItem("warboard_discord") || "";
-let refreshRate = parseInt(localStorage.getItem("warboard_refresh")) || 5;
-
-let dAlertOnline = localStorage.getItem("warboard_alert_online") !== "false";
-let dAlertLanding = localStorage.getItem("warboard_alert_landing") !== "false";
-let dAlertHospital = localStorage.getItem("warboard_alert_hospital") !== "false";
+let cpm = parseInt(localStorage.getItem("warboard_cpm")) || 12; // 12 calls/min = 5 seconds
 
 let knownEnemies = {}; 
 let fetchTimer = null;
@@ -307,11 +282,7 @@ document.getElementById("api-key").value = myKey;
 document.getElementById("enemy-id").value = enemyFacId;
 document.getElementById("my-name").value = myName;
 document.getElementById("discord-webhook").value = discordWebhook;
-document.getElementById("refresh-rate").value = refreshRate;
-
-document.getElementById("alert-online").checked = dAlertOnline;
-document.getElementById("alert-landing").checked = dAlertLanding;
-document.getElementById("alert-hospital").checked = dAlertHospital;
+document.getElementById("api-cpm").value = cpm;
 
 function openSettings() { document.getElementById("settings-modal").style.display = "flex"; }
 function closeSettings() { document.getElementById("settings-modal").style.display = "none"; }
@@ -325,22 +296,20 @@ function saveSettings() {
     myName = document.getElementById("my-name").value.trim() || "Agent";
     discordWebhook = document.getElementById("discord-webhook").value.trim();
     
-    dAlertOnline = document.getElementById("alert-online").checked;
-    dAlertLanding = document.getElementById("alert-landing").checked;
-    dAlertHospital = document.getElementById("alert-hospital").checked;
-    
-    let parsedRate = parseInt(document.getElementById("refresh-rate").value);
-    refreshRate = (parsedRate && parsedRate >= 2) ? parsedRate : 5;
+    let parsedCpm = parseInt(document.getElementById("api-cpm").value);
+    cpm = (parsedCpm && parsedCpm > 0 && parsedCpm <= 60) ? parsedCpm : 12;
     
     localStorage.setItem("warboard_apikey", myKey);
     localStorage.setItem("warboard_enemyId", enemyFacId);
     localStorage.setItem("warboard_myname", myName);
     localStorage.setItem("warboard_discord", discordWebhook);
-    localStorage.setItem("warboard_refresh", refreshRate);
-    
-    localStorage.setItem("warboard_alert_online", dAlertOnline);
-    localStorage.setItem("warboard_alert_landing", dAlertLanding);
-    localStorage.setItem("warboard_alert_hospital", dAlertHospital);
+    localStorage.setItem("warboard_cpm", cpm);
+
+    // Auto-sync Discord webhook to background engines so it shows up in Discord/Bazaar tabs instantly
+    if (discordWebhook) {
+        fetch('/api/save-discord-config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ webhookUrl: discordWebhook }) }).catch(()=>{});
+        fetch('/api/save-market-config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ webhookUrl: discordWebhook }) }).catch(()=>{});
+    }
     
     knownEnemies = {}; 
     closeSettings();
@@ -350,9 +319,11 @@ function saveSettings() {
 function startPolling() {
     if (fetchTimer) clearInterval(fetchTimer);
     fetchWarboard();
-    fetchTimer = setInterval(fetchWarboard, refreshRate * 1000);
+    let refreshMs = Math.floor(60000 / cpm);
+    fetchTimer = setInterval(fetchWarboard, refreshMs);
 }
 
+// Ensure SOS alarms still trigger front-end ping in emergencies
 async function sendDiscordPing(msg) {
     if (!discordWebhook) return;
     try {
@@ -361,9 +332,7 @@ async function sendDiscordPing(msg) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ webhookUrl: discordWebhook, message: msg })
         });
-    } catch (err) {
-        console.error("Failed to ping Discord", err);
-    }
+    } catch (err) { console.error("Failed to ping Discord"); }
 }
 
 function formatTime(unixTimestamp) {
@@ -575,23 +544,14 @@ function processNotifications(enemies) {
             if (oldEnemy.state !== "Okay" && newEnemy.state === "Okay") {
                 if (checkIsFlying(oldEnemy)) {
                     showToast(`🛬 ${newEnemy.name} has landed and is Okay!`, "okay");
-                    if (dAlertLanding) {
-                        sendDiscordPing(`✈️ **TARGET LANDED:** ${newEnemy.name} [${newEnemy.id}] has landed back in Torn!`);
-                    }
                     playedSoundThisTick = true;
                 } else {
                     showToast(`🏥 ${newEnemy.name} left the hospital and is Okay!`, "okay");
-                    if (dAlertHospital) {
-                        sendDiscordPing(`🏥 **TARGET OUT OF HOSP:** ${newEnemy.name} [${newEnemy.id}] is back on the streets!`);
-                    }
                     playedSoundThisTick = true;
                 }
             }
             if (oldEnemy.online !== "Online" && newEnemy.onlineStatus === "Online") {
                 showToast(`🟢 ${newEnemy.name} just came ONLINE!`, "online");
-                if (dAlertOnline) {
-                    sendDiscordPing(`🟢 **TARGET ONLINE:** ${newEnemy.name} [${newEnemy.id}] just opened the app!`);
-                }
                 playedSoundThisTick = true;
             }
         }
