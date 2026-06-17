@@ -49,7 +49,6 @@ let subscriptions = {};
 let adminFactionId = null;
 let lastEventTimestamp = Math.floor(Date.now() / 1000);
 
-// Background Configs
 let lastChainTimeoutAlertState = false;
 let backgroundEnemyTrackingState = {};
 
@@ -58,8 +57,8 @@ let marketConfig = { webhookUrl: "", autoDefense: false, sniperTargets: [] };
 let marketMemory = { defense: {}, sniper: {} };
 
 try { if (fs.existsSync('subscriptions.json')) subscriptions = JSON.parse(fs.readFileSync('subscriptions.json')); } catch (e) {}
-try { if (fs.existsSync('discord_config.json')) discordConfig = JSON.parse(fs.readFileSync('discord_config.json')); } catch(e) {}
-try { if (fs.existsSync('market_config.json')) marketConfig = JSON.parse(fs.readFileSync('market_config.json')); } catch(e) {}
+try { if (fs.existsSync('discord_config.json')) discordConfig = { ...discordConfig, ...JSON.parse(fs.readFileSync('discord_config.json')) }; } catch(e) {}
+try { if (fs.existsSync('market_config.json')) marketConfig = { ...marketConfig, ...JSON.parse(fs.readFileSync('market_config.json')) }; } catch(e) {}
 
 function saveSubs() { fs.writeFileSync('subscriptions.json', JSON.stringify(subscriptions)); }
 function saveDiscordConfig() { fs.writeFileSync('discord_config.json', JSON.stringify(discordConfig)); }
@@ -107,7 +106,6 @@ setInterval(async () => {
                             
                             subscriptions[facId] += weeks * 7 * 24 * 60 * 60 * 1000;
                             saveSubs();
-                            console.log(`[PAYMENT RECEIVED] Credited Faction ${facId} with ${weeks} weeks of access!`);
                             
                             if (ADMIN_DISCORD_WEBHOOK) {
                                 fetch(ADMIN_DISCORD_WEBHOOK, {
@@ -120,7 +118,7 @@ setInterval(async () => {
                 }
             }
         }
-    } catch (err) { console.error("Event Poller Error:", err); }
+    } catch (err) {}
 }, 60000); 
 
 async function verifySubscription(userKey) {
@@ -137,7 +135,7 @@ async function verifySubscription(userKey) {
     if (adminFactionId && facId === adminFactionId) return true;
     if (subscriptions[facId] && subscriptions[facId] > Date.now()) return true;
 
-    throw new Error(`SUBSCRIPTION REQUIRED: Your faction's access has expired or is not active. Send 5x Xanax to Owen777 [3776908] to instantly unlock access for your entire faction for 1 week!`);
+    throw new Error(`SUBSCRIPTION REQUIRED: Your faction's access has expired. Send 5x Xanax to Owen777 [3776908] to instantly unlock access for your entire faction for 1 week!`);
 }
 
 function computeWarIntel(p, cache = {}) {
@@ -166,14 +164,18 @@ function computeWarIntel(p, cache = {}) {
     return Math.floor(score * (0.9 + Math.random() * 0.2));
 }
 
+// BUG FIXED: Now exclusively targets an ONGOING war (winner === 0)
 function autoDetectEnemyFaction(data) {
     if (!data || !data.ID) return null;
     const myId = data.ID.toString();
-    if (data.ranked_wars && Object.keys(data.ranked_wars).length > 0) {
-        for (let warId in data.ranked_wars) {
-            const factions = Object.keys(data.ranked_wars[warId].factions || {});
-            const enemy = factions.find(id => id !== myId);
-            if (enemy) return enemy;
+    if (data.rankedwars && Object.keys(data.rankedwars).length > 0) {
+        for (let warId in data.rankedwars) {
+            let w = data.rankedwars[warId];
+            if (w.war && w.war.winner === 0) { 
+                const factions = Object.keys(w.factions || {});
+                const enemy = factions.find(id => id !== myId);
+                if (enemy) return enemy;
+            }
         }
     }
     return null;
@@ -256,7 +258,6 @@ setInterval(async () => {
 
     const keys = Array.from(apiKeyPool);
     
-    // 1. LIVE DELTA SCRAPE
     try {
         let liveKey = keys[Math.floor(Math.random() * keys.length)];
         const liveRes = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${liveKey}`);
@@ -298,9 +299,8 @@ setInterval(async () => {
                 }
             }
         }
-    } catch (err) { }
+    } catch (err) {}
 
-    // 2. DEEP LOG BACKFILL
     if (isBackfilling) {
         try {
             let bfKey = keys[Math.floor(Math.random() * keys.length)];
@@ -331,20 +331,19 @@ setInterval(async () => {
                     }
                 }
                 backfillCursor = oldestTimeInBatch - 1;
-                if (backfillCursor <= backfillTarget) { isBackfilling = false; console.log("[SYSTEM] Deep log backfill complete."); }
+                if (backfillCursor <= backfillTarget) { isBackfilling = false; }
             } else { isBackfilling = false; }
         } catch (err) {}
     }
 }, 20000); 
 
-// --- ENGINE 5: BACKGROUND MARKET WATCHER (NEW) ---
+// --- ENGINE 5: BACKGROUND MARKET WATCHER ---
 setInterval(async () => {
     if (!marketConfig.webhookUrl || apiKeyPool.size === 0) return;
     const keys = Array.from(apiKeyPool);
     const key = keys[Math.floor(Math.random() * keys.length)];
 
     try {
-        // 1. AUTO-DEFENSE
         if (marketConfig.autoDefense && ADMIN_API_KEY) {
             const userRes = await fetch(`https://api.torn.com/user/?selections=bazaar,profile&key=${ADMIN_API_KEY}`);
             const userData = await userRes.json();
@@ -392,7 +391,6 @@ setInterval(async () => {
             }
         }
 
-        // 2. SNIPER ALERTS
         if (marketConfig.sniperTargets && marketConfig.sniperTargets.length > 0) {
             for (let target of marketConfig.sniperTargets) {
                 const mktRes = await fetch(`https://api.torn.com/market/${target.id}?selections=bazaar,itemmarket&key=${key}`);
@@ -429,10 +427,10 @@ setInterval(async () => {
                 await new Promise(r => setTimeout(r, 500)); 
             }
         }
-    } catch (err) { console.error("Market Engine Error", err); }
+    } catch (err) {}
 }, 45000); 
 
-// BACKGROUND WAR SURVEILLANCE ENGINE
+// --- ENGINE 6: BACKGROUND WAR SURVEILLANCE ---
 setInterval(async () => {
     if (!ADMIN_API_KEY || !adminFactionId) return;
     try {
@@ -796,8 +794,8 @@ app.get('/api/past-war', async (req, res) => {
         const userData = await userRes.json(); const reportData = await reportRes.json(); const itemsData = await itemsRes.json();
         if (userData.error) return res.status(400).json({ error: "Invalid API Key." });
         if (reportData.error) return res.status(400).json({ error: "Torn API Error: " + reportData.error.error });
+        
         const myUserId = userData.player_id.toString(); 
-
         let correctFacId = null;
         let enemyFacId = null; 
 
