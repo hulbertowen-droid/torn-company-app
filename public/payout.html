@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payout Calculator | Owen's Faction Tools</title>
+    <title>War Payouts | Owen's Faction Tools</title>
     <style>
         :root { 
             --bg: #090a0f; --card: #11141d; --item: #1b202e; 
@@ -20,7 +20,7 @@
         .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; z-index: 100; }
         .sidebar.collapsed { width: 75px; }
         .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2f3542; }
-        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 1.1em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
+        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 0.9em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
         .sidebar.collapsed .sidebar-logo { opacity: 0; width: 0; display: none; }
         .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
         .toggle-btn:hover { color: white; background: #2f3542; }
@@ -30,256 +30,197 @@
         .nav-link.active { background: rgba(255, 71, 87, 0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
         .nav-text { transition: opacity 0.2s; }
         .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
+        
         .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
+        h1 { text-align: center; color: var(--green); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
 
-        h1 { text-align: center; color: var(--gold); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; font-size: 1.5em; }
+        .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
 
-        .container { max-width: 1200px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
-        
-        .dash-card { background: #0b0d13; border: 1px solid #2f3542; padding: 20px; border-radius: 12px; }
-        .dash-header { margin-top: 0; color: var(--text-dim); text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; border-bottom: 1px solid #2f3542; padding-bottom: 10px; margin-bottom: 15px; font-weight: bold; }
-        
-        #war-list-container { max-height: 200px; overflow-y: auto; padding-right: 10px; }
-        .war-block { background: var(--card); border: 1px solid #2f3542; padding: 12px 15px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;}
-        .war-details .title { color: var(--gold); font-weight: bold; font-size: 1em; margin-bottom: 3px; }
-        .war-details .dates { color: var(--text-dim); font-size: 0.8em; }
-        
-        .btn-calc { background: var(--blue); color: #000; font-weight: bold; padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; transition: 0.2s; font-size: 0.9em; text-transform: uppercase; }
-        .btn-calc:hover { background: #79c0ff; }
-        .btn-loaded { background: #2f3542; color: var(--text-dim); cursor: default; }
-        .btn-loaded:hover { background: #2f3542; }
+        .fetch-box { background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542; display: flex; gap: 15px; align-items: center; }
+        .fetch-box input { flex-grow: 1; padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; }
+        .fetch-box input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 8px rgba(88,166,255,0.2); }
+        .fetch-box button { background: var(--green); color: #000; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em; text-transform: uppercase; transition: 0.2s; }
+        .fetch-box button:hover { background: #21a556; box-shadow: 0 0 12px rgba(46, 213, 115, 0.4); }
 
-        .rewards-box { border-color: var(--green); background: rgba(46, 213, 115, 0.05); }
-        .rewards-title { color: var(--green); font-size: 1em; font-weight: bold; margin-bottom: 10px; }
-        .rewards-stats { font-size: 0.9em; margin-bottom: 10px; }
+        .config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; }
         
-        /* Two Column Layout for Settings */
-        .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .config-card { background: var(--card); border: 1px solid #2f3542; border-radius: 12px; padding: 20px; }
+        .config-card h3 { margin: 0 0 15px 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; font-size: 1em; }
         
-        .setting-group { background: var(--card); border: 1px solid #2f3542; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
-        .setting-group-title { color: var(--gold); font-size: 0.9em; font-weight: bold; text-transform: uppercase; margin-bottom: 12px; border-bottom: 1px solid #2f3542; padding-bottom: 5px; }
-        
-        .input-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; }
-        .input-label { color: var(--text-main); font-size: 0.9em; font-weight: bold; display: flex; align-items: center; gap: 8px; }
-        .input-field { padding: 8px; border-radius: 4px; border: 1px solid #30363d; background: #050608; color: white; font-size: 0.95em; width: 120px; text-align: right; }
-        .input-field:focus { outline: 1px solid var(--gold); }
-        
-        .radio-group { display: flex; gap: 15px; margin-bottom: 15px; font-size: 0.9em; font-weight: bold; }
-        .radio-group label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+        .input-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .input-row label { font-size: 0.9em; font-weight: bold; color: var(--text-dim); }
+        .input-group { display: flex; align-items: center; gap: 8px; }
+        .input-group span { color: var(--text-dim); font-weight: bold; }
+        .input-row input[type="number"], .input-row input[type="text"] { width: 120px; padding: 8px; border-radius: 4px; border: 1px solid #30363d; background: #0b0d13; color: white; text-align: right; font-weight: bold; }
+        .input-row input:focus { outline: none; border-color: var(--blue); }
 
-        .locked-setting { opacity: 0.4; cursor: not-allowed; }
-        .locked-label { font-size: 0.7em; color: var(--red); font-style: italic; margin-left: 5px; }
-
-        .table-wrapper { width: 100%; overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; min-width: 600px; }
-        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #2f3542; font-size: 0.9em; }
-        th { color: var(--gold); text-transform: uppercase; letter-spacing: 1px; }
-        tr:hover { background: rgba(255,255,255,0.02); }
+        .summary-card { background: linear-gradient(145deg, #11141d, #0b0d13); border: 1px solid var(--blue); border-radius: 12px; padding: 25px; box-shadow: 0 8px 20px rgba(0,0,0,0.5); }
+        .summary-card h2 { margin: 0 0 20px 0; color: var(--blue); text-transform: uppercase; text-align: center; letter-spacing: 1px; }
         
-        .score-val { color: var(--blue); font-weight: bold; }
-        .payout-val { color: var(--green); font-weight: bold; }
-        .text-dim { color: var(--text-dim); }
+        .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .summary-item { background: #1b202e; padding: 15px; border-radius: 8px; border: 1px solid #2f3542; text-align: center; }
+        .summary-item.large { grid-column: 1 / -1; background: rgba(46, 213, 115, 0.1); border-color: var(--green); }
+        .summary-label { font-size: 0.8em; color: var(--text-dim); text-transform: uppercase; font-weight: bold; margin-bottom: 5px; }
+        .summary-val { font-size: 1.4em; font-weight: 900; color: white; }
+        .summary-item.large .summary-val { font-size: 2em; color: var(--green); text-shadow: 0 0 10px rgba(46,213,115,0.3); }
 
-        .summary-footer { display: flex; justify-content: space-between; align-items: center; background: var(--card); padding: 15px; border-radius: 8px; border: 1px solid var(--gold); margin-top: 15px; flex-wrap: wrap; gap: 15px;}
-        .big-money { font-size: 1.5em; font-weight: bold; color: var(--green); }
+        .table-card { background: var(--card); border: 1px solid #2f3542; border-radius: 12px; padding: 20px; margin-top: 10px; }
+        .table-header { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1.5fr; gap: 10px; color: var(--text-dim); font-weight: bold; font-size: 0.85em; text-transform: uppercase; border-bottom: 2px solid #2f3542; padding-bottom: 10px; margin-bottom: 10px; }
+        .table-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1.5fr; gap: 10px; padding: 12px 0; border-bottom: 1px solid #1b202e; align-items: center; font-size: 0.95em; }
+        .table-row:last-child { border-bottom: none; }
+        .table-row:hover { background: #0b0d13; }
+        
+        .p-name { font-weight: bold; color: var(--text-main); text-decoration: none; }
+        .p-name:hover { text-decoration: underline; color: var(--blue); }
+        .val-money { color: var(--green); font-weight: bold; font-family: monospace; font-size: 1.1em; }
+        .val-hits { font-weight: bold; color: var(--gold); }
+        
+        .btn-copy { background: #2f3542; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; float: right; margin-bottom: 15px; }
+        .btn-copy:hover { background: #57606f; }
 
-        /* Mobile Responsiveness */
-        @media (max-width: 768px) {
-            .settings-grid { grid-template-columns: 1fr; }
-            .war-block { flex-direction: column; align-items: flex-start; }
-            .btn-calc { width: 100%; text-align: center; }
-            .input-row { flex-direction: column; align-items: flex-start; }
-            .input-field { width: 100%; text-align: left; }
-            .summary-footer { flex-direction: column; text-align: center; }
-        }
+        .warning-text { color: var(--red); font-size: 0.85em; font-style: italic; margin-top: 5px; display: none; }
     </style>
 </head>
 <body>
-  <nav class="sidebar" id="app-sidebar">
-    <div class="sidebar-header">
-       <div class="sidebar-logo">Owen's Faction Tools</div>
-        <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
-    </div>
- <div class="nav-items">
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">Owen's Faction Tools</div>
+            <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
+        </div>
+        <div class="nav-items">
             <a href="/" class="nav-link">📡 <span class="nav-text">Live Warboard</span></a>
             <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
-            <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
+            <a href="/payout.html" class="nav-link active">💰 <span class="nav-text">Payouts</span></a>
             <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
             <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
             <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
             <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>
-            <a onclick="openSettings()" class="nav-link" style="margin-top: 15px; border-top: 1px solid #2f3542; border-radius: 0; padding-top: 15px;">
-                ⚙️ <span class="nav-text">Settings</span>
-            </a>
+            <a href="/admin.html" class="nav-link">👑 <span class="nav-text">Admin Panel</span></a>
         </div>
-</nav>
+    </nav>
+
     <main class="main-content">
-        <h1>War Payout Calculator</h1>
-<div style="background: rgba(255, 165, 2, 0.1); border: 1px solid var(--gold); color: var(--gold); padding: 12px 20px; border-radius: 8px; margin-bottom: 25px; text-align: center; font-weight: bold; font-size: 0.9em; box-shadow: 0 4px 15px rgba(255, 165, 2, 0.15);">
-    ⚠️ WORK IN PROGRESS: This tool is currently in active development and may not function to its fullest potential. Please report any bugs or suggestions to <a href="https://www.torn.com/profiles.php?XID=3776908" target="_blank" style="color: var(--text-main); text-decoration: underline;">Owen777 [3776908]</a>.
-</div>
+        <h1>Advanced War Payouts</h1>
+        
         <div class="container">
-            <div id="error-msg" style="color: var(--red); font-weight: bold; text-align: center;"></div>
-
-            <!-- Block 1: Past Wars -->
-            <div class="dash-card">
-                <div class="dash-header">Select a Past War</div>
-                <div id="war-list-container">
-                    <div style="color:var(--text-dim);">Loading past wars...</div>
-                </div>
+            <div class="fetch-box">
+                <input type="text" id="report-id" placeholder="Paste Ranked War Report ID (e.g., 12345)">
+                <button onclick="fetchWarReport()">Fetch Data</button>
             </div>
 
-            <div id="main-calculator" style="display:none;">
-                <!-- Block 2: Rewards Box -->
-                <div class="dash-card rewards-box" style="margin-bottom: 20px;">
-                    <div class="rewards-title">🎁 War Summary vs <span id="reward-enemy-name"></span></div>
-                    <div class="rewards-stats" style="color:var(--gold);">
-                        🏆 Points: <span id="reward-points">0</span> | ✊ Respect: <span id="reward-respect">0</span>
+            <div class="config-grid">
+                <!-- FINANCES CARD -->
+                <div class="config-card">
+                    <h3>🏦 Faction Finances</h3>
+                    <div class="input-row">
+                        <label>Total Cache Value</label>
+                        <div class="input-group">
+                            <span>$</span>
+                            <input type="number" id="inp-cache" value="0" onchange="recalculate()">
+                        </div>
                     </div>
-                    <div id="caches-list-ui" style="font-size: 0.9em;"></div>
-                </div>
-
-                <!-- Block 3: Settings Grid -->
-                <div class="settings-grid">
+                    <div class="input-row">
+                        <label>Faction Cut (%)</label>
+                        <div class="input-group">
+                            <input type="number" id="inp-fac-cut" value="25" min="0" max="100" onchange="recalculate()">
+                            <span>%</span>
+                        </div>
+                    </div>
                     
-                    <!-- Left Column: The Money -->
-                    <div class="setting-group">
-                        <div class="setting-group-title">The Pot & Deductions</div>
-                        
-                        <div class="input-row">
-                            <label class="input-label">Cache Sales / Total Winnings</label>
-                            <div style="display:flex; align-items:center; gap:5px;">
-                                <span style="color:var(--green); font-weight:bold;">$</span>
-                                <input type="number" id="gross-pool" oninput="renderPayouts()" class="input-field" style="border-color:var(--green);">
-                            </div>
-                        </div>
-                        <hr style="border: 0; border-top: 1px solid #2f3542; margin: 15px 0;">
-                        <div class="input-row">
-                            <label class="input-label">Consumables Cost</label>
-                            <input type="number" id="deduct-consumables" value="0" oninput="renderPayouts()" class="input-field">
-                        </div>
-                        <div class="input-row">
-                            <label class="input-label">Spies / Mercenaries</label>
-                            <input type="number" id="deduct-spies" value="0" oninput="renderPayouts()" class="input-field">
-                        </div>
-                        <div class="input-row">
-                            <label class="input-label">Bounties / Bails</label>
-                            <input type="number" id="deduct-bounties" value="0" oninput="renderPayouts()" class="input-field">
-                        </div>
-                        <div class="input-row">
-                            <label class="input-label">Other Deductions</label>
-                            <input type="number" id="deduct-other" value="0" oninput="renderPayouts()" class="input-field">
-                        </div>
+                    <h3 style="margin-top: 20px;">📉 Deductions & Costs</h3>
+                    <div class="input-row">
+                        <label>Consumables / Meds</label>
+                        <div class="input-group"><span>$</span><input type="number" id="inp-cost-meds" value="0" onchange="recalculate()"></div>
                     </div>
-
-                    <!-- Right Column: The Logic -->
-                    <div>
-                        <div class="setting-group">
-                            <div class="setting-group-title">Calculation Mode</div>
-                            <div class="radio-group">
-                                <label><input type="radio" name="calc_mode" value="cut" checked onchange="toggleMode()"> Ratio Based (Faction Cut %)</label>
-                                <label><input type="radio" name="calc_mode" value="pph" onchange="toggleMode()"> Flat Pay-Per-Hit</label>
-                            </div>
-                            <div class="input-row" id="ui-mode-cut">
-                                <label class="input-label">Faction Vault Cut (%)</label>
-                                <input type="number" id="val-cut" value="20" oninput="renderPayouts()" class="input-field">
-                            </div>
-                            <div class="input-row" id="ui-mode-pph" style="display:none;">
-                                <label class="input-label">Pay Per War Hit ($)</label>
-                                <input type="number" id="val-pph" value="1000000" oninput="renderPayouts()" class="input-field">
-                            </div>
-                        </div>
-
-                        <div class="setting-group">
-                            <div class="setting-group-title">Advanced Payout Options</div>
-                            <div class="input-row">
-                                <label class="input-label"><input type="checkbox" id="pay-assists" checked onchange="renderPayouts()"> Pay Assists</label>
-                                <div style="display:flex; align-items:center; gap:5px;"><span class="text-dim">Multiplier:</span> <input type="number" id="mult-assists" value="0.25" step="0.05" oninput="renderPayouts()" class="input-field" style="width:60px;"></div>
-                            </div>
-                            <div class="input-row">
-                                <label class="input-label"><input type="checkbox" id="pay-clears" onchange="renderPayouts()"> Pay Clears (Outside Hit)</label>
-                                <div style="display:flex; align-items:center; gap:5px;"><span class="text-dim">Multiplier:</span> <input type="number" id="mult-clears" value="0.10" step="0.05" oninput="renderPayouts()" class="input-field" style="width:60px;"></div>
-                            </div>
-                            
-                            <!-- Locked Advanced Log Data -->
-                            <div class="input-row locked-setting" title="Requires massive external Faction Attacks API parser to function.">
-                                <label class="input-label"><input type="checkbox" disabled> Pay Retals <span class="locked-label">Requires Log API</span></label>
-                                <div style="display:flex; align-items:center; gap:5px;"><span class="text-dim">Multiplier:</span> <input type="number" disabled value="0.5" class="input-field" style="width:60px;"></div>
-                            </div>
-                            <div class="input-row locked-setting" title="Requires massive external Faction Attacks API parser to function.">
-                                <label class="input-label"><input type="checkbox" disabled> Filter Low Fair Fight <span class="locked-label">Requires Log API</span></label>
-                                <div style="display:flex; align-items:center; gap:5px;"><span class="text-dim">Min FF:</span> <input type="number" disabled value="2.0" class="input-field" style="width:60px;"></div>
-                            </div>
-                        </div>
-
-                        <div class="setting-group">
-                            <div class="setting-group-title">Hit Thresholds</div>
-                            <div class="input-row">
-                                <label class="input-label"><input type="checkbox" id="use-thresholds" onchange="renderPayouts()"> Enable Min/Max Caps</label>
-                            </div>
-                            <div class="input-row">
-                                <label class="input-label">Minimum Hits Required</label>
-                                <input type="number" id="thresh-min" value="10" oninput="renderPayouts()" class="input-field">
-                            </div>
-                            <div class="input-row">
-                                <label class="input-label">Maximum Hits Paid</label>
-                                <input type="number" id="thresh-max" value="100" oninput="renderPayouts()" class="input-field">
-                            </div>
-                        </div>
+                    <div class="input-row">
+                        <label>Mercs / Spies</label>
+                        <div class="input-group"><span>$</span><input type="number" id="inp-cost-mercs" value="0" onchange="recalculate()"></div>
+                    </div>
+                    <div class="input-row">
+                        <label>Bounties</label>
+                        <div class="input-group"><span>$</span><input type="number" id="inp-cost-bounties" value="0" onchange="recalculate()"></div>
+                    </div>
+                    <div class="input-row">
+                        <label>Misc. / Other</label>
+                        <div class="input-group"><span>$</span><input type="number" id="inp-cost-other" value="0" onchange="recalculate()"></div>
                     </div>
                 </div>
 
-                <!-- Summary Footer -->
-                <div class="summary-footer">
-                    <div>
-                        <div style="color:var(--text-dim); font-size:0.85em; text-transform:uppercase; font-weight:bold;">Net Distributable Pool</div>
-                        <div class="big-money" id="display-net-pool">$0</div>
+                <!-- MODIFIERS CARD -->
+                <div class="config-card">
+                    <h3>⚖️ Hit Multipliers</h3>
+                    <div class="input-row" title="Base attacks executed. Default is 1.0x">
+                        <label>Standard Attack</label>
+                        <div class="input-group"><input type="number" id="inp-mult-attack" value="1.0" step="0.1" onchange="recalculate()"><span>x</span></div>
                     </div>
-                    <div>
-                        <div style="color:var(--text-dim); font-size:0.85em; text-transform:uppercase; font-weight:bold;">Faction Vault Profit</div>
-                        <div class="big-money" id="display-vault-profit" style="color:var(--gold);">$0</div>
+                    <div class="input-row" title="Assists logic. Typically paid out at 25% to 50%">
+                        <label>Assist Multiplier</label>
+                        <div class="input-group"><input type="number" id="inp-mult-assist" value="0.25" step="0.05" onchange="recalculate()"><span>x</span></div>
                     </div>
-                    <button id="copy-btn" class="btn-calc" style="background:var(--green);" onclick="copyToClipboard()">📋 Copy List</button>
+                    
+                    <h3 style="margin-top: 20px;">🛑 Thresholds & Caps</h3>
+                    <div class="input-row" title="Members below this threshold receive $0">
+                        <label>Minimum Hits Required</label>
+                        <input type="number" id="inp-min-hits" value="0" min="0" onchange="recalculate()">
+                    </div>
+                    <div class="input-row" title="Members will not be paid for hits exceeding this cap">
+                        <label>Maximum Hits Cap</label>
+                        <input type="number" id="inp-max-hits" value="9999" min="1" onchange="recalculate()">
+                    </div>
+                    <div class="warning-text" id="threshold-warn">Hit calculations adjusted by thresholds.</div>
                 </div>
 
-                <!-- Block 4: Table -->
-                <div class="dash-card" style="margin-top: 20px;">
-                    <div class="table-wrapper">
-                        <table id="payout-table">
-                            <thead>
-                                <tr>
-                                    <th>Member</th>
-                                    <th>Score</th>
-                                    <th>Hits</th>
-                                    <th>Assists</th>
-                                    <th>Clears</th>
-                                    <th>Weighted Total</th>
-                                    <th>Payout Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody id="payout-list"></tbody>
-                        </table>
+                <!-- SUMMARY CARD -->
+                <div class="summary-card">
+                    <h2>Payout Summary</h2>
+                    <div class="summary-grid">
+                        <div class="summary-item">
+                            <div class="summary-label">Total Expenses</div>
+                            <div class="summary-val" id="sum-expenses" style="color: var(--red);">$0</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-label">Faction Bank Cut</div>
+                            <div class="summary-val" id="sum-fac-cut" style="color: var(--gold);">$0</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-label">Member Pool</div>
+                            <div class="summary-val" id="sum-member-pool">$0</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-label">Valid Paid Hits</div>
+                            <div class="summary-val" id="sum-valid-hits">0</div>
+                        </div>
+                        <div class="summary-item large">
+                            <div class="summary-label">Calculated Pay Per Hit</div>
+                            <div class="summary-val" id="sum-pph">$0</div>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <!-- RESULTS TABLE -->
+            <div class="table-card">
+                <button class="btn-copy" onclick="copyToClipboard()">📋 Copy Payout List</button>
+                <h3 style="margin: 0 0 15px 0; color: var(--blue); text-transform: uppercase;">Member Breakdown</h3>
+                <div class="table-header">
+                    <div>Player</div>
+                    <div>Attacks</div>
+                    <div>Assists</div>
+                    <div>Effective Hits</div>
+                    <div style="text-align: right;">Total Payout</div>
+                </div>
+                <div id="payout-list">
+                    <div style="color:var(--text-dim); padding:20px; text-align: center; font-style: italic;">Enter a Report ID and click Fetch Data...</div>
+                </div>
+            </div>
+
         </div>
     </main>
 
 <script>
-// --- SIDEBAR & SMART NAV LOGIC ---
 document.addEventListener("DOMContentLoaded", function() {
-    let currentUrl = window.location.pathname;
-    if (currentUrl === "/index.html" || currentUrl === "") currentUrl = "/"; 
-    let links = document.querySelectorAll(".nav-items .nav-link");
-    links.forEach(link => {
-        link.classList.remove("active"); 
-        if (link.getAttribute("href") === currentUrl) link.classList.add("active"); 
-    });
-
     const sidebar = document.getElementById('app-sidebar');
-    if (localStorage.getItem('sidebar_collapsed') === 'true') {
-        sidebar.classList.add('collapsed');
-    }
+    if (localStorage.getItem('sidebar_collapsed') === 'true') { sidebar.classList.add('collapsed'); }
 });
 
 function toggleSidebar() {
@@ -288,213 +229,183 @@ function toggleSidebar() {
     localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
 }
 
-// --- ORIGINAL PAYOUT LOGIC ---
-const myKey = localStorage.getItem("warboard_apikey");
-let currentMembers = [];
-let currentButtons = [];
-let clipboardText = "";
+const myKey = localStorage.getItem("warboard_apikey") || "";
+let rawMembersData = []; 
 
-async function fetchWarList() {
-    if (!myKey) {
-        document.getElementById("error-msg").innerText = "Please set your API key on the Live Warboard settings first.";
-        document.getElementById("war-list-container").innerHTML = "";
+async function fetchWarReport() {
+    const reportId = document.getElementById("report-id").value.trim();
+    if (!reportId || !myKey) {
+        alert("Please enter a valid Report ID and ensure your API key is saved in Settings.");
         return;
     }
-    try {
-        const res = await fetch(`/api/war-list?apiKey=${myKey}`);
-        const data = await res.json();
-        const container = document.getElementById("war-list-container");
-        
-        if (data.error) {
-            container.innerHTML = `<div style="color:var(--red);">API Error: ${data.error}</div>`;
-            return;
-        }
 
-        if (data.wars && data.wars.length > 0) {
-            let html = "";
-            data.wars.forEach(w => {
-                let dStart = new Date(w.start * 1000).toLocaleDateString();
-                html += `
-                    <div class="war-block">
-                        <div class="war-details">
-                            <div class="title">vs ${w.enemy}</div>
-                            <div class="dates">Started: ${dStart}</div>
-                        </div>
-                        <button id="btn-${w.id}" class="btn-calc" onclick="loadWarData('${w.id}', '${w.enemy}')">Calculate</button>
-                    </div>
-                `;
-                currentButtons.push(`btn-${w.id}`);
-            });
-            container.innerHTML = html;
-        } else {
-            container.innerHTML = `<div style="color:var(--text-dim);">No recent completed ranked wars found.</div>`;
-        }
-    } catch (e) {
-        document.getElementById("war-list-container").innerHTML = `<div style="color:var(--red);">Failed to load wars.</div>`;
-    }
-}
-
-fetchWarList();
-
-function toggleMode() {
-    const mode = document.querySelector('input[name="calc_mode"]:checked').value;
-    if (mode === 'cut') {
-        document.getElementById('ui-mode-cut').style.display = 'flex';
-        document.getElementById('ui-mode-pph').style.display = 'none';
-    } else {
-        document.getElementById('ui-mode-cut').style.display = 'none';
-        document.getElementById('ui-mode-pph').style.display = 'flex';
-    }
-    renderPayouts();
-}
-
-async function loadWarData(reportId, enemyName) {
-    document.getElementById("error-msg").innerText = "";
-    
-    currentButtons.forEach(id => {
-        const btn = document.getElementById(id);
-        if (btn) { btn.className = "btn-calc"; btn.innerText = "Calculate"; }
-    });
-    
-    const activeBtn = document.getElementById(`btn-${reportId}`);
-    activeBtn.innerText = "Loading...";
+    document.getElementById("payout-list").innerHTML = `<div style="color:var(--text-dim); padding:20px; text-align: center;">Fetching secure report logs...</div>`;
 
     try {
         const res = await fetch(`/api/past-war?apiKey=${myKey}&reportId=${reportId}`);
         const data = await res.json();
 
-        if (data.error) throw new Error(data.error);
-
-        currentMembers = data.members;
-        
-        document.getElementById("reward-enemy-name").innerText = enemyName;
-        document.getElementById("reward-points").innerText = (data.rewards.points || 0).toLocaleString();
-        document.getElementById("reward-respect").innerText = (data.rewards.respect || 0).toLocaleString();
-        
-        let cachesHtml = "";
-        if (data.rewards.caches && data.rewards.caches.length > 0) {
-            data.rewards.caches.forEach(c => {
-                cachesHtml += `<div>${c.quantity}x ${c.name} <span class="text-dim">($${c.marketValue.toLocaleString()} ea)</span></div>`;
-            });
-        } else {
-            cachesHtml = `<div class="text-dim">No caches won.</div>`;
+        if (data.error) {
+            document.getElementById("payout-list").innerHTML = `<div style="color:var(--red); padding:20px; font-weight:bold; text-align:center;">${data.error}</div>`;
+            return;
         }
-        document.getElementById("caches-list-ui").innerHTML = cachesHtml;
 
-        document.getElementById("gross-pool").value = data.rewards.totalCacheValue || 0;
-        document.getElementById("main-calculator").style.display = "block";
-
-        activeBtn.className = "btn-calc btn-loaded";
-        activeBtn.innerText = "Loaded ✓";
-
-        renderPayouts();
+        document.getElementById("inp-cache").value = data.rewards.totalCacheValue || 0;
+        rawMembersData = data.members || [];
+        
+        recalculate();
 
     } catch (e) {
-        activeBtn.innerText = "Error";
-        document.getElementById("error-msg").innerText = "Failed to load: " + e.message;
+        document.getElementById("payout-list").innerHTML = `<div style="color:var(--red); padding:20px; font-weight:bold; text-align:center;">Network error. Please try again.</div>`;
     }
 }
 
-function renderPayouts() {
-    if(currentMembers.length === 0) return;
+function recalculate() {
+    if (rawMembersData.length === 0) return;
 
-    // Money Settings
-    const gross = parseFloat(document.getElementById("gross-pool").value) || 0;
-    const dConsumables = parseFloat(document.getElementById("deduct-consumables").value) || 0;
-    const dSpies = parseFloat(document.getElementById("deduct-spies").value) || 0;
-    const dBounties = parseFloat(document.getElementById("deduct-bounties").value) || 0;
-    const dOther = parseFloat(document.getElementById("deduct-other").value) || 0;
+    // 1. Gather Finance Inputs
+    const cacheVal = parseFloat(document.getElementById("inp-cache").value) || 0;
+    const facCutPct = parseFloat(document.getElementById("inp-fac-cut").value) || 0;
     
-    const netPool = gross - (dConsumables + dSpies + dBounties + dOther);
-    document.getElementById("display-net-pool").innerText = "$" + netPool.toLocaleString();
-
-    // Logic Settings
-    const mode = document.querySelector('input[name="calc_mode"]:checked').value;
-    const valCut = parseFloat(document.getElementById("val-cut").value) || 0;
-    const valPPH = parseFloat(document.getElementById("val-pph").value) || 0;
-
-    const doAssists = document.getElementById("pay-assists").checked;
-    const multAssists = parseFloat(document.getElementById("mult-assists").value) || 0;
+    const cMeds = parseFloat(document.getElementById("inp-cost-meds").value) || 0;
+    const cMercs = parseFloat(document.getElementById("inp-cost-mercs").value) || 0;
+    const cBounties = parseFloat(document.getElementById("inp-cost-bounties").value) || 0;
+    const cOther = parseFloat(document.getElementById("inp-cost-other").value) || 0;
     
-    const doClears = document.getElementById("pay-clears").checked;
-    const multClears = parseFloat(document.getElementById("mult-clears").value) || 0;
+    const totalExpenses = cMeds + cMercs + cBounties + cOther;
+    
+    let netPool = cacheVal - totalExpenses;
+    if (netPool < 0) netPool = 0; // Prevent negative payouts
 
-    const useThresh = document.getElementById("use-thresholds").checked;
-    const minHits = parseFloat(document.getElementById("thresh-min").value) || 0;
-    const maxHits = parseFloat(document.getElementById("thresh-max").value) || 0;
+    const facCutAmount = netPool * (facCutPct / 100);
+    const memberPool = netPool - facCutAmount;
 
-    // Calculate weighted totals for everyone
-    let totalWeightedHitsAll = 0;
-    let processedMembers = currentMembers.map(m => {
-        let weighted = m.attacks;
-        if (doAssists) weighted += (m.assists * multAssists);
-        if (doClears) weighted += (m.clears * multClears);
+    // 2. Gather Modifiers & Thresholds
+    const multAttack = parseFloat(document.getElementById("inp-mult-attack").value) || 1.0;
+    const multAssist = parseFloat(document.getElementById("inp-mult-assist").value) || 0.25;
+    
+    const minHits = parseInt(document.getElementById("inp-min-hits").value) || 0;
+    const maxHits = parseInt(document.getElementById("inp-max-hits").value) || 99999;
 
-        let meetsThresh = true;
-        if (useThresh) {
-            if (weighted < minHits) { meetsThresh = false; weighted = 0; }
-            if (weighted > maxHits) { weighted = maxHits; }
-        }
+    document.getElementById("threshold-warn").style.display = (minHits > 0 || maxHits < 9999) ? "block" : "none";
 
-        totalWeightedHitsAll += weighted;
+    // 3. Process Members and Calculate "Effective Hits"
+    let totalValidHits = 0;
+    let processedMembers = [];
 
-        return { ...m, weightedHits: weighted, meetsThresh };
-    });
+    rawMembersData.forEach(m => {
+        let rawAttacks = m.attacks || 0;
+        let rawAssists = m.assists || 0;
+        let totalRawActivity = rawAttacks + rawAssists;
 
-    let html = "";
-    let totalPaidOut = 0;
-    const enemyName = document.getElementById("reward-enemy-name").innerText;
-    clipboardText = `**War Payouts vs ${enemyName}**\nTotal Distributable: $${netPool.toLocaleString()}\n\n`;
-
-    processedMembers.forEach(m => {
-        let payout = 0;
+        let effectiveHits = 0;
         
-        if (m.meetsThresh && m.weightedHits > 0) {
-            if (mode === 'cut') {
-                // Ratio based
-                let playerSharePool = netPool * (1 - (valCut / 100));
-                payout = totalWeightedHitsAll > 0 ? playerSharePool * (m.weightedHits / totalWeightedHitsAll) : 0;
-            } else {
-                // Flat Pay Per Hit
-                payout = m.weightedHits * valPPH;
+        // Threshold Logic
+        if (totalRawActivity >= minHits) {
+            // Calculate base effective hits based on multipliers
+            effectiveHits = (rawAttacks * multAttack) + (rawAssists * multAssist);
+            
+            // Apply Max Cap to the effective hits directly
+            if (effectiveHits > maxHits) {
+                effectiveHits = maxHits;
             }
         }
 
-        totalPaidOut += payout;
+        totalValidHits += effectiveHits;
 
-        let rowStyle = !m.meetsThresh ? "opacity: 0.5;" : "";
+        processedMembers.push({
+            ...m,
+            rawAttacks,
+            rawAssists,
+            totalRawActivity,
+            effectiveHits
+        });
+    });
+
+    // 4. Calculate Pay Per Hit
+    const payPerHit = totalValidHits > 0 ? (memberPool / totalValidHits) : 0;
+
+    // 5. Update Summary UI
+    document.getElementById("sum-expenses").innerText = `$${totalExpenses.toLocaleString()}`;
+    document.getElementById("sum-fac-cut").innerText = `$${Math.floor(facCutAmount).toLocaleString()}`;
+    document.getElementById("sum-member-pool").innerText = `$${Math.floor(memberPool).toLocaleString()}`;
+    document.getElementById("sum-valid-hits").innerText = totalValidHits.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2});
+    document.getElementById("sum-pph").innerText = `$${Math.floor(payPerHit).toLocaleString()}`;
+
+    // 6. Render Table
+    // Sort by effective hits descending
+    processedMembers.sort((a, b) => b.effectiveHits - a.effectiveHits);
+
+    let html = "";
+    processedMembers.forEach(m => {
+        if (m.totalRawActivity === 0) return; // Skip complete ghosts
         
-        html += `<tr style="${rowStyle}">
-            <td><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-main); text-decoration:none; font-weight:bold;">${m.name} [${m.id}]</a></td>
-            <td class="score-val">${m.score}</td>
-            <td>${m.attacks}</td>
-            <td class="text-dim">${m.assists}</td>
-            <td class="text-dim">${m.clears}</td>
-            <td style="color:var(--gold); font-weight:bold;">${m.weightedHits.toFixed(2)}</td>
-            <td class="payout-val">$${Math.floor(payout).toLocaleString()}</td>
-        </tr>`;
+        const payout = Math.floor(m.effectiveHits * payPerHit);
+        let warningIcon = "";
         
-        if(payout > 0) {
-            clipboardText += `${m.name}: $${Math.floor(payout).toLocaleString()}\n`;
+        if (m.totalRawActivity > 0 && m.totalRawActivity < minHits) {
+            warningIcon = `<span title="Missed Minimum Hit Threshold" style="color:var(--red); cursor:help;">⚠️</span>`;
+        } else if (m.effectiveHits >= maxHits) {
+            warningIcon = `<span title="Capped at Maximum Hit Threshold" style="color:var(--gold); cursor:help;">🛑</span>`;
         }
+
+        html += `
+            <div class="table-row">
+                <div>
+                    <a class="p-name" href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank">${m.name} [${m.id}]</a>
+                </div>
+                <div>${m.rawAttacks}</div>
+                <div>${m.rawAssists}</div>
+                <div class="val-hits">${m.effectiveHits.toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:2})} ${warningIcon}</div>
+                <div style="text-align: right;" class="val-money">$${payout.toLocaleString()}</div>
+            </div>
+        `;
     });
 
     document.getElementById("payout-list").innerHTML = html;
-    
-    // Calculate Vault Profit (Net Pool minus whatever was paid out to members)
-    let vaultProfit = netPool - totalPaidOut;
-    document.getElementById("display-vault-profit").innerText = "$" + Math.floor(vaultProfit).toLocaleString();
 }
 
-async function copyToClipboard() {
-    try {
-        await navigator.clipboard.writeText(clipboardText);
-        const btn = document.getElementById("copy-btn");
-        btn.innerText = "✓ Copied!";
-        setTimeout(() => { btn.innerText = "📋 Copy List"; }, 2000);
-    } catch (err) {
-        alert("Failed to copy list.");
-    }
+function copyToClipboard() {
+    if (rawMembersData.length === 0) return;
+    
+    let text = "Faction War Payouts\n--------------------\n";
+    const payPerHit = parseFloat(document.getElementById("sum-pph").innerText.replace(/[^0-9.-]+/g,""));
+    
+    // Quick recalc just for the copy data
+    const multAttack = parseFloat(document.getElementById("inp-mult-attack").value) || 1.0;
+    const multAssist = parseFloat(document.getElementById("inp-mult-assist").value) || 0.25;
+    const minHits = parseInt(document.getElementById("inp-min-hits").value) || 0;
+    const maxHits = parseInt(document.getElementById("inp-max-hits").value) || 99999;
+
+    let copyData = [];
+    rawMembersData.forEach(m => {
+        let rawAttacks = m.attacks || 0;
+        let rawAssists = m.assists || 0;
+        let totalRawActivity = rawAttacks + rawAssists;
+        let effectiveHits = 0;
+        
+        if (totalRawActivity >= minHits) {
+            effectiveHits = (rawAttacks * multAttack) + (rawAssists * multAssist);
+            if (effectiveHits > maxHits) effectiveHits = maxHits;
+        }
+
+        if (effectiveHits > 0) {
+            let payout = Math.floor(effectiveHits * payPerHit);
+            copyData.push({ name: m.name, id: m.id, payout: payout });
+        }
+    });
+
+    copyData.sort((a, b) => b.payout - a.payout);
+
+    copyData.forEach(d => {
+        text += `${d.name} [${d.id}]: $${d.payout.toLocaleString()}\n`;
+    });
+
+    navigator.clipboard.writeText(text).then(() => {
+        alert("Payout list copied to clipboard!");
+    }).catch(err => {
+        alert("Failed to copy text. Please select and copy manually.");
+    });
 }
 </script>
 </body>
