@@ -126,36 +126,40 @@ setInterval(async () => {
     } catch (err) {}
 }, 60000); 
 
+// MODIFIED: Now returns the user's Player ID so we can use it to test their FF Scouter key
 async function verifySubscription(userKey) {
     if (!userKey) throw new Error("No API Key provided.");
-    if (ADMIN_API_KEY && userKey === ADMIN_API_KEY) return true; 
-
+    
     const res = await fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`);
     const data = await res.json();
     if (data.error) throw new Error("Invalid API Key.");
 
     const playerId = data.player_id?.toString();
-    if (playerId && (VIP_PLAYERS.includes(playerId) || vipConfig.players.includes(playerId))) return true;
-
     const facId = data.faction?.faction_id?.toString();
+
+    // Check VIP Overrides for access (Returns ID if allowed)
+    if (ADMIN_API_KEY && userKey === ADMIN_API_KEY) return playerId;
+    if (playerId && (VIP_PLAYERS.includes(playerId) || vipConfig.players.includes(playerId))) return playerId;
+    
     if (!facId || facId === "0") throw new Error("You must be in a faction to use these tools.");
 
-    if (adminFactionId && facId === adminFactionId) return true;
-    if (VIP_FACTIONS.includes(facId) || vipConfig.factions.includes(facId)) return true;
-    if (subscriptions[facId] && subscriptions[facId] > Date.now()) return true;
+    if (adminFactionId && facId === adminFactionId) return playerId;
+    if (VIP_FACTIONS.includes(facId) || vipConfig.factions.includes(facId)) return playerId;
+    if (subscriptions[facId] && subscriptions[facId] > Date.now()) return playerId;
 
     throw new Error(`SUBSCRIPTION REQUIRED: Your faction's access has expired. Send 5x Xanax to Owen777 [3776908] to instantly unlock access for your entire faction for 1 week!`);
 }
 
-// NEW: Helper function to strictly check if the user's key is actually Premium on FF Scouter
-async function verifyFfScouterPremium(ffKey) {
-    if (!ffKey) return false;
+// NEW: Strictly tests the FF Scouter key by pulling the user's own stats. 
+// If it succeeds, they have premium. If it fails, they are locked out.
+async function verifyFfScouterPremium(ffKey, testId) {
+    if (!ffKey || ffKey === "null" || ffKey === "") return false;
     try {
-        // We ping a basic lightweight endpoint to see if the key returns a valid response or an auth error
-        const res = await fetch(`https://ffscouter.com/api/v1/get-stats?key=${ffKey}&targets=1`);
+        const res = await fetch(`https://ffscouter.com/api/v1/get-stats?key=${ffKey}&targets=${testId}`);
         const data = await res.json();
-        if (data && data.error) return false;
-        return true;
+        // A valid premium key will return an array of stats. Invalid returns an error object.
+        if (Array.isArray(data) && data.length > 0) return true; 
+        return false;
     } catch (e) {
         return false;
     }
@@ -329,7 +333,7 @@ setInterval(async () => {
                         let uId = atk.attacker_id.toString();
                         let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
                         if (!liveAttacks[uId]) liveAttacks[uId] = {};
-                        liveAttacks[uId][defFacId] = (liveDefends[uId][defFacId] || 0) + 1;
+                        liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
                     }
                 }
                 backfillCursor = oldestTimeInBatch - 1;
@@ -492,6 +496,8 @@ setInterval(async () => {
     } catch (err) {}
 }, 30000);
 
+app.get('/health', (req, res) => res.status(200).send("OK"));
+
 // --- ADMIN API ROUTES ---
 app.get('/api/admin/vips', (req, res) => {
     if (req.query.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
@@ -548,10 +554,8 @@ app.get('/api/dashboard-data', async (req, res) => {
     const userKey = req.query.apiKey;
     const ffKey = req.query.ffKey || null;
     try {
-        await verifySubscription(userKey);
-        
-        // Check if the user's provided key actually passes premium validation
-        const isPremium = await verifyFfScouterPremium(ffKey);
+        const myUserId = await verifySubscription(userKey);
+        const isPremium = await verifyFfScouterPremium(ffKey, myUserId);
 
         const basicResp = await fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`);
         const basicData = await basicResp.json();
@@ -602,14 +606,8 @@ app.get('/api/dashboard-data', async (req, res) => {
 app.get('/api/scan-recruits', async (req, res) => {
     const { apiKey, reportId, ffKey } = req.query;
     try {
-        await verifySubscription(apiKey);
-        
-        const isPremium = await verifyFfScouterPremium(ffKey);
-
-        const userRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${apiKey}`);
-        const userData = await userRes.json();
-        if (userData.error) return res.status(400).json({ error: "Invalid API Key." });
-        const myUserId = userData.player_id.toString();
+        const myUserId = await verifySubscription(apiKey);
+        const isPremium = await verifyFfScouterPremium(ffKey, myUserId);
 
         const reportRes = await fetch(`https://api.torn.com/torn/${reportId}?selections=rankedwarreport&key=${apiKey}`);
         const reportData = await reportRes.json();
@@ -623,6 +621,8 @@ app.get('/api/scan-recruits', async (req, res) => {
         }
         
         if (!myFacId) {
+            const userRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${apiKey}`);
+            const userData = await userRes.json();
             myFacId = userData.faction?.faction_id?.toString();
             enemyFacId = Object.keys(reportData.rankedwarreport.factions).find(id => id !== myFacId);
         }
@@ -919,11 +919,11 @@ app.get('/api/warboard', async (req, res) => {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
         const ffKey = req.query.ffKey && req.query.ffKey !== "null" && req.query.ffKey !== "" ? req.query.ffKey : null;
         
-        await verifySubscription(userKey);
+        const myUserId = await verifySubscription(userKey);
         if (userKey) apiKeyPool.add(userKey);
 
         // Run validation against the FF Scouter endpoint live
-        const isPremium = await verifyFfScouterPremium(ffKey);
+        const isPremium = await verifyFfScouterPremium(ffKey, myUserId);
 
         let enemyId = req.query.enemyFaction && req.query.enemyFaction !== "null" && req.query.enemyFaction !== "" ? req.query.enemyFaction : null;
         
