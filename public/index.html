@@ -56,10 +56,10 @@
         .filter-group { display: flex; gap: 8px; margin-bottom: 15px; }
         .btn-filter { background: #0b0d13; color: var(--text-dim); border: 1px solid #2f3542; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold; transition: 0.2s; }
         .btn-filter:hover { background: #2f3542; color: white; }
-        .btn-filter.active { background: rgba(88, 166, 255, 0.15); border-color: var(--blue); color: white; box-shadow: inset 0 0 10px rgba(88, 166, 255, 0.1); }
+        .btn-filter.active { background: rgba(88, 166, 255, 0.15); border-color: var(--blue); color: white; }
 
         .member-card { background: #0b0d13; border: 1px solid #2f3542; padding: 15px; border-radius: 10px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; transition: 0.2s; }
-        .member-card:hover { border-color: #57606f; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+        .member-card:hover { border-color: #57606f; }
         .member-card.okay { border-left: 4px solid var(--green); }
         .member-card.hospital { border-left: 4px solid var(--red); opacity: 0.85; }
         .member-card.traveling { border-left: 4px solid var(--blue); }
@@ -69,7 +69,7 @@
         .profile:hover { text-decoration: underline; color: var(--blue); }
         
         .badge-bounty { background: rgba(255, 71, 87, 0.15); color: var(--red); border: 1px solid var(--red); padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: bold; text-transform: uppercase; text-decoration: none; margin-left: 8px; transition: 0.2s; vertical-align: middle; }
-        .badge-bounty:hover { background: var(--red); color: white; box-shadow: 0 0 8px rgba(255,71,87,0.5); }
+        .badge-bounty:hover { background: var(--red); color: white; }
 
         .action-arrow { font-size: 0.85em; color: var(--text-dim); margin-top: 5px; display: flex; align-items: center; gap: 6px; }
         .arrow-icon { color: var(--red); font-weight: bold; }
@@ -80,22 +80,22 @@
         
         .intel-badge { background: rgba(255, 165, 2, 0.15); color: var(--gold); padding: 4px 8px; border-radius: 6px; font-size: 0.8em; font-weight: bold; border: 1px solid var(--gold); }
         .stat-box { text-align: right; font-size: 0.9em; flex-shrink: 0; }
-        .stat-val { font-weight: bold; color: var(--gold); font-size: 1.1em; letter-spacing: 0.5px; }
+        .stat-val { font-weight: bold; color: var(--gold); font-size: 1.1em; }
         .stat-val.lock-badge { color: var(--red); font-size: 0.85em; border: 1px dashed var(--red); padding: 2px 6px; border-radius: 4px; display: inline-block; font-weight: bold; }
 
         .card-actions { display: flex; gap: 10px; border-top: 1px solid #2f3542; padding-top: 10px; justify-content: flex-end; align-items: center; }
         .btn-action { background: #2f3542; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold; transition: 0.2s; text-decoration: none; }
         .btn-action:hover { background: #57606f; }
         .btn-claim { background: rgba(46, 213, 115, 0.2); color: var(--green); border: 1px solid var(--green); }
-        .btn-claim:hover { background: var(--green); color: #000; box-shadow: 0 0 8px rgba(46,213,115,0.4); }
+        .btn-claim:hover { background: var(--green); color: #000; }
         .btn-sos { background: rgba(255, 71, 87, 0.2); color: var(--red); border: 1px solid var(--red); }
-        .btn-sos:hover { background: var(--red); color: white; box-shadow: 0 0 8px rgba(255,71,87,0.4); }
+        .btn-sos:hover { background: var(--red); color: white; }
 
         .btn-attack { background: var(--red); color: white; padding: 6px 16px; border-radius: 4px; font-size: 0.85em; font-weight: bold; text-decoration: none; border: 1px solid #ff2a40; box-shadow: 0 0 10px rgba(255, 71, 87, 0.4); text-transform: uppercase; display: flex; align-items: center; gap: 5px; animation: pulseAttack 2s infinite;}
         .btn-attack:hover { background: #ff2a40; color: white; transform: scale(1.05); }
 
-        .active-claim { font-size: 0.8em; color: var(--green); font-weight: bold; background: rgba(46,213,115,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-right: 5px; border: 1px solid rgba(46,213,115,0.3); }
-        .active-sos { font-size: 0.8em; color: var(--red); font-weight: bold; background: rgba(255,71,87,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; border: 1px solid rgba(255,71,87,0.3); animation: pulse 2s infinite; }
+        .active-claim { font-size: 0.8em; color: var(--green); font-weight: bold; background: rgba(46,213,115,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-right: 5px; }
+        .active-sos { font-size: 0.8em; color: var(--red); font-weight: bold; background: rgba(255,71,87,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; animation: pulse 2s infinite; }
 
         #toast-container { position: fixed; top: 25px; right: 25px; z-index: 9999; display: flex; flex-direction: column; gap: 15px; pointer-events: none; }
         .toast { background: var(--card); border-left: 8px solid var(--red); color: white; padding: 20px 30px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); animation: slideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; font-weight: bold; font-size: 1.2em; pointer-events: auto; letter-spacing: 0.5px; }
@@ -106,10 +106,11 @@
         .modal-content { background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; width: 400px; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.9); }
         .modal-content h2 { margin: 0 0 10px 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
         .modal-content label { font-size: 0.85em; color: var(--text-dim); font-weight: bold; text-transform: uppercase; }
-        .modal-content input { padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; width: 100%; box-sizing: border-box; transition: 0.2s; }
-        .modal-content input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 8px rgba(88,166,255,0.2); }
+        .modal-content input { padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; width: 100%; box-sizing: border-box; }
         .modal-content button.btn-save { background: var(--blue); color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.1em; margin-top: 10px; transition: 0.2s; text-transform: uppercase; }
-        .modal-content button.btn-save:hover { background: #79c0ff; box-shadow: 0 0 12px rgba(88,166,255,0.4); }
+        .modal-content button.btn-save:hover { background: #79c0ff; }
+        .modal-content button.btn-action { background: #2f3542; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s; margin-top: 5px; width: 100%; }
+        .modal-content button.btn-action:hover { background: #57606f; }
         .close-btn { position: absolute; right: 20px; top: 20px; color: var(--text-dim); cursor: pointer; font-size: 1.5em; line-height: 1; }
         .close-btn:hover { color: white; }
         
@@ -117,7 +118,6 @@
         details > summary::-webkit-details-marker { display: none; }
 
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
-        @keyframes scanPulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
         @keyframes pulseAttack { 0% { box-shadow: 0 0 5px rgba(255, 71, 87, 0.4); } 50% { box-shadow: 0 0 15px rgba(255, 71, 87, 0.8); } 100% { box-shadow: 0 0 5px rgba(255, 71, 87, 0.4); } }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes fadeOut { to { opacity: 0; transform: translateX(100%); } }
@@ -215,7 +215,7 @@
                 <div>
                     <label>Global Discord Webhook (Auto-Pastes Everywhere)</label>
                     <input type="text" id="discord-webhook" placeholder="Paste Discord Webhook URL here">
-                    <button type="button" onclick="testDiscordWebhook()" class="btn-action" style="background: var(--blue); color: #000; margin-top: 8px; width: 100%; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer;">🧪 Test Discord Connection</button>
+                    <button type="button" onclick="testDiscordWebhook()" class="btn-action" style="background: var(--blue); color: #000; margin-top: 8px;">🧪 Test Discord Connection</button>
                     <div id="discord-test-status" style="font-size: 0.8em; margin-top: 5px; font-weight: bold; text-align: center;"></div>
                 </div>
                 <div>
@@ -360,9 +360,7 @@ function saveSettings() {
 function startPolling() {
     if (fetchTimer) clearInterval(fetchTimer);
     let refreshMs = Math.floor(60000 / cpm);
-    
     fetchWarboard();
-    
     fetchTimer = setInterval(() => {
         fetchWarboard();
     }, refreshMs);
@@ -410,7 +408,7 @@ function setEnemyFilter(filterType) {
     document.getElementById('flt-' + filterType.toLowerCase()).className = "btn-filter active";
     
     if (currentEnemyData.length > 0) {
-        renderEnemyList(currentEnemyData);
+        renderEnemyList(currentEnemyData, ffKey !== "");
     }
 }
 
@@ -492,8 +490,76 @@ function renderChart(friendlyPlayers) {
     }
 }
 
+// -------------------------------------------------------------
+// NEW: SMART DOM RECONCILIATION ENGINE 
+// Stops the lists from completely wiping out and resetting scans
+// -------------------------------------------------------------
+function updateListDOM(containerId, players, prefix, generateCardHTML, emptyMessage) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    if (players.length === 0) {
+        container.innerHTML = `<div style='color:var(--text-dim); padding:10px; font-style: italic; text-align: center;'>${emptyMessage}</div>`;
+        return;
+    }
+
+    if (container.innerHTML.includes(emptyMessage) || container.innerHTML.includes("Connecting to Torn API...")) {
+        container.innerHTML = "";
+    }
+
+    // Identify which IDs are still in the active list
+    const validIds = new Set(players.map(p => `${prefix}-${p.id}`));
+
+    // Purge elements that are no longer in the list (e.g. someone left faction)
+    Array.from(container.children).forEach(child => {
+        if (child.id && child.id.startsWith(prefix + '-') && !validIds.has(child.id)) {
+            container.removeChild(child);
+        }
+    });
+
+    // Update or Insert elements securely without replacing the whole DOM
+    players.forEach((p, index) => {
+        const cardData = generateCardHTML(p);
+        const cardId = `${prefix}-${p.id}`;
+        let card = document.getElementById(cardId);
+
+        if (!card) {
+            // New card, inject it into the precise index spot
+            card = document.createElement('div');
+            card.id = cardId;
+            card.className = cardData.fullClass;
+            card.innerHTML = cardData.innerContent;
+            
+            if (index < container.children.length) {
+                container.insertBefore(card, container.children[index]);
+            } else {
+                container.appendChild(card);
+            }
+        } else {
+            // Existing card, quietly update the text/classes behind the scenes
+            if (card.className !== cardData.fullClass) card.className = cardData.fullClass;
+            if (card.innerHTML !== cardData.innerContent) card.innerHTML = cardData.innerContent;
+            
+            // Reorder visually if the priority changed (e.g. player landed, moved up list)
+            if (container.children[index] !== card) {
+                container.insertBefore(card, container.children[index]);
+            }
+        }
+    });
+}
+
+function formatEstStats(estValue, premiumActive) {
+    if (typeof estValue === 'number') {
+        let formatted = estValue.toLocaleString();
+        return `<div class="stat-val">${formatted}</div>`;
+    }
+    if (estValue === "Scanning...") {
+        return `<div class="stat-val" style="color: var(--text-dim); font-size: 0.8em;">${estValue}</div>`;
+    }
+    return `<div class="stat-val lock-badge">🔒 Requires FF Scouter</div>`;
+}
+
 function renderWatchlist(enemies) {
-    const container = document.getElementById("watchlist-items");
     const now = Math.floor(Date.now() / 1000);
 
     const watchTargets = enemies.filter(e => {
@@ -511,13 +577,7 @@ function renderWatchlist(enemies) {
         return (b.intelScore || 0) - (a.intelScore || 0);
     });
 
-    if(watchTargets.length === 0) {
-        container.innerHTML = `<div style="color:var(--text-dim); padding: 10px; font-style: italic;">No priority targets are currently online or landing within 30 mins.</div>`;
-        return;
-    }
-
-    let html = "";
-    watchTargets.forEach(p => {
+    updateListDOM("watchlist-items", watchTargets, "w-card", (p) => {
         let isFlying = checkIsFlying(p);
         let cardClass = isFlying ? "flying" : "online";
         let highlightText = "";
@@ -538,83 +598,19 @@ function renderWatchlist(enemies) {
             displayStatus = `In hospital for ${hospMins} mins`;
         }
 
-        html += `
-            <div class="watch-card ${cardClass}">
-                <div class="watch-name"><a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a></div>
-                <div class="watch-highlight" style="color: ${highlightColor};">${highlightText}</div>
-                <div style="font-size:0.8em; color:var(--text-dim);">Status: ${displayStatus}</div>
-            </div>
+        let innerContent = `
+            <div class="watch-name"><a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a></div>
+            <div class="watch-highlight" style="color: ${highlightColor};">${highlightText}</div>
+            <div style="font-size:0.8em; color:var(--text-dim);">Status: ${displayStatus}</div>
         `;
-    });
-    
-    container.innerHTML = html;
-}
-
-function processNotifications(enemies) {
-    if (Object.keys(knownEnemies).length === 0) {
-        enemies.forEach(e => { knownEnemies[e.id] = { state: e.state, online: e.onlineStatus }; });
-        return;
-    }
-    let playedSoundThisTick = false;
-
-    enemies.forEach(newEnemy => {
-        let oldEnemy = knownEnemies[newEnemy.id];
-        if (oldEnemy) {
-            if (oldEnemy.state !== "Okay" && newEnemy.state === "Okay") {
-                if (checkIsFlying(oldEnemy)) {
-                    showToast(`🛬 ${newEnemy.name} has landed and is Okay!`, "okay");
-                    playedSoundThisTick = true;
-                } else {
-                    showToast(`🏥 ${newEnemy.name} left the hospital and is Okay!`, "okay");
-                    playedSoundThisTick = true;
-                }
-            }
-            if (oldEnemy.online !== "Online" && newEnemy.onlineStatus === "Online") {
-                showToast(`🟢 ${newEnemy.name} just came ONLINE!`, "online");
-                playedSoundThisTick = true;
-            }
-        }
-        knownEnemies[newEnemy.id] = { state: newEnemy.state, online: newEnemy.onlineStatus };
-    });
-    if (playedSoundThisTick) playAlertSound();
-}
-
-function showToast(msg, typeClass="red") {
-    const container = document.getElementById("toast-container");
-    const toast = document.createElement("div");
-    toast.className = `toast ${typeClass}`;
-    toast.innerHTML = msg;
-    container.appendChild(toast);
-    setTimeout(() => {
-        toast.style.animation = "fadeOut 0.4s ease-out forwards";
-        setTimeout(() => toast.remove(), 400);
-    }, 7000);
-}
-
-function formatEstStats(estValue, premiumActive) {
-    if (typeof estValue === 'number') {
-        let formatted = estValue.toLocaleString();
-        if (estValue > 100000000) return `<div class="stat-val" style="color: var(--blue); text-shadow: 0 0 5px rgba(88,166,255,0.4);">${formatted}</div>`;
-        return `<div class="stat-val">${formatted}</div>`;
-    }
-    if (estValue === "Scanning...") {
-        return `<div class="stat-val" style="color: var(--text-dim); font-size: 0.8em; animation: scanPulse 1.5s infinite;">${estValue}</div>`;
-    }
-    return `<div class="stat-val lock-badge">🔒 Requires FF Scouter</div>`;
+        return { fullClass: `watch-card ${cardClass}`, innerContent };
+    }, "No priority targets are currently online or landing within 30 mins.");
 }
 
 function renderFriendlyList(players, premiumActive) {
-    const container = document.getElementById("friendly-list");
     const now = Math.floor(Date.now() / 1000);
     
-    if (players.length === 0) {
-        container.innerHTML = "<div style='color:var(--text-dim); padding:10px; font-style: italic; text-align: center;'>No friendly members found.</div>";
-        return;
-    }
-
-    let html = "";
-
-    players.forEach(p => {
+    updateListDOM("friendly-list", players, "f-card", (p) => {
         let stateClass = "okay";
         if (p.state === "Hospital" || p.state === "Jail") stateClass = "hospital";
         
@@ -641,36 +637,32 @@ function renderFriendlyList(players, premiumActive) {
 
         let estHtml = formatEstStats(p.estStats, premiumActive);
 
-        html += `
-            <div class="member-card ${stateClass}">
-                <div class="card-header">
-                    <div>
-                        <div style="display: flex; align-items: center;">
-                            <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
-                            <a href="https://www.torn.com/bounties.php?p=add&XID=${p.id}&amount=150000&reason=WAR" target="_blank" class="badge-bounty" title="Place Bounty to keep in Hospital">🎯 Bounty</a>
-                        </div>
-                        <div class="action-arrow">
-                            <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
-                        </div>
-                        <div class="status">Status: <span>${displayStatus}</span></div>
+        let innerContent = `
+            <div class="card-header">
+                <div>
+                    <div style="display: flex; align-items: center;">
+                        <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
+                        <a href="https://www.torn.com/bounties.php?p=add&XID=${p.id}&amount=150000&reason=WAR" target="_blank" class="badge-bounty" title="Place Bounty to keep in Hospital">🎯 Bounty</a>
                     </div>
-                    <div class="stat-box">
-                        <div style="color: var(--text-dim);">Est. Stats</div>
-                        ${estHtml}
+                    <div class="action-arrow">
+                        <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
                     </div>
+                    <div class="status">Status: <span>${displayStatus}</span></div>
                 </div>
-                <div class="card-actions">
-                    <button class="btn-action" onclick="promptUpdateStats('${p.id}')">Update Stats</button>
+                <div class="stat-box">
+                    <div style="color: var(--text-dim);">Est. Stats</div>
+                    ${estHtml}
                 </div>
             </div>
+            <div class="card-actions">
+                <button class="btn-action" onclick="promptUpdateStats('${p.id}')">Update Stats</button>
+            </div>
         `;
-    });
-
-    container.innerHTML = html;
+        return { fullClass: `member-card ${stateClass}`, innerContent };
+    }, "No friendly members found.");
 }
 
 function renderEnemyList(players, premiumActive) {
-    const container = document.getElementById("enemy-list");
     const now = Math.floor(Date.now() / 1000);
     
     const filteredPlayers = players.filter(p => {
@@ -681,14 +673,7 @@ function renderEnemyList(players, premiumActive) {
         return false;
     });
 
-    if (filteredPlayers.length === 0) {
-        container.innerHTML = `<div style='color:var(--text-dim); padding:10px; font-style: italic; text-align: center;'>No targets match the "${activeFilter}" filter.</div>`;
-        return;
-    }
-
-    let html = "";
-
-    filteredPlayers.forEach(p => {
+    updateListDOM("enemy-list", filteredPlayers, "e-card", (p) => {
         let stateClass = "okay";
         if (p.state === "Hospital" || p.state === "Jail") stateClass = "hospital";
         
@@ -731,36 +716,74 @@ function renderEnemyList(players, premiumActive) {
 
         let estHtml = formatEstStats(p.estStats, premiumActive);
 
-        html += `
-            <div class="member-card ${stateClass}">
-                <div class="card-header">
-                    <div>
-                        <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
-                        <div class="action-arrow">
-                            <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
-                        </div>
-                        <div class="status">Status: <span>${displayStatus}</span></div>
-                    </div>
-                    <div class="stat-box">
-                        <div class="intel-badge">Intel: ${p.intelScore || 0}</div>
-                        <div style="color: var(--text-dim); margin-top: 5px;">Est. Stats</div>
-                        ${estHtml}
-                    </div>
-                </div>
+        let innerContent = `
+            <div class="card-header">
                 <div>
-                    ${claimDisplay}
-                    ${sosDisplay}
+                    <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
+                    <div class="action-arrow">
+                        <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
+                    </div>
+                    <div class="status">Status: <span>${displayStatus}</span></div>
                 </div>
-                <div class="card-actions">
-                    <button class="btn-action" onclick="promptUpdateStats('${p.id}')">Override Stats</button>
-                    ${claimButton}
-                    ${sosButton}
+                <div class="stat-box">
+                    <div class="intel-badge">Intel: ${p.intelScore || 0}</div>
+                    <div style="color: var(--text-dim); margin-top: 5px;">Est. Stats</div>
+                    ${estHtml}
                 </div>
             </div>
+            <div>
+                ${claimDisplay}
+                ${sosDisplay}
+            </div>
+            <div class="card-actions">
+                <button class="btn-action" onclick="promptUpdateStats('${p.id}')">Override Stats</button>
+                ${claimButton}
+                ${sosButton}
+            </div>
         `;
+        return { fullClass: `member-card ${stateClass}`, innerContent };
+    }, `No targets match the "${activeFilter}" filter.`);
+}
+
+function processNotifications(enemies) {
+    if (Object.keys(knownEnemies).length === 0) {
+        enemies.forEach(e => { knownEnemies[e.id] = { state: e.state, online: e.onlineStatus }; });
+        return;
+    }
+    let playedSoundThisTick = false;
+
+    enemies.forEach(newEnemy => {
+        let oldEnemy = knownEnemies[newEnemy.id];
+        if (oldEnemy) {
+            if (oldEnemy.state !== "Okay" && newEnemy.state === "Okay") {
+                if (checkIsFlying(oldEnemy)) {
+                    showToast(`🛬 ${newEnemy.name} has landed and is Okay!`, "okay");
+                    playedSoundThisTick = true;
+                } else {
+                    showToast(`🏥 ${newEnemy.name} left the hospital and is Okay!`, "okay");
+                    playedSoundThisTick = true;
+                }
+            }
+            if (oldEnemy.online !== "Online" && newEnemy.onlineStatus === "Online") {
+                showToast(`🟢 ${newEnemy.name} just came ONLINE!`, "online");
+                playedSoundThisTick = true;
+            }
+        }
+        knownEnemies[newEnemy.id] = { state: newEnemy.state, online: newEnemy.onlineStatus };
     });
-    
-    container.innerHTML = html;
+    if (playedSoundThisTick) playAlertSound();
+}
+
+function showToast(msg, typeClass="red") {
+    const container = document.getElementById("toast-container");
+    const toast = document.createElement("div");
+    toast.className = `toast ${typeClass}`;
+    toast.innerHTML = msg;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.animation = "fadeOut 0.4s ease-out forwards";
+        setTimeout(() => toast.remove(), 400);
+    }, 7000);
 }
 
 async function claimTarget(id) { await fetch('/api/claim', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); fetchWarboard(); }
