@@ -220,7 +220,7 @@
                 <div>
                     <label>Global Discord Webhook (Auto-Pastes Everywhere)</label>
                     <input type="text" id="discord-webhook" placeholder="Paste Discord Webhook URL here">
-                    <button type="button" onclick="testDiscordWebhook()" class="btn-action" style="background: var(--blue); color: #000; margin-top: 8px;">🧪 Test Discord Connection</button>
+                    <button type="button" onclick="testDiscordWebhook()" class="btn-action" style="background: var(--blue); color: #000; margin-top: 8px; width: 100%; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer;">🧪 Test Discord Connection</button>
                     <div id="discord-test-status" style="font-size: 0.8em; margin-top: 5px; font-weight: bold; text-align: center;"></div>
                 </div>
                 <div>
@@ -412,18 +412,20 @@ function getSortPriority(state) {
     return 5;
 }
 
+// THE FIX: Added a strict tie-breaker. If scores match exactly, sort alphabetically so they NEVER swap randomly.
 function sortPlayersList(players, isEnemy) {
     return players.sort((a, b) => {
         const prioA = getSortPriority(a.state);
         const prioB = getSortPriority(b.state);
         if (prioA !== prioB) return prioA - prioB;
         if (a.state === "Hospital" && b.state === "Hospital") {
-            return (a.until || Number.MAX_SAFE_INTEGER) - (b.until || Number.MAX_SAFE_INTEGER);
+            if (a.until !== b.until) return (a.until || Number.MAX_SAFE_INTEGER) - (b.until || Number.MAX_SAFE_INTEGER);
         }
         if (isEnemy && a.state === "Okay" && b.state === "Okay") {
-            return (b.intelScore || 0) - (a.intelScore || 0);
+            if (a.intelScore !== b.intelScore) return (b.intelScore || 0) - (a.intelScore || 0);
         }
-        return 0;
+        // Strict deterministic fallback
+        return a.name.localeCompare(b.name);
     });
 }
 
@@ -518,9 +520,6 @@ function renderChart(friendlyPlayers) {
     }
 }
 
-// -------------------------------------------------------------
-// SECURE DOM NODE RECONCILIATION ENGINE
-// -------------------------------------------------------------
 function updateListDOM(containerId, players, prefix, generateCardHTML, emptyMessage) {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -530,7 +529,6 @@ function updateListDOM(containerId, players, prefix, generateCardHTML, emptyMess
         return;
     }
 
-    // STRICT wipe of the placeholder text to prevent the duplication bug
     if (container.innerHTML.includes("Waiting") || container.innerHTML.includes("Connecting") || container.innerHTML.includes(emptyMessage)) {
         container.innerHTML = "";
     }
@@ -597,7 +595,8 @@ function renderWatchlist(enemies) {
         if (aFlying && bFlying) return (a.landingTime || Number.MAX_SAFE_INTEGER) - (b.landingTime || Number.MAX_SAFE_INTEGER);
         if (aFlying) return -1;
         if (bFlying) return 1;
-        return (b.intelScore || 0) - (a.intelScore || 0);
+        if (a.intelScore !== b.intelScore) return (b.intelScore || 0) - (a.intelScore || 0);
+        return a.name.localeCompare(b.name);
     });
 
     updateListDOM("watchlist-items", watchTargets, "w-card", (p) => {
