@@ -148,18 +148,6 @@ async function verifySubscription(userKey) {
     throw new Error(`SUBSCRIPTION REQUIRED: Your faction's access has expired. Send 5x Xanax to Owen777 [3776908] to instantly unlock access for your entire faction for 1 week!`);
 }
 
-async function verifyFfScouterPremium(ffKey, testId) {
-    if (!ffKey || ffKey === "null" || ffKey === "") return false;
-    try {
-        const res = await fetch(`https://ffscouter.com/api/v1/get-stats?key=${ffKey}&targets=${testId}`);
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) return true; 
-        return false;
-    } catch (e) {
-        return false;
-    }
-}
-
 function computeWarIntel(p, cache = {}) {
     let score = 0;
     if (p.state === "Okay") score += 120;
@@ -489,8 +477,10 @@ app.get('/api/dashboard-data', async (req, res) => {
     const userKey = req.query.apiKey;
     const ffKey = req.query.ffKey || null;
     try {
-        const myUserId = await verifySubscription(userKey);
-        const isPremium = await verifyFfScouterPremium(ffKey, myUserId);
+        await verifySubscription(userKey);
+        
+        // Remove DDOS verification. Just check if a key exists to unlock the UI.
+        const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
 
         const basicResp = await fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`);
         const basicData = await basicResp.json();
@@ -542,7 +532,7 @@ app.get('/api/scan-recruits', async (req, res) => {
     const { apiKey, reportId, ffKey } = req.query;
     try {
         const myUserId = await verifySubscription(apiKey);
-        const isPremium = await verifyFfScouterPremium(ffKey, myUserId);
+        const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
 
         const reportRes = await fetch(`https://api.torn.com/torn/${reportId}?selections=rankedwarreport&key=${apiKey}`);
         const reportData = await reportRes.json();
@@ -682,10 +672,10 @@ app.get('/api/warboard', async (req, res) => {
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
         const ffKey = req.query.ffKey && req.query.ffKey !== "null" && req.query.ffKey !== "" ? req.query.ffKey : null;
-        const myUserId = await verifySubscription(userKey);
+        await verifySubscription(userKey);
         if (userKey) apiKeyPool.add(userKey);
 
-        const isPremium = await verifyFfScouterPremium(ffKey, myUserId);
+        const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
         let enemyId = req.query.enemyFaction || null;
         
         let [myData, enemyDataResult] = await Promise.all([
@@ -696,6 +686,22 @@ app.get('/api/warboard', async (req, res) => {
         if (enemyId && Object.keys(enemyDataResult.members || {}).length === 0) { 
             enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })); 
         }
+
+        const friendlyIds = new Set(Object.keys(myData.members || {}));
+        const enemyIds = new Set(Object.keys(enemyDataResult.members || {}));
+        
+        [...friendlyIds, ...enemyIds].forEach(id => {
+            if (!statsCache[id] || (Date.now() - statsCache[id].time) > 3600000) { 
+                if (isPremium && !statQueue.has(id)) statQueue.set(id, ffKey); 
+            }
+            const m = myData.members[id] || enemyDataResult.members[id];
+            const isTraveling = m.status?.state === "Traveling" || (m.status?.description && m.status?.description.includes("Traveling"));
+            if (isTraveling) { 
+                if (!flightCache[id] || (Date.now() - flightCache[id].time) > 30000) { 
+                    if (isPremium && !flightQueue.has(id)) flightQueue.set(id, ffKey); 
+                } 
+            }
+        });
 
         const parseMembers = (data, isEnemy = false) => {
             if (!data.members) return [];
