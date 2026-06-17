@@ -646,7 +646,7 @@ app.post('/api/ai-analyze-ongoing', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
-// THE FIX: Fully restored the Deep Log Scraper to correctly pull Assists and Clears
+// FIX: Expanded Deep Scrape to 200 pages to catch long wars, and fixed the '0' factionless bug
 app.get('/api/past-war', async (req, res) => {
     const { apiKey, reportId } = req.query;
     try {
@@ -700,7 +700,8 @@ app.get('/api/past-war', async (req, res) => {
             let keepScraping = true;
             let pageCount = 0;
             
-            while (keepScraping && pageCount < 30) { 
+            // Bumped to 200 pages (20,000 attacks) to prevent missing data in massive wars
+            while (keepScraping && pageCount < 200) { 
                 const attackRes = await fetch(`https://api.torn.com/faction/?selections=attacks&to=${toTimestamp}&key=${apiKey}`);
                 const attackData = await attackRes.json();
                 
@@ -721,8 +722,14 @@ app.get('/api/past-war', async (req, res) => {
                         let uId = atk.attacker_id.toString();
                         if (!advancedStats[uId]) advancedStats[uId] = { assists: 0, clears: 0 };
                         
-                        if (atk.result === "Assist") advancedStats[uId].assists++;
-                        if (atk.defender_faction && atk.defender_faction.toString() !== enemyFacId) advancedStats[uId].clears++;
+                        if (atk.result === "Assist") {
+                            advancedStats[uId].assists++;
+                        } else if (atk.defender_faction !== undefined && atk.defender_faction.toString() !== enemyFacId) {
+                            // Validates successfully completed attacks, ignoring losses/escapes
+                            if (["Attacked", "Mugged", "Hospitalized", "Arrested", "Special"].includes(atk.result)) {
+                                advancedStats[uId].clears++;
+                            }
+                        }
                     }
                 }
                 toTimestamp = oldestTime - 1;
