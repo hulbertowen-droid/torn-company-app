@@ -71,6 +71,10 @@
         .profile { font-weight: bold; color: var(--text-main); text-decoration: none; font-size: 1.1em; }
         .profile:hover { text-decoration: underline; color: var(--blue); }
         
+        /* NEW: Inspect Button */
+        .btn-inspect { background: rgba(88, 166, 255, 0.15); color: var(--blue); border: 1px solid var(--blue); padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: bold; text-transform: uppercase; cursor: pointer; transition: 0.2s; margin-left: 8px; vertical-align: middle; }
+        .btn-inspect:hover { background: var(--blue); color: #000; box-shadow: 0 0 8px rgba(88,166,255,0.4); }
+
         .badge-bounty { background: rgba(255, 71, 87, 0.15); color: var(--red); border: 1px solid var(--red); padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: bold; text-transform: uppercase; text-decoration: none; margin-left: 8px; transition: 0.2s; vertical-align: middle; }
         .badge-bounty:hover { background: var(--red); color: white; box-shadow: 0 0 8px rgba(255,71,87,0.5); }
 
@@ -119,6 +123,7 @@
         details > summary { list-style: none; outline: none; }
         details > summary::-webkit-details-marker { display: none; }
 
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
         @keyframes scanPulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
         @keyframes pulseAttack { 0% { box-shadow: 0 0 5px rgba(255, 71, 87, 0.4); } 50% { box-shadow: 0 0 15px rgba(255, 71, 87, 0.8); } 100% { box-shadow: 0 0 5px rgba(255, 71, 87, 0.4); } }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
@@ -227,6 +232,17 @@
                     <input type="number" id="api-cpm" min="1" max="60" value="12" placeholder="e.g. 12 calls/min = 1 refresh every 5s">
                 </div>
                 <button class="btn-save" onclick="saveSettings()">Save & Connect</button>
+            </div>
+        </div>
+
+        <!-- NEW: Target Inspect Modal -->
+        <div id="inspect-modal" class="modal-overlay">
+            <div class="modal-content" style="width: 500px; max-width: 90vw;">
+                <div class="close-btn" onclick="closeInspect()">&times;</div>
+                <h2 id="inspect-title" style="color: var(--blue); border-bottom: 1px solid #2f3542; padding-bottom: 10px; margin-top: 0; text-transform: uppercase;">🔍 Target Intel</h2>
+                <div id="inspect-body">
+                    <div style="color:var(--text-dim); text-align:center; padding: 20px; font-style:italic;">Establishing secure uplink to Torn database...</div>
+                </div>
             </div>
         </div>
 
@@ -565,7 +581,6 @@ function updateListDOM(containerId, players, prefix, generateCardHTML, emptyMess
     });
 }
 
-// FIX: Strictly handles the precise null/hidden value return and shortens the lock badge
 function formatEstStats(estValue, premiumActive) {
     if (estValue === "🔒 Requires FF Scouter") {
         return `<div class="stat-val lock-badge">🔒 FF Scouter</div>`;
@@ -602,7 +617,8 @@ function renderWatchlist(enemies) {
         if (aFlying && bFlying) return (a.landingTime || Number.MAX_SAFE_INTEGER) - (b.landingTime || Number.MAX_SAFE_INTEGER);
         if (aFlying) return -1;
         if (bFlying) return 1;
-        return (b.intelScore || 0) - (a.intelScore || 0);
+        if (a.intelScore !== b.intelScore) return (b.intelScore || 0) - (a.intelScore || 0);
+        return a.name.localeCompare(b.name);
     });
 
     updateListDOM("watchlist-items", watchTargets, "w-card", (p) => {
@@ -747,7 +763,10 @@ function renderEnemyList(players, premiumActive) {
         let innerContent = `
             <div class="card-header">
                 <div>
-                    <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
+                        <button class="btn-inspect" onclick="inspectTarget('${p.id}', '${p.name.replace(/'/g, "\\'")}')">🔍 Inspect</button>
+                    </div>
                     <div class="action-arrow">
                         <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
                     </div>
@@ -827,6 +846,75 @@ async function cancelBackup(id) { await fetch('/api/unbackup', { method: 'POST',
 async function promptUpdateStats(id) {
     const statInput = prompt("Enter exact/estimated stats for this player (Numbers only):");
     if (statInput && !isNaN(statInput)) { await fetch('/api/update-stats', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, stats: parseInt(statInput) }) }); fetchWarboard(); }
+}
+
+// NEW: Inspect Player Function
+async function inspectTarget(id, name) {
+    document.getElementById('inspect-title').innerText = `🔍 Target Intel: ${name} [${id}]`;
+    document.getElementById('inspect-body').innerHTML = `<div style="color:var(--text-dim); text-align:center; padding: 20px; font-style:italic;">Establishing secure uplink to Torn database...</div>`;
+    document.getElementById('inspect-modal').style.display = "flex";
+
+    try {
+        const res = await fetch(`/api/inspect?apiKey=${myKey}&targetId=${id}`);
+        const json = await res.json();
+        
+        if (json.error) {
+            document.getElementById('inspect-body').innerHTML = `<div style="color:var(--red); font-weight:bold; text-align:center;">${json.error}</div>`;
+            return;
+        }
+
+        const p = json.data;
+        const stats = p.personalstats || {};
+        
+        const weapons = {
+            "Rifle": stats.riflehits || 0,
+            "SMG": stats.smghits || 0,
+            "Machine Gun": stats.machinegunhits || 0,
+            "Shotgun": stats.shotgunhits || 0,
+            "Pistol": stats.pistolhits || 0,
+            "Piercing": stats.piercinghits || 0,
+            "Slashing": stats.slashinghits || 0,
+            "Clubbing": stats.clubbinghits || 0,
+            "H2H": stats.h2hhits || 0
+        };
+        
+        let topWep = Object.keys(weapons).reduce((a, b) => weapons[a] > weapons[b] ? a : b);
+        if (weapons[topWep] === 0) topWep = "Unknown";
+
+        const lifeMax = p.life ? p.life.maximum.toLocaleString() : "Unknown";
+        const xanax = stats.xantaken ? stats.xantaken.toLocaleString() : 0;
+        const seUsed = stats.statenhancersused ? stats.statenhancersused.toLocaleString() : 0;
+        const defendsLost = stats.defendslost ? stats.defendslost.toLocaleString() : 0;
+
+        document.getElementById('inspect-body').innerHTML = `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div style="background: #0b0d13; padding: 15px; border-radius: 8px; border: 1px solid #2f3542;">
+                    <h4 style="margin:0 0 10px 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 5px;">Player Profile</h4>
+                    <div style="font-size: 0.9em; line-height: 1.6;">
+                        <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Level:</span> <span>${p.level || '?'}</span></div>
+                        <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Rank:</span> <span>${p.rank || '?'}</span></div>
+                        <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Age:</span> <span>${p.age || '?'} days</span></div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 5px;"><span style="color:var(--text-dim); font-weight:bold;">Max Life:</span> <span style="color:var(--green); font-weight:bold;">${lifeMax}</span></div>
+                    </div>
+                </div>
+                <div style="background: #0b0d13; padding: 15px; border-radius: 8px; border: 1px solid #2f3542;">
+                    <h4 style="margin:0 0 10px 0; color: var(--red); border-bottom: 1px solid #2f3542; padding-bottom: 5px;">Combat Profiler</h4>
+                    <div style="font-size: 0.9em; line-height: 1.6;">
+                        <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Fav Weapon:</span> <span style="color:var(--blue); font-weight:bold;">${topWep}</span></div>
+                        <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Xanax Taken:</span> <span>${xanax}</span></div>
+                        <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">SEs Used:</span> <span>${seUsed}</span></div>
+                        <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Defends Lost:</span> <span>${defendsLost}</span></div>
+                    </div>
+                </div>
+            </div>
+        `;
+    } catch(e) {
+        document.getElementById('inspect-body').innerHTML = `<div style="color:var(--red); font-weight:bold; text-align:center;">Failed to connect to API.</div>`;
+    }
+}
+
+function closeInspect() {
+    document.getElementById('inspect-modal').style.display = "none";
 }
 </script>
 </body>
