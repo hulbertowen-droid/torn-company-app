@@ -17,6 +17,7 @@ const ADMIN_DISCORD_WEBHOOK = process.env.ADMIN_DISCORD_WEBHOOK || "";
 const VIP_FACTIONS = (process.env.VIP_FACTIONS || "").split(',').map(id => id.trim());
 const VIP_PLAYERS = (process.env.VIP_PLAYERS || "").split(',').map(id => id.trim());
 
+// Local Databases & Caches
 let claims = {};
 let backups = {}; 
 let statsCache = {}; 
@@ -24,6 +25,7 @@ let manualStats = {};
 let flightCache = {}; 
 let activityCache = {}; 
 let warScrapeCache = {}; 
+let spyDatabase = {}; 
 
 let statQueue = new Map();
 let flightQueue = new Map();
@@ -41,7 +43,6 @@ let liveAttacks = {};
 let liveDefends = {}; 
 let processedAttackIds = new Set();
 
-let bonusHits = {}; 
 const BONUS_THRESHOLDS = new Set([10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000]);
 
 let subscriptions = {};
@@ -56,16 +57,20 @@ let marketConfig = { webhookUrl: "", autoDefense: false, sniperTargets: [] };
 let marketMemory = { defense: {}, sniper: {} };
 let vipConfig = { factions: [], players: [] }; 
 
+// File System Loaders
 try { if (fs.existsSync('subscriptions.json')) subscriptions = JSON.parse(fs.readFileSync('subscriptions.json')); } catch (e) {}
 try { if (fs.existsSync('discord_config.json')) discordConfig = { ...discordConfig, ...JSON.parse(fs.readFileSync('discord_config.json')) }; } catch(e) {}
 try { if (fs.existsSync('market_config.json')) marketConfig = { ...marketConfig, ...JSON.parse(fs.readFileSync('market_config.json')) }; } catch(e) {}
 try { if (fs.existsSync('vip_config.json')) vipConfig = { ...vipConfig, ...JSON.parse(fs.readFileSync('vip_config.json')) }; } catch(e) {}
+try { if (fs.existsSync('spy_db.json')) spyDatabase = JSON.parse(fs.readFileSync('spy_db.json')); } catch(e) {}
 
 function saveSubs() { fs.writeFileSync('subscriptions.json', JSON.stringify(subscriptions)); }
 function saveDiscordConfig() { fs.writeFileSync('discord_config.json', JSON.stringify(discordConfig)); }
 function saveMarketConfig() { fs.writeFileSync('market_config.json', JSON.stringify(marketConfig)); }
 function saveVipConfig() { fs.writeFileSync('vip_config.json', JSON.stringify(vipConfig)); }
+function saveSpyDb() { fs.writeFileSync('spy_db.json', JSON.stringify(spyDatabase)); }
 
+// Initialize Admin Faction
 if (ADMIN_API_KEY) {
     fetch(`https://api.torn.com/user/?selections=profile&key=${ADMIN_API_KEY}`)
         .then(r => r.json())
@@ -74,6 +79,12 @@ if (ADMIN_API_KEY) {
 }
 if (discordConfig.apiKey) apiKeyPool.add(discordConfig.apiKey);
 
+
+// ==========================================
+// BACKGROUND ENGINES & SCRAPERS
+// ==========================================
+
+// Engine 1: Payment Watcher (60s)
 setInterval(async () => {
     if (!ADMIN_API_KEY) return;
     try {
@@ -106,7 +117,6 @@ setInterval(async () => {
                         if (facId && facId !== 0) {
                             let now = Date.now();
                             if (!subscriptions[facId] || subscriptions[facId] < now) subscriptions[facId] = now;
-                            
                             subscriptions[facId] += weeks * 7 * 24 * 60 * 60 * 1000;
                             saveSubs();
                             
@@ -124,9 +134,208 @@ setInterval(async () => {
     } catch (err) {}
 }, 60000); 
 
+// Engine 2: FF Scouter Queues (Stats, Flights, Activity)
+setInterval(async () => {
+    if (statQueue.size === 0 || isProcessingStats) return;
+    isProcessingStats = true;
+    let firstEntry = statQueue.entries().next().value;
+    let ffKeyToUse = firstEntry[1];
+    let batch = [];
+    for (let [id, key] of statQueue.entries()) {
+        if (key === ffKeyToUse && batch.length < 40) { batch.push(id); statQueue.delete(id); }
+    }
+    try {
+        const res = await fetch(`https://ffscouter.com/api/v1/get-stats?key=${ffKeyToUse}&targets=${batch.join(',')}`);
+        const data = await res.json();
+        if (Array.isArray(data)) { data.forEach(p => { statsCache[p.player_id.toString()] = { stats: p.bs_estimate, time: Date.now() }; }); }
+    } catch (err) {}
+    isProcessingStats = false;
+}, 4000);
+
+setInterval(async () => {
+    if (flightQueue.size === 0 || isProcessingFlights) return;
+    isProcessingFlights = true;
+    let [targetId, ffKeyToUse] = flightQueue.entries().next().value;
+    flightQueue.delete(targetId);
+    try {
+        const res = await fetch(`https://ffscouter.com/api/v1/player-flights?key=${ffKeyToUse}&target=${targetId}`);
+        const data = await res.json();
+        if (data.current && data.current.latest_arrival_time) { flightCache[targetId] = { landingTime: data.current.latest_arrival_time, time: Date.now() }; } 
+        else { flightCache[targetId] = { landingTime: null, time: Date.now() }; }
+    } catch (err) {}
+    isProcessingFlights = false;
+}, 1000); 
+
+setInterval(async () => {
+    if (activityQueue.size === 0 || isProcessingActivity) return;
+    isProcessingActivity = true;
+    let [targetId, ffKeyToUse] = activityQueue.entries().next().value;
+    activityQueue.delete(targetId);
+    const end = Math.floor(Date.now() / 1000);
+    const start = end - (12 * 3600); 
+    try {
+        const res = await fetch(`https://ffscouter.com/api/v1/activity/player?key=${ffKeyToUse}&target=${targetId}&start=${start}&end=${end}&bucket=3600`);
+        const data = await res.json();
+        if (data.code === 0 && Array.isArray(data.buckets)) { activityCache[targetId] = { timeline: data.buckets.map(b => b.activity_score), time: Date.now() }; } 
+        else { activityCache[targetId] = { timeline: [], time: Date.now() }; }
+    } catch (err) {}
+    isProcessingActivity = false;
+}, 1500); 
+
+// Engine 3: Wall Watcher & Chain Milestones (20s)
+setInterval(async () => {
+    let watchFactionId = adminFactionId || discordConfig.factionId;
+    if (apiKeyPool.size === 0 || !watchFactionId) return;
+    const keys = Array.from(apiKeyPool);
+    try {
+        let liveKey = keys[Math.floor(Math.random() * keys.length)];
+        const liveRes = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${liveKey}`);
+        const liveData = await liveRes.json();
+        
+        if (liveData.attacks) {
+            for (let [atkId, atk] of Object.entries(liveData.attacks)) {
+                if (processedAttackIds.has(atkId)) continue;
+                processedAttackIds.add(atkId);
+                
+                // Friendly Attacked (Wall Watcher)
+                if (atk.defender_faction && atk.defender_faction.toString() === watchFactionId) {
+                    let uId = atk.defender_id.toString();
+                    let attFacId = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
+                    if (!liveDefends[uId]) liveDefends[uId] = {};
+                    liveDefends[uId][attFacId] = (liveDefends[uId][attFacId] || 0) + 1;
+                    
+                    if (discordConfig.friendlyAttacked && discordConfig.webhookUrl) {
+                        let attackerName = atk.attacker_name || "Unknown"; 
+                        let attackerId = atk.attacker_id; 
+                        let attackerFactionName = atk.attacker_faction_name || "None"; 
+                        let defenderName = atk.defender_name || uId;
+                        fetch(discordConfig.webhookUrl, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ content: `🛡️ **WALL WATCHER:** \`${defenderName}\` is getting hit by **${attackerName}**!\n🏢 **Enemy Faction:** \`${attackerFactionName}\`\n⚔️ **Retaliate:** https://www.torn.com/loader.php?sid=attack&user2ID=${attackerId}` })
+                        }).catch(() => {});
+                    }
+                }
+                // Friendly Attacks Outward
+                if (atk.attacker_faction && atk.attacker_faction.toString() === watchFactionId) {
+                    let uId = atk.attacker_id.toString();
+                    let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
+                    if (!liveAttacks[uId]) liveAttacks[uId] = {};
+                    liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
+                    
+                    if (atk.chain && BONUS_THRESHOLDS.has(atk.chain)) {
+                        if (discordConfig.chainMilestone && discordConfig.webhookUrl) {
+                            fetch(discordConfig.webhookUrl, {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ content: `🏆 **CHAIN MILESTONE:** Hit #**${atk.chain}** made by \`${atk.attacker_name || uId}\` (+${atk.respect_gain || 0} respect)!` })
+                            }).catch(() => {});
+                        }
+                    }
+                }
+            }
+        }
+    } catch (err) {}
+}, 20000); 
+
+// Engine 4: Market Undercut Watcher (45s)
+setInterval(async () => {
+    if (!marketConfig.webhookUrl || apiKeyPool.size === 0) return;
+    const keys = Array.from(apiKeyPool);
+    const key = keys[Math.floor(Math.random() * keys.length)];
+    try {
+        if (marketConfig.autoDefense && ADMIN_API_KEY) {
+            const userRes = await fetch(`https://api.torn.com/user/?selections=bazaar,profile&key=${ADMIN_API_KEY}`);
+            const userData = await userRes.json();
+            
+            if (userData.bazaar && userData.bazaar.length > 0) {
+                let myPrices = {};
+                userData.bazaar.forEach(item => {
+                    if (!myPrices[item.ID] || item.price < myPrices[item.ID].price) { myPrices[item.ID] = { price: item.price, name: item.name }; }
+                });
+
+                for (let [itemId, myItem] of Object.entries(myPrices)) {
+                    const mktRes = await fetch(`https://api.torn.com/market/${itemId}?selections=bazaar,itemmarket&key=${key}`);
+                    const mktData = await mktRes.json();
+
+                    if (mktData.bazaar || mktData.itemmarket) {
+                        let lowestMarketPrice = Infinity;
+                        const checkListings = (listings) => {
+                            if (!listings) return;
+                            Object.values(listings).forEach(listing => { if (listing.cost < myItem.price && listing.cost < lowestMarketPrice) lowestMarketPrice = listing.cost; });
+                        };
+                        checkListings(mktData.bazaar); checkListings(mktData.itemmarket);
+
+                        if (lowestMarketPrice < myItem.price) {
+                            if (marketMemory.defense[itemId] !== lowestMarketPrice) {
+                                marketMemory.defense[itemId] = lowestMarketPrice;
+                                fetch(marketConfig.webhookUrl, {
+                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ content: `📉 **MARKET ALERT:** Your \`${myItem.name}\` ($${myItem.price.toLocaleString()}) got undercut! New lowest: **$${lowestMarketPrice.toLocaleString()}**\n[Check Market](https://www.torn.com/imarket.php#/p=shop&step=shop&type=&searchname=${myItem.name})` })
+                                }).catch(()=>{});
+                            }
+                        } else { delete marketMemory.defense[itemId]; }
+                    }
+                    await new Promise(r => setTimeout(r, 500)); 
+                }
+            }
+        }
+    } catch (err) {}
+}, 45000); 
+
+// Engine 5: Target Surveillance & Chain Drop Watcher (30s)
+setInterval(async () => {
+    let watchKey = ADMIN_API_KEY || discordConfig.apiKey;
+    let watchFactionId = adminFactionId || discordConfig.factionId;
+    if (!watchKey || !watchFactionId) return;
+
+    try {
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,chain,rankedwars&key=${watchKey}`);
+        const facData = await facRes.json();
+        if (facData.error) return;
+
+        if (facData.chain && facData.chain.current >= 10) {
+            let secondsLeft = facData.chain.timeout;
+            if (secondsLeft <= 90 && secondsLeft > 0 && !lastChainTimeoutAlertState && discordConfig.chainUnder90 && discordConfig.webhookUrl) {
+                fetch(discordConfig.webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: `⚠️ **CHAIN DROPPING!** Under 90s (${secondsLeft}s left)! Someone make a hit right now!` }) }).catch(() => {});
+                lastChainTimeoutAlertState = true;
+            } else if (secondsLeft > 120) { lastChainTimeoutAlertState = false; }
+        } else { lastChainTimeoutAlertState = false; }
+
+        let activeEnemyId = autoDetectEnemyFaction(facData);
+        if (activeEnemyId && discordConfig.webhookUrl) {
+            const enemyRes = await fetch(`https://api.torn.com/faction/${activeEnemyId}?selections=basic&key=${watchKey}`);
+            const enemyData = await enemyRes.json();
+            
+            if (enemyData.members) {
+                Object.entries(enemyData.members).forEach(([id, m]) => {
+                    let oldRecord = backgroundEnemyTrackingState[id];
+                    let newRecord = { state: m.status?.state, online: m.last_action?.status, description: m.status?.description };
+                    
+                    if (oldRecord) {
+                        if (oldRecord.online !== "Online" && newRecord.online === "Online" && discordConfig.targetOnline) {
+                            fetch(discordConfig.webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: `🟢 **TARGET ONLINE:** ${m.name} [${id}] just came online!` }) }).catch(() => {});
+                        }
+                        if (oldRecord.state !== "Okay" && newRecord.state === "Okay") {
+                            let oldDesc = oldRecord.description || "";
+                            if ((oldRecord.state === "Traveling" || oldDesc.includes("Traveling") || oldDesc.includes("Abroad")) && discordConfig.targetLanded) {
+                                fetch(discordConfig.webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: `✈️ **TARGET LANDED:** ${m.name} [${id}] just landed in Torn!` }) }).catch(() => {});
+                            } else if (oldRecord.state === "Hospital" && discordConfig.targetOutHosp) {
+                                fetch(discordConfig.webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: `🏥 **TARGET OUT OF HOSP:** ${m.name} [${id}] just left the hospital and is Okay!` }) }).catch(() => {});
+                            }
+                        }
+                    }
+                    backgroundEnemyTrackingState[id] = newRecord;
+                });
+            }
+        }
+    } catch (err) {}
+}, 30000);
+
+
+// ==========================================
+// HELPERS & AUTHENTICATION
+// ==========================================
 async function verifySubscription(userKey) {
     if (!userKey) throw new Error("No API Key provided.");
-    
     const res = await fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`);
     const data = await res.json();
     if (data.error) throw new Error("Invalid API Key.");
@@ -136,26 +345,12 @@ async function verifySubscription(userKey) {
 
     if (ADMIN_API_KEY && userKey === ADMIN_API_KEY) return playerId;
     if (playerId && (VIP_PLAYERS.includes(playerId) || vipConfig.players.includes(playerId))) return playerId;
-    
     if (!facId || facId === "0") throw new Error("You must be in a faction to use these tools.");
-
     if (adminFactionId && facId === adminFactionId) return playerId;
     if (VIP_FACTIONS.includes(facId) || vipConfig.factions.includes(facId)) return playerId;
     if (subscriptions[facId] && subscriptions[facId] > Date.now()) return playerId;
 
     throw new Error(`SUBSCRIPTION REQUIRED: Your faction's access has expired. Send 5x Xanax to Owen777 [3776908] to instantly unlock access for your entire faction for 1 week!`);
-}
-
-async function verifyFfScouterPremium(ffKey, testId) {
-    if (!ffKey || ffKey === "null" || ffKey === "") return false;
-    try {
-        const res = await fetch(`https://ffscouter.com/api/v1/get-stats?key=${ffKey}&targets=${testId}`);
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) return true; 
-        return false;
-    } catch (e) {
-        return false;
-    }
 }
 
 function computeWarIntel(p, cache = {}) {
@@ -184,257 +379,9 @@ function computeWarIntel(p, cache = {}) {
     return score;
 }
 
-function autoDetectEnemyFaction(data) {
-    if (!data || !data.ID) return null;
-    const myId = data.ID.toString();
-    if (data.rankedwars && Object.keys(data.rankedwars).length > 0) {
-        for (let warId in data.rankedwars) {
-            let w = data.rankedwars[warId];
-            if (w.war && w.war.winner === 0) { 
-                const factions = Object.keys(w.factions || {});
-                const enemy = factions.find(id => id !== myId);
-                if (enemy) return enemy;
-            }
-        }
-    }
-    return null;
-}
-
-setInterval(async () => {
-    if (statQueue.size === 0 || isProcessingStats) return;
-    isProcessingStats = true;
-    
-    let firstEntry = statQueue.entries().next().value;
-    let ffKeyToUse = firstEntry[1];
-    let batch = [];
-    
-    for (let [id, key] of statQueue.entries()) {
-        if (key === ffKeyToUse && batch.length < 40) {
-            batch.push(id);
-            statQueue.delete(id);
-        }
-    }
-    
-    try {
-        const res = await fetch(`https://ffscouter.com/api/v1/get-stats?key=${ffKeyToUse}&targets=${batch.join(',')}`);
-        const data = await res.json();
-        if (Array.isArray(data)) {
-            data.forEach(p => { statsCache[p.player_id.toString()] = { stats: p.bs_estimate, time: Date.now() }; });
-        }
-    } catch (err) {}
-    isProcessingStats = false;
-}, 4000);
-
-setInterval(async () => {
-    if (flightQueue.size === 0 || isProcessingFlights) return;
-    isProcessingFlights = true;
-    
-    let [targetId, ffKeyToUse] = flightQueue.entries().next().value;
-    flightQueue.delete(targetId);
-    
-    try {
-        const res = await fetch(`https://ffscouter.com/api/v1/player-flights?key=${ffKeyToUse}&target=${targetId}`);
-        const data = await res.json();
-        if (data.current && data.current.latest_arrival_time) {
-            flightCache[targetId] = { landingTime: data.current.latest_arrival_time, time: Date.now() };
-        } else {
-            flightCache[targetId] = { landingTime: null, time: Date.now() };
-        }
-    } catch (err) {}
-    isProcessingFlights = false;
-}, 1000); 
-
-setInterval(async () => {
-    if (activityQueue.size === 0 || isProcessingActivity) return;
-    isProcessingActivity = true;
-    
-    let [targetId, ffKeyToUse] = activityQueue.entries().next().value;
-    activityQueue.delete(targetId);
-
-    const end = Math.floor(Date.now() / 1000);
-    const start = end - (12 * 3600); 
-
-    try {
-        const res = await fetch(`https://ffscouter.com/api/v1/activity/player?key=${ffKeyToUse}&target=${targetId}&start=${start}&end=${end}&bucket=3600`);
-        const data = await res.json();
-        if (data.code === 0 && Array.isArray(data.buckets)) {
-            const timeline = data.buckets.map(b => b.activity_score);
-            activityCache[targetId] = { timeline: timeline, time: Date.now() };
-        } else {
-            activityCache[targetId] = { timeline: [], time: Date.now() };
-        }
-    } catch (err) {}
-    isProcessingActivity = false;
-}, 1500); 
-
-setInterval(async () => {
-    let watchFactionId = adminFactionId || discordConfig.factionId;
-    if (apiKeyPool.size === 0 || !watchFactionId) return;
-    
-    const keys = Array.from(apiKeyPool);
-    
-    try {
-        let liveKey = keys[Math.floor(Math.random() * keys.length)];
-        const liveRes = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${liveKey}`);
-        const liveData = await liveRes.json();
-        
-        if (liveData.attacks) {
-            for (let [atkId, atk] of Object.entries(liveData.attacks)) {
-                if (processedAttackIds.has(atkId)) continue;
-                processedAttackIds.add(atkId);
-                
-                if (atk.defender_faction && atk.defender_faction.toString() === watchFactionId) {
-                    let uId = atk.defender_id.toString();
-                    let attFacId = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
-                    if (!liveDefends[uId]) liveDefends[uId] = {};
-                    liveDefends[uId][attFacId] = (liveDefends[uId][attFacId] || 0) + 1;
-                    
-                    if (discordConfig.friendlyAttacked && discordConfig.webhookUrl) {
-                        let attackerName = atk.attacker_name || "Unknown";
-                        let attackerId = atk.attacker_id;
-                        let attackerFactionName = atk.attacker_faction_name || "None";
-                        let defenderName = atk.defender_name || uId;
-
-                        let discordMsg = `🛡️ **WALL WATCHER:** \`${defenderName}\` is getting hit by **${attackerName}**!\n🏢 **Enemy Faction:** \`${attackerFactionName}\`\n⚔️ **Retaliate:** https://www.torn.com/loader.php?sid=attack&user2ID=${attackerId}`;
-
-                        fetch(discordConfig.webhookUrl, {
-                            method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ content: discordMsg })
-                        }).catch(() => {});
-                    }
-                }
-
-                if (atk.attacker_faction && atk.attacker_faction.toString() === watchFactionId) {
-                    let uId = atk.attacker_id.toString();
-                    let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
-                    if (!liveAttacks[uId]) liveAttacks[uId] = {};
-                    liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
-
-                    if (atk.chain && BONUS_THRESHOLDS.has(atk.chain)) {
-                        if (discordConfig.chainMilestone && discordConfig.webhookUrl) {
-                            fetch(discordConfig.webhookUrl, {
-                                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ content: `🏆 **CHAIN MILESTONE:** Hit #**${atk.chain}** made by \`${atk.attacker_name || uId}\` (+${atk.respect_gain || 0} respect)!` })
-                            }).catch(() => {});
-                        }
-                    }
-                }
-            }
-        }
-    } catch (err) {}
-}, 20000); 
-
-setInterval(async () => {
-    if (!marketConfig.webhookUrl || apiKeyPool.size === 0) return;
-    const keys = Array.from(apiKeyPool);
-    const key = keys[Math.floor(Math.random() * keys.length)];
-
-    try {
-        if (marketConfig.autoDefense && ADMIN_API_KEY) {
-            const userRes = await fetch(`https://api.torn.com/user/?selections=bazaar,profile&key=${ADMIN_API_KEY}`);
-            const userData = await userRes.json();
-            
-            if (userData.bazaar && userData.bazaar.length > 0) {
-                let myPrices = {};
-                userData.bazaar.forEach(item => {
-                    if (!myPrices[item.ID] || item.price < myPrices[item.ID].price) {
-                        myPrices[item.ID] = { price: item.price, name: item.name };
-                    }
-                });
-
-                for (let [itemId, myItem] of Object.entries(myPrices)) {
-                    const mktRes = await fetch(`https://api.torn.com/market/${itemId}?selections=bazaar,itemmarket&key=${key}`);
-                    const mktData = await mktRes.json();
-
-                    if (mktData.bazaar || mktData.itemmarket) {
-                        let lowestMarketPrice = Infinity;
-                        const checkListings = (listings) => {
-                            if (!listings) return;
-                            Object.values(listings).forEach(listing => {
-                                if (listing.cost < myItem.price && listing.cost < lowestMarketPrice) lowestMarketPrice = listing.cost;
-                            });
-                        };
-                        checkListings(mktData.bazaar);
-                        checkListings(mktData.itemmarket);
-
-                        if (lowestMarketPrice < myItem.price) {
-                            if (marketMemory.defense[itemId] !== lowestMarketPrice) {
-                                marketMemory.defense[itemId] = lowestMarketPrice;
-                                fetch(marketConfig.webhookUrl, {
-                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ content: `📉 **MARKET ALERT:** Your \`${myItem.name}\` ($${myItem.price.toLocaleString()}) got undercut! New lowest: **$${lowestMarketPrice.toLocaleString()}**\n[Check Market](https://www.torn.com/imarket.php#/p=shop&step=shop&type=&searchname=${myItem.name})` })
-                                }).catch(()=>{});
-                            }
-                        } else { delete marketMemory.defense[itemId]; }
-                    }
-                    await new Promise(r => setTimeout(r, 500)); 
-                }
-            }
-        }
-    } catch (err) {}
-}, 45000); 
-
-setInterval(async () => {
-    let watchKey = ADMIN_API_KEY || discordConfig.apiKey;
-    let watchFactionId = adminFactionId || discordConfig.factionId;
-    
-    if (!watchKey || !watchFactionId) return;
-
-    try {
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,chain,rankedwars&key=${watchKey}`);
-        const facData = await facRes.json();
-        if (facData.error) return;
-
-        if (facData.chain && facData.chain.current >= 10) {
-            let secondsLeft = facData.chain.timeout;
-            if (secondsLeft <= 90 && secondsLeft > 0 && !lastChainTimeoutAlertState && discordConfig.chainUnder90 && discordConfig.webhookUrl) {
-                fetch(discordConfig.webhookUrl, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content: `⚠️ **CHAIN DROPPING!** Under 90s (${secondsLeft}s left)! Someone make a hit right now!` })
-                }).catch(() => {});
-                lastChainTimeoutAlertState = true;
-            } else if (secondsLeft > 120) { lastChainTimeoutAlertState = false; }
-        } else { lastChainTimeoutAlertState = false; }
-
-        let activeEnemyId = autoDetectEnemyFaction(facData);
-        if (activeEnemyId && discordConfig.webhookUrl) {
-            const enemyRes = await fetch(`https://api.torn.com/faction/${activeEnemyId}?selections=basic&key=${watchKey}`);
-            const enemyData = await enemyRes.json();
-            
-            if (enemyData.members) {
-                Object.entries(enemyData.members).forEach(([id, m]) => {
-                    let oldRecord = backgroundEnemyTrackingState[id];
-                    let newRecord = { state: m.status?.state, online: m.last_action?.status, description: m.status?.description };
-                    
-                    if (oldRecord) {
-                        if (oldRecord.online !== "Online" && newRecord.online === "Online" && discordConfig.targetOnline) {
-                            fetch(discordConfig.webhookUrl, {
-                                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ content: `🟢 **TARGET ONLINE:** ${m.name} [${id}] just came online!` })
-                            }).catch(() => {});
-                        }
-                        if (oldRecord.state !== "Okay" && newRecord.state === "Okay") {
-                            let oldDesc = oldRecord.description || "";
-                            if ((oldRecord.state === "Traveling" || oldDesc.includes("Traveling") || oldDesc.includes("Abroad")) && discordConfig.targetLanded) {
-                                fetch(discordConfig.webhookUrl, {
-                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ content: `✈️ **TARGET LANDED:** ${m.name} [${id}] just landed in Torn!` })
-                                }).catch(() => {});
-                            } else if (oldRecord.state === "Hospital" && discordConfig.targetOutHosp) {
-                                fetch(discordConfig.webhookUrl, {
-                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ content: `🏥 **TARGET OUT OF HOSP:** ${m.name} [${id}] just left the hospital and is Okay!` })
-                                }).catch(() => {});
-                            }
-                        }
-                    }
-                    backgroundEnemyTrackingState[id] = newRecord;
-                });
-            }
-        }
-    } catch (err) {}
-}, 30000);
-
+// ==========================================
+// API ENDPOINTS
+// ==========================================
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
 app.get('/api/admin/vips', (req, res) => {
@@ -449,10 +396,8 @@ app.post('/api/admin/vips', (req, res) => {
 });
 
 app.get('/api/get-discord-config', (req, res) => { res.json(discordConfig); });
-
 app.post('/api/save-discord-config', async (req, res) => { 
     discordConfig = { ...discordConfig, ...req.body }; 
-    
     if (discordConfig.apiKey) {
         try {
             const profileRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${discordConfig.apiKey}`);
@@ -463,7 +408,6 @@ app.post('/api/save-discord-config', async (req, res) => {
             }
         } catch(e) {}
     }
-
     saveDiscordConfig(); 
     res.json({ success: true }); 
 });
@@ -608,69 +552,7 @@ app.get('/api/scan-recruits', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
-app.post('/api/generate-recruit-msg', async (req, res) => {
-    const { playerName, score, attacks, status } = req.body;
-    if (!GEMINI_API_KEY) return res.status(400).json({ error: "Server missing GEMINI_API_KEY." });
-    try {
-        const prompt = `You are a recruiter for a tactical gaming faction in Torn City. Write a direct, professional DM to a player named ${playerName}. Context: They recently fought against us in a Ranked War, making ${attacks} attacks and scoring ${score} points. Status: ${status}. Max 3 sentences. No brackets.`;
-        const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-        const aiData = await aiRes.json();
-        res.json({ success: true, message: aiData.candidates[0].content.parts[0].text.trim() });
-    } catch (err) { res.status(500).json({ error: "Failed to generate AI message." }); }
-});
-
-app.post('/api/ai-analyze', async (req, res) => {
-    const userKey = req.query.apiKey;
-    if (!GEMINI_API_KEY) return res.status(400).json({ error: "Missing AI Key." });
-    try {
-        await verifySubscription(userKey);
-        const [facRes, userRes] = await Promise.all([
-            fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`).then(r => r.json()),
-            fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`).then(r => r.json())
-        ]);
-        let lastWarId = null;
-        if (facRes.rankedwars) {
-            const completedWars = Object.entries(facRes.rankedwars).filter(([id, w]) => w.war && w.war.winner !== 0).sort((a, b) => b[1].war.end - a[1].war.end);
-            if (completedWars.length > 0) lastWarId = completedWars[0][0];
-        }
-        if (!lastWarId) throw new Error("No wars found.");
-        const reportData = await fetch(`https://api.torn.com/torn/${lastWarId}?selections=rankedwarreport&key=${userKey}`).then(r => r.json());
-        let warStats = reportData.rankedwarreport?.factions[facRes.ID?.toString()]?.members || {};
-        let slimData = Object.values(warStats).slice(0, 20).map(m => `Name: ${m.name}, Score: ${m.score}`).join("\n");
-        
-        const prompt = `Review performance:\n${slimData}\nProvide 3 blunt tactical advice. No headers, use bolding.`;
-        const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-        const aiData = await aiRes.json();
-        res.json({ success: true, analysis: aiData.candidates[0].content.parts[0].text });
-    } catch (err) { res.status(403).json({ error: err.message }); }
-});
-
-app.post('/api/ai-analyze-ongoing', async (req, res) => {
-    const userKey = req.query.apiKey;
-    if (!GEMINI_API_KEY) return res.status(400).json({ error: "Missing AI Key." });
-    try {
-        await verifySubscription(userKey);
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`).then(r => r.json());
-        let ongoingWarId = null; let warData = null;
-        if (facRes.rankedwars) {
-            for (let [id, w] of Object.entries(facRes.rankedwars)) { if (w.war && w.war.winner === 0) { ongoingWarId = id; warData = w; break; } }
-        }
-        if (!ongoingWarId) throw new Error("No active war.");
-        let slimData = Object.values(warData.factions[facRes.ID?.toString()]?.members || {}).slice(0, 20).map(m => `Name: ${m.name}, Score: ${m.score}`).join("\n");
-        
-        const prompt = `LIVE War analysis:\n${slimData}\nProvide 3 urgent actions. Bold text only.`;
-        const aiRes = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-        });
-        const aiData = await aiRes.json();
-        res.json({ success: true, analysis: aiData.candidates[0].content.parts[0].text });
-    } catch (err) { res.status(403).json({ error: err.message }); }
-});
-
+// Advanced Deep Scraper for Payouts (200 pages, finds Assists and Clears)
 app.get('/api/past-war', async (req, res) => {
     const { apiKey, reportId } = req.query;
     try {
@@ -689,11 +571,7 @@ app.get('/api/past-war', async (req, res) => {
         const myUserId = userData.player_id.toString();
 
         for (let [facId, facData] of Object.entries(reportData.rankedwarreport.factions)) {
-            if (facData.members && facData.members[myUserId]) {
-                correctFacId = facId;
-            } else {
-                enemyFacId = facId;
-            }
+            if (facData.members && facData.members[myUserId]) { correctFacId = facId; } else { enemyFacId = facId; }
         }
 
         if (!correctFacId) {
@@ -779,24 +657,82 @@ app.get('/api/past-war', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
+// Button Endpoints
 app.post('/api/claim', (req, res) => { const { enemyId, playerName } = req.body; claims[enemyId] = { playerName, time: Date.now() }; res.json({ success: true }); });
 app.post('/api/unclaim', (req, res) => { const { enemyId, playerName } = req.body; if (claims[enemyId]?.playerName === playerName) delete claims[enemyId]; res.json({ success: true }); });
 app.post('/api/backup', (req, res) => { const { enemyId, playerName } = req.body; backups[enemyId] = { playerName, time: Date.now() }; res.json({ success: true }); });
 app.post('/api/unbackup', (req, res) => { const { enemyId } = req.body; delete backups[enemyId]; res.json({ success: true }); });
 app.post('/api/update-stats', (req, res) => { const { enemyId, stats } = req.body; manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() }; res.json({ success: true }); });
 
-// NEW FIX: Secure endpoint to pull individual target intel (Life + Personal Stats)
+// Advanced Inspector Endpoint (Bazaar, Display, TornStats)
 app.get('/api/inspect', async (req, res) => {
-    const { apiKey, targetId } = req.query;
+    const { apiKey, targetId, tsKey } = req.query;
     try {
         await verifySubscription(apiKey);
-        const r = await fetch(`https://api.torn.com/user/${targetId}?selections=profile,personalstats&key=${apiKey}`);
+        const r = await fetch(`https://api.torn.com/user/${targetId}?selections=profile,personalstats,bazaar,display&key=${apiKey}`);
         const data = await r.json();
         if (data.error) return res.status(400).json({ error: data.error.error });
-        res.json({ success: true, data });
+
+        let loadoutClues = [];
+        const checkItems = (items) => {
+            if (!items) return;
+            items.forEach(item => {
+                if (item.type === "Primary" || item.type === "Secondary" || item.type === "Melee" || item.type === "Armor") {
+                    loadoutClues.push({ name: item.name, type: item.type, price: item.price || item.market_value || 0 });
+                }
+            });
+        };
+        checkItems(data.bazaar); checkItems(data.display);
+        loadoutClues.sort((a, b) => b.price - a.price);
+        loadoutClues = loadoutClues.slice(0, 5);
+
+        let tsData = null;
+        if (tsKey && tsKey !== 'null' && tsKey !== '') {
+            try {
+                const tsRes = await fetch(`https://www.tornstats.com/api/v2/${tsKey}/spy/user/${targetId}`);
+                const tsJson = await tsRes.json();
+                if (tsJson.status && tsJson.spy) { tsData = tsJson.spy; }
+            } catch(e) {}
+        }
+
+        let manualSpy = spyDatabase[targetId] || null;
+
+        res.json({ success: true, data, loadoutClues, tsData, manualSpy });
     } catch(err) { res.status(403).json({ error: err.message }); }
 });
 
+// Save Local Spy Database
+app.post('/api/save-spy', async (req, res) => {
+    const { apiKey, targetId, spyText } = req.body;
+    try {
+        await verifySubscription(apiKey);
+        if (!targetId || !spyText) return res.status(400).json({error: "Missing data"});
+        
+        const extract = (regex) => {
+            const match = spyText.match(regex);
+            return match ? parseInt(match[1].replace(/,/g, '')) : 0;
+        };
+
+        const strength = extract(/Strength:\s*([\d,]+)/i);
+        const defense = extract(/Defense:\s*([\d,]+)/i);
+        const speed = extract(/Speed:\s*([\d,]+)/i);
+        const dexterity = extract(/Dexterity:\s*([\d,]+)/i);
+        const total = extract(/Total:\s*([\d,]+)/i);
+
+        if (total === 0 && strength === 0 && defense === 0) {
+            return res.status(400).json({error: "Could not parse spy report. Make sure you copied the exact text."});
+        }
+
+        spyDatabase[targetId] = { strength, defense, speed, dexterity, total, timestamp: Date.now() };
+        saveSpyDb();
+        
+        manualStats[targetId] = { stats: total, time: Date.now() };
+
+        res.json({success: true, data: spyDatabase[targetId]});
+    } catch(err) { res.status(403).json({ error: err.message }); }
+});
+
+// Primary Warboard Aggregator
 app.get('/api/warboard', async (req, res) => {
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
@@ -831,7 +767,8 @@ app.get('/api/warboard', async (req, res) => {
         const parseMembers = (data, isEnemy = false) => {
             if (!data.members) return [];
             return Object.entries(data.members).map(([id, m]) => {
-                const est = manualStats[id]?.stats !== undefined ? manualStats[id].stats : (statsCache[id]?.stats !== undefined ? statsCache[id].stats : (isPremium ? "Scanning..." : "🔒 Requires FF Scouter"));
+                let est = (spyDatabase[id] && spyDatabase[id].total) ? spyDatabase[id].total : (manualStats[id]?.stats !== undefined ? manualStats[id].stats : (statsCache[id]?.stats !== undefined ? statsCache[id].stats : (isPremium ? "Scanning..." : "🔒 Requires FF Scouter")));
+                
                 const isTraveling = m.status?.state === "Traveling" || m.status?.description?.includes("Traveling");
                 let finalUntil = m.status?.until; let finalLandingTime = null; let needsFfScouterForFlights = false;
                 if (isTraveling) { if (flightCache[id]?.landingTime) { finalLandingTime = flightCache[id].landingTime; finalUntil = finalLandingTime; } else { if (!isPremium) needsFfScouterForFlights = true; } }
