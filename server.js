@@ -54,7 +54,7 @@ let lastEventTimestamp = Math.floor(Date.now() / 1000);
 let lastChainTimeoutAlertState = false;
 let backgroundEnemyTrackingState = {};
 
-let discordConfig = { webhookUrl: "", targetOnline: true, targetLanded: true, targetOutHosp: true, chainUnder90: true, chainMilestone: true, friendlyAttacked: true };
+let discordConfig = { webhookUrl: "", targetOnline: true, targetLanded: true, targetOutHosp: true, chainUnder90: true, chainMilestone: true, friendlyAttacked: true, apiKey: "", factionId: "" };
 let marketConfig = { webhookUrl: "", autoDefense: false, sniperTargets: [] };
 let marketMemory = { defense: {}, sniper: {} };
 let vipConfig = { factions: [], players: [] }; 
@@ -75,6 +75,7 @@ if (ADMIN_API_KEY) {
         .then(d => { if (d.faction) adminFactionId = d.faction.faction_id?.toString(); })
         .catch(e => console.error("Failed to load admin profile"));
 }
+if (discordConfig.apiKey) apiKeyPool.add(discordConfig.apiKey);
 
 setInterval(async () => {
     if (!ADMIN_API_KEY) return;
@@ -269,8 +270,11 @@ setInterval(async () => {
     isProcessingActivity = false;
 }, 1500); 
 
+// ENGINE 4: LIVE DELTA SCRAPER (Now uses provided Discord Config Faction ID)
 setInterval(async () => {
-    if (apiKeyPool.size === 0 || !adminFactionId) return;
+    let watchFactionId = adminFactionId || discordConfig.factionId;
+    if (apiKeyPool.size === 0 || !watchFactionId) return;
+    
     const keys = Array.from(apiKeyPool);
     
     try {
@@ -283,7 +287,7 @@ setInterval(async () => {
                 if (processedAttackIds.has(atkId)) continue;
                 processedAttackIds.add(atkId);
                 
-                if (atk.defender_faction && atk.defender_faction.toString() === adminFactionId) {
+                if (atk.defender_faction && atk.defender_faction.toString() === watchFactionId) {
                     let uId = atk.defender_id.toString();
                     let attFacId = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
                     if (!liveDefends[uId]) liveDefends[uId] = {};
@@ -296,7 +300,7 @@ setInterval(async () => {
                         }).catch(() => {});
                     }
                 }
-                if (atk.attacker_faction && atk.attacker_faction.toString() === adminFactionId) {
+                if (atk.attacker_faction && atk.attacker_faction.toString() === watchFactionId) {
                     let uId = atk.attacker_id.toString();
                     let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
                     if (!liveAttacks[uId]) liveAttacks[uId] = {};
@@ -366,10 +370,15 @@ setInterval(async () => {
     } catch (err) {}
 }, 45000); 
 
+// ENGINE 6: BACKGROUND WAR SURVEILLANCE (Now uses provided Discord Config API Key and Faction ID)
 setInterval(async () => {
-    if (!ADMIN_API_KEY || !adminFactionId) return;
+    let watchKey = ADMIN_API_KEY || discordConfig.apiKey;
+    let watchFactionId = adminFactionId || discordConfig.factionId;
+    
+    if (!watchKey || !watchFactionId) return;
+
     try {
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,chain&key=${ADMIN_API_KEY}`);
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,chain&key=${watchKey}`);
         const facData = await facRes.json();
         if (facData.error) return;
 
@@ -386,7 +395,7 @@ setInterval(async () => {
 
         let activeEnemyId = autoDetectEnemyFaction(facData);
         if (activeEnemyId && discordConfig.webhookUrl) {
-            const enemyRes = await fetch(`https://api.torn.com/faction/${activeEnemyId}?selections=basic&key=${ADMIN_API_KEY}`);
+            const enemyRes = await fetch(`https://api.torn.com/faction/${activeEnemyId}?selections=basic&key=${watchKey}`);
             const enemyData = await enemyRes.json();
             
             if (enemyData.members) {
@@ -437,8 +446,22 @@ app.post('/api/admin/vips', (req, res) => {
 });
 
 app.get('/api/get-discord-config', (req, res) => { res.json(discordConfig); });
-app.post('/api/save-discord-config', (req, res) => { 
+
+// SECURE FIX: Now takes the provided API key, locates your Faction ID, and locks it into the backend config
+app.post('/api/save-discord-config', async (req, res) => { 
     discordConfig = { ...discordConfig, ...req.body }; 
+    
+    if (discordConfig.apiKey) {
+        try {
+            const profileRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${discordConfig.apiKey}`);
+            const profileData = await profileRes.json();
+            if (profileData.faction && profileData.faction.faction_id) {
+                discordConfig.factionId = profileData.faction.faction_id.toString();
+                apiKeyPool.add(discordConfig.apiKey);
+            }
+        } catch(e) {}
+    }
+
     saveDiscordConfig(); 
     res.json({ success: true }); 
 });
@@ -646,7 +669,6 @@ app.post('/api/ai-analyze-ongoing', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
-// FIX: Expanded Deep Scrape to 200 pages to catch long wars, and fixed the '0' factionless bug
 app.get('/api/past-war', async (req, res) => {
     const { apiKey, reportId } = req.query;
     try {
@@ -700,7 +722,6 @@ app.get('/api/past-war', async (req, res) => {
             let keepScraping = true;
             let pageCount = 0;
             
-            // Bumped to 200 pages (20,000 attacks) to prevent missing data in massive wars
             while (keepScraping && pageCount < 200) { 
                 const attackRes = await fetch(`https://api.torn.com/faction/?selections=attacks&to=${toTimestamp}&key=${apiKey}`);
                 const attackData = await attackRes.json();
@@ -725,7 +746,6 @@ app.get('/api/past-war', async (req, res) => {
                         if (atk.result === "Assist") {
                             advancedStats[uId].assists++;
                         } else if (atk.defender_faction !== undefined && atk.defender_faction.toString() !== enemyFacId) {
-                            // Validates successfully completed attacks, ignoring losses/escapes
                             if (["Attacked", "Mugged", "Hospitalized", "Arrested", "Special"].includes(atk.result)) {
                                 advancedStats[uId].clears++;
                             }
