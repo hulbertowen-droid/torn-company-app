@@ -113,7 +113,7 @@ setInterval(async () => {
                             if (ADMIN_DISCORD_WEBHOOK) {
                                 fetch(ADMIN_DISCORD_WEBHOOK, {
                                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ content: `💰 **PAYMENT RECEIVED:** Faction \`${facId}\` paid ${qty}x Xanax for ${weeks} weeks of Warboard access!` })
+                                    body: JSON.stringify({ content: `💰 **PAYMENT RECEIVED:** Faction \`${facId}\` sent ${qty}x Xanax for ${weeks} weeks of access!` })
                                 }).catch(()=>{});
                             }
                         }
@@ -292,13 +292,12 @@ setInterval(async () => {
                     liveDefends[uId][attFacId] = (liveDefends[uId][attFacId] || 0) + 1;
                     
                     if (discordConfig.friendlyAttacked && discordConfig.webhookUrl) {
-                        // UPGRADE: Extract exact attacker details for the Discord embed
                         let attackerName = atk.attacker_name || "Unknown";
                         let attackerId = atk.attacker_id;
                         let attackerFactionName = atk.attacker_faction_name || "None";
                         let defenderName = atk.defender_name || uId;
 
-                        let discordMsg = `🛡️ **WALL WATCHER:** \`${defenderName}\` is taking incoming fire from **${attackerName}**!\n🏢 **Enemy Faction:** \`${attackerFactionName}\`\n⚔️ **Attack Link:** https://www.torn.com/loader.php?sid=attack&user2ID=${attackerId}`;
+                        let discordMsg = `🛡️ **WALL WATCHER:** \`${defenderName}\` is getting hit by **${attackerName}**!\n🏢 **Enemy Faction:** \`${attackerFactionName}\`\n⚔️ **Retaliate:** https://www.torn.com/loader.php?sid=attack&user2ID=${attackerId}`;
 
                         fetch(discordConfig.webhookUrl, {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -318,7 +317,7 @@ setInterval(async () => {
                         if (discordConfig.chainMilestone && discordConfig.webhookUrl) {
                             fetch(discordConfig.webhookUrl, {
                                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ content: `🏆 **CHAIN MILESTONE SECURED:** Hit #**${atk.chain}** executed by \`${atk.attacker_name || uId}\` (+${atk.respect_gain || 0} Respect)!` })
+                                body: JSON.stringify({ content: `🏆 **CHAIN MILESTONE:** Hit #**${atk.chain}** made by \`${atk.attacker_name || uId}\` (+${atk.respect_gain || 0} respect)!` })
                             }).catch(() => {});
                         }
                     }
@@ -366,7 +365,7 @@ setInterval(async () => {
                                 marketMemory.defense[itemId] = lowestMarketPrice;
                                 fetch(marketConfig.webhookUrl, {
                                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ content: `📉 **UNDERCUT ALERT:** Your \`${myItem.name}\` ($${myItem.price.toLocaleString()}) was undercut! New lowest price: **$${lowestMarketPrice.toLocaleString()}**\n[Check Market](https://www.torn.com/imarket.php#/p=shop&step=shop&type=&searchname=${myItem.name})` })
+                                    body: JSON.stringify({ content: `📉 **MARKET ALERT:** Your \`${myItem.name}\` ($${myItem.price.toLocaleString()}) got undercut! New lowest: **$${lowestMarketPrice.toLocaleString()}**\n[Check Market](https://www.torn.com/imarket.php#/p=shop&step=shop&type=&searchname=${myItem.name})` })
                                 }).catch(()=>{});
                             }
                         } else { delete marketMemory.defense[itemId]; }
@@ -386,7 +385,6 @@ setInterval(async () => {
     if (!watchKey || !watchFactionId) return;
 
     try {
-        // FIX: Replaced the broken 'userKey' reference here that was crashing the server loop
         const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,chain,rankedwars&key=${watchKey}`);
         const facData = await facRes.json();
         if (facData.error) return;
@@ -396,7 +394,7 @@ setInterval(async () => {
             if (secondsLeft <= 90 && secondsLeft > 0 && !lastChainTimeoutAlertState && discordConfig.chainUnder90 && discordConfig.webhookUrl) {
                 fetch(discordConfig.webhookUrl, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content: `⚠️ **BACKGROUND ALERT: CHAIN DROPPING!** The countdown has slipped below 90s (${secondsLeft}s left)! Hit a target immediately!` })
+                    body: JSON.stringify({ content: `⚠️ **CHAIN DROPPING!** Under 90s (${secondsLeft}s left)! Someone make a hit right now!` })
                 }).catch(() => {});
                 lastChainTimeoutAlertState = true;
             } else if (secondsLeft > 120) { lastChainTimeoutAlertState = false; }
@@ -416,7 +414,7 @@ setInterval(async () => {
                         if (oldRecord.online !== "Online" && newRecord.online === "Online" && discordConfig.targetOnline) {
                             fetch(discordConfig.webhookUrl, {
                                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ content: `🟢 **TARGET ONLINE:** ${m.name} [${id}] has established connection!` })
+                                body: JSON.stringify({ content: `🟢 **TARGET ONLINE:** ${m.name} [${id}] just came online!` })
                             }).catch(() => {});
                         }
                         if (oldRecord.state !== "Okay" && newRecord.state === "Okay") {
@@ -424,12 +422,12 @@ setInterval(async () => {
                             if ((oldRecord.state === "Traveling" || oldDesc.includes("Traveling") || oldDesc.includes("Abroad")) && discordConfig.targetLanded) {
                                 fetch(discordConfig.webhookUrl, {
                                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ content: `✈️ **TARGET LANDED:** ${m.name} [${id}] finished flight operations!` })
+                                    body: JSON.stringify({ content: `✈️ **TARGET LANDED:** ${m.name} [${id}] just landed in Torn!` })
                                 }).catch(() => {});
                             } else if (oldRecord.state === "Hospital" && discordConfig.targetOutHosp) {
                                 fetch(discordConfig.webhookUrl, {
                                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ content: `🏥 **TARGET OUT OF HOSP:** ${m.name} [${id}] has dropped medical state!` })
+                                    body: JSON.stringify({ content: `🏥 **TARGET OUT OF HOSP:** ${m.name} [${id}] just left the hospital and is Okay!` })
                                 }).catch(() => {});
                             }
                         }
