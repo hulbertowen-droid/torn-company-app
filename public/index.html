@@ -71,7 +71,6 @@
         .profile { font-weight: bold; color: var(--text-main); text-decoration: none; font-size: 1.1em; }
         .profile:hover { text-decoration: underline; color: var(--blue); }
         
-        /* NEW: Inspect Button */
         .btn-inspect { background: rgba(88, 166, 255, 0.15); color: var(--blue); border: 1px solid var(--blue); padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: bold; text-transform: uppercase; cursor: pointer; transition: 0.2s; margin-left: 8px; vertical-align: middle; }
         .btn-inspect:hover { background: var(--blue); color: #000; box-shadow: 0 0 8px rgba(88,166,255,0.4); }
 
@@ -214,6 +213,10 @@
                     <input type="password" id="ff-key" placeholder="Optional: Unlocks advanced stats & radar">
                 </div>
                 <div>
+                    <label>Torn Stats API Key</label>
+                    <input type="password" id="ts-key" placeholder="Optional: Unlocks Global Spy Database">
+                </div>
+                <div>
                     <label>Enemy Faction ID</label>
                     <input type="text" id="enemy-id" placeholder="Optional (Auto-detects usually)">
                 </div>
@@ -235,9 +238,9 @@
             </div>
         </div>
 
-        <!-- NEW: Target Inspect Modal -->
+        <!-- UPGRADED: Target Inspect Modal -->
         <div id="inspect-modal" class="modal-overlay">
-            <div class="modal-content" style="width: 500px; max-width: 90vw;">
+            <div class="modal-content" style="width: 700px; max-width: 95vw; max-height: 90vh; overflow-y: auto;">
                 <div class="close-btn" onclick="closeInspect()">&times;</div>
                 <h2 id="inspect-title" style="color: var(--blue); border-bottom: 1px solid #2f3542; padding-bottom: 10px; margin-top: 0; text-transform: uppercase;">🔍 Target Intel</h2>
                 <div id="inspect-body">
@@ -305,6 +308,7 @@ document.body.addEventListener('click', () => { initAudio(); }, { once: true });
 
 let myKey = localStorage.getItem("warboard_apikey") || "";
 let ffKey = localStorage.getItem("warboard_ffkey") || "";
+let tsKey = localStorage.getItem("warboard_tskey") || "";
 let enemyFacId = localStorage.getItem("warboard_enemyId") || "";
 let myName = localStorage.getItem("warboard_myname") || "Agent";
 let discordWebhook = localStorage.getItem("warboard_discord") || "";
@@ -319,6 +323,7 @@ let warChartInstance = null;
 
 document.getElementById("api-key").value = myKey;
 document.getElementById("ff-key").value = ffKey;
+document.getElementById("ts-key").value = tsKey;
 document.getElementById("enemy-id").value = enemyFacId;
 document.getElementById("my-name").value = myName;
 document.getElementById("discord-webhook").value = discordWebhook;
@@ -354,6 +359,7 @@ function saveSettings() {
     initAudio(); 
     myKey = document.getElementById("api-key").value.trim();
     ffKey = document.getElementById("ff-key").value.trim();
+    tsKey = document.getElementById("ts-key").value.trim();
     enemyFacId = document.getElementById("enemy-id").value.trim();
     myName = document.getElementById("my-name").value.trim() || "Agent";
     discordWebhook = document.getElementById("discord-webhook").value.trim();
@@ -363,6 +369,7 @@ function saveSettings() {
     
     localStorage.setItem("warboard_apikey", myKey);
     localStorage.setItem("warboard_ffkey", ffKey);
+    localStorage.setItem("warboard_tskey", tsKey);
     localStorage.setItem("warboard_enemyId", enemyFacId);
     localStorage.setItem("warboard_myname", myName);
     localStorage.setItem("warboard_discord", discordWebhook);
@@ -848,14 +855,14 @@ async function promptUpdateStats(id) {
     if (statInput && !isNaN(statInput)) { await fetch('/api/update-stats', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, stats: parseInt(statInput) }) }); fetchWarboard(); }
 }
 
-// NEW: Inspect Player Function
+// UPGRADED: Inspect Target (Loadout Clues + Exact Stats)
 async function inspectTarget(id, name) {
     document.getElementById('inspect-title').innerText = `🔍 Target Intel: ${name} [${id}]`;
     document.getElementById('inspect-body').innerHTML = `<div style="color:var(--text-dim); text-align:center; padding: 20px; font-style:italic;">Establishing secure uplink to Torn database...</div>`;
     document.getElementById('inspect-modal').style.display = "flex";
 
     try {
-        const res = await fetch(`/api/inspect?apiKey=${myKey}&targetId=${id}`);
+        const res = await fetch(`/api/inspect?apiKey=${myKey}&targetId=${id}&tsKey=${tsKey}`);
         const json = await res.json();
         
         if (json.error) {
@@ -867,33 +874,60 @@ async function inspectTarget(id, name) {
         const stats = p.personalstats || {};
         
         const weapons = {
-            "Rifle": stats.riflehits || 0,
-            "SMG": stats.smghits || 0,
-            "Machine Gun": stats.machinegunhits || 0,
-            "Shotgun": stats.shotgunhits || 0,
-            "Pistol": stats.pistolhits || 0,
-            "Piercing": stats.piercinghits || 0,
-            "Slashing": stats.slashinghits || 0,
-            "Clubbing": stats.clubbinghits || 0,
-            "H2H": stats.h2hhits || 0
+            "Rifle": stats.riflehits || 0, "SMG": stats.smghits || 0, "Machine Gun": stats.machinegunhits || 0,
+            "Shotgun": stats.shotgunhits || 0, "Pistol": stats.pistolhits || 0, "Piercing": stats.piercinghits || 0,
+            "Slashing": stats.slashinghits || 0, "Clubbing": stats.clubbinghits || 0, "H2H": stats.h2hhits || 0
         };
-        
         let topWep = Object.keys(weapons).reduce((a, b) => weapons[a] > weapons[b] ? a : b);
         if (weapons[topWep] === 0) topWep = "Unknown";
 
         const lifeMax = p.life ? p.life.maximum.toLocaleString() : "Unknown";
         const xanax = stats.xantaken ? stats.xantaken.toLocaleString() : 0;
         const seUsed = stats.statenhancersused ? stats.statenhancersused.toLocaleString() : 0;
-        const defendsLost = stats.defendslost ? stats.defendslost.toLocaleString() : 0;
+        
+        let loadoutHtml = "";
+        if (json.loadoutClues && json.loadoutClues.length > 0) {
+            json.loadoutClues.forEach(item => {
+                loadoutHtml += `<div style="display: flex; justify-content: space-between; margin-bottom: 3px;"><span>${item.name}</span> <span style="color:var(--green);">$${(item.price/1000000).toFixed(1)}m</span></div>`;
+            });
+        } else {
+            loadoutHtml = `<div style="color:var(--text-dim); font-style:italic;">No high-value weapons found in display or bazaar.</div>`;
+        }
+
+        let statsHtml = "";
+        let hasExactStats = false;
+
+        if (json.manualSpy) {
+            hasExactStats = true;
+            statsHtml = `
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Total:</span> <span style="color:var(--gold); font-weight:bold; font-size:1.1em;">${json.manualSpy.total.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Strength:</span> <span>${json.manualSpy.strength.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Defense:</span> <span>${json.manualSpy.defense.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Speed:</span> <span>${json.manualSpy.speed.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Dexterity:</span> <span>${json.manualSpy.dexterity.toLocaleString()}</span></div>
+                <div style="text-align:right; font-size:0.8em; color:var(--green); margin-top:5px;">Source: Local Faction DB</div>
+            `;
+        } else if (json.tsData) {
+            hasExactStats = true;
+            statsHtml = `
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Total:</span> <span style="color:var(--gold); font-weight:bold; font-size:1.1em;">${json.tsData.total.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Strength:</span> <span>${json.tsData.strength.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Defense:</span> <span>${json.tsData.defense.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Speed:</span> <span>${json.tsData.speed.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Dexterity:</span> <span>${json.tsData.dexterity.toLocaleString()}</span></div>
+                <div style="text-align:right; font-size:0.8em; color:var(--blue); margin-top:5px;">Source: Torn Stats API</div>
+            `;
+        } else {
+            statsHtml = `<div style="color:var(--text-dim); font-style:italic; text-align:center; padding: 10px;">No exact spy report found for this target.</div>`;
+        }
 
         document.getElementById('inspect-body').innerHTML = `
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                 <div style="background: #0b0d13; padding: 15px; border-radius: 8px; border: 1px solid #2f3542;">
                     <h4 style="margin:0 0 10px 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 5px;">Player Profile</h4>
                     <div style="font-size: 0.9em; line-height: 1.6;">
                         <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Level:</span> <span>${p.level || '?'}</span></div>
                         <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Rank:</span> <span>${p.rank || '?'}</span></div>
-                        <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Age:</span> <span>${p.age || '?'} days</span></div>
                         <div style="display: flex; justify-content: space-between; margin-top: 5px;"><span style="color:var(--text-dim); font-weight:bold;">Max Life:</span> <span style="color:var(--green); font-weight:bold;">${lifeMax}</span></div>
                     </div>
                 </div>
@@ -903,13 +937,62 @@ async function inspectTarget(id, name) {
                         <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Fav Weapon:</span> <span style="color:var(--blue); font-weight:bold;">${topWep}</span></div>
                         <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Xanax Taken:</span> <span>${xanax}</span></div>
                         <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">SEs Used:</span> <span>${seUsed}</span></div>
-                        <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Defends Lost:</span> <span>${defendsLost}</span></div>
                     </div>
                 </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div style="background: rgba(88, 166, 255, 0.05); padding: 15px; border-radius: 8px; border: 1px solid var(--blue);">
+                    <h4 style="margin:0 0 10px 0; color: var(--blue); border-bottom: 1px solid rgba(88,166,255,0.3); padding-bottom: 5px;">Exact Stats</h4>
+                    <div style="font-size: 0.9em; line-height: 1.6;" id="exact-stats-container">
+                        ${statsHtml}
+                    </div>
+                </div>
+                <div style="background: #0b0d13; padding: 15px; border-radius: 8px; border: 1px solid #2f3542;">
+                    <h4 style="margin:0 0 10px 0; color: var(--text-main); border-bottom: 1px solid #2f3542; padding-bottom: 5px;">Loadout Clues (Market/Display)</h4>
+                    <div style="font-size: 0.85em; line-height: 1.6;">
+                        ${loadoutHtml}
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 15px; background: #0b0d13; padding: 15px; border-radius: 8px; border: 1px solid #2f3542;">
+                <h4 style="margin:0 0 10px 0; color: var(--green); text-transform: uppercase; font-size: 0.9em;">📥 Add Manual Spy Report</h4>
+                <textarea id="manual-spy-text" placeholder="Paste the raw text of the spy report here..." style="width: 100%; height: 60px; background: var(--bg); color: var(--text-main); border: 1px solid #30363d; border-radius: 4px; padding: 8px; box-sizing: border-box; font-family: monospace; font-size: 0.85em; resize: none;"></textarea>
+                <button onclick="saveManualSpy('${id}')" style="margin-top: 8px; width: 100%; background: var(--green); color: #000; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer; text-transform: uppercase;">Save to Database</button>
+                <div id="spy-save-status" style="font-size: 0.85em; text-align: center; margin-top: 5px; font-weight: bold;"></div>
             </div>
         `;
     } catch(e) {
         document.getElementById('inspect-body').innerHTML = `<div style="color:var(--red); font-weight:bold; text-align:center;">Failed to connect to API.</div>`;
+    }
+}
+
+async function saveManualSpy(targetId) {
+    const text = document.getElementById('manual-spy-text').value;
+    const status = document.getElementById('spy-save-status');
+    if (!text.trim()) { status.style.color = "var(--red)"; status.innerText = "Please paste a spy report first."; return; }
+    
+    status.style.color = "var(--gold)";
+    status.innerText = "Parsing report...";
+    
+    try {
+        const res = await fetch('/api/save-spy', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiKey: myKey, targetId: targetId, spyText: text })
+        });
+        const data = await res.json();
+        
+        if (data.error) {
+            status.style.color = "var(--red)";
+            status.innerText = "❌ " + data.error;
+        } else {
+            status.style.color = "var(--green)";
+            status.innerText = "✅ Exact stats saved to database! Close and reopen Inspect to view.";
+            fetchWarboard(); 
+        }
+    } catch(e) {
+        status.style.color = "var(--red)";
+        status.innerText = "❌ Server communication failed.";
     }
 }
 
