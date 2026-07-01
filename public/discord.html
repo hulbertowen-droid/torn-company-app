@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Discord Bot | Owen's Faction Tools</title>
+    <title>Discord Alerts | Owen's Faction Tools</title>
     <style>
         :root { 
             --bg: #090a0f; --card: #11141d; --item: #1b202e; 
@@ -56,7 +56,7 @@
         input:checked + .slider:before { transform: translateX(24px); }
 
         .btn-save { background: var(--blue); color: #000; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em; text-transform: uppercase; transition: 0.2s; width: 100%; }
-        .btn-save:hover { background: #79c0ff; }
+        .btn-save:hover { background: #79c0ff; box-shadow: 0 0 10px rgba(88,166,255,0.4); }
         #status-msg { text-align: center; font-weight: bold; font-size: 0.95em; margin-top: 10px; }
     </style>
 </head>
@@ -73,8 +73,9 @@
             <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
             <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
             <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
-            <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>
-            <a onclick="openSettings()" class="nav-link" style="margin-top: 15px; border-top: 1px solid #2f3542; border-radius: 0; padding-top: 15px;">
+            <a href="/discord.html" class="nav-link active">📢 <span class="nav-text">Discord Alerts</span></a>
+            <a href="/admin.html" class="nav-link">👑 <span class="nav-text">Admin Panel</span></a>
+            <a onclick="openSettings()" class="nav-link" style="margin-top: 15px; border-top: 1px solid #2f3542; border-radius: 0; padding-top: 15px; cursor: pointer;">
                 ⚙️ <span class="nav-text">Settings</span>
             </a>
         </div>
@@ -82,9 +83,7 @@
 
     <main class="main-content">
         <h1>24/7 Background Alert Deck</h1>
-        <div style="background: rgba(255, 165, 2, 0.1); border: 1px solid var(--gold); color: var(--gold); padding: 12px 20px; border-radius: 8px; margin-bottom: 25px; text-align: center; font-weight: bold; font-size: 0.9em; box-shadow: 0 4px 15px rgba(255, 165, 2, 0.15);">
-    ⚠️ WORK IN PROGRESS: This tool is currently in active development and may not function to its fullest potential. Please report any bugs or suggestions to <a href="https://www.torn.com/profiles.php?XID=3776908" target="_blank" style="color: var(--text-main); text-decoration: underline;">Owen777 [3776908]</a>.
-</div>
+        
         <div class="container">
             <div class="dash-card">
                 <h2>Uplink Configuration</h2>
@@ -150,17 +149,11 @@
 
 <script>
 document.addEventListener("DOMContentLoaded", async function() {
-    let currentUrl = window.location.pathname;
-    if (currentUrl === "/discord.html") {
-        document.querySelector('a[href="/discord.html"]').classList.add("active");
-    }
-    
     const sidebar = document.getElementById('app-sidebar');
     if (localStorage.getItem('sidebar_collapsed') === 'true') {
         sidebar.classList.add('collapsed');
     }
 
-    // Load server-wide config on boot
     try {
         const res = await fetch('/api/get-discord-config');
         const config = await res.json();
@@ -181,12 +174,26 @@ function toggleSidebar() {
     localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
 }
 
+function openSettings() {
+    window.location.href = "/";
+}
+
 async function saveDiscordConfig() {
     const status = document.getElementById('status-msg');
     status.style.color = "var(--blue)";
-    status.innerText = "Transmitting options...";
+    status.innerText = "Transmitting options & authenticating faction ID...";
+
+    // Grab the personal API key from localStorage so the server knows exactly who it is tracking for
+    const myKey = localStorage.getItem("warboard_apikey") || "";
+
+    if (!myKey) {
+        status.style.color = "var(--red)";
+        status.innerText = "❌ Missing API Key. Go to Live Warboard settings first!";
+        return;
+    }
 
     const payload = {
+        apiKey: myKey,
         webhookUrl: document.getElementById('webhook-url').value.trim(),
         targetOnline: document.getElementById('targetOnline').checked,
         targetLanded: document.getElementById('targetLanded').checked,
