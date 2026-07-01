@@ -267,7 +267,6 @@ setInterval(async () => {
     isProcessingActivity = false;
 }, 1500); 
 
-// ENGINE 4: LIVE DELTA SCRAPER (Wall Watcher & Chain Milestones)
 setInterval(async () => {
     let watchFactionId = adminFactionId || discordConfig.factionId;
     if (apiKeyPool.size === 0 || !watchFactionId) return;
@@ -284,7 +283,6 @@ setInterval(async () => {
                 if (processedAttackIds.has(atkId)) continue;
                 processedAttackIds.add(atkId);
                 
-                // FRIENDLY IS ATTACKED (WALL WATCHER)
                 if (atk.defender_faction && atk.defender_faction.toString() === watchFactionId) {
                     let uId = atk.defender_id.toString();
                     let attFacId = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
@@ -306,7 +304,6 @@ setInterval(async () => {
                     }
                 }
 
-                // FRIENDLY ATTACKS SOMEONE ELSE
                 if (atk.attacker_faction && atk.attacker_faction.toString() === watchFactionId) {
                     let uId = atk.attacker_id.toString();
                     let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
@@ -377,7 +374,6 @@ setInterval(async () => {
     } catch (err) {}
 }, 45000); 
 
-// ENGINE 6: BACKGROUND WAR SURVEILLANCE
 setInterval(async () => {
     let watchKey = ADMIN_API_KEY || discordConfig.apiKey;
     let watchFactionId = adminFactionId || discordConfig.factionId;
@@ -788,6 +784,18 @@ app.post('/api/unclaim', (req, res) => { const { enemyId, playerName } = req.bod
 app.post('/api/backup', (req, res) => { const { enemyId, playerName } = req.body; backups[enemyId] = { playerName, time: Date.now() }; res.json({ success: true }); });
 app.post('/api/unbackup', (req, res) => { const { enemyId } = req.body; delete backups[enemyId]; res.json({ success: true }); });
 app.post('/api/update-stats', (req, res) => { const { enemyId, stats } = req.body; manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() }; res.json({ success: true }); });
+
+// NEW FIX: Secure endpoint to pull individual target intel (Life + Personal Stats)
+app.get('/api/inspect', async (req, res) => {
+    const { apiKey, targetId } = req.query;
+    try {
+        await verifySubscription(apiKey);
+        const r = await fetch(`https://api.torn.com/user/${targetId}?selections=profile,personalstats&key=${apiKey}`);
+        const data = await r.json();
+        if (data.error) return res.status(400).json({ error: data.error.error });
+        res.json({ success: true, data });
+    } catch(err) { res.status(403).json({ error: err.message }); }
+});
 
 app.get('/api/warboard', async (req, res) => {
     try {
