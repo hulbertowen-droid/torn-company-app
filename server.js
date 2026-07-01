@@ -40,9 +40,6 @@ if (TORN_API_KEY) apiKeyPool.add(TORN_API_KEY);
 let liveAttacks = {};
 let liveDefends = {}; 
 let processedAttackIds = new Set();
-let backfillCursor = Math.floor(Date.now() / 1000);
-let backfillTarget = backfillCursor - (72 * 3600); 
-let isBackfilling = true;
 
 let bonusHits = {}; 
 const BONUS_THRESHOLDS = new Set([10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000]);
@@ -76,6 +73,132 @@ if (ADMIN_API_KEY) {
         .catch(e => console.error("Failed to load admin profile"));
 }
 if (discordConfig.apiKey) apiKeyPool.add(discordConfig.apiKey);
+
+setInterval(async () => {
+    if (!ADMIN_API_KEY) return;
+    try {
+        const res = await fetch(`https://api.torn.com/user/?selections=events&key=${ADMIN_API_KEY}`);
+        const data = await res.json();
+        if (!data.events) return;
+
+        let events = Object.entries(data.events).map(([id, ev]) => ({ id, ...ev }));
+        events.sort((a, b) => a.timestamp - b.timestamp);
+
+        for (let ev of events) {
+            if (ev.timestamp <= lastEventTimestamp) continue;
+            lastEventTimestamp = ev.timestamp;
+
+            const text = ev.event;
+            if (text.toLowerCase().includes('sent you') && text.toLowerCase().includes('xanax')) {
+                const qtyMatch = text.match(/(\d+)\s*[xX]\s*Xanax/i) || text.match(/Xanax\s*[xX]\s*(\d+)/i);
+                let qty = qtyMatch ? parseInt(qtyMatch[1]) : 1;
+                const idMatch = text.match(/XID=(\d+)/);
+
+                if (idMatch) {
+                    let senderId = idMatch[1];
+                    let weeks = Math.floor(qty / 5);
+
+                    if (weeks > 0) {
+                        const senderRes = await fetch(`https://api.torn.com/user/${senderId}?selections=profile&key=${ADMIN_API_KEY}`);
+                        const senderData = await senderRes.json();
+                        const facId = senderData.faction?.faction_id;
+
+                        if (facId && facId !== 0) {
+                            let now = Date.now();
+                            if (!subscriptions[facId] || subscriptions[facId] < now) subscriptions[facId] = now;
+                            
+                            subscriptions[facId] += weeks * 7 * 24 * 60 * 60 * 1000;
+                            saveSubs();
+                            
+                            if (ADMIN_DISCORD_WEBHOOK) {
+                                fetch(ADMIN_DISCORD_WEBHOOK, {
+                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ content: `💰 **PAYMENT RECEIVED:** Faction \`${facId}\` paid ${qty}x Xanax for ${weeks} weeks of Warboard access!` })
+                                }).catch(()=>{});
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } catch (err) {}
+}, 60000); 
+
+async function verifySubscription(userKey) {
+    if (!userKey) throw new Error("No API Key provided.");
+    
+    const res = await fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`);
+    const data = await res.json();
+    if (data.error) throw new Error("Invalid API Key.");
+
+    const playerId = data.player_id?.toString();
+    const facId = data.faction?.faction_id?.toString();
+
+    if (ADMIN_API_KEY && userKey === ADMIN_API_KEY) return playerId;
+    if (playerId && (VIP_PLAYERS.includes(playerId) || vipConfig.players.includes(playerId))) return playerId;
+    
+    if (!facId || facId === "0") throw new Error("You must be in a faction to use these tools.");
+
+    if (adminFactionId && facId === adminFactionId) return playerId;
+    if (VIP_FACTIONS.includes(facId) || vipConfig.factions.includes(facId)) return playerId;
+    if (subscriptions[facId] && subscriptions[facId] > Date.now()) return playerId;
+
+    throw new Error(`SUBSCRIPTION REQUIRED: Your faction's access has expired. Send 5x Xanax to Owen777 [3776908] to instantly unlock access for your entire faction for 1 week!`);
+}
+
+async function verifyFfScouterPremium(ffKey, testId) {
+    if (!ffKey || ffKey === "null" || ffKey === "") return false;
+    try {
+        const res = await fetch(`https://ffscouter.com/api/v1/get-stats?key=${ffKey}&targets=${testId}`);
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) return true; 
+        return false;
+    } catch (e) {
+        return false;
+    }
+}
+
+function computeWarIntel(p, cache = {}) {
+    let score = 0;
+    if (p.state === "Okay") score += 120;
+    if (p.state === "Hospital") score += 60;
+    if (p.onlineStatus === "Online") score += 35;
+    if (p.onlineStatus === "Idle") score += 15;
+    if (p.state === "Hospital" && p.until) {
+        const now = Math.floor(Date.now() / 1000);
+        const remaining = p.until - now;
+        if (remaining > 0) {
+            if (remaining < 300) score += 120;
+            else if (remaining < 900) score += 80;
+            else if (remaining < 3600) score += 40;
+            else score += 10;
+        }
+    }
+    const est = manualStats[p.id]?.stats || cache[p.id]?.stats || p.estStats;
+    if (est && typeof est === 'number') {
+        if (est < 1e7) score += 120;
+        else if (est < 5e7) score += 80;
+        else if (est < 2e8) score += 40;
+        else score += 10;
+    }
+    return score;
+}
+
+function autoDetectEnemyFaction(data) {
+    if (!data || !data.ID) return null;
+    const myId = data.ID.toString();
+    if (data.rankedwars && Object.keys(data.rankedwars).length > 0) {
+        for (let warId in data.rankedwars) {
+            let w = data.rankedwars[warId];
+            if (w.war && w.war.winner === 0) { 
+                const factions = Object.keys(w.factions || {});
+                const enemy = factions.find(id => id !== myId);
+                if (enemy) return enemy;
+            }
+        }
+    }
+    return null;
+}
 
 setInterval(async () => {
     if (statQueue.size === 0 || isProcessingStats) return;
@@ -144,7 +267,7 @@ setInterval(async () => {
     isProcessingActivity = false;
 }, 1500); 
 
-// ENGINE 4: LIVE DELTA SCRAPER 
+// ENGINE 4: LIVE DELTA SCRAPER (Wall Watcher & Chain Milestones)
 setInterval(async () => {
     let watchFactionId = adminFactionId || discordConfig.factionId;
     if (apiKeyPool.size === 0 || !watchFactionId) return;
@@ -161,6 +284,7 @@ setInterval(async () => {
                 if (processedAttackIds.has(atkId)) continue;
                 processedAttackIds.add(atkId);
                 
+                // FRIENDLY IS ATTACKED (WALL WATCHER)
                 if (atk.defender_faction && atk.defender_faction.toString() === watchFactionId) {
                     let uId = atk.defender_id.toString();
                     let attFacId = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
@@ -168,12 +292,22 @@ setInterval(async () => {
                     liveDefends[uId][attFacId] = (liveDefends[uId][attFacId] || 0) + 1;
                     
                     if (discordConfig.friendlyAttacked && discordConfig.webhookUrl) {
+                        // UPGRADE: Extract exact attacker details for the Discord embed
+                        let attackerName = atk.attacker_name || "Unknown";
+                        let attackerId = atk.attacker_id;
+                        let attackerFactionName = atk.attacker_faction_name || "None";
+                        let defenderName = atk.defender_name || uId;
+
+                        let discordMsg = `🛡️ **WALL WATCHER:** \`${defenderName}\` is taking incoming fire from **${attackerName}**!\n🏢 **Enemy Faction:** \`${attackerFactionName}\`\n⚔️ **Attack Link:** https://www.torn.com/loader.php?sid=attack&user2ID=${attackerId}`;
+
                         fetch(discordConfig.webhookUrl, {
                             method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ content: `🛡️ **WALL WATCHER:** Faction member \`${atk.defender_name || uId}\` is taking incoming fire from Faction \`${atk.attacker_faction_name || attFacId}\`!` })
+                            body: JSON.stringify({ content: discordMsg })
                         }).catch(() => {});
                     }
                 }
+
+                // FRIENDLY ATTACKS SOMEONE ELSE
                 if (atk.attacker_faction && atk.attacker_faction.toString() === watchFactionId) {
                     let uId = atk.attacker_id.toString();
                     let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
@@ -245,7 +379,6 @@ setInterval(async () => {
 }, 45000); 
 
 // ENGINE 6: BACKGROUND WAR SURVEILLANCE
-// FIXED: Added 'rankedwars' to selections so active enemy faction detection works flawlessly
 setInterval(async () => {
     let watchKey = ADMIN_API_KEY || discordConfig.apiKey;
     let watchFactionId = adminFactionId || discordConfig.factionId;
@@ -253,7 +386,8 @@ setInterval(async () => {
     if (!watchKey || !watchFactionId) return;
 
     try {
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,chain,rankedwars&key=${userKey || watchKey}`);
+        // FIX: Replaced the broken 'userKey' reference here that was crashing the server loop
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,chain,rankedwars&key=${watchKey}`);
         const facData = await facRes.json();
         if (facData.error) return;
 
@@ -540,7 +674,7 @@ app.post('/api/ai-analyze-ongoing', async (req, res) => {
         });
         const aiData = await aiRes.json();
         res.json({ success: true, analysis: aiData.candidates[0].content.parts[0].text });
-    } catch (err) {}
+    } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
 app.get('/api/past-war', async (req, res) => {
