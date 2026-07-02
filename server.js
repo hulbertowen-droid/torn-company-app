@@ -26,6 +26,7 @@ let flightCache = {};
 let activityCache = {}; 
 let warScrapeCache = {}; 
 let spyDatabase = {}; 
+let subCache = {}; // NEW: Authentication session memory cache
 
 let statQueue = new Map();
 let flightQueue = new Map();
@@ -160,7 +161,6 @@ setInterval(async () => {
     isProcessingFlights = false;
 }, 1000); 
 
-// Engine 3: 72 Hour Activity Backfill
 setInterval(async () => {
     if (activityQueue.size === 0 || isProcessingActivity) return;
     isProcessingActivity = true;
@@ -168,7 +168,7 @@ setInterval(async () => {
     activityQueue.delete(targetId);
     
     const end = Math.floor(Date.now() / 1000);
-    const start = end - (72 * 3600); // 72 Hours Back
+    const start = end - (72 * 3600); 
     
     try {
         const res = await fetch(`https://ffscouter.com/api/v1/activity/player?key=${ffKeyToUse}&target=${targetId}&start=${start}&end=${end}&bucket=3600`);
@@ -179,7 +179,6 @@ setInterval(async () => {
     isProcessingActivity = false;
 }, 1500); 
 
-// Engine 4: Advanced Deep Backfill Function
 async function backfillWarDefends(watchKey, watchFactionId, warStart) {
     let toTimestamp = Math.floor(Date.now() / 1000);
     let keepScraping = true;
@@ -224,7 +223,6 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
     hasBackfilledWar = true;
 }
 
-// Engine 5: Live Attack Scraper + Auto Backfill
 setInterval(async () => {
     let watchFactionId = adminFactionId || discordConfig.factionId || dynamicFactionId;
     let watchKey = ADMIN_API_KEY || discordConfig.apiKey || Array.from(apiKeyPool)[0];
@@ -280,10 +278,6 @@ setInterval(async () => {
                 
                 if (atk.attacker_faction && atk.attacker_faction.toString() === watchFactionId.toString()) {
                     let uId = atk.attacker_id.toString();
-                    let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
-                    if (!liveAttacks[uId]) liveAttacks[uId] = {};
-                    liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
-
                     if (atk.chain && BONUS_THRESHOLDS.has(atk.chain)) {
                         if (hasBackfilledWar && discordConfig.chainMilestone && discordConfig.webhookUrl) {
                             fetch(discordConfig.webhookUrl, {
@@ -298,7 +292,6 @@ setInterval(async () => {
     } catch (err) {}
 }, 20000); 
 
-// Engine 6: Market Undercut Watcher (45s)
 setInterval(async () => {
     if (!marketConfig.webhookUrl || apiKeyPool.size === 0) return;
     const keys = Array.from(apiKeyPool);
@@ -343,7 +336,6 @@ setInterval(async () => {
     } catch (err) {}
 }, 45000); 
 
-// Engine 7: Target Surveillance & Chain Drop Watcher (30s)
 setInterval(async () => {
     let watchKey = ADMIN_API_KEY || discordConfig.apiKey || Array.from(apiKeyPool)[0];
     let watchFactionId = adminFactionId || discordConfig.factionId || dynamicFactionId;
@@ -392,24 +384,50 @@ setInterval(async () => {
     } catch (err) {}
 }, 30000);
 
-
+// NEW FIX: Intelligent Subscription Key Session Cache to absorb API dropouts/throttling
 async function verifySubscription(userKey) {
     if (!userKey) throw new Error("No API Key provided.");
-    const res = await fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`);
-    const data = await res.json();
-    if (data.error) throw new Error("Invalid API Key.");
+    const now = Date.now();
+    if (subCache[userKey] && subCache[userKey].expires > now) {
+        return subCache[userKey].playerId;
+    }
+    
+    try {
+        const res = await fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`);
+        const data = await res.json();
+        
+        if (data.error) {
+            // Error 5 = Throttling, Error 8/9 = Temporary blocks. Pass if we have an active session!
+            if ([5, 8, 9].includes(data.error.code) && subCache[userKey]) {
+                return subCache[userKey].playerId;
+            }
+            if (data.error.code === 2) throw new Error("Invalid API Key.");
+            throw new Error(`Torn API Throttled: Retrying link...`);
+        }
 
-    const playerId = data.player_id?.toString();
-    const facId = data.faction?.faction_id?.toString();
+        const playerId = data.player_id?.toString();
+        const facId = data.faction?.faction_id?.toString();
 
-    if (ADMIN_API_KEY && userKey === ADMIN_API_KEY) return playerId;
-    if (playerId && (VIP_PLAYERS.includes(playerId) || vipConfig.players.includes(playerId))) return playerId;
-    if (!facId || facId === "0") throw new Error("You must be in a faction to use these tools.");
-    if (adminFactionId && facId === adminFactionId) return playerId;
-    if (VIP_FACTIONS.includes(facId) || vipConfig.factions.includes(facId)) return playerId;
-    if (subscriptions[facId] && subscriptions[facId] > Date.now()) return playerId;
+        if (ADMIN_API_KEY && userKey === ADMIN_API_KEY) return playerId;
+        if (playerId && (VIP_PLAYERS.includes(playerId) || vipConfig.players.includes(playerId))) return playerId;
+        if (!facId || facId === "0") throw new Error("You must be in a faction to use these tools.");
+        
+        if (adminFactionId && facId === adminFactionId) {
+            dynamicFactionId = facId; apiKeyPool.add(userKey);
+            spyDatabase["FAC_SESSION"] = facId; // Local backup flag
+        } else if (VIP_FACTIONS.includes(facId) || vipConfig.factions.includes(facId) || (subscriptions[facId] && subscriptions[facId] > Date.now())) {
+            dynamicFactionId = facId; apiKeyPool.add(userKey);
+        } else {
+            throw new Error(`SUBSCRIPTION REQUIRED: Your access has expired. Send 5x Xanax to Owen777 [3776908] to unlock!`);
+        }
 
-    throw new Error(`SUBSCRIPTION REQUIRED: Your faction's access has expired. Send 5x Xanax to Owen777 [3776908] to instantly unlock access for your entire faction for 1 week!`);
+        // Cache verification status for 5 minutes
+        subCache[userKey] = { playerId, expires: now + 300000 };
+        return playerId;
+    } catch (err) {
+        if (subCache[userKey]) return subCache[userKey].playerId;
+        throw err;
+    }
 }
 
 function computeWarIntel(p, cache = {}) {
@@ -453,19 +471,6 @@ function autoDetectEnemyFaction(data) {
     }
     return null;
 }
-
-app.get('/health', (req, res) => res.status(200).send("OK"));
-
-app.get('/api/admin/vips', (req, res) => {
-    if (req.query.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
-    res.json(vipConfig);
-});
-app.post('/api/admin/vips', (req, res) => {
-    if (req.body.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
-    vipConfig = { factions: req.body.factions || [], players: req.body.players || [] };
-    saveVipConfig();
-    res.json({ success: true });
-});
 
 app.get('/api/get-discord-config', (req, res) => { res.json(discordConfig); });
 app.post('/api/save-discord-config', async (req, res) => { 
@@ -799,7 +804,6 @@ app.post('/api/save-spy', async (req, res) => {
     } catch(err) { res.status(403).json({ error: err.message }); }
 });
 
-// FULL FIX: Merges permanent Ranked War Base Data with Instant Live Memory
 app.get('/api/warboard', async (req, res) => {
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
@@ -833,13 +837,8 @@ app.get('/api/warboard', async (req, res) => {
         const enemyIds = new Set(Object.keys(enemyDataResult.members || {}));
         
         [...friendlyIds, ...enemyIds].forEach(id => {
-            if (!statsCache[id] || (Date.now() - statsCache[id].time) > 3600000) { 
-                if (isPremium && !statQueue.has(id)) statQueue.set(id, ffKey); 
-            }
-            if (!activityCache[id] || (Date.now() - activityCache[id].time) > 3600000) { 
-                if (isPremium && !activityQueue.has(id)) activityQueue.set(id, ffKey); 
-            }
-
+            if (!statsCache[id] || (Date.now() - statsCache[id].time) > 3600000) { if (isPremium && !statQueue.has(id)) statQueue.set(id, ffKey); }
+            if (!activityCache[id] || (Date.now() - activityCache[id].time) > 3600000) { if (isPremium && !activityQueue.has(id)) activityQueue.set(id, ffKey); }
             const m = myData.members[id] || enemyDataResult.members[id];
             const isTraveling = m.status?.state === "Traveling" || m.status?.description?.includes("Traveling");
             if (isTraveling) { if (!flightCache[id] || (Date.now() - flightCache[id].time) > 30000) { if (isPremium && !flightQueue.has(id)) flightQueue.set(id, ffKey); } }
@@ -858,15 +857,12 @@ app.get('/api/warboard', async (req, res) => {
                 let baseAttacks = warMemberData ? (warMemberData.attacks || 0) : 0;
                 let score = warMemberData ? (warMemberData.score || 0) : 0;
                 
-                // HYBRID GRAPH MATH: Overlays Live Memory Hits onto Official API Hits
                 let liveAtk = 0;
                 if (enemyId && liveAttacks[id]?.[enemyId]) { liveAtk = liveAttacks[id][enemyId]; }
                 let attacks = Math.max(baseAttacks, liveAtk);
 
                 let defends = 0;
-                if (enemyId && persistentDefends[id]?.[enemyId]) { 
-                    defends = persistentDefends[id][enemyId]; 
-                }
+                if (enemyId && persistentDefends[id]?.[enemyId]) { defends = persistentDefends[id][enemyId]; }
 
                 let timeline = activityCache[id]?.timeline || null;
 
