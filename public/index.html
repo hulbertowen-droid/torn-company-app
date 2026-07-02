@@ -238,7 +238,6 @@
             </div>
         </div>
 
-        <!-- UPGRADED: Target Inspect Modal -->
         <div id="inspect-modal" class="modal-overlay">
             <div class="modal-content" style="width: 700px; max-width: 95vw; max-height: 90vh; overflow-y: auto;">
                 <div class="close-btn" onclick="closeInspect()">&times;</div>
@@ -491,22 +490,16 @@ async function fetchWarboard() {
 }
 
 function renderChart(friendlyPlayers) {
-    let activeHitters = friendlyPlayers.filter(p => p.attacks > 0 || p.defends > 0);
-    
-    if (activeHitters.length === 0) {
-        let sortedByStats = [...friendlyPlayers].sort((a, b) => {
-            let statA = typeof a.estStats === 'number' ? a.estStats : 0;
-            let statB = typeof b.estStats === 'number' ? b.estStats : 0;
-            return statB - statA;
-        });
-        activeHitters = sortedByStats.slice(0, 15);
-    } else {
-        activeHitters.sort((a, b) => b.attacks - a.attacks);
-    }
+    // Show all members, sorted by activity so the top hitters are on the left
+    let allHitters = [...friendlyPlayers].sort((a, b) => {
+        if (b.attacks !== a.attacks) return b.attacks - a.attacks;
+        if (b.defends !== a.defends) return b.defends - a.defends;
+        return a.name.localeCompare(b.name);
+    });
 
-    const labels = activeHitters.map(p => p.name);
-    const attackData = activeHitters.map(p => p.attacks);
-    const defendData = activeHitters.map(p => p.defends); 
+    const labels = allHitters.map(p => p.name);
+    const attackData = allHitters.map(p => p.attacks);
+    const defendData = allHitters.map(p => p.defends); 
 
     const ctx = document.getElementById('warChart').getContext('2d');
 
@@ -855,7 +848,6 @@ async function promptUpdateStats(id) {
     if (statInput && !isNaN(statInput)) { await fetch('/api/update-stats', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, stats: parseInt(statInput) }) }); fetchWarboard(); }
 }
 
-// UPGRADED: Inspect Target (Loadout Clues + Exact Stats)
 async function inspectTarget(id, name) {
     document.getElementById('inspect-title').innerText = `🔍 Target Intel: ${name} [${id}]`;
     document.getElementById('inspect-body').innerHTML = `<div style="color:var(--text-dim); text-align:center; padding: 20px; font-style:italic;">Establishing secure uplink to Torn database...</div>`;
