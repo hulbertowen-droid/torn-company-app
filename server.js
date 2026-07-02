@@ -160,6 +160,7 @@ setInterval(async () => {
     isProcessingFlights = false;
 }, 1000); 
 
+// Engine 3: 72 Hour Activity Backfill
 setInterval(async () => {
     if (activityQueue.size === 0 || isProcessingActivity) return;
     isProcessingActivity = true;
@@ -178,13 +179,13 @@ setInterval(async () => {
     isProcessingActivity = false;
 }, 1500); 
 
-// NEW: Advanced Deep Backfill Function
+// Engine 4: Advanced Deep Backfill Function
 async function backfillWarDefends(watchKey, watchFactionId, warStart) {
     let toTimestamp = Math.floor(Date.now() / 1000);
     let keepScraping = true;
     let pageCount = 0;
     
-    while (keepScraping && pageCount < 50) { // Up to 5000 attacks to secure true defend history
+    while (keepScraping && pageCount < 50) { 
         try {
             const res = await fetch(`https://api.torn.com/faction/?selections=attacks&to=${toTimestamp}&key=${watchKey}`);
             const data = await res.json();
@@ -207,6 +208,12 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
                         if (!persistentDefends[uId]) persistentDefends[uId] = {};
                         persistentDefends[uId][attFacId] = (persistentDefends[uId][attFacId] || 0) + 1;
                     }
+                    if (atk.attacker_faction && atk.attacker_faction.toString() === watchFactionId.toString()) {
+                        let uId = atk.attacker_id.toString();
+                        let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
+                        if (!liveAttacks[uId]) liveAttacks[uId] = {};
+                        liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
+                    }
                 }
             }
             toTimestamp = oldestTime - 1;
@@ -217,7 +224,7 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
     hasBackfilledWar = true;
 }
 
-// Engine 4: Live Attack Scraper + Auto Backfill
+// Engine 5: Live Attack Scraper + Auto Backfill
 setInterval(async () => {
     let watchFactionId = adminFactionId || discordConfig.factionId || dynamicFactionId;
     let watchKey = ADMIN_API_KEY || discordConfig.apiKey || Array.from(apiKeyPool)[0];
@@ -233,9 +240,9 @@ setInterval(async () => {
                 if (activeWarId !== ongoingWar.war.start) {
                     activeWarId = ongoingWar.war.start;
                     persistentDefends = {};
+                    liveAttacks = {};
                     hasBackfilledWar = false;
                     processedAttackIds.clear(); 
-                    // Fire the backfiller the second a new war is identified
                     backfillWarDefends(watchKey, watchFactionId, activeWarId);
                 }
             } else {
@@ -253,7 +260,6 @@ setInterval(async () => {
                 if (processedAttackIds.has(atk.code)) continue;
                 processedAttackIds.add(atk.code);
                 
-                // FRIENDLY ATTACKED (Live Defends)
                 if (atk.defender_faction && atk.defender_faction.toString() === watchFactionId.toString()) {
                     let uId = atk.defender_id.toString();
                     let attFacId = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
@@ -272,9 +278,12 @@ setInterval(async () => {
                     }
                 }
                 
-                // FRIENDLY ATTACKS OUT (Live Milestones)
                 if (atk.attacker_faction && atk.attacker_faction.toString() === watchFactionId.toString()) {
                     let uId = atk.attacker_id.toString();
+                    let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
+                    if (!liveAttacks[uId]) liveAttacks[uId] = {};
+                    liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
+
                     if (atk.chain && BONUS_THRESHOLDS.has(atk.chain)) {
                         if (hasBackfilledWar && discordConfig.chainMilestone && discordConfig.webhookUrl) {
                             fetch(discordConfig.webhookUrl, {
@@ -289,6 +298,7 @@ setInterval(async () => {
     } catch (err) {}
 }, 20000); 
 
+// Engine 6: Market Undercut Watcher (45s)
 setInterval(async () => {
     if (!marketConfig.webhookUrl || apiKeyPool.size === 0) return;
     const keys = Array.from(apiKeyPool);
@@ -333,6 +343,7 @@ setInterval(async () => {
     } catch (err) {}
 }, 45000); 
 
+// Engine 7: Target Surveillance & Chain Drop Watcher (30s)
 setInterval(async () => {
     let watchKey = ADMIN_API_KEY || discordConfig.apiKey || Array.from(apiKeyPool)[0];
     let watchFactionId = adminFactionId || discordConfig.factionId || dynamicFactionId;
@@ -380,6 +391,7 @@ setInterval(async () => {
         }
     } catch (err) {}
 }, 30000);
+
 
 async function verifySubscription(userKey) {
     if (!userKey) throw new Error("No API Key provided.");
@@ -787,7 +799,7 @@ app.post('/api/save-spy', async (req, res) => {
     } catch(err) { res.status(403).json({ error: err.message }); }
 });
 
-// FULL FIX: The Primary Warboard Endpoint now maps the timeline correctly!
+// FULL FIX: Merges permanent Ranked War Base Data with Instant Live Memory
 app.get('/api/warboard', async (req, res) => {
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
@@ -824,7 +836,6 @@ app.get('/api/warboard', async (req, res) => {
             if (!statsCache[id] || (Date.now() - statsCache[id].time) > 3600000) { 
                 if (isPremium && !statQueue.has(id)) statQueue.set(id, ffKey); 
             }
-            // THE FIX: This correctly pushes members into the queue so the server actually fetches their timeline!
             if (!activityCache[id] || (Date.now() - activityCache[id].time) > 3600000) { 
                 if (isPremium && !activityQueue.has(id)) activityQueue.set(id, ffKey); 
             }
@@ -844,15 +855,19 @@ app.get('/api/warboard', async (req, res) => {
                 if (isTraveling) { if (flightCache[id]?.landingTime) { finalLandingTime = flightCache[id].landingTime; finalUntil = finalLandingTime; } else { if (!isPremium) needsFfScouterForFlights = true; } }
                 
                 let warMemberData = isEnemy ? enemyWarMembers[id] : myWarMembers[id];
-                let attacks = warMemberData ? (warMemberData.attacks || 0) : 0;
+                let baseAttacks = warMemberData ? (warMemberData.attacks || 0) : 0;
                 let score = warMemberData ? (warMemberData.score || 0) : 0;
                 
+                // HYBRID GRAPH MATH: Overlays Live Memory Hits onto Official API Hits
+                let liveAtk = 0;
+                if (enemyId && liveAttacks[id]?.[enemyId]) { liveAtk = liveAttacks[id][enemyId]; }
+                let attacks = Math.max(baseAttacks, liveAtk);
+
                 let defends = 0;
                 if (enemyId && persistentDefends[id]?.[enemyId]) { 
                     defends = persistentDefends[id][enemyId]; 
                 }
 
-                // THE FIX: Packaged the timeline into the JSON payload!
                 let timeline = activityCache[id]?.timeline || null;
 
                 return { id, name: m.name, state: m.status?.state, until: finalUntil, statusDescription: m.status?.description || "", onlineStatus: m.last_action?.status || "Offline", lastActionRelative: m.last_action?.relative || "Unknown", landingTime: finalLandingTime, needsFfScouterForFlights, claimedBy: isEnemy ? claims[id]?.playerName || null : null, needsBackup: isEnemy ? backups[id]?.playerName || null : null, estStats: est, intelScore: isEnemy ? computeWarIntel({ id, state: m.status?.state, until: finalUntil, onlineStatus: m.last_action?.status || "Offline", estStats: typeof est === 'number' ? est : null }, statsCache) : null, isManual: !!manualStats[id], attacks, score, defends, timeline };
