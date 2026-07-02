@@ -26,7 +26,7 @@ let flightCache = {};
 let activityCache = {}; 
 let warScrapeCache = {}; 
 let spyDatabase = {}; 
-let subCache = {}; // Tracks active users to build the organic API Swarm
+let subCache = {}; 
 
 let userTracking = {}; 
 let discordIdCache = {}; 
@@ -85,25 +85,19 @@ if (ADMIN_API_KEY) {
         .catch(e => console.error("Failed to load admin profile"));
 }
 
-// ==========================================
-// ORGANIC API SWARM ROTATOR
-// ==========================================
 function getNextApiKey() {
     let activeKeys = [];
     const now = Date.now();
     
-    // 1. Organically harvest all valid keys from currently active faction members
     for (const [key, data] of Object.entries(subCache)) {
         if (data.expires > now) activeKeys.push(key);
     }
     
-    // 2. Add static fallback backups
     if (ADMIN_API_KEY) activeKeys.push(ADMIN_API_KEY);
     if (TORN_API_KEY) activeKeys.push(TORN_API_KEY);
     if (discordConfig.apiKey) activeKeys.push(discordConfig.apiKey);
     if (apiPoolConfig.keys && apiPoolConfig.keys.length > 0) activeKeys.push(...apiPoolConfig.keys);
     
-    // Clean duplicates and dead strings
     activeKeys = [...new Set(activeKeys.filter(k => k && typeof k === 'string' && k.trim() !== ""))];
     if (activeKeys.length === 0) return null;
     
@@ -245,10 +239,13 @@ setInterval(async () => {
     isProcessingActivity = false;
 }, 1500); 
 
+// FIXED: Deep Backfill using Pagination Paging Strategy
 async function backfillWarDefends(watchKey, watchFactionId, warStart) {
     let toTimestamp = Math.floor(Date.now() / 1000);
     let keepScraping = true;
     let pageCount = 0;
+    
+    // We walk BACKWARDS from 'now' to 'warStart' using 'to=' parameter
     while (keepScraping && pageCount < 50) { 
         try {
             const res = await fetch(`https://api.torn.com/faction/?selections=attacks&to=${toTimestamp}&key=${watchKey}`);
@@ -257,11 +254,22 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
             
             let attacks = Object.values(data.attacks);
             if (attacks.length === 0) break;
-            let oldestTime = toTimestamp;
             
+            // Assume attacks are mostly ordered. We need to find the oldest timestamp in this batch
+            let oldestTimeInBatch = toTimestamp;
+            let foundOldAttack = false;
+
             for (let atk of attacks) {
-                if (atk.timestamp_ended < oldestTime) oldestTime = atk.timestamp_ended;
-                if (atk.timestamp_ended < warStart) { keepScraping = false; continue; }
+                if (atk.timestamp_ended < oldestTimeInBatch) {
+                    oldestTimeInBatch = atk.timestamp_ended;
+                }
+                
+                if (atk.timestamp_ended < warStart) { 
+                    // We found an attack older than the war start, meaning we have processed the whole war
+                    keepScraping = false; 
+                    foundOldAttack = true;
+                    continue; 
+                }
                 
                 if (!processedAttackIds.has(atk.code)) {
                     processedAttackIds.add(atk.code);
@@ -279,9 +287,15 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
                     }
                 }
             }
-            toTimestamp = oldestTime - 1;
-            pageCount++;
-            await new Promise(r => setTimeout(r, 200)); 
+            
+            // If we didn't find the start of the war yet, we prepare for the next API call.
+            // We set 'to' to 1 second before the oldest attack in this batch to avoid fetching the same overlap attack
+            if (!foundOldAttack) {
+                 toTimestamp = oldestTimeInBatch - 1;
+                 pageCount++;
+                 await new Promise(r => setTimeout(r, 500)); // Rate limit pause
+            }
+            
         } catch (e) { break; }
     }
     hasBackfilledWar = true;
@@ -378,7 +392,6 @@ setInterval(async () => {
     
     try {
         if (marketConfig.autoDefense) {
-            // Need a primary key to fetch your own bazaar to establish base prices
             let rootKey = ADMIN_API_KEY || discordConfig.apiKey || watchKey;
             const userRes = await fetch(`https://api.torn.com/user/?selections=bazaar,profile&key=${rootKey}`);
             const userData = await userRes.json();
@@ -550,7 +563,7 @@ async function verifySubscription(userKey) {
         const data = await res.json();
         
         if (data.error) {
-            if ([5, 8, 9].includes(data.error.code) && subCache[userKey]) return subCache[userKey].playerId;
+            if ([5, 8, 9].includes(data.error.code) && subCache[userKey]) { return subCache[userKey].playerId; }
             if (data.error.code === 2) throw new Error("Invalid API Key.");
             throw new Error(`Torn API Throttled: Retrying link...`);
         }
@@ -568,9 +581,9 @@ async function verifySubscription(userKey) {
         if (!facId || facId === "0") throw new Error("You must be in a faction to use these tools.");
         
         if (adminFactionId && facId === adminFactionId) {
-            dynamicFactionId = facId; 
+            dynamicFactionId = facId; apiKeyPool.add(userKey);
         } else if (VIP_FACTIONS.includes(facId) || vipConfig.factions.includes(facId) || (subscriptions[facId] && subscriptions[facId] > Date.now())) {
-            dynamicFactionId = facId; 
+            dynamicFactionId = facId; apiKeyPool.add(userKey);
         } else {
             throw new Error(`SUBSCRIPTION REQUIRED: Your access has expired. Send 5x Xanax to Owen777 [3776908] to unlock!`);
         }
@@ -657,6 +670,16 @@ app.get('/api/admin/tracking', (req, res) => {
 app.get('/api/get-discord-config', (req, res) => { res.json(discordConfig); });
 app.post('/api/save-discord-config', async (req, res) => { 
     discordConfig = { ...discordConfig, ...req.body }; 
+    if (discordConfig.apiKey) {
+        try {
+            const profileRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${discordConfig.apiKey}`);
+            const profileData = await profileRes.json();
+            if (profileData.faction && profileData.faction.faction_id) {
+                discordConfig.factionId = profileData.faction.faction_id.toString();
+                apiKeyPool.add(discordConfig.apiKey);
+            }
+        } catch(e) {}
+    }
     saveDiscordConfig(); 
     res.json({ success: true }); 
 });
@@ -989,15 +1012,15 @@ app.get('/api/warboard', async (req, res) => {
         const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
         let enemyId = req.query.enemyFaction || null;
         
-        // Use the user's specific key to load their board, preserving the pooled limits for background tasks
+        let activeKey = getNextApiKey() || userKey;
         let [myData, enemyDataResult] = await Promise.all([
-            fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })),
-            enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} })
+            fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${activeKey}`).then(r => r.json()).catch(() => ({ members: {} })),
+            enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()||userKey}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} })
         ]);
         
         if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
         if (enemyId && Object.keys(enemyDataResult.members || {}).length === 0) { 
-            enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })); 
+            enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()||userKey}`).then(r => r.json()).catch(() => ({ members: {} })); 
         }
 
         if (myData && myData.ID) dynamicFactionId = myData.ID.toString();
