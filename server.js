@@ -26,7 +26,7 @@ let flightCache = {};
 let activityCache = {}; 
 let warScrapeCache = {}; 
 let spyDatabase = {}; 
-let subCache = {}; // NEW: Authentication session memory cache
+let subCache = {}; // Auth memory cache to prevent API-drop disconnects
 
 let statQueue = new Map();
 let flightQueue = new Map();
@@ -56,7 +56,7 @@ let lastEventTimestamp = Math.floor(Date.now() / 1000);
 let lastChainTimeoutAlertState = false;
 let backgroundEnemyTrackingState = {};
 
-let discordConfig = { webhookUrl: "", targetOnline: true, targetLanded: true, targetOutHosp: true, chainUnder90: true, chainMilestone: true, friendlyAttacked: true, apiKey: "", factionId: "" };
+let discordConfig = { webhookUrl: "", targetOnline: true, targetLanded: true, targetOutHosp: true, chainUnder90: true, chainMilestone: true, friendlyAttacked: true, apiKey: "", factionId: "", medOutSniper: true };
 let marketConfig = { webhookUrl: "", autoDefense: false, sniperTargets: [] };
 let marketMemory = { defense: {}, sniper: {} };
 let vipConfig = { factions: [], players: [] }; 
@@ -278,6 +278,10 @@ setInterval(async () => {
                 
                 if (atk.attacker_faction && atk.attacker_faction.toString() === watchFactionId.toString()) {
                     let uId = atk.attacker_id.toString();
+                    let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
+                    if (!liveAttacks[uId]) liveAttacks[uId] = {};
+                    liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
+
                     if (atk.chain && BONUS_THRESHOLDS.has(atk.chain)) {
                         if (hasBackfilledWar && discordConfig.chainMilestone && discordConfig.webhookUrl) {
                             fetch(discordConfig.webhookUrl, {
@@ -336,6 +340,7 @@ setInterval(async () => {
     } catch (err) {}
 }, 45000); 
 
+// Engine 7: Target Surveillance & Med-Out Sniper
 setInterval(async () => {
     let watchKey = ADMIN_API_KEY || discordConfig.apiKey || Array.from(apiKeyPool)[0];
     let watchFactionId = adminFactionId || discordConfig.factionId || dynamicFactionId;
@@ -362,18 +367,54 @@ setInterval(async () => {
             if (enemyData.members) {
                 Object.entries(enemyData.members).forEach(([id, m]) => {
                     let oldRecord = backgroundEnemyTrackingState[id];
-                    let newRecord = { state: m.status?.state, online: m.last_action?.status, description: m.status?.description };
+                    let newRecord = { state: m.status?.state, online: m.last_action?.status, description: m.status?.description, until: m.status?.until };
                     
                     if (oldRecord) {
                         if (oldRecord.online !== "Online" && newRecord.online === "Online" && discordConfig.targetOnline) {
                             fetch(discordConfig.webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: `🟢 **TARGET ONLINE:** ${m.name} [${id}] just came online!` }) }).catch(() => {});
                         }
-                        if (oldRecord.state !== "Okay" && newRecord.state === "Okay") {
-                            let oldDesc = oldRecord.description || "";
-                            if ((oldRecord.state === "Traveling" || oldDesc.includes("Traveling") || oldDesc.includes("Abroad")) && discordConfig.targetLanded) {
+                        
+                        // NEW FIX: Med-Out Sniping Logic
+                        if (oldRecord.state === "Hospital" && newRecord.state === "Okay") {
+                            let now = Math.floor(Date.now() / 1000);
+                            let leftEarly = oldRecord.until && (oldRecord.until > now + 60);
+
+                            if (leftEarly && newRecord.online === "Online" && discordConfig.medOutSniper) {
+                                let enemyEst = (spyDatabase[id] && spyDatabase[id].total) ? spyDatabase[id].total : (statsCache[id]?.stats || manualStats[id]?.stats || 0);
+                                let bestMatchName = "Anyone available";
+                                
+                                // Scan Friendly Roster for someone Online/Idle to take the hit
+                                if (facData.members) {
+                                    let friendliesAvailable = Object.entries(facData.members).filter(([fid, fm]) => fid !== id && (fm.last_action?.status === "Online" || fm.last_action?.status === "Idle"));
+                                    
+                                    if (friendliesAvailable.length > 0 && enemyEst > 0) {
+                                        let bestDiff = Infinity;
+                                        for(let [fid, fm] of friendliesAvailable) {
+                                            let fEst = (spyDatabase[fid] && spyDatabase[fid].total) ? spyDatabase[fid].total : (statsCache[fid]?.stats || manualStats[fid]?.stats || 0);
+                                            // Make sure the friendly is within a beatable stat range (70% or higher of enemy stats)
+                                            if (fEst >= enemyEst * 0.7) {
+                                                let diff = Math.abs(fEst - enemyEst);
+                                                if (diff < bestDiff) {
+                                                    bestDiff = diff;
+                                                    bestMatchName = fm.name;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                let statStr = enemyEst > 0 ? `~${enemyEst.toLocaleString()}` : "Unknown";
+                                fetch(discordConfig.webhookUrl, {
+                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ content: `🚨 **MED-OUT SNIPER:** **${m.name}** [${id}] just used meds/revive to escape the hospital early and is ONLINE!\n🎯 **Target Stats:** ${statStr}\n👉 **Assignment:** **${bestMatchName}**, you have the stats to take them down! [ATTACK LINK](https://www.torn.com/loader.php?sid=attack&user2ID=${id})` })
+                                }).catch(() => {});
+                                
+                            } else if (discordConfig.targetOutHosp && !leftEarly) {
+                                // Natural Hospital Release
+                                fetch(discordConfig.webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: `🏥 **TARGET OUT OF HOSP:** ${m.name} [${id}] naturally finished their hospital time and is Okay!` }) }).catch(() => {});
+                            } else if (discordConfig.targetLanded && (oldRecord.state === "Traveling" || (oldRecord.description && oldRecord.description.includes("Traveling")))) {
+                                // Natural Flight Landing
                                 fetch(discordConfig.webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: `✈️ **TARGET LANDED:** ${m.name} [${id}] just landed in Torn!` }) }).catch(() => {});
-                            } else if (oldRecord.state === "Hospital" && discordConfig.targetOutHosp) {
-                                fetch(discordConfig.webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: `🏥 **TARGET OUT OF HOSP:** ${m.name} [${id}] just left the hospital and is Okay!` }) }).catch(() => {});
                             }
                         }
                     }
@@ -384,7 +425,7 @@ setInterval(async () => {
     } catch (err) {}
 }, 30000);
 
-// NEW FIX: Intelligent Subscription Key Session Cache to absorb API dropouts/throttling
+
 async function verifySubscription(userKey) {
     if (!userKey) throw new Error("No API Key provided.");
     const now = Date.now();
@@ -397,10 +438,7 @@ async function verifySubscription(userKey) {
         const data = await res.json();
         
         if (data.error) {
-            // Error 5 = Throttling, Error 8/9 = Temporary blocks. Pass if we have an active session!
-            if ([5, 8, 9].includes(data.error.code) && subCache[userKey]) {
-                return subCache[userKey].playerId;
-            }
+            if ([5, 8, 9].includes(data.error.code) && subCache[userKey]) { return subCache[userKey].playerId; }
             if (data.error.code === 2) throw new Error("Invalid API Key.");
             throw new Error(`Torn API Throttled: Retrying link...`);
         }
@@ -414,14 +452,12 @@ async function verifySubscription(userKey) {
         
         if (adminFactionId && facId === adminFactionId) {
             dynamicFactionId = facId; apiKeyPool.add(userKey);
-            spyDatabase["FAC_SESSION"] = facId; // Local backup flag
         } else if (VIP_FACTIONS.includes(facId) || vipConfig.factions.includes(facId) || (subscriptions[facId] && subscriptions[facId] > Date.now())) {
             dynamicFactionId = facId; apiKeyPool.add(userKey);
         } else {
             throw new Error(`SUBSCRIPTION REQUIRED: Your access has expired. Send 5x Xanax to Owen777 [3776908] to unlock!`);
         }
 
-        // Cache verification status for 5 minutes
         subCache[userKey] = { playerId, expires: now + 300000 };
         return playerId;
     } catch (err) {
@@ -471,6 +507,19 @@ function autoDetectEnemyFaction(data) {
     }
     return null;
 }
+
+app.get('/health', (req, res) => res.status(200).send("OK"));
+
+app.get('/api/admin/vips', (req, res) => {
+    if (req.query.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
+    res.json(vipConfig);
+});
+app.post('/api/admin/vips', (req, res) => {
+    if (req.body.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
+    vipConfig = { factions: req.body.factions || [], players: req.body.players || [] };
+    saveVipConfig();
+    res.json({ success: true });
+});
 
 app.get('/api/get-discord-config', (req, res) => { res.json(discordConfig); });
 app.post('/api/save-discord-config', async (req, res) => { 
