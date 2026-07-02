@@ -70,6 +70,27 @@
     </nav>
 
     <main class="main-content">
+        <div class="dash-card" style="margin-top: 25px;">
+    <h2 style="color: var(--blue);">🕵️ Active User Tracking Log</h2>
+    <div style="background: rgba(88, 166, 255, 0.05); padding: 15px; border-radius: 8px; border: 1px solid var(--blue); margin-bottom: 15px;">
+        <span style="font-size: 0.85em; color: var(--text-dim);">This panel tracks the exact Torn ID, Name, and Last Active timestamp of every single person who successfully authenticates an API key on your dashboard.</span>
+    </div>
+    
+    <div style="overflow-x: auto; background: #0b0d13; border: 1px solid #2f3542; border-radius: 8px; padding: 10px;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9em;">
+            <thead>
+                <tr style="border-bottom: 1px solid #2f3542; color: var(--text-dim);">
+                    <th style="padding: 10px;">Player Name [ID]</th>
+                    <th style="padding: 10px;">Last Active (Local Time)</th>
+                    <th style="padding: 10px;">Status</th>
+                </tr>
+            </thead>
+            <tbody id="tracking-table-body">
+                <tr><td colspan="3" style="padding: 10px; font-style: italic; color: var(--text-dim);">Fetching user logs...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
         <h1>Master Admin Control</h1>
         <div class="container">
             <div id="error-msg">Checking security credentials...</div>
