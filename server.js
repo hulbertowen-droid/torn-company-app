@@ -26,7 +26,7 @@ let flightCache = {};
 let activityCache = {}; 
 let warScrapeCache = {}; 
 let spyDatabase = {}; 
-let subCache = {}; // Auth memory cache to prevent API-drop disconnects
+let subCache = {}; 
 
 let statQueue = new Map();
 let flightQueue = new Map();
@@ -40,7 +40,6 @@ let apiKeyPool = new Set();
 if (ADMIN_API_KEY) apiKeyPool.add(ADMIN_API_KEY);
 if (TORN_API_KEY) apiKeyPool.add(TORN_API_KEY);
 
-// Permanent War Defend Tracker
 let persistentDefends = {};
 let activeWarId = null;
 let hasBackfilledWar = false;
@@ -81,6 +80,42 @@ if (ADMIN_API_KEY) {
 }
 if (discordConfig.apiKey) apiKeyPool.add(discordConfig.apiKey);
 
+// ==========================================
+// NEW: DISCORD RICH EMBED ENGINE
+// ==========================================
+async function sendDiscordEmbed(webhookUrl, { title, description, color, fields, links }) {
+    if (!webhookUrl) return;
+    
+    let payload = {
+        embeds: [{
+            title: title,
+            description: description,
+            color: color,
+            fields: fields || [],
+            footer: { text: "Owen's Faction Tools • " + new Date().toISOString().replace('T', ' ').substring(0, 19) + " UTC" }
+        }]
+    };
+
+    if (links && links.length > 0) {
+        let components = [];
+        links.forEach(l => {
+            components.push({ type: 2, style: 5, label: l.label, url: l.url });
+        });
+        payload.components = [{ type: 1, components: components }];
+    }
+
+    try {
+        await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+    } catch(e) { console.error("Discord webhook failed", e); }
+}
+
+// ==========================================
+// BACKGROUND ENGINES & SCRAPERS
+// ==========================================
 setInterval(async () => {
     if (!ADMIN_API_KEY) return;
     try {
@@ -116,12 +151,11 @@ setInterval(async () => {
                             subscriptions[facId] += weeks * 7 * 24 * 60 * 60 * 1000;
                             saveSubs();
                             
-                            if (ADMIN_DISCORD_WEBHOOK) {
-                                fetch(ADMIN_DISCORD_WEBHOOK, {
-                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ content: `💰 **PAYMENT RECEIVED:** Faction \`${facId}\` sent ${qty}x Xanax for ${weeks} weeks of access!` })
-                                }).catch(()=>{});
-                            }
+                            sendDiscordEmbed(ADMIN_DISCORD_WEBHOOK, {
+                                title: "💰 Payment Received",
+                                description: `Faction \`${facId}\` sent **${qty}x Xanax** for ${weeks} weeks of Warboard access!`,
+                                color: 3069299 // Green
+                            });
                         }
                     }
                 }
@@ -261,18 +295,29 @@ setInterval(async () => {
                 if (atk.defender_faction && atk.defender_faction.toString() === watchFactionId.toString()) {
                     let uId = atk.defender_id.toString();
                     let attFacId = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
+                    let attackerId = atk.attacker_id.toString();
+
                     if (!persistentDefends[uId]) persistentDefends[uId] = {};
                     persistentDefends[uId][attFacId] = (persistentDefends[uId][attFacId] || 0) + 1;
                     
                     if (hasBackfilledWar && discordConfig.friendlyAttacked && discordConfig.webhookUrl) {
                         let attackerName = atk.attacker_name || "Unknown"; 
-                        let attackerId = atk.attacker_id; 
                         let attackerFactionName = atk.attacker_faction_name || "None"; 
                         let defenderName = atk.defender_name || uId;
-                        fetch(discordConfig.webhookUrl, {
-                            method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ content: `🛡️ **WALL WATCHER:** \`${defenderName}\` is getting hit by **${attackerName}**!\n🏢 **Enemy Faction:** \`${attackerFactionName}\`\n⚔️ **Retaliate:** https://www.torn.com/loader.php?sid=attack&user2ID=${attackerId}` })
-                        }).catch(() => {});
+
+                        let enemyEst = (spyDatabase[attackerId] && spyDatabase[attackerId].total) ? spyDatabase[attackerId].total : (statsCache[attackerId]?.stats || manualStats[attackerId]?.stats || 0);
+                        let statStr = enemyEst > 0 ? enemyEst.toLocaleString() : "Unknown";
+
+                        sendDiscordEmbed(discordConfig.webhookUrl, {
+                            title: "🛡️ Wall Watcher: Friendly Attacked",
+                            description: `**${attackerName}** [${attackerId}] from \`${attackerFactionName}\` just attacked **${defenderName}**!`,
+                            color: 16729943, // Red
+                            fields: [{ name: "Enemy Est. Stats", value: statStr, inline: true }],
+                            links: [
+                                { label: "⚔️ RETALIATE", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${attackerId}` },
+                                { label: "Enemy Profile", url: `https://www.torn.com/profiles.php?XID=${attackerId}` }
+                            ]
+                        });
                     }
                 }
                 
@@ -284,10 +329,11 @@ setInterval(async () => {
 
                     if (atk.chain && BONUS_THRESHOLDS.has(atk.chain)) {
                         if (hasBackfilledWar && discordConfig.chainMilestone && discordConfig.webhookUrl) {
-                            fetch(discordConfig.webhookUrl, {
-                                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ content: `🏆 **CHAIN MILESTONE:** Hit #**${atk.chain}** made by \`${atk.attacker_name || uId}\` (+${atk.respect_gain || 0} respect)!` })
-                            }).catch(() => {});
+                            sendDiscordEmbed(discordConfig.webhookUrl, {
+                                title: "🏆 Chain Milestone Secured",
+                                description: `Hit **#${atk.chain}** executed by \`${atk.attacker_name || uId}\` (+${atk.respect_gain || 0} respect)!`,
+                                color: 16753922 // Gold
+                            });
                         }
                     }
                 }
@@ -326,10 +372,12 @@ setInterval(async () => {
                         if (lowestMarketPrice < myItem.price) {
                             if (marketMemory.defense[itemId] !== lowestMarketPrice) {
                                 marketMemory.defense[itemId] = lowestMarketPrice;
-                                fetch(marketConfig.webhookUrl, {
-                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ content: `📉 **MARKET ALERT:** Your \`${myItem.name}\` ($${myItem.price.toLocaleString()}) got undercut! New lowest: **$${lowestMarketPrice.toLocaleString()}**\n[Check Market](https://www.torn.com/imarket.php#/p=shop&step=shop&type=&searchname=${myItem.name})` })
-                                }).catch(()=>{});
+                                sendDiscordEmbed(marketConfig.webhookUrl, {
+                                    title: "📉 Market Undercut Alert",
+                                    description: `Your \`${myItem.name}\` ($${myItem.price.toLocaleString()}) was undercut!\nNew lowest price: **$${lowestMarketPrice.toLocaleString()}**`,
+                                    color: 16729943,
+                                    links: [{ label: "🛒 Check Market", url: `https://www.torn.com/imarket.php#/p=shop&step=shop&type=&searchname=${myItem.name}` }]
+                                });
                             }
                         } else { delete marketMemory.defense[itemId]; }
                     }
@@ -340,7 +388,6 @@ setInterval(async () => {
     } catch (err) {}
 }, 45000); 
 
-// Engine 7: Target Surveillance & Med-Out Sniper
 setInterval(async () => {
     let watchKey = ADMIN_API_KEY || discordConfig.apiKey || Array.from(apiKeyPool)[0];
     let watchFactionId = adminFactionId || discordConfig.factionId || dynamicFactionId;
@@ -354,7 +401,12 @@ setInterval(async () => {
         if (facData.chain && facData.chain.current >= 10) {
             let secondsLeft = facData.chain.timeout;
             if (secondsLeft <= 90 && secondsLeft > 0 && !lastChainTimeoutAlertState && discordConfig.chainUnder90 && discordConfig.webhookUrl) {
-                fetch(discordConfig.webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: `⚠️ **CHAIN DROPPING!** Under 90s (${secondsLeft}s left)! Someone make a hit right now!` }) }).catch(() => {});
+                sendDiscordEmbed(discordConfig.webhookUrl, {
+                    title: "⚠️ CHAIN DROPPING WARNING",
+                    description: `Active chain is under 90 seconds (**${secondsLeft}s** left)! Someone needs to make a hit right now!`,
+                    color: 16729943,
+                    links: [{ label: "🔗 View Chain", url: `https://www.torn.com/factions.php?step=your#/tab=chains` }]
+                });
                 lastChainTimeoutAlertState = true;
             } else if (secondsLeft > 120) { lastChainTimeoutAlertState = false; }
         } else { lastChainTimeoutAlertState = false; }
@@ -371,10 +423,14 @@ setInterval(async () => {
                     
                     if (oldRecord) {
                         if (oldRecord.online !== "Online" && newRecord.online === "Online" && discordConfig.targetOnline) {
-                            fetch(discordConfig.webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: `🟢 **TARGET ONLINE:** ${m.name} [${id}] just came online!` }) }).catch(() => {});
+                            sendDiscordEmbed(discordConfig.webhookUrl, {
+                                title: "🟢 Target Online",
+                                description: `**${m.name}** [${id}] just established a connection and is Online!`,
+                                color: 3069299,
+                                links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }]
+                            });
                         }
                         
-                        // NEW FIX: Med-Out Sniping Logic
                         if (oldRecord.state === "Hospital" && newRecord.state === "Okay") {
                             let now = Math.floor(Date.now() / 1000);
                             let leftEarly = oldRecord.until && (oldRecord.until > now + 60);
@@ -383,7 +439,6 @@ setInterval(async () => {
                                 let enemyEst = (spyDatabase[id] && spyDatabase[id].total) ? spyDatabase[id].total : (statsCache[id]?.stats || manualStats[id]?.stats || 0);
                                 let bestMatchName = "Anyone available";
                                 
-                                // Scan Friendly Roster for someone Online/Idle to take the hit
                                 if (facData.members) {
                                     let friendliesAvailable = Object.entries(facData.members).filter(([fid, fm]) => fid !== id && (fm.last_action?.status === "Online" || fm.last_action?.status === "Idle"));
                                     
@@ -391,7 +446,6 @@ setInterval(async () => {
                                         let bestDiff = Infinity;
                                         for(let [fid, fm] of friendliesAvailable) {
                                             let fEst = (spyDatabase[fid] && spyDatabase[fid].total) ? spyDatabase[fid].total : (statsCache[fid]?.stats || manualStats[fid]?.stats || 0);
-                                            // Make sure the friendly is within a beatable stat range (70% or higher of enemy stats)
                                             if (fEst >= enemyEst * 0.7) {
                                                 let diff = Math.abs(fEst - enemyEst);
                                                 if (diff < bestDiff) {
@@ -404,17 +458,31 @@ setInterval(async () => {
                                 }
 
                                 let statStr = enemyEst > 0 ? `~${enemyEst.toLocaleString()}` : "Unknown";
-                                fetch(discordConfig.webhookUrl, {
-                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ content: `🚨 **MED-OUT SNIPER:** **${m.name}** [${id}] just used meds/revive to escape the hospital early and is ONLINE!\n🎯 **Target Stats:** ${statStr}\n👉 **Assignment:** **${bestMatchName}**, you have the stats to take them down! [ATTACK LINK](https://www.torn.com/loader.php?sid=attack&user2ID=${id})` })
-                                }).catch(() => {});
+                                sendDiscordEmbed(discordConfig.webhookUrl, {
+                                    title: "🚨 MED-OUT SNIPER ENGAGED",
+                                    description: `**${m.name}** [${id}] just used meds or received a revive to escape the hospital early and is currently ONLINE!`,
+                                    color: 16729943,
+                                    fields: [
+                                        { name: "Target Est. Stats", value: statStr, inline: true },
+                                        { name: "Tactical Assignment", value: `👉 **${bestMatchName}**, you have the stats to take them down!`, inline: false }
+                                    ],
+                                    links: [{ label: "⚔️ ATTACK NOW", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }]
+                                });
                                 
                             } else if (discordConfig.targetOutHosp && !leftEarly) {
-                                // Natural Hospital Release
-                                fetch(discordConfig.webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: `🏥 **TARGET OUT OF HOSP:** ${m.name} [${id}] naturally finished their hospital time and is Okay!` }) }).catch(() => {});
+                                sendDiscordEmbed(discordConfig.webhookUrl, {
+                                    title: "🏥 Target Out of Hospital",
+                                    description: `**${m.name}** [${id}] naturally finished their hospital time and is Okay!`,
+                                    color: 16753922,
+                                    links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }]
+                                });
                             } else if (discordConfig.targetLanded && (oldRecord.state === "Traveling" || (oldRecord.description && oldRecord.description.includes("Traveling")))) {
-                                // Natural Flight Landing
-                                fetch(discordConfig.webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: `✈️ **TARGET LANDED:** ${m.name} [${id}] just landed in Torn!` }) }).catch(() => {});
+                                sendDiscordEmbed(discordConfig.webhookUrl, {
+                                    title: "✈️ Target Landed",
+                                    description: `**${m.name}** [${id}] just landed in Torn!`,
+                                    color: 5809919,
+                                    links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }]
+                                });
                             }
                         }
                     }
@@ -544,8 +612,14 @@ app.post('/api/save-market-config', (req, res) => { marketConfig = { ...marketCo
 app.post('/api/discord-ping', async (req, res) => {
     const { webhookUrl, message } = req.body;
     if (!webhookUrl || !message) return res.status(400).json({ error: "Missing data" });
+    
+    // Send a nicely formatted embed for the test ping instead of plain text
     try {
-        await fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: message }) });
+        await sendDiscordEmbed(webhookUrl, {
+            title: "📡 Connection Diagnostic Confirmation",
+            description: message,
+            color: 3069299 // Green
+        });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Failed to ping Discord" }); }
 });
