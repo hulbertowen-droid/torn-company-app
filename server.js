@@ -47,6 +47,7 @@ const BONUS_THRESHOLDS = new Set([10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 1
 
 let subscriptions = {};
 let adminFactionId = null;
+let dynamicFactionId = null; // NEW: Automatically captures your ID to power background loops
 let lastEventTimestamp = Math.floor(Date.now() / 1000);
 
 let lastChainTimeoutAlertState = false;
@@ -184,7 +185,7 @@ setInterval(async () => {
 
 // Engine 3: Wall Watcher & Chain Milestones (20s)
 setInterval(async () => {
-    let watchFactionId = adminFactionId || discordConfig.factionId;
+    let watchFactionId = adminFactionId || discordConfig.factionId || dynamicFactionId;
     if (apiKeyPool.size === 0 || !watchFactionId) return;
     const keys = Array.from(apiKeyPool);
     try {
@@ -283,8 +284,8 @@ setInterval(async () => {
 
 // Engine 5: Target Surveillance & Chain Drop Watcher (30s)
 setInterval(async () => {
-    let watchKey = ADMIN_API_KEY || discordConfig.apiKey;
-    let watchFactionId = adminFactionId || discordConfig.factionId;
+    let watchKey = ADMIN_API_KEY || discordConfig.apiKey || Array.from(apiKeyPool)[0];
+    let watchFactionId = adminFactionId || discordConfig.factionId || dynamicFactionId;
     if (!watchKey || !watchFactionId) return;
 
     try {
@@ -377,6 +378,22 @@ function computeWarIntel(p, cache = {}) {
         else score += 10;
     }
     return score;
+}
+
+function autoDetectEnemyFaction(data) {
+    if (!data || !data.ID) return null;
+    const myId = data.ID.toString();
+    if (data.rankedwars && Object.keys(data.rankedwars).length > 0) {
+        for (let warId in data.rankedwars) {
+            let w = data.rankedwars[warId];
+            if (w.war && w.war.winner === 0) { 
+                const factions = Object.keys(w.factions || {});
+                const enemy = factions.find(id => id !== myId);
+                if (enemy) return enemy;
+            }
+        }
+    }
+    return null;
 }
 
 // ==========================================
@@ -552,7 +569,6 @@ app.get('/api/scan-recruits', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
-// Advanced Deep Scraper for Payouts (200 pages, finds Assists and Clears)
 app.get('/api/past-war', async (req, res) => {
     const { apiKey, reportId } = req.query;
     try {
@@ -657,14 +673,12 @@ app.get('/api/past-war', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
-// Button Endpoints
 app.post('/api/claim', (req, res) => { const { enemyId, playerName } = req.body; claims[enemyId] = { playerName, time: Date.now() }; res.json({ success: true }); });
 app.post('/api/unclaim', (req, res) => { const { enemyId, playerName } = req.body; if (claims[enemyId]?.playerName === playerName) delete claims[enemyId]; res.json({ success: true }); });
 app.post('/api/backup', (req, res) => { const { enemyId, playerName } = req.body; backups[enemyId] = { playerName, time: Date.now() }; res.json({ success: true }); });
 app.post('/api/unbackup', (req, res) => { const { enemyId } = req.body; delete backups[enemyId]; res.json({ success: true }); });
 app.post('/api/update-stats', (req, res) => { const { enemyId, stats } = req.body; manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() }; res.json({ success: true }); });
 
-// Advanced Inspector Endpoint (Bazaar, Display, TornStats)
 app.get('/api/inspect', async (req, res) => {
     const { apiKey, targetId, tsKey } = req.query;
     try {
@@ -701,7 +715,6 @@ app.get('/api/inspect', async (req, res) => {
     } catch(err) { res.status(403).json({ error: err.message }); }
 });
 
-// Save Local Spy Database
 app.post('/api/save-spy', async (req, res) => {
     const { apiKey, targetId, spyText } = req.body;
     try {
@@ -747,10 +760,21 @@ app.get('/api/warboard', async (req, res) => {
             fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })),
             enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} })
         ]);
+        
         if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
         if (enemyId && Object.keys(enemyDataResult.members || {}).length === 0) { 
             enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })); 
         }
+
+        if (myData && myData.ID) dynamicFactionId = myData.ID.toString();
+
+        // FULL FIX: Permanently extract true attacks/score from Ranked War object to bypass memory wipes
+        let activeWar = null;
+        if (myData.rankedwars) {
+            activeWar = Object.values(myData.rankedwars).find(w => w.war && w.war.winner === 0);
+        }
+        let myWarMembers = activeWar && myData.ID ? (activeWar.factions[myData.ID.toString()]?.members || {}) : {};
+        let enemyWarMembers = activeWar && enemyId ? (activeWar.factions[enemyId]?.members || {}) : {};
 
         const friendlyIds = new Set(Object.keys(myData.members || {}));
         const enemyIds = new Set(Object.keys(enemyDataResult.members || {}));
@@ -773,11 +797,20 @@ app.get('/api/warboard', async (req, res) => {
                 let finalUntil = m.status?.until; let finalLandingTime = null; let needsFfScouterForFlights = false;
                 if (isTraveling) { if (flightCache[id]?.landingTime) { finalLandingTime = flightCache[id].landingTime; finalUntil = finalLandingTime; } else { if (!isPremium) needsFfScouterForFlights = true; } }
                 
-                let attacks = 0; let score = 0; let defends = 0;
+                let warMemberData = isEnemy ? enemyWarMembers[id] : myWarMembers[id];
+                let attacks = warMemberData ? (warMemberData.attacks || 0) : 0;
+                let score = warMemberData ? (warMemberData.score || 0) : 0;
+                let defends = 0;
+                
                 if (enemyId) {
-                    if (liveAttacks[id]?.[enemyId]) attacks = liveAttacks[id][enemyId];
                     if (liveDefends[id]?.[enemyId]) defends = liveDefends[id][enemyId];
                 }
+
+                // Fallback catch just in case Ranked War payload hasn't synced
+                if (attacks === 0 && enemyId && liveAttacks[id]?.[enemyId]) {
+                    attacks = liveAttacks[id][enemyId];
+                }
+
                 return { id, name: m.name, state: m.status?.state, until: finalUntil, statusDescription: m.status?.description || "", onlineStatus: m.last_action?.status || "Offline", lastActionRelative: m.last_action?.relative || "Unknown", landingTime: finalLandingTime, needsFfScouterForFlights, claimedBy: isEnemy ? claims[id]?.playerName || null : null, needsBackup: isEnemy ? backups[id]?.playerName || null : null, estStats: est, intelScore: isEnemy ? computeWarIntel({ id, state: m.status?.state, until: finalUntil, onlineStatus: m.last_action?.status || "Offline", estStats: typeof est === 'number' ? est : null }, statsCache) : null, isManual: !!manualStats[id], attacks, score, defends };
             });
         };
