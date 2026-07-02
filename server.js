@@ -17,7 +17,6 @@ const ADMIN_DISCORD_WEBHOOK = process.env.ADMIN_DISCORD_WEBHOOK || "";
 const VIP_FACTIONS = (process.env.VIP_FACTIONS || "").split(',').map(id => id.trim());
 const VIP_PLAYERS = (process.env.VIP_PLAYERS || "").split(',').map(id => id.trim());
 
-// Local Databases & Caches
 let claims = {};
 let backups = {}; 
 let statsCache = {}; 
@@ -47,7 +46,7 @@ const BONUS_THRESHOLDS = new Set([10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 1
 
 let subscriptions = {};
 let adminFactionId = null;
-let dynamicFactionId = null; // NEW: Automatically captures your ID to power background loops
+let dynamicFactionId = null; 
 let lastEventTimestamp = Math.floor(Date.now() / 1000);
 
 let lastChainTimeoutAlertState = false;
@@ -58,7 +57,6 @@ let marketConfig = { webhookUrl: "", autoDefense: false, sniperTargets: [] };
 let marketMemory = { defense: {}, sniper: {} };
 let vipConfig = { factions: [], players: [] }; 
 
-// File System Loaders
 try { if (fs.existsSync('subscriptions.json')) subscriptions = JSON.parse(fs.readFileSync('subscriptions.json')); } catch (e) {}
 try { if (fs.existsSync('discord_config.json')) discordConfig = { ...discordConfig, ...JSON.parse(fs.readFileSync('discord_config.json')) }; } catch(e) {}
 try { if (fs.existsSync('market_config.json')) marketConfig = { ...marketConfig, ...JSON.parse(fs.readFileSync('market_config.json')) }; } catch(e) {}
@@ -71,7 +69,6 @@ function saveMarketConfig() { fs.writeFileSync('market_config.json', JSON.string
 function saveVipConfig() { fs.writeFileSync('vip_config.json', JSON.stringify(vipConfig)); }
 function saveSpyDb() { fs.writeFileSync('spy_db.json', JSON.stringify(spyDatabase)); }
 
-// Initialize Admin Faction
 if (ADMIN_API_KEY) {
     fetch(`https://api.torn.com/user/?selections=profile&key=${ADMIN_API_KEY}`)
         .then(r => r.json())
@@ -80,12 +77,6 @@ if (ADMIN_API_KEY) {
 }
 if (discordConfig.apiKey) apiKeyPool.add(discordConfig.apiKey);
 
-
-// ==========================================
-// BACKGROUND ENGINES & SCRAPERS
-// ==========================================
-
-// Engine 1: Payment Watcher (60s)
 setInterval(async () => {
     if (!ADMIN_API_KEY) return;
     try {
@@ -135,7 +126,6 @@ setInterval(async () => {
     } catch (err) {}
 }, 60000); 
 
-// Engine 2: FF Scouter Queues (Stats, Flights, Activity)
 setInterval(async () => {
     if (statQueue.size === 0 || isProcessingStats) return;
     isProcessingStats = true;
@@ -183,7 +173,6 @@ setInterval(async () => {
     isProcessingActivity = false;
 }, 1500); 
 
-// Engine 3: Wall Watcher & Chain Milestones (20s)
 setInterval(async () => {
     let watchFactionId = adminFactionId || discordConfig.factionId || dynamicFactionId;
     if (apiKeyPool.size === 0 || !watchFactionId) return;
@@ -198,7 +187,6 @@ setInterval(async () => {
                 if (processedAttackIds.has(atkId)) continue;
                 processedAttackIds.add(atkId);
                 
-                // Friendly Attacked (Wall Watcher)
                 if (atk.defender_faction && atk.defender_faction.toString() === watchFactionId) {
                     let uId = atk.defender_id.toString();
                     let attFacId = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
@@ -216,7 +204,6 @@ setInterval(async () => {
                         }).catch(() => {});
                     }
                 }
-                // Friendly Attacks Outward
                 if (atk.attacker_faction && atk.attacker_faction.toString() === watchFactionId) {
                     let uId = atk.attacker_id.toString();
                     let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
@@ -237,7 +224,6 @@ setInterval(async () => {
     } catch (err) {}
 }, 20000); 
 
-// Engine 4: Market Undercut Watcher (45s)
 setInterval(async () => {
     if (!marketConfig.webhookUrl || apiKeyPool.size === 0) return;
     const keys = Array.from(apiKeyPool);
@@ -282,7 +268,6 @@ setInterval(async () => {
     } catch (err) {}
 }, 45000); 
 
-// Engine 5: Target Surveillance & Chain Drop Watcher (30s)
 setInterval(async () => {
     let watchKey = ADMIN_API_KEY || discordConfig.apiKey || Array.from(apiKeyPool)[0];
     let watchFactionId = adminFactionId || discordConfig.factionId || dynamicFactionId;
@@ -331,10 +316,6 @@ setInterval(async () => {
     } catch (err) {}
 }, 30000);
 
-
-// ==========================================
-// HELPERS & AUTHENTICATION
-// ==========================================
 async function verifySubscription(userKey) {
     if (!userKey) throw new Error("No API Key provided.");
     const res = await fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`);
@@ -396,9 +377,6 @@ function autoDetectEnemyFaction(data) {
     return null;
 }
 
-// ==========================================
-// API ENDPOINTS
-// ==========================================
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
 app.get('/api/admin/vips', (req, res) => {
@@ -738,14 +716,12 @@ app.post('/api/save-spy', async (req, res) => {
 
         spyDatabase[targetId] = { strength, defense, speed, dexterity, total, timestamp: Date.now() };
         saveSpyDb();
-        
         manualStats[targetId] = { stats: total, time: Date.now() };
 
         res.json({success: true, data: spyDatabase[targetId]});
     } catch(err) { res.status(403).json({ error: err.message }); }
 });
 
-// Primary Warboard Aggregator
 app.get('/api/warboard', async (req, res) => {
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
@@ -768,7 +744,6 @@ app.get('/api/warboard', async (req, res) => {
 
         if (myData && myData.ID) dynamicFactionId = myData.ID.toString();
 
-        // FULL FIX: Permanently extract true attacks/score from Ranked War object to bypass memory wipes
         let activeWar = null;
         if (myData.rankedwars) {
             activeWar = Object.values(myData.rankedwars).find(w => w.war && w.war.winner === 0);
@@ -802,14 +777,8 @@ app.get('/api/warboard', async (req, res) => {
                 let score = warMemberData ? (warMemberData.score || 0) : 0;
                 let defends = 0;
                 
-                if (enemyId) {
-                    if (liveDefends[id]?.[enemyId]) defends = liveDefends[id][enemyId];
-                }
-
-                // Fallback catch just in case Ranked War payload hasn't synced
-                if (attacks === 0 && enemyId && liveAttacks[id]?.[enemyId]) {
-                    attacks = liveAttacks[id][enemyId];
-                }
+                if (enemyId) { if (liveDefends[id]?.[enemyId]) defends = liveDefends[id][enemyId]; }
+                if (attacks === 0 && enemyId && liveAttacks[id]?.[enemyId]) { attacks = liveAttacks[id][enemyId]; }
 
                 return { id, name: m.name, state: m.status?.state, until: finalUntil, statusDescription: m.status?.description || "", onlineStatus: m.last_action?.status || "Offline", lastActionRelative: m.last_action?.relative || "Unknown", landingTime: finalLandingTime, needsFfScouterForFlights, claimedBy: isEnemy ? claims[id]?.playerName || null : null, needsBackup: isEnemy ? backups[id]?.playerName || null : null, estStats: est, intelScore: isEnemy ? computeWarIntel({ id, state: m.status?.state, until: finalUntil, onlineStatus: m.last_action?.status || "Offline", estStats: typeof est === 'number' ? est : null }, statsCache) : null, isManual: !!manualStats[id], attacks, score, defends };
             });
