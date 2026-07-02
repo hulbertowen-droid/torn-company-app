@@ -18,7 +18,7 @@
         ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #57606f; }
 
-        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; z-index: 100; }
+        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; z-index: 100; box-shadow: 2px 0 15px rgba(0,0,0,0.5); }
         .sidebar.collapsed { width: 75px; }
         .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2f3542; }
         .sidebar-logo { color: var(--red); font-weight: 900; font-size: 0.9em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
@@ -37,20 +37,20 @@
         #refresh-bar-container { position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: #0b0d13; z-index: 50; }
         #refresh-bar { height: 100%; width: 0%; background: var(--blue); box-shadow: 0 0 8px var(--blue); transition: width 0.1s linear; }
 
-        h1 { text-align: center; color: var(--red); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
+        h1 { text-align: center; color: var(--red); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; text-shadow: 0 4px 15px rgba(255,71,87,0.2); }
 
-        .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+        .container { max-width: 1500px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
         
-        .chart-row { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+        .chart-row { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
 
-        .dash-card { background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542; }
+        .dash-card { background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542; box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
         .dash-card h2 { margin-top:0; color:var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; font-size:1.1em; text-transform:uppercase; display: flex; justify-content: space-between; align-items: center; }
 
-        .watchlist-box { grid-column: 1 / -1; background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542; }
+        .watchlist-box { grid-column: 1 / -1; background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542; box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
         .watchlist-box h3 { margin: 0 0 15px 0; color: var(--red); display: flex; align-items: center; gap: 10px; text-transform: uppercase; letter-spacing: 1px; }
         .watchlist-items { display: flex; gap: 15px; overflow-x: auto; padding-bottom: 10px; }
         
-        .watch-card { background: #0b0d13; border: 1px solid #2f3542; padding: 12px 18px; border-radius: 8px; min-width: 240px; flex-shrink: 0; }
+        .watch-card { background: #0b0d13; border: 1px solid #2f3542; padding: 12px 18px; border-radius: 8px; min-width: 260px; flex-shrink: 0; box-shadow: inset 0 0 20px rgba(0,0,0,0.5); }
         .watch-card.online { border-color: var(--green); background: rgba(46, 213, 115, 0.05); }
         .watch-card.flying { border-color: var(--blue); background: rgba(88, 166, 255, 0.05); }
         .watch-name { font-weight: bold; font-size: 1.1em; margin-bottom: 4px; }
@@ -58,7 +58,7 @@
         .watch-name a:hover { text-decoration: underline; }
         .watch-highlight { font-weight: bold; font-size: 0.95em; margin-bottom: 2px; }
 
-        .faction-col { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #2f3542; display: flex; flex-direction: column;}
+        .faction-col { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #2f3542; display: flex; flex-direction: column; box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
         .faction-col h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center;}
 
         .filter-group { display: flex; gap: 8px; margin-bottom: 15px; }
@@ -67,7 +67,7 @@
         .btn-filter.active { background: rgba(88, 166, 255, 0.15); border-color: var(--blue); color: white; box-shadow: inset 0 0 10px rgba(88, 166, 255, 0.1); }
 
         .member-card { background: #0b0d13; border: 1px solid #2f3542; padding: 15px; border-radius: 10px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; transition: 0.2s; }
-        .member-card:hover { border-color: #57606f; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+        .member-card:hover { border-color: #57606f; transform: translateY(-1px); box-shadow: 0 6px 15px rgba(0,0,0,0.4); }
         .member-card.okay { border-left: 4px solid var(--green); }
         .member-card.hospital { border-left: 4px solid var(--red); opacity: 0.85; }
         .member-card.traveling { border-left: 4px solid var(--blue); }
@@ -132,7 +132,7 @@
         @keyframes pulseAttack { 0% { box-shadow: 0 0 5px rgba(255, 71, 87, 0.4); } 50% { box-shadow: 0 0 15px rgba(255, 71, 87, 0.8); } 100% { box-shadow: 0 0 5px rgba(255, 71, 87, 0.4); } }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         @keyframes fadeOut { to { opacity: 0; transform: translateX(100%); } }
-        @media (max-width: 900px) { .chart-row { grid-template-columns: 1fr; } .container { grid-template-columns: 1fr; } }
+        @media (max-width: 1000px) { .chart-row { grid-template-columns: 1fr; } .container { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
@@ -167,7 +167,7 @@
                 <span style="font-size: 0.85em; color: var(--text-dim); border: 1px solid #2f3542; padding: 2px 8px; border-radius: 4px; background: #0b0d13;">Click to Expand ▼</span>
             </summary>
             <div style="padding: 0 20px 20px 20px; color: var(--text-main); font-size: 0.9em; line-height: 1.6; border-top: 1px solid rgba(88, 166, 255, 0.2); margin-top: 5px; padding-top: 15px;">
-                Certain tactical features on this dashboard—such as exact battle stat estimates, player activity timelines, and live flight landing ETAs—require an active <a href="https://ffscouter.com" target="_blank" style="color: var(--blue); text-decoration: underline;">FF Scouter Premium</a> subscription and API Key linked in your Settings.
+                Certain tactical features on this dashboard—such as exact battle stat estimates, player activity timelines, and live flight landing ETAs—require an active <a href="https://ffscouter.com" target="_blank" style="color: var(--blue); text-decoration: underline;">FF Scouter Premium</a> subscription and API Key linked in your Settings. All times are displayed in Official Torn City Time (TCT/UTC) alongside your local timezone.
                 <br><br>
                 <span style="color: var(--gold); font-weight: bold;">Owen's Faction Tools engineered and created by <a href="https://www.torn.com/profiles.php?XID=3776908" target="_blank" style="color: var(--gold); text-decoration: underline;">Owen777 [3776908]</a>.</span>
             </div>
@@ -433,17 +433,24 @@ function startPolling() {
     }, refreshMs);
 }
 
+// FULL TCT FIX: Converts all unix timestamps strictly to UTC/TCT, and appends Local Time
 function formatTime(unixTimestamp) {
     if (!unixTimestamp) return "";
     let d = new Date(unixTimestamp * 1000);
-    return d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    
+    let tctHr = d.getUTCHours().toString().padStart(2, '0');
+    let tctMin = d.getUTCMinutes().toString().padStart(2, '0');
+    
+    let localTime = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    
+    return `${tctHr}:${tctMin} TCT (${localTime})`;
 }
 
-function formatHourAmPm(h) {
-    let ampm = h >= 12 ? 'PM' : 'AM';
-    let hr = h % 12;
-    if (hr === 0) hr = 12;
-    return `${hr} ${ampm}`;
+// FULL TCT FIX: Converts heatmap 24H array strictly to TCT labels
+function formatHourTCT(h) {
+    let hr = h % 24;
+    if (hr < 0) hr += 24;
+    return `${hr.toString().padStart(2, '0')}:00 TCT`;
 }
 
 function checkIsFlying(p) {
@@ -574,10 +581,11 @@ function renderHeatmap(enemyPlayers, premiumActive) {
     enemyPlayers.forEach(p => {
         if (p.timeline && Array.isArray(p.timeline) && p.timeline.length > 0) {
             timelinesLoaded++;
-            let currentHour = new Date().getHours();
+            // Align the timeline to UTC (TCT)
+            let currentUTCHour = new Date().getUTCHours();
             for (let i = 0; i < p.timeline.length; i++) {
                 let offset = (p.timeline.length - 1) - i;
-                let h = (currentHour - offset) % 24;
+                let h = (currentUTCHour - offset) % 24;
                 if (h < 0) h += 24;
                 global24h[h] += p.timeline[i];
             }
@@ -600,7 +608,7 @@ function renderHeatmap(enemyPlayers, premiumActive) {
     }
     let sleepEnd = (sleepStart + 6) % 24;
 
-    let sleepText = `${formatHourAmPm(sleepStart)} - ${formatHourAmPm(sleepEnd)}`;
+    let sleepText = `${sleepStart.toString().padStart(2,'0')}:00 - ${sleepEnd.toString().padStart(2,'0')}:00 TCT`;
     
     statusLabel.innerHTML = `✅ Tracking ${timelinesLoaded} Targets | <span style="color:var(--red);">Expected Sleep: ${sleepText}</span>`;
     statusLabel.style.color = "var(--green)";
@@ -608,7 +616,7 @@ function renderHeatmap(enemyPlayers, premiumActive) {
 
     const labels = [];
     for (let i = 0; i < 24; i++) {
-        labels.push(formatHourAmPm(i));
+        labels.push(formatHourTCT(i));
     }
 
     const ctx = document.getElementById('activityChart').getContext('2d');
