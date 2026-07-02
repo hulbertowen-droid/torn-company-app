@@ -10,15 +10,17 @@
             --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
             --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
         }
+        
         body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; height: 100vh; overflow: hidden; }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
         ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
-        
-        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; z-index: 100; }
+        ::-webkit-scrollbar-thumb:hover { background: #57606f; }
+
+        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; z-index: 100; box-shadow: 2px 0 15px rgba(0,0,0,0.5); }
         .sidebar.collapsed { width: 75px; }
         .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2f3542; }
-        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 1.1em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
+        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 0.9em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
         .sidebar.collapsed .sidebar-logo { opacity: 0; width: 0; display: none; }
         .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
         .toggle-btn:hover { color: white; background: #2f3542; }
@@ -29,29 +31,44 @@
         .nav-text { transition: opacity 0.2s; }
         .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
         
-        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
-        h1 { text-align: center; color: var(--gold); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
-        
-        .container { max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 25px; }
-        .dash-card { background: var(--card); padding: 25px; border-radius: 16px; border: 1px solid #2f3542; display: none; flex-direction: column; gap: 15px;}
-        .dash-card h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; font-size: 1.1em; letter-spacing: 1px;}
-        
-        .form-group { display: flex; flex-direction: column; gap: 8px; }
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; position: relative; }
+
+        h1 { text-align: center; color: var(--gold); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; text-shadow: 0 4px 15px rgba(255, 165, 2, 0.2); }
+
+        .container { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 25px; }
+
+        .dash-card { background: var(--card); padding: 25px; border-radius: 12px; border: 1px solid #2f3542; box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
+        .dash-card h2 { margin-top:0; color:var(--blue); border-bottom: 1px solid #2f3542; padding-bottom: 10px; font-size:1.1em; text-transform:uppercase; display: flex; justify-content: space-between; align-items: center; }
+
+        .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
         .form-group label { font-size: 0.85em; color: var(--text-dim); font-weight: bold; text-transform: uppercase; }
-        .form-group textarea { padding: 15px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; width: 100%; box-sizing: border-box; min-height: 100px; font-family: monospace; resize: vertical;}
-        .form-group textarea:focus { outline: 1px solid var(--gold); }
+        .form-group input[type="password"], .form-group textarea { padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; width: 100%; box-sizing: border-box; font-family: monospace; }
+        .form-group textarea { height: 80px; resize: vertical; }
+        .form-group input:focus, .form-group textarea:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 8px rgba(88,166,255,0.2); }
+
+        .btn-action { background: var(--blue); color: #000; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.9em; text-transform: uppercase; transition: 0.2s; }
+        .btn-action:hover { background: #79c0ff; box-shadow: 0 0 10px rgba(88,166,255,0.4); transform: translateY(-1px); }
         
-        .btn-save { background: var(--green); color: #000; border: none; padding: 15px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.1em; text-transform: uppercase; transition: 0.2s; width: 100%; margin-top: 10px;}
-        .btn-save:hover { background: #26b361; }
-        
-        #error-msg { text-align: center; font-weight: bold; font-size: 1.1em; color: var(--red); padding: 50px; background: #0b0d13; border: 1px solid var(--red); border-radius: 12px;}
-        #status-msg { text-align: center; font-weight: bold; font-size: 0.95em; color: var(--green); margin-top: 10px;}
+        .btn-auth { background: var(--red); color: white; margin-top: 10px; width: 100%; }
+        .btn-auth:hover { background: #ff2a40; box-shadow: 0 0 10px rgba(255,71,87,0.4); }
+
+        .status-msg { text-align: center; font-weight: bold; font-size: 0.9em; margin-top: 10px; min-height: 20px; }
+
+        .tracking-table-container { overflow-x: auto; background: #0b0d13; border: 1px solid #2f3542; border-radius: 8px; padding: 10px; }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9em; }
+        th { padding: 12px 10px; color: var(--text-dim); border-bottom: 2px solid #2f3542; text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; }
+        td { padding: 12px 10px; border-bottom: 1px solid #1b202e; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: rgba(88, 166, 255, 0.05); }
+
+        .badge-online { color: var(--green); font-weight: bold; background: rgba(46, 213, 115, 0.1); padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(46, 213, 115, 0.3); font-size: 0.85em; text-transform: uppercase; }
+        .badge-offline { color: var(--text-dim); background: rgba(161, 170, 181, 0.1); padding: 4px 8px; border-radius: 4px; border: 1px solid rgba(161, 170, 181, 0.2); font-size: 0.85em; text-transform: uppercase; }
     </style>
 </head>
 <body>
     <nav class="sidebar" id="app-sidebar">
         <div class="sidebar-header">
-           <div class="sidebar-logo">Owen's Faction Tools</div>
+            <div class="sidebar-logo">Owen's Faction Tools</div>
             <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
         </div>
         <div class="nav-items">
@@ -63,86 +80,88 @@
             <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
             <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>
             <a href="/admin.html" class="nav-link active">👑 <span class="nav-text">Admin Panel</span></a>
-            <a href="/" class="nav-link" style="margin-top: 15px; border-top: 1px solid #2f3542; border-radius: 0; padding-top: 15px;">
+            <a onclick="openSettings()" class="nav-link" style="margin-top: 15px; border-top: 1px solid #2f3542; border-radius: 0; padding-top: 15px; cursor: pointer;">
                 ⚙️ <span class="nav-text">Settings</span>
             </a>
         </div>
     </nav>
 
     <main class="main-content">
-        <div class="dash-card" style="margin-top: 25px;">
-    <h2 style="color: var(--blue);">🕵️ Active User Tracking Log</h2>
-    <div style="background: rgba(88, 166, 255, 0.05); padding: 15px; border-radius: 8px; border: 1px solid var(--blue); margin-bottom: 15px;">
-        <span style="font-size: 0.85em; color: var(--text-dim);">This panel tracks the exact Torn ID, Name, and Last Active timestamp of every single person who successfully authenticates an API key on your dashboard.</span>
-    </div>
-    
-    <div style="overflow-x: auto; background: #0b0d13; border: 1px solid #2f3542; border-radius: 8px; padding: 10px;">
-        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9em;">
-            <thead>
-                <tr style="border-bottom: 1px solid #2f3542; color: var(--text-dim);">
-                    <th style="padding: 10px;">Player Name [ID]</th>
-                    <th style="padding: 10px;">Last Active (Local Time)</th>
-                    <th style="padding: 10px;">Status</th>
-                </tr>
-            </thead>
-            <tbody id="tracking-table-body">
-                <tr><td colspan="3" style="padding: 10px; font-style: italic; color: var(--text-dim);">Fetching user logs...</td></tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-        <h1>Master Admin Control</h1>
+        <h1>👑 Admin Command Center</h1>
+
         <div class="container">
-            <div id="error-msg">Checking security credentials...</div>
-            
-            <div class="dash-card" id="admin-panel">
-                <h2>Bypass Subscription Permissions (VIPs)</h2>
-                <p style="color: var(--text-dim); font-size: 0.9em; margin-top: -5px;">Add IDs separated by commas. These users will never be asked to pay the Xanax fee.</p>
+            <!-- Authentication Card -->
+            <div class="dash-card" style="border-color: var(--red);">
+                <h2 style="color: var(--red);">🔐 Server Authentication</h2>
+                <div class="form-group">
+                    <label>Master Admin API Key</label>
+                    <input type="password" id="admin-api-key" placeholder="Enter the root Admin API Key to unlock controls">
+                </div>
+                <button class="btn-action btn-auth" onclick="authenticateAdmin()">Authenticate & Load Data</button>
+                <div id="auth-status" class="status-msg"></div>
+            </div>
+
+            <!-- VIP Management Card -->
+            <div class="dash-card" id="vip-panel" style="display: none; opacity: 0; transition: opacity 0.5s;">
+                <h2>🌟 Access Management (VIPs)</h2>
+                <div style="font-size: 0.85em; color: var(--text-dim); margin-bottom: 15px; line-height: 1.5;">
+                    These IDs bypass the Xanax payment wall. Separate multiple IDs with commas.
+                </div>
                 
                 <div class="form-group">
-                    <label>VIP Faction IDs</label>
+                    <label>Whitelisted Faction IDs</label>
                     <textarea id="vip-factions" placeholder="e.g. 12345, 67890"></textarea>
                 </div>
                 
                 <div class="form-group">
-                    <label>VIP Player IDs (Solo Mercs/Allies)</label>
-                    <textarea id="vip-players" placeholder="e.g. 9876543, 1122334"></textarea>
+                    <label>Whitelisted Player IDs</label>
+                    <textarea id="vip-players" placeholder="e.g. 1234567, 7654321"></textarea>
                 </div>
-
-                <button class="btn-save" onclick="saveVips()">Update VIP Lists</button>
-                <div id="status-msg"></div>
+                
+                <button class="btn-action" onclick="saveVipData()" style="width: 100%;">Save VIP Configurations</button>
+                <div id="vip-status" class="status-msg"></div>
             </div>
+
+            <!-- User Tracking Card -->
+            <div class="dash-card" id="tracking-panel" style="display: none; opacity: 0; transition: opacity 0.5s;">
+                <h2>🕵️ Active User Tracking Log</h2>
+                <div style="background: rgba(88, 166, 255, 0.05); padding: 15px; border-radius: 8px; border: 1px solid var(--blue); margin-bottom: 15px;">
+                    <span style="font-size: 0.85em; color: var(--text-dim);">This panel tracks the exact Torn ID, Name, and Last Active timestamp of every single person who successfully authenticates an API key on your dashboard. Data refreshes every 10 seconds.</span>
+                </div>
+                
+                <div class="tracking-table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Player Name [ID]</th>
+                                <th>Last Active (Local Time)</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tracking-table-body">
+                            <tr><td colspan="3" style="padding: 10px; font-style: italic; color: var(--text-dim); text-align: center;">Authenticating to fetch user logs...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
         </div>
     </main>
 
 <script>
-const myKey = localStorage.getItem("warboard_apikey") || "";
+let trackingInterval = null;
 
-document.addEventListener("DOMContentLoaded", async function() {
+document.addEventListener("DOMContentLoaded", function() {
     const sidebar = document.getElementById('app-sidebar');
-    if (localStorage.getItem('sidebar_collapsed') === 'true') { sidebar.classList.add('collapsed'); }
-
-    if (!myKey) {
-        document.getElementById("error-msg").innerText = "Access Denied: You must input the Master Admin API Key in the Settings tab first.";
-        return;
+    if (localStorage.getItem('sidebar_collapsed') === 'true') {
+        sidebar.classList.add('collapsed');
     }
 
-    try {
-        const res = await fetch(`/api/admin/vips?apiKey=${myKey}`);
-        const data = await res.json();
-        
-        if (data.error) {
-            document.getElementById("error-msg").innerText = "Access Denied: Your API key does not match the Master Admin Key.";
-            return;
-        }
-
-        document.getElementById("error-msg").style.display = "none";
-        document.getElementById("admin-panel").style.display = "flex";
-
-        document.getElementById("vip-factions").value = data.factions ? data.factions.join(', ') : "";
-        document.getElementById("vip-players").value = data.players ? data.players.join(', ') : "";
-    } catch(e) { 
-        document.getElementById("error-msg").innerText = "Server Error: Could not verify credentials.";
+    // Load saved admin key on boot
+    const savedKey = localStorage.getItem('warboard_adminkey');
+    if (savedKey) {
+        document.getElementById('admin-api-key').value = savedKey;
+        authenticateAdmin(); // Auto-login if key exists
     }
 });
 
@@ -152,33 +171,114 @@ function toggleSidebar() {
     localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
 }
 
-async function saveVips() {
-    const status = document.getElementById('status-msg');
-    status.innerText = "Saving to server...";
+function openSettings() {
+    window.location.href = "/";
+}
 
-    const parseList = (str) => str.split(',').map(s => s.trim()).filter(s => s !== "");
-    const factions = parseList(document.getElementById("vip-factions").value);
-    const players = parseList(document.getElementById("vip-players").value);
+async function authenticateAdmin() {
+    const adminKey = document.getElementById('admin-api-key').value.trim();
+    const statusBox = document.getElementById('auth-status');
+    
+    if (!adminKey) {
+        statusBox.style.color = "var(--red)";
+        statusBox.innerText = "❌ Please enter an Admin API Key.";
+        return;
+    }
+
+    statusBox.style.color = "var(--gold)";
+    statusBox.innerText = "Authenticating with server...";
+
+    try {
+        // Attempt to fetch VIPs to verify the key
+        const res = await fetch(`/api/admin/vips?apiKey=${adminKey}`);
+        const data = await res.json();
+
+        if (data.error) {
+            statusBox.style.color = "var(--red)";
+            statusBox.innerText = `❌ ${data.error}`;
+            hidePanels();
+        } else {
+            statusBox.style.color = "var(--green)";
+            statusBox.innerText = "✅ Authentication Successful. Uplink established.";
+            localStorage.setItem('warboard_adminkey', adminKey);
+            
+            // Populate VIP data
+            document.getElementById('vip-factions').value = (data.factions || []).join(', ');
+            document.getElementById('vip-players').value = (data.players || []).join(', ');
+
+            showPanels();
+            
+            // Start tracking logs
+            fetchTrackingLogs();
+            if (trackingInterval) clearInterval(trackingInterval);
+            trackingInterval = setInterval(fetchTrackingLogs, 10000);
+        }
+    } catch(e) {
+        statusBox.style.color = "var(--red)";
+        statusBox.innerText = "❌ Server communication failed.";
+        hidePanels();
+    }
+}
+
+function showPanels() {
+    const vPanel = document.getElementById('vip-panel');
+    const tPanel = document.getElementById('tracking-panel');
+    vPanel.style.display = "block";
+    tPanel.style.display = "block";
+    
+    // Trigger reflow for fade in
+    setTimeout(() => {
+        vPanel.style.opacity = "1";
+        tPanel.style.opacity = "1";
+    }, 50);
+}
+
+function hidePanels() {
+    document.getElementById('vip-panel').style.display = "none";
+    document.getElementById('vip-panel').style.opacity = "0";
+    document.getElementById('tracking-panel').style.display = "none";
+    document.getElementById('tracking-panel').style.opacity = "0";
+    if (trackingInterval) clearInterval(trackingInterval);
+}
+
+async function saveVipData() {
+    const adminKey = document.getElementById('admin-api-key').value.trim();
+    const statusBox = document.getElementById('vip-status');
+    
+    let facArray = document.getElementById('vip-factions').value.split(',').map(s => s.trim()).filter(s => s !== "");
+    let plyArray = document.getElementById('vip-players').value.split(',').map(s => s.trim()).filter(s => s !== "");
+
+    statusBox.style.color = "var(--gold)";
+    statusBox.innerText = "Saving VIP configuration...";
 
     try {
         const res = await fetch('/api/admin/vips', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ apiKey: myKey, factions, players })
+            body: JSON.stringify({
+                apiKey: adminKey,
+                factions: facArray,
+                players: plyArray
+            })
         });
         const data = await res.json();
         
-        if (data.success) {
-            status.innerText = "✓ VIP Database Updated Successfully.";
-            setTimeout(() => status.innerText = "", 3000);
-        } else { throw new Error(data.error); }
+        if (data.error) {
+            statusBox.style.color = "var(--red)";
+            statusBox.innerText = `❌ ${data.error}`;
+        } else {
+            statusBox.style.color = "var(--green)";
+            statusBox.innerText = "✅ VIP configurations saved successfully.";
+            setTimeout(() => { statusBox.innerText = ""; }, 3000);
+        }
     } catch(e) {
-        status.style.color = "var(--red)";
-        status.innerText = "❌ Failed to save: " + e.message;
+        statusBox.style.color = "var(--red)";
+        statusBox.innerText = "❌ Failed to save configuration.";
     }
 }
-    async function fetchTrackingLogs() {
-    const adminKey = document.getElementById("admin-api-key").value; // Change this to wherever you store your Admin Key in the UI
+
+async function fetchTrackingLogs() {
+    const adminKey = document.getElementById("admin-api-key").value.trim();
     if (!adminKey) return;
     
     try {
@@ -186,8 +286,9 @@ async function saveVips() {
         const data = await res.json();
         
         const tbody = document.getElementById('tracking-table-body');
+        
         if (data.error) {
-            tbody.innerHTML = `<tr><td colspan="3" style="color: var(--red); padding: 10px;">${data.error}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="3" style="color: var(--red); padding: 10px; text-align: center;">${data.error}</td></tr>`;
             return;
         }
 
@@ -197,7 +298,7 @@ async function saveVips() {
         userArray.sort((a, b) => b.lastActive - a.lastActive);
 
         if (userArray.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="3" style="padding: 10px; color: var(--text-dim);">No users have logged into the dashboard yet.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="3" style="padding: 10px; color: var(--text-dim); text-align: center; font-style: italic;">No users have logged into the dashboard yet.</td></tr>`;
             return;
         }
 
@@ -208,19 +309,19 @@ async function saveVips() {
             let d = new Date(user.lastActive);
             let timeString = d.toLocaleString();
             
-            // If active within the last 5 minutes, mark as "Online"
+            // If active within the last 5 minutes (300,000 ms), mark as "Online"
             let isOnline = (now - user.lastActive) < 300000;
             let statusBadge = isOnline 
-                ? `<span style="color: var(--green); font-weight: bold; background: rgba(46, 213, 115, 0.1); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--green);">Online</span>` 
-                : `<span style="color: var(--text-dim);">Offline</span>`;
+                ? `<span class="badge-online">Online</span>` 
+                : `<span class="badge-offline">Offline</span>`;
 
             html += `
-                <tr style="border-bottom: 1px solid #1b202e;">
-                    <td style="padding: 10px; font-weight: bold;">
+                <tr>
+                    <td style="font-weight: bold;">
                         <a href="https://www.torn.com/profiles.php?XID=${user.id}" target="_blank" style="color: var(--text-main); text-decoration: none;">${user.name} [${user.id}]</a>
                     </td>
-                    <td style="padding: 10px; color: var(--text-dim);">${timeString}</td>
-                    <td style="padding: 10px;">${statusBadge}</td>
+                    <td style="color: var(--text-dim);">${timeString}</td>
+                    <td>${statusBadge}</td>
                 </tr>
             `;
         });
@@ -230,9 +331,6 @@ async function saveVips() {
         console.error("Failed to load tracking data.");
     }
 }
-
-// Call this once on load, or put it inside an existing initialization function
-setInterval(fetchTrackingLogs, 10000); // Refreshes logs every 10 seconds
 </script>
 </body>
 </html>
