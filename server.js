@@ -26,7 +26,7 @@ let flightCache = {};
 let activityCache = {}; 
 let warScrapeCache = {}; 
 let spyDatabase = {}; 
-let subCache = {}; 
+let subCache = {}; // Tracks active users to build the organic API Swarm
 
 let userTracking = {}; 
 let discordIdCache = {}; 
@@ -85,14 +85,26 @@ if (ADMIN_API_KEY) {
         .catch(e => console.error("Failed to load admin profile"));
 }
 
+// ==========================================
+// ORGANIC API SWARM ROTATOR
+// ==========================================
 function getNextApiKey() {
     let activeKeys = [];
+    const now = Date.now();
+    
+    // 1. Organically harvest all valid keys from currently active faction members
+    for (const [key, data] of Object.entries(subCache)) {
+        if (data.expires > now) activeKeys.push(key);
+    }
+    
+    // 2. Add static fallback backups
     if (ADMIN_API_KEY) activeKeys.push(ADMIN_API_KEY);
     if (TORN_API_KEY) activeKeys.push(TORN_API_KEY);
     if (discordConfig.apiKey) activeKeys.push(discordConfig.apiKey);
     if (apiPoolConfig.keys && apiPoolConfig.keys.length > 0) activeKeys.push(...apiPoolConfig.keys);
     
-    activeKeys = [...new Set(activeKeys.filter(k => k && k.trim() !== ""))];
+    // Clean duplicates and dead strings
+    activeKeys = [...new Set(activeKeys.filter(k => k && typeof k === 'string' && k.trim() !== ""))];
     if (activeKeys.length === 0) return null;
     
     let key = activeKeys[activeKeyIndex % activeKeys.length];
@@ -126,9 +138,10 @@ async function sendDiscordEmbed(webhookUrl, { pingText, title, description, colo
 
 async function getDiscordId(tornId) {
     if (discordIdCache[tornId]) return discordIdCache[tornId];
-    if (!ADMIN_API_KEY) return null;
+    let key = getNextApiKey();
+    if (!key) return null;
     try {
-        let res = await fetch(`https://api.torn.com/user/${tornId}?selections=discord&key=${ADMIN_API_KEY}`);
+        let res = await fetch(`https://api.torn.com/user/${tornId}?selections=discord&key=${key}`);
         let data = await res.json();
         if (data.discord && data.discord.userID) {
             discordIdCache[tornId] = data.discord.userID;
@@ -274,9 +287,10 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
     hasBackfilledWar = true;
 }
 
+// Background Task 1: Wall Watcher & Scraper
 setInterval(async () => {
-    let watchFactionId = adminFactionId || discordConfig.factionId || dynamicFactionId;
     let watchKey = getNextApiKey();
+    let watchFactionId = adminFactionId || discordConfig.factionId || dynamicFactionId;
     if (!watchKey || !watchFactionId) return;
 
     try {
@@ -357,12 +371,16 @@ setInterval(async () => {
     } catch (err) {}
 }, 20000); 
 
+// Background Task 2: Market Watcher
 setInterval(async () => {
     let watchKey = getNextApiKey();
     if (!marketConfig.webhookUrl || !watchKey) return;
+    
     try {
         if (marketConfig.autoDefense) {
-            const userRes = await fetch(`https://api.torn.com/user/?selections=bazaar,profile&key=${watchKey}`);
+            // Need a primary key to fetch your own bazaar to establish base prices
+            let rootKey = ADMIN_API_KEY || discordConfig.apiKey || watchKey;
+            const userRes = await fetch(`https://api.torn.com/user/?selections=bazaar,profile&key=${rootKey}`);
             const userData = await userRes.json();
             
             if (userData.bazaar && userData.bazaar.length > 0) {
@@ -403,6 +421,7 @@ setInterval(async () => {
     } catch (err) {}
 }, 45000); 
 
+// Background Task 3: Sniper & Target Status Watcher
 setInterval(async () => {
     let watchKey = getNextApiKey();
     let watchFactionId = adminFactionId || discordConfig.factionId || dynamicFactionId;
@@ -531,7 +550,7 @@ async function verifySubscription(userKey) {
         const data = await res.json();
         
         if (data.error) {
-            if ([5, 8, 9].includes(data.error.code) && subCache[userKey]) { return subCache[userKey].playerId; }
+            if ([5, 8, 9].includes(data.error.code) && subCache[userKey]) return subCache[userKey].playerId;
             if (data.error.code === 2) throw new Error("Invalid API Key.");
             throw new Error(`Torn API Throttled: Retrying link...`);
         }
@@ -549,9 +568,9 @@ async function verifySubscription(userKey) {
         if (!facId || facId === "0") throw new Error("You must be in a faction to use these tools.");
         
         if (adminFactionId && facId === adminFactionId) {
-            dynamicFactionId = facId; apiKeyPool.add(userKey);
+            dynamicFactionId = facId; 
         } else if (VIP_FACTIONS.includes(facId) || vipConfig.factions.includes(facId) || (subscriptions[facId] && subscriptions[facId] > Date.now())) {
-            dynamicFactionId = facId; apiKeyPool.add(userKey);
+            dynamicFactionId = facId; 
         } else {
             throw new Error(`SUBSCRIPTION REQUIRED: Your access has expired. Send 5x Xanax to Owen777 [3776908] to unlock!`);
         }
@@ -638,16 +657,6 @@ app.get('/api/admin/tracking', (req, res) => {
 app.get('/api/get-discord-config', (req, res) => { res.json(discordConfig); });
 app.post('/api/save-discord-config', async (req, res) => { 
     discordConfig = { ...discordConfig, ...req.body }; 
-    if (discordConfig.apiKey) {
-        try {
-            const profileRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${discordConfig.apiKey}`);
-            const profileData = await profileRes.json();
-            if (profileData.faction && profileData.faction.faction_id) {
-                discordConfig.factionId = profileData.faction.faction_id.toString();
-                apiKeyPool.add(discordConfig.apiKey);
-            }
-        } catch(e) {}
-    }
     saveDiscordConfig(); 
     res.json({ success: true }); 
 });
@@ -976,21 +985,19 @@ app.get('/api/warboard', async (req, res) => {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
         const ffKey = req.query.ffKey && req.query.ffKey !== "null" && req.query.ffKey !== "" ? req.query.ffKey : null;
         await verifySubscription(userKey);
-        
-        if (userKey) apiKeyPool.add(userKey);
 
         const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
         let enemyId = req.query.enemyFaction || null;
         
-        let activeKey = getNextApiKey();
+        // Use the user's specific key to load their board, preserving the pooled limits for background tasks
         let [myData, enemyDataResult] = await Promise.all([
-            fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${activeKey}`).then(r => r.json()).catch(() => ({ members: {} })),
-            enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} })
+            fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })),
+            enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} })
         ]);
         
         if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
         if (enemyId && Object.keys(enemyDataResult.members || {}).length === 0) { 
-            enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()}`).then(r => r.json()).catch(() => ({ members: {} })); 
+            enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })); 
         }
 
         if (myData && myData.ID) dynamicFactionId = myData.ID.toString();
