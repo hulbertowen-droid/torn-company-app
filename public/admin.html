@@ -101,6 +101,22 @@
                 <div id="auth-status" class="status-msg"></div>
             </div>
 
+            <!-- NEW: API Key Pool Manager -->
+            <div class="dash-card" id="key-pool-panel" style="display: none; opacity: 0; transition: opacity 0.5s;">
+                <h2 style="color: var(--green);">🔑 Server API Key Pool</h2>
+                <div style="font-size: 0.85em; color: var(--text-dim); margin-bottom: 15px; line-height: 1.5;">
+                    Add keys from trusted friends or faction leadership to multiply your limit ceiling. The server will actively round-robin through this pool to prevent throttling.
+                </div>
+                
+                <div class="form-group">
+                    <label>Active Key Pool (Comma Separated)</label>
+                    <textarea id="api-key-pool" placeholder="Paste extra API keys here, separated by commas..."></textarea>
+                </div>
+                
+                <button class="btn-action" onclick="saveKeyPool()" style="width: 100%; background: var(--green);">Save Key Pool</button>
+                <div id="key-pool-status" class="status-msg"></div>
+            </div>
+
             <!-- VIP Management Card -->
             <div class="dash-card" id="vip-panel" style="display: none; opacity: 0; transition: opacity 0.5s;">
                 <h2>🌟 Access Management (VIPs)</h2>
@@ -157,11 +173,10 @@ document.addEventListener("DOMContentLoaded", function() {
         sidebar.classList.add('collapsed');
     }
 
-    // Load saved admin key on boot
     const savedKey = localStorage.getItem('warboard_adminkey');
     if (savedKey) {
         document.getElementById('admin-api-key').value = savedKey;
-        authenticateAdmin(); // Auto-login if key exists
+        authenticateAdmin(); 
     }
 });
 
@@ -189,9 +204,13 @@ async function authenticateAdmin() {
     statusBox.innerText = "Authenticating with server...";
 
     try {
-        // Attempt to fetch VIPs to verify the key
+        // Fetch VIPs
         const res = await fetch(`/api/admin/vips?apiKey=${adminKey}`);
         const data = await res.json();
+        
+        // Fetch Key Pool
+        const poolRes = await fetch(`/api/admin/keys?apiKey=${adminKey}`);
+        const poolData = await poolRes.json();
 
         if (data.error) {
             statusBox.style.color = "var(--red)";
@@ -202,13 +221,15 @@ async function authenticateAdmin() {
             statusBox.innerText = "✅ Authentication Successful. Uplink established.";
             localStorage.setItem('warboard_adminkey', adminKey);
             
-            // Populate VIP data
             document.getElementById('vip-factions').value = (data.factions || []).join(', ');
             document.getElementById('vip-players').value = (data.players || []).join(', ');
+            
+            if (!poolData.error && poolData.keys) {
+                document.getElementById('api-key-pool').value = poolData.keys.join(', ');
+            }
 
             showPanels();
             
-            // Start tracking logs
             fetchTrackingLogs();
             if (trackingInterval) clearInterval(trackingInterval);
             trackingInterval = setInterval(fetchTrackingLogs, 10000);
@@ -223,13 +244,15 @@ async function authenticateAdmin() {
 function showPanels() {
     const vPanel = document.getElementById('vip-panel');
     const tPanel = document.getElementById('tracking-panel');
+    const kPanel = document.getElementById('key-pool-panel');
     vPanel.style.display = "block";
     tPanel.style.display = "block";
+    kPanel.style.display = "block";
     
-    // Trigger reflow for fade in
     setTimeout(() => {
         vPanel.style.opacity = "1";
         tPanel.style.opacity = "1";
+        kPanel.style.opacity = "1";
     }, 50);
 }
 
@@ -238,6 +261,8 @@ function hidePanels() {
     document.getElementById('vip-panel').style.opacity = "0";
     document.getElementById('tracking-panel').style.display = "none";
     document.getElementById('tracking-panel').style.opacity = "0";
+    document.getElementById('key-pool-panel').style.display = "none";
+    document.getElementById('key-pool-panel').style.opacity = "0";
     if (trackingInterval) clearInterval(trackingInterval);
 }
 
@@ -277,6 +302,40 @@ async function saveVipData() {
     }
 }
 
+async function saveKeyPool() {
+    const adminKey = document.getElementById('admin-api-key').value.trim();
+    const statusBox = document.getElementById('key-pool-status');
+    
+    let keyArray = document.getElementById('api-key-pool').value.split(',').map(s => s.trim()).filter(s => s !== "");
+
+    statusBox.style.color = "var(--gold)";
+    statusBox.innerText = "Saving Key Pool rotation...";
+
+    try {
+        const res = await fetch('/api/admin/keys', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                apiKey: adminKey,
+                keys: keyArray
+            })
+        });
+        const data = await res.json();
+        
+        if (data.error) {
+            statusBox.style.color = "var(--red)";
+            statusBox.innerText = `❌ ${data.error}`;
+        } else {
+            statusBox.style.color = "var(--green)";
+            statusBox.innerText = `✅ Key Pool active! Server rotating between ${keyArray.length} keys.`;
+            setTimeout(() => { statusBox.innerText = ""; }, 4000);
+        }
+    } catch(e) {
+        statusBox.style.color = "var(--red)";
+        statusBox.innerText = "❌ Failed to save Key Pool.";
+    }
+}
+
 async function fetchTrackingLogs() {
     const adminKey = document.getElementById("admin-api-key").value.trim();
     if (!adminKey) return;
@@ -293,8 +352,6 @@ async function fetchTrackingLogs() {
         }
 
         let userArray = Object.entries(data).map(([id, info]) => ({ id, ...info }));
-        
-        // Sort by most recently active
         userArray.sort((a, b) => b.lastActive - a.lastActive);
 
         if (userArray.length === 0) {
@@ -309,7 +366,6 @@ async function fetchTrackingLogs() {
             let d = new Date(user.lastActive);
             let timeString = d.toLocaleString();
             
-            // If active within the last 5 minutes (300,000 ms), mark as "Online"
             let isOnline = (now - user.lastActive) < 300000;
             let statusBadge = isOnline 
                 ? `<span class="badge-online">Online</span>` 
