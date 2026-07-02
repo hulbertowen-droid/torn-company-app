@@ -28,8 +28,9 @@ let warScrapeCache = {};
 let spyDatabase = {}; 
 let subCache = {}; 
 
-let userTracking = {}; // NEW: Tracks who uses the Warboard and when
-let discordIdCache = {}; // NEW: Caches Torn-to-Discord IDs so we don't spam the API
+let userTracking = {}; 
+let discordIdCache = {}; 
+let apiPoolConfig = { keys: [] }; 
 
 let statQueue = new Map();
 let flightQueue = new Map();
@@ -39,9 +40,7 @@ let isProcessingStats = false;
 let isProcessingFlights = false;
 let isProcessingActivity = false;
 
-let apiKeyPool = new Set();
-if (ADMIN_API_KEY) apiKeyPool.add(ADMIN_API_KEY);
-if (TORN_API_KEY) apiKeyPool.add(TORN_API_KEY);
+let activeKeyIndex = 0;
 
 let persistentDefends = {};
 let activeWarId = null;
@@ -69,6 +68,7 @@ try { if (fs.existsSync('market_config.json')) marketConfig = { ...marketConfig,
 try { if (fs.existsSync('vip_config.json')) vipConfig = { ...vipConfig, ...JSON.parse(fs.readFileSync('vip_config.json')) }; } catch(e) {}
 try { if (fs.existsSync('spy_db.json')) spyDatabase = JSON.parse(fs.readFileSync('spy_db.json')); } catch(e) {}
 try { if (fs.existsSync('user_tracking.json')) userTracking = JSON.parse(fs.readFileSync('user_tracking.json')); } catch(e) {}
+try { if (fs.existsSync('api_pool.json')) apiPoolConfig = JSON.parse(fs.readFileSync('api_pool.json')); } catch(e) {}
 
 function saveSubs() { fs.writeFileSync('subscriptions.json', JSON.stringify(subscriptions)); }
 function saveDiscordConfig() { fs.writeFileSync('discord_config.json', JSON.stringify(discordConfig)); }
@@ -76,6 +76,7 @@ function saveMarketConfig() { fs.writeFileSync('market_config.json', JSON.string
 function saveVipConfig() { fs.writeFileSync('vip_config.json', JSON.stringify(vipConfig)); }
 function saveSpyDb() { fs.writeFileSync('spy_db.json', JSON.stringify(spyDatabase)); }
 function saveTracking() { fs.writeFileSync('user_tracking.json', JSON.stringify(userTracking)); }
+function saveApiPool() { fs.writeFileSync('api_pool.json', JSON.stringify(apiPoolConfig)); }
 
 if (ADMIN_API_KEY) {
     fetch(`https://api.torn.com/user/?selections=profile&key=${ADMIN_API_KEY}`)
@@ -83,16 +84,27 @@ if (ADMIN_API_KEY) {
         .then(d => { if (d.faction) adminFactionId = d.faction.faction_id?.toString(); })
         .catch(e => console.error("Failed to load admin profile"));
 }
-if (discordConfig.apiKey) apiKeyPool.add(discordConfig.apiKey);
 
-// ==========================================
-// DISCORD ENGINE (WITH PING INJECTION)
-// ==========================================
+function getNextApiKey() {
+    let activeKeys = [];
+    if (ADMIN_API_KEY) activeKeys.push(ADMIN_API_KEY);
+    if (TORN_API_KEY) activeKeys.push(TORN_API_KEY);
+    if (discordConfig.apiKey) activeKeys.push(discordConfig.apiKey);
+    if (apiPoolConfig.keys && apiPoolConfig.keys.length > 0) activeKeys.push(...apiPoolConfig.keys);
+    
+    activeKeys = [...new Set(activeKeys.filter(k => k && k.trim() !== ""))];
+    if (activeKeys.length === 0) return null;
+    
+    let key = activeKeys[activeKeyIndex % activeKeys.length];
+    activeKeyIndex++;
+    return key;
+}
+
 async function sendDiscordEmbed(webhookUrl, { pingText, title, description, color, fields, links }) {
     if (!webhookUrl) return;
     
     let payload = {
-        content: pingText || null, // This is what triggers the actual yellow push notification
+        content: pingText || null, 
         embeds: [{
             title: title,
             description: description,
@@ -127,9 +139,6 @@ async function getDiscordId(tornId) {
     } catch(e) { return null; }
 }
 
-// ==========================================
-// BACKGROUND ENGINES
-// ==========================================
 setInterval(async () => {
     if (!ADMIN_API_KEY) return;
     try {
@@ -265,10 +274,9 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
     hasBackfilledWar = true;
 }
 
-// Live Radar & Wall Watcher (Now with @Pings)
 setInterval(async () => {
     let watchFactionId = adminFactionId || discordConfig.factionId || dynamicFactionId;
-    let watchKey = ADMIN_API_KEY || discordConfig.apiKey || Array.from(apiKeyPool)[0];
+    let watchKey = getNextApiKey();
     if (!watchKey || !watchFactionId) return;
 
     try {
@@ -311,7 +319,6 @@ setInterval(async () => {
                         let enemyEst = (spyDatabase[attackerId] && spyDatabase[attackerId].total) ? spyDatabase[attackerId].total : (statsCache[attackerId]?.stats || manualStats[attackerId]?.stats || 0);
                         let statStr = enemyEst > 0 ? enemyEst.toLocaleString() : "Unknown";
 
-                        // PING THE DEFENDER
                         let dId = await getDiscordId(uId);
                         let pingStr = (dId && dId !== "none") ? `<@${dId}>` : "";
 
@@ -351,12 +358,11 @@ setInterval(async () => {
 }, 20000); 
 
 setInterval(async () => {
-    if (!marketConfig.webhookUrl || apiKeyPool.size === 0) return;
-    const keys = Array.from(apiKeyPool);
-    const key = keys[Math.floor(Math.random() * keys.length)];
+    let watchKey = getNextApiKey();
+    if (!marketConfig.webhookUrl || !watchKey) return;
     try {
-        if (marketConfig.autoDefense && ADMIN_API_KEY) {
-            const userRes = await fetch(`https://api.torn.com/user/?selections=bazaar,profile&key=${ADMIN_API_KEY}`);
+        if (marketConfig.autoDefense) {
+            const userRes = await fetch(`https://api.torn.com/user/?selections=bazaar,profile&key=${watchKey}`);
             const userData = await userRes.json();
             
             if (userData.bazaar && userData.bazaar.length > 0) {
@@ -366,7 +372,8 @@ setInterval(async () => {
                 });
 
                 for (let [itemId, myItem] of Object.entries(myPrices)) {
-                    const mktRes = await fetch(`https://api.torn.com/market/${itemId}?selections=bazaar,itemmarket&key=${key}`);
+                    let rotationKey = getNextApiKey();
+                    const mktRes = await fetch(`https://api.torn.com/market/${itemId}?selections=bazaar,itemmarket&key=${rotationKey}`);
                     const mktData = await mktRes.json();
 
                     if (mktData.bazaar || mktData.itemmarket) {
@@ -397,7 +404,7 @@ setInterval(async () => {
 }, 45000); 
 
 setInterval(async () => {
-    let watchKey = ADMIN_API_KEY || discordConfig.apiKey || Array.from(apiKeyPool)[0];
+    let watchKey = getNextApiKey();
     let watchFactionId = adminFactionId || discordConfig.factionId || dynamicFactionId;
     if (!watchKey || !watchFactionId) return;
 
@@ -410,7 +417,7 @@ setInterval(async () => {
             let secondsLeft = facData.chain.timeout;
             if (secondsLeft <= 90 && secondsLeft > 0 && !lastChainTimeoutAlertState && discordConfig.chainUnder90 && discordConfig.webhookUrl) {
                 sendDiscordEmbed(discordConfig.webhookUrl, {
-                    pingText: "@here", // Pings everyone online
+                    pingText: "@here",
                     title: "⚠️ CHAIN DROPPING WARNING",
                     description: `Active chain is under 90 seconds (**${secondsLeft}s** left)! Someone needs to make a hit right now!`,
                     color: 16729943,
@@ -422,7 +429,8 @@ setInterval(async () => {
 
         let activeEnemyId = autoDetectEnemyFaction(facData);
         if (activeEnemyId && discordConfig.webhookUrl) {
-            const enemyRes = await fetch(`https://api.torn.com/faction/${activeEnemyId}?selections=basic&key=${watchKey}`);
+            let rotationKey = getNextApiKey();
+            const enemyRes = await fetch(`https://api.torn.com/faction/${activeEnemyId}?selections=basic&key=${rotationKey}`);
             const enemyData = await enemyRes.json();
             
             if (enemyData.members) {
@@ -463,7 +471,6 @@ setInterval(async () => {
                                     }
                                 }
 
-                                // PING THE SNIPER
                                 let pingStr = "";
                                 if (bestMatchId) {
                                     let dId = await getDiscordId(bestMatchId);
@@ -507,17 +514,24 @@ setInterval(async () => {
     } catch (err) {}
 }, 30000);
 
-
 async function verifySubscription(userKey) {
     if (!userKey) throw new Error("No API Key provided.");
     const now = Date.now();
+    
+    if (subCache[userKey] && subCache[userKey].expires > now) {
+        if (userTracking[subCache[userKey].playerId]) {
+            userTracking[subCache[userKey].playerId].lastActive = now;
+            saveTracking();
+        }
+        return subCache[userKey].playerId;
+    }
     
     try {
         const res = await fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`);
         const data = await res.json();
         
         if (data.error) {
-            if ([5, 8, 9].includes(data.error.code) && subCache[userKey]) return subCache[userKey].playerId;
+            if ([5, 8, 9].includes(data.error.code) && subCache[userKey]) { return subCache[userKey].playerId; }
             if (data.error.code === 2) throw new Error("Invalid API Key.");
             throw new Error(`Torn API Throttled: Retrying link...`);
         }
@@ -525,7 +539,6 @@ async function verifySubscription(userKey) {
         const playerId = data.player_id?.toString();
         const facId = data.faction?.faction_id?.toString();
 
-        // TRACKING: Log the user access event automatically
         if (data.name && playerId) {
             userTracking[playerId] = { name: data.name, lastActive: now };
             saveTracking();
@@ -606,7 +619,17 @@ app.post('/api/admin/vips', (req, res) => {
     res.json({ success: true });
 });
 
-// NEW: Tracking API Endpoint for the Admin Panel
+app.get('/api/admin/keys', (req, res) => {
+    if (req.query.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
+    res.json(apiPoolConfig);
+});
+app.post('/api/admin/keys', (req, res) => {
+    if (req.body.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
+    apiPoolConfig.keys = req.body.keys || [];
+    saveApiPool();
+    res.json({ success: true });
+});
+
 app.get('/api/admin/tracking', (req, res) => {
     if (req.query.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
     res.json(userTracking);
@@ -953,19 +976,21 @@ app.get('/api/warboard', async (req, res) => {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
         const ffKey = req.query.ffKey && req.query.ffKey !== "null" && req.query.ffKey !== "" ? req.query.ffKey : null;
         await verifySubscription(userKey);
+        
         if (userKey) apiKeyPool.add(userKey);
 
         const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
         let enemyId = req.query.enemyFaction || null;
         
+        let activeKey = getNextApiKey();
         let [myData, enemyDataResult] = await Promise.all([
-            fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })),
-            enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} })
+            fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${activeKey}`).then(r => r.json()).catch(() => ({ members: {} })),
+            enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} })
         ]);
         
         if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
         if (enemyId && Object.keys(enemyDataResult.members || {}).length === 0) { 
-            enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })); 
+            enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()}`).then(r => r.json()).catch(() => ({ members: {} })); 
         }
 
         if (myData && myData.ID) dynamicFactionId = myData.ID.toString();
