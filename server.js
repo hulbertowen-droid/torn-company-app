@@ -28,6 +28,9 @@ let warScrapeCache = {};
 let spyDatabase = {}; 
 let subCache = {}; 
 
+let userTracking = {}; // NEW: Tracks who uses the Warboard and when
+let discordIdCache = {}; // NEW: Caches Torn-to-Discord IDs so we don't spam the API
+
 let statQueue = new Map();
 let flightQueue = new Map();
 let activityQueue = new Map();
@@ -65,12 +68,14 @@ try { if (fs.existsSync('discord_config.json')) discordConfig = { ...discordConf
 try { if (fs.existsSync('market_config.json')) marketConfig = { ...marketConfig, ...JSON.parse(fs.readFileSync('market_config.json')) }; } catch(e) {}
 try { if (fs.existsSync('vip_config.json')) vipConfig = { ...vipConfig, ...JSON.parse(fs.readFileSync('vip_config.json')) }; } catch(e) {}
 try { if (fs.existsSync('spy_db.json')) spyDatabase = JSON.parse(fs.readFileSync('spy_db.json')); } catch(e) {}
+try { if (fs.existsSync('user_tracking.json')) userTracking = JSON.parse(fs.readFileSync('user_tracking.json')); } catch(e) {}
 
 function saveSubs() { fs.writeFileSync('subscriptions.json', JSON.stringify(subscriptions)); }
 function saveDiscordConfig() { fs.writeFileSync('discord_config.json', JSON.stringify(discordConfig)); }
 function saveMarketConfig() { fs.writeFileSync('market_config.json', JSON.stringify(marketConfig)); }
 function saveVipConfig() { fs.writeFileSync('vip_config.json', JSON.stringify(vipConfig)); }
 function saveSpyDb() { fs.writeFileSync('spy_db.json', JSON.stringify(spyDatabase)); }
+function saveTracking() { fs.writeFileSync('user_tracking.json', JSON.stringify(userTracking)); }
 
 if (ADMIN_API_KEY) {
     fetch(`https://api.torn.com/user/?selections=profile&key=${ADMIN_API_KEY}`)
@@ -81,12 +86,13 @@ if (ADMIN_API_KEY) {
 if (discordConfig.apiKey) apiKeyPool.add(discordConfig.apiKey);
 
 // ==========================================
-// NEW: DISCORD RICH EMBED ENGINE
+// DISCORD ENGINE (WITH PING INJECTION)
 // ==========================================
-async function sendDiscordEmbed(webhookUrl, { title, description, color, fields, links }) {
+async function sendDiscordEmbed(webhookUrl, { pingText, title, description, color, fields, links }) {
     if (!webhookUrl) return;
     
     let payload = {
+        content: pingText || null, // This is what triggers the actual yellow push notification
         embeds: [{
             title: title,
             description: description,
@@ -98,23 +104,31 @@ async function sendDiscordEmbed(webhookUrl, { title, description, color, fields,
 
     if (links && links.length > 0) {
         let components = [];
-        links.forEach(l => {
-            components.push({ type: 2, style: 5, label: l.label, url: l.url });
-        });
+        links.forEach(l => { components.push({ type: 2, style: 5, label: l.label, url: l.url }); });
         payload.components = [{ type: 1, components: components }];
     }
 
+    try { await fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } 
+    catch(e) { console.error("Discord webhook failed", e); }
+}
+
+async function getDiscordId(tornId) {
+    if (discordIdCache[tornId]) return discordIdCache[tornId];
+    if (!ADMIN_API_KEY) return null;
     try {
-        await fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-    } catch(e) { console.error("Discord webhook failed", e); }
+        let res = await fetch(`https://api.torn.com/user/${tornId}?selections=discord&key=${ADMIN_API_KEY}`);
+        let data = await res.json();
+        if (data.discord && data.discord.userID) {
+            discordIdCache[tornId] = data.discord.userID;
+            return data.discord.userID;
+        }
+        discordIdCache[tornId] = "none"; 
+        return null;
+    } catch(e) { return null; }
 }
 
 // ==========================================
-// BACKGROUND ENGINES & SCRAPERS
+// BACKGROUND ENGINES
 // ==========================================
 setInterval(async () => {
     if (!ADMIN_API_KEY) return;
@@ -122,14 +136,12 @@ setInterval(async () => {
         const res = await fetch(`https://api.torn.com/user/?selections=events&key=${ADMIN_API_KEY}`);
         const data = await res.json();
         if (!data.events) return;
-
         let events = Object.entries(data.events).map(([id, ev]) => ({ id, ...ev }));
         events.sort((a, b) => a.timestamp - b.timestamp);
 
         for (let ev of events) {
             if (ev.timestamp <= lastEventTimestamp) continue;
             lastEventTimestamp = ev.timestamp;
-
             const text = ev.event;
             if (text.toLowerCase().includes('sent you') && text.toLowerCase().includes('xanax')) {
                 const qtyMatch = text.match(/(\d+)\s*[xX]\s*Xanax/i) || text.match(/Xanax\s*[xX]\s*(\d+)/i);
@@ -154,7 +166,7 @@ setInterval(async () => {
                             sendDiscordEmbed(ADMIN_DISCORD_WEBHOOK, {
                                 title: "💰 Payment Received",
                                 description: `Faction \`${facId}\` sent **${qty}x Xanax** for ${weeks} weeks of Warboard access!`,
-                                color: 3069299 // Green
+                                color: 3069299
                             });
                         }
                     }
@@ -200,10 +212,8 @@ setInterval(async () => {
     isProcessingActivity = true;
     let [targetId, ffKeyToUse] = activityQueue.entries().next().value;
     activityQueue.delete(targetId);
-    
     const end = Math.floor(Date.now() / 1000);
     const start = end - (72 * 3600); 
-    
     try {
         const res = await fetch(`https://ffscouter.com/api/v1/activity/player?key=${ffKeyToUse}&target=${targetId}&start=${start}&end=${end}&bucket=3600`);
         const data = await res.json();
@@ -217,7 +227,6 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
     let toTimestamp = Math.floor(Date.now() / 1000);
     let keepScraping = true;
     let pageCount = 0;
-    
     while (keepScraping && pageCount < 50) { 
         try {
             const res = await fetch(`https://api.torn.com/faction/?selections=attacks&to=${toTimestamp}&key=${watchKey}`);
@@ -226,7 +235,6 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
             
             let attacks = Object.values(data.attacks);
             if (attacks.length === 0) break;
-            
             let oldestTime = toTimestamp;
             
             for (let atk of attacks) {
@@ -257,6 +265,7 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
     hasBackfilledWar = true;
 }
 
+// Live Radar & Wall Watcher (Now with @Pings)
 setInterval(async () => {
     let watchFactionId = adminFactionId || discordConfig.factionId || dynamicFactionId;
     let watchKey = ADMIN_API_KEY || discordConfig.apiKey || Array.from(apiKeyPool)[0];
@@ -271,16 +280,10 @@ setInterval(async () => {
             if (ongoingWar) {
                 if (activeWarId !== ongoingWar.war.start) {
                     activeWarId = ongoingWar.war.start;
-                    persistentDefends = {};
-                    liveAttacks = {};
-                    hasBackfilledWar = false;
-                    processedAttackIds.clear(); 
+                    persistentDefends = {}; liveAttacks = {}; hasBackfilledWar = false; processedAttackIds.clear(); 
                     backfillWarDefends(watchKey, watchFactionId, activeWarId);
                 }
-            } else {
-                activeWarId = null;
-                hasBackfilledWar = false;
-            }
+            } else { activeWarId = null; hasBackfilledWar = false; }
         }
 
         if (liveData.attacks && activeWarId) {
@@ -308,10 +311,15 @@ setInterval(async () => {
                         let enemyEst = (spyDatabase[attackerId] && spyDatabase[attackerId].total) ? spyDatabase[attackerId].total : (statsCache[attackerId]?.stats || manualStats[attackerId]?.stats || 0);
                         let statStr = enemyEst > 0 ? enemyEst.toLocaleString() : "Unknown";
 
+                        // PING THE DEFENDER
+                        let dId = await getDiscordId(uId);
+                        let pingStr = (dId && dId !== "none") ? `<@${dId}>` : "";
+
                         sendDiscordEmbed(discordConfig.webhookUrl, {
+                            pingText: pingStr,
                             title: "🛡️ Wall Watcher: Friendly Attacked",
                             description: `**${attackerName}** [${attackerId}] from \`${attackerFactionName}\` just attacked **${defenderName}**!`,
-                            color: 16729943, // Red
+                            color: 16729943,
                             fields: [{ name: "Enemy Est. Stats", value: statStr, inline: true }],
                             links: [
                                 { label: "⚔️ RETALIATE", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${attackerId}` },
@@ -332,7 +340,7 @@ setInterval(async () => {
                             sendDiscordEmbed(discordConfig.webhookUrl, {
                                 title: "🏆 Chain Milestone Secured",
                                 description: `Hit **#${atk.chain}** executed by \`${atk.attacker_name || uId}\` (+${atk.respect_gain || 0} respect)!`,
-                                color: 16753922 // Gold
+                                color: 16753922
                             });
                         }
                     }
@@ -402,6 +410,7 @@ setInterval(async () => {
             let secondsLeft = facData.chain.timeout;
             if (secondsLeft <= 90 && secondsLeft > 0 && !lastChainTimeoutAlertState && discordConfig.chainUnder90 && discordConfig.webhookUrl) {
                 sendDiscordEmbed(discordConfig.webhookUrl, {
+                    pingText: "@here", // Pings everyone online
                     title: "⚠️ CHAIN DROPPING WARNING",
                     description: `Active chain is under 90 seconds (**${secondsLeft}s** left)! Someone needs to make a hit right now!`,
                     color: 16729943,
@@ -417,7 +426,7 @@ setInterval(async () => {
             const enemyData = await enemyRes.json();
             
             if (enemyData.members) {
-                Object.entries(enemyData.members).forEach(([id, m]) => {
+                Object.entries(enemyData.members).forEach(async ([id, m]) => {
                     let oldRecord = backgroundEnemyTrackingState[id];
                     let newRecord = { state: m.status?.state, online: m.last_action?.status, description: m.status?.description, until: m.status?.until };
                     
@@ -438,27 +447,32 @@ setInterval(async () => {
                             if (leftEarly && newRecord.online === "Online" && discordConfig.medOutSniper) {
                                 let enemyEst = (spyDatabase[id] && spyDatabase[id].total) ? spyDatabase[id].total : (statsCache[id]?.stats || manualStats[id]?.stats || 0);
                                 let bestMatchName = "Anyone available";
+                                let bestMatchId = null;
                                 
                                 if (facData.members) {
                                     let friendliesAvailable = Object.entries(facData.members).filter(([fid, fm]) => fid !== id && (fm.last_action?.status === "Online" || fm.last_action?.status === "Idle"));
-                                    
                                     if (friendliesAvailable.length > 0 && enemyEst > 0) {
                                         let bestDiff = Infinity;
                                         for(let [fid, fm] of friendliesAvailable) {
                                             let fEst = (spyDatabase[fid] && spyDatabase[fid].total) ? spyDatabase[fid].total : (statsCache[fid]?.stats || manualStats[fid]?.stats || 0);
                                             if (fEst >= enemyEst * 0.7) {
                                                 let diff = Math.abs(fEst - enemyEst);
-                                                if (diff < bestDiff) {
-                                                    bestDiff = diff;
-                                                    bestMatchName = fm.name;
-                                                }
+                                                if (diff < bestDiff) { bestDiff = diff; bestMatchName = fm.name; bestMatchId = fid; }
                                             }
                                         }
                                     }
                                 }
 
+                                // PING THE SNIPER
+                                let pingStr = "";
+                                if (bestMatchId) {
+                                    let dId = await getDiscordId(bestMatchId);
+                                    if (dId && dId !== "none") pingStr = `<@${dId}>`;
+                                }
+
                                 let statStr = enemyEst > 0 ? `~${enemyEst.toLocaleString()}` : "Unknown";
                                 sendDiscordEmbed(discordConfig.webhookUrl, {
+                                    pingText: pingStr,
                                     title: "🚨 MED-OUT SNIPER ENGAGED",
                                     description: `**${m.name}** [${id}] just used meds or received a revive to escape the hospital early and is currently ONLINE!`,
                                     color: 16729943,
@@ -497,22 +511,25 @@ setInterval(async () => {
 async function verifySubscription(userKey) {
     if (!userKey) throw new Error("No API Key provided.");
     const now = Date.now();
-    if (subCache[userKey] && subCache[userKey].expires > now) {
-        return subCache[userKey].playerId;
-    }
     
     try {
         const res = await fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`);
         const data = await res.json();
         
         if (data.error) {
-            if ([5, 8, 9].includes(data.error.code) && subCache[userKey]) { return subCache[userKey].playerId; }
+            if ([5, 8, 9].includes(data.error.code) && subCache[userKey]) return subCache[userKey].playerId;
             if (data.error.code === 2) throw new Error("Invalid API Key.");
             throw new Error(`Torn API Throttled: Retrying link...`);
         }
 
         const playerId = data.player_id?.toString();
         const facId = data.faction?.faction_id?.toString();
+
+        // TRACKING: Log the user access event automatically
+        if (data.name && playerId) {
+            userTracking[playerId] = { name: data.name, lastActive: now };
+            saveTracking();
+        }
 
         if (ADMIN_API_KEY && userKey === ADMIN_API_KEY) return playerId;
         if (playerId && (VIP_PLAYERS.includes(playerId) || vipConfig.players.includes(playerId))) return playerId;
@@ -589,6 +606,12 @@ app.post('/api/admin/vips', (req, res) => {
     res.json({ success: true });
 });
 
+// NEW: Tracking API Endpoint for the Admin Panel
+app.get('/api/admin/tracking', (req, res) => {
+    if (req.query.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
+    res.json(userTracking);
+});
+
 app.get('/api/get-discord-config', (req, res) => { res.json(discordConfig); });
 app.post('/api/save-discord-config', async (req, res) => { 
     discordConfig = { ...discordConfig, ...req.body }; 
@@ -612,13 +635,11 @@ app.post('/api/save-market-config', (req, res) => { marketConfig = { ...marketCo
 app.post('/api/discord-ping', async (req, res) => {
     const { webhookUrl, message } = req.body;
     if (!webhookUrl || !message) return res.status(400).json({ error: "Missing data" });
-    
-    // Send a nicely formatted embed for the test ping instead of plain text
     try {
         await sendDiscordEmbed(webhookUrl, {
             title: "📡 Connection Diagnostic Confirmation",
             description: message,
-            color: 3069299 // Green
+            color: 3069299 
         });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: "Failed to ping Discord" }); }
