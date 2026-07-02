@@ -16,10 +16,10 @@
         ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #57606f; }
 
-        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; z-index: 100; }
+        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; z-index: 100; box-shadow: 2px 0 15px rgba(0,0,0,0.5); }
         .sidebar.collapsed { width: 75px; }
         .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2f3542; }
-        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 1.1em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
+        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 0.9em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
         .sidebar.collapsed .sidebar-logo { opacity: 0; width: 0; display: none; }
         .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
         .toggle-btn:hover { color: white; background: #2f3542; }
@@ -34,7 +34,7 @@
         h1 { text-align: center; color: var(--blue); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
         
         .container { max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 25px; }
-        .dash-card { background: var(--card); padding: 25px; border-radius: 16px; border: 1px solid #2f3542; }
+        .dash-card { background: var(--card); padding: 25px; border-radius: 16px; border: 1px solid #2f3542; box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
         .dash-card h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; font-size: 1.1em; letter-spacing: 1px;}
         
         .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
@@ -47,7 +47,6 @@
         .trigger-title { font-weight: bold; color: var(--text-main); }
         .trigger-desc { font-size: 0.85em; color: var(--text-dim); }
         
-        /* Checkbox Customization */
         .switch { position: relative; display: inline-block; width: 46px; height: 22px; }
         .switch input { opacity: 0; width: 0; height: 0; }
         .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #2f3542; transition: .3s; border-radius: 34px; }
@@ -55,7 +54,7 @@
         input:checked + .slider { background-color: var(--green); }
         input:checked + .slider:before { transform: translateX(24px); }
 
-        .btn-save { background: var(--blue); color: #000; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em; text-transform: uppercase; transition: 0.2s; width: 100%; }
+        .btn-save { background: var(--blue); color: #000; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em; text-transform: uppercase; transition: 0.2s; width: 100%; margin-top: 20px;}
         .btn-save:hover { background: #79c0ff; box-shadow: 0 0 10px rgba(88,166,255,0.4); }
         #status-msg { text-align: center; font-weight: bold; font-size: 0.95em; margin-top: 10px; }
     </style>
@@ -98,6 +97,13 @@
                 <div class="trigger-list">
                     <div class="trigger-item">
                         <div class="trigger-info">
+                            <span class="trigger-title" style="color: var(--gold);">🚨 Smart Med-Out Sniper</span>
+                            <span class="trigger-desc">Detects if a target uses meds/revive to escape early, finds an online friendly with matching stats, and assigns them the hit instantly.</span>
+                        </div>
+                        <label class="switch"><input type="checkbox" id="medOutSniper"><span class="slider"></span></label>
+                    </div>
+                    <div class="trigger-item">
+                        <div class="trigger-info">
                             <span class="trigger-title">🟢 Target Online Tracker</span>
                             <span class="trigger-desc">Pings when an active enemy target signs on.</span>
                         </div>
@@ -112,8 +118,8 @@
                     </div>
                     <div class="trigger-item">
                         <div class="trigger-info">
-                            <span class="trigger-title">🏥 Target Hospital Release</span>
-                            <span class="trigger-desc">Pings when a critical enemy target exits hospital state.</span>
+                            <span class="trigger-title">🏥 Natural Hospital Release</span>
+                            <span class="trigger-desc">Pings when an enemy naturally exits the hospital due to their timer expiring.</span>
                         </div>
                         <label class="switch"><input type="checkbox" id="targetOutHosp"><span class="slider"></span></label>
                     </div>
@@ -139,10 +145,8 @@
                         <label class="switch"><input type="checkbox" id="friendlyAttacked"><span class="slider"></span></label>
                     </div>
                 </div>
-                <div style="margin-top: 25px;">
-                    <button class="btn-save" onclick="saveDiscordConfig()">Commit Settings to Server</button>
-                    <div id="status-msg"></div>
-                </div>
+                <button class="btn-save" onclick="saveDiscordConfig()">Commit Settings to Server</button>
+                <div id="status-msg"></div>
             </div>
         </div>
     </main>
@@ -165,6 +169,7 @@ document.addEventListener("DOMContentLoaded", async function() {
         document.getElementById('chainUnder90').checked = config.chainUnder90 !== false;
         document.getElementById('chainMilestone').checked = config.chainMilestone !== false;
         document.getElementById('friendlyAttacked').checked = config.friendlyAttacked !== false;
+        document.getElementById('medOutSniper').checked = config.medOutSniper !== false; // NEW
     } catch(e) { console.error("Could not fetch server alert configuration."); }
 });
 
@@ -183,7 +188,6 @@ async function saveDiscordConfig() {
     status.style.color = "var(--blue)";
     status.innerText = "Transmitting options & authenticating faction ID...";
 
-    // Grab the personal API key from localStorage so the server knows exactly who it is tracking for
     const myKey = localStorage.getItem("warboard_apikey") || "";
 
     if (!myKey) {
@@ -200,7 +204,8 @@ async function saveDiscordConfig() {
         targetOutHosp: document.getElementById('targetOutHosp').checked,
         chainUnder90: document.getElementById('chainUnder90').checked,
         chainMilestone: document.getElementById('chainMilestone').checked,
-        friendlyAttacked: document.getElementById('friendlyAttacked').checked
+        friendlyAttacked: document.getElementById('friendlyAttacked').checked,
+        medOutSniper: document.getElementById('medOutSniper').checked // NEW
     };
 
     try {
