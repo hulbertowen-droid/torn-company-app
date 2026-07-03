@@ -239,13 +239,11 @@ setInterval(async () => {
     isProcessingActivity = false;
 }, 1500); 
 
-// FIXED: Deep Backfill using Pagination Paging Strategy
 async function backfillWarDefends(watchKey, watchFactionId, warStart) {
     let toTimestamp = Math.floor(Date.now() / 1000);
     let keepScraping = true;
     let pageCount = 0;
     
-    // We walk BACKWARDS from 'now' to 'warStart' using 'to=' parameter
     while (keepScraping && pageCount < 50) { 
         try {
             const res = await fetch(`https://api.torn.com/faction/?selections=attacks&to=${toTimestamp}&key=${watchKey}`);
@@ -255,7 +253,6 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
             let attacks = Object.values(data.attacks);
             if (attacks.length === 0) break;
             
-            // Assume attacks are mostly ordered. We need to find the oldest timestamp in this batch
             let oldestTimeInBatch = toTimestamp;
             let foundOldAttack = false;
 
@@ -265,7 +262,6 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
                 }
                 
                 if (atk.timestamp_ended < warStart) { 
-                    // We found an attack older than the war start, meaning we have processed the whole war
                     keepScraping = false; 
                     foundOldAttack = true;
                     continue; 
@@ -288,12 +284,10 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
                 }
             }
             
-            // If we didn't find the start of the war yet, we prepare for the next API call.
-            // We set 'to' to 1 second before the oldest attack in this batch to avoid fetching the same overlap attack
             if (!foundOldAttack) {
                  toTimestamp = oldestTimeInBatch - 1;
                  pageCount++;
-                 await new Promise(r => setTimeout(r, 500)); // Rate limit pause
+                 await new Promise(r => setTimeout(r, 500)); 
             }
             
         } catch (e) { break; }
@@ -580,10 +574,19 @@ async function verifySubscription(userKey) {
         if (playerId && (VIP_PLAYERS.includes(playerId) || vipConfig.players.includes(playerId))) return playerId;
         if (!facId || facId === "0") throw new Error("You must be in a faction to use these tools.");
         
+        // FIXED: Using apiPoolConfig instead of the removed apiKeyPool
         if (adminFactionId && facId === adminFactionId) {
-            dynamicFactionId = facId; apiKeyPool.add(userKey);
+            dynamicFactionId = facId; 
+            if (!apiPoolConfig.keys.includes(userKey)) {
+                apiPoolConfig.keys.push(userKey);
+                saveApiPool();
+            }
         } else if (VIP_FACTIONS.includes(facId) || vipConfig.factions.includes(facId) || (subscriptions[facId] && subscriptions[facId] > Date.now())) {
-            dynamicFactionId = facId; apiKeyPool.add(userKey);
+            dynamicFactionId = facId; 
+            if (!apiPoolConfig.keys.includes(userKey)) {
+                apiPoolConfig.keys.push(userKey);
+                saveApiPool();
+            }
         } else {
             throw new Error(`SUBSCRIPTION REQUIRED: Your access has expired. Send 5x Xanax to Owen777 [3776908] to unlock!`);
         }
@@ -668,6 +671,8 @@ app.get('/api/admin/tracking', (req, res) => {
 });
 
 app.get('/api/get-discord-config', (req, res) => { res.json(discordConfig); });
+
+// FIXED: Scraped the old apiKeyPool reference out of here as well
 app.post('/api/save-discord-config', async (req, res) => { 
     discordConfig = { ...discordConfig, ...req.body }; 
     if (discordConfig.apiKey) {
@@ -676,7 +681,10 @@ app.post('/api/save-discord-config', async (req, res) => {
             const profileData = await profileRes.json();
             if (profileData.faction && profileData.faction.faction_id) {
                 discordConfig.factionId = profileData.faction.faction_id.toString();
-                apiKeyPool.add(discordConfig.apiKey);
+                if (!apiPoolConfig.keys.includes(discordConfig.apiKey)) {
+                    apiPoolConfig.keys.push(discordConfig.apiKey);
+                    saveApiPool();
+                }
             }
         } catch(e) {}
     }
