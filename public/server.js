@@ -1,9 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
+const http = require('http');
+const { Server } = require('socket.io');
 require('dotenv').config();
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: '*' } });
+
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public')); 
@@ -377,6 +382,10 @@ setInterval(async () => {
                 }
             }
         }
+        
+        // Emit a refresh event to connected clients to pull new active war data seamlessly
+        io.emit('refreshData');
+        
     } catch (err) {}
 }, 20000); 
 
@@ -941,11 +950,11 @@ app.get('/api/past-war', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
-app.post('/api/claim', (req, res) => { const { enemyId, playerName } = req.body; claims[enemyId] = { playerName, time: Date.now() }; res.json({ success: true }); });
-app.post('/api/unclaim', (req, res) => { const { enemyId, playerName } = req.body; if (claims[enemyId]?.playerName === playerName) delete claims[enemyId]; res.json({ success: true }); });
-app.post('/api/backup', (req, res) => { const { enemyId, playerName } = req.body; backups[enemyId] = { playerName, time: Date.now() }; res.json({ success: true }); });
-app.post('/api/unbackup', (req, res) => { const { enemyId } = req.body; delete backups[enemyId]; res.json({ success: true }); });
-app.post('/api/update-stats', (req, res) => { const { enemyId, stats } = req.body; manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() }; res.json({ success: true }); });
+app.post('/api/claim', (req, res) => { const { enemyId, playerName } = req.body; claims[enemyId] = { playerName, time: Date.now() }; io.emit('refreshData'); res.json({ success: true }); });
+app.post('/api/unclaim', (req, res) => { const { enemyId, playerName } = req.body; if (claims[enemyId]?.playerName === playerName) delete claims[enemyId]; io.emit('refreshData'); res.json({ success: true }); });
+app.post('/api/backup', (req, res) => { const { enemyId, playerName } = req.body; backups[enemyId] = { playerName, time: Date.now() }; io.emit('refreshData'); res.json({ success: true }); });
+app.post('/api/unbackup', (req, res) => { const { enemyId } = req.body; delete backups[enemyId]; io.emit('refreshData'); res.json({ success: true }); });
+app.post('/api/update-stats', (req, res) => { const { enemyId, stats } = req.body; manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() }; io.emit('refreshData'); res.json({ success: true }); });
 
 app.get('/api/inspect', async (req, res) => {
     const { apiKey, targetId, tsKey } = req.query;
@@ -1141,4 +1150,4 @@ app.get('/api/torn-items', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
