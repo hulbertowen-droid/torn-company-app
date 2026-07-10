@@ -641,4 +641,443 @@ function autoDetectEnemyFaction(data) {
     return null;
 }
 
-app.get('/health', (req, res) => res.status(200).send
+app.get('/health', (req, res) => res.status(200).send("OK"));
+
+app.get('/api/admin/vips', (req, res) => {
+    if (req.query.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
+    res.json(vipConfig);
+});
+app.post('/api/admin/vips', (req, res) => {
+    if (req.body.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
+    vipConfig = { factions: req.body.factions || [], players: req.body.players || [] };
+    saveVipConfig();
+    res.json({ success: true });
+});
+
+app.get('/api/admin/keys', (req, res) => {
+    if (req.query.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
+    res.json(apiPoolConfig);
+});
+app.post('/api/admin/keys', (req, res) => {
+    if (req.body.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
+    apiPoolConfig.keys = req.body.keys || [];
+    saveApiPool();
+    res.json({ success: true });
+});
+
+app.get('/api/admin/tracking', (req, res) => {
+    if (req.query.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
+    res.json(userTracking);
+});
+
+app.get('/api/get-discord-config', (req, res) => { res.json(discordConfig); });
+
+// FIXED: Scraped the old apiKeyPool reference out of here as well
+app.post('/api/save-discord-config', async (req, res) => { 
+    discordConfig = { ...discordConfig, ...req.body }; 
+    if (discordConfig.apiKey) {
+        try {
+            const profileRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${discordConfig.apiKey}`);
+            const profileData = await profileRes.json();
+            if (profileData.faction && profileData.faction.faction_id) {
+                discordConfig.factionId = profileData.faction.faction_id.toString();
+                if (!apiPoolConfig.keys.includes(discordConfig.apiKey)) {
+                    apiPoolConfig.keys.push(discordConfig.apiKey);
+                    saveApiPool();
+                }
+            }
+        } catch(e) {}
+    }
+    saveDiscordConfig(); 
+    res.json({ success: true }); 
+});
+
+app.get('/api/get-market-config', (req, res) => { res.json(marketConfig); });
+app.post('/api/save-market-config', (req, res) => { marketConfig = { ...marketConfig, ...req.body }; saveMarketConfig(); res.json({ success: true }); });
+
+app.post('/api/discord-ping', async (req, res) => {
+    const { webhookUrl, message } = req.body;
+    if (!webhookUrl || !message) return res.status(400).json({ error: "Missing data" });
+    try {
+        await sendDiscordEmbed(webhookUrl, {
+            title: "📡 Connection Diagnostic Confirmation",
+            description: message,
+            color: 3069299 
+        });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: "Failed to ping Discord" }); }
+});
+
+app.get('/api/war-list', async (req, res) => {
+    const userKey = req.query.apiKey;
+    try {
+        await verifySubscription(userKey);
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`);
+        const facData = await facRes.json();
+        if (facData.error) return res.status(400).json({ error: facData.error.error });
+
+        let wars = [];
+        if (facData.rankedwars) {
+            for (let [warId, warInfo] of Object.entries(facData.rankedwars)) {
+                if (warInfo.war && warInfo.war.winner === 0) continue; 
+                let enemyName = "Unknown Faction";
+                for (let [fId, fInfo] of Object.entries(warInfo.factions)) {
+                    if (fId !== facData.ID.toString()) enemyName = fInfo.name;
+                }
+                wars.push({ id: warId, enemy: enemyName, start: warInfo.war.start, end: warInfo.war.end });
+            }
+        }
+        wars.sort((a, b) => b.start - a.start);
+        res.json({ success: true, wars });
+    } catch (err) { res.status(403).json({ error: err.message }); }
+});
+
+app.get('/api/dashboard-data', async (req, res) => {
+    const userKey = req.query.apiKey;
+    const ffKey = req.query.ffKey || null;
+    try {
+        await verifySubscription(userKey);
+        const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
+
+        const basicResp = await fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`);
+        const basicData = await basicResp.json();
+        if (basicData.error) return res.status(400).json({ error: basicData.error.error });
+
+        if (basicData.members) {
+            Object.keys(basicData.members).forEach(id => {
+                if (!activityCache[id] || (Date.now() - activityCache[id].time) > 600000) {
+                    if (isPremium && !activityQueue.has(id)) activityQueue.set(id, ffKey);
+                }
+            });
+        }
+
+        let loans = [];
+        let armoryError = false;
+        const armoryResp = await fetch(`https://api.torn.com/faction/?selections=armor,weapons,temporary&key=${userKey}`);
+        const armoryData = await armoryResp.json();
+
+        if (armoryData.error) { armoryError = true; } 
+        else {
+            const findLoans = (obj, typeName) => {
+                if (!obj || typeof obj !== 'object') return;
+                if (obj.loaned_to) {
+                    let loanStr = String(obj.loaned_to).trim();
+                    if (loanStr !== "0" && loanStr !== "null" && loanStr !== "") {
+                        loanStr.split(',').forEach(l => { loans.push({ name: obj.name || "Unknown Item", loaned_to: l.trim(), type: typeName }); });
+                    }
+                    return; 
+                }
+                Object.values(obj).forEach(val => findLoans(val, typeName));
+            };
+            findLoans(armoryData.armor, "Armor");
+            findLoans(armoryData.weapons, "Weapon");
+            findLoans(armoryData.temporary, "Temporary");
+        }
+
+        let parsedMembers = {};
+        if (basicData.members) {
+            Object.entries(basicData.members).forEach(([id, m]) => {
+                parsedMembers[id] = { ...m, timeline: isPremium ? (activityCache[id]?.timeline || null) : null };
+            });
+        }
+
+        res.json({ success: true, members: parsedMembers, loans: loans, armoryError, premiumActive: isPremium });
+    } catch (err) { res.status(403).json({ error: err.message }); }
+});
+
+app.get('/api/scan-recruits', async (req, res) => {
+    const { apiKey, reportId, ffKey } = req.query;
+    try {
+        const myUserId = await verifySubscription(apiKey);
+        const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
+
+        const reportRes = await fetch(`https://api.torn.com/torn/${reportId}?selections=rankedwarreport&key=${apiKey}`);
+        const reportData = await reportRes.json();
+        if (reportData.error) return res.status(400).json({ error: "Torn API Error: " + reportData.error.error });
+
+        let myFacId = null; let enemyFacId = null;
+        for (let [facId, facData] of Object.entries(reportData.rankedwarreport.factions)) {
+            if (facData.members && facData.members[myUserId]) { myFacId = facId; } else { enemyFacId = facId; }
+        }
+        if (!myFacId) {
+            const userRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${apiKey}`);
+            const userData = await userRes.json();
+            myFacId = userData.faction?.faction_id?.toString();
+            enemyFacId = Object.keys(reportData.rankedwarreport.factions).find(id => id !== myFacId);
+        }
+        if (!enemyFacId) return res.status(400).json({ error: "Could not identify the enemy faction." });
+
+        const enemyWarData = reportData.rankedwarreport.factions[enemyFacId];
+        const currentEnemyRes = await fetch(`https://api.torn.com/faction/${enemyFacId}?selections=basic&key=${apiKey}`);
+        const currentEnemyData = await currentEnemyRes.json();
+        const currentRoster = currentEnemyData.members || {};
+
+        let potentialRecruits = [];
+        for (let [id, m] of Object.entries(enemyWarData.members || {})) {
+            if (m.score > 200 || m.attacks > 10) {
+                if (isPremium && !statQueue.has(id) && !statsCache[id]) statQueue.set(id, ffKey);
+                let currentStatus = "Factionless / Left"; let position = "None"; let daysInFaction = 0; let isPoachable = true;
+
+                if (currentRoster[id]) {
+                    position = currentRoster[id].position; daysInFaction = currentRoster[id].days_in_faction;
+                    if (position.toLowerCase().match(/(leader|management|council|co-leader)/)) { isPoachable = false; } 
+                    else { currentStatus = `Member (${position})`; }
+                }
+
+                if (isPoachable) {
+                    let efficiency = m.attacks > 0 ? (m.score / m.attacks).toFixed(1) : 0;
+                    let est = statsCache[id] ? statsCache[id].stats : (isPremium ? "Scanning..." : "🔒 FF Scouter Req.");
+                    potentialRecruits.push({ id, name: m.name, score: m.score, attacks: m.attacks, efficiency, status: currentStatus, days: daysInFaction, stillInFaction: !!currentRoster[id], estStats: est });
+                }
+            }
+        }
+        potentialRecruits.sort((a, b) => b.score - a.score);
+        res.json({ success: true, recruits: potentialRecruits, enemyName: enemyWarData.name });
+    } catch (err) { res.status(403).json({ error: err.message }); }
+});
+
+app.get('/api/past-war', async (req, res) => {
+    const { apiKey, reportId } = req.query;
+    try {
+        await verifySubscription(apiKey);
+        const [userRes, reportRes, itemsRes] = await Promise.all([
+            fetch(`https://api.torn.com/user/?selections=profile&key=${apiKey}`),
+            fetch(`https://api.torn.com/torn/${reportId}?selections=rankedwarreport&key=${apiKey}`),
+            fetch(`https://api.torn.com/torn/?selections=items&key=${apiKey}`)
+        ]);
+        const userData = await userRes.json(); const reportData = await reportRes.json(); const itemsData = await itemsRes.json();
+        if (userData.error) return res.status(400).json({ error: "Invalid API Key." });
+        if (reportData.error) return res.status(400).json({ error: "Torn API Error: " + reportData.error.error });
+
+        let correctFacId = null;
+        let enemyFacId = null;
+        const myUserId = userData.player_id.toString();
+
+        for (let [facId, facData] of Object.entries(reportData.rankedwarreport.factions)) {
+            if (facData.members && facData.members[myUserId]) { correctFacId = facId; } else { enemyFacId = facId; }
+        }
+
+        if (!correctFacId) {
+            correctFacId = userData.faction?.faction_id?.toString();
+            enemyFacId = Object.keys(reportData.rankedwarreport.factions).find(id => id !== correctFacId);
+        }
+
+        const myFactionWarData = reportData.rankedwarreport?.factions[correctFacId];
+        if (!myFactionWarData) return res.status(400).json({ error: "Your faction was not part of this Ranked War Report." });
+
+        let totalCacheValue = 0; let cachesWon = [];
+        if (myFactionWarData?.rewards?.items) {
+            for (let [itemId, itemInfo] of Object.entries(myFactionWarData.rewards.items)) {
+                const iv = itemsData.items?.[itemId]?.market_value || 0;
+                totalCacheValue += iv * itemInfo.quantity;
+                cachesWon.push({ name: itemInfo.name || "Cache", quantity: itemInfo.quantity, marketValue: iv, totalValue: iv * itemInfo.quantity });
+            }
+        }
+
+        let advancedStats = {};
+        if (warScrapeCache[reportId]) {
+            advancedStats = warScrapeCache[reportId];
+        } else {
+            let warStart = reportData.rankedwarreport.war.start;
+            let warEnd = reportData.rankedwarreport.war.end || Math.floor(Date.now() / 1000);
+            
+            let toTimestamp = warEnd;
+            let keepScraping = true;
+            let pageCount = 0;
+            
+            while (keepScraping && pageCount < 200) { 
+                const attackRes = await fetch(`https://api.torn.com/faction/?selections=attacks&to=${toTimestamp}&key=${apiKey}`);
+                const attackData = await attackRes.json();
+                
+                if (attackData.error || !attackData.attacks) break;
+                
+                let attacks = Object.values(attackData.attacks);
+                if (attacks.length === 0) break;
+                
+                let oldestTime = toTimestamp;
+                
+                for (let atk of attacks) {
+                    if (atk.timestamp_ended < oldestTime) oldestTime = atk.timestamp_ended;
+                    
+                    if (atk.timestamp_ended < warStart) { keepScraping = false; continue; }
+                    if (atk.timestamp_ended > warEnd) continue;
+                    
+                    if (atk.attacker_faction && atk.attacker_faction.toString() === correctFacId) {
+                        let uId = atk.attacker_id.toString();
+                        if (!advancedStats[uId]) advancedStats[uId] = { assists: 0, clears: 0 };
+                        
+                        if (atk.result === "Assist") {
+                            advancedStats[uId].assists++;
+                        } else if (atk.defender_faction !== undefined && atk.defender_faction.toString() !== enemyFacId) {
+                            if (["Attacked", "Mugged", "Hospitalized", "Arrested", "Special"].includes(atk.result)) {
+                                advancedStats[uId].clears++;
+                            }
+                        }
+                    }
+                }
+                toTimestamp = oldestTime - 1;
+                pageCount++;
+                await new Promise(r => setTimeout(r, 250)); 
+            }
+            warScrapeCache[reportId] = advancedStats;
+        }
+
+        let formattedMembers = [];
+        const members = myFactionWarData.members || {};
+        for (let [id, m] of Object.entries(members)) {
+            let pStats = advancedStats[id] || { assists: 0, clears: 0 };
+            formattedMembers.push({
+                id,
+                name: m.name,
+                attacks: m.attacks || 0,
+                assists: pStats.assists,
+                clears: pStats.clears,
+                score: m.score || 0
+            });
+        }
+
+        res.json({ success: true, members: formattedMembers, rewards: { totalCacheValue, caches: cachesWon, points: myFactionWarData?.rewards?.points||0, respect: myFactionWarData?.rewards?.respect||0 } });
+    } catch (err) { res.status(403).json({ error: err.message }); }
+});
+
+app.post('/api/claim', (req, res) => { const { enemyId, playerName } = req.body; claims[enemyId] = { playerName, time: Date.now() }; res.json({ success: true }); });
+app.post('/api/unclaim', (req, res) => { const { enemyId, playerName } = req.body; if (claims[enemyId]?.playerName === playerName) delete claims[enemyId]; res.json({ success: true }); });
+app.post('/api/backup', (req, res) => { const { enemyId, playerName } = req.body; backups[enemyId] = { playerName, time: Date.now() }; res.json({ success: true }); });
+app.post('/api/unbackup', (req, res) => { const { enemyId } = req.body; delete backups[enemyId]; res.json({ success: true }); });
+app.post('/api/update-stats', (req, res) => { const { enemyId, stats } = req.body; manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() }; res.json({ success: true }); });
+
+app.get('/api/inspect', async (req, res) => {
+    const { apiKey, targetId, tsKey } = req.query;
+    try {
+        await verifySubscription(apiKey);
+        const r = await fetch(`https://api.torn.com/user/${targetId}?selections=profile,personalstats,bazaar,display&key=${apiKey}`);
+        const data = await r.json();
+        if (data.error) return res.status(400).json({ error: data.error.error });
+
+        let loadoutClues = [];
+        const checkItems = (items) => {
+            if (!items) return;
+            items.forEach(item => {
+                if (item.type === "Primary" || item.type === "Secondary" || item.type === "Melee" || item.type === "Armor") {
+                    loadoutClues.push({ name: item.name, type: item.type, price: item.price || item.market_value || 0 });
+                }
+            });
+        };
+        checkItems(data.bazaar); checkItems(data.display);
+        loadoutClues.sort((a, b) => b.price - a.price);
+        loadoutClues = loadoutClues.slice(0, 5);
+
+        let tsData = null;
+        if (tsKey && tsKey !== 'null' && tsKey !== '') {
+            try {
+                const tsRes = await fetch(`https://www.tornstats.com/api/v2/${tsKey}/spy/user/${targetId}`);
+                const tsJson = await tsRes.json();
+                if (tsJson.status && tsJson.spy) { tsData = tsJson.spy; }
+            } catch(e) {}
+        }
+
+        let manualSpy = spyDatabase[targetId] || null;
+
+        res.json({ success: true, data, loadoutClues, tsData, manualSpy });
+    } catch(err) { res.status(403).json({ error: err.message }); }
+});
+
+app.post('/api/save-spy', async (req, res) => {
+    const { apiKey, targetId, spyText } = req.body;
+    try {
+        await verifySubscription(apiKey);
+        if (!targetId || !spyText) return res.status(400).json({error: "Missing data"});
+        
+        const extract = (regex) => {
+            const match = spyText.match(regex);
+            return match ? parseInt(match[1].replace(/,/g, '')) : 0;
+        };
+
+        const strength = extract(/Strength:\s*([\d,]+)/i);
+        const defense = extract(/Defense:\s*([\d,]+)/i);
+        const speed = extract(/Speed:\s*([\d,]+)/i);
+        const dexterity = extract(/Dexterity:\s*([\d,]+)/i);
+        const total = extract(/Total:\s*([\d,]+)/i);
+
+        if (total === 0 && strength === 0 && defense === 0) {
+            return res.status(400).json({error: "Could not parse spy report. Make sure you copied the exact text."});
+        }
+
+        spyDatabase[targetId] = { strength, defense, speed, dexterity, total, timestamp: Date.now() };
+        saveSpyDb();
+        manualStats[targetId] = { stats: total, time: Date.now() };
+
+        res.json({success: true, data: spyDatabase[targetId]});
+    } catch(err) { res.status(403).json({ error: err.message }); }
+});
+
+app.get('/api/warboard', async (req, res) => {
+    try {
+        const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
+        const ffKey = req.query.ffKey && req.query.ffKey !== "null" && req.query.ffKey !== "" ? req.query.ffKey : null;
+        await verifySubscription(userKey);
+
+        const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
+        let enemyId = req.query.enemyFaction || null;
+        
+        let activeKey = getNextApiKey() || userKey;
+        let [myData, enemyDataResult] = await Promise.all([
+            fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${activeKey}`).then(r => r.json()).catch(() => ({ members: {} })),
+            enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()||userKey}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} })
+        ]);
+        
+        if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
+        if (enemyId && Object.keys(enemyDataResult.members || {}).length === 0) { 
+            enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()||userKey}`).then(r => r.json()).catch(() => ({ members: {} })); 
+        }
+
+        if (myData && myData.ID) dynamicFactionId = myData.ID.toString();
+
+        let activeWar = null;
+        if (myData.rankedwars) {
+            activeWar = Object.values(myData.rankedwars).find(w => w.war && w.war.winner === 0);
+        }
+        let myWarMembers = activeWar && myData.ID ? (activeWar.factions[myData.ID.toString()]?.members || {}) : {};
+        let enemyWarMembers = activeWar && enemyId ? (activeWar.factions[enemyId]?.members || {}) : {};
+
+        const friendlyIds = new Set(Object.keys(myData.members || {}));
+        const enemyIds = new Set(Object.keys(enemyDataResult.members || {}));
+        
+        [...friendlyIds, ...enemyIds].forEach(id => {
+            if (!statsCache[id] || (Date.now() - statsCache[id].time) > 3600000) { if (isPremium && !statQueue.has(id)) statQueue.set(id, ffKey); }
+            if (!activityCache[id] || (Date.now() - activityCache[id].time) > 3600000) { if (isPremium && !activityQueue.has(id)) activityQueue.set(id, ffKey); }
+            const m = myData.members[id] || enemyDataResult.members[id];
+            const isTraveling = m.status?.state === "Traveling" || m.status?.description?.includes("Traveling");
+            if (isTraveling) { if (!flightCache[id] || (Date.now() - flightCache[id].time) > 30000) { if (isPremium && !flightQueue.has(id)) flightQueue.set(id, ffKey); } }
+        });
+
+        const parseMembers = (data, isEnemy = false) => {
+            if (!data.members) return [];
+            return Object.entries(data.members).map(([id, m]) => {
+                let est = (spyDatabase[id] && spyDatabase[id].total) ? spyDatabase[id].total : (manualStats[id]?.stats !== undefined ? manualStats[id].stats : (statsCache[id]?.stats !== undefined ? statsCache[id].stats : (isPremium ? "Scanning..." : "🔒 Requires FF Scouter")));
+                
+                const isTraveling = m.status?.state === "Traveling" || m.status?.description?.includes("Traveling");
+                let finalUntil = m.status?.until; let finalLandingTime = null; let needsFfScouterForFlights = false;
+                if (isTraveling) { if (flightCache[id]?.landingTime) { finalLandingTime = flightCache[id].landingTime; finalUntil = finalLandingTime; } else { if (!isPremium) needsFfScouterForFlights = true; } }
+                
+                let warMemberData = isEnemy ? enemyWarMembers[id] : myWarMembers[id];
+                let baseAttacks = warMemberData ? (warMemberData.attacks || 0) : 0;
+                let score = warMemberData ? (warMemberData.score || 0) : 0;
+                
+                let liveAtk = 0;
+                if (enemyId && liveAttacks[id]?.[enemyId]) { liveAtk = liveAttacks[id][enemyId]; }
+                let attacks = Math.max(baseAttacks, liveAtk);
+
+                let defends = 0;
+                if (enemyId && persistentDefends[id]?.[enemyId]) { defends = persistentDefends[id][enemyId]; }
+
+                let timeline = activityCache[id]?.timeline || null;
+
+                return { id, name: m.name, state: m.status?.state, until: finalUntil, statusDescription: m.status?.description || "", onlineStatus: m.last_action?.status || "Offline", lastActionRelative: m.last_action?.relative || "Unknown", landingTime: finalLandingTime, needsFfScouterForFlights, claimedBy: isEnemy ? claims[id]?.playerName || null : null, needsBackup: isEnemy ? backups[id]?.playerName || null : null, estStats: est, intelScore: isEnemy ? computeWarIntel({ id, state: m.status?.state, until: finalUntil, onlineStatus: m.last_action?.status || "Offline", estStats: typeof est === 'number' ? est : null }, statsCache) : null, isManual: !!manualStats[id], attacks, score, defends, timeline };
+            });
+        };
+        res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId, premiumActive: isPremium });
+    } catch (err) { res.status(403).json({ error: err.message }); }
+});
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
