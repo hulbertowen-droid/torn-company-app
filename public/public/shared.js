@@ -6,7 +6,41 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     initSidebar();
     initToastContainer();
+    initSocketIO();
+    initPWA();
 });
+
+function initPWA() {
+    // Add manifest link dynamically
+    if (!document.querySelector('link[rel="manifest"]')) {
+        let manifest = document.createElement('link');
+        manifest.rel = 'manifest';
+        manifest.href = '/manifest.json';
+        document.head.appendChild(manifest);
+    }
+    
+    // Register service worker
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+                .then(registration => console.log('SW registered:', registration.scope))
+                .catch(err => console.log('SW registration failed:', err));
+        });
+    }
+}
+
+function initSocketIO() {
+    const socketScript = document.createElement('script');
+    socketScript.src = '/socket.io/socket.io.js';
+    socketScript.onload = () => {
+        const socket = io();
+        socket.on('refreshData', () => {
+            if (typeof fetchWarboardData === 'function') fetchWarboardData();
+            if (typeof fetchDashboardData === 'function') fetchDashboardData();
+        });
+    };
+    document.head.appendChild(socketScript);
+}
 
 // --- SIDEBAR LOGIC ---
 function initSidebar() {
@@ -130,6 +164,7 @@ function getSidebarHTML(activePage) {
         { path: '/chain.html', icon: '🔗', label: 'Chain Tracker' },
         { path: '/bazaar.html', icon: '🛒', label: 'Bazaar' },
         { path: '/discord.html', icon: '💬', label: 'Discord Alerts' },
+        { path: '/oc-planner.html', icon: '🕵️', label: 'OC Planner' },
         { path: '/payout.html', icon: '💰', label: 'War Payouts' },
         { path: '/recruitment.html', icon: '🎯', label: 'Recruitment' }
     ];
