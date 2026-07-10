@@ -25,7 +25,10 @@
         .sidebar.collapsed .sidebar-logo { opacity: 0; width: 0; display: none; }
         .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
         .toggle-btn:hover { color: white; background: #2f3542; }
-        .nav-items { display: flex; flex-direction: column; gap: 8px; padding: 20px 10px; }
+        
+        /* UPDATED: Added overflow-y and flex-grow to make the sidebar scrollable */
+        .nav-items { display: flex; flex-direction: column; gap: 8px; padding: 20px 10px; overflow-y: auto; flex-grow: 1; }
+        
         .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
         .nav-link:hover { background: #2f3542; color: white; }
         .nav-link.active { background: rgba(255, 71, 87, 0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
@@ -433,7 +436,6 @@ function startPolling() {
     }, refreshMs);
 }
 
-// FULL TCT FIX: Converts all unix timestamps strictly to UTC/TCT, and appends Local Time
 function formatTime(unixTimestamp) {
     if (!unixTimestamp) return "";
     let d = new Date(unixTimestamp * 1000);
@@ -446,7 +448,6 @@ function formatTime(unixTimestamp) {
     return `${tctHr}:${tctMin} TCT (${localTime})`;
 }
 
-// FULL TCT FIX: Converts heatmap 24H array strictly to TCT labels
 function formatHourTCT(h) {
     let hr = h % 24;
     if (hr < 0) hr += 24;
@@ -581,7 +582,6 @@ function renderHeatmap(enemyPlayers, premiumActive) {
     enemyPlayers.forEach(p => {
         if (p.timeline && Array.isArray(p.timeline) && p.timeline.length > 0) {
             timelinesLoaded++;
-            // Align the timeline to UTC (TCT)
             let currentUTCHour = new Date().getUTCHours();
             for (let i = 0; i < p.timeline.length; i++) {
                 let offset = (p.timeline.length - 1) - i;
