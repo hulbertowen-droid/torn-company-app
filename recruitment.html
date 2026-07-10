@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>War Payouts | Owen's Faction Tools</title>
+    <style>
+        :root { 
+            --bg: #090a0f; --card: #11141d; --item: #1b202e; 
+            --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
+            --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
+        }
+        
+        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; height: 100vh; overflow: hidden; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #57606f; }
+
+        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; z-index: 100; }
+        .sidebar.collapsed { width: 75px; }
+        .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2f3542; }
+        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 0.9em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
+        .sidebar.collapsed .sidebar-logo { opacity: 0; width: 0; display: none; }
+        .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
+        .toggle-btn:hover { color: white; background: #2f3542; }
+        .nav-items { display: flex; flex-direction: column; gap: 8px; padding: 20px 10px; }
+        .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
+        .nav-link:hover { background: #2f3542; color: white; }
+        .nav-link.active { background: rgba(255, 71, 87, 0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
+        .nav-text { transition: opacity 0.2s; }
+        .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
+        
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
+        h1 { text-align: center; color: var(--green); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
+
+        .container { max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+        .fetch-box { background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542; display: flex; gap: 15px; align-items: center; }
+        .fetch-box select { flex-grow: 1; padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; cursor: pointer; }
+        .fetch-box select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 8px rgba(88,166,255,0.2); }
+        .fetch-box input { padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; flex-grow: 1; display: none; }
+        .fetch-box input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 8px rgba(88,166,255,0.2); }
+        .fetch-box button { background: var(--green); color: #000; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em; text-transform: uppercase; transition: 0.2s; flex-shrink: 0; }
+        .fetch-box button:hover { background: #21a556; box-shadow: 0 0 12px rgba(46, 213, 115, 0.4); }
+
+        .config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; }
+        
+        .config-card { background: var(--card); border: 1px solid #2f3542; border-radius: 12px; padding: 20px; }
+        .config-card h3 { margin: 0 0 15px 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; font-size: 1em; }
+        
+        .input-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .input-row label { font-size: 0.9em; font-weight: bold; color: var(--text-dim); }
+        .input-group { display: flex; align-items: center; gap: 8px; }
+        .input-group span { color: var(--text-dim); font-weight: bold; }
+        .input-row input[type="number"], .input-row input[type="text"] { width: 120px; padding: 8px; border-radius: 4px; border: 1px solid #30363d; background: #0b0d13; color: white; text-align: right; font-weight: bold; }
+        .input-row input:focus { outline: none; border-color: var(--blue); }
+
+        .summary-card { background: linear-gradient(145deg, #11141d, #0b0d13); border: 1px solid var(--blue); border-radius: 12px; padding: 25px; box-shadow: 0 8px 20px rgba(0,0,0,0.5); }
+        .summary-card h2 { margin: 0 0 20px 0; color: var(--blue); text-transform: uppercase; text-align: center; letter-spacing: 1px; }
+        
+        .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .summary-item { background: #1b202e; padding: 15px; border-radius: 8px; border: 1px solid #2f3542; text-align: center; }
+        .summary-item.large { grid-column: 1 / -1; background: rgba(46, 213, 115, 0.1); border-color: var(--green); }
+        .summary-label { font-size: 0.8em; color: var(--text-dim); text-transform: uppercase; font-weight: bold; margin-bottom: 5px; }
+        .summary-val { font-size: 1.4em; font-weight: 900; color: white; }
+        .summary-item.large .summary-val { font-size: 2em; color: var(--green); text-shadow: 0 0 10px rgba(46,213,115,0.3); }
+
+        .table-card { background: var(--card); border: 1px solid #2f3542; border-radius: 12px; padding: 20px; margin-top: 10px; }
+        
+        /* STRICT ALIGNMENT: 6 rigid columns, all data pushed right for readability */
+        .table-header { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1.2fr 1.5fr; gap: 10px; color: var(--text-dim); font-weight: bold; font-size: 0.85em; text-transform: uppercase; border-bottom: 2px solid #2f3542; padding-bottom: 10px; margin-bottom: 10px; }
+        .table-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1.2fr 1.5fr; gap: 10px; padding: 12px 0; border-bottom: 1px solid #1b202e; align-items: center; font-size: 0.95em; }
+        
+        .table-row:last-child { border-bottom: none; }
+        .table-row:hover { background: #0b0d13; }
+        
+        .p-name { font-weight: bold; color: var(--text-main); text-decoration: none; }
+        .p-name:hover { text-decoration: underline; color: var(--blue); }
+        .val-money { color: var(--green); font-weight: bold; font-family: monospace; font-size: 1.1em; }
+        .val-hits { font-weight: bold; color: var(--gold); }
+        
+        .btn-copy { background: #2f3542; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; float: right; margin-bottom: 15px; }
+        .btn-copy:hover { background: #57606f; }
+
+        .warning-text { color: var(--red); font-size: 0.85em; font-style: italic; margin-top: 5px; display: none; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">Owen's Faction Tools</div>
+            <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
+        </div>
+        <div class="nav-items">
+            <a href="/" class="nav-link">📡 <span class="nav-text">Live Warboard</span></a>
+            <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
+            <a href="/payout.html" class="nav-link active">💰 <span class="nav-text">Payouts</span></a>
+            <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
+            <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
+            <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
+            <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>
+            <a href="/admin.html" class="nav-link">👑 <span class="nav-text">Admin Panel</span></a>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <h1>Advanced War Payouts</h1>
+        
+        <div class="container">
+            <div class="fetch-box">
+                <select id="war-selector" onchange="handleWarSelection()">
+                    <option value="">Loading past wars...</option>
+                </select>
+                <input type="text" id="report-id" placeholder="Paste Manual Report ID">
+                <button onclick="fetchWarReport()">Fetch Data</button>
+            </div>
+
+            <div class="config-grid">
+                <!-- FINANCES CARD -->
+                <div class="config-card">
+                    <h3>🏦 Faction Finances</h3>
+                    <div class="input-row">
+                        <label>Total Cache Value</label>
+                        <div class="input-group">
+                            <span>$</span>
+                            <input type="number" id="inp-cache" value="0" onchange="recalculate()">
+                        </div>
+                    </div>
+                    <div class="input-row">
+                        <label>Faction Cut (%)</label>
+                        <div class="input-group">
+                            <input type="number" id="inp-fac-cut" value="25" min="0" max="100" onchange="recalculate()">
+                            <span>%</span>
+                        </div>
+                    </div>
+                    
+                    <h3 style="margin-top: 20px;">📉 Deductions & Costs</h3>
+                    <div class="input-row">
+                        <label>Consumables / Meds</label>
+                        <div class="input-group"><span>$</span><input type="number" id="inp-cost-meds" value="0" onchange="recalculate()"></div>
+                    </div>
+                    <div class="input-row">
+                        <label>Mercs / Spies</label>
+                        <div class="input-group"><span>$</span><input type="number" id="inp-cost-mercs" value="0" onchange="recalculate()"></div>
+                    </div>
+                    <div class="input-row">
+                        <label>Bounties</label>
+                        <div class="input-group"><span>$</span><input type="number" id="inp-cost-bounties" value="0" onchange="recalculate()"></div>
+                    </div>
+                    <div class="input-row">
+                        <label>Misc. / Other</label>
+                        <div class="input-group"><span>$</span><input type="number" id="inp-cost-other" value="0" onchange="recalculate()"></div>
+                    </div>
+                </div>
+
+                <!-- MODIFIERS CARD -->
+                <div class="config-card">
+                    <h3>⚖️ Hit Multipliers</h3>
+                    <div class="input-row" title="Base attacks executed. Default is 1.0x">
+                        <label>Standard Attack</label>
+                        <div class="input-group"><input type="number" id="inp-mult-attack" value="1.0" step="0.1" onchange="recalculate()"><span>x</span></div>
+                    </div>
+                    <div class="input-row" title="Assists logic. Typically paid out at 25% to 50%">
+                        <label>Assist Multiplier</label>
+                        <div class="input-group"><input type="number" id="inp-mult-assist" value="0.25" step="0.05" onchange="recalculate()"><span>x</span></div>
+                    </div>
+                    <div class="input-row" title="Clears / Outside Hits (Attacking people not in the war).">
+                        <label>Outside Clear Multiplier</label>
+                        <div class="input-group"><input type="number" id="inp-mult-clear" value="0.5" step="0.05" onchange="recalculate()"><span>x</span></div>
+                    </div>
+                    
+                    <h3 style="margin-top: 20px;">🛑 Thresholds & Caps</h3>
+                    <div class="input-row" title="Members below this threshold receive $0">
+                        <label>Minimum Hits Required</label>
+                        <input type="number" id="inp-min-hits" value="0" min="0" onchange="recalculate()">
+                    </div>
+                    <div class="input-row" title="Members will not be paid for hits exceeding this cap">
+                        <label>Maximum Hits Cap</label>
+                        <input type="number" id="inp-max-hits" value="9999" min="1" onchange="recalculate()">
+                    </div>
+                    <div class="warning-text" id="threshold-warn">Hit calculations adjusted by thresholds.</div>
+                </div>
+
+                <!-- SUMMARY CARD -->
+                <div class="summary-card">
+                    <h2>Payout Summary</h2>
+                    <div class="summary-grid">
+                        <div class="summary-item">
+                            <div class="summary-label">Total Expenses</div>
+                            <div class="summary-val" id="sum-expenses" style="color: var(--red);">$0</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-label">Faction Bank Cut</div>
+                            <div class="summary-val" id="sum-fac-cut" style="color: var(--gold);">$0</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-label">Member Pool</div>
+                            <div class="summary-val" id="sum-member-pool">$0</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-label">Valid Paid Hits</div>
+                            <div class="summary-val" id="sum-valid-hits">0</div>
+                        </div>
+                        <div class="summary-item large">
+                            <div class="summary-label">Calculated Pay Per Hit</div>
+                            <div class="summary-val" id="sum-pph">$0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RESULTS TABLE -->
+            <div class="table-card">
+                <button class="btn-copy" onclick="copyToClipboard()">📋 Copy Payout List</button>
+                <h3 style="margin: 0 0 15px 0; color: var(--blue); text-transform: uppercase;">Member Breakdown</h3>
+                
+                <div class="table-header">
+                    <div>Player</div>
+                    <div style="text-align: right;">Attacks</div>
+                    <div style="text-align: right;">Assists</div>
+                    <div style="text-align: right;">Outside Clears</div>
+                    <div style="text-align: right;">Effective Hits</div>
+                    <div style="text-align: right;">Total Payout</div>
+                </div>
+                
+                <div id="payout-list">
+                    <div style="color:var(--text-dim); padding:20px; text-align: center; font-style: italic;">Select a past war from the dropdown or enter an ID to fetch data.</div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+<script>
+const myKey = localStorage.getItem("warboard_apikey") || "";
+let rawMembersData = []; 
+
+document.addEventListener("DOMContentLoaded", function() {
+    const sidebar = document.getElementById('app-sidebar');
+    if (localStorage.getItem('sidebar_collapsed') === 'true') { sidebar.classList.add('collapsed'); }
+    
+    if (myKey) {
+        fetchWarList();
+    } else {
+        document.getElementById("war-selector").innerHTML = `<option value="">API Key Required in Settings</option>`;
+    }
+});
+
+function toggleSidebar() {
+    const sidebar = document.getElementById('app-sidebar');
+    sidebar.classList.toggle('collapsed');
+    localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+}
+
+async function fetchWarList() {
+    const selector = document.getElementById("war-selector");
+    try {
+        const res = await fetch(`/api/war-list?apiKey=${myKey}`);
+        const data = await res.json();
+        
+        if (data.success && data.wars && data.wars.length > 0) {
+            let opts = `<option value="">-- Select a Past War --</option>`;
+            data.wars.forEach(w => {
+                let date = new Date(w.start * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                opts += `<option value="${w.id}">${date} vs ${w.enemy}</option>`;
+            });
+            opts += `<option value="manual">Enter Manual Report ID...</option>`;
+            selector.innerHTML = opts;
+        } else {
+            selector.innerHTML = `<option value="manual">No recent wars found. Enter Manual ID...</option>`;
+            handleWarSelection();
+        }
+    } catch (e) {
+        selector.innerHTML = `<option value="manual">Failed to load wars. Enter Manual ID...</option>`;
+        handleWarSelection();
+    }
+}
+
+function handleWarSelection() {
+    const val = document.getElementById("war-selector").value;
+    const manualInp = document.getElementById("report-id");
+    if (val === "manual") {
+        manualInp.style.display = "block";
+        manualInp.value = "";
+        manualInp.focus();
+    } else {
+        manualInp.style.display = "none";
+        manualInp.value = "";
+    }
+}
+
+async function fetchWarReport() {
+    let reportId = document.getElementById("report-id").value.trim();
+    const selectorVal = document.getElementById("war-selector").value;
+    
+    if (selectorVal !== "manual" && selectorVal !== "") {
+        reportId = selectorVal;
+    }
+
+    if (!reportId || !myKey) {
+        alert("Please select a war from the dropdown or enter a valid Report ID.");
+        return;
+    }
+
+    document.getElementById("payout-list").innerHTML = `<div style="color:var(--text-dim); padding:20px; text-align: center;">Fetching secure report logs and scanning deep battle history...</div>`;
+
+    try {
+        const res = await fetch(`/api/past-war?apiKey=${myKey}&reportId=${reportId}`);
+        const data = await res.json();
+
+        if (data.error) {
+            document.getElementById("payout-list").innerHTML = `<div style="color:var(--red); padding:20px; font-weight:bold; text-align:center;">${data.error}</div>`;
+            return;
+        }
+
+        document.getElementById("inp-cache").value = data.rewards.totalCacheValue || 0;
+        rawMembersData = data.members || [];
+        
+        recalculate();
+
+    } catch (e) {
+        document.getElementById("payout-list").innerHTML = `<div style="color:var(--red); padding:20px; font-weight:bold; text-align:center;">Network error. Please try again.</div>`;
+    }
+}
+
+function recalculate() {
+    if (rawMembersData.length === 0) return;
+
+    const cacheVal = parseFloat(document.getElementById("inp-cache").value) || 0;
+    const facCutPct = parseFloat(document.getElementById("inp-fac-cut").value) || 0;
+    
+    const cMeds = parseFloat(document.getElementById("inp-cost-meds").value) || 0;
+    const cMercs = parseFloat(document.getElementById("inp-cost-mercs").value) || 0;
+    const cBounties = parseFloat(document.getElementById("inp-cost-bounties").value) || 0;
+    const cOther = parseFloat(document.getElementById("inp-cost-other").value) || 0;
+    
+    const totalExpenses = cMeds + cMercs + cBounties + cOther;
+    
+    let netPool = cacheVal - totalExpenses;
+    if (netPool < 0) netPool = 0;
+
+    const facCutAmount = netPool * (facCutPct / 100);
+    const memberPool = netPool - facCutAmount;
+
+    const multAttack = parseFloat(document.getElementById("inp-mult-attack").value) || 1.0;
+    const multAssist = parseFloat(document.getElementById("inp-mult-assist").value) || 0.25;
+    const multClear = parseFloat(document.getElementById("inp-mult-clear").value) || 0.5;
+    
+    const minHits = parseInt(document.getElementById("inp-min-hits").value) || 0;
+    const maxHits = parseInt(document.getElementById("inp-max-hits").value) || 99999;
+
+    document.getElementById("threshold-warn").style.display = (minHits > 0 || maxHits < 9999) ? "block" : "none";
+
+    let totalValidHits = 0;
+    let processedMembers = [];
+
+    rawMembersData.forEach(m => {
+        let rawAttacks = m.attacks || 0;
+        let rawAssists = m.assists || 0;
+        let rawClears = m.clears || 0;
+        let totalRawActivity = rawAttacks + rawAssists + rawClears;
+
+        let effectiveHits = 0;
+        
+        if (totalRawActivity >= minHits) {
+            effectiveHits = (rawAttacks * multAttack) + (rawAssists * multAssist) + (rawClears * multClear);
+            if (effectiveHits > maxHits) {
+                effectiveHits = maxHits;
+            }
+        }
+
+        totalValidHits += effectiveHits;
+
+        processedMembers.push({
+            ...m,
+            rawAttacks,
+            rawAssists,
+            rawClears,
+            totalRawActivity,
+            effectiveHits
+        });
+    });
+
+    const payPerHit = totalValidHits > 0 ? (memberPool / totalValidHits) : 0;
+
+    document.getElementById("sum-expenses").innerText = `$${totalExpenses.toLocaleString()}`;
+    document.getElementById("sum-fac-cut").innerText = `$${Math.floor(facCutAmount).toLocaleString()}`;
+    document.getElementById("sum-member-pool").innerText = `$${Math.floor(memberPool).toLocaleString()}`;
+    document.getElementById("sum-valid-hits").innerText = totalValidHits.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2});
+    document.getElementById("sum-pph").innerText = `$${Math.floor(payPerHit).toLocaleString()}`;
+
+    processedMembers.sort((a, b) => b.effectiveHits - a.effectiveHits);
+
+    let html = "";
+    processedMembers.forEach(m => {
+        if (m.totalRawActivity === 0) return; 
+        
+        const payout = Math.floor(m.effectiveHits * payPerHit);
+        let warningIcon = "";
+        
+        if (m.totalRawActivity > 0 && m.totalRawActivity < minHits) {
+            warningIcon = `<span title="Missed Minimum Hit Threshold" style="color:var(--red); cursor:help;">⚠️</span>`;
+        } else if (m.effectiveHits >= maxHits) {
+            warningIcon = `<span title="Capped at Maximum Hit Threshold" style="color:var(--gold); cursor:help;">🛑</span>`;
+        }
+
+        html += `
+            <div class="table-row">
+                <div>
+                    <a class="p-name" href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank">${m.name} [${m.id}]</a>
+                </div>
+                <div style="text-align: right;">${m.rawAttacks}</div>
+                <div style="text-align: right; color: var(--gold);">${m.rawAssists}</div>
+                <div style="text-align: right; color: var(--blue);">${m.rawClears}</div>
+                <div class="val-hits" style="text-align: right;">${m.effectiveHits.toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:2})} ${warningIcon}</div>
+                <div style="text-align: right;" class="val-money">$${payout.toLocaleString()}</div>
+            </div>
+        `;
+    });
+
+    document.getElementById("payout-list").innerHTML = html;
+}
+
+function copyToClipboard() {
+    if (rawMembersData.length === 0) return;
+    
+    let text = "Faction War Payouts\n--------------------\n";
+    const payPerHit = parseFloat(document.getElementById("sum-pph").innerText.replace(/[^0-9.-]+/g,""));
+    
+    const multAttack = parseFloat(document.getElementById("inp-mult-attack").value) || 1.0;
+    const multAssist = parseFloat(document.getElementById("inp-mult-assist").value) || 0.25;
+    const multClear = parseFloat(document.getElementById("inp-mult-clear").value) || 0.5;
+    const minHits = parseInt(document.getElementById("inp-min-hits").value) || 0;
+    const maxHits = parseInt(document.getElementById("inp-max-hits").value) || 99999;
+
+    let copyData = [];
+    rawMembersData.forEach(m => {
+        let rawAttacks = m.attacks || 0;
+        let rawAssists = m.assists || 0;
+        let rawClears = m.clears || 0;
+        let totalRawActivity = rawAttacks + rawAssists + rawClears;
+        let effectiveHits = 0;
+        
+        if (totalRawActivity >= minHits) {
+            effectiveHits = (rawAttacks * multAttack) + (rawAssists * multAssist) + (rawClears * multClear);
+            if (effectiveHits > maxHits) effectiveHits = maxHits;
+        }
+
+        if (effectiveHits > 0) {
+            let payout = Math.floor(effectiveHits * payPerHit);
+            copyData.push({ name: m.name, id: m.id, payout: payout });
+        }
+    });
+
+    copyData.sort((a, b) => b.payout - a.payout);
+
+    copyData.forEach(d => {
+        text += `${d.name} [${d.id}]: $${d.payout.toLocaleString()}\n`;
+    });
+
+    navigator.clipboard.writeText(text).then(() => {
+        alert("Payout list copied to clipboard!");
+    }).catch(err => {
+        alert("Failed to copy text. Please select and copy manually.");
+    });
+}
+</script>
+</body>
+</html>

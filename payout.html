@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Warboard | Owen's Faction Tools</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { 
+            --bg: #090a0f; --card: #11141d; --item: #1b202e; 
+            --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
+            --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
+        }
+        
+        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; height: 100vh; overflow: hidden; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #57606f; }
+
+        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; z-index: 100; box-shadow: 2px 0 15px rgba(0,0,0,0.5); }
+        .sidebar.collapsed { width: 75px; }
+        .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2f3542; }
+        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 0.9em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
+        .sidebar.collapsed .sidebar-logo { opacity: 0; width: 0; display: none; }
+        .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
+        .toggle-btn:hover { color: white; background: #2f3542; }
+        .nav-items { display: flex; flex-direction: column; gap: 8px; padding: 20px 10px; }
+        .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
+        .nav-link:hover { background: #2f3542; color: white; }
+        .nav-link.active { background: rgba(255, 71, 87, 0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
+        .nav-text { transition: opacity 0.2s; }
+        .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
+        
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; position: relative; }
+
+        #refresh-bar-container { position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: #0b0d13; z-index: 50; }
+        #refresh-bar { height: 100%; width: 0%; background: var(--blue); box-shadow: 0 0 8px var(--blue); transition: width 0.1s linear; }
+
+        h1 { text-align: center; color: var(--red); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; text-shadow: 0 4px 15px rgba(255,71,87,0.2); }
+
+        .container { max-width: 1500px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+        
+        .chart-row { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+
+        .dash-card { background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542; box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
+        .dash-card h2 { margin-top:0; color:var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; font-size:1.1em; text-transform:uppercase; display: flex; justify-content: space-between; align-items: center; }
+
+        .watchlist-box { grid-column: 1 / -1; background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542; box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
+        .watchlist-box h3 { margin: 0 0 15px 0; color: var(--red); display: flex; align-items: center; gap: 10px; text-transform: uppercase; letter-spacing: 1px; }
+        .watchlist-items { display: flex; gap: 15px; overflow-x: auto; padding-bottom: 10px; }
+        
+        .watch-card { background: #0b0d13; border: 1px solid #2f3542; padding: 12px 18px; border-radius: 8px; min-width: 260px; flex-shrink: 0; box-shadow: inset 0 0 20px rgba(0,0,0,0.5); }
+        .watch-card.online { border-color: var(--green); background: rgba(46, 213, 115, 0.05); }
+        .watch-card.flying { border-color: var(--blue); background: rgba(88, 166, 255, 0.05); }
+        .watch-name { font-weight: bold; font-size: 1.1em; margin-bottom: 4px; }
+        .watch-name a { color: var(--text-main); text-decoration: none; }
+        .watch-name a:hover { text-decoration: underline; }
+        .watch-highlight { font-weight: bold; font-size: 0.95em; margin-bottom: 2px; }
+
+        .faction-col { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #2f3542; display: flex; flex-direction: column; box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
+        .faction-col h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center;}
+
+        .filter-group { display: flex; gap: 8px; margin-bottom: 15px; }
+        .btn-filter { background: #0b0d13; color: var(--text-dim); border: 1px solid #2f3542; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold; transition: 0.2s; }
+        .btn-filter:hover { background: #2f3542; color: white; }
+        .btn-filter.active { background: rgba(88, 166, 255, 0.15); border-color: var(--blue); color: white; box-shadow: inset 0 0 10px rgba(88, 166, 255, 0.1); }
+
+        .member-card { background: #0b0d13; border: 1px solid #2f3542; padding: 15px; border-radius: 10px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; transition: 0.2s; }
+        .member-card:hover { border-color: #57606f; transform: translateY(-1px); box-shadow: 0 6px 15px rgba(0,0,0,0.4); }
+        .member-card.okay { border-left: 4px solid var(--green); }
+        .member-card.hospital { border-left: 4px solid var(--red); opacity: 0.85; }
+        .member-card.traveling { border-left: 4px solid var(--blue); }
+
+        .card-header { display: flex; justify-content: space-between; align-items: flex-start; }
+        .profile { font-weight: bold; color: var(--text-main); text-decoration: none; font-size: 1.1em; }
+        .profile:hover { text-decoration: underline; color: var(--blue); }
+        
+        .btn-inspect { background: rgba(88, 166, 255, 0.15); color: var(--blue); border: 1px solid var(--blue); padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: bold; text-transform: uppercase; cursor: pointer; transition: 0.2s; margin-left: 8px; vertical-align: middle; }
+        .btn-inspect:hover { background: var(--blue); color: #000; box-shadow: 0 0 8px rgba(88,166,255,0.4); }
+
+        .badge-bounty { background: rgba(255, 71, 87, 0.15); color: var(--red); border: 1px solid var(--red); padding: 2px 8px; border-radius: 4px; font-size: 0.7em; font-weight: bold; text-transform: uppercase; text-decoration: none; margin-left: 8px; transition: 0.2s; vertical-align: middle; }
+        .badge-bounty:hover { background: var(--red); color: white; box-shadow: 0 0 8px rgba(255,71,87,0.5); }
+
+        .action-arrow { font-size: 0.85em; color: var(--text-dim); margin-top: 5px; display: flex; align-items: center; gap: 6px; }
+        .arrow-icon { color: var(--red); font-weight: bold; }
+        .flight-info { color: var(--blue); font-weight: bold; background: rgba(88, 166, 255, 0.1); padding: 2px 6px; border-radius: 4px; }
+
+        .status { font-size: 0.85em; color: var(--text-dim); margin-top: 4px; }
+        .status span { font-weight: bold; color: var(--text-main); }
+        
+        .intel-badge { background: rgba(255, 165, 2, 0.15); color: var(--gold); padding: 4px 8px; border-radius: 6px; font-size: 0.8em; font-weight: bold; border: 1px solid var(--gold); }
+        .stat-box { text-align: right; font-size: 0.9em; flex-shrink: 0; }
+        .stat-val { font-weight: bold; color: var(--gold); font-size: 1.1em; letter-spacing: 0.5px; }
+        .stat-val.lock-badge { color: var(--red); font-size: 0.85em; border: 1px dashed var(--red); padding: 2px 6px; border-radius: 4px; display: inline-block; font-weight: bold; }
+
+        .card-actions { display: flex; gap: 10px; border-top: 1px solid #2f3542; padding-top: 10px; justify-content: flex-end; align-items: center; }
+        .btn-action { background: #2f3542; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold; transition: 0.2s; text-decoration: none; }
+        .btn-action:hover { background: #57606f; }
+        .btn-claim { background: rgba(46, 213, 115, 0.2); color: var(--green); border: 1px solid var(--green); }
+        .btn-claim:hover { background: var(--green); color: #000; box-shadow: 0 0 8px rgba(46,213,115,0.4); }
+        .btn-sos { background: rgba(255, 71, 87, 0.2); color: var(--red); border: 1px solid var(--red); }
+        .btn-sos:hover { background: var(--red); color: white; box-shadow: 0 0 8px rgba(255,71,87,0.4); }
+
+        .btn-attack { background: var(--red); color: white; padding: 6px 16px; border-radius: 4px; font-size: 0.85em; font-weight: bold; text-decoration: none; border: 1px solid #ff2a40; box-shadow: 0 0 10px rgba(255, 71, 87, 0.4); text-transform: uppercase; display: flex; align-items: center; gap: 5px; animation: pulseAttack 2s infinite;}
+        .btn-attack:hover { background: #ff2a40; color: white; transform: scale(1.05); }
+
+        .active-claim { font-size: 0.8em; color: var(--green); font-weight: bold; background: rgba(46,213,115,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-right: 5px; border: 1px solid rgba(46,213,115,0.3); }
+        .active-sos { font-size: 0.8em; color: var(--red); font-weight: bold; background: rgba(255,71,87,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block; border: 1px solid rgba(255,71,87,0.3); animation: pulse 2s infinite; }
+
+        #toast-container { position: fixed; top: 25px; right: 25px; z-index: 9999; display: flex; flex-direction: column; gap: 15px; pointer-events: none; }
+        .toast { background: var(--card); border-left: 8px solid var(--red); color: white; padding: 20px 30px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.8); animation: slideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; font-weight: bold; font-size: 1.2em; pointer-events: auto; letter-spacing: 0.5px; }
+        .toast.online { border-left-color: var(--blue); }
+        .toast.okay { border-left-color: var(--green); }
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 10000; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
+        .modal-content { background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; width: 400px; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.9); }
+        .modal-content h2 { margin: 0 0 10px 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+        .modal-content label { font-size: 0.85em; color: var(--text-dim); font-weight: bold; text-transform: uppercase; }
+        .modal-content input { padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; width: 100%; box-sizing: border-box; transition: 0.2s; }
+        .modal-content input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 8px rgba(88,166,255,0.2); }
+        .modal-content button.btn-save { background: var(--blue); color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.1em; margin-top: 10px; transition: 0.2s; text-transform: uppercase; }
+        .modal-content button.btn-save:hover { background: #79c0ff; box-shadow: 0 0 12px rgba(88,166,255,0.4); }
+        .close-btn { position: absolute; right: 20px; top: 20px; color: var(--text-dim); cursor: pointer; font-size: 1.5em; line-height: 1; }
+        .close-btn:hover { color: white; }
+        
+        details > summary { list-style: none; outline: none; }
+        details > summary::-webkit-details-marker { display: none; }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+        @keyframes scanPulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+        @keyframes pulseAttack { 0% { box-shadow: 0 0 5px rgba(255, 71, 87, 0.4); } 50% { box-shadow: 0 0 15px rgba(255, 71, 87, 0.8); } 100% { box-shadow: 0 0 5px rgba(255, 71, 87, 0.4); } }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeOut { to { opacity: 0; transform: translateX(100%); } }
+        @media (max-width: 1000px) { .chart-row { grid-template-columns: 1fr; } .container { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">Owen's Faction Tools</div>
+            <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
+        </div>
+        <div class="nav-items">
+            <a href="/" class="nav-link active">📡 <span class="nav-text">Live Warboard</span></a>
+            <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
+            <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
+            <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
+            <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
+            <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
+            <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>
+            <a href="/admin.html" class="nav-link">👑 <span class="nav-text">Admin Panel</span></a>
+            <a onclick="openSettings()" class="nav-link" style="margin-top: 15px; border-top: 1px solid #2f3542; border-radius: 0; padding-top: 15px; cursor: pointer;">
+                ⚙️ <span class="nav-text">Settings</span>
+            </a>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <div id="refresh-bar-container"><div id="refresh-bar"></div></div>
+        
+        <h1>Live Warboard</h1>
+
+        <details style="background: rgba(88, 166, 255, 0.05); border: 1px solid var(--blue); border-radius: 8px; margin-bottom: 25px; cursor: pointer; transition: 0.2s;">
+            <summary style="padding: 12px 20px; font-weight: bold; color: var(--blue); display: flex; align-items: center; justify-content: space-between;">
+                <span>ℹ️ Advanced Features & Credits</span>
+                <span style="font-size: 0.85em; color: var(--text-dim); border: 1px solid #2f3542; padding: 2px 8px; border-radius: 4px; background: #0b0d13;">Click to Expand ▼</span>
+            </summary>
+            <div style="padding: 0 20px 20px 20px; color: var(--text-main); font-size: 0.9em; line-height: 1.6; border-top: 1px solid rgba(88, 166, 255, 0.2); margin-top: 5px; padding-top: 15px;">
+                Certain tactical features on this dashboard—such as exact battle stat estimates, player activity timelines, and live flight landing ETAs—require an active <a href="https://ffscouter.com" target="_blank" style="color: var(--blue); text-decoration: underline;">FF Scouter Premium</a> subscription and API Key linked in your Settings. All times are displayed in Official Torn City Time (TCT/UTC) alongside your local timezone.
+                <br><br>
+                <span style="color: var(--gold); font-weight: bold;">Owen's Faction Tools engineered and created by <a href="https://www.torn.com/profiles.php?XID=3776908" target="_blank" style="color: var(--gold); text-decoration: underline;">Owen777 [3776908]</a>.</span>
+            </div>
+        </details>
+
+        <div class="container">
+            <div class="chart-row">
+                <div class="dash-card" style="display: flex; flex-direction: column;">
+                    <h2>📊 Friendly Hit Performance</h2>
+                    <div style="position: relative; flex-grow: 1; min-height: 250px; width: 100%;">
+                        <canvas id="warChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="dash-card" style="display: flex; flex-direction: column;">
+                    <h2>
+                        💤 Enemy Activity Heatmap (72H Avg)
+                        <span id="heatmap-status" style="font-size: 0.75em; color: var(--text-dim); background: #0b0d13; padding: 4px 8px; border-radius: 4px; border: 1px solid #2f3542; text-transform: none;">Waiting for Premium API...</span>
+                    </h2>
+                    <div style="position: relative; flex-grow: 1; min-height: 250px; width: 100%;">
+                        <canvas id="activityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="watchlist-box">
+                <h3>🚨 Priority Watchlist</h3>
+                <div id="watchlist-items" class="watchlist-items">
+                    <div style="color:var(--text-dim); padding: 10px; font-style: italic;">Waiting for API Data...</div>
+                </div>
+            </div>
+
+            <div class="faction-col">
+                <h2>Friendly Team <span id="friendly-count" style="background: #2f3542; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.6em;">0</span></h2>
+                <div id="friendly-list"><div style="color:var(--text-dim); padding:20px; text-align: center; font-style: italic;">Connecting to Torn API...</div></div>
+            </div>
+            
+            <div class="faction-col">
+                <h2>Enemy Targets <span id="enemy-count" style="background: #2f3542; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.6em;">0</span></h2>
+                <div class="filter-group">
+                    <button id="flt-all" class="btn-filter active" onclick="setEnemyFilter('All')">ALL</button>
+                    <button id="flt-online" class="btn-filter" onclick="setEnemyFilter('Online')">ONLINE</button>
+                    <button id="flt-okay" class="btn-filter" onclick="setEnemyFilter('Okay')">OKAY (OUT Hosp)</button>
+                    <button id="flt-flying" class="btn-filter" onclick="setEnemyFilter('Flying')">FLYING</button>
+                </div>
+                <div id="enemy-list"><div style="color:var(--text-dim); padding:20px; text-align: center; font-style: italic;">Connecting to Torn API...</div></div>
+            </div>
+        </div>
+
+        <div id="settings-modal" class="modal-overlay">
+            <div class="modal-content" style="position: relative; max-height: 90vh; overflow-y: auto;">
+                <div class="close-btn" onclick="closeSettings()">&times;</div>
+                <h2>Board Settings</h2>
+                <div>
+                    <label>API Key (Hidden for Privacy)</label>
+                    <input type="password" id="api-key" placeholder="Paste your Torn API Key here">
+                </div>
+                <div>
+                    <label>FF Scouter Premium Key</label>
+                    <input type="password" id="ff-key" placeholder="Optional: Unlocks advanced stats & radar">
+                </div>
+                <div>
+                    <label>Torn Stats API Key</label>
+                    <input type="password" id="ts-key" placeholder="Optional: Unlocks Global Spy Database">
+                </div>
+                <div>
+                    <label>Enemy Faction ID</label>
+                    <input type="text" id="enemy-id" placeholder="Optional (Auto-detects usually)">
+                </div>
+                <div>
+                    <label>Your Name (For Targets)</label>
+                    <input type="text" id="my-name" placeholder="E.g. Agent">
+                </div>
+                <div>
+                    <label>Global Discord Webhook (Auto-Pastes Everywhere)</label>
+                    <input type="text" id="discord-webhook" placeholder="Paste Discord Webhook URL here">
+                    <button type="button" onclick="testDiscordWebhook()" class="btn-action" style="background: var(--blue); color: #000; margin-top: 8px; width: 100%; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer;">🧪 Test Discord Connection</button>
+                    <div id="discord-test-status" style="font-size: 0.8em; margin-top: 5px; font-weight: bold; text-align: center;"></div>
+                </div>
+                <div>
+                    <label>API Calls Per Minute (Max 60)</label>
+                    <input type="number" id="api-cpm" min="1" max="60" value="12" placeholder="e.g. 12 calls/min = 1 refresh every 5s">
+                </div>
+                <button class="btn-save" onclick="saveSettings()">Save & Connect</button>
+            </div>
+        </div>
+
+        <div id="inspect-modal" class="modal-overlay">
+            <div class="modal-content" style="width: 700px; max-width: 95vw; max-height: 90vh; overflow-y: auto;">
+                <div class="close-btn" onclick="closeInspect()">&times;</div>
+                <h2 id="inspect-title" style="color: var(--blue); border-bottom: 1px solid #2f3542; padding-bottom: 10px; margin-top: 0; text-transform: uppercase;">🔍 Target Intel</h2>
+                <div id="inspect-body">
+                    <div style="color:var(--text-dim); text-align:center; padding: 20px; font-style:italic;">Establishing secure uplink to Torn database...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="toast-container"></div>
+    </main>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    let currentUrl = window.location.pathname;
+    if (currentUrl === "/index.html" || currentUrl === "") currentUrl = "/"; 
+    let links = document.querySelectorAll(".nav-items .nav-link");
+    links.forEach(link => {
+        link.classList.remove("active"); 
+        if (link.getAttribute("href") === currentUrl) link.classList.add("active"); 
+    });
+
+    const sidebar = document.getElementById('app-sidebar');
+    if (localStorage.getItem('sidebar_collapsed') === 'true') {
+        sidebar.classList.add('collapsed');
+    }
+});
+
+function toggleSidebar() {
+    const sidebar = document.getElementById('app-sidebar');
+    sidebar.classList.toggle('collapsed');
+    localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+}
+
+let audioCtx;
+function initAudio() {
+    if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+    if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+}
+
+function playBeep(time, freq, duration) {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    osc.type = 'triangle'; 
+    osc.frequency.setValueAtTime(freq, time);
+    gainNode.gain.setValueAtTime(0, time);
+    gainNode.gain.linearRampToValueAtTime(0.15, time + 0.05); 
+    gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration); 
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    osc.start(time);
+    osc.stop(time + duration);
+}
+
+function playAlertSound() {
+    try {
+        if (!audioCtx) initAudio();
+        const now = audioCtx.currentTime;
+        playBeep(now, 523.25, 0.4);       
+        playBeep(now + 0.15, 659.25, 0.6); 
+    } catch(e) { console.error("Audio block", e); }
+}
+
+document.body.addEventListener('click', () => { initAudio(); }, { once: true });
+
+let myKey = localStorage.getItem("warboard_apikey") || "";
+let ffKey = localStorage.getItem("warboard_ffkey") || "";
+let tsKey = localStorage.getItem("warboard_tskey") || "";
+let enemyFacId = localStorage.getItem("warboard_enemyId") || "";
+let myName = localStorage.getItem("warboard_myname") || "Agent";
+let discordWebhook = localStorage.getItem("warboard_discord") || "";
+let cpm = parseInt(localStorage.getItem("warboard_cpm")) || 12; 
+
+let knownEnemies = {}; 
+let fetchTimer = null;
+let progressTimer = null;
+let currentEnemyData = []; 
+let activeFilter = 'All';
+let warChartInstance = null; 
+let activityChartInstance = null;
+
+document.getElementById("api-key").value = myKey;
+document.getElementById("ff-key").value = ffKey;
+document.getElementById("ts-key").value = tsKey;
+document.getElementById("enemy-id").value = enemyFacId;
+document.getElementById("my-name").value = myName;
+document.getElementById("discord-webhook").value = discordWebhook;
+document.getElementById("api-cpm").value = cpm;
+
+function openSettings() { 
+    document.getElementById("discord-webhook").value = localStorage.getItem("warboard_discord") || "";
+    document.getElementById("settings-modal").style.display = "flex"; 
+}
+function closeSettings() { document.getElementById("settings-modal").style.display = "none"; }
+
+async function testDiscordWebhook() {
+    const hookUrl = document.getElementById("discord-webhook").value.trim();
+    const statusBox = document.getElementById("discord-test-status");
+    if (!hookUrl) {
+        statusBox.style.color = "var(--red)"; statusBox.innerText = "❌ Put a webhook URL in first!"; return;
+    }
+    statusBox.style.color = "var(--gold)"; statusBox.innerText = "⚡ Transmitting test transmission data bundle...";
+    try {
+        const res = await fetch('/api/discord-ping', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ webhookUrl: hookUrl, message: "📡 **CONNECTION DIAGNOSTIC CONFIRMED:** Owen's Faction Tools automated surveillance center has established a clear, 24/7 uplink to this secure monitoring grid!" })
+        });
+        const data = await res.json();
+        if (data.success) { statusBox.style.color = "var(--green)"; statusBox.innerText = "✅ Test Successful! Check your Discord channel."; } 
+        else { throw new Error(); }
+    } catch(e) { statusBox.style.color = "var(--red)"; statusBox.innerText = "❌ Transmission Rejected. Verify webhook token limits."; }
+}
+
+if (myKey) { startPolling(); } else { openSettings(); }
+
+function saveSettings() {
+    initAudio(); 
+    myKey = document.getElementById("api-key").value.trim();
+    ffKey = document.getElementById("ff-key").value.trim();
+    tsKey = document.getElementById("ts-key").value.trim();
+    enemyFacId = document.getElementById("enemy-id").value.trim();
+    myName = document.getElementById("my-name").value.trim() || "Agent";
+    discordWebhook = document.getElementById("discord-webhook").value.trim();
+    
+    let parsedCpm = parseInt(document.getElementById("api-cpm").value);
+    cpm = (parsedCpm && parsedCpm > 0 && parsedCpm <= 60) ? parsedCpm : 12;
+    
+    localStorage.setItem("warboard_apikey", myKey);
+    localStorage.setItem("warboard_ffkey", ffKey);
+    localStorage.setItem("warboard_tskey", tsKey);
+    localStorage.setItem("warboard_enemyId", enemyFacId);
+    localStorage.setItem("warboard_myname", myName);
+    localStorage.setItem("warboard_discord", discordWebhook);
+    localStorage.setItem("warboard_cpm", cpm);
+
+    if (discordWebhook) {
+        fetch('/api/save-discord-config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ webhookUrl: discordWebhook }) }).catch(()=>{});
+        fetch('/api/save-market-config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ webhookUrl: discordWebhook }) }).catch(()=>{});
+    }
+    
+    knownEnemies = {}; 
+    closeSettings();
+    startPolling();
+}
+
+function startRefreshProgressBar(refreshMs) {
+    if (progressTimer) clearInterval(progressTimer);
+    const bar = document.getElementById("refresh-bar");
+    let startTime = Date.now();
+    
+    bar.style.transition = "none";
+    bar.style.width = "0%";
+    
+    setTimeout(() => { bar.style.transition = "width 0.1s linear"; }, 50);
+
+    progressTimer = setInterval(() => {
+        let elapsed = Date.now() - startTime;
+        let percent = (elapsed / refreshMs) * 100;
+        if (percent > 100) percent = 100;
+        bar.style.width = `${percent}%`;
+    }, 100);
+}
+
+function startPolling() {
+    if (fetchTimer) clearInterval(fetchTimer);
+    let refreshMs = Math.floor(60000 / cpm);
+    
+    fetchWarboard();
+    startRefreshProgressBar(refreshMs);
+    
+    fetchTimer = setInterval(() => {
+        fetchWarboard();
+        startRefreshProgressBar(refreshMs);
+    }, refreshMs);
+}
+
+// FULL TCT FIX: Converts all unix timestamps strictly to UTC/TCT, and appends Local Time
+function formatTime(unixTimestamp) {
+    if (!unixTimestamp) return "";
+    let d = new Date(unixTimestamp * 1000);
+    
+    let tctHr = d.getUTCHours().toString().padStart(2, '0');
+    let tctMin = d.getUTCMinutes().toString().padStart(2, '0');
+    
+    let localTime = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    
+    return `${tctHr}:${tctMin} TCT (${localTime})`;
+}
+
+// FULL TCT FIX: Converts heatmap 24H array strictly to TCT labels
+function formatHourTCT(h) {
+    let hr = h % 24;
+    if (hr < 0) hr += 24;
+    return `${hr.toString().padStart(2, '0')}:00 TCT`;
+}
+
+function checkIsFlying(p) {
+    return p.state === "Traveling" || (p.statusDescription && p.statusDescription.includes("Traveling")) || (p.statusDescription && p.statusDescription.includes("Abroad"));
+}
+
+function getSortPriority(state) {
+    if (state === "Okay") return 1;
+    if (state === "Hospital") return 2;
+    if (state === "Jail") return 3;
+    if (state === "Traveling" || state?.includes("In ")) return 4;
+    return 5;
+}
+
+function sortPlayersList(players, isEnemy) {
+    return players.sort((a, b) => {
+        const prioA = getSortPriority(a.state);
+        const prioB = getSortPriority(b.state);
+        if (prioA !== prioB) return prioA - prioB;
+        if (a.state === "Hospital" && b.state === "Hospital") {
+            if (a.until !== b.until) return (a.until || Number.MAX_SAFE_INTEGER) - (b.until || Number.MAX_SAFE_INTEGER);
+        }
+        if (isEnemy && a.state === "Okay" && b.state === "Okay") {
+            if (a.intelScore !== b.intelScore) return (b.intelScore || 0) - (a.intelScore || 0);
+        }
+        return a.name.localeCompare(b.name);
+    });
+}
+
+function setEnemyFilter(filterType) {
+    activeFilter = filterType;
+    document.getElementById('flt-all').className = "btn-filter";
+    document.getElementById('flt-online').className = "btn-filter";
+    document.getElementById('flt-okay').className = "btn-filter";
+    document.getElementById('flt-flying').className = "btn-filter";
+    document.getElementById('flt-' + filterType.toLowerCase()).className = "btn-filter active";
+    
+    if (currentEnemyData.length > 0) {
+        renderEnemyList(currentEnemyData, ffKey !== "");
+    }
+}
+
+async function fetchWarboard() {
+    if (!myKey) return;
+    try {
+        const res = await fetch(`/api/warboard?apiKey=${myKey}&enemyFaction=${enemyFacId}&ffKey=${ffKey}`);
+        const data = await res.json();
+        
+        if (data.error) {
+            document.getElementById("friendly-list").innerHTML = `<div style="color:var(--red); padding:20px; font-weight: bold; text-align: center;">${data.error}</div>`;
+            return;
+        }
+
+        document.getElementById("friendly-count").innerText = data.friendly.length;
+        document.getElementById("enemy-count").innerText = data.enemy.length;
+
+        processNotifications(data.enemy);
+        renderWatchlist(data.enemy);
+
+        const sortedFriendly = sortPlayersList(data.friendly, false);
+        renderFriendlyList(sortedFriendly, data.premiumActive);
+        
+        renderChart(data.friendly);
+        renderHeatmap(data.enemy, data.premiumActive);
+
+        currentEnemyData = sortPlayersList(data.enemy, true);
+        renderEnemyList(currentEnemyData, data.premiumActive);
+
+    } catch (e) { console.error("Failed to load warboard", e); }
+}
+
+function renderChart(friendlyPlayers) {
+    let allHitters = [...friendlyPlayers].sort((a, b) => {
+        if (b.attacks !== a.attacks) return b.attacks - a.attacks;
+        if (b.defends !== a.defends) return b.defends - a.defends;
+        return a.name.localeCompare(b.name);
+    });
+
+    const labels = allHitters.map(p => p.name);
+    const attackData = allHitters.map(p => p.attacks);
+    const defendData = allHitters.map(p => p.defends); 
+
+    const ctx = document.getElementById('warChart').getContext('2d');
+
+    if (warChartInstance) {
+        warChartInstance.data.labels = labels;
+        warChartInstance.data.datasets[0].data = attackData;
+        warChartInstance.data.datasets[1].data = defendData;
+        warChartInstance.update();
+    } else {
+        warChartInstance = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: 'Hits Made', data: attackData, backgroundColor: '#ff4757', borderRadius: 4 },
+                    { label: 'Hits Received (Defends)', data: defendData, backgroundColor: '#ffa502', borderRadius: 4 }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, grid: { color: 'rgba(47, 53, 66, 0.2)' }, ticks: { color: '#a1aab5', stepSize: 1 } },
+                    x: { grid: { display: false }, ticks: { color: '#a1aab5', font: { weight: 'bold', size: 10 } } }
+                },
+                plugins: {
+                    legend: { labels: { color: '#f1f2f6', font: { weight: 'bold' } } },
+                    tooltip: { backgroundColor: '#11141d', titleColor: '#ffa502', bodyColor: '#f1f2f6', borderColor: '#2f3542', borderWidth: 1 }
+                }
+            }
+        });
+    }
+}
+
+function renderHeatmap(enemyPlayers, premiumActive) {
+    const statusLabel = document.getElementById("heatmap-status");
+    
+    if (!premiumActive) {
+        statusLabel.innerText = "🔒 Requires FF Scouter Premium";
+        statusLabel.style.color = "var(--red)";
+        statusLabel.style.border = "1px solid var(--red)";
+        return;
+    }
+
+    let global24h = new Array(24).fill(0);
+    let timelinesLoaded = 0;
+
+    enemyPlayers.forEach(p => {
+        if (p.timeline && Array.isArray(p.timeline) && p.timeline.length > 0) {
+            timelinesLoaded++;
+            // Align the timeline to UTC (TCT)
+            let currentUTCHour = new Date().getUTCHours();
+            for (let i = 0; i < p.timeline.length; i++) {
+                let offset = (p.timeline.length - 1) - i;
+                let h = (currentUTCHour - offset) % 24;
+                if (h < 0) h += 24;
+                global24h[h] += p.timeline[i];
+            }
+        }
+    });
+
+    if (timelinesLoaded === 0) {
+        statusLabel.innerText = "📡 Scanning Deep Intelligence...";
+        statusLabel.style.color = "var(--gold)";
+        statusLabel.style.border = "1px solid var(--gold)";
+        return;
+    }
+
+    let minSum = Infinity;
+    let sleepStart = 0;
+    for (let i = 0; i < 24; i++) {
+        let sum = 0;
+        for (let j = 0; j < 6; j++) { sum += global24h[(i + j) % 24]; }
+        if (sum < minSum) { minSum = sum; sleepStart = i; }
+    }
+    let sleepEnd = (sleepStart + 6) % 24;
+
+    let sleepText = `${sleepStart.toString().padStart(2,'0')}:00 - ${sleepEnd.toString().padStart(2,'0')}:00 TCT`;
+    
+    statusLabel.innerHTML = `✅ Tracking ${timelinesLoaded} Targets | <span style="color:var(--red);">Expected Sleep: ${sleepText}</span>`;
+    statusLabel.style.color = "var(--green)";
+    statusLabel.style.border = "1px solid #2f3542";
+
+    const labels = [];
+    for (let i = 0; i < 24; i++) {
+        labels.push(formatHourTCT(i));
+    }
+
+    const ctx = document.getElementById('activityChart').getContext('2d');
+
+    if (activityChartInstance) {
+        activityChartInstance.data.labels = labels;
+        activityChartInstance.data.datasets[0].data = global24h;
+        activityChartInstance.update();
+    } else {
+        activityChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Avg Faction Activity',
+                    data: global24h,
+                    borderColor: '#58a6ff',
+                    backgroundColor: 'rgba(88, 166, 255, 0.2)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 3,
+                    pointBackgroundColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, grid: { color: 'rgba(47, 53, 66, 0.2)' }, ticks: { display: false } },
+                    x: { grid: { display: false }, ticks: { color: '#a1aab5', font: { weight: 'bold', size: 10 }, maxRotation: 45, minRotation: 45 } }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { backgroundColor: '#11141d', titleColor: '#58a6ff', bodyColor: '#f1f2f6', borderColor: '#2f3542', borderWidth: 1 }
+                }
+            }
+        });
+    }
+}
+
+function updateListDOM(containerId, players, prefix, generateCardHTML, emptyMessage) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    if (players.length === 0) {
+        container.innerHTML = `<div style='color:var(--text-dim); padding:10px; font-style: italic; text-align: center;'>${emptyMessage}</div>`;
+        return;
+    }
+
+    if (container.innerHTML.includes("Waiting") || container.innerHTML.includes("Connecting") || container.innerHTML.includes(emptyMessage)) {
+        container.innerHTML = "";
+    }
+
+    const validIds = new Set(players.map(p => `${prefix}-${p.id}`));
+
+    Array.from(container.children).forEach(child => {
+        if (child.id && child.id.startsWith(prefix + '-') && !validIds.has(child.id)) {
+            container.removeChild(child);
+        }
+    });
+
+    players.forEach((p, index) => {
+        const cardData = generateCardHTML(p);
+        const cardId = `${prefix}-${p.id}`;
+        let card = document.getElementById(cardId);
+
+        if (!card) {
+            card = document.createElement('div');
+            card.id = cardId;
+            card.className = cardData.fullClass;
+            card.innerHTML = cardData.innerContent;
+            
+            if (index < container.children.length) {
+                container.insertBefore(card, container.children[index]);
+            } else {
+                container.appendChild(card);
+            }
+        } else {
+            if (card.className !== cardData.fullClass) card.className = cardData.fullClass;
+            if (card.innerHTML !== cardData.innerContent) card.innerHTML = cardData.innerContent;
+            
+            if (container.children[index] !== card) {
+                container.insertBefore(card, container.children[index]);
+            }
+        }
+    });
+}
+
+function formatEstStats(estValue, premiumActive) {
+    if (estValue === "🔒 Requires FF Scouter") {
+        return `<div class="stat-val lock-badge">🔒 FF Scouter</div>`;
+    }
+    if (estValue === "Scanning...") {
+        return `<div class="stat-val" style="color: var(--text-dim); font-size: 0.8em; animation: scanPulse 1.5s infinite;">${estValue}</div>`;
+    }
+    if (estValue === null || estValue === undefined || estValue === "") {
+        return `<div class="stat-val" style="color: var(--text-dim); font-size: 0.85em; font-style: italic;">Stats Hidden</div>`;
+    }
+    
+    let num = Number(estValue);
+    if (!isNaN(num)) {
+        let formatted = num.toLocaleString();
+        if (num > 100000000) return `<div class="stat-val" style="color: var(--blue); text-shadow: 0 0 5px rgba(88,166,255,0.4);">${formatted}</div>`;
+        return `<div class="stat-val">${formatted}</div>`;
+    }
+
+    return `<div class="stat-val" style="color: var(--text-dim); font-size: 0.85em;">Unknown</div>`;
+}
+
+function renderWatchlist(enemies) {
+    const now = Math.floor(Date.now() / 1000);
+
+    const watchTargets = enemies.filter(e => {
+        if (e.onlineStatus === "Online") return true;
+        if (checkIsFlying(e) && e.landingTime && (e.landingTime - now) <= 1800 && (e.landingTime - now) > 0) return true;
+        return false;
+    });
+
+    watchTargets.sort((a, b) => {
+        let aFlying = checkIsFlying(a);
+        let bFlying = checkIsFlying(b);
+        if (aFlying && bFlying) return (a.landingTime || Number.MAX_SAFE_INTEGER) - (b.landingTime || Number.MAX_SAFE_INTEGER);
+        if (aFlying) return -1;
+        if (bFlying) return 1;
+        if (a.intelScore !== b.intelScore) return (b.intelScore || 0) - (a.intelScore || 0);
+        return a.name.localeCompare(b.name);
+    });
+
+    updateListDOM("watchlist-items", watchTargets, "w-card", (p) => {
+        let isFlying = checkIsFlying(p);
+        let cardClass = isFlying ? "flying" : "online";
+        let highlightText = "";
+        let highlightColor = "";
+
+        if (isFlying) {
+            let minsLeft = p.landingTime ? Math.max(0, Math.ceil((p.landingTime - now) / 60)) : 0;
+            highlightText = `✈️ ETA: ${formatTime(p.landingTime)} (in ${minsLeft}m)`;
+            highlightColor = "var(--blue)";
+        } else {
+            highlightText = `🟢 Online Now`;
+            highlightColor = "var(--green)";
+        }
+
+        let displayStatus = p.statusDescription || p.state;
+        if (p.state === "Hospital" && p.until) {
+            let hospMins = Math.max(0, Math.ceil((p.until - now) / 60));
+            displayStatus = `In hospital for ${hospMins} mins`;
+        }
+
+        let innerContent = `
+            <div class="watch-name"><a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a></div>
+            <div class="watch-highlight" style="color: ${highlightColor};">${highlightText}</div>
+            <div style="font-size:0.8em; color:var(--text-dim);">Status: ${displayStatus}</div>
+        `;
+        return { fullClass: `watch-card ${cardClass}`, innerContent };
+    }, "No priority targets are currently online or landing within 30 mins.");
+}
+
+function renderFriendlyList(players, premiumActive) {
+    const now = Math.floor(Date.now() / 1000);
+    
+    updateListDOM("friendly-list", players, "f-card", (p) => {
+        let stateClass = "okay";
+        if (p.state === "Hospital" || p.state === "Jail") stateClass = "hospital";
+        
+        let isFlying = checkIsFlying(p);
+        if (isFlying) stateClass = "traveling";
+
+        let displayStatus = p.statusDescription || p.state;
+        if (p.state === "Hospital" && p.until) {
+            let hospMins = Math.max(0, Math.ceil((p.until - now) / 60));
+            displayStatus = `In hospital for ${hospMins} mins`;
+        }
+
+        let etaString = "";
+        if (isFlying) {
+            if (p.needsFfScouterForFlights) {
+                etaString = `<span class="flight-info lock-badge" style="border-style: solid; margin-left: 5px;">🔒 Premium Radar Req.</span>`;
+            } else if (p.landingTime) {
+                let minsLeft = Math.max(0, Math.ceil((p.landingTime - now) / 60));
+                etaString = `<span class="flight-info" style="margin-left: 5px;">✈️ ETA: ${formatTime(p.landingTime)} (${minsLeft}m)</span>`;
+            } else {
+                etaString = `<span class="flight-info" style="background: rgba(161, 170, 181, 0.1); color: var(--text-dim); margin-left: 5px;">✈️ Scanning Radar...</span>`;
+            }
+        }
+
+        let estHtml = formatEstStats(p.estStats, premiumActive);
+
+        let innerContent = `
+            <div class="card-header">
+                <div>
+                    <div style="display: flex; align-items: center;">
+                        <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
+                        <a href="https://www.torn.com/bounties.php?p=add&XID=${p.id}&amount=150000&reason=WAR" target="_blank" class="badge-bounty" title="Place Bounty to keep in Hospital">🎯 Bounty</a>
+                    </div>
+                    <div class="action-arrow">
+                        <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
+                    </div>
+                    <div class="status">Status: <span>${displayStatus}</span></div>
+                </div>
+                <div class="stat-box">
+                    <div style="color: var(--text-dim);">Est. Stats</div>
+                    ${estHtml}
+                </div>
+            </div>
+            <div class="card-actions">
+                <button class="btn-action" onclick="promptUpdateStats('${p.id}')">Update Stats</button>
+            </div>
+        `;
+        return { fullClass: `member-card ${stateClass}`, innerContent };
+    }, "No friendly members found.");
+}
+
+function renderEnemyList(players, premiumActive) {
+    const now = Math.floor(Date.now() / 1000);
+    
+    const filteredPlayers = players.filter(p => {
+        if (activeFilter === 'All') return true;
+        if (activeFilter === 'Online' && p.onlineStatus === 'Online') return true;
+        if (activeFilter === 'Okay' && p.state === 'Okay') return true;
+        if (activeFilter === 'Flying' && checkIsFlying(p)) return true;
+        return false;
+    });
+
+    updateListDOM("enemy-list", filteredPlayers, "e-card", (p) => {
+        let stateClass = "okay";
+        if (p.state === "Hospital" || p.state === "Jail") stateClass = "hospital";
+        
+        let isFlying = checkIsFlying(p);
+        if (isFlying) stateClass = "traveling";
+
+        let displayStatus = p.statusDescription || p.state;
+        if (p.state === "Hospital" && p.until) {
+            let hospMins = Math.max(0, Math.ceil((p.until - now) / 60));
+            displayStatus = `In hospital for ${hospMins} mins`;
+        }
+
+        let etaString = "";
+        if (isFlying) {
+            if (p.needsFfScouterForFlights) {
+                etaString = `<span class="flight-info lock-badge" style="border-style: solid; margin-left: 5px;">🔒 Premium Radar Req.</span>`;
+            } else if (p.landingTime) {
+                let minsLeft = Math.max(0, Math.ceil((p.landingTime - now) / 60));
+                etaString = `<span class="flight-info" style="margin-left: 5px;">✈️ ETA: ${formatTime(p.landingTime)} (${minsLeft}m)</span>`;
+            } else {
+                etaString = `<span class="flight-info" style="background: rgba(161, 170, 181, 0.1); color: var(--text-dim); margin-left: 5px;">✈️ Scanning Radar...</span>`;
+            }
+        }
+        
+        let claimDisplay = p.claimedBy ? `<div class="active-claim">🎯 Claimed by ${p.claimedBy}</div>` : "";
+        let claimButton = "";
+        if (!p.claimedBy) { 
+            claimButton = `<button class="btn-action btn-claim" onclick="claimTarget('${p.id}')">Claim Target</button>`; 
+        } else if (p.claimedBy === myName) { 
+            claimButton = `
+                <a href="https://www.torn.com/page.php?sid=attack&user2ID=${p.id}" target="_blank" class="btn-attack">⚔️ ATTACK</a>
+                <button class="btn-action" onclick="unclaimTarget('${p.id}')">Release Target</button>
+            `; 
+        }
+
+        let sosDisplay = p.needsBackup ? `<div class="active-sos">🚨 Backup requested by ${p.needsBackup}</div>` : "";
+        let sosButton = "";
+        if (!p.needsBackup) { sosButton = `<button class="btn-action btn-sos" onclick="requestBackup('${p.id}', '${p.name}')">Call SOS</button>`; } 
+        else if (p.needsBackup === myName) { sosButton = `<button class="btn-action btn-sos" onclick="cancelBackup('${p.id}')">Cancel SOS</button>`; }
+
+        let estHtml = formatEstStats(p.estStats, premiumActive);
+
+        let innerContent = `
+            <div class="card-header">
+                <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
+                        <button class="btn-inspect" onclick="inspectTarget('${p.id}', '${p.name.replace(/'/g, "\\'")}')">🔍 Inspect</button>
+                    </div>
+                    <div class="action-arrow">
+                        <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
+                    </div>
+                    <div class="status">Status: <span>${displayStatus}</span></div>
+                </div>
+                <div class="stat-box">
+                    <div class="intel-badge">Intel: ${p.intelScore || 0}</div>
+                    <div style="color: var(--text-dim); margin-top: 5px;">Est. Stats</div>
+                    ${estHtml}
+                </div>
+            </div>
+            <div>
+                ${claimDisplay}
+                ${sosDisplay}
+            </div>
+            <div class="card-actions">
+                <button class="btn-action" onclick="promptUpdateStats('${p.id}')">Override Stats</button>
+                ${claimButton}
+                ${sosButton}
+            </div>
+        `;
+        return { fullClass: `member-card ${stateClass}`, innerContent };
+    }, `No targets match the "${activeFilter}" filter.`);
+}
+
+function processNotifications(enemies) {
+    if (Object.keys(knownEnemies).length === 0) {
+        enemies.forEach(e => { knownEnemies[e.id] = { state: e.state, online: e.onlineStatus }; });
+        return;
+    }
+    let playedSoundThisTick = false;
+
+    enemies.forEach(newEnemy => {
+        let oldEnemy = knownEnemies[newEnemy.id];
+        if (oldEnemy) {
+            if (oldEnemy.state !== "Okay" && newEnemy.state === "Okay") {
+                if (checkIsFlying(oldEnemy)) {
+                    showToast(`🛬 ${newEnemy.name} has landed and is Okay!`, "okay");
+                    playedSoundThisTick = true;
+                } else {
+                    showToast(`🏥 ${newEnemy.name} left the hospital and is Okay!`, "okay");
+                    playedSoundThisTick = true;
+                }
+            }
+            if (oldEnemy.online !== "Online" && newEnemy.onlineStatus === "Online") {
+                showToast(`🟢 ${newEnemy.name} just came ONLINE!`, "online");
+                playedSoundThisTick = true;
+            }
+        }
+        knownEnemies[newEnemy.id] = { state: newEnemy.state, online: newEnemy.onlineStatus };
+    });
+    if (playedSoundThisTick) playAlertSound();
+}
+
+function showToast(msg, typeClass="red") {
+    const container = document.getElementById("toast-container");
+    const toast = document.createElement("div");
+    toast.className = `toast ${typeClass}`;
+    toast.innerHTML = msg;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.animation = "fadeOut 0.4s ease-out forwards";
+        setTimeout(() => toast.remove(), 400);
+    }, 7000);
+}
+
+async function claimTarget(id) { await fetch('/api/claim', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); fetchWarboard(); }
+async function unclaimTarget(id) { await fetch('/api/unclaim', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); fetchWarboard(); }
+
+async function requestBackup(id, targetName) { 
+    await fetch('/api/backup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); 
+    sendDiscordPing(`🚨 **SOS CALL FROM ${myName.toUpperCase()}:** Requesting immediate fire support on target **${targetName}** [${id}]!`);
+    fetchWarboard(); 
+}
+
+async function cancelBackup(id) { await fetch('/api/unbackup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id }) }); fetchWarboard(); }
+async function promptUpdateStats(id) {
+    const statInput = prompt("Enter exact/estimated stats for this player (Numbers only):");
+    if (statInput && !isNaN(statInput)) { await fetch('/api/update-stats', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, stats: parseInt(statInput) }) }); fetchWarboard(); }
+}
+
+async function inspectTarget(id, name) {
+    document.getElementById('inspect-title').innerText = `🔍 Target Intel: ${name} [${id}]`;
+    document.getElementById('inspect-body').innerHTML = `<div style="color:var(--text-dim); text-align:center; padding: 20px; font-style:italic;">Establishing secure uplink to Torn database...</div>`;
+    document.getElementById('inspect-modal').style.display = "flex";
+
+    try {
+        const res = await fetch(`/api/inspect?apiKey=${myKey}&targetId=${id}&tsKey=${tsKey}`);
+        const json = await res.json();
+        
+        if (json.error) {
+            document.getElementById('inspect-body').innerHTML = `<div style="color:var(--red); font-weight:bold; text-align:center;">${json.error}</div>`;
+            return;
+        }
+
+        const p = json.data;
+        const stats = p.personalstats || {};
+        
+        const weapons = {
+            "Rifle": stats.riflehits || 0, "SMG": stats.smghits || 0, "Machine Gun": stats.machinegunhits || 0,
+            "Shotgun": stats.shotgunhits || 0, "Pistol": stats.pistolhits || 0, "Piercing": stats.piercinghits || 0,
+            "Slashing": stats.slashinghits || 0, "Clubbing": stats.clubbinghits || 0, "H2H": stats.h2hhits || 0
+        };
+        let topWep = Object.keys(weapons).reduce((a, b) => weapons[a] > weapons[b] ? a : b);
+        if (weapons[topWep] === 0) topWep = "Unknown";
+
+        const lifeMax = p.life ? p.life.maximum.toLocaleString() : "Unknown";
+        const xanax = stats.xantaken ? stats.xantaken.toLocaleString() : 0;
+        const seUsed = stats.statenhancersused ? stats.statenhancersused.toLocaleString() : 0;
+        
+        let loadoutHtml = "";
+        if (json.loadoutClues && json.loadoutClues.length > 0) {
+            json.loadoutClues.forEach(item => {
+                loadoutHtml += `<div style="display: flex; justify-content: space-between; margin-bottom: 3px;"><span>${item.name}</span> <span style="color:var(--green);">$${(item.price/1000000).toFixed(1)}m</span></div>`;
+            });
+        } else {
+            loadoutHtml = `<div style="color:var(--text-dim); font-style:italic;">No high-value weapons found in display or bazaar.</div>`;
+        }
+
+        let statsHtml = "";
+        let hasExactStats = false;
+
+        if (json.manualSpy) {
+            hasExactStats = true;
+            statsHtml = `
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Total:</span> <span style="color:var(--gold); font-weight:bold; font-size:1.1em;">${json.manualSpy.total.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Strength:</span> <span>${json.manualSpy.strength.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Defense:</span> <span>${json.manualSpy.defense.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Speed:</span> <span>${json.manualSpy.speed.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Dexterity:</span> <span>${json.manualSpy.dexterity.toLocaleString()}</span></div>
+                <div style="text-align:right; font-size:0.8em; color:var(--green); margin-top:5px;">Source: Local Faction DB</div>
+            `;
+        } else if (json.tsData) {
+            hasExactStats = true;
+            statsHtml = `
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Total:</span> <span style="color:var(--gold); font-weight:bold; font-size:1.1em;">${json.tsData.total.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Strength:</span> <span>${json.tsData.strength.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Defense:</span> <span>${json.tsData.defense.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Speed:</span> <span>${json.tsData.speed.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Dexterity:</span> <span>${json.tsData.dexterity.toLocaleString()}</span></div>
+                <div style="text-align:right; font-size:0.8em; color:var(--blue); margin-top:5px;">Source: Torn Stats API</div>
+            `;
+        } else {
+            statsHtml = `<div style="color:var(--text-dim); font-style:italic; text-align:center; padding: 10px;">No exact spy report found for this target.</div>`;
+        }
+
+        document.getElementById('inspect-body').innerHTML = `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                <div style="background: #0b0d13; padding: 15px; border-radius: 8px; border: 1px solid #2f3542;">
+                    <h4 style="margin:0 0 10px 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 5px;">Player Profile</h4>
+                    <div style="font-size: 0.9em; line-height: 1.6;">
+                        <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Level:</span> <span>${p.level || '?'}</span></div>
+                        <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Rank:</span> <span>${p.rank || '?'}</span></div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 5px;"><span style="color:var(--text-dim); font-weight:bold;">Max Life:</span> <span style="color:var(--green); font-weight:bold;">${lifeMax}</span></div>
+                    </div>
+                </div>
+                <div style="background: #0b0d13; padding: 15px; border-radius: 8px; border: 1px solid #2f3542;">
+                    <h4 style="margin:0 0 10px 0; color: var(--red); border-bottom: 1px solid #2f3542; padding-bottom: 5px;">Combat Profiler</h4>
+                    <div style="font-size: 0.9em; line-height: 1.6;">
+                        <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Fav Weapon:</span> <span style="color:var(--blue); font-weight:bold;">${topWep}</span></div>
+                        <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Xanax Taken:</span> <span>${xanax}</span></div>
+                        <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">SEs Used:</span> <span>${seUsed}</span></div>
+                    </div>
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div style="background: rgba(88, 166, 255, 0.05); padding: 15px; border-radius: 8px; border: 1px solid var(--blue);">
+                    <h4 style="margin:0 0 10px 0; color: var(--blue); border-bottom: 1px solid rgba(88,166,255,0.3); padding-bottom: 5px;">Exact Stats</h4>
+                    <div style="font-size: 0.9em; line-height: 1.6;" id="exact-stats-container">
+                        ${statsHtml}
+                    </div>
+                </div>
+                <div style="background: #0b0d13; padding: 15px; border-radius: 8px; border: 1px solid #2f3542;">
+                    <h4 style="margin:0 0 10px 0; color: var(--text-main); border-bottom: 1px solid #2f3542; padding-bottom: 5px;">Loadout Clues (Market/Display)</h4>
+                    <div style="font-size: 0.85em; line-height: 1.6;">
+                        ${loadoutHtml}
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 15px; background: #0b0d13; padding: 15px; border-radius: 8px; border: 1px solid #2f3542;">
+                <h4 style="margin:0 0 10px 0; color: var(--green); text-transform: uppercase; font-size: 0.9em;">📥 Add Manual Spy Report</h4>
+                <textarea id="manual-spy-text" placeholder="Paste the raw text of the spy report here..." style="width: 100%; height: 60px; background: var(--bg); color: var(--text-main); border: 1px solid #30363d; border-radius: 4px; padding: 8px; box-sizing: border-box; font-family: monospace; font-size: 0.85em; resize: none;"></textarea>
+                <button onclick="saveManualSpy('${id}')" style="margin-top: 8px; width: 100%; background: var(--green); color: #000; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer; text-transform: uppercase;">Save to Database</button>
+                <div id="spy-save-status" style="font-size: 0.85em; text-align: center; margin-top: 5px; font-weight: bold;"></div>
+            </div>
+        `;
+    } catch(e) {
+        document.getElementById('inspect-body').innerHTML = `<div style="color:var(--red); font-weight:bold; text-align:center;">Failed to connect to API.</div>`;
+    }
+}
+
+async function saveManualSpy(targetId) {
+    const text = document.getElementById('manual-spy-text').value;
+    const status = document.getElementById('spy-save-status');
+    if (!text.trim()) { status.style.color = "var(--red)"; status.innerText = "Please paste a spy report first."; return; }
+    
+    status.style.color = "var(--gold)";
+    status.innerText = "Parsing report...";
+    
+    try {
+        const res = await fetch('/api/save-spy', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiKey: myKey, targetId: targetId, spyText: text })
+        });
+        const data = await res.json();
+        
+        if (data.error) {
+            status.style.color = "var(--red)";
+            status.innerText = "❌ " + data.error;
+        } else {
+            status.style.color = "var(--green)";
+            status.innerText = "✅ Exact stats saved to database! Close and reopen Inspect to view.";
+            fetchWarboard(); 
+        }
+    } catch(e) {
+        status.style.color = "var(--red)";
+        status.innerText = "❌ Server communication failed.";
+    }
+}
+
+function closeInspect() {
+    document.getElementById('inspect-modal').style.display = "none";
+}
+</script>
+</body>
+</html>
