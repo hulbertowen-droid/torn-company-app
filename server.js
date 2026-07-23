@@ -60,11 +60,14 @@ let backgroundEnemyTrackingState = {};
 let discordConfig = { webhookUrl: "", targetOnline: true, targetLanded: true, targetOutHosp: true, chainUnder90: true, chainMilestone: true, friendlyAttacked: true, apiKey: "", factionId: "", medOutSniper: true };
 let marketConfig = { webhookUrl: "", autoDefense: false, sniperTargets: [] };
 let marketMemory = { defense: {}, sniper: {} };
+let ocConfig = { webhookUrl: "", roleId: "" };
+let ocMemory = {};
 let vipConfig = { factions: [], players: [] }; 
 
 try { if (fs.existsSync('subscriptions.json')) subscriptions = JSON.parse(fs.readFileSync('subscriptions.json')); } catch (e) {}
 try { if (fs.existsSync('discord_config.json')) discordConfig = { ...discordConfig, ...JSON.parse(fs.readFileSync('discord_config.json')) }; } catch(e) {}
 try { if (fs.existsSync('market_config.json')) marketConfig = { ...marketConfig, ...JSON.parse(fs.readFileSync('market_config.json')) }; } catch(e) {}
+try { if (fs.existsSync('oc_config.json')) ocConfig = { ...ocConfig, ...JSON.parse(fs.readFileSync('oc_config.json')) }; } catch(e) {}
 try { if (fs.existsSync('vip_config.json')) vipConfig = { ...vipConfig, ...JSON.parse(fs.readFileSync('vip_config.json')) }; } catch(e) {}
 try { if (fs.existsSync('spy_db.json')) spyDatabase = JSON.parse(fs.readFileSync('spy_db.json')); } catch(e) {}
 try { if (fs.existsSync('user_tracking.json')) userTracking = JSON.parse(fs.readFileSync('user_tracking.json')); } catch(e) {}
@@ -73,6 +76,7 @@ try { if (fs.existsSync('api_pool.json')) apiPoolConfig = JSON.parse(fs.readFile
 function saveSubs() { fs.writeFileSync('subscriptions.json', JSON.stringify(subscriptions)); }
 function saveDiscordConfig() { fs.writeFileSync('discord_config.json', JSON.stringify(discordConfig)); }
 function saveMarketConfig() { fs.writeFileSync('market_config.json', JSON.stringify(marketConfig)); }
+function saveOcConfig() { fs.writeFileSync('oc_config.json', JSON.stringify(ocConfig)); }
 function saveVipConfig() { fs.writeFileSync('vip_config.json', JSON.stringify(vipConfig)); }
 function saveSpyDb() { fs.writeFileSync('spy_db.json', JSON.stringify(spyDatabase)); }
 function saveTracking() { fs.writeFileSync('user_tracking.json', JSON.stringify(userTracking)); }
@@ -1078,6 +1082,62 @@ app.get('/api/warboard', async (req, res) => {
         };
         res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId, premiumActive: isPremium });
     } catch (err) { res.status(403).json({ error: err.message }); }
+});
+app.post('/api/save-oc-config', (req, res) => {
+    const { webhookUrl, roleId } = req.body;
+    if (webhookUrl !== undefined) ocConfig.webhookUrl = webhookUrl;
+    if (roleId !== undefined) ocConfig.roleId = roleId;
+    saveOcConfig();
+    res.json({ success: true });
+});
+
+app.get('/api/ocs', async (req, res) => {
+    try {
+        const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
+        await verifySubscription(userKey);
+
+        let activeKey = getNextApiKey() || userKey;
+        const r = await fetch(`https://api.torn.com/faction/?selections=crimes&key=${activeKey}`);
+        const data = await r.json();
+
+        if (data.error) {
+            return res.status(400).json({ error: data.error.error || "Failed to fetch OCs" });
+        }
+
+        // Notify Discord if someone needs an item
+        if (data.crimes && ocConfig.webhookUrl) {
+            for (let [id, crime] of Object.entries(data.crimes)) {
+                if (crime.participants) {
+                    crime.participants.forEach(p => {
+                        let pData = Array.isArray(p) ? p[1] : p;
+                        let pId = Array.isArray(p) ? p[0] : "Unknown";
+                        let state = pData?.state || pData?.details || "";
+                        let lowerState = state.toLowerCase();
+                        
+                        if (lowerState.includes("item") || lowerState.includes("need")) {
+                            const trackingId = id + "_" + pId;
+                            if (!ocMemory[trackingId] || (Date.now() - ocMemory[trackingId]) > 3600000 * 12) { 
+                                // Send notification once every 12 hours max per item issue
+                                ocMemory[trackingId] = Date.now();
+                                
+                                let mention = ocConfig.roleId ? `<@&${ocConfig.roleId}>` : "";
+                                sendDiscordEmbed(ocConfig.webhookUrl, {
+                                    pingText: mention,
+                                    title: `🚨 OC Item Needed!`,
+                                    description: `**Crime:** ${crime.crime_name}\n**Player:** [${pId}](https://www.torn.com/profiles.php?XID=${pId})\n**Status:** ${state}`,
+                                    color: 16733695 // Red-Orange
+                                });
+                            }
+                        }
+                    });
+                }
+            }
+        }
+
+        res.json({ success: true, crimes: data.crimes });
+    } catch (err) {
+        res.status(403).json({ error: err.message });
+    }
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
