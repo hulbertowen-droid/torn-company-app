@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord Alerts | Owen's Faction Tools</title>
+    <style>
+        :root { 
+            --bg: #090a0f; --card: #11141d; --item: #1b202e; 
+            --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
+            --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
+        }
+        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; height: 100vh; overflow: hidden; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #57606f; }
+
+        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; z-index: 100; box-shadow: 2px 0 15px rgba(0,0,0,0.5); }
+        .sidebar.collapsed { width: 75px; }
+        .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2f3542; }
+        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 0.9em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
+        .sidebar.collapsed .sidebar-logo { opacity: 0; width: 0; display: none; }
+        .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
+        .toggle-btn:hover { color: white; background: #2f3542; }
+        .nav-items { display: flex; flex-direction: column; gap: 8px; padding: 20px 10px; }
+        .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
+        .nav-link:hover { background: #2f3542; color: white; }
+        .nav-link.active { background: rgba(255, 71, 87, 0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
+        .nav-text { transition: opacity 0.2s; }
+        .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
+        
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
+        h1 { text-align: center; color: var(--blue); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
+        
+        .container { max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 25px; }
+        .dash-card { background: var(--card); padding: 25px; border-radius: 16px; border: 1px solid #2f3542; box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
+        .dash-card h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; font-size: 1.1em; letter-spacing: 1px;}
+        
+        .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+        .form-group label { font-size: 0.85em; color: var(--text-dim); font-weight: bold; text-transform: uppercase; }
+        .form-group input[type="text"] { padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; width: 100%; box-sizing: border-box; }
+        
+        .trigger-list { display: flex; flex-direction: column; gap: 12px; }
+        .trigger-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 15px; background: #0b0d13; border: 1px solid #2f3542; border-radius: 8px; }
+        .trigger-info { display: flex; flex-direction: column; gap: 2px; }
+        .trigger-title { font-weight: bold; color: var(--text-main); }
+        .trigger-desc { font-size: 0.85em; color: var(--text-dim); }
+        
+        .switch { position: relative; display: inline-block; width: 46px; height: 22px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #2f3542; transition: .3s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--green); }
+        input:checked + .slider:before { transform: translateX(24px); }
+
+        .btn-save { background: var(--blue); color: #000; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em; text-transform: uppercase; transition: 0.2s; width: 100%; margin-top: 20px;}
+        .btn-save:hover { background: #79c0ff; box-shadow: 0 0 10px rgba(88,166,255,0.4); }
+        #status-msg { text-align: center; font-weight: bold; font-size: 0.95em; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">Owen's Faction Tools</div>
+            <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
+        </div>
+     <div class="nav-items">
+            <a href="/" class="nav-link">📡 <span class="nav-text">Live Warboard</span></a>
+            <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
+            <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
+            <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
+            <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
+            <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
+            <a href="/discord.html" class="nav-link active">📢 <span class="nav-text">Discord Alerts</span></a>
+            <a href="/admin.html" class="nav-link">👑 <span class="nav-text">Admin Panel</span></a>
+            <a onclick="openSettings()" class="nav-link" style="margin-top: 15px; border-top: 1px solid #2f3542; border-radius: 0; padding-top: 15px; cursor: pointer;">
+                ⚙️ <span class="nav-text">Settings</span>
+            </a>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <h1>24/7 Background Alert Deck</h1>
+        
+        <div class="container">
+            <div class="dash-card">
+                <h2>Uplink Configuration</h2>
+                <div class="form-group">
+                    <label>Faction Discord Webhook URL</label>
+                    <input type="text" id="webhook-url" placeholder="https://discord.com/api/webhooks/...">
+                </div>
+            </div>
+
+            <div class="dash-card">
+                <h2>Background Notification Options</h2>
+                <div class="trigger-list">
+                    <div class="trigger-item">
+                        <div class="trigger-info">
+                            <span class="trigger-title" style="color: var(--gold);">🚨 Smart Med-Out Sniper</span>
+                            <span class="trigger-desc">Detects if a target uses meds/revive to escape early, finds an online friendly with matching stats, and assigns them the hit instantly.</span>
+                        </div>
+                        <label class="switch"><input type="checkbox" id="medOutSniper"><span class="slider"></span></label>
+                    </div>
+                    <div class="trigger-item">
+                        <div class="trigger-info">
+                            <span class="trigger-title">🟢 Target Online Tracker</span>
+                            <span class="trigger-desc">Pings when an active enemy target signs on.</span>
+                        </div>
+                        <label class="switch"><input type="checkbox" id="targetOnline"><span class="slider"></span></label>
+                    </div>
+                    <div class="trigger-item">
+                        <div class="trigger-info">
+                            <span class="trigger-title">✈️ Target Landing Tracker</span>
+                            <span class="trigger-desc">Pings when an enemy target drops out of flight back into Torn.</span>
+                        </div>
+                        <label class="switch"><input type="checkbox" id="targetLanded"><span class="slider"></span></label>
+                    </div>
+                    <div class="trigger-item">
+                        <div class="trigger-info">
+                            <span class="trigger-title">🏥 Natural Hospital Release</span>
+                            <span class="trigger-desc">Pings when an enemy naturally exits the hospital due to their timer expiring.</span>
+                        </div>
+                        <label class="switch"><input type="checkbox" id="targetOutHosp"><span class="slider"></span></label>
+                    </div>
+                    <div class="trigger-item">
+                        <div class="trigger-info">
+                            <span class="trigger-title">🚨 Chain Time Critical Warning</span>
+                            <span class="trigger-desc">Pings instantly if your active chain countdown falls below 90s.</span>
+                        </div>
+                        <label class="switch"><input type="checkbox" id="chainUnder90"><span class="slider"></span></label>
+                    </div>
+                    <div class="trigger-item">
+                        <div class="trigger-info">
+                            <span class="trigger-title">🏆 Chain Milestone Celebrations</span>
+                            <span class="trigger-desc">Logs bonus milestones (10, 25, 50, 100+) automatically.</span>
+                        </div>
+                        <label class="switch"><input type="checkbox" id="chainMilestone"><span class="slider"></span></label>
+                    </div>
+                    <div class="trigger-item">
+                        <div class="trigger-info">
+                            <span class="trigger-title">🛡️ Wall Defense Scanner</span>
+                            <span class="trigger-desc">Broadcasts immediate alerts when any alliance member takes incoming fire.</span>
+                        </div>
+                        <label class="switch"><input type="checkbox" id="friendlyAttacked"><span class="slider"></span></label>
+                    </div>
+                </div>
+                <button class="btn-save" onclick="saveDiscordConfig()">Commit Settings to Server</button>
+                <div id="status-msg"></div>
+            </div>
+        </div>
+    </main>
+
+<script>
+document.addEventListener("DOMContentLoaded", async function() {
+    const sidebar = document.getElementById('app-sidebar');
+    if (localStorage.getItem('sidebar_collapsed') === 'true') {
+        sidebar.classList.add('collapsed');
+    }
+
+    try {
+        const res = await fetch('/api/get-discord-config');
+        const config = await res.json();
+        
+        document.getElementById('webhook-url').value = config.webhookUrl || "";
+        document.getElementById('targetOnline').checked = config.targetOnline !== false;
+        document.getElementById('targetLanded').checked = config.targetLanded !== false;
+        document.getElementById('targetOutHosp').checked = config.targetOutHosp !== false;
+        document.getElementById('chainUnder90').checked = config.chainUnder90 !== false;
+        document.getElementById('chainMilestone').checked = config.chainMilestone !== false;
+        document.getElementById('friendlyAttacked').checked = config.friendlyAttacked !== false;
+        document.getElementById('medOutSniper').checked = config.medOutSniper !== false; // NEW
+    } catch(e) { console.error("Could not fetch server alert configuration."); }
+});
+
+function toggleSidebar() {
+    const sidebar = document.getElementById('app-sidebar');
+    sidebar.classList.toggle('collapsed');
+    localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+}
+
+function openSettings() {
+    window.location.href = "/";
+}
+
+async function saveDiscordConfig() {
+    const status = document.getElementById('status-msg');
+    status.style.color = "var(--blue)";
+    status.innerText = "Transmitting options & authenticating faction ID...";
+
+    const myKey = localStorage.getItem("warboard_apikey") || "";
+
+    if (!myKey) {
+        status.style.color = "var(--red)";
+        status.innerText = "❌ Missing API Key. Go to Live Warboard settings first!";
+        return;
+    }
+
+    const payload = {
+        apiKey: myKey,
+        webhookUrl: document.getElementById('webhook-url').value.trim(),
+        targetOnline: document.getElementById('targetOnline').checked,
+        targetLanded: document.getElementById('targetLanded').checked,
+        targetOutHosp: document.getElementById('targetOutHosp').checked,
+        chainUnder90: document.getElementById('chainUnder90').checked,
+        chainMilestone: document.getElementById('chainMilestone').checked,
+        friendlyAttacked: document.getElementById('friendlyAttacked').checked,
+        medOutSniper: document.getElementById('medOutSniper').checked // NEW
+    };
+
+    try {
+        const res = await fetch('/api/save-discord-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if(data.success) {
+            status.style.color = "var(--green)";
+            status.innerText = "✓ Backend updated. Scraper engines synced 24/7.";
+        } else { throw new Error(); }
+    } catch(e) {
+        status.style.color = "var(--red)";
+        status.innerText = "❌ Sync failed. Check server terminal logs.";
+    }
+}
+</script>
+</body>
+</html>
+
