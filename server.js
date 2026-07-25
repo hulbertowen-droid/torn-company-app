@@ -797,6 +797,23 @@ app.get('/api/dashboard-data', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
+app.get('/api/company', async (req, res) => {
+    const { apiKey } = req.query;
+    try {
+        await verifySubscription(apiKey);
+        const resp = await fetch(`https://api.torn.com/company/?selections=profile,detailed,employees,stock&key=${apiKey}`);
+        const data = await resp.json();
+        
+        if (data.error) {
+            return res.status(400).json({ error: "Torn API Error: " + data.error.error });
+        }
+        
+        res.json({ success: true, company: data });
+    } catch (err) { 
+        res.status(403).json({ error: err.message }); 
+    }
+});
+
 app.get('/api/scan-recruits', async (req, res) => {
     const { apiKey, reportId, ffKey } = req.query;
     try {

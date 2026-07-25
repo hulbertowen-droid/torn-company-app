@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Company Manager | Owen's Tools</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0b0c10; --card: #1f2833; --item: #283340;
+            --teal: #66fcf1; --teal-dim: #45a29e; --text-main: #c5c6c7;
+            --white: #ffffff; --green: #2ecc71; --red: #e74c3c;
+            --gold: #f1c40f;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Inter', sans-serif; height: 100vh; overflow: hidden; }
+        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: var(--bg); } ::-webkit-scrollbar-thumb { background: var(--item); border-radius: 4px; }
+
+        /* Sidebar - Different style for Company Mode */
+        .sidebar { width: 260px; background: var(--card); border-right: 2px solid var(--teal-dim); display: flex; flex-direction: column; transition: width 0.3s; flex-shrink: 0; z-index: 100; }
+        .sidebar.collapsed { width: 75px; }
+        .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(102, 252, 241, 0.2); }
+        .sidebar-logo { color: var(--teal); font-weight: 900; font-size: 0.9em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; }
+        .sidebar.collapsed .sidebar-logo { display: none; }
+        .toggle-btn { background: none; border: none; color: var(--teal-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
+        .toggle-btn:hover { color: var(--teal); background: rgba(102, 252, 241, 0.1); }
+        .nav-items { display: flex; flex-direction: column; gap: 6px; padding: 16px 10px; overflow-y: auto; flex: 1; }
+        .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-main); text-decoration: none; font-weight: 600; padding: 12px 14px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.88em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
+        .nav-link:hover { background: rgba(102, 252, 241, 0.1); color: var(--teal); }
+        .nav-link.active { background: rgba(102, 252, 241, 0.15); border-left: 4px solid var(--teal); color: var(--teal); border-radius: 0 8px 8px 0; }
+        .nav-text { transition: opacity 0.2s; }
+        .sidebar.collapsed .nav-text { display: none; }
+
+        .btn-switch { margin-top: auto; background: rgba(255, 71, 87, 0.1); border: 1px solid #ff4757; color: #ff4757; border-radius: 8px; }
+        .btn-switch:hover { background: #ff4757; color: #000; }
+
+        /* Main Content */
+        .main-content { flex: 1; overflow-y: auto; padding: 30px 40px; height: 100vh; }
+        
+        .header-row { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 25px; border-bottom: 1px solid rgba(102, 252, 241, 0.2); padding-bottom: 15px; }
+        .company-title { color: var(--white); font-size: 2.2em; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; }
+        .company-stars { color: var(--gold); font-size: 1.5em; letter-spacing: 2px; margin-top: 5px; }
+        .last-updated { font-size: 0.8em; color: var(--teal-dim); }
+
+        /* KPI Cards */
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 30px; }
+        .kpi-card { background: var(--card); border: 1px solid rgba(102, 252, 241, 0.2); border-radius: 10px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .kpi-label { font-size: 0.75em; color: var(--teal-dim); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; margin-bottom: 8px; }
+        .kpi-val { font-size: 1.8em; font-weight: 900; color: var(--white); }
+        .kpi-sub { font-size: 0.8em; color: var(--text-main); margin-top: 5px; }
+        .text-green { color: var(--green) !important; }
+        .text-red { color: var(--red) !important; }
+
+        .section-title { font-size: 1.2em; color: var(--teal); font-weight: 900; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+        .section-title::after { content: ''; flex: 1; height: 1px; background: rgba(102, 252, 241, 0.2); }
+
+        /* Tables */
+        .table-wrap { background: var(--card); border: 1px solid rgba(102, 252, 241, 0.2); border-radius: 10px; overflow: hidden; margin-bottom: 35px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        table { width: 100%; border-collapse: collapse; }
+        thead { background: rgba(0,0,0,0.3); }
+        th { padding: 12px 16px; text-align: left; font-size: 0.75em; text-transform: uppercase; letter-spacing: 1px; color: var(--teal-dim); font-weight: 700; border-bottom: 1px solid rgba(102, 252, 241, 0.2); cursor: pointer; white-space: nowrap; }
+        th:hover { color: var(--teal); }
+        td { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.02); font-size: 0.9em; vertical-align: middle; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: rgba(255,255,255,0.03); }
+        
+        .emp-name { font-weight: 700; color: var(--white); text-decoration: none; }
+        .emp-name:hover { color: var(--teal); }
+
+        .eff-badge { display: inline-block; padding: 4px 10px; border-radius: 5px; font-weight: 900; font-size: 0.85em; }
+        .eff-high { background: rgba(46, 204, 113, 0.2); color: var(--green); border: 1px solid var(--green); }
+        .eff-med { background: rgba(241, 196, 15, 0.2); color: var(--gold); border: 1px solid var(--gold); }
+        .eff-low { background: rgba(231, 76, 60, 0.2); color: var(--red); border: 1px solid var(--red); }
+
+        .stat-val { font-family: monospace; font-size: 1.05em; color: var(--text-main); }
+        
+        /* Empty / Alerts */
+        .alert-box { padding: 15px 20px; border-radius: 8px; margin-bottom: 20px; font-weight: 600; font-size: 0.9em; background: rgba(231, 76, 60, 0.1); border: 1px solid var(--red); color: var(--red); display: none; }
+        
+        #loading-state { text-align: center; padding: 100px; color: var(--teal-dim); font-size: 1.2em; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; }
+        
+        /* Settings Modal */
+        #settings-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10000; justify-content:center; align-items:center; backdrop-filter:blur(4px); }
+        .modal-card { background: var(--card); padding: 30px; border-radius: 12px; border: 1px solid var(--teal); width: 400px; position: relative; }
+        .modal-card h3 { color: var(--teal); margin: 0 0 15px; text-transform: uppercase; letter-spacing: 1px; }
+        .modal-card input { width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--teal-dim); border-radius: 6px; color: white; margin-bottom: 15px; }
+        .modal-card button { width: 100%; background: var(--teal); color: #000; border: none; padding: 12px; border-radius: 6px; font-weight: 900; cursor: pointer; text-transform: uppercase; }
+        .modal-card button:hover { background: #52c9c1; }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">🏢 Company Tools</div>
+            <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
+        </div>
+        <div class="nav-items">
+            <a href="#overview" class="nav-link active">📊 <span class="nav-text">Overview</span></a>
+            <a href="#employees" class="nav-link">👥 <span class="nav-text">Employees</span></a>
+            <a href="#inventory" class="nav-link">📦 <span class="nav-text">Inventory & Stock</span></a>
+            
+            <a href="/" class="nav-link btn-switch">🏠 <span class="nav-text">Switch to Faction Tools</span></a>
+            <a onclick="openSettings()" class="nav-link" style="border-top:1px solid rgba(102, 252, 241, 0.2); border-radius:0; padding-top:14px; cursor:pointer;">
+                ⚙️ <span class="nav-text">Settings</span>
+            </a>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <div id="alert-box" class="alert-box"></div>
+
+        <div id="loading-state">Initializing Company Uplink...</div>
+
+        <div id="dashboard-content" style="display: none;">
+            <div class="header-row" id="overview">
+                <div>
+                    <div class="company-title" id="c-name">Loading...</div>
+                    <div class="company-stars" id="c-stars"></div>
+                </div>
+                <div class="last-updated" id="last-updated"></div>
+            </div>
+
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-label">Daily Profit</div>
+                    <div class="kpi-val" id="c-profit">$0</div>
+                    <div class="kpi-sub">Total Income: <span id="c-income">$0</span></div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Company Bank</div>
+                    <div class="kpi-val text-green" id="c-bank">$0</div>
+                    <div class="kpi-sub">Liquid funds available</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Employees</div>
+                    <div class="kpi-val" id="c-emps">0 / 0</div>
+                    <div class="kpi-sub" id="c-hires">0 pending applications</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">Company Type</div>
+                    <div class="kpi-val" style="font-size: 1.4em;" id="c-type">Unknown</div>
+                    <div class="kpi-sub">Upgrades: Size <span id="c-up-size">0</span> | Adv <span id="c-up-adv">0</span></div>
+                </div>
+            </div>
+
+            <div class="section-title" id="employees">Employee Roster</div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th onclick="sortEmps('name')">Name</th>
+                            <th onclick="sortEmps('position')">Position</th>
+                            <th onclick="sortEmps('effectiveness')">Effectiveness</th>
+                            <th onclick="sortEmps('manual_labor')">MAN</th>
+                            <th onclick="sortEmps('intelligence')">INT</th>
+                            <th onclick="sortEmps('endurance')">END</th>
+                            <th onclick="sortEmps('wage')">Wage</th>
+                            <th onclick="sortEmps('days_in_company')">Days</th>
+                            <th onclick="sortEmps('last_action')">Last Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="emp-list"></tbody>
+                </table>
+            </div>
+
+            <div class="section-title" id="inventory">Inventory & Stock</div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Item Name</th>
+                            <th>Cost</th>
+                            <th>Price Set</th>
+                            <th>In Stock</th>
+                            <th>Sold Daily</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stock-list"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal">
+        <div class="modal-card">
+            <button onclick="closeSettings()" style="position:absolute; right:15px; top:15px; background:none; border:none; color:var(--teal-dim); font-size:1.5em; cursor:pointer;">✕</button>
+            <h3>Settings</h3>
+            <label style="font-size:0.8em; color:var(--teal-dim); font-weight:700; display:block; margin-bottom:8px;">TORN API KEY</label>
+            <input type="password" id="api-key-input" placeholder="Enter API Key">
+            <button onclick="saveKey()">Save & Connect</button>
+        </div>
+    </div>
+
+<script>
+let myKey = localStorage.getItem("warboard_apikey") || "";
+let companyData = null;
+let empSortCol = 'effectiveness';
+let empSortDir = -1; // -1 descending
+
+document.getElementById("api-key-input").value = myKey;
+if (localStorage.getItem('company_sidebar_collapsed') === 'true') document.getElementById('app-sidebar').classList.add('collapsed');
+
+function toggleSidebar() {
+    const s = document.getElementById('app-sidebar');
+    s.classList.toggle('collapsed');
+    localStorage.setItem('company_sidebar_collapsed', s.classList.contains('collapsed'));
+}
+
+function openSettings() { document.getElementById('settings-modal').style.display = 'flex'; }
+function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
+function saveKey() {
+    myKey = document.getElementById('api-key-input').value.trim();
+    localStorage.setItem('warboard_apikey', myKey);
+    closeSettings();
+    loadCompanyData();
+}
+
+function formatMoney(num) {
+    return '$' + parseInt(num).toLocaleString();
+}
+
+function formatTimeAgo(ts) {
+    if (!ts) return "Unknown";
+    const diff = Math.floor(Date.now() / 1000) - ts;
+    if (diff < 60) return "Just now";
+    if (diff < 3600) return Math.floor(diff / 60) + "m ago";
+    if (diff < 86400) return Math.floor(diff / 3600) + "h ago";
+    return Math.floor(diff / 86400) + "d ago";
+}
+
+async function loadCompanyData() {
+    if (!myKey) {
+        document.getElementById('loading-state').style.display = 'none';
+        document.getElementById('alert-box').style.display = 'block';
+        document.getElementById('alert-box').textContent = 'Please configure your API key in Settings. You must be a company director or have API access.';
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/company?apiKey=${encodeURIComponent(myKey)}`);
+        const data = await res.json();
+
+        if (data.error) {
+            throw new Error(data.error);
+        }
+
+        companyData = data.company;
+        renderDashboard();
+
+    } catch (err) {
+        document.getElementById('loading-state').style.display = 'none';
+        document.getElementById('dashboard-content').style.display = 'none';
+        document.getElementById('alert-box').style.display = 'block';
+        document.getElementById('alert-box').textContent = err.message;
+    }
+}
+
+function renderDashboard() {
+    document.getElementById('loading-state').style.display = 'none';
+    document.getElementById('alert-box').style.display = 'none';
+    document.getElementById('dashboard-content').style.display = 'block';
+
+    const p = companyData.company;
+
+    // Header
+    document.getElementById('c-name').textContent = p.name;
+    document.getElementById('c-stars').textContent = '★'.repeat(p.rating) + '☆'.repeat(5 - p.rating);
+    document.getElementById('last-updated').textContent = 'Live Data: ' + new Date().toLocaleTimeString();
+
+    // KPIs
+    const profitEl = document.getElementById('c-profit');
+    profitEl.textContent = formatMoney(p.daily_profit);
+    profitEl.className = 'kpi-val ' + (p.daily_profit > 0 ? 'text-green' : (p.daily_profit < 0 ? 'text-red' : ''));
+    
+    document.getElementById('c-income').textContent = formatMoney(p.daily_income);
+    document.getElementById('c-bank').textContent = formatMoney(p.company_bank);
+    document.getElementById('c-emps').textContent = `${p.employees_hired} / ${p.employees_capacity}`;
+    
+    const appsCount = companyData.applications ? Object.keys(companyData.applications).length : 0;
+    document.getElementById('c-hires').textContent = `${appsCount} pending applications`;
+    
+    document.getElementById('c-type').textContent = companyData.company_type ? Object.values(companyData.company_type)[0] || 'Company' : 'Company';
+    
+    if (companyData.upgrades) {
+        document.getElementById('c-up-size').textContent = companyData.upgrades.company_size;
+        document.getElementById('c-up-adv').textContent = companyData.upgrades.staff_room || companyData.upgrades.advertising || 0;
+    }
+
+    renderEmployees();
+    renderStock();
+}
+
+function sortEmps(col) {
+    if (empSortCol === col) empSortDir *= -1;
+    else { empSortCol = col; empSortDir = -1; }
+    renderEmployees();
+}
+
+function renderEmployees() {
+    if (!companyData.employees) return;
+    
+    const tbody = document.getElementById('emp-list');
+    let emps = Object.entries(companyData.employees).map(([id, e]) => ({ id, ...e }));
+
+    emps.sort((a, b) => {
+        let va = a[empSortCol]; let vb = b[empSortCol];
+        if (empSortCol === 'effectiveness') { va = va?.total || 0; vb = vb?.total || 0; }
+        if (empSortCol === 'last_action') { va = a.last_action?.timestamp || 0; vb = b.last_action?.timestamp || 0; }
+        
+        if (va < vb) return empSortDir;
+        if (va > vb) return -empSortDir;
+        return 0;
+    });
+
+    tbody.innerHTML = emps.map(e => {
+        const eff = e.effectiveness?.total || 0;
+        let effClass = 'eff-high';
+        if (eff < 70) effClass = 'eff-low';
+        else if (eff < 90) effClass = 'eff-med';
+
+        const lastActionStr = e.last_action?.relative || formatTimeAgo(e.last_action?.timestamp);
+        
+        return `<tr>
+            <td><a href="https://www.torn.com/profiles.php?XID=${e.id}" target="_blank" class="emp-name">${e.name}</a></td>
+            <td style="color:var(--teal-dim)">${e.position}</td>
+            <td><span class="eff-badge ${effClass}">${eff}</span></td>
+            <td class="stat-val">${(e.manual_labor||0).toLocaleString()}</td>
+            <td class="stat-val">${(e.intelligence||0).toLocaleString()}</td>
+            <td class="stat-val">${(e.endurance||0).toLocaleString()}</td>
+            <td style="color:var(--green); font-weight:bold;">${formatMoney(e.wage)}</td>
+            <td style="color:var(--teal-dim)">${e.days_in_company}</td>
+            <td style="color:var(--text-main)">${lastActionStr}</td>
+        </tr>`;
+    }).join('');
+}
+
+function renderStock() {
+    const tbody = document.getElementById('stock-list');
+    if (!companyData.stock || Object.keys(companyData.stock).length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 20px; color:var(--teal-dim);">No stock/inventory data available for this company type.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = Object.entries(companyData.stock).map(([name, s]) => {
+        const stockLvl = s.in_stock || 0;
+        const stockColor = stockLvl === 0 ? 'var(--red)' : (stockLvl < (s.sold_amount * 2) ? 'var(--gold)' : 'var(--white)');
+        return `<tr>
+            <td style="font-weight:bold; color:var(--white);">${name}</td>
+            <td style="color:var(--text-main);">${formatMoney(s.cost)}</td>
+            <td style="color:var(--green);">${formatMoney(s.price)}</td>
+            <td style="font-weight:bold; color:${stockColor};">${stockLvl.toLocaleString()}</td>
+            <td style="color:var(--teal-dim);">${(s.sold_amount||0).toLocaleString()}</td>
+        </tr>`;
+    }).join('');
+}
+
+// Nav active state handled by simple intersection observer or click
+document.querySelectorAll('.nav-items a[href^="#"]').forEach(link => {
+    link.addEventListener('click', (e) => {
+        document.querySelectorAll('.nav-items a').forEach(a => a.classList.remove('active'));
+        e.currentTarget.classList.add('active');
+    });
+});
+
+loadCompanyData();
+</script>
+</body>
+</html>
