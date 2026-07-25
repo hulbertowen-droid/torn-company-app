@@ -50,7 +50,7 @@
 
         /* War List */
         .section-header { font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 12px; }
-        .war-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-bottom: 25px; }
+        .war-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; margin-bottom: 20px; max-height: 240px; overflow-y: auto; padding-right: 4px; }
         .war-card { background: var(--card); border: 1px solid #2f3542; border-radius: 10px; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 10px; transition: border-color 0.2s; }
         .war-card:hover { border-color: #4a5568; }
         .war-card .wname { font-weight: 700; font-size: 1em; margin-bottom: 3px; }
@@ -145,6 +145,7 @@
             <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
             <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
             <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
+            <a href="/members.html" class="nav-link">👥 <span class="nav-text">Members</span></a>
             <a href="/recruitment.html" class="nav-link active">🎯 <span class="nav-text">Recruitment</span></a>
             <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
             <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>

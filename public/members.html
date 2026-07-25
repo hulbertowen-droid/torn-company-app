@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <title>Members | Owen's Faction Tools</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #090a0f; --card: #11141d; --item: #1b202e;
+            --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
+            --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
+            --purple: #a29bfe; --teal: #00cec9;
+        }
+        * { box-sizing: border-box; }
+        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Inter', 'Segoe UI', sans-serif; margin: 0; height: 100vh; overflow: hidden; }
+        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #0b0d13; } ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
+
+        /* Sidebar */
+        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s; flex-shrink: 0; z-index: 100; }
+        .sidebar.collapsed { width: 75px; }
+        .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2f3542; }
+        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 0.9em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
+        .sidebar.collapsed .sidebar-logo { opacity: 0; width: 0; display: none; }
+        .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
+        .toggle-btn:hover { color: white; background: #2f3542; }
+        .nav-items { display: flex; flex-direction: column; gap: 8px; padding: 20px 10px; overflow-y: auto; }
+        .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: 600; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
+        .nav-link:hover { background: #2f3542; color: white; }
+        .nav-link.active { background: rgba(255, 71, 87, 0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
+        .nav-text { transition: opacity 0.2s; }
+        .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
+
+        /* Main */
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px 35px; height: 100vh; }
+
+        h1 { text-align: center; color: var(--teal); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 6px; font-size: 1.8em; }
+        .subtitle { text-align: center; color: var(--text-dim); margin-bottom: 25px; font-size: 0.88em; }
+
+        /* Top stats */
+        .stats-bar { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 25px; }
+        .stat-pill { background: var(--card); border: 1px solid #2f3542; border-radius: 10px; padding: 14px 16px; text-align: center; }
+        .stat-pill .val { font-size: 1.6em; font-weight: 900; }
+        .stat-pill .lbl { font-size: 0.68em; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; }
+        .stat-pill.s-online .val { color: var(--green); }
+        .stat-pill.s-idle .val { color: var(--gold); }
+        .stat-pill.s-hosp .val { color: var(--red); }
+        .stat-pill.s-jail .val { color: var(--purple); }
+        .stat-pill.s-travel .val { color: var(--blue); }
+        .stat-pill.s-total .val { color: var(--teal); }
+
+        /* Controls */
+        .controls { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; align-items: center; }
+        .filter-btn { background: var(--card); border: 1px solid #2f3542; color: var(--text-dim); padding: 8px 16px; border-radius: 7px; cursor: pointer; font-size: 0.82em; font-weight: 700; transition: 0.2s; text-transform: uppercase; letter-spacing: 0.5px; }
+        .filter-btn:hover { background: #2f3542; color: white; }
+        .filter-btn.active { background: rgba(0,206,201,0.12); border-color: var(--teal); color: var(--teal); }
+        .view-toggle { display: flex; background: var(--card); border: 1px solid #2f3542; border-radius: 7px; overflow: hidden; }
+        .view-btn { padding: 8px 16px; font-size: 0.82em; font-weight: 700; cursor: pointer; border: none; background: transparent; color: var(--text-dim); transition: 0.2s; }
+        .view-btn.active { background: rgba(0,206,201,0.15); color: var(--teal); }
+        .search-box { background: var(--card); border: 1px solid #2f3542; border-radius: 7px; color: white; padding: 8px 14px; font-size: 0.85em; width: 200px; transition: 0.2s; margin-left: auto; }
+        .search-box:focus { outline: none; border-color: var(--teal); }
+        .search-box::placeholder { color: var(--text-dim); }
+
+        /* Refresh indicator */
+        .refresh-info { font-size: 0.75em; color: var(--text-dim); text-align: right; margin-bottom: 12px; }
+        #refresh-progress { display: inline-block; width: 80px; height: 4px; background: #2f3542; border-radius: 2px; vertical-align: middle; margin-left: 8px; overflow: hidden; }
+        #refresh-fill { height: 100%; width: 0%; background: var(--teal); border-radius: 2px; transition: width 0.5s linear; }
+
+        /* GRID VIEW */
+        .members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+        .member-card {
+            background: var(--card); border: 1px solid #2f3542; border-radius: 12px; padding: 16px 18px;
+            position: relative; transition: border-color 0.2s, transform 0.15s;
+            cursor: default;
+        }
+        .member-card:hover { border-color: #4a5568; transform: translateY(-1px); }
+        .member-card.online { border-left: 3px solid var(--green); }
+        .member-card.idle { border-left: 3px solid var(--gold); }
+        .member-card.offline { border-left: 3px solid #2f3542; }
+        .member-card.hospital { border-left: 3px solid var(--red); background: rgba(255,71,87,0.03); }
+        .member-card.jail { border-left: 3px solid var(--purple); background: rgba(162,155,254,0.03); }
+        .member-card.traveling { border-left: 3px solid var(--blue); background: rgba(88,166,255,0.03); }
+
+        .mc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+        .mc-name { font-weight: 700; font-size: 1em; }
+        .mc-name a { color: var(--text-main); text-decoration: none; }
+        .mc-name a:hover { color: var(--blue); }
+        .mc-pos { font-size: 0.7em; color: var(--text-dim); margin-top: 2px; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+        .dot-online { background: var(--green); box-shadow: 0 0 6px var(--green); animation: blink 2s infinite; }
+        .dot-idle { background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+        .dot-offline { background: #2f3542; }
+        .dot-hospital { background: var(--red); box-shadow: 0 0 6px var(--red); }
+        .dot-jail { background: var(--purple); box-shadow: 0 0 6px var(--purple); }
+        .dot-traveling { background: var(--blue); box-shadow: 0 0 6px var(--blue); }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+        .mc-status { font-size: 0.78em; font-weight: 600; margin-bottom: 8px; }
+        .mc-status.green { color: var(--green); }
+        .mc-status.gold { color: var(--gold); }
+        .mc-status.dim { color: var(--text-dim); }
+        .mc-status.red { color: var(--red); }
+        .mc-status.purple { color: var(--purple); }
+        .mc-status.blue { color: var(--blue); }
+
+        .mc-timer { font-size: 0.82em; color: var(--red); font-weight: 700; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+        .mc-last { font-size: 0.72em; color: var(--text-dim); }
+        .mc-days { font-size: 0.7em; color: var(--text-dim); margin-top: 6px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05); }
+
+        /* TABLE VIEW */
+        .table-wrap { background: var(--card); border: 1px solid #2f3542; border-radius: 12px; overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; }
+        thead { background: #0b0d13; }
+        th { padding: 12px 16px; text-align: left; font-size: 0.72em; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-dim); font-weight: 700; border-bottom: 1px solid #2f3542; cursor: pointer; user-select: none; white-space: nowrap; }
+        th:hover { color: white; }
+        td { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.88em; vertical-align: middle; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+        .player-link { color: var(--text-main); text-decoration: none; font-weight: 700; }
+        .player-link:hover { color: var(--blue); }
+
+        .status-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 5px; font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+        .sb-online { background: rgba(46,213,115,0.12); color: var(--green); border: 1px solid rgba(46,213,115,0.3); }
+        .sb-idle { background: rgba(255,165,2,0.12); color: var(--gold); border: 1px solid rgba(255,165,2,0.3); }
+        .sb-offline { background: rgba(255,255,255,0.04); color: var(--text-dim); border: 1px solid #2f3542; }
+        .sb-hospital { background: rgba(255,71,87,0.12); color: var(--red); border: 1px solid rgba(255,71,87,0.3); }
+        .sb-jail { background: rgba(162,155,254,0.12); color: var(--purple); border: 1px solid rgba(162,155,254,0.3); }
+        .sb-travel { background: rgba(88,166,255,0.12); color: var(--blue); border: 1px solid rgba(88,166,255,0.3); }
+
+        .timer-cell { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--red); }
+
+        /* Empty */
+        .empty { text-align: center; padding: 60px; color: var(--text-dim); }
+        .empty .icon { font-size: 3em; margin-bottom: 12px; }
+
+        /* Alert box */
+        .alert-box { padding: 14px 18px; border-radius: 10px; margin-bottom: 18px; font-weight: 600; font-size: 0.88em; }
+        .alert-info { background: rgba(88,166,255,0.08); border: 1px solid rgba(88,166,255,0.3); color: var(--blue); }
+        .alert-error { background: rgba(255,71,87,0.1); border: 1px solid rgba(255,71,87,0.3); color: var(--red); }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">Owen's Faction Tools</div>
+            <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
+        </div>
+        <div class="nav-items">
+            <a href="/" class="nav-link">📡 <span class="nav-text">Live Warboard</span></a>
+            <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
+            <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
+            <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
+            <a href="/members.html" class="nav-link active">👥 <span class="nav-text">Members</span></a>
+            <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
+            <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
+            <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>
+            <a href="/admin.html" class="nav-link">👑 <span class="nav-text">Admin Panel</span></a>
+            <a href="/oc.html" class="nav-link">💼 <span class="nav-text">OC Manager</span></a>
+            <a onclick="openSettings()" class="nav-link" style="margin-top:auto;border-top:1px solid #2f3542;border-radius:0;padding-top:15px;cursor:pointer;">
+                ⚙️ <span class="nav-text">Settings</span>
+            </a>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <h1>👥 Faction Members</h1>
+        <p class="subtitle" id="faction-name-line">Live status of all your faction members</p>
+
+        <div id="alert-wrap"></div>
+
+        <!-- Stats bar -->
+        <div class="stats-bar" id="stats-bar" style="display:none;">
+            <div class="stat-pill s-total"><div class="val" id="s-total">—</div><div class="lbl">Total</div></div>
+            <div class="stat-pill s-online"><div class="val" id="s-online">—</div><div class="lbl">🟢 Online</div></div>
+            <div class="stat-pill s-idle"><div class="val" id="s-idle">—</div><div class="lbl">🟡 Idle</div></div>
+            <div class="stat-pill s-hosp"><div class="val" id="s-hosp">—</div><div class="lbl">🏥 Hospital</div></div>
+            <div class="stat-pill s-jail"><div class="val" id="s-jail">—</div><div class="lbl">⛓️ Jailed</div></div>
+            <div class="stat-pill s-travel"><div class="val" id="s-travel">—</div><div class="lbl">✈️ Traveling</div></div>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <button class="filter-btn active" id="flt-All" onclick="setFilter('All')">All</button>
+            <button class="filter-btn" id="flt-Online" onclick="setFilter('Online')">🟢 Online</button>
+            <button class="filter-btn" id="flt-Idle" onclick="setFilter('Idle')">🟡 Idle</button>
+            <button class="filter-btn" id="flt-Hospital" onclick="setFilter('Hospital')">🏥 Hospital</button>
+            <button class="filter-btn" id="flt-Jail" onclick="setFilter('Jail')">⛓️ Jail</button>
+            <button class="filter-btn" id="flt-Traveling" onclick="setFilter('Traveling')">✈️ Travel</button>
+            <button class="filter-btn" id="flt-Offline" onclick="setFilter('Offline')">⚫ Offline</button>
+            <div class="view-toggle">
+                <button class="view-btn active" id="view-grid" onclick="setView('grid')">⊞ Grid</button>
+                <button class="view-btn" id="view-table" onclick="setView('table')">☰ Table</button>
+            </div>
+            <input class="search-box" type="text" id="search-box" placeholder="Search member..." oninput="renderMembers()">
+        </div>
+
+        <div class="refresh-info" id="refresh-info" style="display:none;">
+            Auto-refresh every 60s <span id="refresh-progress"><span id="refresh-fill"></span></span>
+            &nbsp;<span id="last-updated"></span>
+        </div>
+
+        <div id="content-area">
+            <div class="empty"><div class="icon">👥</div><p>Loading faction members...</p></div>
+        </div>
+    </main>
+
+    <!-- Settings modal (minimal) -->
+    <div id="settings-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:10000;justify-content:center;align-items:center;backdrop-filter:blur(4px);">
+        <div style="background:var(--card);padding:28px;border-radius:14px;border:1px solid #2f3542;width:400px;position:relative;">
+            <button onclick="closeSettings()" style="position:absolute;right:14px;top:14px;background:none;border:none;color:var(--text-dim);font-size:1.3em;cursor:pointer;">✕</button>
+            <h3 style="margin:0 0 16px;color:var(--teal);text-transform:uppercase;letter-spacing:1px;">⚙️ Settings</h3>
+            <label style="font-size:0.8em;color:var(--text-dim);font-weight:700;display:block;margin-bottom:6px;">TORN API KEY</label>
+            <input type="password" id="api-key-input" placeholder="Your Torn API key" style="width:100%;padding:10px 14px;background:#0b0d13;border:1px solid #30363d;border-radius:7px;color:white;font-size:0.95em;margin-bottom:14px;">
+            <button onclick="saveKey()" style="width:100%;background:var(--teal);color:#000;border:none;padding:12px;border-radius:7px;font-weight:700;font-size:1em;cursor:pointer;text-transform:uppercase;">Save & Reload</button>
+        </div>
+    </div>
+
+<script>
+let myKey = localStorage.getItem("warboard_apikey") || "";
+let allMembers = [];
+let activeFilter = "All";
+let currentView = "grid";
+let refreshInterval = null;
+let progressInterval = null;
+const REFRESH_MS = 60000;
+
+document.getElementById("api-key-input").value = myKey;
+if (localStorage.getItem('sidebar_collapsed') === 'true') document.getElementById('app-sidebar').classList.add('collapsed');
+
+function toggleSidebar() { const s = document.getElementById('app-sidebar'); s.classList.toggle('collapsed'); localStorage.setItem('sidebar_collapsed', s.classList.contains('collapsed')); }
+function openSettings() { document.getElementById('settings-modal').style.display = 'flex'; }
+function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
+function saveKey() { myKey = document.getElementById('api-key-input').value.trim(); localStorage.setItem('warboard_apikey', myKey); closeSettings(); loadMembers(); }
+
+function setAlert(msg, type) {
+    document.getElementById('alert-wrap').innerHTML = msg ? `<div class="alert-box alert-${type}">${msg}</div>` : '';
+}
+
+function setFilter(f) {
+    activeFilter = f;
+    document.querySelectorAll('.filter-btn[id^="flt-"]').forEach(b => b.classList.remove('active'));
+    document.getElementById('flt-' + f)?.classList.add('active');
+    renderMembers();
+}
+
+function setView(v) {
+    currentView = v;
+    document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('view-' + v).classList.add('active');
+    renderMembers();
+}
+
+function getMemberState(m) {
+    const state = (m.status?.state || '').toLowerCase();
+    const desc = (m.status?.description || '').toLowerCase();
+    const online = (m.last_action?.status || '').toLowerCase();
+    if (state === 'hospital' || desc.includes('hospital')) return 'hospital';
+    if (state === 'jail' || desc.includes('jail')) return 'jail';
+    if (state === 'traveling' || desc.includes('travel') || desc.includes('abroad') || desc.includes('returning')) return 'traveling';
+    if (online === 'online') return 'online';
+    if (online === 'idle') return 'idle';
+    return 'offline';
+}
+
+function formatTimer(seconds) {
+    if (!seconds || seconds <= 0) return '';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+}
+
+async function loadMembers() {
+    if (!myKey) {
+        setAlert('⚙️ No API key — click Settings to add your Torn API key.', 'info');
+        document.getElementById('content-area').innerHTML = '<div class="empty"><div class="icon">🔑</div><p>Enter your API key in Settings to view your faction members.</p></div>';
+        return;
+    }
+    setAlert('', '');
+
+    try {
+        const res = await fetch(`/api/warboard?apiKey=${encodeURIComponent(myKey)}&enemyId=`);
+        const data = await res.json();
+
+        if (data.error) { setAlert('❌ ' + data.error, 'error'); return; }
+
+        const friendly = data.friendly || [];
+        allMembers = friendly;
+
+        // Update stats bar
+        const counts = { online:0, idle:0, hospital:0, jail:0, traveling:0, offline:0 };
+        allMembers.forEach(m => {
+            const st = getMemberStateFromObj(m);
+            if (counts[st] !== undefined) counts[st]++;
+            else counts.offline++;
+        });
+
+        document.getElementById('s-total').textContent = allMembers.length;
+        document.getElementById('s-online').textContent = counts.online;
+        document.getElementById('s-idle').textContent = counts.idle;
+        document.getElementById('s-hosp').textContent = counts.hospital;
+        document.getElementById('s-jail').textContent = counts.jail;
+        document.getElementById('s-travel').textContent = counts.traveling;
+        document.getElementById('stats-bar').style.display = 'grid';
+
+        const now = new Date().toLocaleTimeString();
+        document.getElementById('last-updated').textContent = `Updated: ${now}`;
+        document.getElementById('refresh-info').style.display = 'block';
+
+        renderMembers();
+        startProgressBar();
+
+    } catch (e) {
+        setAlert('❌ Failed to connect: ' + e.message, 'error');
+    }
+}
+
+function getMemberStateFromObj(m) {
+    const state = (m.state || '').toLowerCase();
+    const desc = (m.statusDescription || '').toLowerCase();
+    const online = (m.onlineStatus || '').toLowerCase();
+    if (state === 'hospital' || desc.includes('hospital')) return 'hospital';
+    if (state === 'jail' || desc.includes('jail')) return 'jail';
+    if (state === 'abroad' || state === 'traveling' || desc.includes('travel') || desc.includes('abroad') || desc.includes('returning')) return 'traveling';
+    if (online === 'online') return 'online';
+    if (online === 'idle') return 'idle';
+    return 'offline';
+}
+
+function getStatusLabel(state) {
+    const map = { online:'🟢 Online', idle:'🟡 Idle', offline:'⚫ Offline', hospital:'🏥 Hospital', jail:'⛓️ Jailed', traveling:'✈️ Traveling' };
+    return map[state] || '⚫ Offline';
+}
+
+function getStatusClass(state) {
+    const map = { online:'green', idle:'gold', offline:'dim', hospital:'red', jail:'purple', traveling:'blue' };
+    return map[state] || 'dim';
+}
+
+function renderMembers() {
+    const search = (document.getElementById('search-box')?.value || '').toLowerCase();
+    let filtered = allMembers.filter(m => {
+        const state = getMemberStateFromObj(m);
+        if (activeFilter !== 'All') {
+            if (activeFilter === 'Online' && state !== 'online') return false;
+            if (activeFilter === 'Idle' && state !== 'idle') return false;
+            if (activeFilter === 'Hospital' && state !== 'hospital') return false;
+            if (activeFilter === 'Jail' && state !== 'jail') return false;
+            if (activeFilter === 'Traveling' && state !== 'traveling') return false;
+            if (activeFilter === 'Offline' && state !== 'offline') return false;
+        }
+        if (search && !(m.name || '').toLowerCase().includes(search)) return false;
+        return true;
+    });
+
+    // Sort: online first, then idle, hosp, jail, traveling, offline
+    const order = { online:0, idle:1, hospital:2, jail:3, traveling:4, offline:5 };
+    filtered.sort((a, b) => (order[getMemberStateFromObj(a)] || 5) - (order[getMemberStateFromObj(b)] || 5));
+
+    const area = document.getElementById('content-area');
+
+    if (filtered.length === 0) {
+        area.innerHTML = '<div class="empty"><div class="icon">🔍</div><p>No members match this filter.</p></div>';
+        return;
+    }
+
+    if (currentView === 'grid') {
+        area.innerHTML = `<div class="members-grid">${filtered.map(m => renderCard(m)).join('')}</div>`;
+    } else {
+        area.innerHTML = renderTable(filtered);
+    }
+
+    // Start live timers
+    startTimers();
+}
+
+function renderCard(m) {
+    const state = getMemberStateFromObj(m);
+    const statusLabel = getStatusLabel(state);
+    const statusCls = getStatusClass(state);
+    const dotCls = `dot-${state === 'online' ? 'online' : state === 'idle' ? 'idle' : state === 'hospital' ? 'hospital' : state === 'jail' ? 'jail' : state === 'traveling' ? 'traveling' : 'offline'}`;
+
+    let timerHtml = '';
+    if ((state === 'hospital' || state === 'jail') && m.until) {
+        const secsLeft = m.until - Math.floor(Date.now() / 1000);
+        if (secsLeft > 0) {
+            timerHtml = `<div class="mc-timer" data-until="${m.until}">⏱ ${formatTimer(secsLeft)}</div>`;
+        }
+    }
+    if (state === 'traveling' && m.statusDescription) {
+        timerHtml = `<div class="mc-timer" style="color:var(--blue);">✈️ ${m.statusDescription}</div>`;
+    }
+
+    return `<div class="member-card ${state}">
+        <div class="mc-header">
+            <div>
+                <div class="mc-name"><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank">${m.name || '?'}</a></div>
+                <div class="mc-pos">${m.position || ''}</div>
+            </div>
+            <div class="status-dot ${dotCls}"></div>
+        </div>
+        <div class="mc-status ${statusCls}">${statusLabel}</div>
+        ${timerHtml}
+        <div class="mc-last">Last: ${m.lastActionRelative || 'Unknown'}</div>
+        <div class="mc-days">📅 ${m.daysInFaction || 0} days in faction</div>
+    </div>`;
+}
+
+function renderTable(members) {
+    const rows = members.map(m => {
+        const state = getMemberStateFromObj(m);
+        const sbCls = `sb-${state === 'hospital' ? 'hospital' : state === 'jail' ? 'jail' : state === 'traveling' ? 'travel' : state === 'online' ? 'online' : state === 'idle' ? 'idle' : 'offline'}`;
+        const statusLabel = getStatusLabel(state);
+
+        let timer = '—';
+        if ((state === 'hospital' || state === 'jail') && m.until) {
+            const secsLeft = m.until - Math.floor(Date.now() / 1000);
+            if (secsLeft > 0) timer = `<span class="timer-cell" data-until="${m.until}">${formatTimer(secsLeft)}</span>`;
+        } else if (state === 'traveling') {
+            timer = '✈️ Abroad';
+        }
+
+        return `<tr>
+            <td><a class="player-link" href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank">${m.name}</a></td>
+            <td><span class="status-badge ${sbCls}">${statusLabel}</span></td>
+            <td>${timer}</td>
+            <td>${m.position || '—'}</td>
+            <td>${m.lastActionRelative || 'Unknown'}</td>
+            <td>${m.daysInFaction || 0}</td>
+        </tr>`;
+    }).join('');
+
+    return `<div class="table-wrap"><table>
+        <thead><tr>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Timer</th>
+            <th>Position</th>
+            <th>Last Action</th>
+            <th>Days in Faction</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+    </table></div>`;
+}
+
+function startTimers() {
+    setInterval(() => {
+        const now = Math.floor(Date.now() / 1000);
+        document.querySelectorAll('[data-until]').forEach(el => {
+            const left = parseInt(el.dataset.until) - now;
+            if (left <= 0) { el.textContent = 'Free!'; el.style.color = 'var(--green)'; }
+            else el.textContent = (el.classList.contains('timer-cell') ? '' : '⏱ ') + formatTimer(left);
+        });
+    }, 1000);
+}
+
+function startProgressBar() {
+    if (progressInterval) clearInterval(progressInterval);
+    const fill = document.getElementById('refresh-fill');
+    let start = Date.now();
+    fill.style.width = '0%';
+    progressInterval = setInterval(() => {
+        const pct = Math.min((Date.now() - start) / REFRESH_MS * 100, 100);
+        fill.style.width = pct + '%';
+    }, 500);
+
+    if (refreshInterval) clearInterval(refreshInterval);
+    refreshInterval = setInterval(() => { loadMembers(); }, REFRESH_MS);
+}
+
+loadMembers();
+</script>
+</body>
+</html>
