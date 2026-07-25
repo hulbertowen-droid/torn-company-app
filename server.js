@@ -397,7 +397,7 @@ setInterval(async () => {
 // Background Task 2: Market Watcher
 setInterval(async () => {
     let watchKey = getNextApiKey();
-    if (!marketConfig.webhookUrl || !watchKey) return;
+    console.log([Market Watcher] key: , webhook: ); if (!marketConfig.webhookUrl || !watchKey) return;
     
     try {
         if (marketConfig.autoDefense) {
@@ -408,7 +408,7 @@ setInterval(async () => {
             if (userData.bazaar && userData.bazaar.length > 0) {
                 let myPrices = {};
                 userData.bazaar.forEach(item => {
-                    if (!myPrices[item.ID] || item.price < myPrices[item.ID].price) { myPrices[item.ID] = { price: item.price, name: item.name }; }
+                    if (!myPrices[item.itemID] || item.price < myPrices[item.itemID].price) { myPrices[item.itemID] = { price: item.price, name: item.name }; }
                 });
 
                 for (let [itemId, myItem] of Object.entries(myPrices)) {
