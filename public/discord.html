@@ -120,16 +120,48 @@
         
         <div class="container">
             <div class="dash-card">
-                <h2>Uplink Configuration</h2>
+                <h2>👤 Personal Bot Configuration</h2>
                 <div class="form-group">
-                    <label>Faction Discord Webhook URL</label>
-                    <input type="text" id="webhook-url" placeholder="https://discord.com/api/webhooks/...">
+                    <label>Your Discord User ID</label>
+                    <input type="text" id="discord-userid" placeholder="e.g. 123456789012345678">
+                </div>
+                <div class="form-group">
+                    <label>Your Personal Discord Bot Token</label>
+                    <input type="password" id="discord-bottoken" placeholder="Required for Private DMs">
+                </div>
+                <div class="form-group">
+                    <label>Attack Alert Threshold</label>
+                    <input type="number" id="attack-threshold" placeholder="Alert after X losses in 15 mins (Default: 3)">
+                </div>
+                
+                <h3 style="color: #ffa502; border-bottom: 1px solid #2f3542; padding-bottom: 5px; margin-top: 20px;">Personal Alert Toggles</h3>
+                <div class="trigger-list">
+                    <div class="trigger-item">
+                        <div class="trigger-info">
+                            <span class="trigger-title" style="color: var(--red);">⚔️ Attack Alerts</span>
+                            <span class="trigger-desc">Get a Private DM when you are sitting online and get attacked.</span>
+                        </div>
+                        <label class="switch"><input type="checkbox" id="toggle-attack" checked><span class="slider"></span></label>
+                    </div>
+                    <div class="trigger-item">
+                        <div class="trigger-info">
+                            <span class="trigger-title" style="color: var(--gold);">📉 Undercut Alerts</span>
+                            <span class="trigger-desc">Get a Private DM if your bazaar listings are undercut.</span>
+                        </div>
+                        <label class="switch"><input type="checkbox" id="toggle-undercut" checked><span class="slider"></span></label>
+                    </div>
                 </div>
             </div>
 
             <div class="dash-card">
-                <h2>Background Notification Options</h2>
+                <h2>🌍 Faction Uplink Configuration</h2>
+                <div class="form-group">
+                    <label>Faction Discord Webhook URL</label>
+                    <input type="text" id="webhook-url" placeholder="https://discord.com/api/webhooks/...">
+                </div>
+                <h3 style="color: #ffa502; border-bottom: 1px solid #2f3542; padding-bottom: 5px; margin-top: 20px;">Faction Alert Toggles</h3>
                 <div class="trigger-list">
+
                     <div class="trigger-item">
                         <div class="trigger-info">
                             <span class="trigger-title" style="color: var(--gold);">🚨 Smart Med-Out Sniper</span>
@@ -193,6 +225,15 @@ document.addEventListener("DOMContentLoaded", async function() {
         sidebar.classList.add('collapsed');
     }
 
+    // Load Personal Data
+    document.getElementById("discord-userid").value = localStorage.getItem("warboard_discordId") || "";
+    document.getElementById("discord-bottoken").value = localStorage.getItem("warboard_botToken") || "";
+    document.getElementById("attack-threshold").value = localStorage.getItem("warboard_attackThreshold") || "";
+    let tgs = JSON.parse(localStorage.getItem("warboard_alertToggles") || '{"attack":true,"undercut":true}');
+    document.getElementById("toggle-attack").checked = tgs.attack !== false;
+    document.getElementById("toggle-undercut").checked = tgs.undercut !== false;
+
+    // Load Global Data
     try {
         const res = await fetch('/api/get-discord-config');
         const config = await res.json();
@@ -204,18 +245,30 @@ document.addEventListener("DOMContentLoaded", async function() {
         document.getElementById('chainUnder90').checked = config.chainUnder90 !== false;
         document.getElementById('chainMilestone').checked = config.chainMilestone !== false;
         document.getElementById('friendlyAttacked').checked = config.friendlyAttacked !== false;
-        document.getElementById('medOutSniper').checked = config.medOutSniper !== false; // NEW
-    } catch(e) { console.error("Could not fetch server alert configuration."); }
+        document.getElementById('medOutSniper').checked = config.medOutSniper !== false; 
+    } catch(e) {}
+    
+    // Attempt to pull user profile from backend
+    const myKey = localStorage.getItem("warboard_apikey") || "";
+    if (myKey) {
+        try {
+            const pRes = await fetch('/api/get-user-profile?apiKey=' + myKey);
+            const pData = await pRes.json();
+            if (pData.discordId) document.getElementById("discord-userid").value = pData.discordId;
+            if (pData.botToken) document.getElementById("discord-bottoken").value = pData.botToken;
+            if (pData.attackThreshold) document.getElementById("attack-threshold").value = pData.attackThreshold;
+            if (pData.alertToggles) {
+                document.getElementById("toggle-attack").checked = pData.alertToggles.attack !== false;
+                document.getElementById("toggle-undercut").checked = pData.alertToggles.undercut !== false;
+            }
+        } catch(e) {}
+    }
 });
 
 function toggleSidebar() {
     const sidebar = document.getElementById('app-sidebar');
     sidebar.classList.toggle('collapsed');
     localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
-}
-
-function openSettings() {
-    window.location.href = "/";
 }
 
 async function saveDiscordConfig() {
@@ -227,10 +280,33 @@ async function saveDiscordConfig() {
 
     if (!myKey) {
         status.style.color = "var(--red)";
-        status.innerText = "❌ Missing API Key. Go to Live Warboard settings first!";
+        status.innerText = "❌ Missing API Key. Go to Live Warboard Settings first!";
         return;
     }
 
+    // Save Personal Settings
+    let discordId = document.getElementById("discord-userid").value.trim();
+    let botToken = document.getElementById("discord-bottoken").value.trim();
+    let attackThreshold = document.getElementById("attack-threshold").value.trim() || "3";
+    let alertToggles = {
+        attack: document.getElementById("toggle-attack").checked,
+        undercut: document.getElementById("toggle-undercut").checked
+    };
+
+    localStorage.setItem("warboard_discordId", discordId);
+    localStorage.setItem("warboard_botToken", botToken);
+    localStorage.setItem("warboard_attackThreshold", attackThreshold);
+    localStorage.setItem("warboard_alertToggles", JSON.stringify(alertToggles));
+
+    try {
+        await fetch('/api/save-user-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiKey: myKey, discordId, botToken, attackThreshold, alertToggles })
+        });
+    } catch(e) {}
+
+    // Save Global Settings
     const payload = {
         apiKey: myKey,
         webhookUrl: document.getElementById('webhook-url').value.trim(),
@@ -240,7 +316,7 @@ async function saveDiscordConfig() {
         chainUnder90: document.getElementById('chainUnder90').checked,
         chainMilestone: document.getElementById('chainMilestone').checked,
         friendlyAttacked: document.getElementById('friendlyAttacked').checked,
-        medOutSniper: document.getElementById('medOutSniper').checked // NEW
+        medOutSniper: document.getElementById('medOutSniper').checked 
     };
 
     try {
