@@ -1,0 +1,365 @@
+const fs = require('fs');
+
+const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Casino Tools - Torn Company App</title>
+<style>
+    :root {
+        --bg: #0b0d13;
+        --sidebar: #11141d;
+        --border: #2f3542;
+        --text-main: #c9d1d9;
+        --text-dim: #8b949e;
+        --blue: #58a6ff;
+        --red: #ff4757;
+        --green: #2ecc71;
+        --gold: #ffa502;
+        --purple: #9b59b6;
+        --teal: #00cec9;
+    }
+    body { margin: 0; padding: 0; background: var(--bg); color: var(--text-main); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; height: 100vh; overflow: hidden; }
+    
+    .sidebar { width: 250px; background: var(--sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; }
+    .sidebar-header { padding: 20px; font-weight: 900; font-size: 1.2em; color: white; letter-spacing: 1px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .nav-items { display: flex; flex-direction: column; padding: 15px 10px; gap: 5px; flex-grow: 1; }
+    .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
+    .nav-link:hover { background: #2f3542; color: white; }
+    .nav-link.active { background: rgba(0, 206, 201, 0.1); border-left: 4px solid var(--teal); color: white; border-radius: 0 8px 8px 0; }
+    
+    .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
+    h1 { text-align: center; color: var(--teal); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; text-shadow: 0 4px 15px rgba(0,206,201,0.2); }
+    
+    .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+    
+    .panel { background: var(--sidebar); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+    .panel-header { background: rgba(0,0,0,0.2); padding: 15px 20px; border-bottom: 1px solid var(--border); font-weight: 800; font-size: 1.1em; color: var(--text-main); text-transform: uppercase; display: flex; align-items: center; gap: 10px; }
+    .panel-body { padding: 25px; display: flex; flex-direction: column; gap: 20px; }
+    
+    .input-group { display: flex; flex-direction: column; gap: 8px; }
+    label { font-size: 0.85em; font-weight: bold; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+    input, select { background: #0b0d13; border: 1px solid var(--border); padding: 12px 15px; border-radius: 8px; color: white; font-size: 1em; outline: none; transition: 0.2s; }
+    input:focus, select:focus { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(0,206,201,0.2); }
+    
+    .btn-action { background: var(--teal); color: #000; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-transform: uppercase; cursor: pointer; transition: 0.2s; }
+    .btn-action:hover { background: #00b8b8; transform: translateY(-2px); }
+    
+    .result-box { background: rgba(0,206,201,0.05); border: 1px solid rgba(0,206,201,0.2); border-radius: 8px; padding: 20px; margin-top: 10px; }
+    .result-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px dashed rgba(255,255,255,0.1); }
+    .result-row:last-child { border-bottom: none; }
+    .res-label { color: var(--text-dim); font-weight: bold; font-size: 0.9em; text-transform: uppercase; }
+    .res-val { font-size: 1.2em; font-weight: 900; color: var(--white); }
+    .res-val.good { color: var(--green); }
+    .res-val.bad { color: var(--red); }
+    
+    .light-mode { --bg: #f0f2f5; --sidebar: #ffffff; --border: #dcdde1; --text-main: #2f3640; --text-dim: #718093; }
+    .light-mode input, .light-mode select { background: #f5f6fa; color: #2f3640; }
+    
+    @media (max-width: 1000px) { .container { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">Owen's Faction Tools</div>
+        </div>
+        <div class="nav-items">
+            <a href="/" class="nav-link">🎯 <span class="nav-text">Live Warboard</span></a>
+            <a href="/chain.html" class="nav-link">⛓️ <span class="nav-text">Chain Watcher</span></a>
+            <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
+            <a href="/dashboard.html" class="nav-link">📊 <span class="nav-text">Dashboard</span></a>
+            <a href="/members.html" class="nav-link">👥 <span class="nav-text">Members</span></a>
+            <a href="/recruitment.html" class="nav-link">🤝 <span class="nav-text">Recruitment</span></a>
+            <a href="/bazaar.html" class="nav-link">🏪 <span class="nav-text">Bazaar Watcher</span></a>
+            <a href="/discord.html" class="nav-link">🔔 <span class="nav-text">Discord Alerts</span></a>
+            <a href="/admin.html" class="nav-link">👑 <span class="nav-text">Admin Panel</span></a>
+            <a href="/oc.html" class="nav-link">💣 <span class="nav-text">OC Manager</span></a>
+            <div style="margin-top:auto; padding: 0 10px;"><div style="height:1px; background:#2f3542; margin: 10px 0;"></div><div style="font-size:0.65em; color:#57606f; text-transform:uppercase; letter-spacing:2px; padding:0 5px 8px; font-weight:700;">Company</div></div>
+            <a href="/company.html" class="nav-link" style="background: rgba(0,206,201,0.1); border: 1px solid rgba(0,206,201,0.3); color: #00cec9; border-radius: 8px;">🏢 <span class="nav-text">Company Tools</span></a>
+            <div style="padding: 0 10px; margin-top: 12px;"><div style="height:1px; background:#2f3542;"></div></div>
+            <a href="/gamble.html" class="nav-link active">🎰 <span class="nav-text">Casino Tools</span></a>
+            <a onclick="window.location.href='/'" class="nav-link" style="margin-top: 8px; cursor: pointer;">⚙️ <span class="nav-text">Settings</span></a>
+        </div>
+    </nav>
+    <div class="main-content">
+        <h1>Advanced Casino Odds & Strategy</h1>
+        <div class="container">
+            <!-- Russian Roulette Panel -->
+            <div class="panel">
+                <div class="panel-header">🔫 Russian Roulette Engine</div>
+                <div class="panel-body">
+                    <p style="color:var(--text-dim); font-size:0.9em; line-height:1.5; margin:0;">Calculate exact odds of survival and expected value (EV) based on game size. This engine computes the raw mathematical probabilities down to the smallest percentage.</p>
+                    
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                        <div class="input-group">
+                            <label>Number of Players</label>
+                            <input type="number" id="rr-players" min="2" max="6" value="2">
+                        </div>
+                        <div class="input-group">
+                            <label>Total Bet Pool ($)</label>
+                            <input type="number" id="rr-pool" value="10000000">
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label>Your Position (Turn Order)</label>
+                        <select id="rr-turn">
+                            <option value="1">1st to shoot</option>
+                            <option value="2">2nd to shoot</option>
+                            <option value="3">3rd to shoot</option>
+                            <option value="4">4th to shoot</option>
+                            <option value="5">5th to shoot</option>
+                            <option value="6">6th to shoot</option>
+                        </select>
+                    </div>
+                    
+                    <button class="btn-action" onclick="calcRR()">Calculate RR Odds</button>
+                    
+                    <div class="result-box" id="rr-results" style="display:none;">
+                        <div class="result-row">
+                            <span class="res-label">Survival Probability</span>
+                            <span class="res-val" id="rr-surv">0%</span>
+                        </div>
+                        <div class="result-row">
+                            <span class="res-label">Win Probability</span>
+                            <span class="res-val" id="rr-win">0%</span>
+                        </div>
+                        <div class="result-row">
+                            <span class="res-label">Expected Value (EV)</span>
+                            <span class="res-val" id="rr-ev">$0</span>
+                        </div>
+                        <div class="result-row">
+                            <span class="res-label">Mathematical Edge</span>
+                            <span class="res-val" id="rr-edge">0%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bookie Arbitrage & Implied Odds -->
+            <div class="panel">
+                <div class="panel-header">🏅 Bookie Arbitrage & Odds</div>
+                <div class="panel-body">
+                    <p style="color:var(--text-dim); font-size:0.9em; line-height:1.5; margin:0;">Convert fractional odds (e.g., 5/2) to implied probabilities. Enter opposing odds to check for arbitrage (guaranteed profit) opportunities.</p>
+                    
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                        <div class="input-group">
+                            <label>Team A Odds (e.g. 1.5 or 1/2)</label>
+                            <input type="text" id="bookie-odds-a" value="1.5">
+                        </div>
+                        <div class="input-group">
+                            <label>Team B Odds (e.g. 3.0 or 2/1)</label>
+                            <input type="text" id="bookie-odds-b" value="3.0">
+                        </div>
+                    </div>
+                    
+                    <button class="btn-action" style="background:var(--blue);" onclick="calcBookie()">Calculate Bookie Lines</button>
+                    
+                    <div class="result-box" id="bookie-results" style="display:none; border-color:rgba(88,166,255,0.2); background:rgba(88,166,255,0.05);">
+                        <div class="result-row">
+                            <span class="res-label">Team A Implied Prob.</span>
+                            <span class="res-val" id="book-prob-a">0%</span>
+                        </div>
+                        <div class="result-row">
+                            <span class="res-label">Team B Implied Prob.</span>
+                            <span class="res-val" id="book-prob-b">0%</span>
+                        </div>
+                        <div class="result-row">
+                            <span class="res-label">Total Vig (House Edge)</span>
+                            <span class="res-val" id="book-vig">0%</span>
+                        </div>
+                        <div class="result-row">
+                            <span class="res-label">Arbitrage Possible?</span>
+                            <span class="res-val" id="book-arb">No</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Blackjack Basic Strategy -->
+            <div class="panel" style="grid-column: 1 / -1;">
+                <div class="panel-header">🃏 Blackjack Basic Strategy Engine</div>
+                <div class="panel-body">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; align-items:end;">
+                        <div class="input-group">
+                            <label>Your Hand Total (or Pair)</label>
+                            <select id="bj-player">
+                                <option value="8">8 or less</option>
+                                <option value="9">9</option>
+                                <option value="10">10</option>
+                                <option value="11">11</option>
+                                <option value="12">12</option>
+                                <option value="13">13</option>
+                                <option value="14">14</option>
+                                <option value="15">15</option>
+                                <option value="16">16</option>
+                                <option value="17">17 or more</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label>Dealer's Face-Up Card</label>
+                            <select id="bj-dealer">
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                                <option value="6">6</option>
+                                <option value="7">7</option>
+                                <option value="8">8</option>
+                                <option value="9">9</option>
+                                <option value="10">10 / Face</option>
+                                <option value="11">Ace</option>
+                            </select>
+                        </div>
+                        <button class="btn-action" style="background:var(--gold);" onclick="calcBJ()">Get Optimal Move</button>
+                    </div>
+                    
+                    <div class="result-box" id="bj-results" style="display:none; border-color:rgba(255,165,2,0.2); background:rgba(255,165,2,0.05); text-align:center;">
+                        <div style="font-size: 0.9em; color: var(--text-dim); text-transform: uppercase; font-weight: bold; margin-bottom: 5px;">Mathematically Optimal Decision</div>
+                        <div id="bj-decision" style="font-size: 3em; font-weight: 900; color: var(--gold); text-shadow: 0 0 10px rgba(255,165,2,0.3); text-transform: uppercase;">HIT</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-mode');
+
+    function calcRR() {
+        const players = parseInt(document.getElementById('rr-players').value);
+        const turn = parseInt(document.getElementById('rr-turn').value);
+        const pool = parseFloat(document.getElementById('rr-pool').value);
+        
+        if (turn > players) {
+            alert("Your turn cannot be greater than the number of players!");
+            return;
+        }
+
+        // Mathematical Model for Russian Roulette (1 bullet, 6 chambers, spin after every pull or no spin?)
+        // Assuming Torn RR: No spin after each pull (barrel decreases).
+        // Odds of surviving turn n: (6-n)/ (7-n).
+        // Actually, in standard Torn RR, there is 1 bullet. The gun holds 6.
+        // Wait, Torn RR uses a 6 chamber revolver. The bullet is placed, cylinder is spun once.
+        // If players take turns, the probability of firing on turn 1 is 1/6. Turn 2 is 1/5. Turn 3 is 1/4...
+        // But if you are player 1, your chance of dying is 1/6 + (5/6 * 4/5 * 1/4) = 1/6 + 1/6 = ...
+        // Actually, if it's not spun, every chamber has an equal 1/6 chance of holding the bullet.
+        // If there are N players, your chance of winning depends on whether the bullet falls on your turns.
+        // For a 2 player game: P1 fires on 1, 3, 5. P2 fires on 2, 4, 6.
+        // P1 death chance = 3/6 = 50%. P2 death chance = 50%.
+        
+        // Let's implement a dynamic EV calculator.
+        let bulletPositions = [1,2,3,4,5,6];
+        let yourDeathCount = 0;
+        
+        for (let b of bulletPositions) {
+            // b is the chamber the bullet is in (1 to 6)
+            // Who dies on chamber b?
+            // The person whose turn corresponds to chamber b.
+            // Turn sequence: 1, 2, ..., P, 1, 2, ..., P
+            let deathTurn = ((b - 1) % players) + 1;
+            if (deathTurn === turn) yourDeathCount++;
+        }
+        
+        let deathProb = yourDeathCount / 6.0;
+        let winProb = 1.0 - deathProb;
+        
+        // Expected Value
+        // You bet: pool / players (assuming equal buy-in)
+        let buyIn = pool / players;
+        let ev = (winProb * pool) - buyIn;
+        let edge = (ev / buyIn) * 100;
+        
+        document.getElementById('rr-surv').textContent = (winProb * 100).toFixed(2) + "%";
+        document.getElementById('rr-win').textContent = (winProb * 100).toFixed(2) + "%";
+        
+        let evEl = document.getElementById('rr-ev');
+        evEl.textContent = (ev >= 0 ? "+$" : "-$") + Math.abs(ev).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+        evEl.className = "res-val " + (ev >= 0 ? "good" : "bad");
+        
+        let edgeEl = document.getElementById('rr-edge');
+        edgeEl.textContent = (edge >= 0 ? "+" : "") + edge.toFixed(2) + "%";
+        edgeEl.className = "res-val " + (edge >= 0 ? "good" : "bad");
+        
+        document.getElementById('rr-results').style.display = 'block';
+    }
+
+    function parseOdds(str) {
+        if (str.includes('/')) {
+            let parts = str.split('/');
+            return (parseFloat(parts[0]) / parseFloat(parts[1])) + 1;
+        }
+        return parseFloat(str);
+    }
+
+    function calcBookie() {
+        let oddA = parseOdds(document.getElementById('bookie-odds-a').value);
+        let oddB = parseOdds(document.getElementById('bookie-odds-b').value);
+        
+        if (isNaN(oddA) || isNaN(oddB) || oddA <= 1 || oddB <= 1) {
+            alert("Invalid odds format. Use decimal (1.5) or fractional (1/2)");
+            return;
+        }
+        
+        let probA = 1 / oddA;
+        let probB = 1 / oddB;
+        let vig = (probA + probB) - 1;
+        
+        document.getElementById('book-prob-a').textContent = (probA * 100).toFixed(2) + "%";
+        document.getElementById('book-prob-b').textContent = (probB * 100).toFixed(2) + "%";
+        document.getElementById('book-vig').textContent = (vig * 100).toFixed(2) + "%";
+        
+        let arbEl = document.getElementById('book-arb');
+        if (vig < 0) {
+            let guaranteed = Math.abs(vig * 100);
+            arbEl.textContent = "YES! " + guaranteed.toFixed(2) + "% Profit Margin";
+            arbEl.className = "res-val good";
+        } else {
+            arbEl.textContent = "No Arbitrage";
+            arbEl.className = "res-val bad";
+        }
+        
+        document.getElementById('bookie-results').style.display = 'block';
+    }
+
+    function calcBJ() {
+        const player = parseInt(document.getElementById('bj-player').value);
+        const dealer = parseInt(document.getElementById('bj-dealer').value);
+        
+        let decision = "HIT";
+        let color = "var(--gold)";
+        
+        if (player >= 17) {
+            decision = "STAND";
+            color = "var(--green)";
+        } else if (player >= 13 && player <= 16) {
+            if (dealer >= 2 && dealer <= 6) { decision = "STAND"; color = "var(--green)"; }
+            else { decision = "HIT"; color = "var(--gold)"; }
+        } else if (player === 12) {
+            if (dealer >= 4 && dealer <= 6) { decision = "STAND"; color = "var(--green)"; }
+            else { decision = "HIT"; color = "var(--gold)"; }
+        } else if (player === 11) {
+            decision = "DOUBLE DOWN"; color = "var(--blue)";
+        } else if (player === 10) {
+            if (dealer >= 2 && dealer <= 9) { decision = "DOUBLE DOWN"; color = "var(--blue)"; }
+            else { decision = "HIT"; color = "var(--gold)"; }
+        } else if (player === 9) {
+            if (dealer >= 3 && dealer <= 6) { decision = "DOUBLE DOWN"; color = "var(--blue)"; }
+            else { decision = "HIT"; color = "var(--gold)"; }
+        } else {
+            decision = "HIT"; color = "var(--gold)";
+        }
+        
+        const decEl = document.getElementById('bj-decision');
+        decEl.textContent = decision;
+        decEl.style.color = color;
+        
+        document.getElementById('bj-results').style.display = 'block';
+    }
+</script>
+</body>
+</html>`;
+
+fs.writeFileSync('C:/Users/hulbe/Downloads/torn-company-app-latest/public/gamble.html', htmlContent);
+console.log('gamble.html created');

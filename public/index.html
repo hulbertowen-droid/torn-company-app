@@ -173,11 +173,11 @@
         </div>
         <div class="nav-items">
             <a href="/" class="nav-link active">📡 <span class="nav-text">Live Warboard</span></a>
-            <a href="/warhistory.html" class="nav-link">📜 <span class="nav-text">War History</span></a>
+            
             <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
             <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
             <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
-            <a href="/report.html" class="nav-link">📊 <span class="nav-text">Activity Report</span></a>
+            
             <a href="/members.html" class="nav-link">👥 <span class="nav-text">Members</span></a>
             <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
             <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
@@ -187,6 +187,7 @@
             <div style="margin-top:auto; padding: 0 10px;"><div style="height:1px; background:#2f3542; margin: 10px 0;"></div><div style="font-size:0.65em; color:#57606f; text-transform:uppercase; letter-spacing:2px; padding:0 5px 8px; font-weight:700;">Company</div></div>
             <a href="/company.html" class="nav-link" style="background: rgba(0,206,201,0.1); border: 1px solid rgba(0,206,201,0.3); color: #00cec9; border-radius: 8px;">🏢 <span class="nav-text">Company Tools</span></a>
             <div style="padding: 0 10px; margin-top: 12px;"><div style="height:1px; background:#2f3542;"></div></div>
+            <a href="/gamble.html" class="nav-link">🎰 <span class="nav-text">Casino Tools</span></a>
             <a onclick="openSettings()" class="nav-link" style="margin-top: 8px; cursor: pointer;">
                 ⚙️ <span class="nav-text">Settings</span>
             </a>
@@ -198,7 +199,7 @@
         
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
             <h1 style="margin-bottom: 0;">Live Warboard</h1>
-            <button class="btn-action" style="background: var(--blue); padding: 10px 15px; font-size: 0.9em; text-transform: uppercase;" onclick="openSaveWarModal()">Save War to Archive</button>
+            
         </div>
 
         <details style="background: rgba(88, 166, 255, 0.05); border: 1px solid var(--blue); border-radius: 8px; margin-bottom: 25px; cursor: pointer; transition: 0.2s;">
@@ -1218,28 +1219,7 @@ function closeInspect() {
     document.getElementById('inspect-modal').style.display = "none";
 }
 
-function openSaveWarModal() {
-    document.getElementById('sw-enemy-name').value = enemyFacId || '';
-    document.getElementById('sw-date').value = new Date().toISOString().split('T')[0];
-    document.getElementById('save-war-modal').style.display = "flex";
-}
 
-function closeSaveWarModal() {
-    document.getElementById('save-war-modal').style.display = "none";
-}
-
-async function saveWarToArchive() {
-    const enemyName = document.getElementById('sw-enemy-name').value.trim();
-    const date = document.getElementById('sw-date').value.trim();
-    const ourScore = document.getElementById('sw-our-score').value.trim();
-    const theirScore = document.getElementById('sw-their-score').value.trim();
-    const result = document.getElementById('sw-result').value;
-    const mvp = document.getElementById('sw-mvp').value.trim();
-    
-    if (!enemyName || !date || !ourScore || !theirScore) {
-        showToast("Please fill in all required fields", "red");
-        return;
-    }
     
     try {
         const res = await fetch('/api/save-war', {

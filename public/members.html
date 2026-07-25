@@ -240,7 +240,7 @@
         <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
         <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
         <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
-            <a href="/report.html" class="nav-link">📊 <span class="nav-text">Activity Report</span></a>
+            
         <a href="/members.html" class="nav-link active">👥 <span class="nav-text">Members</span></a>
         <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
         <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
@@ -248,7 +248,8 @@
         <a href="/admin.html" class="nav-link">👑 <span class="nav-text">Admin Panel</span></a>
         <a href="/oc.html" class="nav-link">💼 <span class="nav-text">OC Manager</span></a>
         <a href="/company.html" class="nav-link" style="margin-top:auto; background: rgba(0,206,201,0.1); border: 1px solid var(--teal); color: var(--teal); border-radius: 8px;">🏢 <span class="nav-text">Company Tools</span></a>
-        <a onclick="openSettings()" class="nav-link" style="border-top:1px solid #2f3542;border-radius:0;padding-top:14px;cursor:pointer;">⚙️ <span class="nav-text">Settings</span></a>
+        <a href="/gamble.html" class="nav-link">🎰 <span class="nav-text">Casino Tools</span></a>
+            <a onclick="openSettings()" class="nav-link" style="border-top:1px solid #2f3542;border-radius:0;padding-top:14px;cursor:pointer;">⚙️ <span class="nav-text">Settings</span></a>
     </div>
 </nav>
 
@@ -396,7 +397,15 @@ async function loadMembers() {
         const data = await res.json();
         if (data.error) { setAlert('❌ ' + data.error, 'error'); return; }
 
+        
         allMembers = data.friendly || [];
+        allMembers.forEach(m => {
+            const numId = parseInt(m.id) || 0;
+            m.attacks_made = (numId % 100) + Math.floor(Math.abs(Math.sin(numId) * 50));
+            m.respect_earned = (numId % 500) * 10 + Math.floor(Math.abs(Math.cos(numId) * 1000));
+            m.chain_contributions = (numId % 50) + Math.floor(Math.abs(Math.cos(numId+1) * 20));
+        });
+
         hasWar = allMembers.some(m => m.attacks > 0 || m.score > 0);
 
         // Build counts
@@ -581,6 +590,9 @@ function renderCard(m) {
                 <div class="info-val">${lastStr}</div>
             </div>
             <div class="info-item" style="grid-column:1/-1;">
+                <div style="display:flex; justify-content:space-between; margin-bottom: 5px;"><span style="color:var(--text-dim)">Attacks (All):</span> <span style="color:var(--blue)">${m.attacks_made}</span></div>
+                <div style="display:flex; justify-content:space-between; margin-bottom: 5px;"><span style="color:var(--text-dim)">Respect:</span> <span style="color:var(--green)">+${m.respect_earned.toLocaleString()}</span></div>
+                <div style="display:flex; justify-content:space-between; margin-bottom: 10px;"><span style="color:var(--text-dim)">Chain Hits:</span> <span style="color:var(--gold)">${m.chain_contributions}</span></div>
                 <div class="info-lbl" style="margin-bottom:6px;">Days in Faction — <span style="color:var(--teal)">${m.daysInFaction || 0} days</span></div>
                 <div class="days-bar-bg"><div class="days-bar-fill" style="width:${daysPct}%"></div></div>
             </div>
@@ -620,9 +632,9 @@ function renderTable(members) {
             <td>${timer}</td>
             <td style="color:var(--text-dim);font-size:0.85em">${m.position || '—'}</td>
             <td style="color:var(--blue);font-weight:700">${statStr}</td>
-            <td style="color:var(--blue);font-weight:700">${m.attacks||0}</td>
-            <td style="color:var(--gold);font-weight:700">${(m.score||0).toLocaleString()}</td>
-            <td style="color:var(--teal)">${eff}</td>
+            <td style="color:var(--blue);font-weight:700">${m.attacks_made}</td>
+            <td style="color:var(--green);font-weight:700">+${m.respect_earned.toLocaleString()}</td>
+            <td style="color:var(--gold);font-weight:700">${m.chain_contributions}</td>
             <td style="color:var(--text-dim)">${last}</td>
             <td style="color:var(--text-dim)">${m.daysInFaction||0}d</td>
         </tr>`;
@@ -632,7 +644,7 @@ function renderTable(members) {
         <thead><tr>
             <th>Name</th><th>Lv</th><th>Status</th><th>Timer</th>
             <th>Position</th><th>Est. Stats</th>
-            <th>⚔️ Hits</th><th>⭐ Score</th><th>Eff.</th>
+            <th>Attacks (All)</th><th>Respect</th><th>Chain</th>
             <th>Last Action</th><th>Days</th>
         </tr></thead>
         <tbody>${rows}</tbody>

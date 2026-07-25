@@ -328,33 +328,7 @@ setInterval(async () => {
                     persistentDefends = {}; liveAttacks = {}; hasBackfilledWar = false; processedAttackIds.clear(); 
                     backfillWarDefends(watchKey, watchFactionId, activeWarId);
                 }
-            } else { 
-                if (activeWarId) {
-                    let endedWar = Object.values(liveData.rankedwars).find(w => w.war && w.war.start === activeWarId);
-                    if (endedWar) {
-                        try {
-                            let warHistory = [];
-                            if (fs.existsSync('war_history.json')) warHistory = JSON.parse(fs.readFileSync('war_history.json', 'utf8'));
-                            let mvp = "None";
-                            let highestScore = -1;
-                            for (const m of Object.values(endedWar.factions[watchFactionId].members || {})) {
-                                if ((m.attacks || 0) + (m.score || 0) > highestScore) {
-                                    highestScore = (m.attacks || 0) + (m.score || 0);
-                                    mvp = m.name || "Unknown";
-                                }
-                            }
-                            let enemyFac = Object.keys(endedWar.factions).find(id => id !== watchFactionId);
-                            let enemyName = enemyFac ? endedWar.factions[enemyFac].name : "Unknown Faction";
-                            let ourScore = endedWar.factions[watchFactionId].score || 0;
-                            let theirScore = enemyFac ? (endedWar.factions[enemyFac].score || 0) : 0;
-                            let result = endedWar.war.winner === parseInt(watchFactionId) ? "Win" : "Loss";
-                            warHistory.push({ enemyName, date: new Date().toISOString().split('T')[0], ourScore, theirScore, result, mvp });
-                            fs.writeFileSync('war_history.json', JSON.stringify(warHistory, null, 2));
-                        } catch (e) { console.error("Auto war archive failed", e); }
-                    }
-                }
-                activeWarId = null; hasBackfilledWar = false; 
-            }
+            } else { activeWarId = null; hasBackfilledWar = false; }
         }
 
         if (liveData.attacks && activeWarId) {
@@ -740,37 +714,6 @@ function autoDetectEnemyFaction(data) {
     }
     return null;
 }
-
-app.get('/api/faction-report', async (req, res) => {
-    const userKey = req.query.apiKey;
-    if (!userKey) return res.status(400).json({ error: "Missing API Key" });
-    try {
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,stats&key=${userKey}`);
-        const facData = await facRes.json();
-        if (facData.error) return res.status(400).json({ error: facData.error.error });
-
-        let result = [];
-        if (facData.members) {
-            for (let [id, m] of Object.entries(facData.members)) {
-                // Map the ID to pseudo-random dummy stats since API doesn't provide these easily for everyone
-                const numId = parseInt(id) || 0;
-                result.push({
-                    id: id,
-                    name: m.name,
-                    attacks_made: (numId % 100) + Math.floor(Math.abs(Math.sin(numId) * 50)),
-                    respect_earned: (numId % 500) * 10 + Math.floor(Math.abs(Math.cos(numId) * 1000)),
-                    online_activity: (numId % 24) + Math.floor(Math.abs(Math.sin(numId+1) * 10)),
-                    chain_contributions: (numId % 50) + Math.floor(Math.abs(Math.cos(numId+1) * 20))
-                });
-            }
-        }
-        // Sort by respect earned descending
-        result.sort((a, b) => b.respect_earned - a.respect_earned);
-        res.json({ members: result });
-    } catch (err) {
-        res.status(500).json({ error: "Failed to fetch faction report" });
-    }
-});
 
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
@@ -1403,34 +1346,6 @@ Keep your advice specific to the data provided. Be concise, punchy, and use emoj
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
-});
-
-app.get('/api/war-history', (req, res) => {
-    let warHistory = [];
-    try {
-        if (fs.existsSync('war_history.json')) {
-            warHistory = JSON.parse(fs.readFileSync('war_history.json', 'utf8'));
-        }
-    } catch (err) {}
-    res.json(warHistory);
-});
-
-app.post('/api/save-war', (req, res) => {
-    const { enemyName, date, ourScore, theirScore, result, mvp } = req.body;
-    let warHistory = [];
-    try {
-        if (fs.existsSync('war_history.json')) {
-            warHistory = JSON.parse(fs.readFileSync('war_history.json', 'utf8'));
-        }
-    } catch (err) {}
-    
-    warHistory.push({ enemyName, date, ourScore, theirScore, result, mvp });
-    
-    try {
-        fs.writeFileSync('war_history.json', JSON.stringify(warHistory, null, 4));
-    } catch (err) {}
-    
-    res.json({ success: true });
 });
 
 app.get('/api/travel-profits', async (req, res) => {
