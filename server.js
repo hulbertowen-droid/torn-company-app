@@ -22,8 +22,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || "";
 const ADMIN_DISCORD_WEBHOOK = process.env.ADMIN_DISCORD_WEBHOOK || ""; 
 
-const VIP_FACTIONS = (process.env.VIP_FACTIONS || "").split(',').map(id => id.trim());
-const VIP_PLAYERS = (process.env.VIP_PLAYERS || "").split(',').map(id => id.trim());
+
 
 // Local Databases & Caches
 let claims = {};
@@ -57,8 +56,7 @@ let processedAttackIds = new Set();
 
 const BONUS_THRESHOLDS = new Set([10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000]);
 
-let subscriptions = {};
-let adminFactionId = null;
+
 let dynamicFactionId = null; 
 let lastEventTimestamp = Math.floor(Date.now() / 1000);
 
@@ -70,24 +68,23 @@ let marketConfig = { webhookUrl: "", autoDefense: false, sniperTargets: [] };
 let marketMemory = { defense: {}, sniper: {} };
 let ocConfig = { webhookUrl: "", roleId: "" };
 let ocMemory = {};
-let vipConfig = { factions: [], players: [] }; 
+ 
 let companyConfig = { webhookUrl: "", threshold: 0, alertedItems: {}, apiKey: "" };
 
 try { if (fs.existsSync('subscriptions.json')) subscriptions = JSON.parse(fs.readFileSync('subscriptions.json')); } catch (e) {}
 try { if (fs.existsSync('discord_config.json')) discordConfig = { ...discordConfig, ...JSON.parse(fs.readFileSync('discord_config.json')) }; } catch(e) {}
 try { if (fs.existsSync('market_config.json')) marketConfig = { ...marketConfig, ...JSON.parse(fs.readFileSync('market_config.json')) }; } catch(e) {}
 try { if (fs.existsSync('oc_config.json')) ocConfig = { ...ocConfig, ...JSON.parse(fs.readFileSync('oc_config.json')) }; } catch(e) {}
-try { if (fs.existsSync('vip_config.json')) vipConfig = { ...vipConfig, ...JSON.parse(fs.readFileSync('vip_config.json')) }; } catch(e) {}
+
 try { if (fs.existsSync('spy_db.json')) spyDatabase = JSON.parse(fs.readFileSync('spy_db.json')); } catch(e) {}
 try { if (fs.existsSync('user_tracking.json')) userTracking = JSON.parse(fs.readFileSync('user_tracking.json')); } catch(e) {}
 try { if (fs.existsSync('api_pool.json')) apiPoolConfig = JSON.parse(fs.readFileSync('api_pool.json')); } catch(e) {}
 try { if (fs.existsSync('company_config.json')) companyConfig = { ...companyConfig, ...JSON.parse(fs.readFileSync('company_config.json')) }; } catch(e) {}
 
-function saveSubs() { fs.writeFileSync('subscriptions.json', JSON.stringify(subscriptions)); }
 function saveDiscordConfig() { fs.writeFileSync('discord_config.json', JSON.stringify(discordConfig)); }
 function saveMarketConfig() { fs.writeFileSync('market_config.json', JSON.stringify(marketConfig)); }
 function saveOcConfig() { fs.writeFileSync('oc_config.json', JSON.stringify(ocConfig)); }
-function saveVipConfig() { fs.writeFileSync('vip_config.json', JSON.stringify(vipConfig)); }
+
 function saveSpyDb() { fs.writeFileSync('spy_db.json', JSON.stringify(spyDatabase)); }
 function saveTracking() { fs.writeFileSync('user_tracking.json', JSON.stringify(userTracking)); }
 function saveApiPool() { fs.writeFileSync('api_pool.json', JSON.stringify(apiPoolConfig)); }
@@ -401,7 +398,7 @@ setInterval(async () => {
     
     try {
         if (marketConfig.autoDefense) {
-            let rootKey = ADMIN_API_KEY || discordConfig.apiKey || watchKey;
+            let rootKey = discordConfig.apiKey || watchKey;
             const userRes = await fetch(`https://api.torn.com/user/?selections=bazaar,profile&key=${rootKey}`);
             const userData = await userRes.json();
             
@@ -645,17 +642,15 @@ async function verifySubscription(userKey) {
         }
 
         if (ADMIN_API_KEY && userKey === ADMIN_API_KEY) return playerId;
-        if (playerId && (VIP_PLAYERS.includes(playerId) || vipConfig.players.includes(playerId))) return playerId;
         if (!facId || facId === "0") throw new Error("You must be in a faction to use these tools.");
         
-        // FIXED: Using apiPoolConfig instead of the removed apiKeyPool
         if (adminFactionId && facId === adminFactionId) {
             dynamicFactionId = facId; 
             if (!apiPoolConfig.keys.includes(userKey)) {
                 apiPoolConfig.keys.push(userKey);
                 saveApiPool();
             }
-        } else if (VIP_FACTIONS.includes(facId) || vipConfig.factions.includes(facId) || (subscriptions[facId] && subscriptions[facId] > Date.now())) {
+        } else if ((subscriptions[facId] && subscriptions[facId] > Date.now())) {
             dynamicFactionId = facId; 
             if (!apiPoolConfig.keys.includes(userKey)) {
                 apiPoolConfig.keys.push(userKey);
@@ -716,33 +711,6 @@ function autoDetectEnemyFaction(data) {
 }
 
 app.get('/health', (req, res) => res.status(200).send("OK"));
-
-app.get('/api/admin/vips', (req, res) => {
-    if (req.query.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
-    res.json(vipConfig);
-});
-app.post('/api/admin/vips', (req, res) => {
-    if (req.body.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
-    vipConfig = { factions: req.body.factions || [], players: req.body.players || [] };
-    saveVipConfig();
-    res.json({ success: true });
-});
-
-app.get('/api/admin/keys', (req, res) => {
-    if (req.query.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
-    res.json(apiPoolConfig);
-});
-app.post('/api/admin/keys', (req, res) => {
-    if (req.body.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
-    apiPoolConfig.keys = req.body.keys || [];
-    saveApiPool();
-    res.json({ success: true });
-});
-
-app.get('/api/admin/tracking', (req, res) => {
-    if (req.query.apiKey !== ADMIN_API_KEY || !ADMIN_API_KEY) return res.status(403).json({error: "Access Denied."});
-    res.json(userTracking);
-});
 
 app.get('/api/get-discord-config', (req, res) => { res.json(discordConfig); });
 
@@ -1216,8 +1184,7 @@ app.get('/api/master-config', (req, res) => {
         discordConfig,
         companyConfig,
         ocConfig,
-        marketConfig,
-        adminKeys: apiPoolConfig.keys
+        marketConfig
     });
 });
 
