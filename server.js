@@ -555,11 +555,35 @@ setInterval(async () => {
     } catch (err) {}
 }, 30000);
 
+let companyHistory = [];
+try { if (fs.existsSync('company_history.json')) companyHistory = JSON.parse(fs.readFileSync('company_history.json')); } catch(e) {}
+function saveCompanyHistory() { fs.writeFileSync('company_history.json', JSON.stringify(companyHistory)); }
+
 setInterval(async () => {
     if (!companyConfig.webhookUrl || !companyConfig.apiKey) return;
     try {
-        const resp = await fetch(`https://api.torn.com/company/?selections=stock&key=${companyConfig.apiKey}`);
+        const resp = await fetch(`https://api.torn.com/company/?selections=profile,detailed,stock&key=${companyConfig.apiKey}`);
         const data = await resp.json();
+        
+        // Log History (Once per day)
+        const todayStr = new Date().toISOString().split('T')[0];
+        const lastEntry = companyHistory[companyHistory.length - 1];
+        if (!lastEntry || lastEntry.date !== todayStr) {
+            const p = data.company || {};
+            const d = data.company_detailed || {};
+            if (p.name) {
+                companyHistory.push({
+                    date: todayStr,
+                    profit: p.daily_profit || d.daily_profit || 0,
+                    bank: d.company_bank || 0,
+                    popularity: p.popularity || d.popularity || 0,
+                    customers: p.daily_customers || d.daily_customers || 0
+                });
+                if (companyHistory.length > 30) companyHistory.shift(); // Keep 30 days
+                saveCompanyHistory();
+            }
+        }
+        
         const stockData = data.company_stock || data.stock;
         if (!stockData) return;
         
@@ -1186,6 +1210,16 @@ app.post('/api/save-company-config', (req, res) => {
     res.json({ success: true });
 });
 
+app.post('/api/sync-configs', (req, res) => {
+    // Restores configs from the client's browser (acting as a persistent database)
+    const { company, discord, oc, market } = req.body;
+    if (company) { companyConfig = { ...companyConfig, ...company }; saveCompanyConfig(); }
+    if (discord) { discordConfig = { ...discordConfig, ...discord }; saveDiscordConfig(); }
+    if (oc) { ocConfig = { ...ocConfig, ...oc }; saveOcConfig(); }
+    if (market) { marketConfig = { ...marketConfig, ...market }; saveMarketConfig(); }
+    res.json({ success: true });
+});
+
 app.get('/api/company-config', (req, res) => {
     res.json({ success: true, webhookUrl: companyConfig.webhookUrl, threshold: companyConfig.threshold });
 });
@@ -1257,6 +1291,58 @@ app.get('/api/ocs', async (req, res) => {
         }
 
         res.json({ success: true, crimes });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/company-history', (req, res) => {
+    res.json({ success: true, history: companyHistory });
+});
+
+app.post('/api/company-advisor', async (req, res) => {
+    try {
+        const { company, employees, stock, history } = req.body;
+        
+        const prompt = `You are an expert Torn City Company Director advisor. 
+I am giving you the raw data for my company. Please analyze it and give me 3-5 short, actionable insights on how to improve my company's performance, profitability, and employee efficiency.
+
+Company Info:
+Name: ${company.name || 'Unknown'}
+Daily Profit: $${(company.daily_profit || 0).toLocaleString()}
+Popularity: ${company.popularity || 0}
+Customers: ${company.daily_customers || 0}
+
+Stock Data:
+${JSON.stringify(stock, null, 2)}
+
+Employee Data:
+${JSON.stringify(employees, null, 2)}
+
+Keep your advice specific to the data provided. Be concise, punchy, and use emojis. Do not output markdown code blocks, just raw text formatted nicely.`;
+
+        // We will invoke Gemini API
+        // Wait, the backend doesn't have the Gemini API configured.
+        // To make it easy, we will just use the official Gemini API if an API key is provided, 
+        // or for this mockup, I'll return a simulated response if we don't have a Gemini API key.
+        
+        let advisorKey = process.env.GEMINI_API_KEY;
+        if (!advisorKey) {
+            return res.json({ success: true, advice: "🧠 **AI Advisor Simulated Response**\n\n1. **Stock Warning:** You don't have a Gemini API Key configured on the server (`GEMINI_API_KEY`). \n2. **Employee Analysis:** I need a real API key to parse this data!\n3. **Action:** Have your developer add a Gemini API key to your environment variables!" });
+        }
+
+        const gRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${advisorKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }]
+            })
+        });
+        
+        const gData = await gRes.json();
+        const advice = gData.candidates?.[0]?.content?.parts?.[0]?.text || "Failed to generate advice.";
+        
+        res.json({ success: true, advice });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

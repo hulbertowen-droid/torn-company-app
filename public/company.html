@@ -6,6 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Company Manager | Owen's Tools</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --bg: #0b0c10; --card: #1f2833; --item: #283340;
@@ -46,11 +47,12 @@
         /* KPI Cards */
         .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 30px; }
         .kpi-card { background: var(--card); border: 1px solid rgba(102, 252, 241, 0.2); border-radius: 10px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
-        .kpi-label { font-size: 0.75em; color: var(--teal-dim); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; margin-bottom: 8px; }
+        .kpi-title { font-size: 0.75em; color: var(--teal-dim); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700; margin-bottom: 8px; }
         .kpi-val { font-size: 1.8em; font-weight: 900; color: var(--white); }
         .kpi-sub { font-size: 0.8em; color: var(--text-main); margin-top: 5px; }
         .text-green { color: var(--green) !important; }
         .text-red { color: var(--red) !important; }
+        .text-gold { color: var(--gold) !important; }
 
         .section-title { font-size: 1.2em; color: var(--teal); font-weight: 900; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
         .section-title::after { content: ''; flex: 1; height: 1px; background: rgba(102, 252, 241, 0.2); }
@@ -103,6 +105,15 @@
         .tt-val { font-weight: bold; }
         .tt-pos { color: var(--green); }
         .tt-neg { color: var(--red); }
+
+        /* AI Advisor Modal */
+        #advisor-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10000; justify-content:center; align-items:center; backdrop-filter:blur(4px); }
+        .advisor-card { background: var(--card); padding: 30px; border-radius: 12px; border: 1px solid var(--gold); width: 600px; max-width: 90%; max-height: 80vh; overflow-y: auto; position: relative; }
+        .advisor-card h3 { color: var(--gold); margin: 0 0 15px; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 10px; }
+        .advisor-content { font-size: 0.95em; line-height: 1.6; color: #ccc; white-space: pre-wrap; }
+        .advisor-content strong { color: var(--white); }
+        
+        .chart-container { background: rgba(0,0,0,0.3); border-radius: 8px; padding: 15px; margin-top: 20px; border: 1px solid #333; }
     </style>
 </head>
 <body>
@@ -139,28 +150,37 @@
 
             <div class="kpi-grid">
                 <div class="kpi-card">
-                    <div class="kpi-label">Daily Profit</div>
+                    <div class="kpi-title">DAILY PROFIT</div>
                     <div class="kpi-val" id="c-profit">$0</div>
-                    <div class="kpi-sub">Total Income: <span id="c-income">$0</span></div>
+                    <div class="kpi-sub" style="margin-top: 5px;">Total Income: <span id="c-income">$0</span></div>
                 </div>
                 <div class="kpi-card">
-                    <div class="kpi-label">Company Bank</div>
+                    <div class="kpi-title">COMPANY BANK</div>
                     <div class="kpi-val text-green" id="c-bank">$0</div>
-                    <div class="kpi-sub">Liquid funds available</div>
+                    <div class="kpi-sub" style="margin-top: 5px;">Liquid funds available</div>
                 </div>
                 <div class="kpi-card">
-                    <div class="kpi-label">Employees</div>
+                    <div class="kpi-title">EMPLOYEES</div>
                     <div class="kpi-val" id="c-emps">0 / 0</div>
-                    <div class="kpi-sub" id="c-hires">0 pending applications</div>
+                    <div class="kpi-sub" style="margin-top: 5px;" id="c-hires">0 pending applications</div>
                 </div>
                 <div class="kpi-card">
-                    <div class="kpi-label">Company Type</div>
-                    <div class="kpi-val" style="font-size: 1.4em;" id="c-type">Unknown</div>
-                    <div class="kpi-sub">Upgrades: Size <span id="c-up-size">0</span> | Adv <span id="c-up-adv">0</span></div>
+                    <div class="kpi-title">POPULARITY</div>
+                    <div class="kpi-val text-gold" id="c-pop">0</div>
+                    <div class="kpi-sub" style="margin-top: 5px;" id="c-customers">0 daily customers</div>
                 </div>
             </div>
 
-            <div class="section-title" id="employees">Employee Roster</div>
+            <!-- Growth Graph Section -->
+            <div class="section-title" style="display:flex; justify-content:space-between; align-items:flex-end;">
+                <span>COMPANY GROWTH</span>
+                <button onclick="getAIAdvice()" style="background:var(--gold); color:#000; border:none; padding:8px 16px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:0.8em; text-transform:uppercase;">🧠 AI Advisor</button>
+            </div>
+            <div class="chart-container">
+                <canvas id="growthChart" height="80"></canvas>
+            </div>
+
+            <div class="section-title" id="employees" style="margin-top:30px;">Employee Roster</div>
             <div class="table-wrap">
                 <table>
                     <thead>
@@ -217,12 +237,22 @@
             <button onclick="saveKey()">Save & Connect</button>
         </div>
     </div>
+    
+    <!-- AI Advisor Modal -->
+    <div id="advisor-modal">
+        <div class="advisor-card">
+            <button onclick="closeAdvisor()" style="position:absolute; right:15px; top:15px; background:none; border:none; color:var(--teal-dim); font-size:1.5em; cursor:pointer;">✕</button>
+            <h3>🧠 Expert Director Analysis</h3>
+            <div id="advisor-text" class="advisor-content">Loading AI insights...</div>
+        </div>
+    </div>
 
 <script>
 let myKey = localStorage.getItem("warboard_apikey") || "";
 let companyData = null;
 let empSortCol = 'effectiveness';
 let empSortDir = -1; // -1 descending
+let growthChartInstance = null;
 
 document.getElementById("api-key-input").value = myKey;
 if (localStorage.getItem('company_sidebar_collapsed') === 'true') document.getElementById('app-sidebar').classList.add('collapsed');
@@ -252,15 +282,29 @@ function saveKey() {
     const webhookUrl = document.getElementById('webhook-input').value.trim();
     const threshold = document.getElementById('threshold-input').value;
     
+    const config = { webhookUrl, threshold, apiKey: myKey };
+    localStorage.setItem('master_company_config', JSON.stringify(config));
+    
     fetch('/api/save-company-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ webhookUrl, threshold, apiKey: myKey })
+        body: JSON.stringify(config)
     });
     
     closeSettings();
     loadCompanyData();
 }
+
+window.addEventListener('DOMContentLoaded', () => {
+    let companySync = localStorage.getItem('master_company_config');
+    if (companySync) {
+        fetch('/api/sync-configs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ company: JSON.parse(companySync) })
+        }).catch(err => console.log(err));
+    }
+});
 
 function formatMoney(num) {
     return '$' + parseInt(num).toLocaleString();
@@ -310,12 +354,10 @@ function renderDashboard() {
     const p = companyData.company || {};
     const d = companyData.company_detailed || {};
 
-    // Header
     document.getElementById('c-name').textContent = p.name || 'Unknown';
     document.getElementById('c-stars').textContent = '★'.repeat(p.rating || 0) + '☆'.repeat(5 - (p.rating || 0));
     document.getElementById('last-updated').textContent = 'Live Data: ' + new Date().toLocaleTimeString();
 
-    // KPIs
     const profitEl = document.getElementById('c-profit');
     profitEl.textContent = formatMoney(p.daily_profit || d.daily_profit || 0);
     const prof = p.daily_profit || d.daily_profit || 0;
@@ -325,17 +367,15 @@ function renderDashboard() {
     document.getElementById('c-bank').textContent = formatMoney(d.company_bank || 0);
     document.getElementById('c-emps').textContent = `${p.employees_hired || 0} / ${p.employees_capacity || 0}`;
     
+    document.getElementById('c-pop').textContent = p.popularity || d.popularity || 0;
+    document.getElementById('c-customers').textContent = `${p.daily_customers || d.daily_customers || 0} daily customers`;
+    
     const appsCount = companyData.applications ? Object.keys(companyData.applications).length : 0;
     document.getElementById('c-hires').textContent = `${appsCount} pending applications`;
-    
-    document.getElementById('c-type').textContent = companyData.company_type ? Object.values(companyData.company_type)[0] || 'Company' : 'Company';
-    
-    const upg = companyData.company_upgrades || d.upgrades || {};
-    document.getElementById('c-up-size').textContent = upg.company_size || 0;
-    document.getElementById('c-up-adv').textContent = upg.staff_room || upg.advertising || 0;
 
     renderEmployees();
     renderStock();
+    renderChart();
 }
 
 function sortEmps(col) {
@@ -372,7 +412,6 @@ function renderEmployees() {
         if (eff < 70) effClass = 'eff-low';
         else if (eff < 90) effClass = 'eff-med';
 
-        // Tooltip building
         const wStats = effObj.working_stats || 0;
         const setIn = effObj.settled_in || 0;
         const edu = effObj.director_education || 0;
@@ -433,7 +472,70 @@ function renderStock() {
     }).join('');
 }
 
-// Nav active state handled by simple intersection observer or click
+// AI Advisor
+function getAIAdvice() {
+    document.getElementById('advisor-modal').style.display = 'flex';
+    document.getElementById('advisor-text').innerHTML = "🧠 Analyzing your company data...<br><br><i>This may take a few seconds as the AI reads your employee stats, stock levels, and historical profit...</i>";
+    
+    fetch('/api/company-advisor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            company: companyData.company || {},
+            employees: companyData.company_employees || companyData.employees || {},
+            stock: companyData.company_stock || companyData.stock || {}
+        })
+    }).then(r => r.json()).then(data => {
+        if (data.success) {
+            let html = data.advice.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            document.getElementById('advisor-text').innerHTML = html;
+        } else {
+            document.getElementById('advisor-text').innerHTML = "Error: " + data.error;
+        }
+    }).catch(e => document.getElementById('advisor-text').innerHTML = "Failed to reach AI API.");
+}
+function closeAdvisor() { document.getElementById('advisor-modal').style.display = 'none'; }
+
+// Growth Chart
+function renderChart() {
+    fetch('/api/company-history')
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success || !data.history || data.history.length === 0) return;
+            
+            const labels = data.history.map(h => h.date.split('-').slice(1).join('/'));
+            const profitData = data.history.map(h => h.profit);
+            
+            if (growthChartInstance) growthChartInstance.destroy();
+            
+            const ctx = document.getElementById('growthChart').getContext('2d');
+            growthChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Daily Profit',
+                        data: profitData,
+                        borderColor: '#52c9c1',
+                        backgroundColor: 'rgba(82, 201, 193, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888' } },
+                        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', callback: function(val) { return '$' + (val/1000000).toFixed(1) + 'm'; } } }
+                    }
+                }
+            });
+        });
+}
+
 document.querySelectorAll('.nav-items a[href^="#"]').forEach(link => {
     link.addEventListener('click', (e) => {
         document.querySelectorAll('.nav-items a').forEach(a => a.classList.remove('active'));
