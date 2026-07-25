@@ -4,94 +4,143 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recruitment | Owen's Faction Tools</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
     <style>
-        :root { 
-            --bg: #090a0f; --card: #11141d; --item: #1b202e; 
+        :root {
+            --bg: #090a0f; --card: #11141d; --item: #1b202e;
             --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
             --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
+            --purple: #a29bfe;
         }
-        
-        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; height: 100vh; overflow: hidden; }
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #57606f; }
+        * { box-sizing: border-box; }
+        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Inter', 'Segoe UI', sans-serif; margin: 0; height: 100vh; overflow: hidden; }
+        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #0b0d13; } ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
 
-        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; z-index: 100; }
+        /* Sidebar */
+        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s; flex-shrink: 0; z-index: 100; }
         .sidebar.collapsed { width: 75px; }
         .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2f3542; }
-        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 1.1em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
+        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 0.9em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
         .sidebar.collapsed .sidebar-logo { opacity: 0; width: 0; display: none; }
         .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
         .toggle-btn:hover { color: white; background: #2f3542; }
         .nav-items { display: flex; flex-direction: column; gap: 8px; padding: 20px 10px; }
-        .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
+        .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: 600; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
         .nav-link:hover { background: #2f3542; color: white; }
         .nav-link.active { background: rgba(255, 71, 87, 0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
         .nav-text { transition: opacity 0.2s; }
         .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
-        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
 
-        h1 { text-align: center; color: var(--green); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
+        /* Main */
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px 35px; height: 100vh; }
 
-        .container { max-width: 1200px; margin: 0 auto; background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; }
-        
-        .dash-card { background: #0b0d13; border: 1px solid #2f3542; padding: 20px; border-radius: 12px; margin-bottom: 20px; }
-        .dash-header { margin-top: 0; color: var(--text-dim); text-transform: uppercase; font-size: 0.85em; letter-spacing: 1px; border-bottom: 1px solid #2f3542; padding-bottom: 10px; margin-bottom: 15px; font-weight: bold; }
-        
-        #war-list-container { max-height: 250px; overflow-y: auto; padding-right: 10px; }
+        h1 { text-align: center; color: var(--green); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 6px; font-size: 1.8em; }
+        .subtitle { text-align: center; color: var(--text-dim); margin-bottom: 30px; font-size: 0.88em; }
 
-        .war-block { background: var(--card); border: 1px solid #2f3542; padding: 15px 20px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        .war-details .title { color: var(--gold); font-weight: bold; font-size: 1.1em; margin-bottom: 5px; }
-        .war-details .dates { color: var(--text-dim); font-size: 0.85em; }
-        
-        .btn-calc { background: var(--blue); color: #000; font-weight: bold; padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; transition: 0.2s; flex-shrink: 0; }
-        .btn-calc:hover { background: #79c0ff; }
-        .btn-loaded { background: #2f3542; color: var(--text-dim); cursor: default; }
-        .btn-loaded:hover { background: #2f3542; }
-        
-        .btn-msg { background: rgba(88, 166, 255, 0.15); border: 1px solid var(--blue); color: var(--blue); padding: 6px 12px; border-radius: 4px; text-decoration: none; font-size: 0.8em; font-weight: bold; transition: 0.2s; cursor: pointer; }
-        .btn-msg:hover { background: var(--blue); color: #000; }
+        /* Stats Bar */
+        .stats-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 28px; }
+        .stat-card { background: var(--card); border: 1px solid #2f3542; border-radius: 10px; padding: 16px 20px; text-align: center; }
+        .stat-card .val { font-size: 1.8em; font-weight: 900; }
+        .stat-card .lbl { font-size: 0.72em; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+        .stat-card.green .val { color: var(--green); }
+        .stat-card.gold .val { color: var(--gold); }
+        .stat-card.blue .val { color: var(--blue); }
+        .stat-card.red .val { color: var(--red); }
 
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold; text-transform: uppercase; display: inline-block;}
-        .badge-gone { background: rgba(46, 213, 115, 0.15); color: var(--green); border: 1px solid var(--green); }
-        .badge-member { background: rgba(255, 165, 2, 0.15); color: var(--gold); border: 1px solid var(--gold); }
+        /* War List */
+        .section-header { font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; color: var(--text-dim); margin-bottom: 12px; }
+        .war-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-bottom: 25px; }
+        .war-card { background: var(--card); border: 1px solid #2f3542; border-radius: 10px; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; gap: 10px; transition: border-color 0.2s; }
+        .war-card:hover { border-color: #4a5568; }
+        .war-card .wname { font-weight: 700; font-size: 1em; margin-bottom: 3px; }
+        .war-card .wmeta { font-size: 0.78em; color: var(--text-dim); }
+        .btn-scan { background: var(--green); color: #000; font-weight: 700; padding: 9px 18px; border-radius: 7px; border: none; cursor: pointer; transition: 0.2s; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; flex-shrink: 0; }
+        .btn-scan:hover { background: #26b361; box-shadow: 0 0 12px rgba(46,213,115,0.3); }
+        .btn-scan:disabled { background: #2f3542; color: var(--text-dim); cursor: not-allowed; box-shadow: none; }
+        .btn-scan.done { background: rgba(46,213,115,0.15); color: var(--green); border: 1px solid var(--green); cursor: default; }
 
-        /* Filter Tabs */
-        .filter-group { display: none; gap: 8px; margin-bottom: 15px; align-items: center; justify-content: space-between; border-top: 1px solid #2f3542; padding-top: 20px;}
-        .filter-btn { background: #0b0d13; color: var(--text-dim); border: 1px solid #2f3542; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 0.85em; font-weight: bold; transition: 0.2s; text-transform: uppercase;}
+        /* Filters */
+        .filter-row { display: flex; gap: 10px; margin-bottom: 18px; align-items: center; flex-wrap: wrap; }
+        .filter-btn { background: var(--card); border: 1px solid #2f3542; color: var(--text-dim); padding: 8px 16px; border-radius: 7px; cursor: pointer; font-size: 0.82em; font-weight: 700; transition: 0.2s; text-transform: uppercase; letter-spacing: 0.5px; }
         .filter-btn:hover { background: #2f3542; color: white; }
-        .filter-btn.active { background: rgba(46, 213, 115, 0.15); border-color: var(--green); color: white; }
+        .filter-btn.active { background: rgba(46,213,115,0.12); border-color: var(--green); color: var(--green); }
+        .filter-btn.blue { border-color: var(--blue); color: var(--blue); background: rgba(88,166,255,0.08); }
+        .filter-btn.blue:hover { background: rgba(88,166,255,0.2); }
+        .search-box { margin-left: auto; background: var(--card); border: 1px solid #2f3542; border-radius: 7px; color: white; padding: 8px 14px; font-size: 0.85em; width: 200px; transition: 0.2s; }
+        .search-box:focus { outline: none; border-color: var(--blue); }
+        .search-box::placeholder { color: var(--text-dim); }
 
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; display: none; }
-        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #2f3542; }
-        th { color: var(--green); font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; }
-        tr:hover { background: rgba(255,255,255,0.02); }
-        
-        .score-val { color: var(--blue); font-weight: bold; }
-        .eff-val { color: var(--gold); font-weight: bold; }
-        .stat-val { color: var(--text-dim); font-size: 0.9em; font-style: italic;}
+        /* Table */
+        .table-wrap { background: var(--card); border: 1px solid #2f3542; border-radius: 12px; overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; }
+        thead { background: #0b0d13; }
+        th { padding: 13px 16px; text-align: left; font-size: 0.75em; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-dim); font-weight: 700; border-bottom: 1px solid #2f3542; cursor: pointer; user-select: none; white-space: nowrap; }
+        th:hover { color: white; }
+        th .sort-arrow { opacity: 0.3; margin-left: 4px; }
+        th.sorted .sort-arrow { opacity: 1; color: var(--green); }
+        td { padding: 13px 16px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.9em; vertical-align: middle; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+        .player-link { color: var(--text-main); text-decoration: none; font-weight: 700; }
+        .player-link:hover { color: var(--blue); text-decoration: underline; }
+        .player-id { font-size: 0.75em; color: var(--text-dim); font-weight: 400; }
 
-        /* Modal Styling */
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 10000; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
-        .modal-content { background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; width: 500px; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.9); position: relative;}
-        .modal-content h2 { margin: 0 0 10px 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
-        .modal-content textarea { padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; width: 100%; box-sizing: border-box; min-height: 120px; font-family: inherit; resize: vertical; line-height: 1.5; }
-        .modal-content textarea:focus { outline: 1px solid var(--blue); }
-        .modal-content button { background: var(--green); color: #000; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.1em; margin-top: 10px; transition: 0.2s; text-transform: uppercase; }
-        .modal-content button:hover { background: #26b361; }
-        .modal-content button:disabled { background: #2f3542; color: #57606f; cursor: not-allowed; }
-        .close-btn { position: absolute; right: 20px; top: 20px; color: var(--text-dim); cursor: pointer; font-size: 1.5em; line-height: 1; }
-        .close-btn:hover { color: white; }
+        .badge { padding: 3px 9px; border-radius: 5px; font-size: 0.72em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; }
+        .badge-gone { background: rgba(46,213,115,0.12); color: var(--green); border: 1px solid rgba(46,213,115,0.4); }
+        .badge-member { background: rgba(255,165,2,0.12); color: var(--gold); border: 1px solid rgba(255,165,2,0.4); }
+
+        .score-val { color: var(--blue); font-weight: 700; }
+        .eff-val { color: var(--gold); font-weight: 700; }
+        .stat-dim { color: var(--text-dim); font-style: italic; }
+
+        .btn-ai { background: linear-gradient(135deg, rgba(162,155,254,0.2), rgba(88,166,255,0.2)); border: 1px solid var(--purple); color: var(--purple); padding: 6px 14px; border-radius: 6px; font-size: 0.78em; font-weight: 700; cursor: pointer; transition: 0.2s; white-space: nowrap; }
+        .btn-ai:hover { background: linear-gradient(135deg, rgba(162,155,254,0.4), rgba(88,166,255,0.3)); box-shadow: 0 0 10px rgba(162,155,254,0.3); }
+        .btn-profile { background: rgba(88,166,255,0.1); border: 1px solid rgba(88,166,255,0.3); color: var(--blue); padding: 6px 12px; border-radius: 6px; font-size: 0.78em; font-weight: 700; text-decoration: none; display: inline-block; transition: 0.2s; }
+        .btn-profile:hover { background: rgba(88,166,255,0.25); }
+
+        /* Priority badge for top performers */
+        .priority-tag { background: linear-gradient(135deg, rgba(255,71,87,0.2), rgba(255,165,2,0.2)); border: 1px solid rgba(255,165,2,0.5); color: var(--gold); padding: 2px 7px; border-radius: 4px; font-size: 0.68em; font-weight: 700; text-transform: uppercase; margin-left: 6px; }
+
+        /* Empty / Loading */
+        .empty-state { padding: 60px 20px; text-align: center; color: var(--text-dim); }
+        .empty-state .icon { font-size: 3.5em; margin-bottom: 14px; }
+        .empty-state h3 { color: var(--text-main); margin: 0 0 8px; }
+        .loading-row td { text-align: center; color: var(--text-dim); padding: 40px; font-style: italic; }
+
+        /* AI Modal */
+        .modal-overlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.88); z-index:10000; justify-content:center; align-items:center; backdrop-filter: blur(5px); }
+        .modal-content { background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; width: 540px; max-width: 95vw; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 25px 80px rgba(0,0,0,0.9); position: relative; }
+        .modal-header { display: flex; align-items: center; gap: 12px; margin-bottom: 5px; }
+        .modal-header h2 { margin: 0; font-size: 1.05em; color: var(--text-main); }
+        .ai-badge { background: linear-gradient(135deg, var(--purple), var(--blue)); padding: 3px 10px; border-radius: 5px; font-size: 0.7em; font-weight: 700; color: white; text-transform: uppercase; letter-spacing: 1px; }
+        .modal-content textarea { padding: 14px; border-radius: 8px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 0.92em; width: 100%; min-height: 200px; font-family: 'Inter', sans-serif; resize: vertical; line-height: 1.6; transition: 0.2s; }
+        .modal-content textarea:focus { outline: none; border-color: var(--purple); }
+        .modal-actions { display: flex; gap: 10px; }
+        .btn-copy { background: var(--green); color: #000; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 0.95em; flex: 1; transition: 0.2s; text-transform: uppercase; }
+        .btn-copy:hover { background: #26b361; }
+        .btn-copy:disabled { background: #2f3542; color: var(--text-dim); cursor: not-allowed; }
+        .btn-regen { background: rgba(162,155,254,0.15); border: 1px solid var(--purple); color: var(--purple); padding: 12px 18px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 0.9em; transition: 0.2s; }
+        .btn-regen:hover { background: rgba(162,155,254,0.3); }
+        .btn-regen:disabled { opacity: 0.4; cursor: not-allowed; }
+        .close-btn { position: absolute; right: 16px; top: 16px; background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.3em; padding: 4px 8px; border-radius: 4px; }
+        .close-btn:hover { background: #2f3542; color: white; }
+        .modal-source { font-size: 0.72em; color: var(--text-dim); text-align: right; margin-top: -5px; }
+
+        /* Loading spinner */
+        .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.2); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .error-box { background: rgba(255,71,87,0.1); border: 1px solid rgba(255,71,87,0.4); color: var(--red); padding: 12px 18px; border-radius: 8px; font-size: 0.88em; font-weight: 600; margin-bottom: 15px; }
     </style>
 </head>
 <body>
-  <nav class="sidebar" id="app-sidebar">
-    <div class="sidebar-header">
-       <div class="sidebar-logo">Owen's Faction Tools</div>
-        <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
-    </div>
-  <div class="nav-items">
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">Owen's Faction Tools</div>
+            <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
+        </div>
+        <div class="nav-items">
             <a href="/" class="nav-link">📡 <span class="nav-text">Live Warboard</span></a>
             <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
             <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
@@ -101,276 +150,332 @@
             <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>
             <a href="/admin.html" class="nav-link">👑 <span class="nav-text">Admin Panel</span></a>
             <a href="/oc.html" class="nav-link">💼 <span class="nav-text">OC Manager</span></a>
-            <a onclick="openSettings()" class="nav-link" style="margin-top: 15px; border-top: 1px solid #2f3542; border-radius: 0; padding-top: 15px; cursor: pointer;">
+            <a onclick="openSettings()" class="nav-link" style="margin-top:auto; border-top:1px solid #2f3542; border-radius:0; padding-top:15px; cursor:pointer;">
                 ⚙️ <span class="nav-text">Settings</span>
             </a>
         </div>
-</nav>
+    </nav>
 
     <main class="main-content">
-        <h1>Enemy Poaching Scanner</h1>
-<div style="background: rgba(255, 165, 2, 0.1); border: 1px solid var(--gold); color: var(--gold); padding: 12px 20px; border-radius: 8px; margin-bottom: 25px; text-align: center; font-weight: bold; font-size: 0.9em; box-shadow: 0 4px 15px rgba(255, 165, 2, 0.15);">
-    ⚠️ WORK IN PROGRESS: This tool is currently in active development and may not function to its fullest potential. Please report any bugs or suggestions to <a href="https://www.torn.com/profiles.php?XID=3776908" target="_blank" style="color: var(--text-main); text-decoration: underline;">Owen777 [3776908]</a>.
-</div>
-        <div class="container">
-            <div id="error-msg" style="color: var(--red); font-weight: bold; margin-bottom: 15px; text-align: center;"></div>
+        <h1>🎯 Enemy Poaching Scanner</h1>
+        <p class="subtitle">Find high-value targets from past wars who are ready to be recruited</p>
 
-            <div class="dash-card">
-                <div class="dash-header">Select a Past War to Scan</div>
-                <div id="war-list-container">
-                    <div style="color:var(--text-dim);">Loading past wars...</div>
-                </div>
-            </div>
+        <div id="error-box" class="error-box" style="display:none;"></div>
 
-            <div id="filter-bar" class="filter-group">
-                <div style="display:flex; gap:10px;">
-                    <button id="flt-all" class="filter-btn active" onclick="setRecruitFilter('All')">All Targets</button>
-                    <button id="flt-factionless" class="filter-btn" onclick="setRecruitFilter('Factionless')">🚨 Factionless / Left Only</button>
-                </div>
-                <button class="filter-btn" onclick="rescanStats()" style="border-color:var(--blue); color:var(--blue);">🔄 Refresh FFScouter Stats</button>
-            </div>
-
-            <table id="recruit-table">
-                <thead>
-                    <tr>
-                        <th>Target Player</th>
-                        <th>Est. Stats</th>
-                        <th>War Score</th>
-                        <th>Hits</th>
-                        <th>Efficiency (Score/Hit)</th>
-                        <th>Current Status</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody id="recruit-list"></tbody>
-            </table>
+        <!-- Stats overview bar -->
+        <div class="stats-bar" id="stats-bar" style="display:none;">
+            <div class="stat-card green"><div class="val" id="stat-total">0</div><div class="lbl">Poachable Targets</div></div>
+            <div class="stat-card gold"><div class="val" id="stat-factionless">0</div><div class="lbl">Already Factionless</div></div>
+            <div class="stat-card blue"><div class="val" id="stat-top-score">0</div><div class="lbl">Top War Score</div></div>
+            <div class="stat-card red"><div class="val" id="stat-avg-eff">0</div><div class="lbl">Avg Score/Hit</div></div>
         </div>
 
-        <!-- AI Quick Chat Modal -->
-        <div id="msg-modal" class="modal-overlay">
-            <div class="modal-content">
-                <div class="close-btn" onclick="closeMsgModal()">&times;</div>
-                <h2 id="modal-title">Drafting Message...</h2>
-                <textarea id="ai-msg-box" spellcheck="false">Initializing AI uplink...</textarea>
-                <button id="btn-copy-send" onclick="copyAndSend()" disabled>Copy & Open Torn</button>
+        <!-- War selection -->
+        <div class="section-header">📋 Select a Past War to Scan</div>
+        <div id="war-grid" class="war-grid">
+            <div style="color:var(--text-dim); font-style:italic;">Loading your past wars...</div>
+        </div>
+
+        <!-- Results -->
+        <div id="results-section" style="display:none;">
+            <div class="filter-row" id="filter-row">
+                <button class="filter-btn active" id="flt-All" onclick="setFilter('All')">All Targets</button>
+                <button class="filter-btn" id="flt-Factionless" onclick="setFilter('Factionless')">🟢 Factionless Only</button>
+                <button class="filter-btn" id="flt-Member" onclick="setFilter('Member')">🟡 Still In Faction</button>
+                <button class="filter-btn blue" onclick="rescan()">🔄 Rescan</button>
+                <input class="search-box" type="text" id="search-box" placeholder="Search by name..." oninput="renderTable()">
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th onclick="sortBy('name')">Player <span class="sort-arrow">↕</span></th>
+                            <th onclick="sortBy('estStats')">Est. Stats <span class="sort-arrow">↕</span></th>
+                            <th onclick="sortBy('score')">War Score <span class="sort-arrow">↕</span></th>
+                            <th onclick="sortBy('attacks')">Hits <span class="sort-arrow">↕</span></th>
+                            <th onclick="sortBy('efficiency')">Score/Hit <span class="sort-arrow">↕</span></th>
+                            <th onclick="sortBy('stillInFaction')">Status <span class="sort-arrow">↕</span></th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recruit-list"></tbody>
+                </table>
             </div>
         </div>
     </main>
 
-<script>
-// --- SIDEBAR & SMART NAV LOGIC ---
-document.addEventListener("DOMContentLoaded", function() {
-    let currentUrl = window.location.pathname;
-    if (currentUrl === "/index.html" || currentUrl === "") currentUrl = "/"; 
-    let links = document.querySelectorAll(".nav-items .nav-link");
-    links.forEach(link => {
-        link.classList.remove("active"); 
-        if (link.getAttribute("href") === currentUrl) link.classList.add("active"); 
-    });
+    <!-- AI Message Modal -->
+    <div id="msg-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeMsgModal()">✕</button>
+            <div class="modal-header">
+                <h2 id="modal-title">Drafting Message...</h2>
+                <span class="ai-badge">✨ AI</span>
+            </div>
+            <div class="modal-source" id="modal-source"></div>
+            <textarea id="ai-msg-box" spellcheck="false" placeholder="Generating..."></textarea>
+            <div class="modal-actions">
+                <button class="btn-regen" id="btn-regen" onclick="regenerateMsg()" disabled>🔄 Regenerate</button>
+                <button class="btn-copy" id="btn-copy" onclick="copyAndSend()" disabled>📋 Copy & Open Torn</button>
+            </div>
+        </div>
+    </div>
 
-    const sidebar = document.getElementById('app-sidebar');
-    if (localStorage.getItem('sidebar_collapsed') === 'true') {
-        sidebar.classList.add('collapsed');
-    }
-});
+<script>
+const myKey = localStorage.getItem("warboard_apikey") || "";
+let allRecruits = [];
+let activeFilter = 'All';
+let sortCol = 'score';
+let sortDir = -1;
+let currentReportId = null;
+let currentEnemy = '';
+let currentTarget = null;
 
 function toggleSidebar() {
-    const sidebar = document.getElementById('app-sidebar');
-    sidebar.classList.toggle('collapsed');
-    localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+    const s = document.getElementById('app-sidebar');
+    s.classList.toggle('collapsed');
+    localStorage.setItem('sidebar_collapsed', s.classList.contains('collapsed'));
+}
+if (localStorage.getItem('sidebar_collapsed') === 'true') document.getElementById('app-sidebar').classList.add('collapsed');
+
+function openSettings() { alert("Please set your API key on the Live Warboard settings page first."); }
+
+function showError(msg) {
+    const el = document.getElementById('error-box');
+    el.textContent = '⚠️ ' + msg;
+    el.style.display = msg ? 'block' : 'none';
 }
 
-// --- ORIGINAL RECRUITMENT LOGIC ---
-const myKey = localStorage.getItem("warboard_apikey");
-let currentButtons = [];
-let currentTargetId = null;
-let currentRecruits = [];
-let activeFilter = 'All';
-let currentReportId = null;
-
+// --- LOAD WAR LIST ---
 async function fetchWarList() {
     if (!myKey) {
-        document.getElementById("error-msg").innerText = "Please set your API key on the Live Warboard settings first.";
-        document.getElementById("war-list-container").innerHTML = "";
+        showError("No API key found. Please set your API key on the Live Warboard first.");
+        document.getElementById('war-grid').innerHTML = '';
         return;
     }
     try {
         const res = await fetch(`/api/war-list?apiKey=${myKey}`);
         const data = await res.json();
-        const container = document.getElementById("war-list-container");
-        
-        if (data.error) { container.innerHTML = `<div style="color:var(--red);">API Error: ${data.error}</div>`; return; }
+        const grid = document.getElementById('war-grid');
+        if (data.error) { grid.innerHTML = `<div style="color:var(--red)">API Error: ${data.error}</div>`; return; }
 
-        if (data.wars && data.wars.length > 0) {
-            let html = "";
-            data.wars.forEach(w => {
-                let dStart = new Date(w.start * 1000).toLocaleDateString();
-                html += `
-                    <div class="war-block">
-                        <div class="war-details">
-                            <div class="title">vs ${w.enemy}</div>
-                            <div class="dates">Started: ${dStart}</div>
-                        </div>
-                        <button id="btn-${w.id}" class="btn-calc" onclick="scanRecruits('${w.id}')">Scan Enemy Faction</button>
-                    </div>
-                `;
-                currentButtons.push(`btn-${w.id}`);
-            });
-            container.innerHTML = html;
-        } else {
-            container.innerHTML = `<div style="color:var(--text-dim);">No recent completed ranked wars found.</div>`;
+        if (!data.wars || data.wars.length === 0) {
+            grid.innerHTML = `<div style="color:var(--text-dim);font-style:italic;">No completed ranked wars found in Torn API history.</div>`;
+            return;
         }
+
+        grid.innerHTML = data.wars.map(w => {
+            const d = new Date(w.start * 1000);
+            const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            return `
+                <div class="war-card" id="wcard-${w.id}">
+                    <div>
+                        <div class="wname">⚔️ vs ${w.enemy}</div>
+                        <div class="wmeta">Started ${dateStr}</div>
+                    </div>
+                    <button class="btn-scan" id="wscan-${w.id}" onclick="scanWar('${w.id}', '${w.enemy.replace(/'/g, "\\'")}')">Scan</button>
+                </div>`;
+        }).join('');
     } catch (e) {
-        document.getElementById("war-list-container").innerHTML = `<div style="color:var(--red);">Failed to load wars.</div>`;
+        document.getElementById('war-grid').innerHTML = `<div style="color:var(--red);">Failed to load wars.</div>`;
     }
 }
 
-fetchWarList();
-
-async function scanRecruits(reportId) {
+// --- SCAN WAR ---
+async function scanWar(reportId, enemyName) {
     currentReportId = reportId;
-    document.getElementById("error-msg").innerText = "";
-    const table = document.getElementById("recruit-table");
-    const list = document.getElementById("recruit-list");
-    const filterBar = document.getElementById("filter-bar");
-    
-    currentButtons.forEach(id => {
-        const btn = document.getElementById(id);
-        if (btn) { btn.className = "btn-calc"; btn.innerText = "Scan Enemy Faction"; }
-    });
-    
-    const activeBtn = document.getElementById(`btn-${reportId}`);
-    activeBtn.innerText = "Scanning...";
-    filterBar.style.display = "none";
-    table.style.display = "table";
-    list.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-dim);">Fetching live faction data and querying FFScouter...</td></tr>`;
+    currentEnemy = enemyName;
+    showError('');
+
+    // Reset all scan buttons
+    document.querySelectorAll('[id^="wscan-"]').forEach(b => { b.textContent = 'Scan'; b.disabled = false; b.className = 'btn-scan'; });
+    const btn = document.getElementById(`wscan-${reportId}`);
+    btn.textContent = '⏳ Scanning...';
+    btn.disabled = true;
+
+    document.getElementById('results-section').style.display = 'none';
+    document.getElementById('stats-bar').style.display = 'none';
 
     try {
         const res = await fetch(`/api/scan-recruits?apiKey=${myKey}&reportId=${reportId}`);
         const data = await res.json();
+        if (data.error) { showError(data.error); btn.textContent = '❌ Error'; return; }
 
-        if (data.error) throw new Error(data.error);
+        btn.textContent = '✅ Done';
+        btn.className = 'btn-scan done';
 
-        activeBtn.className = "btn-calc btn-loaded";
-        activeBtn.innerText = "Scan Complete ✓";
-        
-        currentRecruits = data.recruits;
-
-        if (currentRecruits.length === 0) {
-            list.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-dim);">No poachable heavy-hitters found from this war.</td></tr>`;
-            return;
-        }
-
-        filterBar.style.display = "flex";
+        allRecruits = data.recruits || [];
+        renderStats();
         renderTable();
-
+        document.getElementById('results-section').style.display = 'block';
     } catch (e) {
-        activeBtn.innerText = "Error";
-        list.innerHTML = "";
-        table.style.display = "none";
-        document.getElementById("error-msg").innerText = "Failed to scan: " + e.message;
+        btn.textContent = '❌ Error';
+        showError('Failed to scan: ' + e.message);
     }
 }
 
-function setRecruitFilter(filterType) {
-    activeFilter = filterType;
-    document.getElementById('flt-all').className = "filter-btn";
-    document.getElementById('flt-factionless').className = "filter-btn";
-    document.getElementById('flt-' + filterType.toLowerCase()).className = "filter-btn active";
+function rescan() { if (currentReportId) scanWar(currentReportId, currentEnemy); }
+
+// --- STATS BAR ---
+function renderStats() {
+    const factionless = allRecruits.filter(r => !r.stillInFaction).length;
+    const topScore = allRecruits.length > 0 ? Math.max(...allRecruits.map(r => r.score)) : 0;
+    const avgEff = allRecruits.length > 0 ? (allRecruits.reduce((a, r) => a + parseFloat(r.efficiency || 0), 0) / allRecruits.length).toFixed(1) : 0;
+    document.getElementById('stat-total').textContent = allRecruits.length;
+    document.getElementById('stat-factionless').textContent = factionless;
+    document.getElementById('stat-top-score').textContent = topScore.toLocaleString();
+    document.getElementById('stat-avg-eff').textContent = avgEff;
+    document.getElementById('stats-bar').style.display = 'grid';
+}
+
+// --- FILTER & SORT ---
+function setFilter(f) {
+    activeFilter = f;
+    document.querySelectorAll('.filter-btn[id^="flt-"]').forEach(b => b.classList.remove('active'));
+    const el = document.getElementById('flt-' + f);
+    if (el) el.classList.add('active');
     renderTable();
 }
 
-function rescanStats() {
-    if (currentReportId) {
-        scanRecruits(currentReportId);
+function sortBy(col) {
+    if (sortCol === col) sortDir *= -1;
+    else { sortCol = col; sortDir = -1; }
+    document.querySelectorAll('th').forEach(t => t.classList.remove('sorted'));
+    document.querySelectorAll('th .sort-arrow').forEach(a => a.textContent = '↕');
+    const headers = ['name','estStats','score','attacks','efficiency','stillInFaction'];
+    const idx = headers.indexOf(col);
+    if (idx >= 0) {
+        const ths = document.querySelectorAll('th');
+        ths[idx].classList.add('sorted');
+        ths[idx].querySelector('.sort-arrow').textContent = sortDir === 1 ? '↑' : '↓';
     }
+    renderTable();
 }
 
+// --- RENDER TABLE ---
 function renderTable() {
-    const list = document.getElementById("recruit-list");
-    let html = "";
-    
-    const filteredRecruits = currentRecruits.filter(r => {
-        if (activeFilter === 'All') return true;
-        if (activeFilter === 'Factionless' && !r.stillInFaction) return true;
-        return false;
+    const search = (document.getElementById('search-box')?.value || '').toLowerCase();
+    let filtered = allRecruits.filter(r => {
+        if (activeFilter === 'Factionless' && r.stillInFaction) return false;
+        if (activeFilter === 'Member' && !r.stillInFaction) return false;
+        if (search && !r.name.toLowerCase().includes(search)) return false;
+        return true;
     });
 
-    if (filteredRecruits.length === 0) {
-        list.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-dim);">No recruits match the current filter.</td></tr>`;
+    filtered.sort((a, b) => {
+        let av = a[sortCol], bv = b[sortCol];
+        if (sortCol === 'estStats') { av = typeof av === 'number' ? av : -1; bv = typeof bv === 'number' ? bv : -1; }
+        if (sortCol === 'stillInFaction') { av = av ? 1 : 0; bv = bv ? 1 : 0; }
+        if (av < bv) return sortDir;
+        if (av > bv) return -sortDir;
+        return 0;
+    });
+
+    const tbody = document.getElementById('recruit-list');
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:40px;font-style:italic;">No recruits match this filter.</td></tr>`;
         return;
     }
 
-    filteredRecruits.forEach(r => {
-        let badgeClass = r.stillInFaction ? "badge-member" : "badge-gone";
-        let daysText = r.stillInFaction ? ` (${r.days} Days)` : "";
-        let parsedStats = typeof r.estStats === 'number' ? r.estStats.toLocaleString() : r.estStats;
-        let statDisplayClass = parsedStats === "Scanning..." ? "stat-val" : "score-val";
-
-        html += `<tr>
-            <td><a href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank" style="color:var(--text-main); text-decoration:none; font-weight:bold;">${r.name} [${r.id}]</a></td>
-            <td class="${statDisplayClass}">${parsedStats}</td>
-            <td class="score-val">${r.score}</td>
+    const topScore = filtered.length > 0 ? Math.max(...filtered.map(r => r.score)) : 0;
+    tbody.innerHTML = filtered.map(r => {
+        const isPriority = r.score >= topScore * 0.85;
+        const statStr = typeof r.estStats === 'number' ? r.estStats.toLocaleString() : `<span class="stat-dim">${r.estStats}</span>`;
+        const badge = r.stillInFaction
+            ? `<span class="badge badge-member">🟡 ${r.status}</span>`
+            : `<span class="badge badge-gone">🟢 Factionless</span>`;
+        const priority = isPriority && !r.stillInFaction ? `<span class="priority-tag">⭐ PRIME</span>` : '';
+        return `<tr>
+            <td>
+                <a class="player-link" href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank">${r.name}</a>${priority}
+                <div class="player-id">[${r.id}]</div>
+            </td>
+            <td class="score-val">${statStr}</td>
+            <td class="score-val">${r.score.toLocaleString()}</td>
             <td>${r.attacks}</td>
             <td class="eff-val">${r.efficiency}</td>
-            <td><span class="badge ${badgeClass}">${r.status}${daysText}</span></td>
-            <td><button class="btn-msg" onclick="openMsgModal('${r.id}', '${r.name}', ${r.score}, ${r.attacks}, '${r.status}')">✉️ Auto-Draft Message</button></td>
+            <td>${badge}</td>
+            <td style="display:flex;gap:7px;align-items:center;">
+                <a class="btn-profile" href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank">Profile</a>
+                <button class="btn-ai" onclick='openMsgModal(${JSON.stringify(r)})'>✨ AI Draft</button>
+            </td>
         </tr>`;
-    });
-
-    list.innerHTML = html;
+    }).join('');
 }
 
-function closeMsgModal() {
-    document.getElementById("msg-modal").style.display = "none";
+// --- AI MESSAGE MODAL ---
+let pendingTarget = null;
+
+function openMsgModal(recruit) {
+    pendingTarget = recruit;
+    currentTarget = recruit;
+    document.getElementById('modal-title').textContent = `Recruiting ${recruit.name}`;
+    document.getElementById('ai-msg-box').value = '';
+    document.getElementById('ai-msg-box').placeholder = '⏳ AI is drafting your message...';
+    document.getElementById('btn-copy').disabled = true;
+    document.getElementById('btn-regen').disabled = true;
+    document.getElementById('modal-source').textContent = '';
+    document.getElementById('msg-modal').style.display = 'flex';
+    generateMsg(recruit);
 }
 
-async function openMsgModal(id, name, score, attacks, status) {
-    currentTargetId = id;
-    document.getElementById("modal-title").innerText = `Drafting DM to ${name}`;
-    document.getElementById("ai-msg-box").value = "Analyzing stats and writing recruitment pitch...";
-    document.getElementById("btn-copy-send").disabled = true;
-    document.getElementById("msg-modal").style.display = "flex";
-
+async function generateMsg(recruit) {
     try {
         const res = await fetch('/api/generate-recruit-msg', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ playerName: name, score: score, attacks: attacks, status: status })
+            body: JSON.stringify({
+                playerName: recruit.name,
+                score: recruit.score,
+                attacks: recruit.attacks,
+                efficiency: recruit.efficiency,
+                status: recruit.status,
+                estStats: typeof recruit.estStats === 'number' ? recruit.estStats.toLocaleString() : recruit.estStats,
+                enemyFaction: currentEnemy
+            })
         });
         const data = await res.json();
-        
         if (data.error) throw new Error(data.error);
-
-        document.getElementById("ai-msg-box").value = data.message;
-        document.getElementById("btn-copy-send").disabled = false;
-
+        document.getElementById('ai-msg-box').value = data.message;
+        document.getElementById('modal-source').textContent = data.source === 'ai' ? '✨ Generated by Gemini AI' : '📝 Smart Template (no Gemini key set)';
+        document.getElementById('btn-copy').disabled = false;
+        document.getElementById('btn-regen').disabled = false;
     } catch (e) {
-        document.getElementById("ai-msg-box").value = `[ERROR] Failed to connect to Gemini API. \n\nReason: ${e.message}\n\nYou can manually write your message here before copying!`;
-        document.getElementById("btn-copy-send").disabled = false; 
+        document.getElementById('ai-msg-box').value = `Hey ${recruit.name}!\n\nI saw your war stats from our fight — ${recruit.score} score and ${recruit.attacks} hits is impressive work.\n\nWe're always looking for solid fighters. If you're open to a change, hit me back.\n\nOwen777 [3776908]`;
+        document.getElementById('btn-copy').disabled = false;
+        document.getElementById('btn-regen').disabled = false;
+        document.getElementById('modal-source').textContent = '📝 Fallback Template';
     }
+}
+
+function regenerateMsg() {
+    if (!pendingTarget) return;
+    document.getElementById('btn-regen').disabled = true;
+    document.getElementById('btn-copy').disabled = true;
+    document.getElementById('ai-msg-box').value = '';
+    document.getElementById('ai-msg-box').placeholder = '⏳ Regenerating...';
+    generateMsg(pendingTarget);
 }
 
 async function copyAndSend() {
-    const textToCopy = document.getElementById("ai-msg-box").value;
+    const text = document.getElementById('ai-msg-box').value;
+    if (!text) return;
     try {
-        await navigator.clipboard.writeText(textToCopy);
-        
-        const btn = document.getElementById("btn-copy-send");
-        btn.innerText = "✓ Copied! Opening Torn...";
-        
+        await navigator.clipboard.writeText(text);
+        const btn = document.getElementById('btn-copy');
+        btn.textContent = '✅ Copied! Opening Torn...';
         setTimeout(() => {
-            window.open(`https://www.torn.com/messages.php?action=send&XID=${currentTargetId}`, '_blank');
+            window.open(`https://www.torn.com/messages.php?action=send&XID=${currentTarget.id}`, '_blank');
             closeMsgModal();
-            btn.innerText = "Copy & Open Torn";
-        }, 800);
-        
-    } catch (err) {
-        alert("Failed to copy message to clipboard.");
-    }
+            btn.textContent = '📋 Copy & Open Torn';
+        }, 700);
+    } catch { alert('Failed to copy. Please manually select and copy the text above.'); }
 }
+
+function closeMsgModal() { document.getElementById('msg-modal').style.display = 'none'; }
+
+// Init
+fetchWarList();
 </script>
 </body>
 </html>
-
-

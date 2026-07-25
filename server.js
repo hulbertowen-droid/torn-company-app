@@ -848,6 +848,29 @@ app.get('/api/scan-recruits', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
+app.post('/api/generate-recruit-msg', async (req, res) => {
+    const { playerName, score, attacks, efficiency, status, estStats, enemyFaction } = req.body;
+    const factionless = status && status.toLowerCase().includes("factionless");
+    const fallback = `Hey ${playerName}!\n\nI was checking the war report from our recent fight against ${enemyFaction || "your faction"} and your performance stood out — ${score} score across ${attacks} hits is seriously impressive.\n\n${factionless ? "I noticed you've since left your faction, so the timing seems perfect." : "I know you're still with your faction, but I wanted to reach out anyway."}\n\nWe run a tight, active crew focused on ranked wars and organized crimes. We'd love to have someone with your stats on our side. If you're ever looking for a change, hit me back — happy to chat.\n\nGood fight either way.\nOwen777 [3776908]`;
+
+    if (!GEMINI_API_KEY) return res.json({ message: fallback, source: "template" });
+
+    try {
+        const prompt = `You are writing a Torn City (browser game) faction recruitment message. Keep it short (3-4 paragraphs max), casual, direct and personalized. Do NOT use generic filler like "I hope this message finds you well". Sound like a real player, not a robot.\n\nPlayer: ${playerName}\nWar stats: ${score} score, ${attacks} hits, ${efficiency} score/hit efficiency\nEst. Battle Stats: ${estStats || "Unknown"}\nCurrent faction status: ${status}\nEnemy faction they fought for: ${enemyFaction || "Unknown"}\n\nWrite a compelling recruitment message. Mention their specific war numbers. ${factionless ? "They are now factionless — emphasize this is a perfect time." : "Be respectful that they are still in a faction."} Sign off from Owen777 [3776908].`;
+
+        const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+        });
+        const geminiData = await geminiRes.json();
+        const message = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!message) throw new Error("Empty response");
+        res.json({ message, source: "ai" });
+    } catch (e) {
+        res.json({ message: fallback, source: "template" });
+    }
+});
+
 app.get('/api/past-war', async (req, res) => {
     const { apiKey, reportId } = req.query;
     try {
