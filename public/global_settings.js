@@ -15,7 +15,7 @@ const globalSettingsHTML = `
         <button class="global-close-btn" onclick="closeGlobalSettings()">&times;</button>
         <h2>Board Settings</h2>
         <div>
-            <label>API Key (Hidden for Privacy)</label>
+            <label>API Key (Requires "Limited" Access & Faction Permissions)</label>
             <input type="password" id="gs-api-key" placeholder="Paste your Torn API Key here">
         </div>
         <div>
