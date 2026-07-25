@@ -173,9 +173,11 @@
         </div>
         <div class="nav-items">
             <a href="/" class="nav-link active">📡 <span class="nav-text">Live Warboard</span></a>
+            <a href="/warhistory.html" class="nav-link">📜 <span class="nav-text">War History</span></a>
             <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
             <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
             <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
+            <a href="/report.html" class="nav-link">📊 <span class="nav-text">Activity Report</span></a>
             <a href="/members.html" class="nav-link">👥 <span class="nav-text">Members</span></a>
             <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
             <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
@@ -194,7 +196,10 @@
     <main class="main-content">
         <div id="refresh-bar-container"><div id="refresh-bar"></div></div>
         
-        <h1>Live Warboard</h1>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+            <h1 style="margin-bottom: 0;">Live Warboard</h1>
+            <button class="btn-action" style="background: var(--blue); padding: 10px 15px; font-size: 0.9em; text-transform: uppercase;" onclick="openSaveWarModal()">Save War to Archive</button>
+        </div>
 
         <details style="background: rgba(88, 166, 255, 0.05); border: 1px solid var(--blue); border-radius: 8px; margin-bottom: 25px; cursor: pointer; transition: 0.2s;">
             <summary style="padding: 12px 20px; font-weight: bold; color: var(--blue); display: flex; align-items: center; justify-content: space-between;">
@@ -297,6 +302,41 @@
                 <div id="inspect-body">
                     <div style="color:var(--text-dim); text-align:center; padding: 20px; font-style:italic;">Establishing secure uplink to Torn database...</div>
                 </div>
+            </div>
+        </div>
+
+        <div id="save-war-modal" class="modal-overlay">
+            <div class="modal-content">
+                <div class="close-btn" onclick="closeSaveWarModal()">&times;</div>
+                <h2>Save War to Archive</h2>
+                <div>
+                    <label>Enemy Faction</label>
+                    <input type="text" id="sw-enemy-name" placeholder="Enemy Faction Name">
+                </div>
+                <div>
+                    <label>Date</label>
+                    <input type="text" id="sw-date" placeholder="YYYY-MM-DD">
+                </div>
+                <div>
+                    <label>Our Score</label>
+                    <input type="text" id="sw-our-score" placeholder="e.g. 15,000">
+                </div>
+                <div>
+                    <label>Their Score</label>
+                    <input type="text" id="sw-their-score" placeholder="e.g. 12,000">
+                </div>
+                <div>
+                    <label>Result</label>
+                    <select id="sw-result" style="padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; width: 100%; box-sizing: border-box; font-size: 1em;">
+                        <option value="Win">Win</option>
+                        <option value="Loss">Loss</option>
+                    </select>
+                </div>
+                <div>
+                    <label>MVP Hitter</label>
+                    <input type="text" id="sw-mvp" placeholder="Player Name">
+                </div>
+                <button class="btn-save" onclick="saveWarToArchive()">Save War</button>
             </div>
         </div>
 
@@ -1169,6 +1209,201 @@ async function saveManualSpy(targetId) {
             fetchWarboard(); 
         }
     } catch(e) {
+        return { fullClass: `member-card ${stateClass}`, innerContent };
+    }, `No targets match the "${activeFilter}" filter.`);
+}
+
+function processNotifications(enemies) {
+    if (Object.keys(knownEnemies).length === 0) {
+        enemies.forEach(e => { knownEnemies[e.id] = { state: e.state, online: e.onlineStatus }; });
+        return;
+    }
+    let playedSoundThisTick = false;
+
+    enemies.forEach(newEnemy => {
+        let oldEnemy = knownEnemies[newEnemy.id];
+        if (oldEnemy) {
+            if (oldEnemy.state !== "Okay" && newEnemy.state === "Okay") {
+                if (checkIsFlying(oldEnemy)) {
+                    showToast(`🛬 ${newEnemy.name} has landed and is Okay!`, "okay");
+                    playedSoundThisTick = true;
+                } else {
+                    showToast(`🏥 ${newEnemy.name} left the hospital and is Okay!`, "okay");
+                    playedSoundThisTick = true;
+                }
+            }
+            if (oldEnemy.online !== "Online" && newEnemy.onlineStatus === "Online") {
+                showToast(`🟢 ${newEnemy.name} just came ONLINE!`, "online");
+                playedSoundThisTick = true;
+            }
+        }
+        knownEnemies[newEnemy.id] = { state: newEnemy.state, online: newEnemy.onlineStatus };
+    });
+    if (playedSoundThisTick) playAlertSound();
+}
+
+function showToast(msg, typeClass="red") {
+    const container = document.getElementById("toast-container");
+    const toast = document.createElement("div");
+    toast.className = `toast ${typeClass}`;
+    toast.innerHTML = msg;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.animation = "fadeOut 0.4s ease-out forwards";
+        setTimeout(() => toast.remove(), 400);
+    }, 7000);
+}
+
+async function claimTarget(id) { await fetch('/api/claim', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); fetchWarboard(); }
+async function unclaimTarget(id) { await fetch('/api/unclaim', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); fetchWarboard(); }
+
+async function requestBackup(id, targetName) { 
+    await fetch('/api/backup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); 
+    sendDiscordPing(`🚨 **SOS CALL FROM ${myName.toUpperCase()}:** Requesting immediate fire support on target **${targetName}** [${id}]!`);
+    fetchWarboard(); 
+}
+
+async function cancelBackup(id) { await fetch('/api/unbackup', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id }) }); fetchWarboard(); }
+async function promptUpdateStats(id) {
+    const statInput = prompt("Enter exact/estimated stats for this player (Numbers only):");
+    if (statInput && !isNaN(statInput)) { await fetch('/api/update-stats', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ enemyId: id, stats: parseInt(statInput) }) }); fetchWarboard(); }
+}
+
+async function inspectTarget(id, name) {
+    document.getElementById('inspect-title').innerText = `🔍 Target Intel: ${name} [${id}]`;
+    document.getElementById('inspect-body').innerHTML = `<div style="color:var(--text-dim); text-align:center; padding: 20px; font-style:italic;">Establishing secure uplink to Torn database...</div>`;
+    document.getElementById('inspect-modal').style.display = "flex";
+
+    try {
+        const res = await fetch(`/api/inspect?apiKey=${myKey}&targetId=${id}&tsKey=${tsKey}`);
+        const json = await res.json();
+        
+        if (json.error) {
+            document.getElementById('inspect-body').innerHTML = `<div style="color:var(--red); font-weight:bold; text-align:center;">${json.error}</div>`;
+            return;
+        }
+
+        const p = json.data;
+        const stats = p.personalstats || {};
+        
+        const weapons = {
+            "Rifle": stats.riflehits || 0, "SMG": stats.smghits || 0, "Machine Gun": stats.machinegunhits || 0,
+            "Shotgun": stats.shotgunhits || 0, "Pistol": stats.pistolhits || 0, "Piercing": stats.piercinghits || 0,
+            "Slashing": stats.slashinghits || 0, "Clubbing": stats.clubbinghits || 0, "H2H": stats.h2hhits || 0
+        };
+        let topWep = Object.keys(weapons).reduce((a, b) => weapons[a] > weapons[b] ? a : b);
+        if (weapons[topWep] === 0) topWep = "Unknown";
+
+        const lifeMax = p.life ? p.life.maximum.toLocaleString() : "Unknown";
+        const xanax = stats.xantaken ? stats.xantaken.toLocaleString() : 0;
+        const seUsed = stats.statenhancersused ? stats.statenhancersused.toLocaleString() : 0;
+        
+        let loadoutHtml = "";
+        if (json.loadoutClues && json.loadoutClues.length > 0) {
+            json.loadoutClues.forEach(item => {
+                loadoutHtml += `<div style="display: flex; justify-content: space-between; margin-bottom: 3px;"><span>${item.name}</span> <span style="color:var(--green);">$${(item.price/1000000).toFixed(1)}m</span></div>`;
+            });
+        } else {
+            loadoutHtml = `<div style="color:var(--text-dim); font-style:italic;">No high-value weapons found in display or bazaar.</div>`;
+        }
+
+        let statsHtml = "";
+        let hasExactStats = false;
+
+        if (json.manualSpy) {
+            hasExactStats = true;
+            statsHtml = `
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Total:</span> <span style="color:var(--gold); font-weight:bold; font-size:1.1em;">${json.manualSpy.total.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Strength:</span> <span>${json.manualSpy.strength.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Defense:</span> <span>${json.manualSpy.defense.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Speed:</span> <span>${json.manualSpy.speed.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Dexterity:</span> <span>${json.manualSpy.dexterity.toLocaleString()}</span></div>
+                <div style="text-align:right; font-size:0.8em; color:var(--green); margin-top:5px;">Source: Local Faction DB</div>
+            `;
+        } else if (json.tsData) {
+            hasExactStats = true;
+            statsHtml = `
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Total:</span> <span style="color:var(--gold); font-weight:bold; font-size:1.1em;">${json.tsData.total.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Strength:</span> <span>${json.tsData.strength.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Defense:</span> <span>${json.tsData.defense.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Speed:</span> <span>${json.tsData.speed.toLocaleString()}</span></div>
+                <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Dexterity:</span> <span>${json.tsData.dexterity.toLocaleString()}</span></div>
+                <div style="text-align:right; font-size:0.8em; color:var(--blue); margin-top:5px;">Source: Torn Stats API</div>
+            `;
+        } else {
+            statsHtml = `<div style="color:var(--text-dim); font-style:italic; text-align:center; padding: 10px;">No exact spy report found for this target.</div>`;
+        }
+
+        document.getElementById('inspect-body').innerHTML = `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                <div style="background: #0b0d13; padding: 15px; border-radius: 8px; border: 1px solid #2f3542;">
+                    <h4 style="margin:0 0 10px 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 5px;">Player Profile</h4>
+                    <div style="font-size: 0.9em; line-height: 1.6;">
+                        <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Level:</span> <span>${p.level || '?'}</span></div>
+                        <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Rank:</span> <span>${p.rank || '?'}</span></div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 5px;"><span style="color:var(--text-dim); font-weight:bold;">Max Life:</span> <span style="color:var(--green); font-weight:bold;">${lifeMax}</span></div>
+                    </div>
+                </div>
+                <div style="background: #0b0d13; padding: 15px; border-radius: 8px; border: 1px solid #2f3542;">
+                    <h4 style="margin:0 0 10px 0; color: var(--red); border-bottom: 1px solid #2f3542; padding-bottom: 5px;">Combat Profiler</h4>
+                    <div style="font-size: 0.9em; line-height: 1.6;">
+                        <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Fav Weapon:</span> <span style="color:var(--blue); font-weight:bold;">${topWep}</span></div>
+                        <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">Xanax Taken:</span> <span>${xanax}</span></div>
+                        <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-dim); font-weight:bold;">SEs Used:</span> <span>${seUsed}</span></div>
+                    </div>
+                </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div style="background: rgba(88, 166, 255, 0.05); padding: 15px; border-radius: 8px; border: 1px solid var(--blue);">
+                    <h4 style="margin:0 0 10px 0; color: var(--blue); border-bottom: 1px solid rgba(88,166,255,0.3); padding-bottom: 5px;">Exact Stats</h4>
+                    <div style="font-size: 0.9em; line-height: 1.6;" id="exact-stats-container">
+                        ${statsHtml}
+                    </div>
+                </div>
+                <div style="background: #0b0d13; padding: 15px; border-radius: 8px; border: 1px solid #2f3542;">
+                    <h4 style="margin:0 0 10px 0; color: var(--text-main); border-bottom: 1px solid #2f3542; padding-bottom: 5px;">Loadout Clues (Market/Display)</h4>
+                    <div style="font-size: 0.85em; line-height: 1.6;">
+                        ${loadoutHtml}
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 15px; background: #0b0d13; padding: 15px; border-radius: 8px; border: 1px solid #2f3542;">
+                <h4 style="margin:0 0 10px 0; color: var(--green); text-transform: uppercase; font-size: 0.9em;">📥 Add Manual Spy Report</h4>
+                <textarea id="manual-spy-text" placeholder="Paste the raw text of the spy report here..." style="width: 100%; height: 60px; background: var(--bg); color: var(--text-main); border: 1px solid #30363d; border-radius: 4px; padding: 8px; box-sizing: border-box; font-family: monospace; font-size: 0.85em; resize: none;"></textarea>
+                <button onclick="saveManualSpy('${id}')" style="margin-top: 8px; width: 100%; background: var(--green); color: #000; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer; text-transform: uppercase;">Save to Database</button>
+                <div id="spy-save-status" style="font-size: 0.85em; text-align: center; margin-top: 5px; font-weight: bold;"></div>
+            </div>
+        `;
+    } catch(e) {
+        document.getElementById('inspect-body').innerHTML = `<div style="color:var(--red); font-weight:bold; text-align:center;">Failed to connect to API.</div>`;
+    }
+}
+
+async function saveManualSpy(targetId) {
+    const text = document.getElementById('manual-spy-text').value;
+    const status = document.getElementById('spy-save-status');
+    if (!text.trim()) { status.style.color = "var(--red)"; status.innerText = "Please paste a spy report first."; return; }
+    
+    status.style.color = "var(--gold)";
+    status.innerText = "Parsing report...";
+    
+    try {
+        const res = await fetch('/api/save-spy', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiKey: myKey, targetId: targetId, spyText: text })
+        });
+        const data = await res.json();
+        
+        if (data.error) {
+            status.style.color = "var(--red)";
+            status.innerText = "❌ " + data.error;
+        } else {
+            status.style.color = "var(--green)";
+            status.innerText = "✅ Exact stats saved to database! Close and reopen Inspect to view.";
+            fetchWarboard(); 
+        }
+    } catch(e) {
         status.style.color = "var(--red)";
         status.innerText = "❌ Server communication failed.";
     }
@@ -1176,6 +1411,47 @@ async function saveManualSpy(targetId) {
 
 function closeInspect() {
     document.getElementById('inspect-modal').style.display = "none";
+}
+
+function openSaveWarModal() {
+    document.getElementById('sw-enemy-name').value = enemyFacId || '';
+    document.getElementById('sw-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('save-war-modal').style.display = "flex";
+}
+
+function closeSaveWarModal() {
+    document.getElementById('save-war-modal').style.display = "none";
+}
+
+async function saveWarToArchive() {
+    const enemyName = document.getElementById('sw-enemy-name').value.trim();
+    const date = document.getElementById('sw-date').value.trim();
+    const ourScore = document.getElementById('sw-our-score').value.trim();
+    const theirScore = document.getElementById('sw-their-score').value.trim();
+    const result = document.getElementById('sw-result').value;
+    const mvp = document.getElementById('sw-mvp').value.trim();
+    
+    if (!enemyName || !date || !ourScore || !theirScore) {
+        showToast("Please fill in all required fields", "red");
+        return;
+    }
+    
+    try {
+        const res = await fetch('/api/save-war', {
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ enemyName, date, ourScore, theirScore, result, mvp })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast("War saved to archive successfully!", "okay");
+            closeSaveWarModal();
+        } else {
+            showToast("Failed to save war.", "red");
+        }
+    } catch(e) {
+        showToast("Network error while saving war.", "red");
+    }
 }
 </script>
 

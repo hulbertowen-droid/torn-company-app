@@ -116,8 +116,8 @@
             <a href="/" class="nav-link">📡 <span class="nav-text">Live Warboard</span></a>
             <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
             <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
-            <a href="/dashboard.html" class="nav-link active">🛡️ <span class="nav-text">Dashboard</span></a>
-            <a href="/report.html" class="nav-link">📊 <span class="nav-text">Activity Report</span></a>
+            <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
+            <a href="/report.html" class="nav-link active">📊 <span class="nav-text">Activity Report</span></a>
             <a href="/members.html" class="nav-link">👥 <span class="nav-text">Members</span></a>
             <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
             <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
@@ -130,55 +130,26 @@
     </nav>
 
     <main class="main-content">
-        <h1>Alliance Dashboard</h1>
-        <div class="container">
-            
-            <!-- GEMINI WAR ANALYST -->
-            <div class="ai-card">
-                <div class="ai-header">
-                    <div class="ai-title">🧠 Gemini Tactical War Analyst</div>
-                    <div class="ai-btn-group">
-                        <button class="btn-ai" onclick="runAiAnalysis('past')">Analyze Last War</button>
-                        <button class="btn-ai live" onclick="runAiAnalysis('live')">💥 Analyze LIVE War</button>
-                    </div>
+        <h1>Faction Activity Report</h1>
+        <div class="container" style="display: block;">
+            <div class="dash-col" style="height: auto; min-height: 500px;">
+                <h2>📊 Faction Activity Report <span id="member-count" style="color:var(--text-dim); font-size:0.7em;">0</span></h2>
+                <div class="table-header" style="grid-template-columns: 2fr 1.5fr 1.5fr 1.5fr 2fr;">
+                    <div>Member</div>
+                    <div>Attacks Made</div>
+                    <div>Respect Earned</div>
+                    <div>Online Hours</div>
+                    <div>Chain Contributions</div>
                 </div>
-                <div class="ai-response-box" id="ai-output">
-                    Awaiting command... Click a button above to feed war data into the AI.
-                </div>
-            </div>
-
-            <!-- MEMBER ACTIVITY TRACKER -->
-            <div class="dash-col">
-                <h2>👤 Member Activity Tracker <span id="member-count" style="color:var(--text-dim); font-size:0.7em;">0</span></h2>
-                <div class="table-header">
-                    <div>Player</div>
-                    <div>Status</div>
-                    <div>Scanner Timeline (12H)</div>
-                </div>
-                <div class="list-container" id="activity-list">
-                    <div style="color:var(--text-dim); padding:20px; text-align:center;">Loading roster tracking matrices...</div>
+                <div class="list-container" id="report-list">
+                    <div style="color:var(--text-dim); padding:20px; text-align:center;">Loading report...</div>
                 </div>
             </div>
-
-            <!-- ARMORY LOANS TRACKER -->
-            <div class="dash-col">
-                <h2>🔫 Armory Loans Tracker <span id="loan-count" style="color:var(--text-dim); font-size:0.7em;">0</span></h2>
-                <div class="loan-header">
-                    <div>Item</div>
-                    <div>Loaned To</div>
-                    <div>Type</div>
-                </div>
-                <div class="list-container" id="loan-list">
-                    <div style="color:var(--text-dim); padding:20px; text-align:center;">Scanning armory vault allocation...</div>
-                </div>
-            </div>
-
         </div>
     </main>
 
 <script>
 const myKey = localStorage.getItem("warboard_apikey") || "";
-const ffKey = localStorage.getItem("warboard_ffkey") || "";
 
 document.addEventListener("DOMContentLoaded", function() {
     const sidebar = document.getElementById('app-sidebar');
@@ -187,7 +158,7 @@ document.addEventListener("DOMContentLoaded", function() {
     if (myKey) {
         fetchDashboardData();
     } else {
-        document.getElementById("activity-list").innerHTML = `<div style="color:var(--red); padding:20px; text-align:center;">API Key missing. Add it on the Live Warboard settings.</div>`;
+        document.getElementById("report-list").innerHTML = `<div style="color:var(--red); padding:20px; text-align:center;">API Key missing. Add it on the Live Warboard settings.</div>`;
     }
 });
 
@@ -199,105 +170,52 @@ function toggleSidebar() {
 
 async function fetchDashboardData() {
     try {
-        // Correctly passing both credentials to backend endpoints
-        const res = await fetch(`/api/dashboard-data?apiKey=${myKey}&ffKey=${ffKey}`);
+        const res = await fetch(`/api/faction-report?apiKey=${myKey}`);
         const data = await res.json();
 
         if (data.error) {
-            document.getElementById("activity-list").innerHTML = `<div style="color:var(--red); padding:20px; text-align:center;">${data.error}</div>`;
+            document.getElementById("report-list").innerHTML = `<div style="color:var(--red); padding:20px; text-align:center;">${data.error}</div>`;
             return;
         }
 
-        // 1. RENDER ACTIVITY TRACKER
-        let members = Object.entries(data.members || {});
+        let members = data.members || [];
         document.getElementById("member-count").innerText = members.length;
         
-        let actHtml = "";
-        members.sort((a,b) => b[1].last_action.timestamp - a[1].last_action.timestamp);
-
-        members.forEach(([id, m]) => {
-            let dotClass = m.last_action.status === "Online" ? "online" : (m.last_action.status === "Idle" ? "idle" : "");
-            
-            // Render beautiful custom activity blocks if premium is active, otherwise lock it cleanly
-            let timelineContent = "";
-            if (!data.premiumActive) {
-                timelineContent = `<span class="lock-badge">🔒 Requires FF Scouter</span>`;
-            } else if (!m.timeline || m.timeline.length === 0) {
-                timelineContent = `<span style="color:var(--text-dim); font-size:0.85em; font-style:italic;">⌛ Synchronizing...</span>`;
-            } else {
-                timelineContent = `<div class="activity-block-container">`;
-                m.timeline.forEach(score => {
-                    let intensity = "";
-                    if (score > 40) intensity = "active-high";
-                    else if (score > 15) intensity = "active-med";
-                    else if (score > 0) intensity = "active-low";
-                    timelineContent += `<div class="act-block ${intensity}" title="Activity Weight: ${score}"></div>`;
-                });
-                timelineContent += `</div>`;
+        let reportHtml = "";
+        
+        // Find MVP (highest respect + attacks score)
+        let mvp = null;
+        let maxScore = -1;
+        members.forEach(m => {
+            let score = m.respect_earned + m.attacks_made;
+            if (score > maxScore) {
+                maxScore = score;
+                mvp = m;
             }
+        });
 
-            actHtml += `
-                <div class="table-row">
+        members.forEach(m => {
+            let isMvp = (mvp && m.id === mvp.id);
+            let rowStyle = isMvp ? "background: rgba(255, 165, 2, 0.1); border-left: 3px solid var(--gold);" : "";
+            
+            reportHtml += `
+                <div class="table-row" style="grid-template-columns: 2fr 1.5fr 1.5fr 1.5fr 2fr; ${rowStyle}">
                     <div>
-                        <a class="p-name" href="https://www.torn.com/profiles.php?XID=${id}" target="_blank">${m.name}</a>
-                        <div style="font-size:0.75em; color:var(--text-dim);">[${id}]</div>
+                        <a class="p-name" href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank">${m.name}</a> ${isMvp ? '<span title="MVP" style="color:var(--gold); margin-left: 5px;">👑</span>' : ''}
+                        <div style="font-size:0.75em; color:var(--text-dim);">[${m.id}]</div>
                     </div>
-                    <div style="font-size:0.85em; display:flex; align-items:center;">
-                        <span class="status-dot ${dotClass}"></span> ${m.last_action.status}
-                        <span style="font-size:0.85em; color:var(--text-dim); margin-left:4px;">(${m.last_action.relative})</span>
-                    </div>
-                    <div>${timelineContent}</div>
+                    <div>${m.attacks_made.toLocaleString()}</div>
+                    <div style="color:var(--green); font-weight: bold;">${m.respect_earned.toLocaleString()}</div>
+                    <div>${m.online_activity}h</div>
+                    <div>${m.chain_contributions.toLocaleString()}</div>
                 </div>
             `;
         });
-        document.getElementById("activity-list").innerHTML = actHtml || `<div style="color:var(--text-dim); padding:20px; text-align:center;">No players tracked.</div>`;
-
-        // 2. RENDER LOANS VAULT 
-        document.getElementById("loan-count").innerText = data.loans ? data.loans.length : 0;
-        let loanHtml = "";
-        if (data.armoryError) {
-            loanHtml = `<div style="color:var(--gold); font-size:0.85em; padding:20px; text-align:center; border: 1px dashed var(--gold); border-radius:8px;">⚠️ High-Security Armory Blocked. Faction keys must have 'Armory' selections enabled to track loans.</div>`;
-        } else if (data.loans && data.loans.length > 0) {
-            data.loans.forEach(l => {
-                loanHtml += `
-                    <div class="loan-row">
-                        <div style="font-weight:bold; color:var(--gold);">${l.name}</div>
-                        <div style="font-size:0.9em;">User ID: <span style="font-weight:bold; color:var(--text-main);">${l.loaned_to}</span></div>
-                        <div><span class="badge-type">${l.type}</span></div>
-                    </div>
-                `;
-            });
-        } else {
-            loanHtml = `<div style="color:var(--text-dim); padding:20px; text-align:center; font-style:italic;">No active weapon or armor loans recorded.</div>`;
-        }
-        document.getElementById("loan-list").innerHTML = loanHtml;
+        document.getElementById("report-list").innerHTML = reportHtml || `<div style="color:var(--text-dim); padding:20px; text-align:center;">No data found.</div>`;
 
     } catch (e) {
         console.error(e);
-        document.getElementById("activity-list").innerHTML = `<div style="color:var(--red); padding:20px; text-align:center;">Server communication failure.</div>`;
-    }
-}
-
-async function runAiAnalysis(mode) {
-    const box = document.getElementById("ai-output");
-    box.style.color = "var(--text-main)";
-    box.innerText = "Analyzing battle metrics and generating tactical command overview...";
-
-    let endpoint = mode === 'live' ? '/api/ai-analyze-ongoing' : '/api/ai-analyze';
-    
-    try {
-        const res = await fetch(`${endpoint}?apiKey=${myKey}`, { method: 'POST' });
-        const data = await res.json();
-
-        if (data.error) {
-            box.style.color = "var(--red)";
-            box.innerText = `[ERROR] Gemini API Error: ${data.error}`;
-        } else {
-            box.innerHTML = data.analysis.replace(/\n/g, '<br>');
-        }
-    } catch (e) {
-        box.style.color = "var(--red)";
-        box.innerText = "[ERROR] Connection failed. Could not reach analyst engine.";
+        document.getElementById("report-list").innerHTML = `<div style="color:var(--red); padding:20px; text-align:center;">Server communication failure.</div>`;
     }
 }
 </script>

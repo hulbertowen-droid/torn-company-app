@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>War History Archive | Owen's Faction Tools</title>
+    <style>
+        :root { 
+            --bg: #090a0f; --card: #11141d; --item: #1b202e; 
+            --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
+            --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
+        }
+        
+        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; height: 100vh; overflow: hidden; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #57606f; }
+
+        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; z-index: 100; box-shadow: 2px 0 15px rgba(0,0,0,0.5); }
+        .sidebar.collapsed { width: 75px; }
+        .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2f3542; }
+        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 0.9em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
+        .sidebar.collapsed .sidebar-logo { opacity: 0; width: 0; display: none; }
+        .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
+        .toggle-btn:hover { color: white; background: #2f3542; }
+        .nav-items { display: flex; flex-direction: column; gap: 8px; padding: 20px 10px; }
+        .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
+        .nav-link:hover { background: #2f3542; color: white; }
+        .nav-link.active { background: rgba(255, 71, 87, 0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
+        .nav-text { transition: opacity 0.2s; }
+        .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
+        
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; position: relative; }
+        h1 { color: var(--gold); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; text-shadow: 0 4px 15px rgba(255,165,2,0.2); text-align: center;}
+
+        .war-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; max-width: 1200px; margin: 0 auto; }
+        .war-card { background: var(--card); border: 1px solid #2f3542; border-radius: 12px; padding: 20px; box-shadow: 0 8px 20px rgba(0,0,0,0.3); display: flex; flex-direction: column; gap: 10px; }
+        .war-card.win { border-top: 4px solid var(--green); }
+        .war-card.loss { border-top: 4px solid var(--red); }
+        .war-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2f3542; padding-bottom: 10px; }
+        .war-enemy { font-size: 1.2em; font-weight: bold; color: var(--blue); }
+        .war-date { color: var(--text-dim); font-size: 0.9em; }
+        .war-result { font-weight: bold; text-transform: uppercase; font-size: 1.1em; }
+        .war-result.win { color: var(--green); }
+        .war-result.loss { color: var(--red); }
+        .war-stats { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; font-size: 0.95em; }
+        .stat-row { display: flex; justify-content: space-between; }
+        .stat-label { color: var(--text-dim); }
+        .stat-value { font-weight: bold; }
+        .mvp-row { background: rgba(255,165,2,0.1); border: 1px solid rgba(255,165,2,0.3); padding: 8px; border-radius: 6px; margin-top: 10px; text-align: center; font-size: 0.9em; }
+        .mvp-label { color: var(--gold); font-weight: bold; margin-right: 5px; }
+
+        /* Theme & Mobile Inject */
+        body.light-mode {
+            --bg: #f5f6fa; --card: #ffffff; --item: #f1f2f6; --bg2: #f5f6fa;
+            --red: #e84118; --blue: #273c75; --gold: #e1b12c; --teal: #0097e6;
+            --text-main: #2f3640; --text-dim: #718093; --text-faint: #dcdde1; --text: #2f3640;
+            --border: #dcdde1; --border-light: #f5f6fa;
+        }
+        .light-mode .sidebar { border-color: #dcdde1; box-shadow: 2px 0 15px rgba(0,0,0,0.05); }
+        .light-mode .sidebar-header { border-color: #dcdde1; background: #ffffff; }
+        .light-mode .nav-link:hover { background: #f5f6fa; color: #2f3640; }
+        .light-mode .war-card { border-color: #dcdde1; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        
+        @media (max-width: 768px) {
+            body { flex-direction: column; }
+            .sidebar { width: 100% !important; height: auto; border-right: none; border-bottom: 1px solid var(--border, #2f3542); z-index: 1000; }
+            .sidebar.collapsed { width: 100% !important; }
+            .sidebar-header { padding: 10px 20px; }
+            .nav-items { display: none; flex-direction: row; flex-wrap: wrap; padding: 10px; justify-content: center; }
+            .nav-items.mobile-open { display: flex; }
+            .main-content { padding: 15px; height: auto; flex: 1; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">Owen's Faction Tools</div>
+            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Theme" style="background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.2em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; margin-right: 10px;">🌗</button>
+            <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
+        </div>
+        <div class="nav-items">
+            <a href="/" class="nav-link">📡 <span class="nav-text">Live Warboard</span></a>
+            <a href="/warhistory.html" class="nav-link active">📜 <span class="nav-text">War History</span></a>
+            <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
+            <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
+            <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
+            <a href="/report.html" class="nav-link">📊 <span class="nav-text">Activity Report</span></a>
+            <a href="/members.html" class="nav-link">👥 <span class="nav-text">Members</span></a>
+            <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
+            <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
+            <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>
+            <a href="/admin.html" class="nav-link">👑 <span class="nav-text">Admin Panel</span></a>
+            <a href="/oc.html" class="nav-link">💼 <span class="nav-text">OC Manager</span></a>
+            <div style="margin-top:auto; padding: 0 10px;"><div style="height:1px; background:#2f3542; margin: 10px 0;"></div><div style="font-size:0.65em; color:#57606f; text-transform:uppercase; letter-spacing:2px; padding:0 5px 8px; font-weight:700;">Company</div></div>
+            <a href="/company.html" class="nav-link" style="background: rgba(0,206,201,0.1); border: 1px solid rgba(0,206,201,0.3); color: #00cec9; border-radius: 8px;">🏢 <span class="nav-text">Company Tools</span></a>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <h1>War History Archive</h1>
+        <div class="war-grid" id="war-container">
+            <div style="color:var(--text-dim); text-align:center; font-style:italic; grid-column: 1 / -1;">Loading war history...</div>
+        </div>
+    </main>
+
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('app-sidebar');
+            sidebar.classList.toggle('collapsed');
+            localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+        }
+
+        function toggleTheme() { 
+            document.body.classList.toggle('light-mode'); 
+            localStorage.setItem('theme', document.body.classList.contains('light-mode') ? 'light' : 'dark'); 
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            if (localStorage.getItem('sidebar_collapsed') === 'true') {
+                document.getElementById('app-sidebar').classList.add('collapsed');
+            }
+            if (localStorage.getItem('theme') === 'light') {
+                document.body.classList.add('light-mode');
+            }
+            fetchWarHistory();
+        });
+
+        // Mobile override
+        const originalToggle = typeof toggleSidebar === 'function' ? toggleSidebar : null;
+        window.toggleSidebar = function() {
+            if (window.innerWidth <= 768) {
+                const nav = document.querySelector('.nav-items');
+                if (nav) nav.classList.toggle('mobile-open');
+            } else if (originalToggle) {
+                originalToggle();
+            } else {
+                const s = document.querySelector('.sidebar');
+                if(s) s.classList.toggle('collapsed');
+            }
+        }
+
+        async function fetchWarHistory() {
+            try {
+                const res = await fetch('/api/war-history');
+                const wars = await res.json();
+                const container = document.getElementById('war-container');
+                
+                if (wars.length === 0) {
+                    container.innerHTML = `<div style="color:var(--text-dim); text-align:center; font-style:italic; grid-column: 1 / -1;">No wars have been saved yet.</div>`;
+                    return;
+                }
+                
+                container.innerHTML = '';
+                
+                // Display latest first
+                wars.reverse().forEach(war => {
+                    const isWin = war.result === 'Win';
+                    const cardClass = isWin ? 'win' : 'loss';
+                    const resultClass = isWin ? 'win' : 'loss';
+                    
+                    const card = document.createElement('div');
+                    card.className = `war-card ${cardClass}`;
+                    card.innerHTML = `
+                        <div class="war-header">
+                            <div class="war-enemy">${war.enemyName}</div>
+                            <div class="war-date">${war.date}</div>
+                        </div>
+                        <div style="display:flex; justify-content: space-between; align-items:center; margin-top: 10px;">
+                            <div class="war-result ${resultClass}">${war.result}</div>
+                        </div>
+                        <div class="war-stats">
+                            <div class="stat-row">
+                                <span class="stat-label">Our Score:</span>
+                                <span class="stat-value" style="color:var(--blue);">${war.ourScore}</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Their Score:</span>
+                                <span class="stat-value" style="color:var(--red);">${war.theirScore}</span>
+                            </div>
+                        </div>
+                        ${war.mvp ? `
+                        <div class="mvp-row">
+                            <span class="mvp-label">MVP:</span> <span>${war.mvp}</span>
+                        </div>
+                        ` : ''}
+                    `;
+                    container.appendChild(card);
+                });
+            } catch (err) {
+                document.getElementById('war-container').innerHTML = `<div style="color:var(--red); text-align:center; font-weight:bold; grid-column: 1 / -1;">Failed to load war history.</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
