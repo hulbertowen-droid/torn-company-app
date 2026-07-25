@@ -50,6 +50,7 @@ let isProcessingActivity = false;
 let activeKeyIndex = 0;
 
 let persistentDefends = {};
+let liveAttacks = {};
 let activeWarId = null;
 let hasBackfilledWar = false;
 let processedAttackIds = new Set();
