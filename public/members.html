@@ -5,323 +5,318 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <title>Members | Owen's Faction Tools</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg: #090a0f; --card: #11141d; --item: #1b202e;
             --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
             --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
-            --purple: #a29bfe; --teal: #00cec9;
+            --purple: #a29bfe; --teal: #00cec9; --orange: #fd9644;
         }
-        * { box-sizing: border-box; }
-        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Inter', 'Segoe UI', sans-serif; margin: 0; height: 100vh; overflow: hidden; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Inter', sans-serif; height: 100vh; overflow: hidden; }
         ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #0b0d13; } ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
 
         /* Sidebar */
         .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s; flex-shrink: 0; z-index: 100; }
         .sidebar.collapsed { width: 75px; }
         .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2f3542; }
-        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 0.9em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
-        .sidebar.collapsed .sidebar-logo { opacity: 0; width: 0; display: none; }
+        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 0.9em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; }
+        .sidebar.collapsed .sidebar-logo { display: none; }
         .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
         .toggle-btn:hover { color: white; background: #2f3542; }
-        .nav-items { display: flex; flex-direction: column; gap: 8px; padding: 20px 10px; overflow-y: auto; }
-        .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: 600; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
+        .nav-items { display: flex; flex-direction: column; gap: 6px; padding: 16px 10px; overflow-y: auto; flex: 1; }
+        .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: 600; padding: 11px 14px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.88em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
         .nav-link:hover { background: #2f3542; color: white; }
-        .nav-link.active { background: rgba(255, 71, 87, 0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
+        .nav-link.active { background: rgba(255,71,87,0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
         .nav-text { transition: opacity 0.2s; }
-        .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
+        .sidebar.collapsed .nav-text { display: none; }
 
         /* Main */
-        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px 35px; height: 100vh; }
+        .main-content { flex: 1; overflow-y: auto; padding: 28px 32px; height: 100vh; }
 
-        h1 { text-align: center; color: var(--teal); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 6px; font-size: 1.8em; }
-        .subtitle { text-align: center; color: var(--text-dim); margin-bottom: 25px; font-size: 0.88em; }
+        /* Header */
+        .page-header { text-align: center; margin-bottom: 24px; }
+        .page-header h1 { font-size: 1.9em; font-weight: 900; color: var(--teal); text-transform: uppercase; letter-spacing: 3px; margin-bottom: 4px; }
+        .page-header .sub { color: var(--text-dim); font-size: 0.85em; }
 
-        /* Top stats */
-        .stats-bar { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 25px; }
-        .stat-pill { background: var(--card); border: 1px solid #2f3542; border-radius: 10px; padding: 14px 16px; text-align: center; }
-        .stat-pill .val { font-size: 1.6em; font-weight: 900; }
-        .stat-pill .lbl { font-size: 0.68em; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; }
-        .stat-pill.s-online .val { color: var(--green); }
-        .stat-pill.s-idle .val { color: var(--gold); }
-        .stat-pill.s-hosp .val { color: var(--red); }
-        .stat-pill.s-jail .val { color: var(--purple); }
-        .stat-pill.s-travel .val { color: var(--blue); }
-        .stat-pill.s-total .val { color: var(--teal); }
+        /* Summary Cards Row */
+        .summary-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-bottom: 22px; }
+        .sum-card { background: var(--card); border: 1px solid #2f3542; border-radius: 10px; padding: 14px 12px; text-align: center; cursor: pointer; transition: 0.2s; }
+        .sum-card:hover, .sum-card.active { border-color: var(--teal); background: rgba(0,206,201,0.05); }
+        .sum-card.active .sc-val { color: var(--teal); }
+        .sc-val { font-size: 1.7em; font-weight: 900; line-height: 1; margin-bottom: 4px; }
+        .sc-lbl { font-size: 0.65em; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+        .c-green { color: var(--green) !important; }
+        .c-gold { color: var(--gold) !important; }
+        .c-red { color: var(--red) !important; }
+        .c-purple { color: var(--purple) !important; }
+        .c-blue { color: var(--blue) !important; }
+        .c-teal { color: var(--teal) !important; }
+        .c-dim { color: var(--text-dim) !important; }
 
         /* Controls */
-        .controls { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; align-items: center; }
-        .filter-btn { background: var(--card); border: 1px solid #2f3542; color: var(--text-dim); padding: 8px 16px; border-radius: 7px; cursor: pointer; font-size: 0.82em; font-weight: 700; transition: 0.2s; text-transform: uppercase; letter-spacing: 0.5px; }
-        .filter-btn:hover { background: #2f3542; color: white; }
-        .filter-btn.active { background: rgba(0,206,201,0.12); border-color: var(--teal); color: var(--teal); }
-        .view-toggle { display: flex; background: var(--card); border: 1px solid #2f3542; border-radius: 7px; overflow: hidden; }
-        .view-btn { padding: 8px 16px; font-size: 0.82em; font-weight: 700; cursor: pointer; border: none; background: transparent; color: var(--text-dim); transition: 0.2s; }
+        .controls-row { display: flex; gap: 10px; align-items: center; margin-bottom: 18px; flex-wrap: wrap; }
+        .sort-label { font-size: 0.72em; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+        .sort-select { background: var(--card); border: 1px solid #2f3542; color: var(--text-main); padding: 7px 12px; border-radius: 7px; font-size: 0.82em; cursor: pointer; }
+        .view-toggle { display: flex; background: var(--card); border: 1px solid #2f3542; border-radius: 7px; overflow: hidden; margin-left: auto; }
+        .view-btn { padding: 7px 14px; font-size: 0.82em; font-weight: 700; cursor: pointer; border: none; background: transparent; color: var(--text-dim); transition: 0.2s; }
         .view-btn.active { background: rgba(0,206,201,0.15); color: var(--teal); }
-        .search-box { background: var(--card); border: 1px solid #2f3542; border-radius: 7px; color: white; padding: 8px 14px; font-size: 0.85em; width: 200px; transition: 0.2s; margin-left: auto; }
+        .search-box { background: var(--card); border: 1px solid #2f3542; border-radius: 7px; color: white; padding: 7px 13px; font-size: 0.83em; width: 180px; }
         .search-box:focus { outline: none; border-color: var(--teal); }
         .search-box::placeholder { color: var(--text-dim); }
 
-        /* Refresh indicator */
-        .refresh-info { font-size: 0.75em; color: var(--text-dim); text-align: right; margin-bottom: 12px; }
-        #refresh-progress { display: inline-block; width: 80px; height: 4px; background: #2f3542; border-radius: 2px; vertical-align: middle; margin-left: 8px; overflow: hidden; }
-        #refresh-fill { height: 100%; width: 0%; background: var(--teal); border-radius: 2px; transition: width 0.5s linear; }
+        /* Refresh bar */
+        .refresh-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 0.72em; color: var(--text-dim); }
+        #rbar-wrap { flex: 1; height: 3px; background: #2f3542; border-radius: 2px; overflow: hidden; }
+        #rbar-fill { height: 100%; width: 0%; background: var(--teal); transition: width 1s linear; }
 
         /* GRID VIEW */
-        .members-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
-        .member-card {
-            background: var(--card); border: 1px solid #2f3542; border-radius: 12px; padding: 16px 18px;
-            position: relative; transition: border-color 0.2s, transform 0.15s;
-            cursor: default;
-        }
-        .member-card:hover { border-color: #4a5568; transform: translateY(-1px); }
-        .member-card.online { border-left: 3px solid var(--green); }
-        .member-card.idle { border-left: 3px solid var(--gold); }
-        .member-card.offline { border-left: 3px solid #2f3542; }
-        .member-card.hospital { border-left: 3px solid var(--red); background: rgba(255,71,87,0.03); }
-        .member-card.jail { border-left: 3px solid var(--purple); background: rgba(162,155,254,0.03); }
-        .member-card.traveling { border-left: 3px solid var(--blue); background: rgba(88,166,255,0.03); }
+        .member-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
 
-        .mc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
-        .mc-name { font-weight: 700; font-size: 1em; }
+        .mc {
+            background: var(--card);
+            border: 1px solid #2f3542;
+            border-radius: 12px;
+            overflow: hidden;
+            transition: border-color 0.2s, transform 0.15s;
+        }
+        .mc:hover { transform: translateY(-2px); border-color: #3d4558; }
+        .mc.st-online  { border-top: 3px solid var(--green); }
+        .mc.st-idle    { border-top: 3px solid var(--gold); }
+        .mc.st-offline { border-top: 3px solid #2f3542; }
+        .mc.st-hospital{ border-top: 3px solid var(--red); }
+        .mc.st-jail    { border-top: 3px solid var(--purple); }
+        .mc.st-traveling{ border-top: 3px solid var(--blue); }
+
+        /* Card top strip */
+        .mc-top { padding: 14px 16px 12px; display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .mc-identity { flex: 1; min-width: 0; }
+        .mc-name-row { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
+        .mc-name { font-weight: 700; font-size: 1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .mc-name a { color: var(--text-main); text-decoration: none; }
         .mc-name a:hover { color: var(--blue); }
-        .mc-pos { font-size: 0.7em; color: var(--text-dim); margin-top: 2px; }
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
-        .dot-online { background: var(--green); box-shadow: 0 0 6px var(--green); animation: blink 2s infinite; }
-        .dot-idle { background: var(--gold); box-shadow: 0 0 6px var(--gold); }
-        .dot-offline { background: #2f3542; }
-        .dot-hospital { background: var(--red); box-shadow: 0 0 6px var(--red); }
-        .dot-jail { background: var(--purple); box-shadow: 0 0 6px var(--purple); }
-        .dot-traveling { background: var(--blue); box-shadow: 0 0 6px var(--blue); }
-        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        .lvl-badge { background: rgba(255,165,2,0.15); border: 1px solid rgba(255,165,2,0.3); color: var(--gold); font-size: 0.65em; font-weight: 700; padding: 1px 6px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; }
+        .mc-pos { font-size: 0.7em; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
 
-        .mc-status { font-size: 0.78em; font-weight: 600; margin-bottom: 8px; }
-        .mc-status.green { color: var(--green); }
-        .mc-status.gold { color: var(--gold); }
-        .mc-status.dim { color: var(--text-dim); }
-        .mc-status.red { color: var(--red); }
-        .mc-status.purple { color: var(--purple); }
-        .mc-status.blue { color: var(--blue); }
+        .mc-status-block { text-align: right; flex-shrink: 0; }
+        .status-dot-lg { width: 10px; height: 10px; border-radius: 50%; margin: 2px 0 5px auto; }
+        .dot-online   { background: var(--green);  box-shadow: 0 0 7px var(--green);  animation: pulse 2s infinite; }
+        .dot-idle     { background: var(--gold);   box-shadow: 0 0 7px var(--gold); }
+        .dot-offline  { background: #3d4558; }
+        .dot-hospital { background: var(--red);    box-shadow: 0 0 7px var(--red); }
+        .dot-jail     { background: var(--purple); box-shadow: 0 0 7px var(--purple); }
+        .dot-traveling{ background: var(--blue);   box-shadow: 0 0 7px var(--blue); }
+        @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+        .status-label { font-size: 0.72em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+        .sl-online   { color: var(--green); }
+        .sl-idle     { color: var(--gold); }
+        .sl-offline  { color: var(--text-dim); }
+        .sl-hospital { color: var(--red); }
+        .sl-jail     { color: var(--purple); }
+        .sl-traveling{ color: var(--blue); }
 
-        .mc-timer { font-size: 0.82em; color: var(--red); font-weight: 700; margin-bottom: 6px; font-variant-numeric: tabular-nums; }
-        .mc-last { font-size: 0.72em; color: var(--text-dim); }
-        .mc-days { font-size: 0.7em; color: var(--text-dim); margin-top: 6px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05); }
+        /* Timer */
+        .mc-timer-row { padding: 9px 16px; background: rgba(255,71,87,0.05); border-bottom: 1px solid rgba(255,255,255,0.04); display: flex; align-items: center; justify-content: space-between; font-size: 0.8em; }
+        .mc-timer-row.jail-bg { background: rgba(162,155,254,0.06); }
+        .mc-timer-row.travel-bg { background: rgba(88,166,255,0.05); }
+        .timer-label { color: var(--text-dim); font-weight: 600; }
+        .timer-val { font-weight: 900; font-variant-numeric: tabular-nums; }
+        .tv-hosp { color: var(--red); }
+        .tv-jail { color: var(--purple); }
+        .tv-travel { color: var(--blue); }
+
+        /* Info grid */
+        .mc-body { padding: 12px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        .info-item { }
+        .info-lbl { font-size: 0.65em; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; font-weight: 700; }
+        .info-val { font-size: 0.88em; font-weight: 600; }
+
+        /* Days bar */
+        .days-row { padding: 10px 16px 12px; }
+        .days-bar-label { display: flex; justify-content: space-between; font-size: 0.68em; color: var(--text-dim); margin-bottom: 4px; }
+        .days-bar-bg { height: 4px; background: #2f3542; border-radius: 2px; overflow: hidden; }
+        .days-bar-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--teal), var(--blue)); transition: width 0.5s; }
+
+        /* War stats row */
+        .war-row { padding: 10px 16px; border-top: 1px solid rgba(255,255,255,0.04); display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; background: rgba(255,255,255,0.015); }
+        .war-stat { text-align: center; }
+        .ws-val { font-size: 1em; font-weight: 900; }
+        .ws-lbl { font-size: 0.62em; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 1px; }
+
+        /* Stats bar (battle stats) */
+        .stats-row { padding: 10px 16px 12px; border-top: 1px solid rgba(255,255,255,0.04); }
+        .stats-label { font-size: 0.65em; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; font-weight: 700; }
+        .stat-bars { display: grid; gap: 4px; }
+        .stat-bar-row { display: flex; align-items: center; gap: 8px; font-size: 0.72em; }
+        .sbar-name { color: var(--text-dim); width: 50px; flex-shrink: 0; }
+        .sbar-track { flex: 1; height: 4px; background: #2f3542; border-radius: 2px; overflow: hidden; }
+        .sbar-fill { height: 100%; border-radius: 2px; }
+
+        /* Activity sparkline */
+        .activity-row { padding: 10px 16px 12px; border-top: 1px solid rgba(255,255,255,0.04); }
+        .act-label { font-size: 0.65em; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; font-weight: 700; display: flex; justify-content: space-between; }
+        .sparkline { display: flex; align-items: flex-end; gap: 2px; height: 30px; }
+        .spark-bar { flex: 1; border-radius: 1px 1px 0 0; min-height: 2px; transition: height 0.3s; background: var(--teal); opacity: 0.7; }
+
+        /* Action buttons */
+        .mc-footer { padding: 10px 14px; display: flex; gap: 8px; border-top: 1px solid rgba(255,255,255,0.04); }
+        .mc-btn { flex: 1; padding: 7px 0; border-radius: 6px; font-size: 0.73em; font-weight: 700; cursor: pointer; border: none; transition: 0.2s; text-align: center; text-decoration: none; display: block; text-transform: uppercase; letter-spacing: 0.5px; }
+        .mc-btn-profile { background: rgba(88,166,255,0.12); color: var(--blue); border: 1px solid rgba(88,166,255,0.3); }
+        .mc-btn-profile:hover { background: rgba(88,166,255,0.25); }
+        .mc-btn-attack { background: rgba(255,71,87,0.12); color: var(--red); border: 1px solid rgba(255,71,87,0.3); }
+        .mc-btn-attack:hover { background: rgba(255,71,87,0.25); }
+        .mc-btn-msg { background: rgba(162,155,254,0.12); color: var(--purple); border: 1px solid rgba(162,155,254,0.3); }
+        .mc-btn-msg:hover { background: rgba(162,155,254,0.25); }
 
         /* TABLE VIEW */
         .table-wrap { background: var(--card); border: 1px solid #2f3542; border-radius: 12px; overflow: hidden; }
         table { width: 100%; border-collapse: collapse; }
-        thead { background: #0b0d13; }
-        th { padding: 12px 16px; text-align: left; font-size: 0.72em; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-dim); font-weight: 700; border-bottom: 1px solid #2f3542; cursor: pointer; user-select: none; white-space: nowrap; }
+        thead { background: rgba(0,0,0,0.3); }
+        th { padding: 11px 14px; text-align: left; font-size: 0.7em; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-dim); font-weight: 700; border-bottom: 1px solid #2f3542; cursor: pointer; white-space: nowrap; }
         th:hover { color: white; }
-        td { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.88em; vertical-align: middle; }
+        td { padding: 11px 14px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.86em; vertical-align: middle; }
         tr:last-child td { border-bottom: none; }
         tr:hover td { background: rgba(255,255,255,0.02); }
-        .player-link { color: var(--text-main); text-decoration: none; font-weight: 700; }
-        .player-link:hover { color: var(--blue); }
+        .tlink { color: var(--text-main); text-decoration: none; font-weight: 700; }
+        .tlink:hover { color: var(--blue); }
 
-        .status-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 5px; font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-        .sb-online { background: rgba(46,213,115,0.12); color: var(--green); border: 1px solid rgba(46,213,115,0.3); }
-        .sb-idle { background: rgba(255,165,2,0.12); color: var(--gold); border: 1px solid rgba(255,165,2,0.3); }
-        .sb-offline { background: rgba(255,255,255,0.04); color: var(--text-dim); border: 1px solid #2f3542; }
-        .sb-hospital { background: rgba(255,71,87,0.12); color: var(--red); border: 1px solid rgba(255,71,87,0.3); }
-        .sb-jail { background: rgba(162,155,254,0.12); color: var(--purple); border: 1px solid rgba(162,155,254,0.3); }
-        .sb-travel { background: rgba(88,166,255,0.12); color: var(--blue); border: 1px solid rgba(88,166,255,0.3); }
+        .sb { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 5px; font-size: 0.72em; font-weight: 700; text-transform: uppercase; }
+        .sb-online   { background: rgba(46,213,115,0.12); color: var(--green);  border: 1px solid rgba(46,213,115,0.3); }
+        .sb-idle     { background: rgba(255,165,2,0.12);  color: var(--gold);   border: 1px solid rgba(255,165,2,0.3); }
+        .sb-offline  { background: rgba(255,255,255,0.04);color: var(--text-dim);border: 1px solid #2f3542; }
+        .sb-hospital { background: rgba(255,71,87,0.12);  color: var(--red);    border: 1px solid rgba(255,71,87,0.3); }
+        .sb-jail     { background: rgba(162,155,254,0.12);color: var(--purple); border: 1px solid rgba(162,155,254,0.3); }
+        .sb-travel   { background: rgba(88,166,255,0.12); color: var(--blue);   border: 1px solid rgba(88,166,255,0.3); }
 
-        .timer-cell { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--red); }
+        .timer-td { font-variant-numeric: tabular-nums; font-weight: 700; }
 
-        /* Empty */
-        .empty { text-align: center; padding: 60px; color: var(--text-dim); }
-        .empty .icon { font-size: 3em; margin-bottom: 12px; }
-
-        /* Alert box */
+        /* Empty / Alert */
+        .empty { text-align: center; padding: 60px 20px; color: var(--text-dim); }
+        .empty .ico { font-size: 3.5em; margin-bottom: 12px; }
         .alert-box { padding: 14px 18px; border-radius: 10px; margin-bottom: 18px; font-weight: 600; font-size: 0.88em; }
         .alert-info { background: rgba(88,166,255,0.08); border: 1px solid rgba(88,166,255,0.3); color: var(--blue); }
         .alert-error { background: rgba(255,71,87,0.1); border: 1px solid rgba(255,71,87,0.3); color: var(--red); }
     </style>
 </head>
 <body>
-    <nav class="sidebar" id="app-sidebar">
-        <div class="sidebar-header">
-            <div class="sidebar-logo">Owen's Faction Tools</div>
-            <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
-        </div>
-        <div class="nav-items">
-            <a href="/" class="nav-link">📡 <span class="nav-text">Live Warboard</span></a>
-            <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
-            <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
-            <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
-            <a href="/members.html" class="nav-link active">👥 <span class="nav-text">Members</span></a>
-            <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
-            <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
-            <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>
-            <a href="/admin.html" class="nav-link">👑 <span class="nav-text">Admin Panel</span></a>
-            <a href="/oc.html" class="nav-link">💼 <span class="nav-text">OC Manager</span></a>
-            <a onclick="openSettings()" class="nav-link" style="margin-top:auto;border-top:1px solid #2f3542;border-radius:0;padding-top:15px;cursor:pointer;">
-                ⚙️ <span class="nav-text">Settings</span>
-            </a>
-        </div>
-    </nav>
+<nav class="sidebar" id="app-sidebar">
+    <div class="sidebar-header">
+        <div class="sidebar-logo">Owen's Faction Tools</div>
+        <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
+    </div>
+    <div class="nav-items">
+        <a href="/" class="nav-link">📡 <span class="nav-text">Live Warboard</span></a>
+        <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
+        <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
+        <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
+        <a href="/members.html" class="nav-link active">👥 <span class="nav-text">Members</span></a>
+        <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
+        <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
+        <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>
+        <a href="/admin.html" class="nav-link">👑 <span class="nav-text">Admin Panel</span></a>
+        <a href="/oc.html" class="nav-link">💼 <span class="nav-text">OC Manager</span></a>
+        <a onclick="openSettings()" class="nav-link" style="margin-top:auto;border-top:1px solid #2f3542;border-radius:0;padding-top:14px;cursor:pointer;">⚙️ <span class="nav-text">Settings</span></a>
+    </div>
+</nav>
 
-    <main class="main-content">
+<main class="main-content">
+    <div class="page-header">
         <h1>👥 Faction Members</h1>
-        <p class="subtitle" id="faction-name-line">Live status of all your faction members</p>
+        <p class="sub" id="faction-line">Loading faction data...</p>
+    </div>
 
-        <div id="alert-wrap"></div>
+    <div id="alert-wrap"></div>
 
-        <!-- Stats bar -->
-        <div class="stats-bar" id="stats-bar" style="display:none;">
-            <div class="stat-pill s-total"><div class="val" id="s-total">—</div><div class="lbl">Total</div></div>
-            <div class="stat-pill s-online"><div class="val" id="s-online">—</div><div class="lbl">🟢 Online</div></div>
-            <div class="stat-pill s-idle"><div class="val" id="s-idle">—</div><div class="lbl">🟡 Idle</div></div>
-            <div class="stat-pill s-hosp"><div class="val" id="s-hosp">—</div><div class="lbl">🏥 Hospital</div></div>
-            <div class="stat-pill s-jail"><div class="val" id="s-jail">—</div><div class="lbl">⛓️ Jailed</div></div>
-            <div class="stat-pill s-travel"><div class="val" id="s-travel">—</div><div class="lbl">✈️ Traveling</div></div>
-        </div>
+    <!-- Summary row -->
+    <div class="summary-row" id="summary-row" style="display:none;">
+        <div class="sum-card active" id="sc-All" onclick="setFilter('All')"><div class="sc-val c-teal" id="sc-v-All">—</div><div class="sc-lbl">All Members</div></div>
+        <div class="sum-card" id="sc-Online" onclick="setFilter('Online')"><div class="sc-val c-green" id="sc-v-Online">—</div><div class="sc-lbl">🟢 Online</div></div>
+        <div class="sum-card" id="sc-Idle" onclick="setFilter('Idle')"><div class="sc-val c-gold" id="sc-v-Idle">—</div><div class="sc-lbl">🟡 Idle</div></div>
+        <div class="sum-card" id="sc-Hospital" onclick="setFilter('Hospital')"><div class="sc-val c-red" id="sc-v-Hospital">—</div><div class="sc-lbl">🏥 Hospital</div></div>
+        <div class="sum-card" id="sc-Jail" onclick="setFilter('Jail')"><div class="sc-val c-purple" id="sc-v-Jail">—</div><div class="sc-lbl">⛓️ Jailed</div></div>
+        <div class="sum-card" id="sc-Traveling" onclick="setFilter('Traveling')"><div class="sc-val c-blue" id="sc-v-Traveling">—</div><div class="sc-lbl">✈️ Traveling</div></div>
+        <div class="sum-card" id="sc-Offline" onclick="setFilter('Offline')"><div class="sc-val c-dim" id="sc-v-Offline">—</div><div class="sc-lbl">⚫ Offline</div></div>
+    </div>
 
-        <!-- Controls -->
-        <div class="controls">
-            <button class="filter-btn active" id="flt-All" onclick="setFilter('All')">All</button>
-            <button class="filter-btn" id="flt-Online" onclick="setFilter('Online')">🟢 Online</button>
-            <button class="filter-btn" id="flt-Idle" onclick="setFilter('Idle')">🟡 Idle</button>
-            <button class="filter-btn" id="flt-Hospital" onclick="setFilter('Hospital')">🏥 Hospital</button>
-            <button class="filter-btn" id="flt-Jail" onclick="setFilter('Jail')">⛓️ Jail</button>
-            <button class="filter-btn" id="flt-Traveling" onclick="setFilter('Traveling')">✈️ Travel</button>
-            <button class="filter-btn" id="flt-Offline" onclick="setFilter('Offline')">⚫ Offline</button>
-            <div class="view-toggle">
-                <button class="view-btn active" id="view-grid" onclick="setView('grid')">⊞ Grid</button>
-                <button class="view-btn" id="view-table" onclick="setView('table')">☰ Table</button>
-            </div>
-            <input class="search-box" type="text" id="search-box" placeholder="Search member..." oninput="renderMembers()">
-        </div>
-
-        <div class="refresh-info" id="refresh-info" style="display:none;">
-            Auto-refresh every 60s <span id="refresh-progress"><span id="refresh-fill"></span></span>
-            &nbsp;<span id="last-updated"></span>
-        </div>
-
-        <div id="content-area">
-            <div class="empty"><div class="icon">👥</div><p>Loading faction members...</p></div>
-        </div>
-    </main>
-
-    <!-- Settings modal (minimal) -->
-    <div id="settings-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:10000;justify-content:center;align-items:center;backdrop-filter:blur(4px);">
-        <div style="background:var(--card);padding:28px;border-radius:14px;border:1px solid #2f3542;width:400px;position:relative;">
-            <button onclick="closeSettings()" style="position:absolute;right:14px;top:14px;background:none;border:none;color:var(--text-dim);font-size:1.3em;cursor:pointer;">✕</button>
-            <h3 style="margin:0 0 16px;color:var(--teal);text-transform:uppercase;letter-spacing:1px;">⚙️ Settings</h3>
-            <label style="font-size:0.8em;color:var(--text-dim);font-weight:700;display:block;margin-bottom:6px;">TORN API KEY</label>
-            <input type="password" id="api-key-input" placeholder="Your Torn API key" style="width:100%;padding:10px 14px;background:#0b0d13;border:1px solid #30363d;border-radius:7px;color:white;font-size:0.95em;margin-bottom:14px;">
-            <button onclick="saveKey()" style="width:100%;background:var(--teal);color:#000;border:none;padding:12px;border-radius:7px;font-weight:700;font-size:1em;cursor:pointer;text-transform:uppercase;">Save & Reload</button>
+    <!-- Controls -->
+    <div class="controls-row" id="controls-row" style="display:none;">
+        <span class="sort-label">Sort by:</span>
+        <select class="sort-select" id="sort-select" onchange="renderMembers()">
+            <option value="status">Status</option>
+            <option value="level">Level</option>
+            <option value="name">Name</option>
+            <option value="days">Days in Faction</option>
+            <option value="attacks">War Attacks</option>
+            <option value="score">War Score</option>
+            <option value="lastAction">Last Active</option>
+        </select>
+        <input class="search-box" type="text" id="search-box" placeholder="🔍 Search member..." oninput="renderMembers()">
+        <div class="view-toggle">
+            <button class="view-btn active" id="vbtn-grid" onclick="setView('grid')">⊞ Grid</button>
+            <button class="view-btn" id="vbtn-table" onclick="setView('table')">☰ Table</button>
         </div>
     </div>
+
+    <!-- Refresh bar -->
+    <div class="refresh-row" id="refresh-row" style="display:none;">
+        <span id="last-upd">—</span>
+        <div id="rbar-wrap"><div id="rbar-fill"></div></div>
+        <span>Auto-refresh 60s</span>
+    </div>
+
+    <div id="content-area">
+        <div class="empty"><div class="ico">👥</div><p>Loading members...</p></div>
+    </div>
+</main>
+
+<!-- Settings modal -->
+<div id="settings-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;display:none;justify-content:center;align-items:center;backdrop-filter:blur(4px);">
+    <div style="background:var(--card);padding:28px;border-radius:14px;border:1px solid #2f3542;width:400px;position:relative;">
+        <button onclick="closeSettings()" style="position:absolute;right:14px;top:14px;background:none;border:none;color:var(--text-dim);font-size:1.3em;cursor:pointer;">✕</button>
+        <h3 style="margin:0 0 16px;color:var(--teal);text-transform:uppercase;letter-spacing:1px;font-size:1em;">⚙️ Settings</h3>
+        <label style="font-size:0.78em;color:var(--text-dim);font-weight:700;display:block;margin-bottom:6px;text-transform:uppercase;">Torn API Key</label>
+        <input type="password" id="api-key-input" placeholder="Paste your Torn API key" style="width:100%;padding:10px 14px;background:#0b0d13;border:1px solid #30363d;border-radius:7px;color:white;font-size:0.93em;margin-bottom:14px;">
+        <button onclick="saveKey()" style="width:100%;background:var(--teal);color:#000;border:none;padding:11px;border-radius:7px;font-weight:700;font-size:0.95em;cursor:pointer;text-transform:uppercase;">Save & Reload</button>
+    </div>
+</div>
 
 <script>
 let myKey = localStorage.getItem("warboard_apikey") || "";
 let allMembers = [];
 let activeFilter = "All";
 let currentView = "grid";
-let refreshInterval = null;
-let progressInterval = null;
+let refreshTimer = null;
+let progressTimer = null;
 const REFRESH_MS = 60000;
+let hasWar = false;
 
 document.getElementById("api-key-input").value = myKey;
 if (localStorage.getItem('sidebar_collapsed') === 'true') document.getElementById('app-sidebar').classList.add('collapsed');
 
-function toggleSidebar() { const s = document.getElementById('app-sidebar'); s.classList.toggle('collapsed'); localStorage.setItem('sidebar_collapsed', s.classList.contains('collapsed')); }
+function toggleSidebar() {
+    const s = document.getElementById('app-sidebar');
+    s.classList.toggle('collapsed');
+    localStorage.setItem('sidebar_collapsed', s.classList.contains('collapsed'));
+}
 function openSettings() { document.getElementById('settings-modal').style.display = 'flex'; }
 function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
-function saveKey() { myKey = document.getElementById('api-key-input').value.trim(); localStorage.setItem('warboard_apikey', myKey); closeSettings(); loadMembers(); }
+function saveKey() {
+    myKey = document.getElementById('api-key-input').value.trim();
+    localStorage.setItem('warboard_apikey', myKey);
+    closeSettings();
+    loadMembers();
+}
 
 function setAlert(msg, type) {
-    document.getElementById('alert-wrap').innerHTML = msg ? `<div class="alert-box alert-${type}">${msg}</div>` : '';
+    document.getElementById('alert-wrap').innerHTML = msg
+        ? `<div class="alert-box alert-${type}">${msg}</div>` : '';
 }
 
-function setFilter(f) {
-    activeFilter = f;
-    document.querySelectorAll('.filter-btn[id^="flt-"]').forEach(b => b.classList.remove('active'));
-    document.getElementById('flt-' + f)?.classList.add('active');
-    renderMembers();
-}
-
-function setView(v) {
-    currentView = v;
-    document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById('view-' + v).classList.add('active');
-    renderMembers();
-}
-
-function getMemberState(m) {
-    const state = (m.status?.state || '').toLowerCase();
-    const desc = (m.status?.description || '').toLowerCase();
-    const online = (m.last_action?.status || '').toLowerCase();
-    if (state === 'hospital' || desc.includes('hospital')) return 'hospital';
-    if (state === 'jail' || desc.includes('jail')) return 'jail';
-    if (state === 'traveling' || desc.includes('travel') || desc.includes('abroad') || desc.includes('returning')) return 'traveling';
-    if (online === 'online') return 'online';
-    if (online === 'idle') return 'idle';
-    return 'offline';
-}
-
-function formatTimer(seconds) {
-    if (!seconds || seconds <= 0) return '';
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-    if (h > 0) return `${h}h ${m}m`;
-    if (m > 0) return `${m}m ${s}s`;
-    return `${s}s`;
-}
-
-async function loadMembers() {
-    if (!myKey) {
-        setAlert('⚙️ No API key — click Settings to add your Torn API key.', 'info');
-        document.getElementById('content-area').innerHTML = '<div class="empty"><div class="icon">🔑</div><p>Enter your API key in Settings to view your faction members.</p></div>';
-        return;
-    }
-    setAlert('', '');
-
-    try {
-        const res = await fetch(`/api/warboard?apiKey=${encodeURIComponent(myKey)}&enemyId=`);
-        const data = await res.json();
-
-        if (data.error) { setAlert('❌ ' + data.error, 'error'); return; }
-
-        const friendly = data.friendly || [];
-        allMembers = friendly;
-
-        // Update stats bar
-        const counts = { online:0, idle:0, hospital:0, jail:0, traveling:0, offline:0 };
-        allMembers.forEach(m => {
-            const st = getMemberStateFromObj(m);
-            if (counts[st] !== undefined) counts[st]++;
-            else counts.offline++;
-        });
-
-        document.getElementById('s-total').textContent = allMembers.length;
-        document.getElementById('s-online').textContent = counts.online;
-        document.getElementById('s-idle').textContent = counts.idle;
-        document.getElementById('s-hosp').textContent = counts.hospital;
-        document.getElementById('s-jail').textContent = counts.jail;
-        document.getElementById('s-travel').textContent = counts.traveling;
-        document.getElementById('stats-bar').style.display = 'grid';
-
-        const now = new Date().toLocaleTimeString();
-        document.getElementById('last-updated').textContent = `Updated: ${now}`;
-        document.getElementById('refresh-info').style.display = 'block';
-
-        renderMembers();
-        startProgressBar();
-
-    } catch (e) {
-        setAlert('❌ Failed to connect: ' + e.message, 'error');
-    }
-}
-
-function getMemberStateFromObj(m) {
-    const state = (m.state || '').toLowerCase();
-    const desc = (m.statusDescription || '').toLowerCase();
+// --- STATE DETECTION ---
+function getState(m) {
+    const state  = (m.state || '').toLowerCase();
+    const desc   = (m.statusDescription || '').toLowerCase();
     const online = (m.onlineStatus || '').toLowerCase();
     if (state === 'hospital' || desc.includes('hospital')) return 'hospital';
     if (state === 'jail' || desc.includes('jail')) return 'jail';
@@ -331,145 +326,310 @@ function getMemberStateFromObj(m) {
     return 'offline';
 }
 
-function getStatusLabel(state) {
-    const map = { online:'🟢 Online', idle:'🟡 Idle', offline:'⚫ Offline', hospital:'🏥 Hospital', jail:'⛓️ Jailed', traveling:'✈️ Traveling' };
-    return map[state] || '⚫ Offline';
+function stateOrder(s) {
+    return { online:0, idle:1, hospital:2, jail:3, traveling:4, offline:5 }[s] ?? 5;
 }
 
-function getStatusClass(state) {
-    const map = { online:'green', idle:'gold', offline:'dim', hospital:'red', jail:'purple', traveling:'blue' };
-    return map[state] || 'dim';
+function formatTimer(secs) {
+    if (!secs || secs <= 0) return '—';
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = Math.floor(secs % 60);
+    if (h > 48) return `${Math.floor(h/24)}d ${h%24}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+}
+
+function formatLastAction(ts) {
+    if (!ts) return null;
+    const diff = Math.floor(Date.now()/1000) - ts;
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+    return `${Math.floor(diff/86400)}d ago`;
+}
+
+// --- LOAD ---
+async function loadMembers() {
+    if (!myKey) {
+        setAlert('⚙️ No API key — click Settings and add your Torn API key (needs Faction access).', 'info');
+        document.getElementById('content-area').innerHTML =
+            '<div class="empty"><div class="ico">🔑</div><p>Enter your API key in Settings to view faction members.</p></div>';
+        return;
+    }
+    setAlert('', '');
+    try {
+        const res = await fetch(`/api/warboard?apiKey=${encodeURIComponent(myKey)}&enemyId=`);
+        const data = await res.json();
+        if (data.error) { setAlert('❌ ' + data.error, 'error'); return; }
+
+        allMembers = data.friendly || [];
+        hasWar = allMembers.some(m => m.attacks > 0 || m.score > 0);
+
+        // Build counts
+        const counts = {All: allMembers.length, Online:0, Idle:0, Hospital:0, Jail:0, Traveling:0, Offline:0};
+        allMembers.forEach(m => {
+            const s = getState(m);
+            if (s === 'online') counts.Online++;
+            else if (s === 'idle') counts.Idle++;
+            else if (s === 'hospital') counts.Hospital++;
+            else if (s === 'jail') counts.Jail++;
+            else if (s === 'traveling') counts.Traveling++;
+            else counts.Offline++;
+        });
+        Object.keys(counts).forEach(k => {
+            const el = document.getElementById('sc-v-' + k);
+            if (el) el.textContent = counts[k];
+        });
+
+        // Faction name
+        const fline = document.getElementById('faction-line');
+        fline.textContent = `${allMembers.length} members · ${counts.Online} online · ${counts.Hospital} in hospital`;
+
+        document.getElementById('summary-row').style.display = 'grid';
+        document.getElementById('controls-row').style.display = 'flex';
+        document.getElementById('refresh-row').style.display = 'flex';
+        document.getElementById('last-upd').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+
+        renderMembers();
+        startProgress();
+
+    } catch(e) {
+        setAlert('❌ Failed to load: ' + e.message, 'error');
+    }
+}
+
+// --- FILTER / SORT / RENDER ---
+function setFilter(f) {
+    activeFilter = f;
+    document.querySelectorAll('.sum-card').forEach(c => c.classList.remove('active'));
+    document.getElementById('sc-' + f)?.classList.add('active');
+    renderMembers();
+}
+
+function setView(v) {
+    currentView = v;
+    document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('vbtn-' + v)?.classList.add('active');
+    renderMembers();
 }
 
 function renderMembers() {
     const search = (document.getElementById('search-box')?.value || '').toLowerCase();
+    const sortKey = document.getElementById('sort-select')?.value || 'status';
+
     let filtered = allMembers.filter(m => {
-        const state = getMemberStateFromObj(m);
+        const s = getState(m);
         if (activeFilter !== 'All') {
-            if (activeFilter === 'Online' && state !== 'online') return false;
-            if (activeFilter === 'Idle' && state !== 'idle') return false;
-            if (activeFilter === 'Hospital' && state !== 'hospital') return false;
-            if (activeFilter === 'Jail' && state !== 'jail') return false;
-            if (activeFilter === 'Traveling' && state !== 'traveling') return false;
-            if (activeFilter === 'Offline' && state !== 'offline') return false;
+            if (activeFilter === 'Online'   && s !== 'online') return false;
+            if (activeFilter === 'Idle'     && s !== 'idle') return false;
+            if (activeFilter === 'Hospital' && s !== 'hospital') return false;
+            if (activeFilter === 'Jail'     && s !== 'jail') return false;
+            if (activeFilter === 'Traveling'&& s !== 'traveling') return false;
+            if (activeFilter === 'Offline'  && s !== 'offline') return false;
         }
         if (search && !(m.name || '').toLowerCase().includes(search)) return false;
         return true;
     });
 
-    // Sort: online first, then idle, hosp, jail, traveling, offline
-    const order = { online:0, idle:1, hospital:2, jail:3, traveling:4, offline:5 };
-    filtered.sort((a, b) => (order[getMemberStateFromObj(a)] || 5) - (order[getMemberStateFromObj(b)] || 5));
+    filtered.sort((a,b) => {
+        if (sortKey === 'status') return stateOrder(getState(a)) - stateOrder(getState(b));
+        if (sortKey === 'level') return (b.level||0) - (a.level||0);
+        if (sortKey === 'name') return (a.name||'').localeCompare(b.name||'');
+        if (sortKey === 'days') return (b.daysInFaction||0) - (a.daysInFaction||0);
+        if (sortKey === 'attacks') return (b.attacks||0) - (a.attacks||0);
+        if (sortKey === 'score') return (b.score||0) - (a.score||0);
+        if (sortKey === 'lastAction') return (b.lastActionTimestamp||0) - (a.lastActionTimestamp||0);
+        return 0;
+    });
 
     const area = document.getElementById('content-area');
-
     if (filtered.length === 0) {
-        area.innerHTML = '<div class="empty"><div class="icon">🔍</div><p>No members match this filter.</p></div>';
+        area.innerHTML = '<div class="empty"><div class="ico">🔍</div><p>No members match this filter.</p></div>';
         return;
     }
 
     if (currentView === 'grid') {
-        area.innerHTML = `<div class="members-grid">${filtered.map(m => renderCard(m)).join('')}</div>`;
+        area.innerHTML = `<div class="member-grid">${filtered.map(renderCard).join('')}</div>`;
     } else {
         area.innerHTML = renderTable(filtered);
     }
 
-    // Start live timers
     startTimers();
 }
 
+// ─── CARD ───────────────────────────────────────────────────────────────────
 function renderCard(m) {
-    const state = getMemberStateFromObj(m);
-    const statusLabel = getStatusLabel(state);
-    const statusCls = getStatusClass(state);
-    const dotCls = `dot-${state === 'online' ? 'online' : state === 'idle' ? 'idle' : state === 'hospital' ? 'hospital' : state === 'jail' ? 'jail' : state === 'traveling' ? 'traveling' : 'offline'}`;
+    const state   = getState(m);
+    const dotCls  = `dot-${state}`;
+    const slCls   = `sl-${state}`;
+    const stLabel = { online:'🟢 Online', idle:'🟡 Idle', offline:'⚫ Offline', hospital:'🏥 Hospital', jail:'⛓️ Jailed', traveling:'✈️ Traveling' }[state] || '⚫ Offline';
 
+    // --- Timer block ---
     let timerHtml = '';
     if ((state === 'hospital' || state === 'jail') && m.until) {
-        const secsLeft = m.until - Math.floor(Date.now() / 1000);
-        if (secsLeft > 0) {
-            timerHtml = `<div class="mc-timer" data-until="${m.until}">⏱ ${formatTimer(secsLeft)}</div>`;
-        }
-    }
-    if (state === 'traveling' && m.statusDescription) {
-        timerHtml = `<div class="mc-timer" style="color:var(--blue);">✈️ ${m.statusDescription}</div>`;
+        const now   = Math.floor(Date.now()/1000);
+        const secs  = m.until - now;
+        const bgCls = state === 'jail' ? 'jail-bg' : '';
+        const tvCls = state === 'jail' ? 'tv-jail' : 'tv-hosp';
+        const icon  = state === 'jail' ? '⛓️' : '🏥';
+        timerHtml = `<div class="mc-timer-row ${bgCls}">
+            <span class="timer-label">${icon} Time Left</span>
+            <span class="timer-val ${tvCls}" data-until="${m.until}">${secs > 0 ? formatTimer(secs) : 'Releasing...'}</span>
+        </div>`;
+    } else if (state === 'traveling') {
+        const landingLeft = m.landingTime ? (m.landingTime - Math.floor(Date.now()/1000)) : null;
+        const tText = landingLeft && landingLeft > 0
+            ? `<span class="timer-val tv-travel" data-until="${m.landingTime}">${formatTimer(landingLeft)}</span>`
+            : `<span class="timer-val tv-travel">${m.statusDescription || 'Traveling'}</span>`;
+        timerHtml = `<div class="mc-timer-row travel-bg"><span class="timer-label">✈️ ETA</span>${tText}</div>`;
     }
 
-    return `<div class="member-card ${state}">
-        <div class="mc-header">
-            <div>
-                <div class="mc-name"><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank">${m.name || '?'}</a></div>
-                <div class="mc-pos">${m.position || ''}</div>
+    // --- Est stats ---
+    const statStr = typeof m.estStats === 'number'
+        ? m.estStats.toLocaleString()
+        : (m.estStats || '—');
+
+    // --- Last action ---
+    const lastStr = formatLastAction(m.lastActionTimestamp) || m.lastActionRelative || '—';
+
+    // --- Days bar (max anchored at 5 years = 1825 days) ---
+    const daysPct = Math.min((m.daysInFaction || 0) / 1825 * 100, 100).toFixed(1);
+
+    // --- War stats section ---
+    let warHtml = '';
+    if (hasWar || m.attacks > 0 || m.score > 0 || m.defends > 0) {
+        const eff = m.attacks > 0 ? (m.score / m.attacks).toFixed(1) : '0';
+        warHtml = `<div class="war-row">
+            <div class="war-stat"><div class="ws-val c-blue">${m.attacks || 0}</div><div class="ws-lbl">⚔️ Hits</div></div>
+            <div class="war-stat"><div class="ws-val c-gold">${(m.score||0).toLocaleString()}</div><div class="ws-lbl">⭐ Score</div></div>
+            <div class="war-stat"><div class="ws-val c-teal">${eff}</div><div class="ws-lbl">📊 Eff.</div></div>
+        </div>`;
+    }
+
+    // --- Activity sparkline ---
+    let sparkHtml = '';
+    if (m.timeline && m.timeline.length > 0) {
+        const maxAct = Math.max(...m.timeline, 1);
+        const recent = m.timeline.slice(-24); // last 24 buckets
+        const bars = recent.map(v => {
+            const pct = (v / maxAct * 100).toFixed(0);
+            const opacity = v > 0 ? 0.4 + (v / maxAct * 0.6) : 0.1;
+            return `<div class="spark-bar" style="height:${Math.max(pct,5)}%;opacity:${opacity};"></div>`;
+        }).join('');
+        sparkHtml = `<div class="activity-row">
+            <div class="act-label"><span>72h Activity</span><span style="color:var(--green)">${m.timeline.filter(v=>v>0).length} active hrs</span></div>
+            <div class="sparkline">${bars}</div>
+        </div>`;
+    }
+
+    return `<div class="mc st-${state}">
+        <div class="mc-top">
+            <div class="mc-identity">
+                <div class="mc-name-row">
+                    <div class="mc-name"><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank">${m.name || '?'}</a></div>
+                    ${m.level ? `<span class="lvl-badge">Lv ${m.level}</span>` : ''}
+                </div>
+                <div class="mc-pos">${m.position || 'Member'}</div>
             </div>
-            <div class="status-dot ${dotCls}"></div>
+            <div class="mc-status-block">
+                <div class="status-dot-lg ${dotCls}"></div>
+                <div class="status-label ${slCls}">${stLabel}</div>
+            </div>
         </div>
-        <div class="mc-status ${statusCls}">${statusLabel}</div>
         ${timerHtml}
-        <div class="mc-last">Last: ${m.lastActionRelative || 'Unknown'}</div>
-        <div class="mc-days">📅 ${m.daysInFaction || 0} days in faction</div>
+        <div class="mc-body">
+            <div class="info-item">
+                <div class="info-lbl">Est. Battle Stats</div>
+                <div class="info-val" style="color:var(--blue)">${statStr}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-lbl">Last Action</div>
+                <div class="info-val">${lastStr}</div>
+            </div>
+            <div class="info-item" style="grid-column:1/-1;">
+                <div class="info-lbl" style="margin-bottom:6px;">Days in Faction — <span style="color:var(--teal)">${m.daysInFaction || 0} days</span></div>
+                <div class="days-bar-bg"><div class="days-bar-fill" style="width:${daysPct}%"></div></div>
+            </div>
+        </div>
+        ${warHtml}
+        ${sparkHtml}
+        <div class="mc-footer">
+            <a class="mc-btn mc-btn-profile" href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank">👤 Profile</a>
+            <a class="mc-btn mc-btn-msg" href="https://www.torn.com/messages.php?action=send&XID=${m.id}" target="_blank">✉️ Message</a>
+        </div>
     </div>`;
 }
 
+// ─── TABLE ───────────────────────────────────────────────────────────────────
 function renderTable(members) {
     const rows = members.map(m => {
-        const state = getMemberStateFromObj(m);
-        const sbCls = `sb-${state === 'hospital' ? 'hospital' : state === 'jail' ? 'jail' : state === 'traveling' ? 'travel' : state === 'online' ? 'online' : state === 'idle' ? 'idle' : 'offline'}`;
-        const statusLabel = getStatusLabel(state);
+        const state = getState(m);
+        const sbCls = `sb-${{hospital:'hospital',jail:'jail',traveling:'travel',online:'online',idle:'idle',offline:'offline'}[state]||'offline'}`;
+        const stLabel = { online:'🟢 Online', idle:'🟡 Idle', offline:'⚫ Offline', hospital:'🏥 Hospital', jail:'⛓️ Jailed', traveling:'✈️ Traveling' }[state] || '⚫';
 
         let timer = '—';
         if ((state === 'hospital' || state === 'jail') && m.until) {
-            const secsLeft = m.until - Math.floor(Date.now() / 1000);
-            if (secsLeft > 0) timer = `<span class="timer-cell" data-until="${m.until}">${formatTimer(secsLeft)}</span>`;
+            const left = m.until - Math.floor(Date.now()/1000);
+            if (left > 0) timer = `<span class="timer-td" style="color:${state==='jail'?'var(--purple)':'var(--red)'}" data-until="${m.until}">${formatTimer(left)}</span>`;
         } else if (state === 'traveling') {
-            timer = '✈️ Abroad';
+            timer = m.statusDescription || '✈️';
         }
 
+        const statStr = typeof m.estStats === 'number' ? m.estStats.toLocaleString() : (m.estStats || '—');
+        const last = formatLastAction(m.lastActionTimestamp) || m.lastActionRelative || '—';
+        const eff = m.attacks > 0 ? (m.score/m.attacks).toFixed(1) : '—';
+
         return `<tr>
-            <td><a class="player-link" href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank">${m.name}</a></td>
-            <td><span class="status-badge ${sbCls}">${statusLabel}</span></td>
+            <td><a class="tlink" href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank">${m.name}</a></td>
+            <td style="color:var(--gold);font-weight:700">${m.level || '?'}</td>
+            <td><span class="sb ${sbCls}">${stLabel}</span></td>
             <td>${timer}</td>
-            <td>${m.position || '—'}</td>
-            <td>${m.lastActionRelative || 'Unknown'}</td>
-            <td>${m.daysInFaction || 0}</td>
+            <td style="color:var(--text-dim);font-size:0.85em">${m.position || '—'}</td>
+            <td style="color:var(--blue);font-weight:700">${statStr}</td>
+            <td style="color:var(--blue);font-weight:700">${m.attacks||0}</td>
+            <td style="color:var(--gold);font-weight:700">${(m.score||0).toLocaleString()}</td>
+            <td style="color:var(--teal)">${eff}</td>
+            <td style="color:var(--text-dim)">${last}</td>
+            <td style="color:var(--text-dim)">${m.daysInFaction||0}d</td>
         </tr>`;
     }).join('');
 
     return `<div class="table-wrap"><table>
         <thead><tr>
-            <th>Name</th>
-            <th>Status</th>
-            <th>Timer</th>
-            <th>Position</th>
-            <th>Last Action</th>
-            <th>Days in Faction</th>
+            <th>Name</th><th>Lv</th><th>Status</th><th>Timer</th>
+            <th>Position</th><th>Est. Stats</th>
+            <th>⚔️ Hits</th><th>⭐ Score</th><th>Eff.</th>
+            <th>Last Action</th><th>Days</th>
         </tr></thead>
         <tbody>${rows}</tbody>
     </table></div>`;
 }
 
+// ─── TIMERS ───────────────────────────────────────────────────────────────────
 function startTimers() {
-    setInterval(() => {
-        const now = Math.floor(Date.now() / 1000);
+    if (window._timerInterval) clearInterval(window._timerInterval);
+    window._timerInterval = setInterval(() => {
+        const now = Math.floor(Date.now()/1000);
         document.querySelectorAll('[data-until]').forEach(el => {
             const left = parseInt(el.dataset.until) - now;
-            if (left <= 0) { el.textContent = 'Free!'; el.style.color = 'var(--green)'; }
-            else el.textContent = (el.classList.contains('timer-cell') ? '' : '⏱ ') + formatTimer(left);
+            if (left <= 0) { el.textContent = '✅ Free!'; el.style.color = 'var(--green)'; }
+            else el.textContent = formatTimer(left);
         });
     }, 1000);
 }
 
-function startProgressBar() {
-    if (progressInterval) clearInterval(progressInterval);
-    const fill = document.getElementById('refresh-fill');
+function startProgress() {
+    if (progressTimer) clearInterval(progressTimer);
+    if (refreshTimer) clearInterval(refreshTimer);
+    const fill = document.getElementById('rbar-fill');
     let start = Date.now();
     fill.style.width = '0%';
-    progressInterval = setInterval(() => {
-        const pct = Math.min((Date.now() - start) / REFRESH_MS * 100, 100);
-        fill.style.width = pct + '%';
-    }, 500);
-
-    if (refreshInterval) clearInterval(refreshInterval);
-    refreshInterval = setInterval(() => { loadMembers(); }, REFRESH_MS);
+    progressTimer = setInterval(() => {
+        fill.style.width = Math.min((Date.now()-start)/REFRESH_MS*100, 100).toFixed(1)+'%';
+    }, 1000);
+    refreshTimer = setInterval(loadMembers, REFRESH_MS);
 }
 
 loadMembers();
