@@ -397,7 +397,7 @@ setInterval(async () => {
 // Background Task 2: Market Watcher
 setInterval(async () => {
     let watchKey = getNextApiKey();
-    console.log([Market Watcher] key: , webhook: ); if (!marketConfig.webhookUrl || !watchKey) return;
+    if (!marketConfig.webhookUrl || !watchKey) return;
     
     try {
         if (marketConfig.autoDefense) {
