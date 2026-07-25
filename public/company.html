@@ -434,9 +434,23 @@ function saveKey() {
     loadCompanyData();
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-    let s = localStorage.getItem('master_company_config');
-    if (s) fetch('/api/sync-configs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ company: JSON.parse(s) }) }).catch(() => {});
+window.addEventListener('DOMContentLoaded', async () => {
+    try {
+        const res = await fetch('/api/master-config');
+        const data = await res.json();
+        if (data.discordConfig && data.discordConfig.apiKey) {
+            localStorage.setItem('warboard_apikey', data.discordConfig.apiKey);
+        }
+        if (data.companyConfig) {
+            localStorage.setItem('master_company_config', JSON.stringify(data.companyConfig));
+        }
+        if (data.ocConfig) {
+            localStorage.setItem('master_oc_config', JSON.stringify(data.ocConfig));
+        }
+        if (data.discordConfig) {
+            localStorage.setItem('master_faction_config', JSON.stringify(data.discordConfig));
+        }
+    } catch(e) {}
 });
 
 function formatMoney(num) {

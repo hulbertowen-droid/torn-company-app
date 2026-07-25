@@ -459,7 +459,7 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-function saveSettings() {
+async function saveSettings() {
     initAudio(); 
     myKey = document.getElementById("api-key").value.trim();
     ffKey = document.getElementById("ff-key").value.trim();
@@ -478,6 +478,15 @@ function saveSettings() {
     localStorage.setItem("warboard_myname", myName);
     localStorage.setItem("warboard_discord", discordWebhook);
     localStorage.setItem("warboard_cpm", cpm);
+
+    try {
+        await fetch('/api/master-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiKey: myKey, discordWebhook: discordWebhook, myName: myName })
+        });
+    } catch(e) {}
+
 
     if (discordWebhook) {
         fetch('/api/save-discord-config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ webhookUrl: discordWebhook }) }).catch(()=>{});

@@ -1210,6 +1210,32 @@ app.post('/api/save-company-config', (req, res) => {
     res.json({ success: true });
 });
 
+
+app.get('/api/master-config', (req, res) => {
+    res.json({
+        discordConfig,
+        companyConfig,
+        ocConfig,
+        marketConfig,
+        adminKeys: apiPoolConfig.keys
+    });
+});
+
+app.post('/api/master-config', (req, res) => {
+    const { apiKey, discordWebhook, companyWebhook, ocWebhook, myName } = req.body;
+    
+    // Save to discord config
+    if (discordWebhook !== undefined) discordConfig.webhookUrl = discordWebhook;
+    if (apiKey !== undefined) discordConfig.apiKey = apiKey;
+    if (myName !== undefined) discordConfig.myName = myName; // Generic storage
+    saveDiscordConfig();
+    
+    // Also save API key to company config for redundancy if needed
+    if (apiKey !== undefined) { companyConfig.apiKey = apiKey; saveCompanyConfig(); }
+    
+    res.json({ success: true });
+});
+
 app.post('/api/sync-configs', (req, res) => {
     // Restores configs from the client's browser (acting as a persistent database)
     const { company, discord, oc, market } = req.body;
