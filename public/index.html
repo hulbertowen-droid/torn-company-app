@@ -479,6 +479,20 @@ async function saveSettings() {
     localStorage.setItem("warboard_discord", discordWebhook);
     localStorage.setItem("warboard_cpm", cpm);
 
+    let discordId = document.getElementById("discord-userid").value.trim();
+    let attackThreshold = document.getElementById("attack-threshold").value.trim() || "3";
+    localStorage.setItem("warboard_discordId", discordId);
+    localStorage.setItem("warboard_attackThreshold", attackThreshold);
+    
+    try {
+        fetch('/api/save-user-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiKey: myKey, discordId: discordId, attackThreshold: attackThreshold })
+        });
+    } catch(e) {}
+
+
     try {
         await fetch('/api/master-config', {
             method: 'POST',
