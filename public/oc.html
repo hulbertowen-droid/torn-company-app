@@ -4,20 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OC Manager | Owen's Faction Tools</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
     <style>
-        :root { 
-            --bg: #090a0f; --card: #11141d; --item: #1b202e; 
+        :root {
+            --bg: #090a0f; --card: #11141d; --item: #1b202e;
             --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
             --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
+            --purple: #a29bfe;
         }
-        
-        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; height: 100vh; overflow: hidden; }
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #57606f; }
+        * { box-sizing: border-box; }
+        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Inter', 'Segoe UI', sans-serif; margin: 0; height: 100vh; overflow: hidden; }
+        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #0b0d13; } ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
 
-        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; z-index: 100; box-shadow: 2px 0 15px rgba(0,0,0,0.5); }
+        /* Sidebar */
+        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s; flex-shrink: 0; z-index: 100; }
         .sidebar.collapsed { width: 75px; }
         .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2f3542; }
         .sidebar-logo { color: var(--red); font-weight: 900; font-size: 0.9em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
@@ -25,42 +26,147 @@
         .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
         .toggle-btn:hover { color: white; background: #2f3542; }
         .nav-items { display: flex; flex-direction: column; gap: 8px; padding: 20px 10px; }
-        .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
+        .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: 600; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
         .nav-link:hover { background: #2f3542; color: white; }
         .nav-link.active { background: rgba(255, 71, 87, 0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
         .nav-text { transition: opacity 0.2s; }
         .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
-        
-        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; position: relative; }
 
-        #refresh-bar-container { position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: #0b0d13; z-index: 50; }
+        /* Main */
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; position: relative; }
+        #refresh-bar-container { position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: transparent; z-index: 50; }
         #refresh-bar { height: 100%; width: 0%; background: var(--blue); box-shadow: 0 0 8px var(--blue); transition: width 0.1s linear; }
 
-        h1 { text-align: center; color: var(--blue); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; text-shadow: 0 4px 15px rgba(88,166,255,0.2); }
+        h1 { text-align: center; color: var(--blue); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 8px; font-size: 1.8em; }
+        .subtitle { text-align: center; color: var(--text-dim); font-size: 0.85em; margin-bottom: 30px; }
+        .container { max-width: 1400px; margin: 0 auto; }
 
-        .container { max-width: 1500px; margin: 0 auto; display: grid; grid-template-columns: 1fr; gap: 25px; }
+        /* Tabs */
+        .tabs { display: flex; gap: 4px; margin-bottom: 25px; background: var(--card); padding: 6px; border-radius: 10px; border: 1px solid #2f3542; width: fit-content; }
+        .tab-btn { padding: 8px 22px; border-radius: 7px; border: none; cursor: pointer; font-weight: 700; font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; transition: 0.2s; background: transparent; color: var(--text-dim); }
+        .tab-btn.active { background: var(--blue); color: white; box-shadow: 0 0 12px rgba(88,166,255,0.3); }
+        .tab-btn:hover:not(.active) { background: #2f3542; color: white; }
 
-        .oc-card { background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542; box-shadow: 0 8px 20px rgba(0,0,0,0.3); margin-bottom: 20px; }
-        .oc-card h2 { margin-top:0; color:var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; font-size:1.2em; text-transform:uppercase; display: flex; justify-content: space-between; align-items: center; }
-        
-        .participant-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; margin-top: 15px; }
-        .p-card { background: #0b0d13; border: 1px solid #2f3542; padding: 12px 18px; border-radius: 8px; display: flex; flex-direction: column; box-shadow: inset 0 0 20px rgba(0,0,0,0.5); }
-        .p-card.ready { border-color: var(--green); background: rgba(46, 213, 115, 0.05); }
-        .p-card.issue { border-color: var(--red); background: rgba(255, 71, 87, 0.05); }
-        .p-name { font-weight: bold; font-size: 1.1em; margin-bottom: 4px; }
-        .p-name a { color: var(--text-main); text-decoration: none; }
-        .p-name a:hover { text-decoration: underline; }
-        
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 10000; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
-        .modal-content { background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; width: 400px; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 10px 40px rgba(0,0,0,0.9); }
-        .modal-content h2 { margin: 0 0 10px 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
-        .modal-content label { font-size: 0.85em; color: var(--text-dim); font-weight: bold; text-transform: uppercase; }
-        .modal-content input { padding: 12px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1em; width: 100%; box-sizing: border-box; transition: 0.2s; }
-        .modal-content input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 8px rgba(88,166,255,0.2); }
-        .modal-content button.btn-save { background: var(--blue); color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1.1em; margin-top: 10px; transition: 0.2s; text-transform: uppercase; }
-        .modal-content button.btn-save:hover { background: #79c0ff; box-shadow: 0 0 12px rgba(88,166,255,0.4); }
-        .close-btn { position: absolute; right: 20px; top: 20px; color: var(--text-dim); cursor: pointer; font-size: 1.5em; line-height: 1; }
-        .close-btn:hover { color: white; }
+        /* Crime Cards */
+        .oc-card {
+            background: var(--card);
+            border: 1px solid #2f3542;
+            border-radius: 12px;
+            margin-bottom: 18px;
+            overflow: hidden;
+            transition: border-color 0.2s;
+        }
+        .oc-card:hover { border-color: #4a5568; }
+        .oc-card.ready { border-left: 4px solid var(--green); }
+        .oc-card.recruiting { border-left: 4px solid var(--gold); }
+        .oc-card.planning { border-left: 4px solid var(--blue); }
+
+        .oc-header {
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+            border-bottom: 1px solid #2f3542;
+            gap: 15px;
+        }
+        .oc-header:hover { background: rgba(255,255,255,0.02); }
+
+        .oc-title-block { display: flex; align-items: center; gap: 14px; }
+        .oc-thumbnail {
+            width: 60px; height: 60px; border-radius: 8px;
+            background: linear-gradient(135deg, #1b202e, #2f3542);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.8em; flex-shrink: 0;
+        }
+        .oc-name { font-weight: 900; font-size: 1.15em; color: var(--text-main); }
+        .oc-meta { display: flex; align-items: center; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
+        .diff-badge { font-size: 0.75em; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: rgba(88,166,255,0.15); color: var(--blue); border: 1px solid rgba(88,166,255,0.3); }
+        .slots-badge { font-size: 0.75em; color: var(--text-dim); }
+
+        .oc-header-right { display: flex; align-items: center; gap: 15px; flex-shrink: 0; }
+        .timer-block { text-align: right; }
+        .timer-big { font-size: 1.5em; font-weight: 900; font-variant-numeric: tabular-nums; }
+        .timer-label { font-size: 0.7em; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+        .status-pill { padding: 5px 14px; border-radius: 20px; font-size: 0.8em; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+        .pill-recruiting { background: rgba(255,165,2,0.15); color: var(--gold); border: 1px solid rgba(255,165,2,0.4); }
+        .pill-planning { background: rgba(88,166,255,0.15); color: var(--blue); border: 1px solid rgba(88,166,255,0.4); }
+        .pill-ready { background: rgba(46,213,115,0.15); color: var(--green); border: 1px solid rgba(46,213,115,0.4); animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(46,213,115,0.3); } 50% { box-shadow: 0 0 0 6px rgba(46,213,115,0); } }
+        .pill-successful { background: rgba(46,213,115,0.1); color: var(--green); border: 1px solid rgba(46,213,115,0.2); }
+        .pill-failure { background: rgba(255,71,87,0.1); color: var(--red); border: 1px solid rgba(255,71,87,0.2); }
+        .collapse-arrow { color: var(--text-dim); font-size: 1em; transition: transform 0.2s; }
+        .oc-card.open .collapse-arrow { transform: rotate(180deg); }
+
+        /* Slots Grid */
+        .oc-body { padding: 18px 20px; }
+        .slots-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+
+        .slot-card {
+            background: #0b0d13;
+            border: 1px solid #2f3542;
+            border-radius: 10px;
+            padding: 14px;
+            position: relative;
+            transition: border-color 0.2s;
+        }
+        .slot-card.slot-issue { border-color: rgba(255,71,87,0.5); background: rgba(255,71,87,0.03); }
+        .slot-card.slot-ok { border-color: rgba(46,213,115,0.3); }
+        .slot-card.slot-empty { opacity: 0.5; border-style: dashed; }
+
+        .slot-role { font-size: 0.7em; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-dim); margin-bottom: 8px; }
+        .slot-name { font-weight: 700; font-size: 1em; margin-bottom: 2px; }
+        .slot-name a { color: var(--text-main); text-decoration: none; }
+        .slot-name a:hover { color: var(--blue); text-decoration: underline; }
+        .slot-id { font-size: 0.72em; color: var(--text-dim); margin-bottom: 10px; }
+
+        .pass-rate-bar-wrap { margin: 8px 0 4px; }
+        .pass-rate-label { font-size: 0.7em; color: var(--text-dim); display: flex; justify-content: space-between; margin-bottom: 3px; }
+        .pass-rate-bar { height: 4px; background: #2f3542; border-radius: 2px; overflow: hidden; }
+        .pass-rate-fill { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
+
+        .slot-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+        .tag { font-size: 0.68em; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .tag-hosp { background: rgba(255,71,87,0.2); color: var(--red); border: 1px solid rgba(255,71,87,0.4); }
+        .tag-jail { background: rgba(255,165,2,0.2); color: var(--gold); border: 1px solid rgba(255,165,2,0.4); }
+        .tag-ok { background: rgba(46,213,115,0.15); color: var(--green); border: 1px solid rgba(46,213,115,0.3); }
+        .tag-item-missing { background: rgba(255,71,87,0.2); color: var(--red); border: 1px solid rgba(255,71,87,0.4); }
+        .tag-item-faction { background: rgba(162,155,254,0.15); color: var(--purple); border: 1px solid rgba(162,155,254,0.3); }
+        .tag-item-user { background: rgba(88,166,255,0.15); color: var(--blue); border: 1px solid rgba(88,166,255,0.3); }
+        .tag-item-used { background: rgba(255,165,2,0.15); color: var(--gold); border: 1px solid rgba(255,165,2,0.3); }
+        .tag-item-reusable { background: rgba(46,213,115,0.12); color: var(--green); border: 1px solid rgba(46,213,115,0.25); }
+
+        /* Rewards */
+        .oc-rewards { display: flex; gap: 15px; padding: 12px 20px; background: rgba(255,165,2,0.04); border-top: 1px solid #2f3542; flex-wrap: wrap; align-items: center; }
+        .reward-label { font-size: 0.72em; text-transform: uppercase; color: var(--text-dim); font-weight: 700; letter-spacing: 1px; }
+        .reward-value { font-weight: 900; font-size: 0.9em; color: var(--gold); }
+        .reward-sep { color: #2f3542; }
+
+        /* Empty state */
+        .empty-state { text-align: center; padding: 80px 20px; color: var(--text-dim); }
+        .empty-state .icon { font-size: 4em; margin-bottom: 15px; }
+        .empty-state h3 { margin: 0 0 8px; color: var(--text-main); }
+
+        /* Error / No key */
+        .alert-box { padding: 18px 22px; border-radius: 10px; margin-bottom: 20px; font-weight: 600; }
+        .alert-error { background: rgba(255,71,87,0.1); border: 1px solid rgba(255,71,87,0.4); color: var(--red); }
+        .alert-info { background: rgba(88,166,255,0.08); border: 1px solid rgba(88,166,255,0.3); color: var(--blue); }
+
+        /* Settings Modal */
+        .modal-overlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.85); z-index:10000; justify-content:center; align-items:center; backdrop-filter: blur(4px); }
+        .modal-content { background: var(--card); padding: 30px; border-radius: 16px; border: 1px solid #2f3542; width: 420px; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 20px 60px rgba(0,0,0,0.9); position: relative; }
+        .modal-content h2 { margin: 0 0 5px 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; font-size: 1.1em; }
+        .modal-content label { font-size: 0.8em; color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 6px; }
+        .modal-content input { padding: 11px 14px; border-radius: 7px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 0.95em; width: 100%; transition: 0.2s; }
+        .modal-content input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(88,166,255,0.1); }
+        .btn-save { background: var(--blue); color: white; border: none; padding: 13px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 1em; margin-top: 5px; transition: 0.2s; text-transform: uppercase; letter-spacing: 1px; }
+        .btn-save:hover { background: #79c0ff; box-shadow: 0 0 15px rgba(88,166,255,0.35); }
+        .close-btn { position: absolute; right: 18px; top: 18px; color: var(--text-dim); cursor: pointer; font-size: 1.4em; line-height: 1; background: none; border: none; padding: 4px 8px; border-radius: 4px; }
+        .close-btn:hover { color: white; background: #2f3542; }
+
+        .settings-btn { position: fixed; bottom: 25px; right: 25px; background: var(--gold); color: #000; border: none; width: 48px; height: 48px; border-radius: 50%; font-size: 1.2em; cursor: pointer; box-shadow: 0 4px 20px rgba(255,165,2,0.4); transition: 0.2s; z-index: 500; }
+        .settings-btn:hover { transform: scale(1.1); box-shadow: 0 6px 25px rgba(255,165,2,0.6); }
     </style>
 </head>
 <body>
@@ -79,7 +185,7 @@
             <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>
             <a href="/admin.html" class="nav-link">👑 <span class="nav-text">Admin Panel</span></a>
             <a href="/oc.html" class="nav-link active">💼 <span class="nav-text">OC Manager</span></a>
-            <a onclick="openSettings()" class="nav-link" style="margin-top: 15px; border-top: 1px solid #2f3542; border-radius: 0; padding-top: 15px; cursor: pointer;">
+            <a onclick="openSettings()" class="nav-link" style="margin-top:auto; border-top:1px solid #2f3542; border-radius:0; padding-top:15px; cursor:pointer;">
                 ⚙️ <span class="nav-text">Settings</span>
             </a>
         </div>
@@ -87,52 +193,59 @@
 
     <main class="main-content">
         <div id="refresh-bar-container"><div id="refresh-bar"></div></div>
-        
-        <h1>Organized Crimes Manager</h1>
 
-        <div class="container" id="oc-container">
-            <div style="color:var(--text-dim); padding:20px; text-align: center; font-style: italic;">Loading Organized Crimes...</div>
-        </div>
+        <h1>💼 OC Manager</h1>
+        <p class="subtitle" id="status-line">Connecting to Torn API...</p>
 
-        <div id="settings-modal" class="modal-overlay">
-            <div class="modal-content" style="position: relative;">
-                <div class="close-btn" onclick="closeSettings()">&times;</div>
-                <h2>OC Settings</h2>
-                <div>
-                    <label>Torn API Key (Faction Perms)</label>
-                    <input type="password" id="api-key" placeholder="Paste your Torn API Key here">
-                </div>
-                <div>
-                    <label>Discord Webhook (Missing Items Alert)</label>
-                    <input type="text" id="discord-webhook" placeholder="Webhook URL">
-                </div>
-                <div>
-                    <label>Discord Role ID to @ (Optional)</label>
-                    <input type="text" id="discord-role" placeholder="e.g. 123456789012345678">
-                </div>
-                <button class="btn-save" onclick="saveSettings()">Save & Connect</button>
+        <div class="container">
+            <div class="tabs">
+                <button class="tab-btn active" id="tab-recruiting" onclick="setTab('recruiting')">Recruiting</button>
+                <button class="tab-btn" id="tab-planning" onclick="setTab('planning')">Planning</button>
+                <button class="tab-btn" id="tab-ready" onclick="setTab('ready')">Ready</button>
+            </div>
+            <div id="oc-container">
+                <div style="color:var(--text-dim); padding:40px; text-align:center;">Loading...</div>
             </div>
         </div>
     </main>
+
+    <button class="settings-btn" onclick="openSettings()" title="Settings">⚙️</button>
+
+    <div id="settings-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeSettings()">✕</button>
+            <h2>⚙️ OC Settings</h2>
+            <div>
+                <label>Your Torn API Key (needs Faction access)</label>
+                <input type="password" id="api-key" placeholder="Paste your 16-char Torn API key">
+            </div>
+            <div>
+                <label>Discord Webhook URL (for alerts)</label>
+                <input type="text" id="discord-webhook" placeholder="https://discord.com/api/webhooks/...">
+            </div>
+            <div>
+                <label>Discord Role ID to Ping (Optional)</label>
+                <input type="text" id="discord-role" placeholder="e.g. 123456789012345678">
+            </div>
+            <button class="btn-save" onclick="saveSettings()">💾 Save & Load</button>
+        </div>
+    </div>
 
 <script>
 let myKey = localStorage.getItem("warboard_apikey") || "";
 let ocWebhook = localStorage.getItem("oc_webhook") || "";
 let ocRole = localStorage.getItem("oc_role") || "";
-
-let fetchTimer = null;
+let allCrimes = [];
+let currentTab = "recruiting";
+let refreshTimer = null;
 let progressTimer = null;
-const REFRESH_MS = 300000; // 5 minutes
+const REFRESH_MS = 300000;
 
 document.getElementById("api-key").value = myKey;
 document.getElementById("discord-webhook").value = ocWebhook;
 document.getElementById("discord-role").value = ocRole;
 
-function toggleSidebar() {
-    const sidebar = document.getElementById('app-sidebar');
-    sidebar.classList.toggle('collapsed');
-}
-
+function toggleSidebar() { document.getElementById('app-sidebar').classList.toggle('collapsed'); }
 function openSettings() { document.getElementById("settings-modal").style.display = "flex"; }
 function closeSettings() { document.getElementById("settings-modal").style.display = "none"; }
 
@@ -140,172 +253,333 @@ function saveSettings() {
     myKey = document.getElementById("api-key").value.trim();
     ocWebhook = document.getElementById("discord-webhook").value.trim();
     ocRole = document.getElementById("discord-role").value.trim();
-    
     localStorage.setItem("warboard_apikey", myKey);
     localStorage.setItem("oc_webhook", ocWebhook);
     localStorage.setItem("oc_role", ocRole);
-
-    fetch('/api/save-oc-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ webhookUrl: ocWebhook, roleId: ocRole })
-    }).catch(console.error);
-
+    if (ocWebhook || ocRole) {
+        fetch('/api/save-oc-config', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ webhookUrl: ocWebhook, roleId: ocRole })
+        }).catch(console.error);
+    }
     closeSettings();
-    startPolling();
+    fetchOCs();
 }
 
-function startRefreshProgressBar(refreshMs) {
+function setTab(tab) {
+    currentTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    renderOCs(allCrimes);
+}
+
+function startProgressBar() {
     if (progressTimer) clearInterval(progressTimer);
     const bar = document.getElementById("refresh-bar");
     let startTime = Date.now();
-    
-    bar.style.transition = "none";
-    bar.style.width = "0%";
+    bar.style.transition = "none"; bar.style.width = "0%";
     setTimeout(() => { bar.style.transition = "width 0.1s linear"; }, 50);
-
     progressTimer = setInterval(() => {
-        let elapsed = Date.now() - startTime;
-        let percent = (elapsed / refreshMs) * 100;
-        if (percent > 100) percent = 100;
-        bar.style.width = `${percent}%`;
+        let pct = Math.min((Date.now() - startTime) / REFRESH_MS * 100, 100);
+        bar.style.width = pct + "%";
     }, 100);
 }
 
-function startPolling() {
-    if (fetchTimer) clearInterval(fetchTimer);
-    
-    fetchOCs();
-    startRefreshProgressBar(REFRESH_MS);
-    
-    fetchTimer = setInterval(() => {
-        fetchOCs();
-        startRefreshProgressBar(REFRESH_MS);
-    }, REFRESH_MS);
-}
-
-function formatTimeLeft(seconds) {
-    if (seconds <= 0) return "Ready!";
-    let h = Math.floor(seconds / 3600);
-    let m = Math.floor((seconds % 3600) / 60);
-    return `${h}h ${m}m remaining`;
-}
-
 async function fetchOCs() {
-    if (!myKey) return;
+    if (!myKey) {
+        document.getElementById("oc-container").innerHTML = `
+            <div class="alert-box alert-info">
+                ⚙️ <strong>API Key Required</strong> — Click the ⚙️ Settings button and paste your Torn API key (needs Faction access) to load your organized crimes.
+            </div>`;
+        document.getElementById("status-line").textContent = "No API key set.";
+        return;
+    }
+
     try {
-        const res = await fetch(`/api/ocs?apiKey=${myKey}`);
+        const res = await fetch(`/api/ocs?apiKey=${encodeURIComponent(myKey)}`);
         const data = await res.json();
-        
+
         if (data.error) {
-            document.getElementById("oc-container").innerHTML = `<div style="color:var(--red); padding:20px; font-weight: bold; text-align: center;">${data.error}</div>`;
+            document.getElementById("oc-container").innerHTML = `<div class="alert-box alert-error">❌ ${data.error}</div>`;
+            document.getElementById("status-line").textContent = "Error loading data.";
             return;
         }
 
-        renderOCs(data.crimes);
+        allCrimes = data.crimes || [];
+        renderOCs(allCrimes);
+        startProgressBar();
+
+        const now = new Date().toLocaleTimeString();
+        document.getElementById("status-line").textContent = `Showing ${allCrimes.length} crimes • Last updated: ${now} • Auto-refresh every 5 min`;
+
+        if (refreshTimer) clearInterval(refreshTimer);
+        refreshTimer = setInterval(fetchOCs, REFRESH_MS);
+
     } catch (e) {
-        console.error("Failed to load OCs", e);
+        document.getElementById("oc-container").innerHTML = `<div class="alert-box alert-error">❌ Failed to connect to server. Is Render still deploying?</div>`;
     }
+}
+
+function getCrimeEmoji(name) {
+    if (!name) return "🔫";
+    const n = name.toLowerCase();
+    if (n.includes("stage") || n.includes("fright") || n.includes("heist")) return "🎭";
+    if (n.includes("market") || n.includes("trader")) return "💹";
+    if (n.includes("car") || n.includes("lot") || n.includes("vehicle")) return "🚗";
+    if (n.includes("lotus") || n.includes("petal") || n.includes("club")) return "🌸";
+    if (n.includes("smoke") || n.includes("mirror")) return "💨";
+    if (n.includes("cash") || n.includes("money") || n.includes("bank")) return "💰";
+    if (n.includes("first aid") || n.includes("hospital") || n.includes("medic")) return "🏥";
+    if (n.includes("fire") || n.includes("arson")) return "🔥";
+    if (n.includes("jewelry") || n.includes("jewel")) return "💎";
+    if (n.includes("gas") || n.includes("light")) return "⛽";
+    if (n.includes("pet") || n.includes("animal")) return "🐾";
+    return "🎯";
+}
+
+function getPassRateColor(rate) {
+    if (rate >= 80) return "var(--green)";
+    if (rate >= 60) return "var(--gold)";
+    return "var(--red)";
+}
+
+function formatCountdown(seconds) {
+    if (seconds <= 0) return "00:00:00";
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    return [h, m, s].map(v => String(v).padStart(2, "0")).join(":");
+}
+
+function getTabForCrime(crime) {
+    const status = (crime.status || "").toLowerCase();
+    if (status === "recruiting") return "recruiting";
+    if (status === "planning") {
+        const now = Math.floor(Date.now() / 1000);
+        const secsLeft = (crime.ready_at || 0) - now;
+        if (secsLeft <= 0) return "ready";
+        return "planning";
+    }
+    return null; // completed/failed/expired → not shown
 }
 
 function renderOCs(crimes) {
     const container = document.getElementById("oc-container");
-    container.innerHTML = "";
-    
-    // Filter out completed/failed/expired
-    const activeCrimes = crimes.filter(c => !["successful", "failure", "expired", "completed"].includes(c.status));
-    
-    if (!activeCrimes || activeCrimes.length === 0) {
-        container.innerHTML = `<div style='color:var(--text-dim); padding:10px; font-style: italic; text-align: center;'>No active Organized Crimes found.</div>`;
+    const now = Math.floor(Date.now() / 1000);
+
+    // Filter to current tab
+    const tabCrimes = crimes.filter(c => getTabForCrime(c) === currentTab);
+
+    // Update tab counts
+    const counts = { recruiting: 0, planning: 0, ready: 0 };
+    crimes.forEach(c => {
+        const t = getTabForCrime(c);
+        if (t) counts[t]++;
+    });
+    document.getElementById("tab-recruiting").textContent = `Recruiting (${counts.recruiting})`;
+    document.getElementById("tab-planning").textContent = `Planning (${counts.planning})`;
+    document.getElementById("tab-ready").textContent = `✅ Ready (${counts.ready})`;
+
+    if (tabCrimes.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="icon">📋</div>
+                <h3>No ${currentTab} crimes</h3>
+                <p>Nothing in the ${currentTab} phase right now.</p>
+            </div>`;
         return;
     }
 
-    activeCrimes.sort((a, b) => (a.ready_at || 0) - (b.ready_at || 0)).forEach(crime => {
-        const card = document.createElement("div");
-        card.className = "oc-card";
-        
-        const now = Math.floor(Date.now() / 1000);
-        let timeLeftStr = "";
-        let isReady = false;
-        
-        if (crime.status === "initiated") {
-            timeLeftStr = "Initiated!";
-            isReady = true;
-        } else if (crime.ready_at) {
-            let secondsLeft = crime.ready_at - now;
-            if (secondsLeft <= 0) {
-                timeLeftStr = "Ready!";
-                isReady = true;
-            } else {
-                let h = Math.floor(secondsLeft / 3600);
-                let m = Math.floor((secondsLeft % 3600) / 60);
-                timeLeftStr = `${h}h ${m}m remaining`;
+    container.innerHTML = "";
+    tabCrimes.forEach(crime => {
+        const status = (crime.status || "").toLowerCase();
+        const secsLeft = (crime.ready_at || 0) - now;
+        const isReady = secsLeft <= 0 && status === "planning";
+        const filledSlots = (crime.slots || []).filter(s => s.user).length;
+        const totalSlots = (crime.slots || []).length;
+
+        let statusPillHtml = "";
+        if (isReady) statusPillHtml = `<span class="status-pill pill-ready">✅ READY</span>`;
+        else if (status === "recruiting") statusPillHtml = `<span class="status-pill pill-recruiting">👥 Recruiting</span>`;
+        else if (status === "planning") statusPillHtml = `<span class="status-pill pill-planning">⏳ Planning</span>`;
+
+        let timerHtml = "";
+        if (isReady) {
+            timerHtml = `<div class="timer-block"><div class="timer-big" style="color:var(--green)">READY!</div><div class="timer-label">Execute now</div></div>`;
+        } else if (status === "planning" && crime.ready_at) {
+            const t = formatCountdown(secsLeft);
+            timerHtml = `<div class="timer-block"><div class="timer-big" style="color:var(--blue)" data-ready="${crime.ready_at}">${t}</div><div class="timer-label">Until ready</div></div>`;
+        } else if (status === "recruiting" && crime.expired_at) {
+            const expSecs = crime.expired_at - now;
+            const t = expSecs > 0 ? formatCountdown(expSecs) : "Expired";
+            timerHtml = `<div class="timer-block"><div class="timer-big" style="color:var(--gold)">${t}</div><div class="timer-label">Until expired</div></div>`;
+        }
+
+        let cardClass = "oc-card";
+        if (isReady) cardClass += " ready";
+        else if (status === "recruiting") cardClass += " recruiting";
+        else if (status === "planning") cardClass += " planning";
+
+        // --- Slots ---
+        let slotsHtml = "";
+        (crime.slots || []).forEach(slot => {
+            const role = slot.position_info?.label || slot.position || "Unknown Role";
+            const passRate = slot.checkpoint_pass_rate || 0;
+            const passColor = getPassRateColor(passRate);
+
+            if (!slot.user) {
+                slotsHtml += `
+                    <div class="slot-card slot-empty">
+                        <div class="slot-role">${role}</div>
+                        <div class="slot-name" style="color:var(--text-dim)">— Empty Slot —</div>
+                        ${slot.item_requirement ? `<div class="slot-tags"><span class="tag tag-item-missing">📦 Item Required</span></div>` : ""}
+                    </div>`;
+                return;
             }
-        } else {
-            timeLeftStr = crime.status.charAt(0).toUpperCase() + crime.status.slice(1);
-        }
-        
-        const timeColor = isReady ? 'var(--green)' : 'var(--blue)';
-        
-        let crimeName = crime.name || "Unknown Crime";
-        let lvlStr = crime.level ? `<span style="font-size: 0.6em; color:var(--text-dim);">[Lvl ${crime.level}]</span>` : "";
-        let header = `<h2>
-            <span>${crimeName} ${lvlStr}</span>
-            <span style="color:${timeColor}; font-size:0.85em;">${timeLeftStr}</span>
-        </h2>`;
-        
-        let participantsHtml = `<div class="participant-list">`;
-        
-        if (crime.slots) {
-            crime.slots.forEach(slot => {
-                if (!slot.user) {
-                    // Empty slot
-                    participantsHtml += `
-                        <div class="p-card">
-                            <div class="p-name" style="color:var(--text-dim);">Empty Slot</div>
-                            <div style="font-size:0.85em; color:var(--text-dim); font-weight:bold;">${slot.position}</div>
-                        </div>
-                    `;
-                    return;
-                }
-                
-                let pId = slot.user.id;
-                let pName = slot.user.name;
-                
-                let stateStr = slot.status.charAt(0).toUpperCase() + slot.status.slice(1);
-                let issue = false;
-                
-                if (slot.item_requirement) {
-                    if (!slot.item_requirement.is_available) {
-                        stateStr = `Needs ${slot.item_requirement.item_name}`;
-                        issue = true;
-                    } else {
-                        stateStr += ` (Has ${slot.item_requirement.item_name})`;
+
+            const uid = slot.user.id;
+            const uname = slot.user.name || `[${uid}]`;
+            const outcome = slot.user.outcome || "";
+            const outLower = outcome.toLowerCase();
+            const isHosp = outLower === "hospitalized";
+            const isJail = outLower === "jailed";
+            const hasIssue = isHosp || isJail || (slot.item_requirement && !slot.item_requirement.is_available);
+
+            let tags = "";
+
+            // Status tag
+            if (isHosp) tags += `<span class="tag tag-hosp">🏥 Hospitalized</span>`;
+            else if (isJail) tags += `<span class="tag tag-jail">⛓️ Jailed</span>`;
+            else if (status === "recruiting" || status === "planning") tags += `<span class="tag tag-ok">✅ Ready</span>`;
+
+            // Item tags
+            if (slot.item_requirement) {
+                if (!slot.item_requirement.is_available) {
+                    tags += `<span class="tag tag-item-missing">❌ Item Missing</span>`;
+                } else if (slot.item_outcome) {
+                    const ownedBy = slot.item_outcome.owned_by;
+                    const itemOutcome = slot.item_outcome.outcome;
+                    const reusable = slot.item_requirement.is_reusable;
+                    if (itemOutcome === "used") {
+                        tags += reusable
+                            ? `<span class="tag tag-item-reusable">✅ Item Kept</span>`
+                            : `<span class="tag tag-item-used">🔥 Item Consumed</span>`;
+                        if (ownedBy === "faction") tags += `<span class="tag tag-item-faction">🏛 Faction Item</span>`;
+                        else if (ownedBy === "user") tags += `<span class="tag tag-item-user">👤 Own Item</span>`;
                     }
+                } else {
+                    // Has it, not yet used
+                    tags += `<span class="tag tag-ok">📦 Item Ready</span>`;
+                    const reusable = slot.item_requirement.is_reusable;
+                    if (reusable) tags += `<span class="tag tag-item-reusable">♻️ Reusable</span>`;
                 }
-                if (slot.status.toLowerCase().includes("hospital") || slot.status.toLowerCase().includes("jail")) {
-                    issue = true;
-                }
-                
-                participantsHtml += `
-                    <div class="p-card ${issue ? 'issue' : 'ready'}">
-                        <div class="p-name"><a href="https://www.torn.com/profiles.php?XID=${pId}" target="_blank">${pName} [${pId}]</a></div>
-                        <div style="font-size:0.85em; color:var(--text-dim); font-weight:bold;">${slot.position}: ${stateStr}</div>
+            }
+
+            const slotClass = hasIssue ? "slot-card slot-issue" : "slot-card slot-ok";
+
+            slotsHtml += `
+                <div class="${slotClass}">
+                    <div class="slot-role">${role}</div>
+                    <div class="slot-name"><a href="https://www.torn.com/profiles.php?XID=${uid}" target="_blank">${uname}</a></div>
+                    <div class="slot-id">ID: ${uid}</div>
+                    <div class="pass-rate-bar-wrap">
+                        <div class="pass-rate-label">
+                            <span>Success Rate</span>
+                            <span style="color:${passColor}; font-weight:700">${passRate}%</span>
+                        </div>
+                        <div class="pass-rate-bar">
+                            <div class="pass-rate-fill" style="width:${passRate}%; background:${passColor};"></div>
+                        </div>
                     </div>
-                `;
-            });
+                    <div class="slot-tags">${tags}</div>
+                </div>`;
+        });
+
+        // --- Rewards (for completed crimes) ---
+        let rewardsHtml = "";
+        if (crime.rewards) {
+            const r = crime.rewards;
+            let parts = [];
+            if (r.money > 0) parts.push(`<span class="reward-label">💰 Cash</span> <span class="reward-value">$${r.money.toLocaleString()}</span>`);
+            if (r.respect > 0) parts.push(`<span class="reward-label">⭐ Respect</span> <span class="reward-value">${r.respect}</span>`);
+            if (r.items && r.items.length > 0) parts.push(`<span class="reward-label">📦 Items</span> <span class="reward-value">${r.items.length} item(s)</span>`);
+            if (parts.length > 0) {
+                rewardsHtml = `<div class="oc-rewards">${parts.join('<span class="reward-sep"> | </span>')}</div>`;
+            }
         }
-        
-        participantsHtml += `</div>`;
-        card.innerHTML = header + participantsHtml;
-        container.appendChild(card);
+
+        const cardId = "crime-" + crime.id;
+        container.innerHTML += `
+            <div class="${cardClass}" id="${cardId}">
+                <div class="oc-header" onclick="toggleCard('${cardId}')">
+                    <div class="oc-title-block">
+                        <div class="oc-thumbnail">${getCrimeEmoji(crime.name)}</div>
+                        <div>
+                            <div class="oc-name">${crime.name || "Unknown Crime"}</div>
+                            <div class="oc-meta">
+                                ${crime.difficulty ? `<span class="diff-badge">Difficulty ${crime.difficulty}</span>` : ""}
+                                <span class="slots-badge">${filledSlots}/${totalSlots} slots filled</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="oc-header-right">
+                        ${timerHtml}
+                        ${statusPillHtml}
+                        <span class="collapse-arrow">▼</span>
+                    </div>
+                </div>
+                <div class="oc-body" style="display:none;">
+                    <div class="slots-grid">${slotsHtml}</div>
+                </div>
+                ${rewardsHtml}
+            </div>`;
     });
+
+    // Start live timers
+    startLiveTimers();
 }
 
+function toggleCard(id) {
+    const card = document.getElementById(id);
+    const body = card.querySelector('.oc-body');
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    card.classList.toggle('open', !isOpen);
+}
+
+function startLiveTimers() {
+    setInterval(() => {
+        const now = Math.floor(Date.now() / 1000);
+        document.querySelectorAll('[data-ready]').forEach(el => {
+            const readyAt = parseInt(el.dataset.ready);
+            const secsLeft = readyAt - now;
+            if (secsLeft <= 0) {
+                el.textContent = "READY!";
+                el.style.color = "var(--green)";
+            } else {
+                el.textContent = formatCountdown(secsLeft);
+            }
+        });
+    }, 1000);
+}
+
+// Auto-open cards on page load
+function autoOpenAll() {
+    document.querySelectorAll('.oc-body').forEach(b => b.style.display = 'block');
+    document.querySelectorAll('.oc-card').forEach(c => c.classList.add('open'));
+}
+
+// Init
 if (myKey) {
-    startPolling();
+    fetchOCs().then(() => { setTimeout(autoOpenAll, 200); });
 } else {
     openSettings();
+    document.getElementById("oc-container").innerHTML = `
+        <div class="alert-box alert-info">
+            ⚙️ <strong>Welcome to OC Manager!</strong><br><br>
+            To get started, enter your <strong>Torn API key</strong> (must have Faction access enabled) in Settings above.
+            Once connected, you will see all your faction's active organized crimes with live countdowns, member assignments, item tracking, and success rates.
+        </div>`;
 }
 </script>
 </body>

@@ -1102,56 +1102,72 @@ app.post('/api/save-oc-config', (req, res) => {
 app.get('/api/ocs', async (req, res) => {
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
-        await verifySubscription(userKey);
+        if (!userKey) return res.status(400).json({ error: "No API key provided. Please add your API key in Settings." });
 
-        let activeKey = getNextApiKey() || userKey;
-        // Using Torn v2 API for OC 2.0
-        const r = await fetch(`https://api.torn.com/v2/faction/crimes?key=${activeKey}`);
-        const data = await r.json();
+        // Fetch OC crimes AND faction members in parallel using the user's own key
+        const [crimeRes, memberRes] = await Promise.all([
+            fetch(`https://api.torn.com/v2/faction/crimes?cat=available&key=${userKey}`),
+            fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`)
+        ]);
+        const crimeData = await crimeRes.json();
+        const memberData = await memberRes.json();
 
-        if (data.error) {
-            return res.status(400).json({ error: data.error.error || "Failed to fetch OCs" });
+        if (crimeData.error) {
+            return res.status(400).json({ error: `Torn API Error: ${crimeData.error.error || JSON.stringify(crimeData.error)}` });
         }
 
-        // Notify Discord if someone needs an item or is in hosp/jail
-        if (data.crimes && ocConfig.webhookUrl) {
-            data.crimes.forEach(crime => {
-                if (crime.slots) {
-                    crime.slots.forEach(slot => {
-                        if (!slot.user) return;
-                        let pId = slot.user.id;
-                        let pName = slot.user.name;
-                        
-                        let issueMessage = null;
-                        if (slot.item_requirement && !slot.item_requirement.is_available) {
-                            issueMessage = `Needs Item: ${slot.item_requirement.item_name}`;
-                        } else if (slot.status && (slot.status.toLowerCase().includes("hospital") || slot.status.toLowerCase().includes("jail"))) {
-                            issueMessage = `Status: ${slot.status}`;
-                        }
-
-                        if (issueMessage) {
-                            const trackingId = crime.crime_id + "_" + pId + "_" + issueMessage;
-                            if (!ocMemory[trackingId] || (Date.now() - ocMemory[trackingId]) > 3600000 * 12) { 
-                                // Send notification once every 12 hours max per issue
-                                ocMemory[trackingId] = Date.now();
-                                
-                                let mention = ocConfig.roleId ? `<@&${ocConfig.roleId}>` : "";
-                                sendDiscordEmbed(ocConfig.webhookUrl, {
-                                    pingText: mention,
-                                    title: `🚨 OC Issue Detected!`,
-                                    description: `**Crime:** ${crime.crime_name}\n**Player:** [${pName}](https://www.torn.com/profiles.php?XID=${pId})\n**Issue:** ${issueMessage}`,
-                                    color: 16733695 // Red-Orange
-                                });
-                            }
-                        }
-                    });
-                }
+        // Build a name lookup map: { "1234567": "Owen777", ... }
+        const memberNames = {};
+        if (memberData.members) {
+            Object.entries(memberData.members).forEach(([id, m]) => {
+                memberNames[id] = m.name;
             });
         }
 
-        res.json({ success: true, crimes: data.crimes });
+        // Inject names into every crime slot
+        const crimes = (crimeData.crimes || []).map(crime => {
+            const slots = (crime.slots || []).map(slot => {
+                if (slot.user && slot.user.id) {
+                    slot.user.name = memberNames[slot.user.id.toString()] || `ID:${slot.user.id}`;
+                }
+                return slot;
+            });
+            return { ...crime, slots };
+        });
+
+        // Discord alerts for missing items
+        if (ocConfig.webhookUrl) {
+            crimes.forEach(crime => {
+                (crime.slots || []).forEach(slot => {
+                    if (!slot.user) return;
+                    let pId = slot.user.id;
+                    let pName = slot.user.name || pId;
+                    let issueMessage = null;
+                    if (slot.item_requirement && !slot.item_requirement.is_available) {
+                        issueMessage = `Missing required item for their role`;
+                    } else if (slot.user.outcome && (slot.user.outcome.toLowerCase() === 'hospitalized' || slot.user.outcome.toLowerCase() === 'jailed')) {
+                        issueMessage = `Currently ${slot.user.outcome}`;
+                    }
+                    if (issueMessage) {
+                        const trackingId = crime.id + "_" + pId + "_" + issueMessage;
+                        if (!ocMemory[trackingId] || (Date.now() - ocMemory[trackingId]) > 3600000 * 12) {
+                            ocMemory[trackingId] = Date.now();
+                            let mention = ocConfig.roleId ? `<@&${ocConfig.roleId}>` : "";
+                            sendDiscordEmbed(ocConfig.webhookUrl, {
+                                pingText: mention,
+                                title: `🚨 OC Issue: ${crime.name}`,
+                                description: `**Player:** [${pName}](https://www.torn.com/profiles.php?XID=${pId})\n**Role:** ${slot.position_info?.label || slot.position}\n**Issue:** ${issueMessage}`,
+                                color: 16733695
+                            });
+                        }
+                    }
+                });
+            });
+        }
+
+        res.json({ success: true, crimes });
     } catch (err) {
-        res.status(403).json({ error: err.message });
+        res.status(500).json({ error: err.message });
     }
 });
 
