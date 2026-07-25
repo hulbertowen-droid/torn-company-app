@@ -427,10 +427,7 @@ document.getElementById("api-cpm").value = cpm;
 
 function openSettings() { 
     document.getElementById("discord-webhook").value = localStorage.getItem("warboard_discord") || "";
-    let globalTgs = JSON.parse(localStorage.getItem("warboard_globalToggles") || '{"chain":true,"target":true,"sniper":true}');
-    document.getElementById("global-chain").checked = globalTgs.chain;
-    document.getElementById("global-target").checked = globalTgs.target;
-    document.getElementById("global-sniper").checked = globalTgs.sniper;
+    
     document.getElementById("settings-modal").style.display = "flex"; 
 }
 function closeSettings() { document.getElementById("settings-modal").style.display = "none"; }
@@ -485,27 +482,7 @@ async function saveSettings() {
     localStorage.setItem("warboard_discord", discordWebhook);
     localStorage.setItem("warboard_cpm", cpm);
 
-    let discordId = document.getElementById("discord-userid").value.trim();
-    let botToken = document.getElementById("discord-bottoken").value.trim();
-    let attackThreshold = document.getElementById("attack-threshold").value.trim() || "3";
-    let alertToggles = {
-        attack: document.getElementById("toggle-attack").checked,
-        undercut: document.getElementById("toggle-undercut").checked,
-        chain: document.getElementById("toggle-chain").checked
-    };
-
-    localStorage.setItem("warboard_discordId", discordId);
-    localStorage.setItem("warboard_botToken", botToken);
-    localStorage.setItem("warboard_attackThreshold", attackThreshold);
-    localStorage.setItem("warboard_alertToggles", JSON.stringify(alertToggles));
     
-    try {
-        fetch('/api/save-user-profile', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ apiKey: myKey, discordId, botToken, attackThreshold, alertToggles })
-        });
-    } catch(e) {}
 
 
     try {
