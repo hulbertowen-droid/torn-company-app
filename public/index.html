@@ -180,6 +180,7 @@
             
             <a href="/members.html" class="nav-link">👥 <span class="nav-text">Members</span></a>
             <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
+            <a href="/travel.html" class="nav-link">✈️ <span class="nav-text">Travel Calculator</span></a>
             <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
             <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>
             <a href="/admin.html" class="nav-link">👑 <span class="nav-text">Admin Panel</span></a>
@@ -1217,26 +1218,6 @@ async function saveManualSpy(targetId) {
 
 function closeInspect() {
     document.getElementById('inspect-modal').style.display = "none";
-}
-
-
-    
-    try {
-        const res = await fetch('/api/save-war', {
-            method: 'POST', 
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ enemyName, date, ourScore, theirScore, result, mvp })
-        });
-        const data = await res.json();
-        if (data.success) {
-            showToast("War saved to archive successfully!", "okay");
-            closeSaveWarModal();
-        } else {
-            showToast("Failed to save war.", "red");
-        }
-    } catch(e) {
-        showToast("Network error while saving war.", "red");
-    }
 }
 </script>
 
