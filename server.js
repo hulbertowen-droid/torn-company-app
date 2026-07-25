@@ -1353,12 +1353,21 @@ app.get('/api/travel-profits', async (req, res) => {
     if (!apiKey) return res.status(400).json({ error: "API Key required" });
     try {
         await verifySubscription(apiKey);
+        
+        // Fetch Torn market data
         const resp = await fetch(`https://api.torn.com/torn/?selections=items&key=${apiKey}`);
         const data = await resp.json();
+        if (data.error) return res.status(400).json({ error: "Torn API Error: " + data.error.error });
+
+        // Fetch live YATA stock data
+        const yataResp = await fetch('https://yata.yt/api/v1/travel/export/');
+        const yataData = await yataResp.json();
         
-        if (data.error) {
-            return res.status(400).json({ error: "Torn API Error: " + data.error.error });
-        }
+        const yataCountryMap = {
+            "Mexico": "mex", "Cayman Islands": "cay", "Canada": "can", "Hawaii": "haw",
+            "UK": "uni", "Argentina": "arg", "Switzerland": "swi", "Japan": "jap",
+            "China": "chi", "UAE": "uae", "South Africa": "sou"
+        };
 
         const items = data.items;
         const foreignItems = [
@@ -1382,21 +1391,49 @@ app.get('/api/travel-profits', async (req, res) => {
             { id: 270, name: "Ceibo Flower", country: "Argentina", cost: 500, flightTimeMins: 117 },
             { id: 275, name: "Dahlia", country: "Mexico", cost: 300, flightTimeMins: 18 },
             { id: 262, name: "Crocus", country: "Canada", cost: 600, flightTimeMins: 29 },
-            { id: 259, name: "Orchid", country: "Hawaii", cost: 700, flightTimeMins: 94 }
+            { id: 259, name: "Orchid", country: "Hawaii", cost: 700, flightTimeMins: 94 },
+            
+            // High Value / Drugs
+            { id: 206, name: "Xanax", country: "South Africa", cost: 808000, flightTimeMins: 209 },
+            { id: 226, name: "Smoke Grenade", country: "South Africa", cost: 20000, flightTimeMins: 209 },
+            { id: 242, name: "Flash Grenade", country: "UAE", cost: 24000, flightTimeMins: 190 },
+            { id: 254, name: "Tear Gas", country: "China", cost: 30000, flightTimeMins: 164 }
         ];
 
         let results = [];
         for (let item of foreignItems) {
             let marketPrice = items[item.id] ? items[item.id].market_value : 0;
-            let profit = marketPrice - item.cost;
+            let cost = item.cost;
+            let stock = 0;
+            
+            let yCode = yataCountryMap[item.country];
+            if (yCode && yataData.stocks && yataData.stocks[yCode]) {
+                let s = yataData.stocks[yCode].stocks.find(i => i.id === item.id);
+                if (s) {
+                    cost = s.cost;
+                    stock = s.quantity;
+                }
+            }
+            
+            let profit = marketPrice - cost;
+            let roundTrip = item.flightTimeMins * 2;
+            let profitPerMin = roundTrip > 0 ? profit / roundTrip : 0;
+            let profitPerHr = profitPerMin * 60;
+            
             results.push({
                 ...item,
+                cost,
+                stock,
                 marketPrice,
-                profit
+                profit,
+                profitPerMin,
+                profitPerHr,
+                roundTrip
             });
         }
         
-        results.sort((a, b) => b.profit - a.profit);
+        // Sort by Profit / Hour by default
+        results.sort((a, b) => b.profitPerHr - a.profitPerHr);
         res.json({ success: true, items: results });
     } catch (err) {
         res.status(500).json({ error: err.message });

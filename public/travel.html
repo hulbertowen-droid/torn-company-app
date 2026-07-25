@@ -215,14 +215,15 @@
                     <tr style="border-bottom: 1px solid #2f3542;">
                         <th style="padding: 10px;">Item</th>
                         <th style="padding: 10px;">Country</th>
-                        <th style="padding: 10px;">Cost</th>
-                        <th style="padding: 10px;">Market Price</th>
+                        <th style="padding: 10px;">Stock (YATA)</th>
+                        <th style="padding: 10px;">Flight (RT)</th>
                         <th style="padding: 10px;">Profit / Item</th>
                         <th style="padding: 10px;">Total Profit</th>
+                        <th style="padding: 10px;">Profit / Hr</th>
                     </tr>
                 </thead>
                 <tbody id="profits-tbody">
-                    <tr><td colspan="6" style="padding: 10px;">Loading...</td></tr>
+                    <tr><td colspan="7" style="padding: 10px;">Loading...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -256,10 +257,10 @@
 
     async function loadProfits() {
         const tbody = document.getElementById("profits-tbody");
-        tbody.innerHTML = "<tr><td colspan=\"6\" style=\"padding: 10px;\">Loading...</td></tr>";
+        tbody.innerHTML = "<tr><td colspan=\"7\" style=\"padding: 10px;\">Loading...</td></tr>";
         let apiKey = localStorage.getItem("warboard_apikey") || localStorage.getItem("tornApiKey");
         if (!apiKey) {
-            tbody.innerHTML = "<tr><td colspan=\"6\" style=\"padding: 10px;\">No API Key found. Set it in the main dashboard Settings.</td></tr>";
+            tbody.innerHTML = "<tr><td colspan=\"7\" style=\"padding: 10px;\">No API Key found. Set it in the main dashboard Settings.</td></tr>";
             return;
         }
 
@@ -268,14 +269,14 @@
             const data = await res.json();
             
             if (data.error) {
-                tbody.innerHTML = "<tr><td colspan=\"6\" style=\"padding: 10px; color: #ff4757;\">Error: " + data.error + "</td></tr>";
+                tbody.innerHTML = "<tr><td colspan=\"7\" style=\"padding: 10px; color: #ff4757;\">Error: " + data.error + "</td></tr>";
                 return;
             }
             
             itemsData = data.items;
             renderTable();
         } catch (err) {
-            tbody.innerHTML = "<tr><td colspan=\"6\" style=\"padding: 10px; color: #ff4757;\">Error loading data.</td></tr>";
+            tbody.innerHTML = "<tr><td colspan=\"7\" style=\"padding: 10px; color: #ff4757;\">Error loading data.</td></tr>";
         }
     }
 
