@@ -279,31 +279,32 @@ function renderDashboard() {
     document.getElementById('alert-box').style.display = 'none';
     document.getElementById('dashboard-content').style.display = 'block';
 
-    const p = companyData.company;
+    const p = companyData.company || {};
+    const d = companyData.company_detailed || {};
 
     // Header
-    document.getElementById('c-name').textContent = p.name;
-    document.getElementById('c-stars').textContent = '★'.repeat(p.rating) + '☆'.repeat(5 - p.rating);
+    document.getElementById('c-name').textContent = p.name || 'Unknown';
+    document.getElementById('c-stars').textContent = '★'.repeat(p.rating || 0) + '☆'.repeat(5 - (p.rating || 0));
     document.getElementById('last-updated').textContent = 'Live Data: ' + new Date().toLocaleTimeString();
 
     // KPIs
     const profitEl = document.getElementById('c-profit');
-    profitEl.textContent = formatMoney(p.daily_profit);
-    profitEl.className = 'kpi-val ' + (p.daily_profit > 0 ? 'text-green' : (p.daily_profit < 0 ? 'text-red' : ''));
+    profitEl.textContent = formatMoney(p.daily_profit || d.daily_profit || 0);
+    const prof = p.daily_profit || d.daily_profit || 0;
+    profitEl.className = 'kpi-val ' + (prof > 0 ? 'text-green' : (prof < 0 ? 'text-red' : ''));
     
-    document.getElementById('c-income').textContent = formatMoney(p.daily_income);
-    document.getElementById('c-bank').textContent = formatMoney(p.company_bank);
-    document.getElementById('c-emps').textContent = `${p.employees_hired} / ${p.employees_capacity}`;
+    document.getElementById('c-income').textContent = formatMoney(p.daily_income || d.daily_income || 0);
+    document.getElementById('c-bank').textContent = formatMoney(d.company_bank || 0);
+    document.getElementById('c-emps').textContent = `${p.employees_hired || 0} / ${p.employees_capacity || 0}`;
     
     const appsCount = companyData.applications ? Object.keys(companyData.applications).length : 0;
     document.getElementById('c-hires').textContent = `${appsCount} pending applications`;
     
     document.getElementById('c-type').textContent = companyData.company_type ? Object.values(companyData.company_type)[0] || 'Company' : 'Company';
     
-    if (companyData.upgrades) {
-        document.getElementById('c-up-size').textContent = companyData.upgrades.company_size;
-        document.getElementById('c-up-adv').textContent = companyData.upgrades.staff_room || companyData.upgrades.advertising || 0;
-    }
+    const upg = companyData.company_upgrades || d.upgrades || {};
+    document.getElementById('c-up-size').textContent = upg.company_size || 0;
+    document.getElementById('c-up-adv').textContent = upg.staff_room || upg.advertising || 0;
 
     renderEmployees();
     renderStock();
@@ -316,10 +317,11 @@ function sortEmps(col) {
 }
 
 function renderEmployees() {
-    if (!companyData.employees) return;
+    const empsData = companyData.company_employees || companyData.employees;
+    if (!empsData) return;
     
     const tbody = document.getElementById('emp-list');
-    let emps = Object.entries(companyData.employees).map(([id, e]) => ({ id, ...e }));
+    let emps = Object.entries(empsData).map(([id, e]) => ({ id, ...e }));
 
     emps.sort((a, b) => {
         let va = a[empSortCol]; let vb = b[empSortCol];
@@ -384,12 +386,13 @@ function renderEmployees() {
 
 function renderStock() {
     const tbody = document.getElementById('stock-list');
-    if (!companyData.stock || Object.keys(companyData.stock).length === 0) {
+    const stockData = companyData.company_stock || companyData.stock;
+    if (!stockData || Object.keys(stockData).length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding: 20px; color:var(--teal-dim);">No stock/inventory data available for this company type.</td></tr>`;
         return;
     }
 
-    tbody.innerHTML = Object.entries(companyData.stock).map(([name, s]) => {
+    tbody.innerHTML = Object.entries(stockData).map(([name, s]) => {
         const stockLvl = s.in_stock || 0;
         const stockColor = stockLvl === 0 ? 'var(--red)' : (stockLvl < (s.sold_amount * 2) ? 'var(--gold)' : 'var(--white)');
         return `<tr>
