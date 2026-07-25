@@ -247,8 +247,10 @@ function renderOCs(crimes) {
         
         const timeColor = isReady ? 'var(--green)' : 'var(--blue)';
         
+        let crimeName = crime.name || "Unknown Crime";
+        let lvlStr = crime.level ? `<span style="font-size: 0.6em; color:var(--text-dim);">[Lvl ${crime.level}]</span>` : "";
         let header = `<h2>
-            <span>${crime.crime_name} <span style="font-size: 0.6em; color:var(--text-dim);">[Lvl ${crime.level}]</span></span>
+            <span>${crimeName} ${lvlStr}</span>
             <span style="color:${timeColor}; font-size:0.85em;">${timeLeftStr}</span>
         </h2>`;
         
