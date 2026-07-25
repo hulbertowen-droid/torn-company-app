@@ -87,6 +87,22 @@
         .modal-card input { width: 100%; padding: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--teal-dim); border-radius: 6px; color: white; margin-bottom: 15px; }
         .modal-card button { width: 100%; background: var(--teal); color: #000; border: none; padding: 12px; border-radius: 6px; font-weight: 900; cursor: pointer; text-transform: uppercase; }
         .modal-card button:hover { background: #52c9c1; }
+
+        /* Tooltip */
+        .tooltip { position: relative; cursor: help; border-bottom: 1px dotted rgba(255,255,255,0.4); }
+        .tooltip .tooltip-text {
+            visibility: hidden; width: max-content; background-color: #111; color: #fff;
+            text-align: left; border-radius: 8px; padding: 12px; position: absolute; z-index: 100;
+            bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s;
+            border: 1px solid #333; font-size: 0.85em; font-weight: normal; font-family: monospace;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5); line-height: 1.5; pointer-events: none;
+        }
+        .tooltip:hover .tooltip-text { visibility: visible; opacity: 1; }
+        .tt-row { display: flex; justify-content: space-between; gap: 15px; }
+        .tt-lbl { color: var(--teal-dim); }
+        .tt-val { font-weight: bold; }
+        .tt-pos { color: var(--green); }
+        .tt-neg { color: var(--red); }
     </style>
 </head>
 <body>
@@ -156,6 +172,7 @@
                             <th onclick="sortEmps('intelligence')">INT</th>
                             <th onclick="sortEmps('endurance')">END</th>
                             <th onclick="sortEmps('wage')">Wage</th>
+                            <th onclick="sortEmps('wage_eff')">Wage/Eff</th>
                             <th onclick="sortEmps('days_in_company')">Days</th>
                             <th onclick="sortEmps('last_action')">Last Action</th>
                         </tr>
@@ -308,6 +325,10 @@ function renderEmployees() {
         let va = a[empSortCol]; let vb = b[empSortCol];
         if (empSortCol === 'effectiveness') { va = va?.total || 0; vb = vb?.total || 0; }
         if (empSortCol === 'last_action') { va = a.last_action?.timestamp || 0; vb = b.last_action?.timestamp || 0; }
+        if (empSortCol === 'wage_eff') { 
+            va = a.effectiveness?.total ? (a.wage || 0) / a.effectiveness.total : Infinity;
+            vb = b.effectiveness?.total ? (b.wage || 0) / b.effectiveness.total : Infinity;
+        }
         
         if (va < vb) return empSortDir;
         if (va > vb) return -empSortDir;
@@ -315,21 +336,46 @@ function renderEmployees() {
     });
 
     tbody.innerHTML = emps.map(e => {
-        const eff = e.effectiveness?.total || 0;
+        const effObj = e.effectiveness || {};
+        const eff = effObj.total || 0;
         let effClass = 'eff-high';
         if (eff < 70) effClass = 'eff-low';
         else if (eff < 90) effClass = 'eff-med';
 
+        // Tooltip building
+        const wStats = effObj.working_stats || 0;
+        const setIn = effObj.settled_in || 0;
+        const edu = effObj.director_education || 0;
+        const man = effObj.management || 0;
+        const add = effObj.addiction || 0;
+        const inact = effObj.inactivity || 0;
+
+        const ttHtml = `
+            <div class="tt-row"><span class="tt-lbl">Working Stats:</span><span class="tt-val tt-pos">+${wStats}</span></div>
+            <div class="tt-row"><span class="tt-lbl">Settled In:</span><span class="tt-val tt-pos">+${setIn}</span></div>
+            <div class="tt-row"><span class="tt-lbl">Director Edu:</span><span class="tt-val tt-pos">+${edu}</span></div>
+            ${man ? `<div class="tt-row"><span class="tt-lbl">Management:</span><span class="tt-val tt-pos">+${man}</span></div>` : ''}
+            <div class="tt-row"><span class="tt-lbl">Addiction:</span><span class="tt-val tt-neg">${add}</span></div>
+            <div class="tt-row"><span class="tt-lbl">Inactivity:</span><span class="tt-val tt-neg">${inact}</span></div>
+        `;
+
         const lastActionStr = e.last_action?.relative || formatTimeAgo(e.last_action?.timestamp);
+        const wageEff = eff > 0 ? (e.wage / eff) : 0;
         
         return `<tr>
             <td><a href="https://www.torn.com/profiles.php?XID=${e.id}" target="_blank" class="emp-name">${e.name}</a></td>
             <td style="color:var(--teal-dim)">${e.position}</td>
-            <td><span class="eff-badge ${effClass}">${eff}</span></td>
+            <td>
+                <div class="tooltip">
+                    <span class="eff-badge ${effClass}">${eff}</span>
+                    <div class="tooltip-text">${ttHtml}</div>
+                </div>
+            </td>
             <td class="stat-val">${(e.manual_labor||0).toLocaleString()}</td>
             <td class="stat-val">${(e.intelligence||0).toLocaleString()}</td>
             <td class="stat-val">${(e.endurance||0).toLocaleString()}</td>
             <td style="color:var(--green); font-weight:bold;">${formatMoney(e.wage)}</td>
+            <td class="stat-val" style="color:var(--teal-dim)">$${Math.round(wageEff).toLocaleString()}/eff</td>
             <td style="color:var(--teal-dim)">${e.days_in_company}</td>
             <td style="color:var(--text-main)">${lastActionStr}</td>
         </tr>`;
