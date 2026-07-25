@@ -424,12 +424,21 @@ setInterval(async () => {
                         if (lowestMarketPrice < myItem.price) {
                             if (marketMemory.defense[itemId] !== lowestMarketPrice) {
                                 marketMemory.defense[itemId] = lowestMarketPrice;
-                                sendDiscordEmbed(marketConfig.webhookUrl, {
+                                
+                                let embed = {
                                     title: "📉 Market Undercut Alert",
                                     description: `Your \`${myItem.name}\` ($${myItem.price.toLocaleString()}) was undercut!\nNew lowest price: **$${lowestMarketPrice.toLocaleString()}**`,
                                     color: 16729943,
-                                    links: [{ label: "🛒 Check Market", url: `https://www.torn.com/imarket.php#/p=shop&step=shop&type=&searchname=${myItem.name}` }]
-                                });
+                                    links: [{ label: "🔎 Check Market", url: `https://www.torn.com/imarket.php#/p=shop&step=shop&type=&searchname=${myItem.name}` }]
+                                };
+                                
+                                // Try DM first if this API key belongs to a registered user
+                                let profile = userDatabase[rootKey];
+                                if (profile && profile.botToken && profile.discordId && profile.alertToggles?.undercut) {
+                                    sendPrivateDM(profile.botToken, profile.discordId, embed);
+                                } else if (marketConfig.webhookUrl) {
+                                    sendDiscordEmbed(marketConfig.webhookUrl, embed);
+                                }
                             }
                         } else { delete marketMemory.defense[itemId]; }
                     }
@@ -1189,12 +1198,22 @@ app.get('/api/master-config', (req, res) => {
 });
 
 app.post('/api/master-config', (req, res) => {
-    const { apiKey, discordWebhook, companyWebhook, ocWebhook, myName } = req.body;
+    const { apiKey, discordWebhook, companyWebhook, ocWebhook, myName, globalToggles } = req.body;
     
     // Save to discord config
     if (discordWebhook !== undefined) discordConfig.webhookUrl = discordWebhook;
     if (apiKey !== undefined) discordConfig.apiKey = apiKey;
     if (myName !== undefined) discordConfig.myName = myName; // Generic storage
+    
+    if (globalToggles) {
+        discordConfig.chainUnder90 = globalToggles.chain;
+        discordConfig.chainMilestone = globalToggles.chain;
+        discordConfig.targetOnline = globalToggles.target;
+        discordConfig.targetLanded = globalToggles.target;
+        discordConfig.targetOutHosp = globalToggles.target;
+        discordConfig.medOutSniper = globalToggles.sniper;
+    }
+    
     saveDiscordConfig();
     
     // Also save API key to company config for redundancy if needed

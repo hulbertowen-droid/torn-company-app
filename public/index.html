@@ -282,6 +282,30 @@
                     <label>Your Name (For Targets)</label>
                     <input type="text" id="my-name" placeholder="E.g. Agent">
                 </div>
+
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #2f3542;">
+                    <h3 style="color: #00cec9; margin-top: 0;">Multi-Tenant Discord Bot</h3>
+                    <p style="font-size: 0.85em; color: #57606f; margin-bottom: 10px;">The server will spin up your personal bot to send Private DMs.</p>
+                    <label>Your Discord User ID</label>
+                    <input type="text" id="discord-userid" placeholder="e.g. 123456789012345678">
+                </div>
+                <div>
+                    <label>Your Discord Bot Token</label>
+                    <input type="password" id="discord-bottoken" placeholder="Optional: To receive Private DMs">
+                </div>
+                <div>
+                    <label>Attack Alert Threshold</label>
+                    <input type="number" id="attack-threshold" placeholder="Alert after X losses in 15 mins (Default: 3)">
+                </div>
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #2f3542;">
+                    <h3 style="color: #ffa502; margin-top: 0;">Alert Toggles</h3>
+                    <div style="display:flex; flex-direction:column; gap:8px; font-size:0.9em; margin-bottom:10px;">
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="toggle-attack" checked> Attack Alerts (Requires User ID)</label>
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="toggle-undercut" checked> Undercut Alerts</label>
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer;"><input type="checkbox" id="toggle-chain" checked> Chain Timeout Alerts</label>
+                    </div>
+                </div>
+
                 <div>
                     <label>Global Discord Webhook (Auto-Pastes Everywhere)</label>
                     <input type="text" id="discord-webhook" placeholder="Paste Discord Webhook URL here">
@@ -424,6 +448,10 @@ document.getElementById("api-cpm").value = cpm;
 
 function openSettings() { 
     document.getElementById("discord-webhook").value = localStorage.getItem("warboard_discord") || "";
+    let globalTgs = JSON.parse(localStorage.getItem("warboard_globalToggles") || '{"chain":true,"target":true,"sniper":true}');
+    document.getElementById("global-chain").checked = globalTgs.chain;
+    document.getElementById("global-target").checked = globalTgs.target;
+    document.getElementById("global-sniper").checked = globalTgs.sniper;
     document.getElementById("settings-modal").style.display = "flex"; 
 }
 function closeSettings() { document.getElementById("settings-modal").style.display = "none"; }
@@ -479,15 +507,24 @@ async function saveSettings() {
     localStorage.setItem("warboard_cpm", cpm);
 
     let discordId = document.getElementById("discord-userid").value.trim();
+    let botToken = document.getElementById("discord-bottoken").value.trim();
     let attackThreshold = document.getElementById("attack-threshold").value.trim() || "3";
+    let alertToggles = {
+        attack: document.getElementById("toggle-attack").checked,
+        undercut: document.getElementById("toggle-undercut").checked,
+        chain: document.getElementById("toggle-chain").checked
+    };
+
     localStorage.setItem("warboard_discordId", discordId);
+    localStorage.setItem("warboard_botToken", botToken);
     localStorage.setItem("warboard_attackThreshold", attackThreshold);
+    localStorage.setItem("warboard_alertToggles", JSON.stringify(alertToggles));
     
     try {
         fetch('/api/save-user-profile', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ apiKey: myKey, discordId: discordId, attackThreshold: attackThreshold })
+            body: JSON.stringify({ apiKey: myKey, discordId, botToken, attackThreshold, alertToggles })
         });
     } catch(e) {}
 
