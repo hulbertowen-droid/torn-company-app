@@ -206,6 +206,14 @@
             <h3>Settings</h3>
             <label style="font-size:0.8em; color:var(--teal-dim); font-weight:700; display:block; margin-bottom:8px;">TORN API KEY</label>
             <input type="password" id="api-key-input" placeholder="Enter API Key">
+            
+            <h3 style="margin: 20px 0 10px; font-size: 0.9em; color: var(--gold);">Discord Alerts</h3>
+            <label style="font-size:0.8em; color:var(--teal-dim); font-weight:700; display:block; margin-bottom:8px;">WEBHOOK URL</label>
+            <input type="password" id="webhook-input" placeholder="Discord Webhook URL for Stock Alerts">
+            
+            <label style="font-size:0.8em; color:var(--teal-dim); font-weight:700; display:block; margin-bottom:8px;">LOW STOCK THRESHOLD</label>
+            <input type="number" id="threshold-input" placeholder="e.g. 100" style="background: rgba(0,0,0,0.3); color: white; border: 1px solid var(--teal-dim); padding: 12px; width: 100%; border-radius: 6px; margin-bottom: 20px;">
+            
             <button onclick="saveKey()">Save & Connect</button>
         </div>
     </div>
@@ -225,11 +233,31 @@ function toggleSidebar() {
     localStorage.setItem('company_sidebar_collapsed', s.classList.contains('collapsed'));
 }
 
-function openSettings() { document.getElementById('settings-modal').style.display = 'flex'; }
+function openSettings() { 
+    document.getElementById('settings-modal').style.display = 'flex';
+    fetch('/api/company-config')
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('webhook-input').value = data.webhookUrl || '';
+                document.getElementById('threshold-input').value = data.threshold || 0;
+            }
+        }).catch(err => console.log(err));
+}
 function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
 function saveKey() {
     myKey = document.getElementById('api-key-input').value.trim();
     localStorage.setItem('warboard_apikey', myKey);
+    
+    const webhookUrl = document.getElementById('webhook-input').value.trim();
+    const threshold = document.getElementById('threshold-input').value;
+    
+    fetch('/api/save-company-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webhookUrl, threshold, apiKey: myKey })
+    });
+    
     closeSettings();
     loadCompanyData();
 }

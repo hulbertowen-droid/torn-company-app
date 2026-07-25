@@ -71,6 +71,7 @@ let marketMemory = { defense: {}, sniper: {} };
 let ocConfig = { webhookUrl: "", roleId: "" };
 let ocMemory = {};
 let vipConfig = { factions: [], players: [] }; 
+let companyConfig = { webhookUrl: "", threshold: 0, alertedItems: {}, apiKey: "" };
 
 try { if (fs.existsSync('subscriptions.json')) subscriptions = JSON.parse(fs.readFileSync('subscriptions.json')); } catch (e) {}
 try { if (fs.existsSync('discord_config.json')) discordConfig = { ...discordConfig, ...JSON.parse(fs.readFileSync('discord_config.json')) }; } catch(e) {}
@@ -80,6 +81,7 @@ try { if (fs.existsSync('vip_config.json')) vipConfig = { ...vipConfig, ...JSON.
 try { if (fs.existsSync('spy_db.json')) spyDatabase = JSON.parse(fs.readFileSync('spy_db.json')); } catch(e) {}
 try { if (fs.existsSync('user_tracking.json')) userTracking = JSON.parse(fs.readFileSync('user_tracking.json')); } catch(e) {}
 try { if (fs.existsSync('api_pool.json')) apiPoolConfig = JSON.parse(fs.readFileSync('api_pool.json')); } catch(e) {}
+try { if (fs.existsSync('company_config.json')) companyConfig = { ...companyConfig, ...JSON.parse(fs.readFileSync('company_config.json')) }; } catch(e) {}
 
 function saveSubs() { fs.writeFileSync('subscriptions.json', JSON.stringify(subscriptions)); }
 function saveDiscordConfig() { fs.writeFileSync('discord_config.json', JSON.stringify(discordConfig)); }
@@ -89,6 +91,7 @@ function saveVipConfig() { fs.writeFileSync('vip_config.json', JSON.stringify(vi
 function saveSpyDb() { fs.writeFileSync('spy_db.json', JSON.stringify(spyDatabase)); }
 function saveTracking() { fs.writeFileSync('user_tracking.json', JSON.stringify(userTracking)); }
 function saveApiPool() { fs.writeFileSync('api_pool.json', JSON.stringify(apiPoolConfig)); }
+function saveCompanyConfig() { fs.writeFileSync('company_config.json', JSON.stringify(companyConfig)); }
 
 if (ADMIN_API_KEY) {
     fetch(`https://api.torn.com/user/?selections=profile&key=${ADMIN_API_KEY}`)
@@ -551,6 +554,41 @@ setInterval(async () => {
         }
     } catch (err) {}
 }, 30000);
+
+setInterval(async () => {
+    if (!companyConfig.webhookUrl || !companyConfig.apiKey) return;
+    try {
+        const resp = await fetch(`https://api.torn.com/company/?selections=stock&key=${companyConfig.apiKey}`);
+        const data = await resp.json();
+        const stockData = data.company_stock || data.stock;
+        if (!stockData) return;
+        
+        let changed = false;
+        Object.entries(stockData).forEach(([itemName, s]) => {
+            const currentStock = s.in_stock || 0;
+            if (currentStock <= companyConfig.threshold) {
+                if (!companyConfig.alertedItems[itemName] || companyConfig.alertedItems[itemName] !== currentStock) {
+                    sendDiscordEmbed(companyConfig.webhookUrl, {
+                        title: "📉 LOW STOCK ALERT",
+                        description: `**${itemName}** is running low!\nOnly **${currentStock.toLocaleString()}** remaining in stock.`,
+                        color: 15158332,
+                        fields: [
+                            { name: "Daily Sales Rate", value: s.sold_amount ? s.sold_amount.toString() : "0", inline: true }
+                        ]
+                    });
+                    companyConfig.alertedItems[itemName] = currentStock;
+                    changed = true;
+                }
+            } else {
+                if (companyConfig.alertedItems[itemName]) {
+                    delete companyConfig.alertedItems[itemName];
+                    changed = true;
+                }
+            }
+        });
+        if (changed) saveCompanyConfig();
+    } catch(e) {}
+}, 60000);
 
 async function verifySubscription(userKey) {
     if (!userKey) throw new Error("No API Key provided.");
@@ -1137,6 +1175,19 @@ app.post('/api/save-oc-config', (req, res) => {
     if (roleId !== undefined) ocConfig.roleId = roleId;
     saveOcConfig();
     res.json({ success: true });
+});
+
+app.post('/api/save-company-config', (req, res) => {
+    const { webhookUrl, threshold, apiKey } = req.body;
+    if (webhookUrl !== undefined) companyConfig.webhookUrl = webhookUrl;
+    if (threshold !== undefined) companyConfig.threshold = parseInt(threshold) || 0;
+    if (apiKey !== undefined) companyConfig.apiKey = apiKey;
+    saveCompanyConfig();
+    res.json({ success: true });
+});
+
+app.get('/api/company-config', (req, res) => {
+    res.json({ success: true, webhookUrl: companyConfig.webhookUrl, threshold: companyConfig.threshold });
 });
 
 app.get('/api/ocs', async (req, res) => {
