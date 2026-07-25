@@ -1097,41 +1097,48 @@ app.get('/api/ocs', async (req, res) => {
         await verifySubscription(userKey);
 
         let activeKey = getNextApiKey() || userKey;
-        const r = await fetch(`https://api.torn.com/faction/?selections=crimes&key=${activeKey}`);
+        // Using Torn v2 API for OC 2.0
+        const r = await fetch(`https://api.torn.com/v2/faction/crimes?key=${activeKey}`);
         const data = await r.json();
 
         if (data.error) {
             return res.status(400).json({ error: data.error.error || "Failed to fetch OCs" });
         }
 
-        // Notify Discord if someone needs an item
+        // Notify Discord if someone needs an item or is in hosp/jail
         if (data.crimes && ocConfig.webhookUrl) {
-            for (let [id, crime] of Object.entries(data.crimes)) {
-                if (crime.participants) {
-                    crime.participants.forEach(p => {
-                        let pData = Array.isArray(p) ? p[1] : p;
-                        let pId = Array.isArray(p) ? p[0] : "Unknown";
-                        let state = pData?.state || pData?.details || "";
-                        let lowerState = state.toLowerCase();
+            data.crimes.forEach(crime => {
+                if (crime.slots) {
+                    crime.slots.forEach(slot => {
+                        if (!slot.user) return;
+                        let pId = slot.user.id;
+                        let pName = slot.user.name;
                         
-                        if (lowerState.includes("item") || lowerState.includes("need")) {
-                            const trackingId = id + "_" + pId;
+                        let issueMessage = null;
+                        if (slot.item_requirement && !slot.item_requirement.is_available) {
+                            issueMessage = `Needs Item: ${slot.item_requirement.item_name}`;
+                        } else if (slot.status && (slot.status.toLowerCase().includes("hospital") || slot.status.toLowerCase().includes("jail"))) {
+                            issueMessage = `Status: ${slot.status}`;
+                        }
+
+                        if (issueMessage) {
+                            const trackingId = crime.crime_id + "_" + pId + "_" + issueMessage;
                             if (!ocMemory[trackingId] || (Date.now() - ocMemory[trackingId]) > 3600000 * 12) { 
-                                // Send notification once every 12 hours max per item issue
+                                // Send notification once every 12 hours max per issue
                                 ocMemory[trackingId] = Date.now();
                                 
                                 let mention = ocConfig.roleId ? `<@&${ocConfig.roleId}>` : "";
                                 sendDiscordEmbed(ocConfig.webhookUrl, {
                                     pingText: mention,
-                                    title: `🚨 OC Item Needed!`,
-                                    description: `**Crime:** ${crime.crime_name}\n**Player:** [${pId}](https://www.torn.com/profiles.php?XID=${pId})\n**Status:** ${state}`,
+                                    title: `🚨 OC Issue Detected!`,
+                                    description: `**Crime:** ${crime.crime_name}\n**Player:** [${pName}](https://www.torn.com/profiles.php?XID=${pId})\n**Issue:** ${issueMessage}`,
                                     color: 16733695 // Red-Orange
                                 });
                             }
                         }
                     });
                 }
-            }
+            });
         }
 
         res.json({ success: true, crimes: data.crimes });

@@ -212,38 +212,83 @@ function renderOCs(crimes) {
     const container = document.getElementById("oc-container");
     container.innerHTML = "";
     
-    if (!crimes || Object.keys(crimes).length === 0) {
+    // Filter out completed/failed/expired
+    const activeCrimes = crimes.filter(c => !["successful", "failure", "expired", "completed"].includes(c.status));
+    
+    if (!activeCrimes || activeCrimes.length === 0) {
         container.innerHTML = `<div style='color:var(--text-dim); padding:10px; font-style: italic; text-align: center;'>No active Organized Crimes found.</div>`;
         return;
     }
 
-    Object.values(crimes).sort((a, b) => a.time_left - b.time_left).forEach(crime => {
+    activeCrimes.sort((a, b) => (a.ready_at || 0) - (b.ready_at || 0)).forEach(crime => {
         const card = document.createElement("div");
         card.className = "oc-card";
         
-        const isReady = crime.time_left <= 0;
+        const now = Math.floor(Date.now() / 1000);
+        let timeLeftStr = "";
+        let isReady = false;
+        
+        if (crime.status === "initiated") {
+            timeLeftStr = "Initiated!";
+            isReady = true;
+        } else if (crime.ready_at) {
+            let secondsLeft = crime.ready_at - now;
+            if (secondsLeft <= 0) {
+                timeLeftStr = "Ready!";
+                isReady = true;
+            } else {
+                let h = Math.floor(secondsLeft / 3600);
+                let m = Math.floor((secondsLeft % 3600) / 60);
+                timeLeftStr = `${h}h ${m}m remaining`;
+            }
+        } else {
+            timeLeftStr = crime.status.charAt(0).toUpperCase() + crime.status.slice(1);
+        }
+        
         const timeColor = isReady ? 'var(--green)' : 'var(--blue)';
         
         let header = `<h2>
-            <span>${crime.crime_name}</span>
-            <span style="color:${timeColor}; font-size:0.85em;">${formatTimeLeft(crime.time_left)}</span>
+            <span>${crime.crime_name} <span style="font-size: 0.6em; color:var(--text-dim);">[Lvl ${crime.level}]</span></span>
+            <span style="color:${timeColor}; font-size:0.85em;">${timeLeftStr}</span>
         </h2>`;
         
         let participantsHtml = `<div class="participant-list">`;
         
-        if (crime.participants) {
-            crime.participants.forEach(p => {
-                let pData = Array.isArray(p) ? p[1] : p;
-                let pId = Array.isArray(p) ? p[0] : "Unknown";
+        if (crime.slots) {
+            crime.slots.forEach(slot => {
+                if (!slot.user) {
+                    // Empty slot
+                    participantsHtml += `
+                        <div class="p-card">
+                            <div class="p-name" style="color:var(--text-dim);">Empty Slot</div>
+                            <div style="font-size:0.85em; color:var(--text-dim); font-weight:bold;">${slot.position}</div>
+                        </div>
+                    `;
+                    return;
+                }
                 
-                let state = pData.state || pData.details || "Okay";
-                let lowerState = state.toLowerCase();
-                let issue = lowerState.includes("item") || lowerState.includes("need") || lowerState.includes("hospital") || lowerState.includes("jail");
+                let pId = slot.user.id;
+                let pName = slot.user.name;
+                
+                let stateStr = slot.status.charAt(0).toUpperCase() + slot.status.slice(1);
+                let issue = false;
+                
+                if (slot.item_requirement) {
+                    if (!slot.item_requirement.is_available) {
+                        stateStr = `Needs ${slot.item_requirement.item_name}`;
+                        issue = true;
+                    } else {
+                        stateStr += ` (Has ${slot.item_requirement.item_name})`;
+                    }
+                }
+                if (slot.status.toLowerCase().includes("hospital") || slot.status.toLowerCase().includes("jail")) {
+                    issue = true;
+                }
                 
                 participantsHtml += `
                     <div class="p-card ${issue ? 'issue' : 'ready'}">
-                        <div class="p-name"><a href="https://www.torn.com/profiles.php?XID=${pId}" target="_blank">Player [${pId}]</a></div>
-                        <div style="font-size:0.85em; color:var(--text-dim); font-weight:bold;">${state}</div>
+                        <div class="p-name"><a href="https://www.torn.com/profiles.php?XID=${pId}" target="_blank">${pName} [${pId}]</a></div>
+                        <div style="font-size:0.85em; color:var(--text-dim); font-weight:bold;">${slot.position}: ${stateStr}</div>
                     </div>
                 `;
             });
