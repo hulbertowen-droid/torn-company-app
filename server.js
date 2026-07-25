@@ -259,7 +259,7 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
     
     while (keepScraping && pageCount < 50) { 
         try {
-            const res = await fetch(`https://api.torn.com/faction/?selections=attacks&to=${toTimestamp}&key=${watchKey}`);
+            const res = await fetch(`https://api.torn.com/faction/${watchFactionId}?selections=attacks&to=${toTimestamp}&key=${watchKey}`);
             const data = await res.json();
             if (data.error || !data.attacks) break;
             
@@ -310,12 +310,12 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
 
 // Background Task 1: Wall Watcher & Scraper
 setInterval(async () => {
-    let watchKey = getNextApiKey();
-    let watchFactionId = adminFactionId || discordConfig.factionId || dynamicFactionId;
+    let watchFactionId = adminFactionId || discordConfig.factionId;
+    let watchKey = discordConfig.apiKey || TORN_API_KEY;
     if (!watchKey || !watchFactionId) return;
 
     try {
-        const liveRes = await fetch(`https://api.torn.com/faction/?selections=attacks,basic,rankedwars&key=${watchKey}`);
+        const liveRes = await fetch(`https://api.torn.com/faction/${watchFactionId}?selections=attacks,basic,rankedwars&key=${watchKey}`);
         const liveData = await liveRes.json();
         
         if (liveData.rankedwars) {
@@ -453,11 +453,11 @@ setInterval(async () => {
 // Background Task 3: Sniper & Target Status Watcher
 setInterval(async () => {
     let watchKey = getNextApiKey();
-    let watchFactionId = adminFactionId || discordConfig.factionId || dynamicFactionId;
+    let watchFactionId = adminFactionId || discordConfig.factionId;
     if (!watchKey || !watchFactionId) return;
 
     try {
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,chain,rankedwars&key=${watchKey}`);
+        const facRes = await fetch(`https://api.torn.com/faction/${watchFactionId}?selections=basic,chain,rankedwars&key=${watchKey}`);
         const facData = await facRes.json();
         if (facData.error) return;
 
@@ -1112,9 +1112,9 @@ app.get('/api/warboard', async (req, res) => {
         const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
         let enemyId = req.query.enemyFaction || null;
         
-        let activeKey = getNextApiKey() || userKey;
+        let activeKey = userKey;
         let [myData, enemyDataResult] = await Promise.all([
-            fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${activeKey}`).then(r => r.json()).catch(() => ({ members: {} })),
+            fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })),
             enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()||userKey}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} })
         ]);
         
