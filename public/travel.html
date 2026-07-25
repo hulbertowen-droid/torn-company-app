@@ -257,9 +257,9 @@
     async function loadProfits() {
         const tbody = document.getElementById("profits-tbody");
         tbody.innerHTML = "<tr><td colspan=\"6\" style=\"padding: 10px;\">Loading...</td></tr>";
-        let apiKey = localStorage.getItem("tornApiKey");
+        let apiKey = localStorage.getItem("warboard_apikey") || localStorage.getItem("tornApiKey");
         if (!apiKey) {
-            tbody.innerHTML = "<tr><td colspan=\"6\" style=\"padding: 10px;\">No API Key found. Set it in the main dashboard.</td></tr>";
+            tbody.innerHTML = "<tr><td colspan=\"6\" style=\"padding: 10px;\">No API Key found. Set it in the main dashboard Settings.</td></tr>";
             return;
         }
 
