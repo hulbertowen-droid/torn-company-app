@@ -199,14 +199,14 @@
                         <label>Assist Multiplier</label>
                         <div class="input-group"><input type="number" id="inp-mult-assist" value="0.25" step="0.05" onchange="recalculate()"><span>x</span></div>
                     </div>
-                    <div class="input-row" title="Clears / Outside Hits (Attacking people not in the war).">
+                    <div class="input-row" title="Hits against players NOT in the war (farming/clearing). Most factions pay 0x for these. Adjust if your faction compensates.">
                         <label>Outside Clear Multiplier</label>
-                        <div class="input-group"><input type="number" id="inp-mult-clear" value="0.5" step="0.05" onchange="recalculate()"><span>x</span></div>
+                        <div class="input-group"><input type="number" id="inp-mult-clear" value="0" step="0.05" onchange="recalculate()"><span>x</span></div>
                     </div>
                     
                     <h3 style="margin-top: 20px;">🛑 Thresholds & Caps</h3>
-                    <div class="input-row" title="Members below this threshold receive $0">
-                        <label>Minimum Hits Required</label>
+                    <div class="input-row" title="Members whose EFFECTIVE hits (after multipliers) fall below this number receive $0">
+                        <label>Minimum Effective Hits</label>
                         <input type="number" id="inp-min-hits" value="0" min="0" onchange="recalculate()">
                     </div>
                     <div class="input-row" title="Members will not be paid for hits exceeding this cap">
@@ -395,14 +395,15 @@ function recalculate() {
         let rawClears = m.clears || 0;
         let totalRawActivity = rawAttacks + rawAssists + rawClears;
 
-        let effectiveHits = 0;
+        // Calculate effective hits first (post-multiplier)
+        let effectiveHits = (rawAttacks * multAttack) + (rawAssists * multAssist) + (rawClears * multClear);
         
-        if (totalRawActivity >= minHits) {
-            effectiveHits = (rawAttacks * multAttack) + (rawAssists * multAssist) + (rawClears * multClear);
-            if (effectiveHits > maxHits) {
-                effectiveHits = maxHits;
-            }
-        }
+        // Cap at max
+        if (effectiveHits > maxHits) effectiveHits = maxHits;
+        
+        // Enforce minimum EFFECTIVE hits threshold — if they didn't earn enough, they get $0
+        // This is how factions actually enforce minimums (not raw activity)
+        if (effectiveHits < minHits) effectiveHits = 0;
 
         totalValidHits += effectiveHits;
 
@@ -433,9 +434,10 @@ function recalculate() {
         const payout = Math.floor(m.effectiveHits * payPerHit);
         let warningIcon = "";
         
-        if (m.totalRawActivity > 0 && m.totalRawActivity < minHits) {
-            warningIcon = `<span title="Missed Minimum Hit Threshold" style="color:var(--red); cursor:help;">⚠️</span>`;
-        } else if (m.effectiveHits >= maxHits) {
+        // Show warning if they had activity but got zeroed out by the minimum threshold
+        if (m.totalRawActivity > 0 && m.effectiveHits === 0 && minHits > 0) {
+            warningIcon = `<span title="Below Minimum Effective Hit Threshold — No Pay" style="color:var(--red); cursor:help;">⚠️</span>`;
+        } else if (m.rawAttacks > 0 && m.effectiveHits >= maxHits && maxHits < 9999) {
             warningIcon = `<span title="Capped at Maximum Hit Threshold" style="color:var(--gold); cursor:help;">🛑</span>`;
         }
 
