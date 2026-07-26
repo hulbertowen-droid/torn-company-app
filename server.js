@@ -56,6 +56,11 @@ let liveAttacks = {};
 let activeWarId = null;
 let hasBackfilledWar = false;
 let processedAttackIds = new Set();
+let friendlyHitTracker = {};
+let travelAlerts = {};
+let currentEnemyFacId = null;
+let enemyMembersCache = {};
+let lastEnemyScrape = 0;
 
 const BONUS_THRESHOLDS = new Set([10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000]);
 
@@ -326,7 +331,8 @@ setInterval(async () => {
             if (ongoingWar) {
                 if (activeWarId !== ongoingWar.war.start) {
                     activeWarId = ongoingWar.war.start;
-                    persistentDefends = {}; liveAttacks = {}; hasBackfilledWar = false; processedAttackIds.clear(); 
+                    persistentDefends = {}; liveAttacks = {}; hasBackfilledWar = false; processedAttackIds.clear();
+                    friendlyHitTracker = {}; travelAlerts = {}; currentEnemyFacId = null; enemyMembersCache = {};
                     backfillWarDefends(watchKey, watchFactionId, activeWarId);
                 }
             } else { activeWarId = null; hasBackfilledWar = false; }
@@ -349,6 +355,30 @@ setInterval(async () => {
 
                     if (!persistentDefends[uId]) persistentDefends[uId] = {};
                     persistentDefends[uId][attFacId] = (persistentDefends[uId][attFacId] || 0) + 1;
+                    
+                    let friendlyMem = liveData.members ? liveData.members[uId] : null;
+                    if (friendlyMem && friendlyMem.status.state !== "Traveling") {
+                        if (!friendlyHitTracker[uId]) friendlyHitTracker[uId] = { count: 0, lastHit: 0, alertedAt: 0 };
+                        let now = Date.now();
+                        if (now - friendlyHitTracker[uId].lastHit > 15 * 60 * 1000) friendlyHitTracker[uId].count = 0;
+                        friendlyHitTracker[uId].count++;
+                        friendlyHitTracker[uId].lastHit = now;
+                        
+                        if (friendlyHitTracker[uId].count >= 3 && (now - friendlyHitTracker[uId].alertedAt > 30 * 60 * 1000)) {
+                            friendlyHitTracker[uId].alertedAt = now;
+                            friendlyHitTracker[uId].count = 0;
+                            let dId = await getDiscordId(uId);
+                            let pingStr = (dId && dId !== "none") ? `<@${dId}>` : "";
+                            if (discordConfig.webhookUrl) {
+                                sendDiscordEmbed(discordConfig.webhookUrl, {
+                                    pingText: pingStr,
+                                    title: "⚠️ CHAIN ATTACK WARNING",
+                                    description: `**${friendlyMem.name}**, you have been hit 3 consecutive times in Torn! Log in and react!`,
+                                    color: 16729943
+                                });
+                            }
+                        }
+                    }
                     
                     if (hasBackfilledWar && discordConfig.friendlyAttacked && discordConfig.webhookUrl) {
                         let attackerName = atk.attacker_name || "Unknown"; 
