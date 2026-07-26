@@ -30,8 +30,10 @@ let backups = {};
 let statsCache = {}; 
 let manualStats = {}; 
 let flightCache = {}; 
-let activityCache = {}; 
-let warScrapeCache = {}; 
+let activityCache = {};
+let warScrapeCache = {};
+let warScrapeCache_v2 = {}; 
+
 let spyDatabase = {}; 
 let subCache = {}; 
 
@@ -1001,8 +1003,8 @@ app.get('/api/past-war', async (req, res) => {
         }
 
         let advancedStats = {};
-        if (warScrapeCache[reportId]) {
-            advancedStats = warScrapeCache[reportId];
+        if (warScrapeCache_v2[reportId]) {
+            advancedStats = warScrapeCache_v2[reportId];
         } else {
             let warStart = reportData.rankedwarreport.war.start;
             let warEnd = reportData.rankedwarreport.war.end || Math.floor(Date.now() / 1000);
@@ -1030,35 +1032,37 @@ app.get('/api/past-war', async (req, res) => {
                     
                     if (atk.attacker_faction && atk.attacker_faction.toString() === correctFacId) {
                         let uId = atk.attacker_id.toString();
-                        if (!advancedStats[uId]) advancedStats[uId] = { assists: 0, clears: 0 };
+                        if (!advancedStats[uId]) advancedStats[uId] = { hits: [] };
                         
-                        if (atk.result === "Assist") {
-                            advancedStats[uId].assists++;
-                        } else if (atk.defender_faction !== undefined && atk.defender_faction.toString() !== enemyFacId) {
-                            if (["Attacked", "Mugged", "Hospitalized", "Arrested", "Special"].includes(atk.result)) {
-                                advancedStats[uId].clears++;
-                            }
-                        }
+                        let isEnemy = (atk.defender_faction !== undefined && atk.defender_faction.toString() === enemyFacId);
+                        advancedStats[uId].hits.push({
+                            t: atk.timestamp_ended,
+                            r: atk.result,
+                            ff: atk.modifiers?.fair_fight || 1.0,
+                            ret: atk.modifiers?.retaliation || 1.0,
+                            os: atk.modifiers?.overseas || 1.0,
+                            res: atk.respect || 0,
+                            tgt: isEnemy ? 1 : 0
+                        });
                     }
                 }
                 toTimestamp = oldestTime - 1;
                 pageCount++;
                 await new Promise(r => setTimeout(r, 250)); 
             }
-            warScrapeCache[reportId] = advancedStats;
+            warScrapeCache_v2[reportId] = advancedStats;
         }
 
         let formattedMembers = [];
         const members = myFactionWarData.members || {};
         for (let [id, m] of Object.entries(members)) {
-            let pStats = advancedStats[id] || { assists: 0, clears: 0 };
+            let pStats = advancedStats[id] || { hits: [] };
             formattedMembers.push({
                 id,
                 name: m.name,
                 attacks: m.attacks || 0,
-                assists: pStats.assists,
-                clears: pStats.clears,
-                score: m.score || 0
+                score: m.score || 0,
+                hits: pStats.hits
             });
         }
 
