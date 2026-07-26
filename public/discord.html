@@ -98,6 +98,10 @@
                     <label>Faction Discord Webhook URL</label>
                     <input type="text" id="webhook-url" placeholder="https://discord.com/api/webhooks/...">
                 </div>
+                <div class="form-group">
+                    <label>Global Bot Token (For Direct Messages)</label>
+                    <input type="password" id="global-bottoken" placeholder="Optional: Faction-wide Discord Bot Token for DMs">
+                </div>
                 <h3 style="color: #ffa502; border-bottom: 1px solid #2f3542; padding-bottom: 5px; margin-top: 20px;">Faction Alert Toggles</h3>
                 <div class="trigger-list">
 
@@ -192,6 +196,7 @@ document.addEventListener("DOMContentLoaded", async function() {
         const config = await res.json();
         
         document.getElementById('webhook-url').value = config.webhookUrl || "";
+        document.getElementById('global-bottoken').value = config.globalBotToken || "";
         document.getElementById('targetOnline').checked = config.targetOnline !== false;
         document.getElementById('targetLanded').checked = config.targetLanded !== false;
         document.getElementById('targetOutHosp').checked = config.targetOutHosp !== false;
@@ -265,6 +270,7 @@ async function saveDiscordConfig() {
     const payload = {
         apiKey: myKey,
         webhookUrl: document.getElementById('webhook-url').value.trim(),
+        globalBotToken: document.getElementById('global-bottoken').value.trim(),
         targetOnline: document.getElementById('targetOnline').checked,
         targetLanded: document.getElementById('targetLanded').checked,
         targetOutHosp: document.getElementById('targetOutHosp').checked,

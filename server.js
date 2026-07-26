@@ -369,13 +369,17 @@ setInterval(async () => {
                             friendlyHitTracker[uId].count = 0;
                             let dId = await getDiscordId(uId);
                             let pingStr = (dId && dId !== "none") ? `<@${dId}>` : "";
-                            if (discordConfig.webhookUrl && discordConfig.chainWarnings !== false) {
-                                sendDiscordEmbed(discordConfig.webhookUrl, {
-                                    pingText: pingStr,
+                            if (discordConfig.chainWarnings !== false) {
+                                let embed = {
                                     title: "⚠️ CHAIN ATTACK WARNING",
                                     description: `**${friendlyMem.name}**, you have been hit 3 consecutive times in Torn! Log in and react!`,
                                     color: 16729943
-                                });
+                                };
+                                if (discordConfig.globalBotToken && dId && dId !== "none") {
+                                    sendPrivateDM(discordConfig.globalBotToken, dId, embed);
+                                } else if (discordConfig.webhookUrl) {
+                                    sendDiscordEmbed(discordConfig.webhookUrl, { ...embed, pingText: pingStr });
+                                }
                             }
                         }
                     }
@@ -464,13 +468,17 @@ setInterval(async () => {
                         travelAlerts[uId] = Date.now();
                         let dId = await getDiscordId(uId);
                         let pingStr = (dId && dId !== "none") ? `<@${dId}>` : "";
-                        if (discordConfig.webhookUrl && discordConfig.travelWarnings !== false) {
-                            sendDiscordEmbed(discordConfig.webhookUrl, {
-                                pingText: pingStr,
+                        if (discordConfig.travelWarnings !== false) {
+                            let embed = {
                                 title: "✈️ TRAVEL WARNING",
                                 description: `**${fMem.name}**, an enemy (**${enemyThreats[fCountry][0]}**) is currently flying to **${fCountry}** where you are located (or heading)!\n\nFly away or return to Torn immediately!`,
                                 color: 16729943
-                            });
+                            };
+                            if (discordConfig.globalBotToken && dId && dId !== "none") {
+                                sendPrivateDM(discordConfig.globalBotToken, dId, embed);
+                            } else if (discordConfig.webhookUrl) {
+                                sendDiscordEmbed(discordConfig.webhookUrl, { ...embed, pingText: pingStr });
+                            }
                         }
                     }
                 }
@@ -820,6 +828,7 @@ app.post('/api/save-discord-config', async (req, res) => {
         } catch(e) {}
     }
     saveDiscordConfig(); 
+    if (discordConfig.globalBotToken) getDiscordClient(discordConfig.globalBotToken);
     res.json({ success: true }); 
 });
 
@@ -834,23 +843,31 @@ app.post('/api/test-discord-alert', (req, res) => {
     }
     
     let pingStr = discordId ? `<@${discordId}>` : "";
+    let useDM = discordConfig.globalBotToken && discordId;
+    let embed = {};
     
     if (type === 'travel') {
-        sendDiscordEmbed(wh, {
-            pingText: pingStr,
+        embed = {
             title: "✈️ TRAVEL WARNING",
             description: `**[Your Name]**, an enemy (**[Test] EnemyName**) is currently flying to **Mexico** where you are located (or heading)!\n\nFly away or return to Torn immediately!`,
             color: 16729943
-        });
+        };
     } else if (type === 'chain') {
-        sendDiscordEmbed(wh, {
-            pingText: pingStr,
+        embed = {
             title: "⚠️ CHAIN ATTACK WARNING",
             description: `**[Your Name]**, you have been hit 3 consecutive times in Torn! Log in and react!`,
             color: 16729943
-        });
+        };
     } else {
         return res.json({ success: false, error: "Unknown test type." });
+    }
+
+    if (useDM) {
+        sendPrivateDM(discordConfig.globalBotToken, discordId, embed);
+    } else if (wh) {
+        sendDiscordEmbed(wh, { ...embed, pingText: pingStr });
+    } else {
+        return res.json({ success: false, error: "No Webhook URL or Global Bot Token configured." });
     }
     
     res.json({ success: true });
@@ -1640,6 +1657,10 @@ async function getDiscordClient(token) {
 Object.values(userDatabase).forEach(profile => {
     if (profile.botToken) getDiscordClient(profile.botToken);
 });
+
+if (discordConfig.globalBotToken) {
+    getDiscordClient(discordConfig.globalBotToken);
+}
 
 async function sendPrivateDM(token, userId, embedData) {
     const client = await getDiscordClient(token);
