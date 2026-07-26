@@ -826,6 +826,36 @@ app.post('/api/save-discord-config', async (req, res) => {
 app.get('/api/get-market-config', (req, res) => { res.json(marketConfig); });
 app.post('/api/save-market-config', (req, res) => { marketConfig = { ...marketConfig, ...req.body }; saveMarketConfig(); res.json({ success: true }); });
 
+app.post('/api/test-discord-alert', (req, res) => {
+    const { type, discordId, webhookUrl } = req.body;
+    let wh = webhookUrl || discordConfig.webhookUrl;
+    if (!wh) {
+        return res.json({ success: false, error: "No webhook URL provided or saved." });
+    }
+    
+    let pingStr = discordId ? `<@${discordId}>` : "";
+    
+    if (type === 'travel') {
+        sendDiscordEmbed(wh, {
+            pingText: pingStr,
+            title: "✈️ TRAVEL WARNING",
+            description: `**[Your Name]**, an enemy (**[Test] EnemyName**) is currently flying to **Mexico** where you are located (or heading)!\n\nFly away or return to Torn immediately!`,
+            color: 16729943
+        });
+    } else if (type === 'chain') {
+        sendDiscordEmbed(wh, {
+            pingText: pingStr,
+            title: "⚠️ CHAIN ATTACK WARNING",
+            description: `**[Your Name]**, you have been hit 3 consecutive times in Torn! Log in and react!`,
+            color: 16729943
+        });
+    } else {
+        return res.json({ success: false, error: "Unknown test type." });
+    }
+    
+    res.json({ success: true });
+});
+
 app.post('/api/discord-ping', async (req, res) => {
     const { webhookUrl, message } = req.body;
     if (!webhookUrl || !message) return res.status(400).json({ error: "Missing data" });

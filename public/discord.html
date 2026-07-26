@@ -152,14 +152,14 @@
                     </div>
                     <div class="trigger-item">
                         <div class="trigger-info">
-                            <span class="trigger-title">✈️ Travel Warning Engine</span>
+                            <span class="trigger-title">✈️ Travel Warning Engine <button class="btn-inspect" onclick="testDiscordAlert('travel')">🧪 Test</button></span>
                             <span class="trigger-desc">Pings an online member if an enemy flies to their exact location.</span>
                         </div>
                         <label class="switch"><input type="checkbox" id="travelWarnings"><span class="slider"></span></label>
                     </div>
                     <div class="trigger-item">
                         <div class="trigger-info">
-                            <span class="trigger-title" style="color: var(--red);">⚠️ Chain Attack Warning</span>
+                            <span class="trigger-title" style="color: var(--red);">⚠️ Chain Attack Warning <button class="btn-inspect" onclick="testDiscordAlert('chain')">🧪 Test</button></span>
                             <span class="trigger-desc">Pings a member directly if they suffer 3 consecutive hits on the ground.</span>
                         </div>
                         <label class="switch"><input type="checkbox" id="chainWarnings"><span class="slider"></span></label>
@@ -283,14 +283,48 @@ async function saveDiscordConfig() {
             body: JSON.stringify(payload)
         });
         const data = await res.json();
-        if(data.success) {
+        
+        setTimeout(() => {
             status.style.color = "var(--green)";
-            status.innerText = "✓ Backend updated. Scraper engines synced 24/7.";
-        } else { throw new Error(); }
+            status.innerText = "✅ Saved settings to localStorage & Server.";
+        }, 800);
     } catch(e) {
         status.style.color = "var(--red)";
-        status.innerText = "❌ Sync failed. Check server terminal logs.";
+        status.innerText = "❌ Network error updating server configurations.";
     }
+}
+
+async function testDiscordAlert(type) {
+    const status = document.getElementById('status-msg');
+    status.style.color = "var(--blue)";
+    status.innerText = `Sending ${type} test alert...`;
+    
+    let discordId = document.getElementById("discord-userid").value.trim();
+    let webhookUrl = document.getElementById('webhook-url').value.trim();
+    
+    try {
+        const res = await fetch('/api/test-discord-alert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type, discordId, webhookUrl })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+            status.style.color = "var(--green)";
+            status.innerText = `✅ Test ${type} alert sent successfully!`;
+        } else {
+            status.style.color = "var(--red)";
+            status.innerText = `❌ Error: ${data.error || 'Failed to send alert'}`;
+        }
+    } catch (e) {
+        status.style.color = "var(--red)";
+        status.innerText = "❌ Network error sending test alert.";
+    }
+}
+
+function openSettings() {
+    window.location.href = '/index.html';
 }
 </script>
 
