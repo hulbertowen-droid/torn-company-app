@@ -31,20 +31,26 @@
         ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
 
         /* ── SIDEBAR ── */
-        .sidebar { width: 220px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
-        .sidebar-logo { padding: 18px 16px; font-size: 0.8em; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; color: var(--red); border-bottom: 1px solid var(--border); }
-        .nav-items { display: flex; flex-direction: column; gap: 3px; padding: 12px 8px; flex: 1; }
-        .nav-link { display: flex; align-items: center; gap: 10px; color: var(--text-dim); text-decoration: none; padding: 9px 12px; border-radius: 8px; font-weight: 600; font-size: 0.85em; transition: all 0.15s; }
+        .sidebar { width: 250px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; transition: width 0.3s ease; z-index:100; }
+        .sidebar.collapsed { width: 72px; }
+        .sidebar-logo { padding: 18px 16px; font-size: 0.85em; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: var(--red); border-bottom: 1px solid var(--border); display:flex; justify-content:space-between; align-items:center; white-space: nowrap; }
+        .sidebar.collapsed .sidebar-logo span { display:none; }
+        .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.3em; padding: 4px 8px; border-radius: 6px; transition: 0.2s; }
+        .toggle-btn:hover { background: #21262d; color: white; }
+        .nav-items { display: flex; flex-direction: column; gap: 4px; padding: 16px 8px; flex: 1; overflow-y: auto; }
+        .nav-link { display: flex; align-items: center; gap: 12px; color: var(--text-dim); text-decoration: none; padding: 10px 12px; border-radius: 8px; font-weight: 600; font-size: 0.85em; transition: all 0.15s; white-space: nowrap; }
         .nav-link:hover { background: var(--item); color: var(--text-main); }
         .nav-link.active { background: rgba(255,71,87,0.12); color: var(--red); }
         .nav-link .icon { font-size: 1.1em; width: 18px; text-align: center; flex-shrink: 0; }
+        .nav-text { transition: opacity 0.2s; }
+        .sidebar.collapsed .nav-text { display: none; }
 
         /* ── MAIN ── */
         .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
         /* top bar */
-        .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 16px; height: 56px; flex-shrink: 0; }
-        .topbar-title { font-weight: 900; font-size: 1.1em; color: var(--text-main); flex: 1; }
+        .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 16px; height: 56px; flex-shrink: 0; flex-wrap: wrap;}
+        .topbar-title { font-weight: 900; font-size: 1.1em; color: var(--text-main); flex: 1; min-width: 200px;}
         .war-select { background: var(--item); border: 1px solid var(--border); color: var(--text-main); padding: 7px 12px; border-radius: 8px; font-family: inherit; font-size: 0.85em; cursor: pointer; }
         .war-select:focus { outline: none; border-color: var(--red); }
         .input-manual { background: var(--item); border: 1px solid var(--border); color: var(--text-main); padding: 7px 12px; border-radius: 8px; font-family: inherit; font-size: 0.85em; width: 180px; }
@@ -153,23 +159,33 @@
             .two-col { grid-template-columns: 1fr; }
             .summary-strip { grid-template-columns: 1fr 1fr; }
         }
+        @media (max-width: 900px) {
+            body { flex-direction: column; }
+            .sidebar { width: 100% !important; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+            .sidebar-logo { padding: 12px 16px; }
+            .nav-items { flex-direction: row; flex-wrap: wrap; padding: 10px; justify-content: center; display: none; }
+            .nav-items.mobile-open { display: flex; }
+            .main { height: auto; overflow: visible; }
+            .content { overflow-y: visible; }
+            .topbar { height: auto; padding: 12px; }
+        }
     </style>
 </head>
 <body>
-    <nav class="sidebar">
-        <div class="sidebar-logo">Owen's Tools</div>
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-logo"><span>Owen's Tools</span> <button class="toggle-btn" onclick="toggleSidebar()">☰</button></div>
         <div class="nav-items">
-            <a href="/" class="nav-link"><span class="icon">📡</span> Live Warboard</a>
-            <a href="/chain.html" class="nav-link"><span class="icon">🔗</span> Chain Watcher</a>
-            <a href="/payout.html" class="nav-link active"><span class="icon">💰</span> Payouts</a>
-            <a href="/dashboard.html" class="nav-link"><span class="icon">🛡️</span> Dashboard</a>
-            <a href="/members.html" class="nav-link"><span class="icon">👥</span> Members</a>
-            <a href="/recruitment.html" class="nav-link"><span class="icon">🎯</span> Recruitment</a>
-            <a href="/travel.html" class="nav-link"><span class="icon">✈️</span> Travel Calc</a>
-            <a href="/bazaar.html" class="nav-link"><span class="icon">🛒</span> Bazaar</a>
-            <a href="/discord.html" class="nav-link"><span class="icon">📢</span> Discord Alerts</a>
-            <a href="/oc.html" class="nav-link"><span class="icon">💼</span> OC Manager</a>
-            <a href="/company.html" class="nav-link" style="margin-top:auto; color:var(--teal);"><span class="icon">🏢</span> Company Tools</a>
+            <a href="/" class="nav-link"><span class="icon">📡</span> <span class="nav-text">Live Warboard</span></a>
+            <a href="/chain.html" class="nav-link"><span class="icon">🔗</span> <span class="nav-text">Chain Watcher</span></a>
+            <a href="/payout.html" class="nav-link active"><span class="icon">💰</span> <span class="nav-text">Payouts</span></a>
+            <a href="/dashboard.html" class="nav-link"><span class="icon">🛡️</span> <span class="nav-text">Dashboard</span></a>
+            <a href="/members.html" class="nav-link"><span class="icon">👥</span> <span class="nav-text">Members</span></a>
+            <a href="/recruitment.html" class="nav-link"><span class="icon">🎯</span> <span class="nav-text">Recruitment</span></a>
+            <a href="/travel.html" class="nav-link"><span class="icon">✈️</span> <span class="nav-text">Travel Calc</span></a>
+            <a href="/bazaar.html" class="nav-link"><span class="icon">🛒</span> <span class="nav-text">Bazaar</span></a>
+            <a href="/discord.html" class="nav-link"><span class="icon">📢</span> <span class="nav-text">Discord Alerts</span></a>
+            <a href="/oc.html" class="nav-link"><span class="icon">💼</span> <span class="nav-text">OC Manager</span></a>
+            <a href="/company.html" class="nav-link" style="margin-top:auto; color:var(--teal);"><span class="icon">🏢</span> <span class="nav-text">Company Tools</span></a>
         </div>
     </nav>
 
@@ -220,7 +236,7 @@
 
                         <div class="field">
                             <label>Cache Sales</label>
-                            <div class="money-input"><span>$</span><input type="text" id="inp-cache" value="0" readonly></div>
+                            <div class="money-input"><span>$</span><input type="number" id="inp-cache" value="0" oninput="recalc()"></div>
                         </div>
                         <div class="field">
                             <label>Consumables / Meds</label>
@@ -399,6 +415,15 @@
         const savedTheme = localStorage.getItem('warboard_theme');
         if (savedTheme === 'light') document.body.classList.add('light-mode');
 
+        function toggleSidebar() {
+            const s = document.getElementById('app-sidebar');
+            if (window.innerWidth <= 900) {
+                document.querySelector('.nav-items').classList.toggle('mobile-open');
+            } else {
+                s.classList.toggle('collapsed');
+            }
+        }
+
         window.onload = async () => {
             if (!myKey) return;
             try {
@@ -435,7 +460,7 @@
                 if (data.error) throw new Error(data.error);
                 rawMembers = data.members;
                 totalCacheVal = data.rewards?.totalCacheValue || 0;
-                document.getElementById('inp-cache').value = totalCacheVal.toLocaleString();
+                document.getElementById('inp-cache').value = totalCacheVal;
                 document.getElementById('war-title').innerText = '💰 War Payout — Report #' + id;
                 recalc();
             } catch(e) {
@@ -503,8 +528,10 @@
             const eqPay = document.querySelector('input[name="pay-mode"]:checked').value === 'equal';
 
             // Pool math
+            const inpCacheRaw = document.getElementById('inp-cache').value;
+            const currentCacheVal = parseFloat(inpCacheRaw) || 0;
             const totalDeductions = C_med + C_spy + C_bty + C_trm + C_oth;
-            const netPool  = totalCacheVal - totalDeductions + C_bon;
+            const netPool  = currentCacheVal - totalDeductions + C_bon;
             const memberPool = isCut ? netPool * (1 - cutPct / 100) : netPool;
 
             // Chronological cap pass
@@ -593,7 +620,7 @@
             }
 
             // Update KPIs
-            document.getElementById('kpi-cache').innerText  = fmtShort(totalCacheVal);
+            document.getElementById('kpi-cache').innerText  = fmtShort(currentCacheVal);
             document.getElementById('kpi-deductions').innerText = fmtShort(totalDeductions);
             document.getElementById('kpi-pool').innerText   = fmtShort(memberPool);
             document.getElementById('kpi-hits').innerText   = totalAdjHits.toFixed(1);
