@@ -422,9 +422,7 @@ setInterval(async () => {
                     }
                 }
             }
-            }
         }
-
         if (activeWarId && liveData.rankedwars) {
             let ongoingWar = Object.values(liveData.rankedwars).find(w => w.war && w.war.start === activeWarId);
             if (ongoingWar && ongoingWar.factions) {
