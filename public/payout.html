@@ -130,6 +130,8 @@
         table { width: 100%; border-collapse: collapse; }
         thead th { background: rgba(255,255,255,0.02); padding: 10px 14px; text-align: left; font-size: 0.7em; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-faint); border-bottom: 1px solid var(--border); white-space: nowrap; }
         thead th:not(:first-child) { text-align: right; }
+        .btn-pay { background: rgba(46,213,115,0.1); border: 1px solid rgba(46,213,115,0.3); color: var(--green); padding: 5px 10px; border-radius: 6px; font-weight: 700; font-size: 0.8em; cursor: pointer; transition: 0.15s; }
+        .btn-pay:hover { background: var(--green); color: white; }
         tbody td { padding: 11px 14px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.9em; vertical-align: middle; }
         tbody td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
         tbody tr:last-child td { border-bottom: none; }
@@ -392,11 +394,12 @@
                                     <th>Filtered</th>
                                     <th>Adj. Hits</th>
                                     <th>Payout</th>
+                                    <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody id="tb-body">
                                 <tr>
-                                    <td colspan="8">
+                                    <td colspan="9">
                                         <div class="empty">
                                             <div class="icon">⚔️</div>
                                             <p>Load a war report to calculate payouts</p>
@@ -459,6 +462,7 @@
         async function fetchReport(rid) {
             const id = rid || document.getElementById('report-id').value.trim();
             if (!id) return;
+            window.currentReportId = id;
             setLoading(true);
             try {
                 const res = await fetch(`/api/past-war?apiKey=${myKey}&reportId=${id}`);
@@ -477,7 +481,7 @@
 
         function setLoading(on) {
             document.getElementById('tb-body').innerHTML = on
-                ? '<tr><td colspan="8"><div class="empty"><div class="icon">⏳</div><p>Fetching attack logs from Torn API...<br><small style="color:#555;">This can take 10–30 seconds for large wars</small></p></div></td></tr>'
+                ? '<tr><td colspan="9"><div class="empty"><div class="icon">⏳</div><p>Fetching attack logs from Torn API...<br><small style="color:#555;">This can take 10–30 seconds for large wars</small></p></div></td></tr>'
                 : '';
         }
 
@@ -609,7 +613,7 @@
                 }
 
                 totalAdjHits += adjH;
-                rows.push({ name: m.name, warH, astH, outH, trmH, fltH, adjH, qualifies, threshCount });
+                rows.push({ id: m.id, name: m.name, warH, astH, outH, trmH, fltH, adjH, qualifies, threshCount });
             });
 
             // PPH
@@ -639,7 +643,8 @@
             rows.forEach((m, i) => {
                 const pay = m.qualifies ? (eqPay ? (isCut ? actPph : hardPph) : m.adjH * actPph) : 0;
                 const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
-                html += `<tr class="${rankClass}">
+                const isPaid = window.currentReportId ? localStorage.getItem('paid_' + window.currentReportId + '_' + m.id) === '1' : false;
+                html += `<tr id="row-${m.id}" class="${rankClass}" style="${isPaid ? 'opacity: 0.4;' : ''}">
                     <td class="td-name">${m.name}</td>
                     <td class="td-hits${m.warH === 0 ? ' badge-zero' : ''}">${m.warH}</td>
                     <td class="td-ast${m.astH === 0 ? ' badge-zero' : ''}">${m.astH}</td>
@@ -648,18 +653,41 @@
                     <td class="td-flt">${m.fltH}</td>
                     <td class="td-adj">${m.adjH.toFixed(2)}</td>
                     <td class="td-pay${pay === 0 ? ' badge-zero' : ''}">${fmt(pay)}</td>
+                    <td style="text-align:right;">
+                        <label style="cursor:pointer; display:inline-flex; align-items:center; gap:5px; margin-right:10px; color:var(--text-dim); font-size:0.85em;">
+                            <input type="checkbox" onchange="markPaid(${m.id}, this.checked)" ${isPaid ? 'checked' : ''} style="accent-color:var(--green);"> Paid
+                        </label>
+                        <button class="btn-pay" onclick="openPay(this, ${m.id}, ${Math.floor(pay)})">💸 Pay</button>
+                    </td>
                 </tr>`;
             });
-            document.getElementById('tb-body').innerHTML = html || '<tr><td colspan="8"><div class="empty"><p>No members found.</p></div></td></tr>';
+            document.getElementById('tb-body').innerHTML = html || '<tr><td colspan="9"><div class="empty"><p>No members found.</p></div></td></tr>';
+        }
+
+        function markPaid(uid, checked) {
+            if (!window.currentReportId) return;
+            const key = 'paid_' + window.currentReportId + '_' + uid;
+            if (checked) localStorage.setItem(key, '1');
+            else localStorage.removeItem(key);
+            const tr = document.getElementById('row-' + uid);
+            if (tr) tr.style.opacity = checked ? '0.4' : '1';
+        }
+
+        function openPay(btn, uid, amt) {
+            navigator.clipboard.writeText(amt).catch(()=>{});
+            const oldText = btn.innerText;
+            btn.innerText = 'Copied Amount!';
+            setTimeout(() => btn.innerText = oldText, 2000);
+            window.open(`https://www.torn.com/factions.php?step=your#/tab=controls&select=donate&payUser=${uid}`, '_blank');
         }
 
         function copyPayouts() {
-            let text = 'Member\tPayout\n';
+            let text = 'Member\tWar Hits\tAssists\tOutside\tTermed\tFiltered\tAdj Hits\tPayout\n';
             document.querySelectorAll('#tb-body tr').forEach(r => {
                 const tds = r.querySelectorAll('td');
-                if (tds.length === 8) {
-                    const pay = tds[7].innerText;
-                    if (pay !== '$0') text += `${tds[0].innerText.replace(/🥇|🥈|🥉/g, '').trim()}\t${pay}\n`;
+                if (tds.length >= 8) {
+                    const rowData = Array.from(tds).slice(0, 8).map(td => td.innerText.replace(/🥇|🥈|🥉/g, '').trim());
+                    text += rowData.join('\t') + '\n';
                 }
             });
             navigator.clipboard.writeText(text).then(() => {
