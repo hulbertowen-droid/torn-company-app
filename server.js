@@ -284,13 +284,14 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
                 
                 if (!processedAttackIds.has(atk.code)) {
                     processedAttackIds.add(atk.code);
-                    if (atk.defender_faction && atk.defender_faction.toString() === watchFactionId.toString()) {
+                    let isWin = ["Hospitalized", "Mugged", "Arrested", "Looted", "Assist"].includes(atk.result);
+                    if (isWin && atk.defender_faction && atk.defender_faction.toString() === watchFactionId.toString()) {
                         let uId = atk.defender_id.toString();
                         let attFacId = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
                         if (!persistentDefends[uId]) persistentDefends[uId] = {};
                         persistentDefends[uId][attFacId] = (persistentDefends[uId][attFacId] || 0) + 1;
                     }
-                    if (atk.attacker_faction && atk.attacker_faction.toString() === watchFactionId.toString()) {
+                    if (isWin && atk.attacker_faction && atk.attacker_faction.toString() === watchFactionId.toString()) {
                         let uId = atk.attacker_id.toString();
                         let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
                         if (!liveAttacks[uId]) liveAttacks[uId] = {};
@@ -340,7 +341,8 @@ setInterval(async () => {
                 if (processedAttackIds.has(atk.code)) continue;
                 processedAttackIds.add(atk.code);
                 
-                if (atk.defender_faction && atk.defender_faction.toString() === watchFactionId.toString()) {
+                let isWin = ["Hospitalized", "Mugged", "Arrested", "Looted", "Assist"].includes(atk.result);
+                if (isWin && atk.defender_faction && atk.defender_faction.toString() === watchFactionId.toString()) {
                     let uId = atk.defender_id.toString();
                     let attFacId = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
                     let attackerId = atk.attacker_id.toString();
@@ -373,7 +375,7 @@ setInterval(async () => {
                     }
                 }
                 
-                if (atk.attacker_faction && atk.attacker_faction.toString() === watchFactionId.toString()) {
+                if (isWin && atk.attacker_faction && atk.attacker_faction.toString() === watchFactionId.toString()) {
                     let uId = atk.attacker_id.toString();
                     let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
                     if (!liveAttacks[uId]) liveAttacks[uId] = {};
@@ -1030,7 +1032,8 @@ app.get('/api/past-war', async (req, res) => {
                     if (atk.timestamp_ended < warStart) { keepScraping = false; continue; }
                     if (atk.timestamp_ended > warEnd) continue;
                     
-                    if (atk.attacker_faction && atk.attacker_faction.toString() === correctFacId) {
+                    let isWin = ["Hospitalized", "Mugged", "Arrested", "Looted", "Assist"].includes(atk.result);
+                    if (isWin && atk.attacker_faction && atk.attacker_faction.toString() === correctFacId) {
                         let uId = atk.attacker_id.toString();
                         if (!advancedStats[uId]) advancedStats[uId] = { hits: [] };
                         
