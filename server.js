@@ -338,7 +338,9 @@ setInterval(async () => {
                         friendlyHitTracker[uId].count++;
                         friendlyHitTracker[uId].lastHit = now;
                         
-                        if (friendlyHitTracker[uId].count >= 3 && (now - friendlyHitTracker[uId].alertedAt > 30 * 60 * 1000)) {
+                        let isOnline = friendlyMem.last_action && (friendlyMem.last_action.status === "Online" || friendlyMem.last_action.status === "Idle");
+                        
+                        if (friendlyHitTracker[uId].count >= 3 && (now - friendlyHitTracker[uId].alertedAt > 30 * 60 * 1000) && !isOnline) {
                             friendlyHitTracker[uId].alertedAt = now;
                             friendlyHitTracker[uId].count = 0;
                             let dId = await getDiscordId(uId);
