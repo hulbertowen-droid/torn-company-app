@@ -8,9 +8,23 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/global.css">
     <style>
+        :root {
+            --bg: #090a0f; --card: #11141d; --item: #1b202e;
+            --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
+            --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
+            --purple: #a29bfe;
+        }
+        * { box-sizing: border-box; }
+        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #0b0d13; } ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
+
+        /* Sidebar */
+
+        /* Main */
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; position: relative; }
         #refresh-bar-container { position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: transparent; z-index: 50; }
         #refresh-bar { height: 100%; width: 0%; background: var(--blue); box-shadow: 0 0 8px var(--blue); transition: width 0.1s linear; }
 
+        h1 { text-align: center; color: var(--blue); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 8px; font-size: 1.8em; }
         .subtitle { text-align: center; color: var(--text-dim); font-size: 0.85em; margin-bottom: 30px; }
         .container { max-width: 1400px; margin: 0 auto; }
 
@@ -140,10 +154,7 @@
 
         .settings-btn { position: fixed; bottom: 25px; right: 25px; background: var(--gold); color: #000; border: none; width: 48px; height: 48px; border-radius: 50%; font-size: 1.2em; cursor: pointer; box-shadow: 0 4px 20px rgba(255,165,2,0.4); transition: 0.2s; z-index: 500; }
         .settings-btn:hover { transform: scale(1.1); box-shadow: 0 6px 25px rgba(255,165,2,0.6); }
-    
-
-
-</style>
+    </style>
 </head>
 <body>
     <nav class="sidebar" id="app-sidebar">

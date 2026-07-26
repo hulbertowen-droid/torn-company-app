@@ -5,8 +5,32 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Casino Tools - Torn Company App</title>
 <link rel="stylesheet" href="/global.css">
-<style>
+    <style>
+    :root {
+        --bg: #0b0d13;
+        --sidebar: #11141d;
+        --border: #2f3542;
+        --text-main: #c9d1d9;
+        --text-dim: #8b949e;
+        --blue: #58a6ff;
+        --red: #ff4757;
+        --green: #2ecc71;
+        --gold: #ffa502;
+        --purple: #9b59b6;
+        --teal: #00cec9;
+    }
+    
+    .sidebar { width: 250px; background: var(--sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; }
+    .sidebar-header { padding: 20px; font-weight: 900; font-size: 1.2em; color: white; letter-spacing: 1px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+    .nav-items { display: flex; flex-direction: column; padding: 15px 10px; gap: 5px; flex-grow: 1; }
+    .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
+    .nav-link:hover { background: #2f3542; color: white; }
+    .nav-link.active { background: rgba(0, 206, 201, 0.1); border-left: 4px solid var(--teal); color: white; border-radius: 0 8px 8px 0; }
+    
+    .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
     h1 { text-align: center; color: var(--teal); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; text-shadow: 0 4px 15px rgba(0,206,201,0.2); }
+    
+    .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
     
     .panel { background: var(--sidebar); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
     .panel-header { background: rgba(0,0,0,0.2); padding: 15px 20px; border-bottom: 1px solid var(--border); font-weight: 800; font-size: 1.1em; color: var(--text-main); text-transform: uppercase; display: flex; align-items: center; gap: 10px; }
@@ -27,6 +51,11 @@
     .res-val { font-size: 1.2em; font-weight: 900; color: var(--white); }
     .res-val.good { color: var(--green); }
     .res-val.bad { color: var(--red); }
+    
+    .light-mode { --bg: #f0f2f5; --sidebar: #ffffff; --border: #dcdde1; --text-main: #2f3640; --text-dim: #718093; }
+    .light-mode input, .light-mode select { background: #f5f6fa; color: #2f3640; }
+    
+    @media (max-width: 1000px) { .container { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>

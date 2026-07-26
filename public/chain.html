@@ -6,8 +6,13 @@
     <title>Live Chain Tracker | Owen's Faction Tools</title>
     <link rel="stylesheet" href="/global.css">
     <style>
+        
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
+        h1 { text-align: center; color: var(--gold); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
 
-
+        .container { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 30px; }
+        
+        .dash-card { background: var(--card); border: 1px solid #2f3542; padding: 40px; border-radius: 12px; text-align: center; position: relative;}
         .chain-title { color: var(--text-dim); font-size: 1.2em; text-transform: uppercase; letter-spacing: 2px; font-weight: bold; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 10px; }
         
         .badge-modifier { background: rgba(88, 166, 255, 0.15); color: var(--blue); padding: 4px 10px; border-radius: 6px; font-size: 0.75em; border: 1px solid var(--blue); font-weight: 900; }
@@ -35,8 +40,7 @@
         .danger .timer-time { color: var(--red); animation: pulse 1s infinite; }
 
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
-    
-</style>
+    </style>
 </head>
 <body>
     <nav class="sidebar" id="app-sidebar">

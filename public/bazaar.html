@@ -6,6 +6,15 @@
    <title>Bazaar Tracker | Owen's Faction Tools</title>
     <link rel="stylesheet" href="/global.css">
     <style>
+
+        /* Sidebar Styling */
+        
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
+        h1 { text-align: center; color: var(--green); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
+        
+        .container { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 25px; }
+        .dash-card { background: var(--card); padding: 25px; border-radius: 16px; border: 1px solid #2f3542; }
+        .dash-card h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; font-size: 1.1em; letter-spacing: 1px;}
         
         /* Form & Input Styling */
         .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; position: relative;}
@@ -33,7 +42,13 @@
         .trigger-title { font-weight: bold; color: var(--text-main); font-size: 1.1em; }
         .trigger-desc { font-size: 0.85em; color: var(--text-dim); }
         
-
+        /* Toggle Switch */
+        .switch { position: relative; display: inline-block; width: 46px; height: 22px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #2f3542; transition: .3s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--green); }
+        input:checked + .slider:before { transform: translateX(24px); }
 
         /* Buttons */
         .btn { background: var(--blue); color: #000; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.9em; text-transform: uppercase; transition: 0.2s; white-space: nowrap;}
@@ -60,10 +75,7 @@
 
         /* Selected Item Display */
         #selected-item-display { display: none; background: rgba(88, 166, 255, 0.05); border: 1px solid var(--blue); padding: 10px 15px; border-radius: 8px; margin-bottom: 15px; align-items: center; justify-content: space-between; }
-    
-
-
-</style>
+    </style>
 </head>
 <body>
     <nav class="sidebar" id="app-sidebar">
