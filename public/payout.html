@@ -4,462 +4,636 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>War Payout Calculator | Owen's Faction Tools</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
     <style>
-        :root { 
-            --bg: #1c1c1c; --card: #2d2d2d; --item: #3d3d3d; 
-            --red: #ff4757; --blue: #58a6ff; --gold: #ffd700; --yellow: #ffd700;
-            --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
-            --accent: #ffd700;
+        :root {
+            --bg: #090a0f;
+            --card: #11141d;
+            --item: #1b202e;
+            --border: #2f3542;
+            --red: #ff4757;
+            --blue: #58a6ff;
+            --gold: #ffa502;
+            --green: #2ed573;
+            --teal: #00cec9;
+            --purple: #a29bfe;
+            --text-main: #f1f2f6;
+            --text-dim: #a1aab5;
+            --text-faint: #57606f;
         }
-        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; height: 100vh; overflow: hidden; font-size: 14px; }
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: var(--bg); border-radius: 4px; }
-        ::-webkit-scrollbar-thumb { background: var(--item); border-radius: 4px; }
-        
-        .sidebar { width: 260px; background: #111; border-right: 1px solid #333; display: flex; flex-direction: column; flex-shrink: 0; }
-        .sidebar-header { padding: 20px; color: var(--gold); font-weight: 900; border-bottom: 1px solid #333; display:flex; justify-content:space-between; align-items:center;}
-        .nav-items { display: flex; flex-direction: column; gap: 8px; padding: 20px 10px; }
-        .nav-link { color: var(--text-dim); text-decoration: none; padding: 12px 15px; border-radius: 4px; display:flex; align-items:center; gap: 10px; font-weight: bold; }
-        .nav-link:hover, .nav-link.active { background: #222; color: var(--gold); }
-        
-        .main-content { flex-grow: 1; overflow-y: auto; padding: 20px; box-sizing: border-box; }
-        
-        .top-tabs { display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 2px solid #333; }
-        .tab { padding: 10px 20px; background: #222; color: #888; cursor: pointer; border-radius: 4px 4px 0 0; text-align: center; flex:1; font-weight: bold; text-transform: uppercase; font-size: 0.9em; }
-        .tab.active { background: var(--gold); color: #000; }
-        
-        .fetch-bar { background: var(--card); padding: 15px; border-radius: 4px; display: flex; gap: 10px; margin-bottom: 20px; }
-        .fetch-bar select, .fetch-bar input { background: #111; border: 1px solid #444; color: white; padding: 8px; flex:1; border-radius: 4px; }
-        .fetch-bar button { background: var(--gold); border: none; color: black; font-weight: bold; padding: 8px 15px; cursor: pointer; border-radius: 4px; }
-        
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        
-        .panel { background: var(--card); padding: 20px; border-radius: 4px; border: 1px solid #444; margin-bottom: 15px; }
-        .panel h4 { margin: 0 0 10px 0; color: var(--gold); font-size: 1.1em; }
-        
-        .input-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .input-row label { color: var(--text-dim); font-size: 0.9em; }
-        .input-box { background: #111; border: 1px solid #444; color: white; padding: 5px 10px; border-radius: 4px; display: flex; align-items: center; gap: 5px; width: 140px; }
-        .input-box input { background: transparent; border: none; color: white; width: 100%; text-align: right; outline: none; font-weight: bold;}
-        
-        .flex { display: flex; align-items: center; gap: 10px; }
-        .flex-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .mt-10 { margin-top: 15px; }
-        .mb-10 { margin-bottom: 15px; }
-        .pt-10 { padding-top: 10px; }
-        
-        input[type=checkbox], input[type=radio] { accent-color: var(--gold); }
-        
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: var(--card); }
-        th { background: #222; padding: 12px; text-align: left; color: var(--gold); font-size: 0.9em; text-transform: uppercase; }
-        td { padding: 12px; border-bottom: 1px solid #333; }
-        tr:hover { background: #333; }
-        .money { color: var(--green); font-family: monospace; font-size: 1.1em; }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Inter', system-ui, sans-serif; height: 100vh; overflow: hidden; font-size: 13px; }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+
+        /* ── SIDEBAR ── */
+        .sidebar { width: 220px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+        .sidebar-logo { padding: 18px 16px; font-size: 0.8em; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; color: var(--red); border-bottom: 1px solid var(--border); }
+        .nav-items { display: flex; flex-direction: column; gap: 3px; padding: 12px 8px; flex: 1; }
+        .nav-link { display: flex; align-items: center; gap: 10px; color: var(--text-dim); text-decoration: none; padding: 9px 12px; border-radius: 8px; font-weight: 600; font-size: 0.85em; transition: all 0.15s; }
+        .nav-link:hover { background: var(--item); color: var(--text-main); }
+        .nav-link.active { background: rgba(255,71,87,0.12); color: var(--red); }
+        .nav-link .icon { font-size: 1.1em; width: 18px; text-align: center; flex-shrink: 0; }
+
+        /* ── MAIN ── */
+        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* top bar */
+        .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 16px; height: 56px; flex-shrink: 0; }
+        .topbar-title { font-weight: 900; font-size: 1.1em; color: var(--text-main); flex: 1; }
+        .war-select { background: var(--item); border: 1px solid var(--border); color: var(--text-main); padding: 7px 12px; border-radius: 8px; font-family: inherit; font-size: 0.85em; cursor: pointer; }
+        .war-select:focus { outline: none; border-color: var(--red); }
+        .input-manual { background: var(--item); border: 1px solid var(--border); color: var(--text-main); padding: 7px 12px; border-radius: 8px; font-family: inherit; font-size: 0.85em; width: 180px; }
+        .input-manual:focus { outline: none; border-color: var(--red); }
+        .btn-load { background: var(--red); color: white; border: none; padding: 7px 18px; border-radius: 8px; font-weight: 700; font-size: 0.85em; cursor: pointer; transition: 0.2s; letter-spacing: 0.5px; }
+        .btn-load:hover { background: #e0404e; }
+
+        /* content area */
+        .content { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+
+        /* summary strip */
+        .summary-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+        .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+        .kpi-label { color: var(--text-faint); font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+        .kpi-val { font-size: 1.25em; font-weight: 900; color: var(--text-main); }
+        .kpi-val.green { color: var(--green); }
+        .kpi-val.gold { color: var(--gold); }
+        .kpi-val.red { color: var(--red); }
+        .kpi-val.blue { color: var(--blue); }
+
+        /* two-col layout */
+        .two-col { display: grid; grid-template-columns: 380px 1fr; gap: 16px; align-items: start; }
+
+        /* cards */
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+        .card-title { font-size: 0.7em; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; color: var(--text-faint); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+        .card-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+        /* field rows */
+        .field { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .field label { color: var(--text-dim); font-weight: 500; font-size: 0.9em; }
+        .money-input { display: flex; align-items: center; background: var(--item); border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+        .money-input span { padding: 6px 10px; color: var(--text-faint); font-weight: 700; background: rgba(255,255,255,0.03); border-right: 1px solid var(--border); font-size: 0.9em; }
+        .money-input input { background: transparent; border: none; color: var(--text-main); padding: 6px 10px; width: 110px; text-align: right; font-weight: 700; font-family: inherit; font-size: 0.9em; outline: none; }
+        .money-input input:read-only { color: var(--text-faint); cursor: default; }
+        .money-input input[type=number]::-webkit-inner-spin-button { opacity: 0; }
+        .small-input { background: var(--item); border: 1px solid var(--border); border-radius: 7px; color: var(--text-main); padding: 6px 10px; width: 70px; text-align: right; font-weight: 700; font-family: inherit; font-size: 0.9em; outline: none; }
+        .small-input:focus { border-color: var(--blue); }
+        .small-input[type=number]::-webkit-inner-spin-button { opacity: 0; }
+
+        /* toggle rows */
+        .toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        .toggle-row:last-child { border-bottom: none; padding-bottom: 0; }
+        .toggle-row label { display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-weight: 500; cursor: pointer; user-select: none; }
+        .toggle-row label input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--gold); cursor: pointer; }
+        .mult-badge { display: flex; align-items: center; gap: 6px; font-size: 0.8em; color: var(--text-faint); }
+        .mult-badge span { font-weight: 700; }
+
+        /* radio group */
+        .radio-group { display: flex; gap: 8px; }
+        .radio-pill { display: flex; align-items: center; gap: 6px; background: var(--item); border: 1px solid var(--border); border-radius: 20px; padding: 5px 14px; cursor: pointer; font-size: 0.85em; font-weight: 600; color: var(--text-dim); transition: all 0.15s; }
+        .radio-pill input { display: none; }
+        .radio-pill.selected { background: rgba(255,165,2,0.15); border-color: var(--gold); color: var(--gold); }
+
+        /* section divider */
+        .divider { display: flex; align-items: center; gap: 10px; margin: 12px 0 8px; }
+        .divider span { font-size: 0.7em; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: var(--text-faint); white-space: nowrap; }
+        .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+        /* pph display */
+        .pph-display { background: linear-gradient(135deg, rgba(46,213,115,0.08), rgba(46,213,115,0.03)); border: 1px solid rgba(46,213,115,0.25); border-radius: 10px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+        .pph-display .lbl { font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-faint); }
+        .pph-display .val { font-size: 1.4em; font-weight: 900; color: var(--green); font-variant-numeric: tabular-nums; }
+
+        /* datetime input */
+        input[type=datetime-local] { background: var(--item); border: 1px solid var(--border); color: var(--text-main); padding: 7px 10px; border-radius: 7px; font-family: inherit; font-size: 0.85em; width: 100%; outline: none; }
+        input[type=datetime-local]:focus { border-color: var(--gold); }
+        input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
+
+        /* right col — table card */
+        .table-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        .table-head-bar { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+        .table-head-bar h3 { font-size: 0.75em; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; color: var(--text-faint); }
+        .btn-copy { background: var(--item); border: 1px solid var(--border); color: var(--text-dim); padding: 6px 14px; border-radius: 7px; font-weight: 700; font-size: 0.8em; cursor: pointer; transition: 0.15s; }
+        .btn-copy:hover { background: var(--border); color: var(--text-main); }
+
+        table { width: 100%; border-collapse: collapse; }
+        thead th { background: rgba(255,255,255,0.02); padding: 10px 14px; text-align: left; font-size: 0.7em; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-faint); border-bottom: 1px solid var(--border); white-space: nowrap; }
+        thead th:not(:first-child) { text-align: right; }
+        tbody td { padding: 11px 14px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.9em; vertical-align: middle; }
+        tbody td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+        tbody tr:last-child td { border-bottom: none; }
+        tbody tr:hover td { background: rgba(255,255,255,0.025); }
+        .td-name { font-weight: 700; color: var(--text-main); }
+        .td-hits { color: var(--blue); font-weight: 700; }
+        .td-ast { color: var(--purple); }
+        .td-out { color: var(--text-faint); }
+        .td-trm { color: var(--gold); }
+        .td-flt { color: #444; }
+        .td-adj { color: var(--gold); font-weight: 800; }
+        .td-pay { color: var(--green); font-weight: 900; font-size: 1em; }
+        .badge-zero { color: var(--border) !important; font-weight: 500 !important; }
+        .rank-1 .td-name::before { content: '🥇 '; }
+        .rank-2 .td-name::before { content: '🥈 '; }
+        .rank-3 .td-name::before { content: '🥉 '; }
+
+        /* empty state */
+        .empty { text-align: center; padding: 50px; color: var(--text-faint); }
+        .empty .icon { font-size: 2.5em; margin-bottom: 10px; }
+        .empty p { font-size: 0.9em; }
+
+        /* light mode */
+        body.light-mode { --bg: #f5f6fa; --card: #ffffff; --item: #f1f2f6; --border: #dcdde1; --text-main: #2f3640; --text-dim: #718093; --text-faint: #a4b0be; }
+
+        @media (max-width: 1100px) {
+            .two-col { grid-template-columns: 1fr; }
+            .summary-strip { grid-template-columns: 1fr 1fr; }
+        }
     </style>
 </head>
 <body>
-    <nav class="sidebar" id="app-sidebar">
-        <div class="sidebar-header">OWEN'S FACTION TOOLS</div>
+    <nav class="sidebar">
+        <div class="sidebar-logo">Owen's Tools</div>
         <div class="nav-items">
-            <a href="/" class="nav-link">📡 Live Warboard</a>
-            <a href="/chain.html" class="nav-link">🔗 Chain Watcher</a>
-            <a href="/payout.html" class="nav-link active">💰 Payouts</a>
-            <a href="/dashboard.html" class="nav-link">🛡️ Dashboard</a>
-            <a href="/members.html" class="nav-link">👥 Members</a>
-            <a href="/recruitment.html" class="nav-link">🎯 Recruitment</a>
-            <a href="/travel.html" class="nav-link">✈️ Travel Calculator</a>
-            <a href="/bazaar.html" class="nav-link">🛒 Bazaar Watcher</a>
-            <a href="/discord.html" class="nav-link">📢 Discord Alerts</a>
-            <a href="/oc.html" class="nav-link">💼 OC Manager</a>
-            <a href="/company.html" class="nav-link" style="margin-top:auto; color: #00cec9;">🏢 Company Tools</a>
+            <a href="/" class="nav-link"><span class="icon">📡</span> Live Warboard</a>
+            <a href="/chain.html" class="nav-link"><span class="icon">🔗</span> Chain Watcher</a>
+            <a href="/payout.html" class="nav-link active"><span class="icon">💰</span> Payouts</a>
+            <a href="/dashboard.html" class="nav-link"><span class="icon">🛡️</span> Dashboard</a>
+            <a href="/members.html" class="nav-link"><span class="icon">👥</span> Members</a>
+            <a href="/recruitment.html" class="nav-link"><span class="icon">🎯</span> Recruitment</a>
+            <a href="/travel.html" class="nav-link"><span class="icon">✈️</span> Travel Calc</a>
+            <a href="/bazaar.html" class="nav-link"><span class="icon">🛒</span> Bazaar</a>
+            <a href="/discord.html" class="nav-link"><span class="icon">📢</span> Discord Alerts</a>
+            <a href="/oc.html" class="nav-link"><span class="icon">💼</span> OC Manager</a>
+            <a href="/company.html" class="nav-link" style="margin-top:auto; color:var(--teal);"><span class="icon">🏢</span> Company Tools</a>
         </div>
     </nav>
 
-    <main class="main-content">
-        <div class="fetch-bar">
-            <select id="war-selector" onchange="if(this.value) fetchWarReport(this.value)"><option value="">Select Past War...</option></select>
-            <input type="text" id="report-id" placeholder="Paste Manual Report ID">
-            <button onclick="fetchWarReport()">LOAD REPORT</button>
-        </div>
-        
-        <div class="top-tabs">
-            <div class="tab">War Report</div>
-            <div class="tab active">War Payout Calculator (Hit Based)</div>
-            <div class="tab">War Payout Calculator (Respect Based)</div>
+    <div class="main">
+        <!-- TOP BAR -->
+        <div class="topbar">
+            <div class="topbar-title" id="war-title">💰 War Payout Calculator</div>
+            <select class="war-select" id="war-selector" onchange="if(this.value) fetchReport(this.value)">
+                <option value="">Select a past war...</option>
+            </select>
+            <input class="input-manual" type="text" id="report-id" placeholder="Or paste report ID">
+            <button class="btn-load" onclick="fetchReport()">Load Report</button>
         </div>
 
-        <div class="grid-2">
-            <!-- LEFT COL -->
-            <div>
-                <h3 style="margin-top:0; border-bottom: 1px solid #333; padding-bottom: 10px;" id="war-title">War Payout Summary vs ---</h3>
-                
-                <div class="input-row">
-                    <label style="color:white; font-weight:bold;">Cache Sales:</label>
-                    <div class="input-box"><span>$</span><input type="text" id="inp-cache" value="0" readonly style="color:#aaa;"></div>
+        <div class="content">
+
+            <!-- KPI STRIP -->
+            <div class="summary-strip">
+                <div class="kpi">
+                    <div class="kpi-label">Cache Value</div>
+                    <div class="kpi-val green" id="kpi-cache">—</div>
                 </div>
-                
-                <div class="mt-10" style="color:white; margin-bottom: 10px;">Other Costs:</div>
-                <div style="padding-left: 15px;">
-                    <div class="input-row"><label>Consumables</label><div class="input-box"><span>$</span><input type="number" id="c-med" value="0" oninput="recalc()"></div></div>
-                    <div class="input-row"><label>Spies</label><div class="input-box"><span>$</span><input type="number" id="c-spy" value="0" oninput="recalc()"></div></div>
-                    <div class="input-row"><label>Bounties</label><div class="input-box"><span>$</span><input type="number" id="c-bounty" value="0" oninput="recalc()"></div></div>
-                    <div class="input-row"><label>Terms</label><div class="input-box"><span>$</span><input type="number" id="c-terms" value="0" oninput="recalc()"></div></div>
-                    <div class="input-row"><label>Other</label><div class="input-box"><span>$</span><input type="number" id="c-other" value="0" oninput="recalc()"></div></div>
+                <div class="kpi">
+                    <div class="kpi-label">Total Deductions</div>
+                    <div class="kpi-val red" id="kpi-deductions">—</div>
                 </div>
-                
-                <div class="input-row mt-10">
-                    <label style="color:var(--gold);">Manual Bonuses:</label>
-                    <div class="input-box"><span>$</span><input type="number" id="c-bonus" value="0" oninput="recalc()"></div>
+                <div class="kpi">
+                    <div class="kpi-label">Member Pool</div>
+                    <div class="kpi-val blue" id="kpi-pool">—</div>
                 </div>
-                
-                <div class="panel mt-10" style="border-color: #ffd700;">
-                    <h4>Surrender Time (TCT/UTC)</h4>
-                    <input type="datetime-local" id="surrender-time" style="background:#111; color:white; padding:8px; border:1px solid #555; width:100%; box-sizing:border-box; margin-bottom:10px;" onchange="recalc()">
-                    <div style="font-size:0.8em; color:#888; margin-bottom:10px;">War hits after this time appear in Termed War Hits.</div>
-                    
-                    <div class="flex-between">
-                        <label><input type="checkbox" id="chk-real-war" onchange="recalc()"> Apply Real War Factor</label>
-                    </div>
-                    <div class="flex-between mt-10">
-                        <span style="font-size:0.9em;">Real War Factor:</span>
-                        <div class="input-box" style="width:80px;"><input type="number" id="inp-real-war" value="2.0" step="0.1" oninput="recalc()"></div>
-                    </div>
-                    <div style="font-size:0.75em; color:#888; text-align:right;">1.0 = same weight as termed hits</div>
+                <div class="kpi">
+                    <div class="kpi-label">Total Adj. Hits</div>
+                    <div class="kpi-val gold" id="kpi-hits">—</div>
                 </div>
-                
-                <div class="panel">
-                    <label class="flex"><input type="checkbox" id="chk-cap" onchange="recalc()"> <b>Cap faction war score (termed target)</b></label>
-                    <div style="font-size:0.8em; color:#888; margin: 5px 0;">Stop war context pay after cumulative respect exceeds:</div>
-                    <div class="input-box" style="width:100%;"><input type="number" id="inp-cap" placeholder="e.g. 50000" oninput="recalc()" style="text-align:left;"></div>
-                    <div style="font-size:0.75em; color:#666; margin-top:5px; line-height:1.4;">
-                        Uses chronological war-context hits only. Each hit adds its API respect gain... The hit that first pushes the total past your target still pays; nothing after that. Outside hits are excluded.
-                    </div>
+                <div class="kpi">
+                    <div class="kpi-label">Pay Per Hit</div>
+                    <div class="kpi-val green" id="kpi-pph">—</div>
                 </div>
             </div>
-            
-            <!-- RIGHT COL -->
-            <div>
-                <div class="panel">
-                    <div class="flex-between mb-10">
-                        <label style="color:white;">Calculation Mode:</label>
-                        <div class="flex">
-                            <label><input type="radio" name="calc-mode" value="pph" onchange="updateCalcMode()"> Pay Per Hit</label>
-                            <label><input type="radio" name="calc-mode" value="cut" checked onchange="updateCalcMode()"> Faction Cut %</label>
+
+            <!-- CONTROLS + TABLE -->
+            <div class="two-col">
+                <!-- LEFT: All controls -->
+                <div>
+                    <!-- FINANCES -->
+                    <div class="card" style="margin-bottom:12px;">
+                        <div class="card-title">Finances</div>
+
+                        <div class="field">
+                            <label>Cache Sales</label>
+                            <div class="money-input"><span>$</span><input type="text" id="inp-cache" value="0" readonly></div>
+                        </div>
+                        <div class="field">
+                            <label>Consumables / Meds</label>
+                            <div class="money-input"><span>$</span><input type="number" id="c-med" value="0" oninput="recalc()"></div>
+                        </div>
+                        <div class="field">
+                            <label>Mercs / Spies</label>
+                            <div class="money-input"><span>$</span><input type="number" id="c-spy" value="0" oninput="recalc()"></div>
+                        </div>
+                        <div class="field">
+                            <label>Bounties</label>
+                            <div class="money-input"><span>$</span><input type="number" id="c-bounty" value="0" oninput="recalc()"></div>
+                        </div>
+                        <div class="field">
+                            <label>Terms / Agreements</label>
+                            <div class="money-input"><span>$</span><input type="number" id="c-terms" value="0" oninput="recalc()"></div>
+                        </div>
+                        <div class="field">
+                            <label>Other Costs</label>
+                            <div class="money-input"><span>$</span><input type="number" id="c-other" value="0" oninput="recalc()"></div>
+                        </div>
+                        <div class="field" style="margin-bottom:0;">
+                            <label style="color:var(--gold);">Manual Bonuses</label>
+                            <div class="money-input" style="border-color:rgba(255,165,2,0.3);"><span>$</span><input type="number" id="c-bonus" value="0" oninput="recalc()"></div>
                         </div>
                     </div>
-                    
-                    <div id="div-fac-cut" class="flex-between mt-10">
-                        <label style="color:var(--gold);">Faction Cut Percentage:</label>
-                        <div class="input-box" style="width:100px;"><input type="number" id="inp-cut-pct" value="25" max="100" min="0" oninput="recalc()"><span>%</span></div>
+
+                    <!-- CALC MODE -->
+                    <div class="card" style="margin-bottom:12px;">
+                        <div class="card-title">Calculation Mode</div>
+                        <div style="display:flex; gap:8px; margin-bottom:12px;">
+                            <label class="radio-pill selected" id="pill-cut" onclick="setCalcMode('cut')">
+                                <input type="radio" name="calc-mode" value="cut" checked> Faction Cut %
+                            </label>
+                            <label class="radio-pill" id="pill-pph" onclick="setCalcMode('pph')">
+                                <input type="radio" name="calc-mode" value="pph"> Fixed Pay Per Hit
+                            </label>
+                        </div>
+                        <div id="div-fac-cut" class="field">
+                            <label>Faction Cut</label>
+                            <div class="money-input"><input type="number" id="inp-cut-pct" value="25" min="0" max="100" oninput="recalc()"><span>%</span></div>
+                        </div>
+                        <div id="div-pph" class="field" style="display:none;">
+                            <label>Pay Per Hit</label>
+                            <div class="money-input"><span>$</span><input type="number" id="inp-hard-pph" value="1000000" oninput="recalc()"></div>
+                        </div>
+                        <div class="pph-display">
+                            <div class="lbl">Calculated Pay Per Hit</div>
+                            <div class="val" id="out-calc-pph">$0</div>
+                        </div>
                     </div>
-                    
-                    <div id="div-pph" class="flex-between mt-10" style="display:none;">
-                        <label style="color:var(--gold);">Hardcoded Pay Per Hit:</label>
-                        <div class="input-box"><span>$</span><input type="number" id="inp-hard-pph" value="1000000" oninput="recalc()"></div>
+
+                    <!-- SURRENDER / TERMED -->
+                    <div class="card" style="margin-bottom:12px;">
+                        <div class="card-title">Surrender & Terming</div>
+                        <div style="margin-bottom:10px;">
+                            <div style="font-size:0.8em; color:var(--text-faint); margin-bottom:6px;">Surrender Time (TCT/UTC) — hits after this are "termed"</div>
+                            <input type="datetime-local" id="surrender-time" onchange="recalc()">
+                        </div>
+                        <div class="toggle-row">
+                            <label><input type="checkbox" id="chk-real-war" onchange="recalc()"> Apply Real War Factor to pre-surrender hits</label>
+                            <div class="mult-badge"><span>×</span><input class="small-input" type="number" id="inp-real-war" value="2.0" step="0.1" oninput="recalc()" style="width:55px;"></div>
+                        </div>
+                        <div class="divider"><span>Score Cap</span></div>
+                        <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer; color:var(--text-dim); font-size:0.85em;">
+                            <input type="checkbox" id="chk-cap" onchange="recalc()" style="accent-color:var(--gold);">
+                            Stop paying after cumulative war score exceeds:
+                        </label>
+                        <div class="money-input" style="width:100%;">
+                            <input type="number" id="inp-cap" placeholder="e.g. 50000" oninput="recalc()" style="width:100%; text-align:left;">
+                        </div>
+                        <div style="margin-top:6px; font-size:0.75em; color:var(--text-faint); line-height:1.5;">
+                            Hits are counted chronologically. The hit that pushes respect past the target still pays — nothing after it.
+                        </div>
                     </div>
-                    
-                    <div class="flex-between mt-10" style="background:#222; padding:10px; border-radius:4px;">
-                        <label style="color:white; font-weight:bold;">Calculated Pay Per Hit:</label>
-                        <div style="color:var(--green); font-family:monospace; font-size:1.2em; font-weight:bold;" id="out-calc-pph">$ 0</div>
+
+                    <!-- ADVANCED OPTIONS -->
+                    <div class="card" style="margin-bottom:12px;">
+                        <div class="card-title">Advanced Hit Options</div>
+                        <div class="toggle-row">
+                            <label><input type="checkbox" id="chk-assists" onchange="recalc()"> Pay Assists</label>
+                            <div class="mult-badge"><span>×</span><input class="small-input" type="number" id="m-assist" value="0.25" step="0.05" oninput="recalc()" style="width:55px;"></div>
+                        </div>
+                        <div class="toggle-row">
+                            <label><input type="checkbox" id="chk-retal" onchange="recalc()"> Pay Retals (bonus on top)</label>
+                            <div class="mult-badge"><span>+</span><input class="small-input" type="number" id="m-retal" value="0.5" step="0.1" oninput="recalc()" style="width:55px;"></div>
+                        </div>
+                        <div class="toggle-row">
+                            <label><input type="checkbox" id="chk-os" onchange="recalc()"> Pay Overseas (bonus on top)</label>
+                            <div class="mult-badge"><span>+</span><input class="small-input" type="number" id="m-os" value="0.25" step="0.05" oninput="recalc()" style="width:55px;"></div>
+                        </div>
+                        <div class="toggle-row">
+                            <label><input type="checkbox" id="chk-out" onchange="recalc()"> Pay Outside Hits</label>
+                            <div class="mult-badge"><span>×</span><input class="small-input" type="number" id="m-out" value="0.1" step="0.1" oninput="recalc()" style="width:55px;"></div>
+                        </div>
+                        <div class="toggle-row" style="margin-top:8px; border-top:1px solid var(--border); padding-top:12px;">
+                            <label><input type="checkbox" id="chk-ff" onchange="recalc()"> Filter Low Fair Fight Hits</label>
+                            <div class="mult-badge">Min FF <input class="small-input" type="number" id="inp-ff-min" value="2.0" step="0.1" oninput="recalc()" style="width:55px;"></div>
+                        </div>
+                    </div>
+
+                    <!-- THRESHOLDS -->
+                    <div class="card">
+                        <div class="card-title">Hit Thresholds</div>
+                        <div class="toggle-row" style="margin-bottom:10px;">
+                            <label style="font-weight:700; color:var(--gold);"><input type="checkbox" id="chk-thresh" onchange="recalc()" style="accent-color:var(--gold);"> Enable Thresholds</label>
+                        </div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
+                            <div>
+                                <div style="font-size:0.75em; color:var(--text-faint); margin-bottom:4px;">Min Hits (or $0)</div>
+                                <input class="small-input" type="number" id="t-min" value="0" oninput="recalc()" style="width:100%;">
+                            </div>
+                            <div>
+                                <div style="font-size:0.75em; color:var(--text-faint); margin-bottom:4px;">Max Hits Cap</div>
+                                <input class="small-input" type="number" id="t-max" value="50" oninput="recalc()" style="width:100%;">
+                            </div>
+                        </div>
+                        <div style="font-size:0.75em; color:var(--text-faint); margin-bottom:8px;">Include in threshold count:</div>
+                        <div style="display:flex; gap:12px;">
+                            <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.85em;"><input type="checkbox" id="inc-assist" onchange="recalc()" style="accent-color:var(--gold);"> Assists</label>
+                            <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.85em;"><input type="checkbox" id="inc-out" onchange="recalc()" style="accent-color:var(--gold);"> Outside</label>
+                            <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.85em;"><input type="checkbox" id="inc-term" onchange="recalc()" style="accent-color:var(--gold);"> Termed</label>
+                        </div>
+                        <div class="divider" style="margin-top:14px;"><span>Payout Distribution</span></div>
+                        <div style="display:flex; flex-direction:column; gap:8px;">
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85em; color:var(--text-dim);"><input type="radio" name="pay-mode" value="ratio" checked onchange="recalc()" style="accent-color:var(--gold);"> Ratio Based — proportional to adjusted hits</label>
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85em; color:var(--text-dim);"><input type="radio" name="pay-mode" value="equal" onchange="recalc()" style="accent-color:var(--gold);"> Equal Split — same payout for everyone who qualifies</label>
+                        </div>
                     </div>
                 </div>
-                
-                <div class="panel">
-                    <h4>Advanced Payout Options:</h4>
-                    <div class="flex-between"><label><input type="checkbox" id="chk-assists" onchange="recalc()"> Pay Assists</label> <div class="flex" style="font-size:0.85em;">Multiplier <div class="input-box" style="width:60px;"><input type="number" id="m-assist" value="0.25" step="0.05" oninput="recalc()"></div></div></div>
-                    <div class="flex-between"><label><input type="checkbox" id="chk-retal" onchange="recalc()"> Pay Retals</label> <div class="flex" style="font-size:0.85em;">Multiplier <div class="input-box" style="width:60px;"><input type="number" id="m-retal" value="0.5" step="0.1" oninput="recalc()"></div></div></div>
-                    <div class="flex-between"><label><input type="checkbox" id="chk-os" onchange="recalc()"> Pay Overseas</label> <div class="flex" style="font-size:0.85em;">Multiplier <div class="input-box" style="width:60px;"><input type="number" id="m-os" value="0.25" step="0.05" oninput="recalc()"></div></div></div>
-                    <div class="flex-between"><label><input type="checkbox" id="chk-out" onchange="recalc()"> Pay Outside Hits</label> <div class="flex" style="font-size:0.85em;">Multiplier <div class="input-box" style="width:60px;"><input type="number" id="m-out" value="0.1" step="0.1" oninput="recalc()"></div></div></div>
-                    
-                    <div class="flex-between mt-10 pt-10" style="border-top:1px solid #444;">
-                        <label><input type="checkbox" id="chk-ff" onchange="recalc()"> Filter Low Fair Fight Hits</label> 
-                        <div class="flex" style="font-size:0.85em;">Min FF: <div class="input-box" style="width:60px;"><input type="number" id="inp-ff-min" value="2.0" step="0.1" oninput="recalc()"></div></div>
+
+                <!-- RIGHT: Table -->
+                <div class="table-card">
+                    <div class="table-head-bar">
+                        <h3>Member Breakdown</h3>
+                        <button class="btn-copy" onclick="copyPayouts()">📋 Copy Payouts</button>
                     </div>
-                </div>
-                
-                <div class="panel">
-                    <div style="background: rgba(255, 215, 0, 0.1); border-left: 3px solid var(--gold); padding: 10px; margin-bottom: 15px;">
-                        <label class="flex" style="color:var(--gold); font-weight:bold;"><input type="checkbox" id="chk-thresh" onchange="recalc()"> Enable Hit Thresholds</label>
-                    </div>
-                    
-                    <div class="flex-between">
-                        <div class="flex">Min Hits: <div class="input-box" style="width:60px;"><input type="number" id="t-min" value="0" oninput="recalc()"></div></div>
-                        <div class="flex">Max Hits: <div class="input-box" style="width:60px;"><input type="number" id="t-max" value="50" oninput="recalc()"></div></div>
-                    </div>
-                    
-                    <div style="font-size:0.85em; margin-top:15px; color:#888;">Pre-surrender war hits always count. Also include:</div>
-                    <div class="flex mt-10" style="gap:15px; font-size:0.85em;">
-                        <label><input type="checkbox" id="inc-assist" onchange="recalc()"> Assists</label>
-                        <label><input type="checkbox" id="inc-out" onchange="recalc()"> Outside hits</label>
-                        <label><input type="checkbox" id="inc-term" onchange="recalc()"> Termed hits</label>
-                    </div>
-                    
-                    <div class="mt-10 pt-10" style="border-top:1px solid #444;">
-                        <div style="color:white; margin-bottom:8px;">Payout Mode:</div>
-                        <label style="display:block; margin-bottom:5px;"><input type="radio" name="pay-mode" value="ratio" checked onchange="recalc()"> Ratio Based (proportional within range)</label>
-                        <label style="display:block;"><input type="radio" name="pay-mode" value="equal" onchange="recalc()"> Equal Payout (same amount for all in range)</label>
+                    <div style="overflow-x:auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Member</th>
+                                    <th>War</th>
+                                    <th>Assists</th>
+                                    <th>Outside</th>
+                                    <th>Termed</th>
+                                    <th>Filtered</th>
+                                    <th>Adj. Hits</th>
+                                    <th>Payout</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tb-body">
+                                <tr>
+                                    <td colspan="8">
+                                        <div class="empty">
+                                            <div class="icon">⚔️</div>
+                                            <p>Load a war report to calculate payouts</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 30px;">
-            <h3 style="margin:0; color:var(--gold);">MEMBER BREAKDOWN</h3>
-            <button onclick="copyTable()" style="background:#222; border:1px solid #444; color:white; padding:8px 15px; border-radius:4px; cursor:pointer;">📋 Copy Payouts</button>
         </div>
-        
-        <table id="payout-table">
-            <thead>
-                <tr>
-                    <th>Member</th>
-                    <th>War Hits</th>
-                    <th>Assists</th>
-                    <th>Outside</th>
-                    <th>Termed</th>
-                    <th>Filtered</th>
-                    <th>Adj. Hits</th>
-                    <th>Payout</th>
-                </tr>
-            </thead>
-            <tbody id="tb-body">
-                <tr><td colspan="8" style="text-align:center; color:#666;">No data loaded.</td></tr>
-            </tbody>
-        </table>
-    </main>
+    </div>
 
     <script>
-        const myKey = localStorage.getItem("warboard_apikey") || "";
+        const myKey = localStorage.getItem('warboard_apikey') || '';
         let rawMembers = [];
         let totalCacheVal = 0;
 
+        // Theme
+        const savedTheme = localStorage.getItem('warboard_theme');
+        if (savedTheme === 'light') document.body.classList.add('light-mode');
+
         window.onload = async () => {
-            if (!myKey) { alert('No API key found. Go to Dashboard or Settings to enter one.'); return; }
+            if (!myKey) return;
             try {
-                const wRes = await fetch('/api/war-list?apiKey=' + myKey);
-                const wData = await wRes.json();
-                if (wData.wars) {
+                const res = await fetch('/api/war-list?apiKey=' + myKey);
+                const data = await res.json();
+                if (data.wars) {
                     const sel = document.getElementById('war-selector');
-                    wData.wars.forEach(w => {
-                        const opt = document.createElement('option');
-                        opt.value = w.id;
-                        opt.textContent = w.enemy + ' (' + new Date(w.start*1000).toLocaleDateString() + ')';
-                        sel.appendChild(opt);
+                    data.wars.forEach(w => {
+                        const o = document.createElement('option');
+                        o.value = w.id;
+                        o.textContent = w.enemy + ' — ' + new Date(w.start * 1000).toLocaleDateString();
+                        sel.appendChild(o);
                     });
                 }
             } catch(e) {}
-        }
+        };
 
-        function updateCalcMode() {
-            const isCut = document.querySelector('input[name="calc-mode"]:checked').value === 'cut';
-            document.getElementById('div-fac-cut').style.display = isCut ? 'flex' : 'none';
-            document.getElementById('div-pph').style.display = isCut ? 'none' : 'flex';
+        function setCalcMode(mode) {
+            document.getElementById('div-fac-cut').style.display = mode === 'cut' ? 'flex' : 'none';
+            document.getElementById('div-pph').style.display = mode === 'pph' ? 'flex' : 'none';
+            document.getElementById('pill-cut').classList.toggle('selected', mode === 'cut');
+            document.getElementById('pill-pph').classList.toggle('selected', mode === 'pph');
+            document.querySelector(`input[name="calc-mode"][value="${mode}"]`).checked = true;
             recalc();
         }
 
-        async function fetchWarReport(rid) {
-            let id = rid || document.getElementById('report-id').value.trim();
-            if(!id) return;
-            document.getElementById('tb-body').innerHTML = '<tr><td colspan="8" style="text-align:center;">Loading detailed hits from API... (this may take a few seconds)</td></tr>';
+        async function fetchReport(rid) {
+            const id = rid || document.getElementById('report-id').value.trim();
+            if (!id) return;
+            setLoading(true);
             try {
                 const res = await fetch(`/api/past-war?apiKey=${myKey}&reportId=${id}`);
                 const data = await res.json();
-                if(data.error) throw new Error(data.error);
-                
+                if (data.error) throw new Error(data.error);
                 rawMembers = data.members;
-                totalCacheVal = data.rewards.totalCacheValue || 0;
+                totalCacheVal = data.rewards?.totalCacheValue || 0;
                 document.getElementById('inp-cache').value = totalCacheVal.toLocaleString();
-                document.getElementById('war-title').innerText = 'War Payout Summary (Report ' + id + ')';
+                document.getElementById('war-title').innerText = '💰 War Payout — Report #' + id;
                 recalc();
             } catch(e) {
-                alert(e.message);
-                document.getElementById('tb-body').innerHTML = '<tr><td colspan="8" style="text-align:center; color:red;">Error loading.</td></tr>';
+                alert('Error: ' + e.message);
+                setLoading(false);
             }
+        }
+
+        function setLoading(on) {
+            document.getElementById('tb-body').innerHTML = on
+                ? '<tr><td colspan="8"><div class="empty"><div class="icon">⏳</div><p>Fetching attack logs from Torn API...<br><small style="color:#555;">This can take 10–30 seconds for large wars</small></p></div></td></tr>'
+                : '';
+        }
+
+        function fmt(n) { return '$' + Math.floor(n).toLocaleString(); }
+        function fmtShort(n) {
+            if (n >= 1e9) return '$' + (n/1e9).toFixed(2) + 'B';
+            if (n >= 1e6) return '$' + (n/1e6).toFixed(2) + 'M';
+            if (n >= 1e3) return '$' + (n/1e3).toFixed(0) + 'K';
+            return '$' + n.toFixed(0);
         }
 
         function recalc() {
             if (!rawMembers || rawMembers.length === 0) return;
-            
-            // Collect Inputs
-            const C_med = parseFloat(document.getElementById('c-med').value)||0;
-            const C_spy = parseFloat(document.getElementById('c-spy').value)||0;
-            const C_bty = parseFloat(document.getElementById('c-bounty').value)||0;
-            const C_trm = parseFloat(document.getElementById('c-terms').value)||0;
-            const C_oth = parseFloat(document.getElementById('c-other').value)||0;
-            const C_bon = parseFloat(document.getElementById('c-bonus').value)||0;
-            
-            const srndrDate = document.getElementById('surrender-time').value;
-            const surrenderT = srndrDate ? new Date(srndrDate).getTime()/1000 : Infinity;
-            
-            const applyRW = document.getElementById('chk-real-war').checked;
-            const rwFactor = parseFloat(document.getElementById('inp-real-war').value)||1;
-            
-            const capScore = document.getElementById('chk-cap').checked;
-            const capVal = parseFloat(document.getElementById('inp-cap').value)||Infinity;
-            
-            const isCut = document.querySelector('input[name="calc-mode"]:checked').value === 'cut';
-            const cutPct = parseFloat(document.getElementById('inp-cut-pct').value)||0;
-            const hardPph = parseFloat(document.getElementById('inp-hard-pph').value)||0;
-            
+
+            const C_med   = parseFloat(document.getElementById('c-med').value)    || 0;
+            const C_spy   = parseFloat(document.getElementById('c-spy').value)    || 0;
+            const C_bty   = parseFloat(document.getElementById('c-bounty').value) || 0;
+            const C_trm   = parseFloat(document.getElementById('c-terms').value)  || 0;
+            const C_oth   = parseFloat(document.getElementById('c-other').value)  || 0;
+            const C_bon   = parseFloat(document.getElementById('c-bonus').value)  || 0;
+
+            const srndrVal  = document.getElementById('surrender-time').value;
+            const surrenderT = srndrVal ? new Date(srndrVal).getTime() / 1000 : Infinity;
+
+            const applyRW  = document.getElementById('chk-real-war').checked;
+            const rwFactor = parseFloat(document.getElementById('inp-real-war').value) || 1;
+
+            const capOn  = document.getElementById('chk-cap').checked;
+            const capVal = parseFloat(document.getElementById('inp-cap').value) || Infinity;
+
+            const isCut  = document.querySelector('input[name="calc-mode"]:checked').value === 'cut';
+            const cutPct = parseFloat(document.getElementById('inp-cut-pct').value) || 0;
+            const hardPph = parseFloat(document.getElementById('inp-hard-pph').value) || 0;
+
             const pAst = document.getElementById('chk-assists').checked;
-            const mAst = parseFloat(document.getElementById('m-assist').value)||0;
+            const mAst = parseFloat(document.getElementById('m-assist').value) || 0;
             const pRet = document.getElementById('chk-retal').checked;
-            const mRet = parseFloat(document.getElementById('m-retal').value)||0;
-            const pOs = document.getElementById('chk-os').checked;
-            const mOs = parseFloat(document.getElementById('m-os').value)||0;
+            const mRet = parseFloat(document.getElementById('m-retal').value) || 0;
+            const pOs  = document.getElementById('chk-os').checked;
+            const mOs  = parseFloat(document.getElementById('m-os').value) || 0;
             const pOut = document.getElementById('chk-out').checked;
-            const mOut = parseFloat(document.getElementById('m-out').value)||0;
-            
-            const fFF = document.getElementById('chk-ff').checked;
-            const mFF = parseFloat(document.getElementById('inp-ff-min').value)||0;
-            
+            const mOut = parseFloat(document.getElementById('m-out').value) || 0;
+
+            const fFF  = document.getElementById('chk-ff').checked;
+            const minFF = parseFloat(document.getElementById('inp-ff-min').value) || 0;
+
             const thres = document.getElementById('chk-thresh').checked;
-            const tMin = parseFloat(document.getElementById('t-min').value)||0;
-            const tMax = parseFloat(document.getElementById('t-max').value)||Infinity;
-            const iAst = document.getElementById('inc-assist').checked;
-            const iOut = document.getElementById('inc-out').checked;
-            const iTrm = document.getElementById('inc-term').checked;
-            
+            const tMin  = parseFloat(document.getElementById('t-min').value) || 0;
+            const tMax  = parseFloat(document.getElementById('t-max').value) || Infinity;
+            const iAst  = document.getElementById('inc-assist').checked;
+            const iOut  = document.getElementById('inc-out').checked;
+            const iTrm  = document.getElementById('inc-term').checked;
+
             const eqPay = document.querySelector('input[name="pay-mode"]:checked').value === 'equal';
-            
-            // Math
-            const netPool = totalCacheVal - C_med - C_spy - C_bty - C_trm - C_oth + C_bon;
-            const facCutPool = isCut ? netPool * (1 - (cutPct/100)) : netPool;
-            
-            // Chrono pass for cap
-            let allHits = [];
-            rawMembers.forEach(m => { if(m.hits) allHits.push(...m.hits.map(h => ({...h, uid:m.id}))); });
-            allHits.sort((a,b) => a.t - b.t);
+
+            // Pool math
+            const totalDeductions = C_med + C_spy + C_bty + C_trm + C_oth;
+            const netPool  = totalCacheVal - totalDeductions + C_bon;
+            const memberPool = isCut ? netPool * (1 - cutPct / 100) : netPool;
+
+            // Chronological cap pass
+            const allHits = [];
+            rawMembers.forEach(m => {
+                if (m.hits) m.hits.forEach(h => allHits.push({ ...h, uid: m.id }));
+            });
+            allHits.sort((a, b) => a.t - b.t);
             let cumScore = 0;
             allHits.forEach(h => {
-                if (h.tgt && h.r !== 'Assist') { cumScore += h.res; }
-                h.termedByScore = capScore && (cumScore > capVal);
-                h.termedByTime = h.t > surrenderT;
-                h.isTermed = h.termedByScore || h.termedByTime;
+                if (h.tgt && h.r !== 'Assist') cumScore += (h.res || 0);
+                h.termedByScore = capOn && cumScore > capVal;
+                h.termedByTime  = h.t > surrenderT;
+                h.isTermed      = h.termedByScore || h.termedByTime;
             });
-            
-            let displayMembers = [];
+
             let totalAdjHits = 0;
-            
+            const rows = [];
+
             rawMembers.forEach(m => {
-                let mHits = allHits.filter(h => h.uid === m.id);
-                let warH=0, astH=0, outH=0, trmH=0, fltH=0, adjH=0;
-                let threshCount=0;
-                
+                const mHits = allHits.filter(h => h.uid === m.id);
+                let warH = 0, astH = 0, outH = 0, trmH = 0, fltH = 0, adjH = 0, threshCount = 0;
+
                 mHits.forEach(h => {
-                    let isAst = h.r === 'Assist';
-                    let isOut = !h.tgt;
-                    let isWar = h.tgt && !isAst;
-                    
+                    const isAst = h.r === 'Assist';
+                    const isOut = !h.tgt;
+                    const isWar = h.tgt && !isAst;
+
                     if (isWar && !h.isTermed) warH++;
                     if (isAst) astH++;
                     if (isOut) outH++;
                     if (isWar && h.isTermed) trmH++;
-                    
+
                     let valid = true;
-                    let mult = 1.0;
-                    
+                    let mult  = 1.0;
+
                     if (isAst) {
-                        if (!pAst) valid = false;
-                        else mult = mAst;
+                        if (!pAst) { valid = false; }
+                        else { mult = mAst; }
                     } else if (isOut) {
-                        if (!pOut) valid = false;
-                        else mult = mOut;
+                        if (!pOut) { valid = false; }
+                        else { mult = mOut; }
                     } else {
-                        if (fFF && h.ff < mFF) valid = false;
+                        if (fFF && (h.ff || 1) < minFF) { valid = false; }
                         if (valid) {
-                            if (pRet && h.ret > 1) mult += mRet;
-                            if (pOs && h.os > 1) mult += mOs;
+                            if (pRet && (h.ret || 1) > 1) mult += mRet;
+                            if (pOs  && (h.os  || 1) > 1) mult += mOs;
                         }
                     }
-                    
+
                     if (valid) {
-                        if (h.isTermed) {
-                            // termed hit has 1.0 base modifier
-                        } else if (!isOut && !isAst) {
-                            if (applyRW) mult *= rwFactor;
-                        }
+                        if (!h.isTermed && !isOut && !isAst && applyRW) mult *= rwFactor;
                         adjH += mult;
                     } else {
                         fltH++;
                     }
-                    
-                    // Threshold logic
-                    let counts = false;
-                    if (isWar && !h.isTermed) counts = true;
-                    if (isAst && iAst) counts = true;
-                    if (isOut && iOut) counts = true;
-                    if (isWar && h.isTermed && iTrm) counts = true;
-                    if (counts) threshCount++;
+
+                    // Threshold counter
+                    if (isWar && !h.isTermed) threshCount++;
+                    else if (isAst && iAst) threshCount++;
+                    else if (isOut && iOut) threshCount++;
+                    else if (isWar && h.isTermed && iTrm) threshCount++;
                 });
-                
+
                 let qualifies = true;
                 if (thres) {
-                    if (threshCount < tMin) qualifies = false;
-                    if (threshCount > tMax) {
-                        let scale = tMax / threshCount;
-                        adjH *= scale;
-                    }
+                    if (threshCount < tMin) { qualifies = false; adjH = 0; }
+                    else if (threshCount > tMax) { adjH *= tMax / threshCount; }
                 }
-                if (!qualifies) adjH = 0;
-                
+
                 totalAdjHits += adjH;
-                
-                displayMembers.push({ name: m.name, warH, astH, outH, trmH, fltH, adjH, qualifies });
+                rows.push({ name: m.name, warH, astH, outH, trmH, fltH, adjH, qualifies, threshCount });
             });
-            
-            // Calculate payout
+
+            // PPH
             let actPph = 0;
             if (isCut) {
                 if (eqPay) {
-                    let qCount = displayMembers.filter(x=>x.qualifies).length;
-                    actPph = qCount > 0 ? facCutPool / qCount : 0;
+                    const q = rows.filter(r => r.qualifies).length;
+                    actPph = q > 0 ? memberPool / q : 0;
                 } else {
-                    actPph = totalAdjHits > 0 ? facCutPool / totalAdjHits : 0;
+                    actPph = totalAdjHits > 0 ? memberPool / totalAdjHits : 0;
                 }
             } else {
                 actPph = hardPph;
             }
-            
-            document.getElementById('out-calc-pph').innerText = '$ ' + actPph.toLocaleString(undefined, {maximumFractionDigits:0});
-            
-            // Render
+
+            // Update KPIs
+            document.getElementById('kpi-cache').innerText  = fmtShort(totalCacheVal);
+            document.getElementById('kpi-deductions').innerText = fmtShort(totalDeductions);
+            document.getElementById('kpi-pool').innerText   = fmtShort(memberPool);
+            document.getElementById('kpi-hits').innerText   = totalAdjHits.toFixed(1);
+            document.getElementById('kpi-pph').innerText    = fmtShort(actPph);
+            document.getElementById('out-calc-pph').innerText = fmtShort(actPph);
+
+            // Render table
+            rows.sort((a, b) => b.adjH - a.adjH);
             let html = '';
-            displayMembers.sort((a,b) => b.adjH - a.adjH).forEach(m => {
-                let pay = 0;
-                if (m.qualifies) {
-                    if (eqPay && isCut) pay = actPph;
-                    else if (eqPay && !isCut) pay = hardPph;
-                    else pay = m.adjH * actPph;
-                }
-                
-                html += `<tr>
-                    <td style="font-weight:bold;">${m.name}</td>
-                    <td>${m.warH}</td>
-                    <td>${m.astH}</td>
-                    <td>${m.outH}</td>
-                    <td>${m.trmH}</td>
-                    <td style="color:#888;">${m.fltH}</td>
-                    <td style="color:var(--gold); font-weight:bold;">${m.adjH.toFixed(2)}</td>
-                    <td class="money">$${Math.floor(pay).toLocaleString()}</td>
+            rows.forEach((m, i) => {
+                const pay = m.qualifies ? (eqPay ? (isCut ? actPph : hardPph) : m.adjH * actPph) : 0;
+                const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
+                html += `<tr class="${rankClass}">
+                    <td class="td-name">${m.name}</td>
+                    <td class="td-hits${m.warH === 0 ? ' badge-zero' : ''}">${m.warH}</td>
+                    <td class="td-ast${m.astH === 0 ? ' badge-zero' : ''}">${m.astH}</td>
+                    <td class="td-out${m.outH === 0 ? ' badge-zero' : ''}">${m.outH}</td>
+                    <td class="td-trm${m.trmH === 0 ? ' badge-zero' : ''}">${m.trmH}</td>
+                    <td class="td-flt">${m.fltH}</td>
+                    <td class="td-adj">${m.adjH.toFixed(2)}</td>
+                    <td class="td-pay${pay === 0 ? ' badge-zero' : ''}">${fmt(pay)}</td>
                 </tr>`;
             });
-            
-            document.getElementById('tb-body').innerHTML = html;
+            document.getElementById('tb-body').innerHTML = html || '<tr><td colspan="8"><div class="empty"><p>No members found.</p></div></td></tr>';
         }
 
-        function copyTable() {
-            let str = 'Member\tPayout\n';
-            const rows = document.querySelectorAll('#tb-body tr');
-            rows.forEach(r => {
-                let tds = r.querySelectorAll('td');
-                if(tds.length === 8) {
-                    let name = tds[0].innerText;
-                    let amt = tds[7].innerText;
-                    if (amt !== '$0') str += `${name}\t${amt}\n`;
+        function copyPayouts() {
+            let text = 'Member\tPayout\n';
+            document.querySelectorAll('#tb-body tr').forEach(r => {
+                const tds = r.querySelectorAll('td');
+                if (tds.length === 8) {
+                    const pay = tds[7].innerText;
+                    if (pay !== '$0') text += `${tds[0].innerText.replace(/🥇|🥈|🥉/g, '').trim()}\t${pay}\n`;
                 }
             });
-            navigator.clipboard.writeText(str);
-            alert('Copied to clipboard!');
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.querySelector('.btn-copy');
+                btn.innerText = '✅ Copied!';
+                setTimeout(() => btn.innerText = '📋 Copy Payouts', 2000);
+            });
         }
     </script>
 </body>
