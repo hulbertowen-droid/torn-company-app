@@ -438,9 +438,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     try {
         const res = await fetch('/api/master-config');
         const data = await res.json();
-        if (data.discordConfig && data.discordConfig.apiKey) {
-            localStorage.setItem('warboard_apikey', data.discordConfig.apiKey);
-        }
         if (data.companyConfig) {
             localStorage.setItem('master_company_config', JSON.stringify(data.companyConfig));
         }
