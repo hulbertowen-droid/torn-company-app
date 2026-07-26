@@ -71,13 +71,13 @@ let lastEventTimestamp = Math.floor(Date.now() / 1000);
 let lastChainTimeoutAlertState = false;
 let backgroundEnemyTrackingState = {};
 
-let discordConfig = { webhookUrl: "", targetOnline: true, targetLanded: true, targetOutHosp: true, chainUnder90: true, chainMilestone: true, friendlyAttacked: true, apiKey: "", factionId: "", medOutSniper: true };
-let marketConfig = { webhookUrl: "", autoDefense: false, sniperTargets: [] };
+let discordConfig = { globalChannelId: "", targetOnline: true, targetLanded: true, targetOutHosp: true, chainUnder90: true, chainMilestone: true, friendlyAttacked: true, apiKey: "", factionId: "", medOutSniper: true };
+let marketConfig = { globalChannelId: "", autoDefense: false, sniperTargets: [] };
 let marketMemory = { defense: {}, sniper: {} };
-let ocConfig = { webhookUrl: "", roleId: "" };
+let ocConfig = { globalChannelId: "", roleId: "" };
 let ocMemory = {};
  
-let companyConfig = { webhookUrl: "", threshold: 0, alertedItems: {}, apiKey: "" };
+let companyConfig = { globalChannelId: "", threshold: 0, alertedItems: {}, apiKey: "" };
 
 try { if (fs.existsSync('subscriptions.json')) subscriptions = JSON.parse(fs.readFileSync('subscriptions.json')); } catch (e) {}
 try { if (fs.existsSync('discord_config.json')) discordConfig = { ...discordConfig, ...JSON.parse(fs.readFileSync('discord_config.json')) }; } catch(e) {}
@@ -126,29 +126,7 @@ function getNextApiKey() {
     return key;
 }
 
-async function sendDiscordEmbed(webhookUrl, { pingText, title, description, color, fields, links }) {
-    if (!webhookUrl) return;
-    
-    let payload = {
-        content: pingText || null, 
-        embeds: [{
-            title: title,
-            description: description,
-            color: color,
-            fields: fields || [],
-            footer: { text: "Owen's Faction Tools • " + new Date().toISOString().replace('T', ' ').substring(0, 19) + " UTC" }
-        }]
-    };
 
-    if (links && links.length > 0) {
-        let components = [];
-        links.forEach(l => { components.push({ type: 2, style: 5, label: l.label, url: l.url }); });
-        payload.components = [{ type: 1, components: components }];
-    }
-
-    try { await fetch(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } 
-    catch(e) { console.error("Discord webhook failed", e); }
-}
 
 async function getDiscordId(tornId) {
     if (discordIdCache[tornId]) return discordIdCache[tornId];
@@ -199,11 +177,7 @@ setInterval(async () => {
                             subscriptions[facId] += weeks * 7 * 24 * 60 * 60 * 1000;
                             saveSubs();
                             
-                            sendDiscordEmbed(ADMIN_DISCORD_WEBHOOK, {
-                                title: "💰 Payment Received",
-                                description: `Faction \`${facId}\` sent **${qty}x Xanax** for ${weeks} weeks of Warboard access!`,
-                                color: 3069299
-                            });
+                            fetch(ADMIN_DISCORD_WEBHOOK, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ embeds: [{ title: "💰 Payment Received", description: `Faction \`${facId}\` sent **${qty}x Xanax** for ${weeks} weeks of Warboard access!`, color: 3069299 }] }) }).catch(()=>{});
                         }
                     }
                 }
@@ -377,14 +351,12 @@ setInterval(async () => {
                                 };
                                 if (discordConfig.globalBotToken && discordConfig.globalChannelId) {
                                     sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, embed, pingStr);
-                                } else if (discordConfig.webhookUrl) {
-                                    sendDiscordEmbed(discordConfig.webhookUrl, { ...embed, pingText: pingStr });
                                 }
                             }
                         }
                     }
                     
-                    if (hasBackfilledWar && discordConfig.friendlyAttacked && discordConfig.webhookUrl) {
+                    if (hasBackfilledWar && discordConfig.friendlyAttacked && discordConfig.globalChannelId) {
                         let attackerName = atk.attacker_name || "Unknown"; 
                         let attackerFactionName = atk.attacker_faction_name || "None"; 
                         let defenderName = atk.defender_name || uId;
@@ -395,10 +367,7 @@ setInterval(async () => {
                         let dId = await getDiscordId(uId);
                         let pingStr = (dId && dId !== "none") ? `<@${dId}>` : "";
 
-                        sendDiscordEmbed(discordConfig.webhookUrl, {
-                            pingText: pingStr,
-                            title: "🛡️ Wall Watcher: Friendly Attacked",
-                            description: `**${attackerName}** [${attackerId}] from \`${attackerFactionName}\` just attacked **${defenderName}**!`,
+                        if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { title: "🛡️ Wall Watcher: Friendly Attacked", description: `**${attackerName}** [${attackerId}] from \`${attackerFactionName}\` just attacked **${defenderName}**!`,
                             color: 16729943,
                             fields: [{ name: "Enemy Est. Stats", value: statStr, inline: true }],
                             links: [
@@ -416,10 +385,8 @@ setInterval(async () => {
                     liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
 
                     if (atk.chain && BONUS_THRESHOLDS.has(atk.chain)) {
-                        if (hasBackfilledWar && discordConfig.chainMilestone && discordConfig.webhookUrl) {
-                            sendDiscordEmbed(discordConfig.webhookUrl, {
-                                title: "🏆 Chain Milestone Secured",
-                                description: `Hit **#${atk.chain}** executed by \`${atk.attacker_name || uId}\` (+${atk.respect_gain || 0} respect)!`,
+                        if (hasBackfilledWar && discordConfig.chainMilestone && discordConfig.globalChannelId) {
+                            if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { title: "🏆 Chain Milestone Secured", description: `Hit **#${atk.chain}** executed by \`${atk.attacker_name || uId}\` (+${atk.respect_gain || 0} respect)!`,
                                 color: 16753922
                             });
                         }
@@ -475,10 +442,8 @@ setInterval(async () => {
                                 color: 16729943
                             };
                             if (discordConfig.globalBotToken && discordConfig.globalChannelId) {
-                                sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, embed, pingStr);
-                            } else if (discordConfig.webhookUrl) {
-                                sendDiscordEmbed(discordConfig.webhookUrl, { ...embed, pingText: pingStr });
-                            }
+                                    sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, embed, pingStr);
+                                }
                         }
                     }
                 }
@@ -491,7 +456,7 @@ setInterval(async () => {
 // Background Task 2: Market Watcher
 setInterval(async () => {
     let watchKey = getNextApiKey();
-    if (!marketConfig.webhookUrl || !watchKey) return;
+    if (!marketConfig.globalChannelId || !watchKey) return;
     
     try {
         if (marketConfig.autoDefense) {
@@ -533,8 +498,8 @@ setInterval(async () => {
                                 let profile = userDatabase[rootKey];
                                 if (profile && profile.botToken && profile.discordId && profile.alertToggles?.undercut) {
                                     sendPrivateDM(profile.botToken, profile.discordId, embed);
-                                } else if (marketConfig.webhookUrl) {
-                                    sendDiscordEmbed(marketConfig.webhookUrl, embed);
+                                } else if (marketConfig.globalChannelId && discordConfig.globalBotToken) {
+                                    sendChannelMessage(discordConfig.globalBotToken, marketConfig.globalChannelId, embed);
                                 }
                             }
                         } else { delete marketMemory.defense[itemId]; }
@@ -559,20 +524,21 @@ setInterval(async () => {
 
         if (facData.chain && facData.chain.current >= 10) {
             let secondsLeft = facData.chain.timeout;
-            if (secondsLeft <= 90 && secondsLeft > 0 && !lastChainTimeoutAlertState && discordConfig.chainUnder90 && discordConfig.webhookUrl) {
-                sendDiscordEmbed(discordConfig.webhookUrl, {
-                    pingText: "@here",
-                    title: "⚠️ CHAIN DROPPING WARNING",
-                    description: `Active chain is under 90 seconds (**${secondsLeft}s** left)! Someone needs to make a hit right now!`,
-                    color: 16729943,
-                    links: [{ label: "🔗 View Chain", url: `https://www.torn.com/factions.php?step=your#/tab=chains` }]
-                });
+            if (secondsLeft <= 90 && secondsLeft > 0 && !lastChainTimeoutAlertState && discordConfig.chainUnder90 && discordConfig.globalChannelId) {
+                if (discordConfig.globalBotToken) {
+                    sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, {
+                        title: "⚠️ CHAIN DROPPING WARNING",
+                        description: `Active chain is under 90 seconds (**${secondsLeft}s** left)! Someone needs to make a hit right now!`,
+                        color: 16729943,
+                        links: [{ label: "🔗 View Chain", url: `https://www.torn.com/factions.php?step=your#/tab=chains` }]
+                    }, "@here");
+                }
                 lastChainTimeoutAlertState = true;
             } else if (secondsLeft > 120) { lastChainTimeoutAlertState = false; }
         } else { lastChainTimeoutAlertState = false; }
 
         let activeEnemyId = autoDetectEnemyFaction(facData);
-        if (activeEnemyId && discordConfig.webhookUrl) {
+        if (activeEnemyId && discordConfig.globalChannelId) {
             let rotationKey = getNextApiKey();
             const enemyRes = await fetch(`https://api.torn.com/faction/${activeEnemyId}?selections=basic&key=${rotationKey}`);
             const enemyData = await enemyRes.json();
@@ -584,12 +550,7 @@ setInterval(async () => {
                     
                     if (oldRecord) {
                         if (oldRecord.online !== "Online" && newRecord.online === "Online" && discordConfig.targetOnline) {
-                            sendDiscordEmbed(discordConfig.webhookUrl, {
-                                title: "🟢 Target Online",
-                                description: `**${m.name}** [${id}] just established a connection and is Online!`,
-                                color: 3069299,
-                                links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }]
-                            });
+                            if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { title: "🟢 Target Online", description: `**${m.name}** [${id}] just established a connection and is Online!`, color: 3069299, links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }] });
                         }
                         
                         if (oldRecord.state === "Hospital" && newRecord.state === "Okay") {
@@ -622,10 +583,7 @@ setInterval(async () => {
                                 }
 
                                 let statStr = enemyEst > 0 ? `~${enemyEst.toLocaleString()}` : "Unknown";
-                                sendDiscordEmbed(discordConfig.webhookUrl, {
-                                    pingText: pingStr,
-                                    title: "🚨 MED-OUT SNIPER ENGAGED",
-                                    description: `**${m.name}** [${id}] just used meds or received a revive to escape the hospital early and is currently ONLINE!`,
+                                if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { title: "🚨 MED-OUT SNIPER ENGAGED", description: `**${m.name}** [${id}] just used meds or received a revive to escape the hospital early and is currently ONLINE!`,
                                     color: 16729943,
                                     fields: [
                                         { name: "Target Est. Stats", value: statStr, inline: true },
@@ -635,19 +593,9 @@ setInterval(async () => {
                                 });
                                 
                             } else if (discordConfig.targetOutHosp && !leftEarly) {
-                                sendDiscordEmbed(discordConfig.webhookUrl, {
-                                    title: "🏥 Target Out of Hospital",
-                                    description: `**${m.name}** [${id}] naturally finished their hospital time and is Okay!`,
-                                    color: 16753922,
-                                    links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }]
-                                });
+                                if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { title: "🏥 Target Out of Hospital", description: `**${m.name}** [${id}] naturally finished their hospital time and is Okay!`, color: 16753922, links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }] }, pingStr);
                             } else if (discordConfig.targetLanded && (oldRecord.state === "Traveling" || (oldRecord.description && oldRecord.description.includes("Traveling")))) {
-                                sendDiscordEmbed(discordConfig.webhookUrl, {
-                                    title: "✈️ Target Landed",
-                                    description: `**${m.name}** [${id}] just landed in Torn!`,
-                                    color: 5809919,
-                                    links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }]
-                                });
+                                if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { title: "✈️ Target Landed", description: `**${m.name}** [${id}] just landed in Torn!`, color: 5809919, links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }] });
                             }
                         }
                     }
@@ -663,7 +611,7 @@ try { if (fs.existsSync('company_history.json')) companyHistory = JSON.parse(fs.
 function saveCompanyHistory() { fs.writeFileSync('company_history.json', JSON.stringify(companyHistory)); }
 
 setInterval(async () => {
-    if (!companyConfig.webhookUrl || !companyConfig.apiKey) return;
+    if (!companyConfig.globalChannelId || !companyConfig.apiKey) return;
     try {
         const resp = await fetch(`https://api.torn.com/company/?selections=profile,detailed,stock&key=${companyConfig.apiKey}`);
         const data = await resp.json();
@@ -695,9 +643,7 @@ setInterval(async () => {
             const currentStock = s.in_stock || 0;
             if (currentStock <= companyConfig.threshold) {
                 if (!companyConfig.alertedItems[itemName] || companyConfig.alertedItems[itemName] !== currentStock) {
-                    sendDiscordEmbed(companyConfig.webhookUrl, {
-                        title: "📉 LOW STOCK ALERT",
-                        description: `**${itemName}** is running low!\nOnly **${currentStock.toLocaleString()}** remaining in stock.`,
+                    if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, companyConfig.globalChannelId, { title: "📉 LOW STOCK ALERT", description: `**${itemName}** is running low!\nOnly **${currentStock.toLocaleString()}** remaining in stock.`,
                         color: 15158332,
                         fields: [
                             { name: "Daily Sales Rate", value: s.sold_amount ? s.sold_amount.toString() : "0", inline: true }
@@ -836,17 +782,15 @@ app.get('/api/get-market-config', (req, res) => { res.json(marketConfig); });
 app.post('/api/save-market-config', (req, res) => { marketConfig = { ...marketConfig, ...req.body }; saveMarketConfig(); res.json({ success: true }); });
 
 app.post('/api/test-discord-alert', async (req, res) => {
-    const { type, discordId, webhookUrl, globalChannelId, globalBotToken } = req.body;
-    let wh = webhookUrl || discordConfig.webhookUrl;
+    const { type, discordId, globalChannelId, globalBotToken } = req.body;
     let chanId = globalChannelId || discordConfig.globalChannelId;
     let botToken = globalBotToken || discordConfig.globalBotToken;
     
-    if (!wh && !(botToken && chanId)) {
-        return res.json({ success: false, error: "No Webhook URL or Global Bot Token + Channel ID provided." });
+    if (!(botToken && chanId)) {
+        return res.json({ success: false, error: "No Faction Bot Token or Channel ID provided." });
     }
     
     let pingStr = discordId ? `<@${discordId}>` : "";
-    let useChannel = botToken && chanId;
     let embed = {};
     
     if (type === 'travel') {
@@ -865,30 +809,16 @@ app.post('/api/test-discord-alert', async (req, res) => {
         return res.json({ success: false, error: "Unknown test type." });
     }
 
-    if (useChannel) {
-        let result = await sendChannelMessage(botToken, chanId, embed, pingStr);
-        if (!result.success) return res.json({ success: false, error: result.error });
-    } else if (wh) {
-        sendDiscordEmbed(wh, { ...embed, pingText: pingStr });
-    } else {
-        return res.json({ success: false, error: "Configuration missing." });
-    }
+    let result = await sendChannelMessage(botToken, chanId, embed, pingStr);
+    if (!result.success) return res.json({ success: false, error: result.error });
     
     res.json({ success: true });
 });
 
 app.post('/api/discord-ping', async (req, res) => {
-    const { webhookUrl, message } = req.body;
-    if (!webhookUrl || !message) return res.status(400).json({ error: "Missing data" });
-    try {
-        await sendDiscordEmbed(webhookUrl, {
-            title: "📡 Connection Diagnostic Confirmation",
-            description: message,
-            color: 3069299 
-        });
-        res.json({ success: true });
-    } catch (err) { res.status(500).json({ error: "Failed to ping Discord" }); }
+    return res.json({ success: false, error: "Deprecated endpoint. Use test-discord-alert." });
 });
+
 
 app.get('/api/war-list', async (req, res) => {
     const userKey = req.query.apiKey;
@@ -1348,16 +1278,16 @@ app.get('/api/warboard', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 app.post('/api/save-oc-config', (req, res) => {
-    const { webhookUrl, roleId } = req.body;
-    if (webhookUrl !== undefined) ocConfig.webhookUrl = webhookUrl;
+    const { globalChannelId, roleId } = req.body;
+    if (globalChannelId !== undefined) ocConfig.globalChannelId = globalChannelId;
     if (roleId !== undefined) ocConfig.roleId = roleId;
     saveOcConfig();
     res.json({ success: true });
 });
 
 app.post('/api/save-company-config', (req, res) => {
-    const { webhookUrl, threshold, apiKey } = req.body;
-    if (webhookUrl !== undefined) companyConfig.webhookUrl = webhookUrl;
+    const { globalChannelId, threshold, apiKey } = req.body;
+    if (globalChannelId !== undefined) companyConfig.globalChannelId = globalChannelId;
     if (threshold !== undefined) companyConfig.threshold = parseInt(threshold) || 0;
     if (apiKey !== undefined) companyConfig.apiKey = apiKey;
     saveCompanyConfig();
@@ -1378,7 +1308,7 @@ app.post('/api/master-config', (req, res) => {
     const { apiKey, discordWebhook, companyWebhook, ocWebhook, myName, globalToggles } = req.body;
     
     // Save to discord config
-    if (discordWebhook !== undefined) discordConfig.webhookUrl = discordWebhook;
+    if (discordWebhook !== undefined) discordConfig.globalChannelId = discordWebhook;
     if (apiKey !== undefined) discordConfig.apiKey = apiKey;
     if (myName !== undefined) discordConfig.myName = myName; // Generic storage
     
@@ -1412,7 +1342,7 @@ app.post('/api/sync-configs', (req, res) => {
 });
 
 app.get('/api/company-config', (req, res) => {
-    res.json({ success: true, webhookUrl: companyConfig.webhookUrl, threshold: companyConfig.threshold });
+    res.json({ success: true, globalChannelId: companyConfig.globalChannelId, threshold: companyConfig.threshold });
 });
 
 app.get('/api/ocs', async (req, res) => {
@@ -1452,7 +1382,7 @@ app.get('/api/ocs', async (req, res) => {
         });
 
         // Discord alerts for missing items
-        if (ocConfig.webhookUrl) {
+        if (ocConfig.globalChannelId) {
             crimes.forEach(crime => {
                 (crime.slots || []).forEach(slot => {
                     if (!slot.user) return;
@@ -1469,12 +1399,13 @@ app.get('/api/ocs', async (req, res) => {
                         if (!ocMemory[trackingId] || (Date.now() - ocMemory[trackingId]) > 3600000 * 12) {
                             ocMemory[trackingId] = Date.now();
                             let mention = ocConfig.roleId ? `<@&${ocConfig.roleId}>` : "";
-                            sendDiscordEmbed(ocConfig.webhookUrl, {
-                                pingText: mention,
-                                title: `🚨 OC Issue: ${crime.name}`,
-                                description: `**Player:** [${pName}](https://www.torn.com/profiles.php?XID=${pId})\n**Role:** ${slot.position_info?.label || slot.position}\n**Issue:** ${issueMessage}`,
-                                color: 16733695
-                            });
+                            if (discordConfig.globalBotToken) {
+                                sendChannelMessage(discordConfig.globalBotToken, ocConfig.globalChannelId, {
+                                    title: `🚨 OC Issue: ${crime.name}`,
+                                    description: `**Player:** [${pName}](https://www.torn.com/profiles.php?XID=${pId})\n**Role:** ${slot.position_info?.label || slot.position}\n**Issue:** ${issueMessage}`, 
+                                    color: 16733695
+                                }, mention);
+                            }
                         }
                     }
                 });

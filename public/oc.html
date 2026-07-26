@@ -212,8 +212,8 @@
                 <input type="password" id="api-key" placeholder="Paste your 16-char Torn API key">
             </div>
             <div>
-                <label>Discord Webhook URL (for alerts)</label>
-                <input type="text" id="discord-webhook" placeholder="https://discord.com/api/webhooks/...">
+                <label>OC Alerts Channel ID</label>
+                <input type="text" id="discord-webhook" placeholder="Channel ID for missing items alerts">
             </div>
             <div>
                 <label>Discord Role ID to Ping (Optional)</label>
@@ -225,7 +225,7 @@
 
 <script>
 let myKey = localStorage.getItem("warboard_apikey") || "";
-let ocWebhook = localStorage.getItem("oc_webhook") || "";
+let ocWebhook = localStorage.getItem("oc_channelid") || "";
 let ocRole = localStorage.getItem("oc_role") || "";
 let allCrimes = [];
 let currentTab = "recruiting";
@@ -246,12 +246,13 @@ function saveSettings() {
     ocWebhook = document.getElementById("discord-webhook").value.trim();
     ocRole = document.getElementById("discord-role").value.trim();
     localStorage.setItem("warboard_apikey", myKey);
-    localStorage.setItem("oc_webhook", ocWebhook);
+    localStorage.setItem("oc_channelid", ocWebhook);
     localStorage.setItem("oc_role", ocRole);
     if (ocWebhook || ocRole) {
         fetch('/api/save-oc-config', {
-            method: 'POST', headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ webhookUrl: ocWebhook, roleId: ocRole })
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ globalChannelId: ocWebhook, roleId: ocRole })
         }).catch(console.error);
     }
     closeSettings();

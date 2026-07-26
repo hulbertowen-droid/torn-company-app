@@ -325,8 +325,8 @@
             <input type="password" id="api-key-input" placeholder="Enter your Torn API Key">
             <div class="modal-divider"></div>
             <h3 style="font-size:0.85em; color:var(--gold);">🔔 Discord Stock Alerts</h3>
-            <label class="modal-label">WEBHOOK URL</label>
-            <input type="password" id="webhook-input" placeholder="https://discord.com/api/webhooks/...">
+            <label class="modal-label">COMPANY ALERTS CHANNEL ID</label>
+            <input type="text" id="webhook-input" placeholder="Channel ID for stock low alerts">
             <label class="modal-label">LOW STOCK THRESHOLD</label>
             <input type="number" id="threshold-input" placeholder="Alert when stock drops below this">
             <button class="btn-save" onclick="saveKey()">Save & Connect</button>
@@ -371,7 +371,7 @@ function openSettings() {
     document.getElementById('settings-modal').style.display = 'flex';
     fetch('/api/company-config').then(r => r.json()).then(data => {
         if (data.success) {
-            document.getElementById('webhook-input').value = data.webhookUrl || '';
+            document.getElementById('webhook-input').value = data.globalChannelId || '';
             document.getElementById('threshold-input').value = data.threshold || 0;
         }
     }).catch(() => {});
@@ -381,7 +381,7 @@ function closeSettings() { document.getElementById('settings-modal').style.displ
 function saveKey() {
     myKey = document.getElementById('api-key-input').value.trim();
     localStorage.setItem('warboard_apikey', myKey);
-    const config = { webhookUrl: document.getElementById('webhook-input').value.trim(), threshold: document.getElementById('threshold-input').value, apiKey: myKey };
+    const config = { globalChannelId: document.getElementById('webhook-input').value.trim(), threshold: document.getElementById('threshold-input').value, apiKey: myKey };
     localStorage.setItem('master_company_config', JSON.stringify(config));
     fetch('/api/save-company-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
     closeSettings();

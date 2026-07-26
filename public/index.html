@@ -223,6 +223,81 @@
                     <input type="password" id="ts-key" placeholder="Optional: Unlocks Global Spy Database">
                 </div>
                 <div>
+        </div>
+
+        <details style="background: rgba(88, 166, 255, 0.05); border: 1px solid var(--blue); border-radius: 8px; margin-bottom: 25px; cursor: pointer; transition: 0.2s;">
+            <summary style="padding: 12px 20px; font-weight: bold; color: var(--blue); display: flex; align-items: center; justify-content: space-between;">
+                <span>ℹ️ Advanced Features & Credits</span>
+                <span style="font-size: 0.85em; color: var(--text-dim); border: 1px solid #2f3542; padding: 2px 8px; border-radius: 4px; background: #0b0d13;">Click to Expand ▼</span>
+            </summary>
+            <div style="padding: 0 20px 20px 20px; color: var(--text-main); font-size: 0.9em; line-height: 1.6; border-top: 1px solid rgba(88, 166, 255, 0.2); margin-top: 5px; padding-top: 15px;">
+                Certain tactical features on this dashboard—such as exact battle stat estimates, player activity timelines, and live flight landing ETAs—require an active <a href="https://ffscouter.com" target="_blank" style="color: var(--blue); text-decoration: underline;">FF Scouter Premium</a> subscription and API Key linked in your Settings. All times are displayed in Official Torn City Time (TCT/UTC) alongside your local timezone.
+                <br><br>
+                <span style="color: var(--gold); font-weight: bold;">Owen's Faction Tools engineered and created by <a href="https://www.torn.com/profiles.php?XID=3776908" target="_blank" style="color: var(--gold); text-decoration: underline;">Owen777 [3776908]</a>.</span>
+            </div>
+        </details>
+
+        <div class="container">
+            <div class="chart-row">
+                <div class="dash-card" style="display: flex; flex-direction: column;">
+                    <h2>📊 Friendly Hit Performance</h2>
+                    <div style="position: relative; flex-grow: 1; min-height: 250px; width: 100%;">
+                        <canvas id="warChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="dash-card" style="display: flex; flex-direction: column;">
+                    <h2>
+                        💤 Enemy Activity Heatmap (72H Avg)
+                        <span id="heatmap-status" style="font-size: 0.75em; color: var(--text-dim); background: #0b0d13; padding: 4px 8px; border-radius: 4px; border: 1px solid #2f3542; text-transform: none;">Waiting for Premium API...</span>
+                    </h2>
+                    <div style="position: relative; flex-grow: 1; min-height: 250px; width: 100%;">
+                        <canvas id="activityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="watchlist-box">
+                <h3>🚨 Priority Watchlist</h3>
+                <div id="watchlist-items" class="watchlist-items">
+                    <div style="color:var(--text-dim); padding: 10px; font-style: italic;">Waiting for API Data...</div>
+                </div>
+            </div>
+
+            <div class="faction-col">
+                <h2>Friendly Team <span id="friendly-count" style="background: #2f3542; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.6em;">0</span></h2>
+                <div id="friendly-list"><div style="color:var(--text-dim); padding:20px; text-align: center; font-style: italic;">Connecting to Torn API...</div></div>
+            </div>
+            
+            <div class="faction-col">
+                <h2>Enemy Targets <span id="enemy-count" style="background: #2f3542; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.6em;">0</span></h2>
+                <div class="filter-group">
+                    <button id="flt-all" class="btn-filter active" onclick="setEnemyFilter('All')">ALL</button>
+                    <button id="flt-online" class="btn-filter" onclick="setEnemyFilter('Online')">ONLINE</button>
+                    <button id="flt-okay" class="btn-filter" onclick="setEnemyFilter('Okay')">OKAY (OUT Hosp)</button>
+                    <button id="flt-flying" class="btn-filter" onclick="setEnemyFilter('Flying')">FLYING</button>
+                </div>
+                <div id="enemy-list"><div style="color:var(--text-dim); padding:20px; text-align: center; font-style: italic;">Connecting to Torn API...</div></div>
+            </div>
+        </div>
+
+        <div id="settings-modal" class="modal-overlay">
+            <div class="modal-content" style="position: relative; max-height: 90vh; overflow-y: auto;">
+                <div class="close-btn" onclick="closeSettings()">&times;</div>
+                <h2>Board Settings</h2>
+                <div>
+                    <label>API Key (Requires "Limited" Access & Faction Permissions)</label>
+                    <input type="password" id="api-key" placeholder="Paste your Torn API Key here">
+                </div>
+                <div>
+                    <label>FF Scouter Premium Key</label>
+                    <input type="password" id="ff-key" placeholder="Optional: Unlocks advanced stats & radar">
+                </div>
+                <div>
+                    <label>Torn Stats API Key</label>
+                    <input type="password" id="ts-key" placeholder="Optional: Unlocks Global Spy Database">
+                </div>
+                <div>
                     <label>Enemy Faction ID</label>
                     <input type="text" id="enemy-id" placeholder="Optional (Auto-detects usually)">
                 </div>
@@ -230,12 +305,13 @@
                     <label>Your Name (For Targets)</label>
                     <input type="text" id="my-name" placeholder="E.g. Agent">
                 </div>
-
-                
-
                 <div>
-                    <label>Global Discord Webhook (Auto-Pastes Everywhere)</label>
-                    <input type="text" id="discord-webhook" placeholder="Paste Discord Webhook URL here">
+                    <label>Faction Bot Token (Auto-Pastes Everywhere)</label>
+                    <input type="password" id="discord-bottoken" placeholder="Paste Bot Token here">
+                </div>
+                <div style="margin-top: 10px;">
+                    <label>Faction Alert Channel ID (Auto-Pastes Everywhere)</label>
+                    <input type="text" id="discord-channelid" placeholder="Paste Channel ID here">
                     <button type="button" onclick="testDiscordWebhook()" class="btn-action" style="background: var(--blue); color: #000; margin-top: 8px; width: 100%; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer;">🧪 Test Discord Connection</button>
                     <div id="discord-test-status" style="font-size: 0.8em; margin-top: 5px; font-weight: bold; text-align: center;"></div>
                 </div>
@@ -354,7 +430,8 @@ let ffKey = localStorage.getItem("warboard_ffkey") || "";
 let tsKey = localStorage.getItem("warboard_tskey") || "";
 let enemyFacId = localStorage.getItem("warboard_enemyId") || "";
 let myName = localStorage.getItem("warboard_myname") || "Agent";
-let discordWebhook = localStorage.getItem("warboard_discord") || "";
+let globalBotToken = localStorage.getItem("warboard_bottoken") || "";
+let globalChannelId = localStorage.getItem("warboard_channelid") || "";
 let cpm = parseInt(localStorage.getItem("warboard_cpm")) || 12; 
 
 let knownEnemies = {}; 
@@ -370,32 +447,35 @@ document.getElementById("ff-key").value = ffKey;
 document.getElementById("ts-key").value = tsKey;
 document.getElementById("enemy-id").value = enemyFacId;
 document.getElementById("my-name").value = myName;
-document.getElementById("discord-webhook").value = discordWebhook;
+document.getElementById("discord-bottoken").value = globalBotToken;
+document.getElementById("discord-channelid").value = globalChannelId;
 document.getElementById("api-cpm").value = cpm;
 
 function openSettings() { 
-    document.getElementById("discord-webhook").value = localStorage.getItem("warboard_discord") || "";
+    document.getElementById("discord-bottoken").value = localStorage.getItem("warboard_bottoken") || "";
+    document.getElementById("discord-channelid").value = localStorage.getItem("warboard_channelid") || "";
     
     document.getElementById("settings-modal").style.display = "flex"; 
 }
 function closeSettings() { document.getElementById("settings-modal").style.display = "none"; }
 
 async function testDiscordWebhook() {
-    const hookUrl = document.getElementById("discord-webhook").value.trim();
+    const botToken = document.getElementById("discord-bottoken").value.trim();
+    const channelId = document.getElementById("discord-channelid").value.trim();
     const statusBox = document.getElementById("discord-test-status");
-    if (!hookUrl) {
-        statusBox.style.color = "var(--red)"; statusBox.innerText = "❌ Put a webhook URL in first!"; return;
+    if (!botToken || !channelId) {
+        statusBox.style.color = "var(--red)"; statusBox.innerText = "❌ Put a Bot Token and Channel ID in first!"; return;
     }
     statusBox.style.color = "var(--gold)"; statusBox.innerText = "⚡ Transmitting test transmission data bundle...";
     try {
-        const res = await fetch('/api/discord-ping', {
+        const res = await fetch('/api/test-discord-alert', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ webhookUrl: hookUrl, message: "📡 **CONNECTION DIAGNOSTIC CONFIRMED:** Owen's Faction Tools automated surveillance center has established a clear, 24/7 uplink to this secure monitoring grid!" })
+            body: JSON.stringify({ type: 'travel', globalBotToken: botToken, globalChannelId: channelId })
         });
         const data = await res.json();
         if (data.success) { statusBox.style.color = "var(--green)"; statusBox.innerText = "✅ Test Successful! Check your Discord channel."; } 
-        else { throw new Error(); }
-    } catch(e) { statusBox.style.color = "var(--red)"; statusBox.innerText = "❌ Transmission Rejected. Verify webhook token limits."; }
+        else { throw new Error(data.error || "Failed"); }
+    } catch(e) { statusBox.style.color = "var(--red)"; statusBox.innerText = `❌ Error: ${e.message}`; }
 }
 
 if (myKey) { startPolling(); } else { openSettings(); }
@@ -417,7 +497,8 @@ async function saveSettings() {
     tsKey = document.getElementById("ts-key").value.trim();
     enemyFacId = document.getElementById("enemy-id").value.trim();
     myName = document.getElementById("my-name").value.trim() || "Agent";
-    discordWebhook = document.getElementById("discord-webhook").value.trim();
+    globalBotToken = document.getElementById("discord-bottoken").value.trim();
+    globalChannelId = document.getElementById("discord-channelid").value.trim();
     
     let parsedCpm = parseInt(document.getElementById("api-cpm").value);
     cpm = (parsedCpm && parsedCpm > 0 && parsedCpm <= 60) ? parsedCpm : 12;
@@ -427,30 +508,26 @@ async function saveSettings() {
     localStorage.setItem("warboard_tskey", tsKey);
     localStorage.setItem("warboard_enemyId", enemyFacId);
     localStorage.setItem("warboard_myname", myName);
-    localStorage.setItem("warboard_discord", discordWebhook);
+    localStorage.setItem("warboard_bottoken", globalBotToken);
+    localStorage.setItem("warboard_channelid", globalChannelId);
     localStorage.setItem("warboard_cpm", cpm);
-
-    
-
 
     try {
         await fetch('/api/master-config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ apiKey: myKey, discordWebhook: discordWebhook, myName: myName })
+            body: JSON.stringify({ apiKey: myKey, myName: myName })
         });
     } catch(e) {}
-
-
-    if (discordWebhook) {
-        fetch('/api/save-discord-config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ webhookUrl: discordWebhook }) }).catch(()=>{});
-        fetch('/api/save-market-config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ webhookUrl: discordWebhook }) }).catch(()=>{});
+    if (globalBotToken) {
+        fetch('/api/save-discord-config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ globalBotToken: globalBotToken, globalChannelId: globalChannelId }) }).catch(()=>{});
+        fetch('/api/save-market-config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ globalChannelId: globalChannelId }) }).catch(()=>{});
     }
     
     knownEnemies = {}; 
     closeSettings();
     startPolling();
-    localStorage.setItem('master_faction_config', JSON.stringify({ webhookUrl: discordWebhook, apiKey: myKey, ffKey, tsKey, enemyFacId, myName, cpm }));
+    localStorage.setItem('master_faction_config', JSON.stringify({ globalBotToken: globalBotToken, globalChannelId: globalChannelId, apiKey: myKey, ffKey, tsKey, enemyFacId, myName, cpm }));
 }
 
 function startRefreshProgressBar(refreshMs) {

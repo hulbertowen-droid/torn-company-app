@@ -112,10 +112,6 @@
                 </details>
 
                 <div class="form-group">
-                    <label>Faction Discord Webhook URL (Legacy)</label>
-                    <input type="text" id="webhook-url" placeholder="https://discord.com/api/webhooks/...">
-                </div>
-                <div class="form-group">
                     <label>Faction Bot Token</label>
                     <input type="password" id="global-bottoken" placeholder="Bot Token (Recommended over Webhook)">
                 </div>
@@ -216,7 +212,6 @@ document.addEventListener("DOMContentLoaded", async function() {
         const res = await fetch('/api/get-discord-config');
         const config = await res.json();
         
-        document.getElementById('webhook-url').value = config.webhookUrl || "";
         document.getElementById('global-bottoken').value = config.globalBotToken || "";
         document.getElementById('global-channelid').value = config.globalChannelId || "";
         document.getElementById('targetOnline').checked = config.targetOnline !== false;
@@ -291,7 +286,6 @@ async function saveDiscordConfig() {
     // Save Global Settings
     const payload = {
         apiKey: myKey,
-        webhookUrl: document.getElementById('webhook-url').value.trim(),
         globalBotToken: document.getElementById('global-bottoken').value.trim(),
         globalChannelId: document.getElementById('global-channelid').value.trim(),
         targetOnline: document.getElementById('targetOnline').checked,
@@ -329,7 +323,6 @@ async function testDiscordAlert(type) {
     status.innerText = `Sending ${type} test alert...`;
     
     let discordId = document.getElementById("discord-userid").value.trim();
-    let webhookUrl = document.getElementById('webhook-url').value.trim();
     let globalChannelId = document.getElementById('global-channelid').value.trim();
     let globalBotToken = document.getElementById('global-bottoken').value.trim();
     
@@ -337,7 +330,7 @@ async function testDiscordAlert(type) {
         const res = await fetch('/api/test-discord-alert', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type, discordId, webhookUrl, globalChannelId, globalBotToken })
+            body: JSON.stringify({ type, discordId, globalChannelId, globalBotToken })
         });
         const data = await res.json();
         

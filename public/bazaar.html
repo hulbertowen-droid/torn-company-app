@@ -112,10 +112,10 @@
         <div class="container">
 
             <div class="dash-card">
-                <h2>Trading Post Webhook</h2>
-                <div class="form-group">
-                    <label>Discord Webhook URL (Where to send Trade Alerts)</label>
-                    <input type="text" id="trade-webhook" placeholder="https://discord.com/api/webhooks/... (Can be same as Warboard)">
+                <h2>Trading Post Channel Ping</h2>
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label>Trade Alerts Channel ID</label>
+                    <input type="text" id="trade-webhook" placeholder="Channel ID where Trade/Sniper Alerts will be posted">
                 </div>
             </div>
 
@@ -225,7 +225,7 @@ document.addEventListener("DOMContentLoaded", async function() {
         const res = await fetch('/api/get-market-config');
         const config = await res.json();
         
-        document.getElementById('trade-webhook').value = config.webhookUrl || "";
+        document.getElementById('trade-webhook').value = config.globalChannelId || "";
         document.getElementById('auto-defense').checked = config.autoDefense === true;
         sniperTargets = config.sniperTargets || [];
         renderTargets();
@@ -395,7 +395,7 @@ async function saveMarketConfig() {
     status.innerText = "Transmitting trading protocols to backend...";
 
     const payload = {
-        webhookUrl: document.getElementById('trade-webhook').value.trim(),
+        globalChannelId: document.getElementById('trade-webhook').value.trim(),
         autoDefense: document.getElementById('auto-defense').checked,
         sniperTargets: sniperTargets
     };
