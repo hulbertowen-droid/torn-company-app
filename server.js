@@ -835,11 +835,11 @@ app.post('/api/save-discord-config', async (req, res) => {
 app.get('/api/get-market-config', (req, res) => { res.json(marketConfig); });
 app.post('/api/save-market-config', (req, res) => { marketConfig = { ...marketConfig, ...req.body }; saveMarketConfig(); res.json({ success: true }); });
 
-app.post('/api/test-discord-alert', (req, res) => {
-    const { type, discordId, webhookUrl, globalChannelId } = req.body;
+app.post('/api/test-discord-alert', async (req, res) => {
+    const { type, discordId, webhookUrl, globalChannelId, globalBotToken } = req.body;
     let wh = webhookUrl || discordConfig.webhookUrl;
     let chanId = globalChannelId || discordConfig.globalChannelId;
-    let botToken = discordConfig.globalBotToken;
+    let botToken = globalBotToken || discordConfig.globalBotToken;
     
     if (!wh && !(botToken && chanId)) {
         return res.json({ success: false, error: "No Webhook URL or Global Bot Token + Channel ID provided." });
@@ -866,7 +866,8 @@ app.post('/api/test-discord-alert', (req, res) => {
     }
 
     if (useChannel) {
-        sendChannelMessage(botToken, chanId, embed, pingStr);
+        let result = await sendChannelMessage(botToken, chanId, embed, pingStr);
+        if (!result.success) return res.json({ success: false, error: result.error });
     } else if (wh) {
         sendDiscordEmbed(wh, { ...embed, pingText: pingStr });
     } else {
@@ -1678,16 +1679,19 @@ async function sendPrivateDM(token, userId, embedData) {
 
 async function sendChannelMessage(token, channelId, embedData, pingStr) {
     const client = await getDiscordClient(token);
-    if (!client) return;
+    if (!client) return { success: false, error: "Invalid bot token or unable to login." };
     try {
         const channel = await client.channels.fetch(channelId);
         if (channel) {
             let msgOptions = { embeds: [embedData] };
             if (pingStr) msgOptions.content = pingStr;
             await channel.send(msgOptions);
+            return { success: true };
         }
+        return { success: false, error: "Channel not found." };
     } catch (e) {
         console.error(`[Discord Bot] Failed to send message to channel ${channelId}:`, e.message);
+        return { success: false, error: e.message };
     }
 }
 

@@ -96,16 +96,17 @@
                 <h2>🌍 Faction Uplink Configuration</h2>
                 
                 <details style="margin-bottom: 20px; background: rgba(88, 166, 255, 0.05); border: 1px solid var(--blue); padding: 15px; border-radius: 8px;">
-                    <summary style="color: var(--blue); font-weight: bold; cursor: pointer; outline: none;">📖 How to Setup a Global Discord Bot</summary>
+                    <summary style="color: var(--blue); font-weight: bold; cursor: pointer; outline: none;">📖 How to Setup a Faction Discord Bot</summary>
                     <div style="margin-top: 15px; font-size: 0.9em; line-height: 1.5; color: var(--text-dim);">
                         <p>Follow these steps to set up the Faction Bot so it can ping members in your server:</p>
                         <ol style="padding-left: 20px; margin-top: 10px;">
                             <li style="margin-bottom: 8px;">Go to the <a href="https://discord.com/developers/applications" target="_blank" style="color: var(--blue);">Discord Developer Portal</a> and click <b>New Application</b>.</li>
-                            <li style="margin-bottom: 8px;">Click <b>Bot</b> in the left menu, then click <b>Reset Token</b> to copy your Bot Token. Paste it below.</li>
-                            <li style="margin-bottom: 8px;">Scroll down and enable all <b>Privileged Gateway Intents</b> (Presence, Server Members, Message Content).</li>
-                            <li style="margin-bottom: 8px;">Go to <b>OAuth2 &gt; URL Generator</b>. Select the <b>bot</b> scope, then select the <b>Send Messages</b> and <b>Mention Everyone</b> permissions.</li>
-                            <li style="margin-bottom: 8px;">Copy the generated URL at the bottom and paste it in a new tab to invite the bot to your faction server!</li>
-                            <li>In Discord, go to <b>User Settings &gt; Advanced</b> and enable <b>Developer Mode</b>. Right-click the channel where you want the alerts to go, click <b>Copy Channel ID</b>, and paste it below!</li>
+                            <li style="margin-bottom: 8px;">Click <b>Bot</b> in the left menu. Under the Token section, click <b>Reset Token</b> to copy your Bot Token. Paste it below.</li>
+                            <li style="margin-bottom: 8px;">Scroll down to <b>Privileged Gateway Intents</b>. Enable <b>Presence Intent</b>, <b>Server Members Intent</b>, and <b>Message Content Intent</b>, then click <b>Save Changes</b>.</li>
+                            <li style="margin-bottom: 8px;">Click <b>OAuth2</b> in the left menu, then click <b>URL Generator</b>. Under <b>Scopes</b>, select the <b>bot</b> checkbox.</li>
+                            <li style="margin-bottom: 8px;">Under <b>Bot Permissions</b>, select <b>Send Messages</b> and <b>Mention Everyone</b>.</li>
+                            <li style="margin-bottom: 8px;">Copy the <b>Generated URL</b> at the bottom and open it in a new tab to invite the bot to your server!</li>
+                            <li>In your Discord app, go to <b>User Settings &gt; Advanced</b> and toggle on <b>Developer Mode</b>. Right-click the channel where you want alerts to go, click <b>Copy Channel ID</b>, and paste it below.</li>
                         </ol>
                     </div>
                 </details>
@@ -115,11 +116,11 @@
                     <input type="text" id="webhook-url" placeholder="https://discord.com/api/webhooks/...">
                 </div>
                 <div class="form-group">
-                    <label>Global Bot Token</label>
+                    <label>Faction Bot Token</label>
                     <input type="password" id="global-bottoken" placeholder="Bot Token (Recommended over Webhook)">
                 </div>
                 <div class="form-group">
-                    <label>Global Alert Channel ID</label>
+                    <label>Faction Alert Channel ID</label>
                     <input type="text" id="global-channelid" placeholder="Channel ID for Bot Pings">
                 </div>
                 <h3 style="color: #ffa502; border-bottom: 1px solid #2f3542; padding-bottom: 5px; margin-top: 20px;">Faction Alert Toggles</h3>
@@ -330,12 +331,13 @@ async function testDiscordAlert(type) {
     let discordId = document.getElementById("discord-userid").value.trim();
     let webhookUrl = document.getElementById('webhook-url').value.trim();
     let globalChannelId = document.getElementById('global-channelid').value.trim();
+    let globalBotToken = document.getElementById('global-bottoken').value.trim();
     
     try {
         const res = await fetch('/api/test-discord-alert', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type, discordId, webhookUrl, globalChannelId })
+            body: JSON.stringify({ type, discordId, webhookUrl, globalChannelId, globalBotToken })
         });
         const data = await res.json();
         
