@@ -6,38 +6,11 @@
     <title>OC Manager | Owen's Faction Tools</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/global.css">
     <style>
-        :root {
-            --bg: #090a0f; --card: #11141d; --item: #1b202e;
-            --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
-            --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
-            --purple: #a29bfe;
-        }
-        * { box-sizing: border-box; }
-        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Inter', 'Segoe UI', sans-serif; margin: 0; height: 100vh; overflow: hidden; }
-        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: #0b0d13; } ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
-
-        /* Sidebar */
-        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s; flex-shrink: 0; z-index: 100; }
-        .sidebar.collapsed { width: 75px; }
-        .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2f3542; }
-        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 0.9em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
-        .sidebar.collapsed .sidebar-logo { opacity: 0; width: 0; display: none; }
-        .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
-        .toggle-btn:hover { color: white; background: #2f3542; }
-        .nav-items { display: flex; flex-direction: column; gap: 8px; padding: 20px 10px; }
-        .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: 600; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
-        .nav-link:hover { background: #2f3542; color: white; }
-        .nav-link.active { background: rgba(255, 71, 87, 0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
-        .nav-text { transition: opacity 0.2s; }
-        .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
-
-        /* Main */
-        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; position: relative; }
         #refresh-bar-container { position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: transparent; z-index: 50; }
         #refresh-bar { height: 100%; width: 0%; background: var(--blue); box-shadow: 0 0 8px var(--blue); transition: width 0.1s linear; }
 
-        h1 { text-align: center; color: var(--blue); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 8px; font-size: 1.8em; }
         .subtitle { text-align: center; color: var(--text-dim); font-size: 0.85em; margin-bottom: 30px; }
         .container { max-width: 1400px; margin: 0 auto; }
 
@@ -168,33 +141,7 @@
         .settings-btn { position: fixed; bottom: 25px; right: 25px; background: var(--gold); color: #000; border: none; width: 48px; height: 48px; border-radius: 50%; font-size: 1.2em; cursor: pointer; box-shadow: 0 4px 20px rgba(255,165,2,0.4); transition: 0.2s; z-index: 500; }
         .settings-btn:hover { transform: scale(1.1); box-shadow: 0 6px 25px rgba(255,165,2,0.6); }
     
-        /* Theme & Mobile Inject */
-        body.light-mode {
-            --bg: #f5f6fa; --card: #ffffff; --item: #f1f2f6; --bg2: #f5f6fa;
-            --red: #e84118; --blue: #273c75; --gold: #e1b12c; --teal: #0097e6;
-            --text-main: #2f3640; --text-dim: #718093; --text-faint: #dcdde1; --text: #2f3640;
-            --border: #dcdde1; --border-light: #f5f6fa;
-        }
-        .light-mode .sidebar { border-color: #dcdde1; box-shadow: 2px 0 15px rgba(0,0,0,0.05); }
-        .light-mode .sidebar-header, .light-mode .panel-header, .light-mode .top-bar { border-color: #dcdde1; background: #ffffff; }
-        .light-mode .nav-link:hover { background: #f5f6fa; color: #2f3640; }
-        .light-mode .dash-card, .light-mode .watchlist-box, .light-mode .faction-col, .light-mode .modal-content, .light-mode .toast, .light-mode .table-wrap, .light-mode .panel, .light-mode .kpi-card, .light-mode .stock-card { border-color: #dcdde1; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        .light-mode .watch-card, .light-mode .member-card, .light-mode .btn-filter, .light-mode .modal-content input, .light-mode thead { background: #f5f6fa; border-color: #dcdde1; color: #2f3640; }
-        .light-mode th { border-color: #dcdde1; }
-        .light-mode td { border-color: #f5f6fa; }
 
-        @media (max-width: 768px) {
-            body { flex-direction: column; }
-            .sidebar { width: 100% !important; height: auto; border-right: none; border-bottom: 1px solid var(--border, #2f3542); z-index: 1000; }
-            .sidebar.collapsed { width: 100% !important; }
-            .sidebar-header { padding: 10px 20px; }
-            .nav-items { display: none; flex-direction: row; flex-wrap: wrap; padding: 10px; justify-content: center; }
-            .nav-items.mobile-open { display: flex; }
-            .main-content { padding: 15px; height: auto; flex: 1; }
-            .container, .chart-row, .grid-2 { grid-template-columns: 1fr !important; }
-            .kpi-grid { grid-template-columns: 1fr 1fr !important; }
-            .table-wrap, .watchlist-items { overflow-x: auto; }
-        }
 
 </style>
 </head>

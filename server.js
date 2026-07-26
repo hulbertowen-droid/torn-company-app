@@ -369,7 +369,7 @@ setInterval(async () => {
                             friendlyHitTracker[uId].count = 0;
                             let dId = await getDiscordId(uId);
                             let pingStr = (dId && dId !== "none") ? `<@${dId}>` : "";
-                            if (discordConfig.webhookUrl) {
+                            if (discordConfig.webhookUrl && discordConfig.chainWarnings !== false) {
                                 sendDiscordEmbed(discordConfig.webhookUrl, {
                                     pingText: pingStr,
                                     title: "⚠️ CHAIN ATTACK WARNING",
@@ -422,7 +422,63 @@ setInterval(async () => {
                     }
                 }
             }
+            }
         }
+
+        if (activeWarId && liveData.rankedwars) {
+            let ongoingWar = Object.values(liveData.rankedwars).find(w => w.war && w.war.start === activeWarId);
+            if (ongoingWar && ongoingWar.factions) {
+                let facIds = Object.keys(ongoingWar.factions);
+                currentEnemyFacId = facIds.find(id => id !== watchFactionId.toString());
+            }
+        }
+
+        if (currentEnemyFacId && Date.now() - lastEnemyScrape > 60000) {
+            lastEnemyScrape = Date.now();
+            try {
+                const enemyRes = await fetch(`https://api.torn.com/faction/${currentEnemyFacId}?selections=basic&key=${watchKey}`);
+                const enemyData = await enemyRes.json();
+                if (enemyData.members) enemyMembersCache = enemyData.members;
+            } catch(e) {}
+        }
+
+        if (liveData.members && Object.keys(enemyMembersCache).length > 0) {
+            const COUNTRIES = ["Mexico", "Cayman Islands", "Canada", "Hawaii", "United Kingdom", "Argentina", "Switzerland", "Japan", "China", "UAE", "South Africa"];
+            
+            let enemyThreats = {}; 
+            for (let [eId, eMem] of Object.entries(enemyMembersCache)) {
+                let det = (eMem.status && eMem.status.details) ? eMem.status.details : "";
+                if (det.includes("Traveling to ")) {
+                    let country = COUNTRIES.find(c => det.includes(c));
+                    if (country) {
+                        if (!enemyThreats[country]) enemyThreats[country] = [];
+                        enemyThreats[country].push(eMem.name);
+                    }
+                }
+            }
+
+            for (let [uId, fMem] of Object.entries(liveData.members)) {
+                let det = (fMem.status && fMem.status.details) ? fMem.status.details : "";
+                let fCountry = COUNTRIES.find(c => det.includes(c));
+                if (fCountry && enemyThreats[fCountry] && enemyThreats[fCountry].length > 0) {
+                    let lastAlert = travelAlerts[uId] || 0;
+                    if (Date.now() - lastAlert > 15 * 60 * 1000) {
+                        travelAlerts[uId] = Date.now();
+                        let dId = await getDiscordId(uId);
+                        let pingStr = (dId && dId !== "none") ? `<@${dId}>` : "";
+                        if (discordConfig.webhookUrl && discordConfig.travelWarnings !== false) {
+                            sendDiscordEmbed(discordConfig.webhookUrl, {
+                                pingText: pingStr,
+                                title: "✈️ TRAVEL WARNING",
+                                description: `**${fMem.name}**, an enemy (**${enemyThreats[fCountry][0]}**) is currently flying to **${fCountry}** where you are located (or heading)!\n\nFly away or return to Torn immediately!`,
+                                color: 16729943
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
     } catch (err) {}
 }, 20000); 
 
@@ -1284,6 +1340,8 @@ app.post('/api/master-config', (req, res) => {
         discordConfig.targetLanded = globalToggles.target;
         discordConfig.targetOutHosp = globalToggles.target;
         discordConfig.medOutSniper = globalToggles.sniper;
+        if (globalToggles.travelWarnings !== undefined) discordConfig.travelWarnings = globalToggles.travelWarnings;
+        if (globalToggles.chainWarnings !== undefined) discordConfig.chainWarnings = globalToggles.chainWarnings;
     }
     
     saveDiscordConfig();
