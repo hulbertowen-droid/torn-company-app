@@ -3,331 +3,837 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alliance Dashboard | Owen's Faction Tools</title>
+    <title>Faction Dashboard | Owen's Faction Tools</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
     <style>
-        :root { 
-            --bg: #090a0f; --card: #11141d; --item: #1b202e; 
+        :root {
+            --bg: #060810; --card: #0d1117; --item: #161b22;
             --red: #ff4757; --blue: #58a6ff; --gold: #ffa502;
-            --text-main: #f1f2f6; --text-dim: #a1aab5; --green: #2ed573;
+            --green: #2ed573; --teal: #00cec9; --purple: #a29bfe;
+            --text-main: #e6edf3; --text-dim: #8b949e; --border: #21262d;
         }
-        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; height: 100vh; overflow: hidden; }
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #0b0d13; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb { background: #2f3542; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #57606f; }
+        * { box-sizing: border-box; }
+        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Inter', system-ui, sans-serif; margin: 0; height: 100vh; overflow: hidden; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 6px; }
 
-        .sidebar { width: 260px; background: var(--card); border-right: 1px solid #2f3542; display: flex; flex-direction: column; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); flex-shrink: 0; z-index: 100; }
-        .sidebar.collapsed { width: 75px; }
-        .sidebar-header { padding: 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #2f3542; }
-        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 0.9em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; transition: opacity 0.2s; }
-        .sidebar.collapsed .sidebar-logo { opacity: 0; width: 0; display: none; }
-        .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.5em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; }
-        .toggle-btn:hover { color: white; background: #2f3542; }
-        .nav-items { display: flex; flex-direction: column; gap: 8px; padding: 20px 10px; }
-        .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; overflow: hidden; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
-        .nav-link:hover { background: #2f3542; color: white; }
-        .nav-link.active { background: rgba(255, 71, 87, 0.1); border-left: 4px solid var(--red); color: white; border-radius: 0 8px 8px 0; }
+        /* SIDEBAR */
+        .sidebar { width: 250px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; transition: width 0.3s ease; flex-shrink: 0; z-index: 100; }
+        .sidebar.collapsed { width: 72px; }
+        .sidebar-header { padding: 18px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+        .sidebar-logo { color: var(--red); font-weight: 900; font-size: 0.85em; text-transform: uppercase; letter-spacing: 2px; white-space: nowrap; }
+        .sidebar.collapsed .sidebar-logo { display: none; }
+        .toggle-btn { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.3em; padding: 4px 8px; border-radius: 6px; transition: 0.2s; }
+        .toggle-btn:hover { background: #21262d; color: white; }
+        .nav-items { display: flex; flex-direction: column; gap: 4px; padding: 16px 8px; flex: 1; overflow-y: auto; }
+        .nav-link { display: flex; align-items: center; gap: 12px; color: var(--text-dim); text-decoration: none; font-weight: 600; padding: 10px 12px; border-radius: 8px; transition: 0.15s; white-space: nowrap; font-size: 0.85em; letter-spacing: 0.5px; cursor: pointer; }
+        .nav-link:hover { background: #161b22; color: var(--text-main); }
+        .nav-link.active { background: rgba(255,71,87,0.12); color: var(--red); }
         .nav-text { transition: opacity 0.2s; }
-        .sidebar.collapsed .nav-text { opacity: 0; width: 0; display: none; }
-        
-        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
-        h1 { text-align: center; color: var(--blue); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
+        .sidebar.collapsed .nav-text { display: none; }
 
-        .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
-        
-        .ai-card { grid-column: 1 / -1; background: var(--card); border: 1px solid #2f3542; padding: 25px; border-radius: 12px; }
-        .ai-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2f3542; padding-bottom: 12px; margin-bottom: 15px; }
-        .ai-title { color: var(--gold); font-weight: bold; text-transform: uppercase; font-size: 1.1em; display: flex; align-items: center; gap: 10px; }
-        .ai-btn-group { display: flex; gap: 10px; }
-        .btn-ai { background: #2f3542; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 0.85em; text-transform: uppercase; }
-        .btn-ai:hover { background: #57606f; }
-        .btn-ai.live { background: rgba(255, 71, 87, 0.2); color: var(--red); border: 1px solid var(--red); }
-        .btn-ai.live:hover { background: var(--red); color: white; }
-        
-        .ai-response-box { background: #0b0d13; border: 1px solid #2f3542; border-radius: 8px; padding: 20px; min-height: 120px; font-size: 0.95em; line-height: 1.6; color: var(--text-main); overflow-y: auto; max-height: 250px; }
+        /* MAIN */
+        .main-content { flex: 1; overflow-y: auto; padding: 24px 28px; height: 100vh; }
 
-        .dash-col { background: var(--card); border: 1px solid #2f3542; padding: 25px; border-radius: 12px; display: flex; flex-direction: column; height: 500px; }
-        .dash-col h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 12px; text-transform: uppercase; font-size: 1.1em; display: flex; justify-content: space-between; align-items: center; }
-        
-        .list-container { flex-grow: 1; overflow-y: auto; padding-right: 5px; }
-        
-        .table-header { display: grid; grid-template-columns: 1.5fr 1.5fr 2fr; gap: 10px; color: var(--text-dim); font-weight: bold; font-size: 0.8em; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #2f3542; padding-bottom: 8px; margin-bottom: 10px; }
-        .table-row { display: grid; grid-template-columns: 1.5fr 1.5fr 2fr; gap: 10px; padding: 12px 0; border-bottom: 1px solid #1b202e; font-size: 0.9em; align-items: center; }
-        .table-row:last-child { border-bottom: none; }
-        
-        .p-name { font-weight: bold; color: var(--text-main); text-decoration: none; }
-        .p-name:hover { text-decoration: underline; color: var(--blue); }
-        .status-dot { inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: #a1aab5; }
-        .status-dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
-        .status-dot.idle { background: var(--gold); }
-        
-        .loan-header { display: grid; grid-template-columns: 2fr 2fr 1fr; gap: 10px; color: var(--text-dim); font-weight: bold; font-size: 0.8em; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #2f3542; padding-bottom: 8px; margin-bottom: 10px; }
-        .loan-row { display: grid; grid-template-columns: 2fr 2fr 1fr; gap: 10px; padding: 12px 0; border-bottom: 1px solid #1b202e; font-size: 0.9em; align-items: center; }
-        
-        .badge-type { padding: 3px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold; text-transform: uppercase; text-align: center; background: rgba(88, 166, 255, 0.15); color: var(--blue); border: 1px solid var(--blue); }
-        
-        .lock-badge { color: var(--red); font-size: 0.85em; font-weight: bold; border: 1px dashed var(--red); padding: 2px 6px; border-radius: 4px; display: inline-block; }
-        
-        /* Activity blocks styling */
-        .activity-block-container { display: flex; gap: 2px; align-items: center; }
-        .act-block { width: 10px; height: 16px; background: #1b202e; border-radius: 2px; }
-        .act-block.active-low { background: #0e3a2f; }
-        .act-block.active-med { background: #16664f; }
-        .act-block.active-high { background: var(--green); }
-    
-        /* Theme & Mobile Inject */
-        body.light-mode {
-            --bg: #f5f6fa; --card: #ffffff; --item: #f1f2f6; --bg2: #f5f6fa;
-            --red: #e84118; --blue: #273c75; --gold: #e1b12c; --teal: #0097e6;
-            --text-main: #2f3640; --text-dim: #718093; --text-faint: #dcdde1; --text: #2f3640;
-            --border: #dcdde1; --border-light: #f5f6fa;
-        }
-        .light-mode .sidebar { border-color: #dcdde1; box-shadow: 2px 0 15px rgba(0,0,0,0.05); }
-        .light-mode .sidebar-header, .light-mode .panel-header, .light-mode .top-bar { border-color: #dcdde1; background: #ffffff; }
-        .light-mode .nav-link:hover { background: #f5f6fa; color: #2f3640; }
-        .light-mode .dash-card, .light-mode .watchlist-box, .light-mode .faction-col, .light-mode .modal-content, .light-mode .toast, .light-mode .table-wrap, .light-mode .panel, .light-mode .kpi-card, .light-mode .stock-card { border-color: #dcdde1; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        .light-mode .watch-card, .light-mode .member-card, .light-mode .btn-filter, .light-mode .modal-content input, .light-mode thead { background: #f5f6fa; border-color: #dcdde1; color: #2f3640; }
-        .light-mode th { border-color: #dcdde1; }
-        .light-mode td { border-color: #f5f6fa; }
+        /* HEADER */
+        .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+        .page-title { font-size: 1.5em; font-weight: 900; color: var(--text-main); display: flex; align-items: center; gap: 12px; }
+        .page-title span { color: var(--blue); }
+        .refresh-btn { background: var(--item); border: 1px solid var(--border); color: var(--text-dim); padding: 8px 16px; border-radius: 8px; font-size: 0.85em; cursor: pointer; font-weight: 600; transition: 0.2s; display: flex; align-items: center; gap: 8px; }
+        .refresh-btn:hover { border-color: var(--blue); color: var(--blue); }
+        .last-updated { font-size: 0.8em; color: var(--text-dim); }
 
-        @media (max-width: 768px) {
+        /* FACTION HERO STRIP */
+        .faction-hero { background: linear-gradient(135deg, #0d1117 0%, #0f1923 50%, #0d1117 100%); border: 1px solid var(--border); border-radius: 14px; padding: 24px 28px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; gap: 20px; position: relative; overflow: hidden; }
+        .faction-hero::before { content: ''; position: absolute; top: -50%; right: -10%; width: 400px; height: 400px; background: radial-gradient(circle, rgba(88,166,255,0.06) 0%, transparent 70%); pointer-events: none; }
+        .faction-name-block h2 { margin: 0; font-size: 1.6em; font-weight: 900; background: linear-gradient(135deg, var(--blue), var(--teal)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .faction-name-block .faction-id { color: var(--text-dim); font-size: 0.85em; margin-top: 4px; }
+        .faction-name-block .faction-tag { display: inline-block; background: rgba(88,166,255,0.1); border: 1px solid var(--blue); color: var(--blue); padding: 2px 10px; border-radius: 20px; font-size: 0.8em; font-weight: 700; margin-top: 6px; }
+        .faction-hero-stats { display: flex; gap: 24px; }
+        .hero-stat { text-align: center; }
+        .hero-stat .val { font-size: 1.8em; font-weight: 900; color: var(--text-main); line-height: 1; }
+        .hero-stat .lbl { font-size: 0.75em; color: var(--text-dim); text-transform: uppercase; font-weight: 600; margin-top: 4px; letter-spacing: 0.5px; }
+        .hero-stat .val.green { color: var(--green); }
+        .hero-stat .val.red { color: var(--red); }
+        .hero-stat .val.gold { color: var(--gold); }
+        .faction-divider { width: 1px; background: var(--border); height: 60px; }
+
+        /* KPI ROW */
+        .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 20px; }
+        .kpi-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; display: flex; align-items: center; gap: 14px; transition: 0.2s; }
+        .kpi-card:hover { border-color: #30363d; }
+        .kpi-icon { font-size: 1.8em; flex-shrink: 0; }
+        .kpi-label { font-size: 0.75em; color: var(--text-dim); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
+        .kpi-value { font-size: 1.4em; font-weight: 900; color: var(--text-main); margin-top: 2px; }
+        .kpi-sub { font-size: 0.75em; color: var(--text-dim); margin-top: 2px; }
+
+        /* GRID */
+        .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+        .dash-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+        .span-full { grid-column: 1 / -1; }
+
+        /* CARDS */
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .card-title { font-size: 0.9em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; }
+        .card-body { padding: 16px 20px; }
+        .card-body.scrollable { max-height: 320px; overflow-y: auto; padding: 0; }
+
+        /* WAR STATUS */
+        .war-active-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,71,87,0.15); border: 1px solid rgba(255,71,87,0.4); color: var(--red); padding: 4px 12px; border-radius: 20px; font-size: 0.8em; font-weight: 700; animation: pulse 2s infinite; }
+        .war-no-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(46,213,115,0.1); border: 1px solid rgba(46,213,115,0.3); color: var(--green); padding: 4px 12px; border-radius: 20px; font-size: 0.8em; font-weight: 700; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+        /* WAR SCORE CARD */
+        .war-score-row { display: flex; align-items: center; gap: 12px; padding: 16px 20px; }
+        .war-faction-name { font-weight: 700; font-size: 1em; flex: 1; }
+        .war-score-num { font-size: 2.2em; font-weight: 900; min-width: 80px; text-align: center; }
+        .war-score-num.winning { color: var(--green); }
+        .war-score-num.losing { color: var(--red); }
+        .war-vs { font-size: 1.2em; font-weight: 900; color: var(--text-dim); padding: 0 8px; }
+        .war-bar-wrap { height: 8px; background: var(--item); border-radius: 4px; margin: 0 20px 16px; overflow: hidden; }
+        .war-bar-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--green), var(--teal)); transition: width 0.6s ease; }
+        .war-bar-fill.danger { background: linear-gradient(90deg, var(--red), var(--gold)); }
+
+        /* CHAIN BAR */
+        .chain-section { padding: 16px 20px; }
+        .chain-progress-wrap { background: var(--item); border-radius: 8px; height: 14px; overflow: hidden; margin: 10px 0; }
+        .chain-progress-fill { height: 100%; border-radius: 8px; background: linear-gradient(90deg, #2ed573, #00cec9); box-shadow: 0 0 10px rgba(46,213,115,0.4); transition: width 0.5s ease; }
+        .chain-meta { display: flex; justify-content: space-between; font-size: 0.8em; color: var(--text-dim); }
+        .chain-timeout { font-size: 1.4em; font-weight: 900; }
+        .chain-timeout.danger { color: var(--red); animation: pulse 1s infinite; }
+        .chain-timeout.ok { color: var(--green); }
+
+        /* MEMBER LIST */
+        .member-row { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 8px; padding: 10px 20px; border-bottom: 1px solid #161b22; align-items: center; font-size: 0.88em; transition: 0.15s; }
+        .member-row:hover { background: #0d1117; }
+        .member-row:last-child { border-bottom: none; }
+        .member-row-header { grid-template-columns: 2fr 1fr 1fr; color: var(--text-dim); font-size: 0.75em; font-weight: 700; text-transform: uppercase; padding: 10px 20px; border-bottom: 1px solid var(--border); }
+        .m-name { font-weight: 600; color: var(--text-main); text-decoration: none; }
+        .m-name:hover { color: var(--blue); }
+        .status-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 0.78em; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+        .status-pill.online { background: rgba(46,213,115,0.12); color: var(--green); }
+        .status-pill.idle { background: rgba(255,165,2,0.12); color: var(--gold); }
+        .status-pill.offline { background: #161b22; color: var(--text-dim); }
+        .status-pill.hospital { background: rgba(255,71,87,0.12); color: var(--red); }
+        .status-pill.traveling { background: rgba(88,166,255,0.12); color: var(--blue); }
+        .status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+        /* LOAN LIST */
+        .loan-row { display: grid; grid-template-columns: 2fr 2fr 1fr; gap: 8px; padding: 10px 20px; border-bottom: 1px solid #161b22; align-items: center; font-size: 0.88em; }
+        .loan-row:last-child { border-bottom: none; }
+        .badge-type { padding: 2px 8px; border-radius: 4px; font-size: 0.75em; font-weight: 700; background: rgba(88,166,255,0.1); color: var(--blue); border: 1px solid rgba(88,166,255,0.3); }
+        .badge-type.armor { background: rgba(255,165,2,0.1); color: var(--gold); border-color: rgba(255,165,2,0.3); }
+        .badge-type.temp { background: rgba(162,155,254,0.1); color: var(--purple); border-color: rgba(162,155,254,0.3); }
+
+        /* WAR ANALYST */
+        .analyst-tabs { display: flex; gap: 8px; padding: 12px 20px; border-bottom: 1px solid var(--border); }
+        .analyst-tab { padding: 6px 16px; border-radius: 6px; font-size: 0.82em; font-weight: 700; border: 1px solid var(--border); background: none; color: var(--text-dim); cursor: pointer; transition: 0.15s; }
+        .analyst-tab:hover, .analyst-tab.active { background: rgba(88,166,255,0.1); color: var(--blue); border-color: var(--blue); }
+        .analyst-tab.live { border-color: rgba(255,71,87,0.4); color: var(--red); background: rgba(255,71,87,0.08); }
+        .analyst-tab.live:hover, .analyst-tab.live.active { background: var(--red); color: white; }
+        .analyst-output { padding: 20px; min-height: 160px; font-size: 0.9em; line-height: 1.8; color: var(--text-main); }
+        .analyst-output.loading { color: var(--text-dim); font-style: italic; }
+        .analyst-output.error { color: var(--red); }
+        
+        /* STAT BREAKDOWN */
+        .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #161b22; font-size: 0.88em; }
+        .stat-row:last-child { border-bottom: none; }
+        .stat-label { color: var(--text-dim); font-weight: 600; }
+        .stat-val { font-weight: 700; color: var(--text-main); }
+
+        /* RESPECT BAR */
+        .respect-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 0.82em; }
+        .respect-bar-wrap { flex: 1; background: var(--item); border-radius: 4px; height: 6px; overflow: hidden; }
+        .respect-bar-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--blue), var(--purple)); }
+        .respect-name { width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-main); font-weight: 600; }
+        .respect-val { width: 50px; text-align: right; color: var(--text-dim); }
+
+        /* EMPTY STATE */
+        .empty-state { padding: 30px; text-align: center; color: var(--text-dim); font-style: italic; font-size: 0.9em; }
+
+        /* LOADING */
+        .loading-shimmer { background: linear-gradient(90deg, #161b22 25%, #1f2937 50%, #161b22 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 6px; height: 20px; margin: 8px 0; }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+        /* MOBILE */
+        @media (max-width: 900px) {
             body { flex-direction: column; }
-            .sidebar { width: 100% !important; height: auto; border-right: none; border-bottom: 1px solid var(--border, #2f3542); z-index: 1000; }
-            .sidebar.collapsed { width: 100% !important; }
-            .sidebar-header { padding: 10px 20px; }
-            .nav-items { display: none; flex-direction: row; flex-wrap: wrap; padding: 10px; justify-content: center; }
+            .sidebar { width: 100% !important; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+            .nav-items { flex-direction: row; flex-wrap: wrap; padding: 10px; justify-content: center; display: none; }
             .nav-items.mobile-open { display: flex; }
-            .main-content { padding: 15px; height: auto; flex: 1; }
-            .container, .chart-row, .grid-2 { grid-template-columns: 1fr !important; }
-            .kpi-grid { grid-template-columns: 1fr 1fr !important; }
-            .table-wrap, .watchlist-items { overflow-x: auto; }
+            .main-content { height: auto; }
+            .kpi-row { grid-template-columns: repeat(2, 1fr); }
+            .dash-grid, .dash-grid-3 { grid-template-columns: 1fr; }
+            .faction-hero { flex-direction: column; }
+            .faction-hero-stats { flex-wrap: wrap; }
         }
 
-</style>
+        /* LIGHT MODE */
+        body.light-mode {
+            --bg: #f0f2f5; --card: #ffffff; --item: #f6f8fa; --border: #d0d7de;
+            --text-main: #24292f; --text-dim: #57606a;
+        }
+    </style>
 </head>
 <body>
     <nav class="sidebar" id="app-sidebar">
         <div class="sidebar-header">
             <div class="sidebar-logo">Owen's Faction Tools</div>
-            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Theme" style="background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.2em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; margin-right: 10px;">🌗</button>
-            <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
+            <div style="display:flex;gap:6px;">
+                <button onclick="toggleTheme()" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:1.1em;padding:4px 8px;border-radius:6px;" title="Toggle Theme">🌗</button>
+                <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
+            </div>
         </div>
         <div class="nav-items">
             <a href="/" class="nav-link">📡 <span class="nav-text">Live Warboard</span></a>
             <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
             <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
             <a href="/dashboard.html" class="nav-link active">🛡️ <span class="nav-text">Dashboard</span></a>
-            
             <a href="/members.html" class="nav-link">👥 <span class="nav-text">Members</span></a>
             <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
             <a href="/travel.html" class="nav-link">✈️ <span class="nav-text">Travel Calculator</span></a>
             <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
             <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>
             <a href="/oc.html" class="nav-link">💼 <span class="nav-text">OC Manager</span></a>
-            <a href="/company.html" class="nav-link" style="margin-top:auto; background: rgba(0,206,201,0.1); border: 1px solid var(--teal); color: var(--teal); border-radius: 8px;">🏢 <span class="nav-text">Company Tools</span></a>
+            <a href="/company.html" class="nav-link" style="margin-top:auto;background:rgba(0,206,201,0.08);border:1px solid var(--teal);color:var(--teal);border-radius:8px;">🏢 <span class="nav-text">Company Tools</span></a>
         </div>
-
     </nav>
 
-    <main class="main-content">
-        <h1>Alliance Dashboard</h1>
-        <div class="container">
-            
-            <!-- GEMINI WAR ANALYST -->
-            <div class="ai-card">
-                <div class="ai-header">
-                    <div class="ai-title">🧠 Gemini Tactical War Analyst</div>
-                    <div class="ai-btn-group">
-                        <button class="btn-ai" onclick="runAiAnalysis('past')">Analyze Last War</button>
-                        <button class="btn-ai live" onclick="runAiAnalysis('live')">💥 Analyze LIVE War</button>
+    <main class="main-content" id="main-content">
+        <div class="page-header">
+            <div class="page-title">🛡️ Faction <span>Dashboard</span></div>
+            <div style="display:flex;align-items:center;gap:14px;">
+                <div class="last-updated" id="last-updated">Fetching data...</div>
+                <button class="refresh-btn" onclick="loadAll()">↻ Refresh</button>
+            </div>
+        </div>
+
+        <!-- FACTION HERO -->
+        <div class="faction-hero" id="faction-hero">
+            <div class="faction-name-block">
+                <div class="loading-shimmer" style="width:200px;height:28px;"></div>
+                <div class="loading-shimmer" style="width:120px;height:14px;margin-top:8px;"></div>
+            </div>
+            <div class="faction-hero-stats" id="hero-stats">
+                <div class="loading-shimmer" style="width:280px;height:50px;"></div>
+            </div>
+        </div>
+
+        <!-- KPI ROW -->
+        <div class="kpi-row" id="kpi-row">
+            <div class="kpi-card"><div class="kpi-icon">👥</div><div><div class="kpi-label">Total Members</div><div class="kpi-value" id="kpi-members">—</div><div class="kpi-sub" id="kpi-online-sub">Loading...</div></div></div>
+            <div class="kpi-card"><div class="kpi-icon">🏆</div><div><div class="kpi-label">Faction Respect</div><div class="kpi-value" id="kpi-respect">—</div><div class="kpi-sub" id="kpi-respect-sub"></div></div></div>
+            <div class="kpi-card"><div class="kpi-icon">🔗</div><div><div class="kpi-label">Active Chain</div><div class="kpi-value" id="kpi-chain">—</div><div class="kpi-sub" id="kpi-chain-timeout">—</div></div></div>
+            <div class="kpi-card"><div class="kpi-icon">⚔️</div><div><div class="kpi-label">War Status</div><div class="kpi-value" id="kpi-war-status">—</div><div class="kpi-sub" id="kpi-war-sub">—</div></div></div>
+            <div class="kpi-card"><div class="kpi-icon">🏦</div><div><div class="kpi-label">Faction Level</div><div class="kpi-value" id="kpi-level">—</div><div class="kpi-sub" id="kpi-age">—</div></div></div>
+        </div>
+
+        <!-- WAR SCORE + CHAIN DETAILS -->
+        <div class="dash-grid" id="war-chain-row">
+            <!-- WAR SCORE CARD -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">⚔️ Active War Score</div>
+                    <span id="war-live-badge"></span>
+                </div>
+                <div id="war-score-body">
+                    <div class="empty-state">No active ranked war detected.</div>
+                </div>
+            </div>
+
+            <!-- CHAIN CARD -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">🔗 Chain Monitor</div>
+                    <span id="chain-status-badge"></span>
+                </div>
+                <div class="chain-section" id="chain-body">
+                    <div class="empty-state">No active chain detected.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- WAR ANALYST FULL WIDTH -->
+        <div class="card span-full" style="margin-bottom:18px;">
+            <div class="card-header">
+                <div class="card-title">🧠 War Analyst</div>
+                <div style="font-size:0.8em;color:var(--text-dim);">Uses your live faction + war data</div>
+            </div>
+            <div class="analyst-tabs">
+                <button class="analyst-tab" id="tab-past" onclick="runAnalysis('past')">📊 Analyze Last War</button>
+                <button class="analyst-tab live" id="tab-live" onclick="runAnalysis('live')">💥 Analyze LIVE War</button>
+                <button class="analyst-tab" id="tab-members" onclick="runAnalysis('members')">👥 Member Health Report</button>
+                <button class="analyst-tab" id="tab-recommend" onclick="runAnalysis('recommend')">🎯 Tactical Recommendations</button>
+            </div>
+            <div class="analyst-output loading" id="analyst-output">
+                Select an analysis above to generate a real-time report from your faction data.
+            </div>
+        </div>
+
+        <!-- MEMBERS + LOANS -->
+        <div class="dash-grid">
+            <!-- MEMBER ACTIVITY -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">👥 Member Activity</div>
+                    <span id="member-count-badge" style="font-size:0.8em;color:var(--text-dim);">Loading...</span>
+                </div>
+                <div class="card-body scrollable">
+                    <div class="member-row member-row-header">
+                        <div>Player</div>
+                        <div>Status</div>
+                        <div>Last Action</div>
+                    </div>
+                    <div id="member-list">
+                        <div class="loading-shimmer" style="margin:12px 20px;"></div>
+                        <div class="loading-shimmer" style="margin:12px 20px;"></div>
+                        <div class="loading-shimmer" style="margin:12px 20px;"></div>
                     </div>
                 </div>
-                <div class="ai-response-box" id="ai-output">
-                    Awaiting command... Click a button above to feed war data into the AI.
-                </div>
             </div>
 
-            <!-- MEMBER ACTIVITY TRACKER -->
-            <div class="dash-col">
-                <h2>👤 Member Activity Tracker <span id="member-count" style="color:var(--text-dim); font-size:0.7em;">0</span></h2>
-                <div class="table-header">
-                    <div>Player</div>
-                    <div>Status</div>
-                    <div>Scanner Timeline (12H)</div>
+            <!-- TOP RESPECT + LOANS -->
+            <div style="display:flex;flex-direction:column;gap:18px;">
+                <!-- TOP RESPECT EARNERS -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">🏆 Top Respect Earners</div>
+                        <span style="font-size:0.8em;color:var(--text-dim);">War contributions</span>
+                    </div>
+                    <div class="card-body" id="respect-list">
+                        <div class="empty-state">Loading respect data...</div>
+                    </div>
                 </div>
-                <div class="list-container" id="activity-list">
-                    <div style="color:var(--text-dim); padding:20px; text-align:center;">Loading roster tracking matrices...</div>
+
+                <!-- ARMORY LOANS -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">🔫 Armory Loans</div>
+                        <span id="loan-count-badge" style="font-size:0.8em;color:var(--text-dim);">Loading...</span>
+                    </div>
+                    <div class="card-body scrollable" style="max-height:200px;">
+                        <div id="loan-list">
+                            <div class="loading-shimmer" style="margin:12px 20px;"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
-
-            <!-- ARMORY LOANS TRACKER -->
-            <div class="dash-col">
-                <h2>🔫 Armory Loans Tracker <span id="loan-count" style="color:var(--text-dim); font-size:0.7em;">0</span></h2>
-                <div class="loan-header">
-                    <div>Item</div>
-                    <div>Loaned To</div>
-                    <div>Type</div>
-                </div>
-                <div class="list-container" id="loan-list">
-                    <div style="color:var(--text-dim); padding:20px; text-align:center;">Scanning armory vault allocation...</div>
-                </div>
-            </div>
-
         </div>
+
+        <!-- FACTION STATS -->
+        <div class="dash-grid-3" style="margin-top:18px;">
+            <div class="card">
+                <div class="card-header"><div class="card-title">📊 Faction Stats</div></div>
+                <div class="card-body" id="faction-stats-body">
+                    <div class="empty-state">Loading...</div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header"><div class="card-title">🗺️ Member Status Breakdown</div></div>
+                <div class="card-body" id="status-breakdown-body">
+                    <div class="empty-state">Loading...</div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header"><div class="card-title">📅 Recent Wars</div></div>
+                <div class="card-body scrollable" style="max-height:220px;" id="recent-wars-body">
+                    <div class="empty-state">Loading...</div>
+                </div>
+            </div>
+        </div>
+
     </main>
 
 <script>
 const myKey = localStorage.getItem("warboard_apikey") || "";
-const ffKey = localStorage.getItem("warboard_ffkey") || "";
-
-document.addEventListener("DOMContentLoaded", function() {
-    const sidebar = document.getElementById('app-sidebar');
-    if (localStorage.getItem('sidebar_collapsed') === 'true') { sidebar.classList.add('collapsed'); }
-    
-    if (myKey) {
-        fetchDashboardData();
-    } else {
-        document.getElementById("activity-list").innerHTML = `<div style="color:var(--red); padding:20px; text-align:center;">API Key missing. Add it on the Live Warboard settings.</div>`;
-    }
-});
 
 function toggleSidebar() {
-    const sidebar = document.getElementById('app-sidebar');
-    sidebar.classList.toggle('collapsed');
-    localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+    const s = document.getElementById('app-sidebar');
+    if (window.innerWidth <= 900) {
+        document.querySelector('.nav-items').classList.toggle('mobile-open');
+    } else {
+        s.classList.toggle('collapsed');
+        localStorage.setItem('sidebar_collapsed', s.classList.contains('collapsed'));
+    }
+}
+if (localStorage.getItem('sidebar_collapsed') === 'true' && window.innerWidth > 900) {
+    document.getElementById('app-sidebar').classList.add('collapsed');
+}
+function toggleTheme() {
+    document.body.classList.toggle('light-mode');
+    localStorage.setItem('theme', document.body.classList.contains('light-mode') ? 'light' : 'dark');
+}
+if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-mode');
+
+function fmtNum(n) { return Number(n).toLocaleString(); }
+function fmtMoney(n) {
+    n = Number(n);
+    if (n >= 1e9) return '$' + (n/1e9).toFixed(2) + 'B';
+    if (n >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return '$' + (n/1e3).toFixed(0) + 'K';
+    return '$' + n;
+}
+function timeSince(ts) {
+    const s = Math.floor(Date.now()/1000) - ts;
+    if (s < 60) return s + 's ago';
+    if (s < 3600) return Math.floor(s/60) + 'm ago';
+    if (s < 86400) return Math.floor(s/3600) + 'h ago';
+    return Math.floor(s/86400) + 'd ago';
+}
+function fmtDuration(s) {
+    const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${sec}s`;
+    return `${sec}s`;
 }
 
-async function fetchDashboardData() {
-    try {
-        // Correctly passing both credentials to backend endpoints
-        const res = await fetch(`/api/dashboard-data?apiKey=${myKey}&ffKey=${ffKey}`);
-        const data = await res.json();
+let dashData = null;
 
-        if (data.error) {
-            document.getElementById("activity-list").innerHTML = `<div style="color:var(--red); padding:20px; text-align:center;">${data.error}</div>`;
+async function loadAll() {
+    if (!myKey) {
+        document.getElementById('analyst-output').innerHTML = '<span style="color:var(--red)">⚠️ No API key set. Open Settings (⚙️) to add your Torn API key.</span>';
+        document.getElementById('analyst-output').classList.remove('loading');
+        return;
+    }
+    document.getElementById('last-updated').innerText = 'Refreshing...';
+    try {
+        const [dashRes, warRes] = await Promise.all([
+            fetch(`/api/dashboard-data?apiKey=${myKey}`),
+            fetch(`/api/war-list?apiKey=${myKey}`)
+        ]);
+        const dash = await dashRes.json();
+        const wars = await warRes.json();
+
+        if (dash.error) {
+            document.getElementById('analyst-output').innerHTML = `<span style="color:var(--red)">Error: ${dash.error}</span>`;
             return;
         }
 
-        // 1. RENDER ACTIVITY TRACKER
-        let members = Object.entries(data.members || {});
-        document.getElementById("member-count").innerText = members.length;
-        
-        let actHtml = "";
-        members.sort((a,b) => b[1].last_action.timestamp - a[1].last_action.timestamp);
+        dashData = { dash, wars };
+        renderAll(dash, wars);
+        document.getElementById('last-updated').innerText = 'Updated ' + new Date().toLocaleTimeString();
+    } catch(e) {
+        document.getElementById('analyst-output').innerHTML = `<span style="color:var(--red)">Connection failed. Check server is running.</span>`;
+    }
+}
 
-        members.forEach(([id, m]) => {
-            let dotClass = m.last_action.status === "Online" ? "online" : (m.last_action.status === "Idle" ? "idle" : "");
-            
-            // Render beautiful custom activity blocks if premium is active, otherwise lock it cleanly
-            let timelineContent = "";
-            if (!data.premiumActive) {
-                timelineContent = `<span class="lock-badge">🔒 Requires FF Scouter</span>`;
-            } else if (!m.timeline || m.timeline.length === 0) {
-                timelineContent = `<span style="color:var(--text-dim); font-size:0.85em; font-style:italic;">⌛ Synchronizing...</span>`;
-            } else {
-                timelineContent = `<div class="activity-block-container">`;
-                m.timeline.forEach(score => {
-                    let intensity = "";
-                    if (score > 40) intensity = "active-high";
-                    else if (score > 15) intensity = "active-med";
-                    else if (score > 0) intensity = "active-low";
-                    timelineContent += `<div class="act-block ${intensity}" title="Activity Weight: ${score}"></div>`;
-                });
-                timelineContent += `</div>`;
-            }
+function renderAll(d, wars) {
+    renderFactionHero(d);
+    renderKPIs(d);
+    renderWarScore(d);
+    renderChain(d);
+    renderMembers(d);
+    renderRespect(d);
+    renderLoans(d);
+    renderFactionStats(d);
+    renderStatusBreakdown(d);
+    renderRecentWars(wars);
+}
 
-            actHtml += `
-                <div class="table-row">
-                    <div>
-                        <a class="p-name" href="https://www.torn.com/profiles.php?XID=${id}" target="_blank">${m.name}</a>
-                        <div style="font-size:0.75em; color:var(--text-dim);">[${id}]</div>
+function renderFactionHero(d) {
+    const f = d.faction || {};
+    const members = Object.values(d.members || {});
+    const online = members.filter(m => m.last_action?.status === 'Online').length;
+    const hosp = members.filter(m => m.status?.state === 'Hospital').length;
+    const travel = members.filter(m => m.status?.state === 'Traveling').length;
+
+    document.getElementById('faction-hero').innerHTML = `
+        <div class="faction-name-block">
+            <h2>${f.name || 'Your Faction'}</h2>
+            <div class="faction-id">ID: ${f.ID || '—'} &nbsp;|&nbsp; Respect: ${fmtNum(f.respect || 0)}</div>
+            ${f.tag ? `<span class="faction-tag">[${f.tag}]</span>` : ''}
+        </div>
+        <div class="faction-hero-stats">
+            <div class="hero-stat"><div class="val">${members.length}</div><div class="lbl">Members</div></div>
+            <div class="faction-divider"></div>
+            <div class="hero-stat"><div class="val green">${online}</div><div class="lbl">Online</div></div>
+            <div class="faction-divider"></div>
+            <div class="hero-stat"><div class="val red">${hosp}</div><div class="lbl">Hospital</div></div>
+            <div class="faction-divider"></div>
+            <div class="hero-stat"><div class="val" style="color:var(--blue)">${travel}</div><div class="lbl">Traveling</div></div>
+            <div class="faction-divider"></div>
+            <div class="hero-stat"><div class="val gold">${f.level || '—'}</div><div class="lbl">Level</div></div>
+        </div>
+    `;
+}
+
+function renderKPIs(d) {
+    const f = d.faction || {};
+    const members = Object.values(d.members || {});
+    const online = members.filter(m => m.last_action?.status === 'Online').length;
+    const idle = members.filter(m => m.last_action?.status === 'Idle').length;
+    const chain = d.chain || {};
+    const war = d.activeWar;
+
+    document.getElementById('kpi-members').innerText = members.length;
+    document.getElementById('kpi-online-sub').innerHTML = `<span style="color:var(--green)">${online} online</span>, <span style="color:var(--gold)">${idle} idle</span>`;
+    document.getElementById('kpi-respect').innerText = fmtNum(f.respect || 0);
+    document.getElementById('kpi-respect-sub').innerText = `Lvl ${f.level || '—'} faction`;
+
+    if (chain && chain.current > 0) {
+        document.getElementById('kpi-chain').innerText = fmtNum(chain.current);
+        document.getElementById('kpi-chain-timeout').innerText = `${fmtDuration(chain.timeout)} remaining`;
+    } else {
+        document.getElementById('kpi-chain').innerText = '0';
+        document.getElementById('kpi-chain-timeout').innerText = 'No active chain';
+    }
+
+    if (war) {
+        document.getElementById('kpi-war-status').innerHTML = `<span style="color:var(--red)">⚔️ AT WAR</span>`;
+        const myScore = war.myScore || 0;
+        const theirScore = war.enemyScore || 0;
+        document.getElementById('kpi-war-sub').innerText = `${fmtNum(myScore)} vs ${fmtNum(theirScore)}`;
+    } else {
+        document.getElementById('kpi-war-status').innerHTML = `<span style="color:var(--green)">Peace</span>`;
+        document.getElementById('kpi-war-sub').innerText = 'No active war';
+    }
+
+    document.getElementById('kpi-level').innerText = f.level || '—';
+    document.getElementById('kpi-age').innerText = f.age ? `${Math.floor(f.age/365)}y ${Math.floor((f.age%365)/30)}m old` : '—';
+}
+
+function renderWarScore(d) {
+    const war = d.activeWar;
+    const badge = document.getElementById('war-live-badge');
+    const body = document.getElementById('war-score-body');
+
+    if (!war) {
+        badge.innerHTML = `<span class="war-no-badge">✅ No Active War</span>`;
+        body.innerHTML = `<div class="empty-state">Your faction is not currently in a ranked war. Enjoy the peace.</div>`;
+        return;
+    }
+
+    badge.innerHTML = `<span class="war-active-badge">🔴 LIVE WAR</span>`;
+
+    const myScore = war.myScore || 0;
+    const theirScore = war.enemyScore || 0;
+    const total = myScore + theirScore || 1;
+    const myPct = (myScore / total * 100).toFixed(1);
+    const winning = myScore >= theirScore;
+
+    body.innerHTML = `
+        <div class="war-score-row">
+            <div class="war-faction-name" style="color:var(--blue);">🔵 ${war.myFaction || 'Your Faction'}</div>
+            <div class="war-score-num ${winning ? 'winning' : 'losing'}">${fmtNum(myScore)}</div>
+            <div class="war-vs">VS</div>
+            <div class="war-score-num ${!winning ? 'winning' : 'losing'}">${fmtNum(theirScore)}</div>
+            <div class="war-faction-name" style="text-align:right;color:var(--red);">🔴 ${war.enemyFaction || 'Enemy'}</div>
+        </div>
+        <div class="war-bar-wrap">
+            <div class="war-bar-fill ${!winning ? 'danger' : ''}" style="width:${myPct}%"></div>
+        </div>
+        <div style="padding:0 20px 16px;display:flex;justify-content:space-between;font-size:0.82em;color:var(--text-dim);">
+            <span>${myPct}% score share</span>
+            <span>${winning ? '✅ Currently winning' : '❌ Currently losing'}</span>
+            <span>Target: ${fmtNum(war.target || 0)}</span>
+        </div>
+    `;
+}
+
+function renderChain(d) {
+    const chain = d.chain;
+    const body = document.getElementById('chain-body');
+    const badge = document.getElementById('chain-status-badge');
+
+    if (!chain || chain.current === 0) {
+        badge.innerHTML = '';
+        body.innerHTML = `<div class="empty-state">No active chain. Start hitting to begin one!</div>`;
+        return;
+    }
+
+    const timeout = chain.timeout;
+    const current = chain.current;
+    const nextBonus = chain.modifier ? chain.modifier : 10;
+    const dangerClass = timeout <= 90 ? 'danger' : 'ok';
+    const pct = Math.min((current / nextBonus) * 100, 100);
+
+    badge.innerHTML = timeout <= 90 
+        ? `<span class="war-active-badge" style="border-color:var(--red);color:var(--red);">⚠️ DROPPING</span>`
+        : `<span class="war-no-badge">🟢 Active</span>`;
+
+    body.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div>
+                <div style="font-size:0.8em;color:var(--text-dim);text-transform:uppercase;font-weight:700;">Current Chain</div>
+                <div style="font-size:2em;font-weight:900;color:var(--green)">${fmtNum(current)}</div>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:0.8em;color:var(--text-dim);text-transform:uppercase;font-weight:700;">Time Left</div>
+                <div class="chain-timeout ${dangerClass}">${fmtDuration(timeout)}</div>
+            </div>
+        </div>
+        <div class="chain-progress-wrap">
+            <div class="chain-progress-fill" style="width:${timeout/300*100}%"></div>
+        </div>
+        <div class="chain-meta">
+            <span>Timeout: ${fmtDuration(timeout)}</span>
+            <span>Modifier: ${chain.modifier ? chain.modifier + 'x' : '—'}</span>
+            <span>Cooldown: ${chain.cooldown ? fmtDuration(chain.cooldown) : 'None'}</span>
+        </div>
+    `;
+}
+
+function renderMembers(d) {
+    const members = Object.entries(d.members || {});
+    const count = document.getElementById('member-count-badge');
+    const list = document.getElementById('member-list');
+
+    const online = members.filter(([,m]) => m.last_action?.status === 'Online').length;
+    count.innerText = `${members.length} members · ${online} online`;
+
+    members.sort((a, b) => {
+        const order = { 'Online': 0, 'Idle': 1, 'Offline': 2, 'Hospital': 3, 'Traveling': 4 };
+        return (order[a[1].last_action?.status] ?? 5) - (order[b[1].last_action?.status] ?? 5);
+    });
+
+    if (!members.length) { list.innerHTML = `<div class="empty-state">No members found.</div>`; return; }
+
+    list.innerHTML = members.map(([id, m]) => {
+        const s = m.last_action?.status || 'Offline';
+        const stateMap = { 'Online': 'online', 'Idle': 'idle', 'Offline': 'offline', 'Hospital': 'hospital', 'Traveling': 'traveling' };
+        const pillClass = stateMap[s] || 'offline';
+        const lastTs = m.last_action?.timestamp ? timeSince(m.last_action.timestamp) : '—';
+        return `<div class="member-row">
+            <div><a class="m-name" href="https://www.torn.com/profiles.php?XID=${id}" target="_blank">${m.name}</a><div style="font-size:0.72em;color:var(--text-dim);">[${id}]</div></div>
+            <div><span class="status-pill ${pillClass}"><span class="status-dot"></span>${s}</span></div>
+            <div style="font-size:0.82em;color:var(--text-dim);">${lastTs}</div>
+        </div>`;
+    }).join('');
+}
+
+function renderRespect(d) {
+    const members = Object.entries(d.members || {});
+    const el = document.getElementById('respect-list');
+
+    const sorted = members
+        .map(([id, m]) => ({ name: m.name, id, score: m.score || 0 }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 8);
+
+    if (!sorted.length || sorted[0].score === 0) {
+        el.innerHTML = `<div class="empty-state">War respect data not available outside of active wars.</div>`;
+        return;
+    }
+
+    const max = sorted[0].score || 1;
+    el.innerHTML = sorted.map((m, i) => `
+        <div class="respect-row">
+            <div style="font-size:0.8em;color:var(--text-dim);width:16px;">${i+1}</div>
+            <div class="respect-name"><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-main);text-decoration:none;font-weight:600;">${m.name}</a></div>
+            <div class="respect-bar-wrap"><div class="respect-bar-fill" style="width:${(m.score/max*100).toFixed(0)}%"></div></div>
+            <div class="respect-val">${fmtNum(m.score)}</div>
+        </div>
+    `).join('');
+}
+
+function renderLoans(d) {
+    const loans = d.loans || [];
+    const el = document.getElementById('loan-list');
+    const badge = document.getElementById('loan-count-badge');
+
+    badge.innerText = `${loans.length} active`;
+
+    if (d.armoryError) {
+        el.innerHTML = `<div class="empty-state" style="color:var(--gold);">⚠️ Armory access requires the faction API key to have "Armory" permissions enabled.</div>`;
+        return;
+    }
+    if (!loans.length) {
+        el.innerHTML = `<div class="empty-state">No active armory loans.</div>`;
+        return;
+    }
+
+    const typeMap = { 'Armor': 'armor', 'Weapon': '', 'Temporary': 'temp' };
+    el.innerHTML = `<div style="display:grid;grid-template-columns:2fr 2fr 1fr;gap:8px;padding:8px 20px;font-size:0.75em;font-weight:700;text-transform:uppercase;color:var(--text-dim);border-bottom:1px solid var(--border)"><div>Item</div><div>Loaned To</div><div>Type</div></div>` +
+        loans.map(l => `<div class="loan-row">
+            <div style="font-weight:600;color:var(--gold);">${l.name}</div>
+            <div style="color:var(--text-dim);">ID: <span style="color:var(--text-main);font-weight:600;">${l.loaned_to}</span></div>
+            <div><span class="badge-type ${typeMap[l.type] || ''}">${l.type}</span></div>
+        </div>`).join('');
+}
+
+function renderFactionStats(d) {
+    const f = d.faction || {};
+    const el = document.getElementById('faction-stats-body');
+    const members = Object.values(d.members || {});
+    const ok = members.filter(m => m.status?.state === 'Okay').length;
+    const hosp = members.filter(m => m.status?.state === 'Hospital').length;
+
+    el.innerHTML = [
+        ['Faction Name', f.name || '—'],
+        ['Tag', f.tag ? `[${f.tag}]` : '—'],
+        ['ID', f.ID || '—'],
+        ['Level', f.level || '—'],
+        ['Respect', fmtNum(f.respect || 0)],
+        ['Best Chain', fmtNum(f.best_chain || 0)],
+        ['Age', f.age ? `${Math.floor(f.age/365)} years` : '—'],
+        ['Members', members.length],
+        ['Members OK', ok],
+        ['In Hospital', hosp],
+    ].map(([k, v]) => `<div class="stat-row"><span class="stat-label">${k}</span><span class="stat-val">${v}</span></div>`).join('');
+}
+
+function renderStatusBreakdown(d) {
+    const members = Object.values(d.members || {});
+    const el = document.getElementById('status-breakdown-body');
+
+    const counts = {};
+    members.forEach(m => {
+        const s = m.status?.state || 'Unknown';
+        counts[s] = (counts[s] || 0) + 1;
+    });
+
+    const colorMap = { 'Okay': 'var(--green)', 'Hospital': 'var(--red)', 'Traveling': 'var(--blue)', 'Jail': 'var(--purple)', 'Federal': 'var(--red)', 'Unknown': 'var(--text-dim)' };
+    const total = members.length || 1;
+
+    el.innerHTML = Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([state, count]) => {
+            const pct = (count / total * 100).toFixed(0);
+            return `<div class="stat-row">
+                <span class="stat-label" style="color:${colorMap[state] || 'var(--text-dim)'}">${state}</span>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="width:80px;background:var(--item);border-radius:4px;height:6px;overflow:hidden;">
+                        <div style="width:${pct}%;height:100%;border-radius:4px;background:${colorMap[state] || '#666'};"></div>
                     </div>
-                    <div style="font-size:0.85em; display:flex; align-items:center;">
-                        <span class="status-dot ${dotClass}"></span> ${m.last_action.status}
-                        <span style="font-size:0.85em; color:var(--text-dim); margin-left:4px;">(${m.last_action.relative})</span>
-                    </div>
-                    <div>${timelineContent}</div>
+                    <span class="stat-val">${count} <span style="color:var(--text-dim);font-size:0.8em;">(${pct}%)</span></span>
                 </div>
-            `;
-        });
-        document.getElementById("activity-list").innerHTML = actHtml || `<div style="color:var(--text-dim); padding:20px; text-align:center;">No players tracked.</div>`;
+            </div>`;
+        }).join('') || '<div class="empty-state">No data.</div>';
+}
 
-        // 2. RENDER LOANS VAULT 
-        document.getElementById("loan-count").innerText = data.loans ? data.loans.length : 0;
-        let loanHtml = "";
-        if (data.armoryError) {
-            loanHtml = `<div style="color:var(--gold); font-size:0.85em; padding:20px; text-align:center; border: 1px dashed var(--gold); border-radius:8px;">⚠️ High-Security Armory Blocked. Faction keys must have 'Armory' selections enabled to track loans.</div>`;
-        } else if (data.loans && data.loans.length > 0) {
-            data.loans.forEach(l => {
-                loanHtml += `
-                    <div class="loan-row">
-                        <div style="font-weight:bold; color:var(--gold);">${l.name}</div>
-                        <div style="font-size:0.9em;">User ID: <span style="font-weight:bold; color:var(--text-main);">${l.loaned_to}</span></div>
-                        <div><span class="badge-type">${l.type}</span></div>
-                    </div>
-                `;
+function renderRecentWars(wars) {
+    const el = document.getElementById('recent-wars-body');
+    const list = wars?.wars || [];
+
+    if (!list.length) {
+        el.innerHTML = `<div class="empty-state">No recent wars found in faction history.</div>`;
+        return;
+    }
+
+    el.innerHTML = list.slice(0, 10).map(w => {
+        const date = new Date(w.start * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        return `<div class="stat-row" style="padding:10px 0;">
+            <div><div style="font-weight:600;font-size:0.88em;">${w.enemy || 'Unknown'}</div><div style="font-size:0.75em;color:var(--text-dim);">${date}</div></div>
+            <a href="/payout.html" style="font-size:0.78em;color:var(--blue);text-decoration:none;font-weight:600;">View →</a>
+        </div>`;
+    }).join('');
+}
+
+// WAR ANALYST — uses existing data, no Gemini API needed
+function runAnalysis(mode) {
+    ['past', 'live', 'members', 'recommend'].forEach(t => {
+        document.getElementById(`tab-${t}`)?.classList.remove('active');
+    });
+    document.getElementById(`tab-${mode}`)?.classList.add('active');
+
+    const el = document.getElementById('analyst-output');
+    el.className = 'analyst-output loading';
+    el.innerText = 'Analyzing faction data...';
+
+    if (!dashData) {
+        el.className = 'analyst-output error';
+        el.innerText = '⚠️ No data loaded yet. Wait for the dashboard to finish loading.';
+        return;
+    }
+
+    const d = dashData.dash;
+    const f = d.faction || {};
+    const members = Object.values(d.members || {});
+    const war = d.activeWar;
+    const chain = d.chain;
+
+    setTimeout(() => {
+        el.className = 'analyst-output';
+
+        if (mode === 'live') {
+            if (!war) {
+                el.innerHTML = `<b>🟢 No Active War</b><br><br>Your faction is currently at peace. Use this time to:<br>• <b>Build your chain</b> for bonus respect<br>• <b>Train stats</b> before the next ranked war<br>• <b>Scout</b> potential opponents to identify optimal matchmaking targets`;
+                return;
+            }
+            const myScore = war.myScore || 0;
+            const theirScore = war.enemyScore || 0;
+            const diff = myScore - theirScore;
+            const winning = diff >= 0;
+            const hosp = members.filter(m => m.status?.state === 'Hospital').length;
+            const online = members.filter(m => m.last_action?.status === 'Online').length;
+            const target = war.target || 0;
+            const myPct = target > 0 ? (myScore/target*100).toFixed(1) : '—';
+
+            el.innerHTML = `<b>⚔️ LIVE WAR ANALYSIS</b><br><br>
+<b>Score:</b> ${fmtNum(myScore)} vs ${fmtNum(theirScore)} &nbsp;(${winning ? '✅ You are winning' : '❌ You are losing'})<br>
+<b>Target Score:</b> ${fmtNum(target)} &nbsp;|&nbsp; <b>Your Progress:</b> ${myPct}%<br>
+<b>Score Gap:</b> ${winning ? '+' : ''}${fmtNum(diff)} in your ${winning ? 'favor' : "enemy's favor"}<br><br>
+<b>🚨 Urgent Actions:</b><br>
+${hosp > 3 ? `• <span style="color:var(--red)">⚠️ ${hosp} members are hospitalized</span> — prioritize medding them out<br>` : ''}
+${online < 5 ? `• <span style="color:var(--gold)">⚠️ Only ${online} members are online</span> — call in off-duty members immediately<br>` : ''}
+${!winning ? `• <span style="color:var(--red)">You are behind by ${fmtNum(Math.abs(diff))} points</span> — all active members must focus war hits NOW<br>` : ''}
+${winning ? `• <span style="color:var(--green)">Maintain pressure</span> — keep pushing and hospitalize their online members to prevent them catching up<br>` : ''}
+• Focus highest-respect enemies (check Live Warboard for targets)`;
+        }
+
+        else if (mode === 'past') {
+            const wars = dashData.wars?.wars || [];
+            if (!wars.length) {
+                el.innerHTML = `<b>📊 No Past Wars Found</b><br><br>Your faction doesn't appear to have any recently finished ranked wars, or the API key doesn't have ranked war history access.`;
+                return;
+            }
+            const lastWar = wars[0];
+            const date = new Date(lastWar.start * 1000).toLocaleDateString();
+            el.innerHTML = `<b>📊 LAST WAR SUMMARY</b><br><br>
+<b>Opponent:</b> ${lastWar.enemy || 'Unknown'}<br>
+<b>Date:</b> ${date}<br><br>
+To get a full breakdown of member performance, hits, assists, and payouts from this war:<br><br>
+→ <a href="/payout.html" style="color:var(--blue);font-weight:700;">Open the Payout Calculator →</a><br><br>
+The Payout Calculator scrapes your full attack log and calculates per-member stats including attacks, assists, outside clears, and exact payout amounts.`;
+        }
+
+        else if (mode === 'members') {
+            const total = members.length;
+            const online = members.filter(m => m.last_action?.status === 'Online').length;
+            const idle = members.filter(m => m.last_action?.status === 'Idle').length;
+            const hosp = members.filter(m => m.status?.state === 'Hospital').length;
+            const travel = members.filter(m => m.status?.state === 'Traveling').length;
+            const ok = members.filter(m => m.status?.state === 'Okay').length;
+            const now = Math.floor(Date.now()/1000);
+            const inactive = members.filter(m => {
+                const lastSeen = m.last_action?.timestamp || 0;
+                return (now - lastSeen) > 7 * 86400; // 7 days
             });
-        } else {
-            loanHtml = `<div style="color:var(--text-dim); padding:20px; text-align:center; font-style:italic;">No active weapon or armor loans recorded.</div>`;
-        }
-        document.getElementById("loan-list").innerHTML = loanHtml;
 
-    } catch (e) {
-        console.error(e);
-        document.getElementById("activity-list").innerHTML = `<div style="color:var(--red); padding:20px; text-align:center;">Server communication failure.</div>`;
-    }
+            el.innerHTML = `<b>👥 MEMBER HEALTH REPORT</b><br><br>
+<b>Total Members:</b> ${total} / 100<br>
+<b>Online Right Now:</b> ${online} (${(online/total*100).toFixed(0)}%)<br>
+<b>Idle:</b> ${idle} &nbsp;|&nbsp; <b>In Hospital:</b> ${hosp} &nbsp;|&nbsp; <b>Traveling:</b> ${travel} &nbsp;|&nbsp; <b>OK:</b> ${ok}<br><br>
+<b>⚠️ Inactive Members (&gt;7 days):</b> ${inactive.length}<br>
+${inactive.slice(0,5).map(m => `&nbsp;&nbsp;• <a href="https://www.torn.com/profiles.php?XID=${m.player_id || ''}" target="_blank" style="color:var(--gold)">${m.name}</a> — last seen ${timeSince(m.last_action?.timestamp)}`).join('<br>')}<br>
+${inactive.length > 5 ? `<span style="color:var(--text-dim)">&nbsp;&nbsp;...and ${inactive.length - 5} more</span><br>` : ''}
+<br><b>💡 Recommendation:</b> ${inactive.length > 5 ? `Consider recruiting actively. ${inactive.length} members haven't logged in within 7 days.` : 'Member activity looks healthy. Keep up engagement!'}`;
+        }
+
+        else if (mode === 'recommend') {
+            const total = members.length;
+            const online = members.filter(m => m.last_action?.status === 'Online').length;
+            const hosp = members.filter(m => m.status?.state === 'Hospital').length;
+            const chainActive = chain && chain.current > 0;
+            const chainDanger = chainActive && chain.timeout <= 90;
+
+            el.innerHTML = `<b>🎯 TACTICAL RECOMMENDATIONS</b><br><br>
+${chainDanger ? `<b style="color:var(--red)">🚨 URGENT: Chain is about to drop (${chain.timeout}s left)! Someone needs to hit NOW.</b><br><br>` : ''}
+${chainActive ? `✅ <b>Keep the chain alive</b> — at ${fmtNum(chain.current)} hits<br>` : '🔴 <b>Start a chain</b> — you currently have no active chain. Chaining earns bonus respect.<br>'}
+${war ? `⚔️ <b>War is active</b> — prioritize war hits over all else. Every point counts.<br>` : ''}
+${hosp > 0 ? `💊 <b>${hosp} members in hospital</b> — if it's your own members, consider medding them.<br>` : ''}
+${total < 90 ? `👥 <b>Recruiting opportunity</b> — you have ${100 - total} open slots. Fill them for war strength.<br>` : ''}
+${online < 10 ? `📢 <b>Low online count (${online})</b> — consider pinging members in Discord to be online during wars.<br>` : ''}
+<br>→ Check <a href="/payout.html" style="color:var(--blue)">Payouts</a> to reward your members after wars.<br>
+→ Check <a href="/discord.html" style="color:var(--blue)">Discord Alerts</a> for automated notifications.`;
+        }
+    }, 600);
 }
 
-async function runAiAnalysis(mode) {
-    const box = document.getElementById("ai-output");
-    box.style.color = "var(--text-main)";
-    box.innerText = "Analyzing battle metrics and generating tactical command overview...";
-
-    let endpoint = mode === 'live' ? '/api/ai-analyze-ongoing' : '/api/ai-analyze';
-    
-    try {
-        const res = await fetch(`${endpoint}?apiKey=${myKey}`, { method: 'POST' });
-        const data = await res.json();
-
-        if (data.error) {
-            box.style.color = "var(--red)";
-            box.innerText = `[ERROR] Gemini API Error: ${data.error}`;
-        } else {
-            box.innerHTML = data.analysis.replace(/\n/g, '<br>');
-        }
-    } catch (e) {
-        box.style.color = "var(--red)";
-        box.innerText = "[ERROR] Connection failed. Could not reach analyst engine.";
-    }
-}
+document.addEventListener('DOMContentLoaded', loadAll);
 </script>
-
-<script>
-    function toggleTheme() { 
-        document.body.classList.toggle('light-mode'); 
-        localStorage.setItem('theme', document.body.classList.contains('light-mode') ? 'light' : 'dark'); 
-    }
-    if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-mode');
-    
-    // Override toggleSidebar for mobile
-    const originalToggle = typeof toggleSidebar === 'function' ? toggleSidebar : null;
-    window.toggleSidebar = function() {
-        if (window.innerWidth <= 768) {
-            const nav = document.querySelector('.nav-items');
-            if (nav) nav.classList.toggle('mobile-open');
-        } else if (originalToggle) {
-            originalToggle();
-        } else {
-            const s = document.querySelector('.sidebar');
-            if(s) s.classList.toggle('collapsed');
-        }
-    }
-</script>
-
-
-    <script src="/global_settings.js"></script>
+<script src="/global_settings.js"></script>
 </body>
 </html>
-
-
-

@@ -824,7 +824,50 @@ app.get('/api/dashboard-data', async (req, res) => {
             });
         }
 
-        res.json({ success: true, members: parsedMembers, loans: loans, armoryError, premiumActive: isPremium });
+        // Fetch chain and ranked war data
+        let chain = null;
+        let activeWar = null;
+        try {
+            const chainResp = await fetch(`https://api.torn.com/faction/?selections=chain,rankedwars&key=${userKey}`);
+            const chainData = await chainResp.json();
+            if (!chainData.error) {
+                chain = chainData.chain || null;
+                if (chainData.rankedwars) {
+                    for (const [warId, warInfo] of Object.entries(chainData.rankedwars)) {
+                        if (warInfo.war && warInfo.war.winner === 0) {
+                            const facIds = Object.keys(warInfo.factions || {});
+                            const myFacId = basicData.ID?.toString();
+                            const enemyFacId = facIds.find(id => id !== myFacId);
+                            const myFacData = warInfo.factions[myFacId] || {};
+                            const enemyFacData = enemyFacId ? (warInfo.factions[enemyFacId] || {}) : {};
+                            activeWar = {
+                                warId,
+                                myFaction: basicData.name || 'Your Faction',
+                                enemyFaction: enemyFacData.name || 'Enemy Faction',
+                                myScore: myFacData.score || 0,
+                                enemyScore: enemyFacData.score || 0,
+                                target: warInfo.war.target || 0,
+                                start: warInfo.war.start
+                            };
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch(e) {}
+
+        const faction = {
+            name: basicData.name,
+            ID: basicData.ID,
+            tag: basicData.tag,
+            level: basicData.level,
+            age: basicData.age,
+            respect: basicData.respect,
+            best_chain: basicData.best_chain,
+            capacity: basicData.capacity
+        };
+
+        res.json({ success: true, members: parsedMembers, loans, armoryError, premiumActive: isPremium, chain, activeWar, faction });
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
