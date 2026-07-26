@@ -225,7 +225,7 @@ document.addEventListener("DOMContentLoaded", async function() {
         const res = await fetch('/api/get-market-config');
         const config = await res.json();
         
-        document.getElementById('trade-webhook').value = config.globalChannelId || "";
+        document.getElementById('trade-webhook').value = config.globalChannelId || localStorage.getItem("market_channelid") || "";
         document.getElementById('auto-defense').checked = config.autoDefense === true;
         sniperTargets = config.sniperTargets || [];
         renderTargets();
@@ -394,8 +394,11 @@ async function saveMarketConfig() {
     status.style.color = "var(--blue)";
     status.innerText = "Transmitting trading protocols to backend...";
 
+    let channelId = document.getElementById('trade-webhook').value.trim();
+    localStorage.setItem("market_channelid", channelId);
+
     const payload = {
-        globalChannelId: document.getElementById('trade-webhook').value.trim(),
+        globalChannelId: channelId,
         autoDefense: document.getElementById('auto-defense').checked,
         sniperTargets: sniperTargets
     };

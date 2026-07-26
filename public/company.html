@@ -374,7 +374,14 @@ function openSettings() {
             document.getElementById('webhook-input').value = data.globalChannelId || '';
             document.getElementById('threshold-input').value = data.threshold || 0;
         }
-    }).catch(() => {});
+    }).catch(() => {
+        let stored = localStorage.getItem('master_company_config');
+        if (stored) {
+            let config = JSON.parse(stored);
+            document.getElementById('webhook-input').value = config.globalChannelId || '';
+            document.getElementById('threshold-input').value = config.threshold || 0;
+        }
+    });
 }
 function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
 

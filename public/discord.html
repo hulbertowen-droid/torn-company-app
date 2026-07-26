@@ -173,8 +173,8 @@ document.addEventListener("DOMContentLoaded", async function() {
         const res = await fetch('/api/get-discord-config');
         const config = await res.json();
         
-        document.getElementById('global-bottoken').value = config.globalBotToken || "";
-        document.getElementById('global-channelid').value = config.globalChannelId || "";
+        document.getElementById('global-bottoken').value = config.globalBotToken || localStorage.getItem("warboard_bottoken") || "";
+        document.getElementById('global-channelid').value = config.globalChannelId || localStorage.getItem("warboard_channelid") || "";
         document.getElementById('targetOnline').checked = config.targetOnline !== false;
         document.getElementById('targetLanded').checked = config.targetLanded !== false;
         document.getElementById('targetOutHosp').checked = config.targetOutHosp !== false;
@@ -210,11 +210,17 @@ async function saveDiscordConfig() {
 
 
 
+    let globalBotToken = document.getElementById('global-bottoken').value.trim();
+    let globalChannelId = document.getElementById('global-channelid').value.trim();
+    
+    localStorage.setItem("warboard_bottoken", globalBotToken);
+    localStorage.setItem("warboard_channelid", globalChannelId);
+
     // Save Global Settings
     const payload = {
         apiKey: myKey,
-        globalBotToken: document.getElementById('global-bottoken').value.trim(),
-        globalChannelId: document.getElementById('global-channelid').value.trim(),
+        globalBotToken: globalBotToken,
+        globalChannelId: globalChannelId,
         targetOnline: document.getElementById('targetOnline').checked,
         targetLanded: document.getElementById('targetLanded').checked,
         targetOutHosp: document.getElementById('targetOutHosp').checked,
