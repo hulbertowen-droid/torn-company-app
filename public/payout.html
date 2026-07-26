@@ -24,7 +24,7 @@
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Inter', system-ui, sans-serif; height: 100vh; overflow: hidden; font-size: 13px; }
+        body { display: flex; background: var(--bg); color: var(--text-main); font-family: 'Inter', system-ui, sans-serif; height: 100vh; overflow: hidden; }
 
         ::-webkit-scrollbar { width: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -193,14 +193,20 @@
         <!-- TOP BAR -->
         <div class="topbar">
             <div class="topbar-title" id="war-title">💰 War Payout Calculator</div>
-            <select class="war-select" id="war-selector" onchange="if(this.value) fetchReport(this.value)">
-                <option value="">Select a past war...</option>
-            </select>
-            <input class="input-manual" type="text" id="report-id" placeholder="Or paste report ID">
-            <button class="btn-load" onclick="fetchReport()">Load Report</button>
         </div>
 
         <div class="content">
+
+            <!-- FETCH BAR -->
+            <div style="background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+                <div style="font-weight: 800; color: var(--gold); font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px;">Load Report:</div>
+                <select class="war-select" id="war-selector" style="flex:1; padding: 10px 14px; font-size: 1em;" onchange="if(this.value) fetchReport(this.value)">
+                    <option value="">Select a past war...</option>
+                </select>
+                <div style="font-weight: 800; color: var(--text-faint); font-size: 0.8em;">OR</div>
+                <input class="input-manual" type="text" id="report-id" style="flex:1; padding: 10px 14px; font-size: 1em;" placeholder="Paste report ID (e.g. 123456)">
+                <button class="btn-load" style="padding: 10px 24px; font-size: 1em;" onclick="fetchReport()">Fetch Data</button>
+            </div>
 
             <!-- KPI STRIP -->
             <div class="summary-strip">
