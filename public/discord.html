@@ -94,13 +94,33 @@
 
             <div class="dash-card">
                 <h2>🌍 Faction Uplink Configuration</h2>
+                
+                <details style="margin-bottom: 20px; background: rgba(88, 166, 255, 0.05); border: 1px solid var(--blue); padding: 15px; border-radius: 8px;">
+                    <summary style="color: var(--blue); font-weight: bold; cursor: pointer; outline: none;">📖 How to Setup a Global Discord Bot</summary>
+                    <div style="margin-top: 15px; font-size: 0.9em; line-height: 1.5; color: var(--text-dim);">
+                        <p>Follow these steps to set up the Faction Bot so it can ping members in your server:</p>
+                        <ol style="padding-left: 20px; margin-top: 10px;">
+                            <li style="margin-bottom: 8px;">Go to the <a href="https://discord.com/developers/applications" target="_blank" style="color: var(--blue);">Discord Developer Portal</a> and click <b>New Application</b>.</li>
+                            <li style="margin-bottom: 8px;">Click <b>Bot</b> in the left menu, then click <b>Reset Token</b> to copy your Bot Token. Paste it below.</li>
+                            <li style="margin-bottom: 8px;">Scroll down and enable all <b>Privileged Gateway Intents</b> (Presence, Server Members, Message Content).</li>
+                            <li style="margin-bottom: 8px;">Go to <b>OAuth2 &gt; URL Generator</b>. Select the <b>bot</b> scope, then select the <b>Send Messages</b> and <b>Mention Everyone</b> permissions.</li>
+                            <li style="margin-bottom: 8px;">Copy the generated URL at the bottom and paste it in a new tab to invite the bot to your faction server!</li>
+                            <li>In Discord, go to <b>User Settings &gt; Advanced</b> and enable <b>Developer Mode</b>. Right-click the channel where you want the alerts to go, click <b>Copy Channel ID</b>, and paste it below!</li>
+                        </ol>
+                    </div>
+                </details>
+
                 <div class="form-group">
-                    <label>Faction Discord Webhook URL</label>
+                    <label>Faction Discord Webhook URL (Legacy)</label>
                     <input type="text" id="webhook-url" placeholder="https://discord.com/api/webhooks/...">
                 </div>
                 <div class="form-group">
-                    <label>Global Bot Token (For Direct Messages)</label>
-                    <input type="password" id="global-bottoken" placeholder="Optional: Faction-wide Discord Bot Token for DMs">
+                    <label>Global Bot Token</label>
+                    <input type="password" id="global-bottoken" placeholder="Bot Token (Recommended over Webhook)">
+                </div>
+                <div class="form-group">
+                    <label>Global Alert Channel ID</label>
+                    <input type="text" id="global-channelid" placeholder="Channel ID for Bot Pings">
                 </div>
                 <h3 style="color: #ffa502; border-bottom: 1px solid #2f3542; padding-bottom: 5px; margin-top: 20px;">Faction Alert Toggles</h3>
                 <div class="trigger-list">
@@ -197,6 +217,7 @@ document.addEventListener("DOMContentLoaded", async function() {
         
         document.getElementById('webhook-url').value = config.webhookUrl || "";
         document.getElementById('global-bottoken').value = config.globalBotToken || "";
+        document.getElementById('global-channelid').value = config.globalChannelId || "";
         document.getElementById('targetOnline').checked = config.targetOnline !== false;
         document.getElementById('targetLanded').checked = config.targetLanded !== false;
         document.getElementById('targetOutHosp').checked = config.targetOutHosp !== false;
@@ -271,6 +292,7 @@ async function saveDiscordConfig() {
         apiKey: myKey,
         webhookUrl: document.getElementById('webhook-url').value.trim(),
         globalBotToken: document.getElementById('global-bottoken').value.trim(),
+        globalChannelId: document.getElementById('global-channelid').value.trim(),
         targetOnline: document.getElementById('targetOnline').checked,
         targetLanded: document.getElementById('targetLanded').checked,
         targetOutHosp: document.getElementById('targetOutHosp').checked,
@@ -307,12 +329,13 @@ async function testDiscordAlert(type) {
     
     let discordId = document.getElementById("discord-userid").value.trim();
     let webhookUrl = document.getElementById('webhook-url').value.trim();
+    let globalChannelId = document.getElementById('global-channelid').value.trim();
     
     try {
         const res = await fetch('/api/test-discord-alert', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type, discordId, webhookUrl })
+            body: JSON.stringify({ type, discordId, webhookUrl, globalChannelId })
         });
         const data = await res.json();
         

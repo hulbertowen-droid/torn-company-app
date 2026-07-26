@@ -375,8 +375,8 @@ setInterval(async () => {
                                     description: `**${friendlyMem.name}**, you have been hit 3 consecutive times in Torn! Log in and react!`,
                                     color: 16729943
                                 };
-                                if (discordConfig.globalBotToken && dId && dId !== "none") {
-                                    sendPrivateDM(discordConfig.globalBotToken, dId, embed);
+                                if (discordConfig.globalBotToken && discordConfig.globalChannelId) {
+                                    sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, embed, pingStr);
                                 } else if (discordConfig.webhookUrl) {
                                     sendDiscordEmbed(discordConfig.webhookUrl, { ...embed, pingText: pingStr });
                                 }
@@ -474,8 +474,8 @@ setInterval(async () => {
                                 description: `**${fMem.name}**, an enemy (**${enemyThreats[fCountry][0]}**) is currently flying to **${fCountry}** where you are located (or heading)!\n\nFly away or return to Torn immediately!`,
                                 color: 16729943
                             };
-                            if (discordConfig.globalBotToken && dId && dId !== "none") {
-                                sendPrivateDM(discordConfig.globalBotToken, dId, embed);
+                            if (discordConfig.globalBotToken && discordConfig.globalChannelId) {
+                                sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, embed, pingStr);
                             } else if (discordConfig.webhookUrl) {
                                 sendDiscordEmbed(discordConfig.webhookUrl, { ...embed, pingText: pingStr });
                             }
@@ -836,14 +836,17 @@ app.get('/api/get-market-config', (req, res) => { res.json(marketConfig); });
 app.post('/api/save-market-config', (req, res) => { marketConfig = { ...marketConfig, ...req.body }; saveMarketConfig(); res.json({ success: true }); });
 
 app.post('/api/test-discord-alert', (req, res) => {
-    const { type, discordId, webhookUrl } = req.body;
+    const { type, discordId, webhookUrl, globalChannelId } = req.body;
     let wh = webhookUrl || discordConfig.webhookUrl;
-    if (!wh) {
-        return res.json({ success: false, error: "No webhook URL provided or saved." });
+    let chanId = globalChannelId || discordConfig.globalChannelId;
+    let botToken = discordConfig.globalBotToken;
+    
+    if (!wh && !(botToken && chanId)) {
+        return res.json({ success: false, error: "No Webhook URL or Global Bot Token + Channel ID provided." });
     }
     
     let pingStr = discordId ? `<@${discordId}>` : "";
-    let useDM = discordConfig.globalBotToken && discordId;
+    let useChannel = botToken && chanId;
     let embed = {};
     
     if (type === 'travel') {
@@ -862,12 +865,12 @@ app.post('/api/test-discord-alert', (req, res) => {
         return res.json({ success: false, error: "Unknown test type." });
     }
 
-    if (useDM) {
-        sendPrivateDM(discordConfig.globalBotToken, discordId, embed);
+    if (useChannel) {
+        sendChannelMessage(botToken, chanId, embed, pingStr);
     } else if (wh) {
         sendDiscordEmbed(wh, { ...embed, pingText: pingStr });
     } else {
-        return res.json({ success: false, error: "No Webhook URL or Global Bot Token configured." });
+        return res.json({ success: false, error: "Configuration missing." });
     }
     
     res.json({ success: true });
@@ -1670,6 +1673,21 @@ async function sendPrivateDM(token, userId, embedData) {
         if (user) await user.send({ embeds: [embedData] });
     } catch (e) {
         console.error(`[Discord Bot] Failed to send DM to ${userId}:`, e.message);
+    }
+}
+
+async function sendChannelMessage(token, channelId, embedData, pingStr) {
+    const client = await getDiscordClient(token);
+    if (!client) return;
+    try {
+        const channel = await client.channels.fetch(channelId);
+        if (channel) {
+            let msgOptions = { embeds: [embedData] };
+            if (pingStr) msgOptions.content = pingStr;
+            await channel.send(msgOptions);
+        }
+    } catch (e) {
+        console.error(`[Discord Bot] Failed to send message to channel ${channelId}:`, e.message);
     }
 }
 
