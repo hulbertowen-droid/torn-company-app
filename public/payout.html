@@ -655,7 +655,7 @@
                     <td class="td-pay${pay === 0 ? ' badge-zero' : ''}">${fmt(pay)}</td>
                     <td style="text-align:right;">
                         <label style="cursor:pointer; display:inline-flex; align-items:center; gap:5px; margin-right:10px; color:var(--text-dim); font-size:0.85em;">
-                            <input type="checkbox" onchange="markPaid(${m.id}, this.checked)" ${isPaid ? 'checked' : ''} style="accent-color:var(--green);"> Paid
+                            <input type="checkbox" id="cb-paid-${m.id}" onchange="markPaid(${m.id}, this.checked)" ${isPaid ? 'checked' : ''} style="accent-color:var(--green);"> Paid
                         </label>
                         <button class="btn-pay" onclick="openPay(this, ${m.id}, ${Math.floor(pay)})">💸 Pay</button>
                     </td>
@@ -678,7 +678,14 @@
             const oldText = btn.innerText;
             btn.innerText = 'Copied Amount!';
             setTimeout(() => btn.innerText = oldText, 2000);
-            window.open(`https://www.torn.com/factions.php?step=your#/tab=controls&select=donate&payUser=${uid}`, '_blank');
+            
+            const cb = document.getElementById('cb-paid-' + uid);
+            if (cb && !cb.checked) {
+                cb.checked = true;
+                markPaid(uid, true);
+            }
+            
+            window.open(`https://www.torn.com/factions.php?step=your#/tab=controls&select=donate&payUser=${uid}&money=${amt}&amount=${amt}`, '_blank');
         }
 
         function copyPayouts() {
