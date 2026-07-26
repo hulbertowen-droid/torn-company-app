@@ -651,23 +651,14 @@ async function verifySubscription(userKey) {
             saveTracking();
         }
 
-        if (ADMIN_API_KEY && userKey === ADMIN_API_KEY) return playerId;
-        if (!facId || facId === "0") throw new Error("You must be in a faction to use these tools.");
-        
-        if (adminFactionId && facId === adminFactionId) {
-            dynamicFactionId = facId; 
-            if (!apiPoolConfig.keys.includes(userKey)) {
-                apiPoolConfig.keys.push(userKey);
-                saveApiPool();
+        // Track the user's faction if admin faction matches, otherwise just allow any valid key
+        if (facId && facId !== "0") {
+            if (adminFactionId && facId === adminFactionId) {
+                if (!apiPoolConfig.keys.includes(userKey)) {
+                    apiPoolConfig.keys.push(userKey);
+                    saveApiPool();
+                }
             }
-        } else if ((subscriptions[facId] && subscriptions[facId] > Date.now())) {
-            dynamicFactionId = facId; 
-            if (!apiPoolConfig.keys.includes(userKey)) {
-                apiPoolConfig.keys.push(userKey);
-                saveApiPool();
-            }
-        } else {
-            throw new Error(`SUBSCRIPTION REQUIRED: Your access has expired. Send 5x Xanax to Owen777 [3776908] to unlock!`);
         }
 
         subCache[userKey] = { playerId, expires: now + 300000 };
