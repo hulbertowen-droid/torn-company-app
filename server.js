@@ -347,16 +347,22 @@ setInterval(async () => {
             const playtimeSec = personalstats.useractivity || 0;
             const playtimeDays = parseFloat((playtimeSec / 86400).toFixed(1));
             const xanax = personalstats.xantaken || 0;
+            const refills = personalstats.refills || 0;
+            const se = personalstats.statenhancersused || 0;
+            const estStats = (xanax * 40000) + (refills * 15000) + (se * 50000000) + ((profile.level || 1) * 2500);
             const donator = profile.donator === 1 || profile.donator === true;
 
             return {
                 id,
                 name: profile.name,
                 level,
-                age: profile.age || 1,
-                playtime: playtimeDays,
-                xanax,
-                donator,
+                        age: profile.age || 1,
+                        playtime: playtimeDays,
+                        xanax,
+                        refills,
+                        se,
+                        estStats,
+                        donator,
                 status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
                 faction: "Factionless"
             };
@@ -1131,9 +1137,12 @@ app.post('/api/analyze-player-list', async (req, res) => {
                     const profile = userData.profile || userData;
                     const personalstats = userData.personalstats || {};
                     const playtimeSec = personalstats.useractivity || 0;
-                    const playtimeDays = parseFloat((playtimeSec / 86400).toFixed(1));
-                    const xanax = personalstats.xantaken || 0;
-                    const donator = profile.donator === 1 || profile.donator === true;
+            const playtimeDays = parseFloat((playtimeSec / 86400).toFixed(1));
+            const xanax = personalstats.xantaken || 0;
+            const refills = personalstats.refills || 0;
+            const se = personalstats.statenhancersused || 0;
+            const estStats = (xanax * 40000) + (refills * 15000) + (se * 50000000) + ((profile.level || 1) * 2500);
+            const donator = profile.donator === 1 || profile.donator === true;
                     if (profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen")) return null;
                     const level = profile.level || 1;
 
@@ -1150,6 +1159,9 @@ app.post('/api/analyze-player-list', async (req, res) => {
                         age: profile.age || 1,
                         playtime: playtimeDays,
                         xanax,
+                        refills,
+                        se,
+                        estStats,
                         donator,
                         status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
                         faction: profile.faction ? profile.faction.faction_name : "None",
@@ -1852,12 +1864,22 @@ app.post('/api/turbo/start', (req, res) => {
 
                 const level = profile.level || 1;
                 const playtimeSec = personalstats.useractivity || 0;
-                const playtimeDays = parseFloat((playtimeSec / 86400).toFixed(1));
-                const xanax = personalstats.xantaken || 0;
-                const donator = profile.donator === 1 || profile.donator === true;
+            const playtimeDays = parseFloat((playtimeSec / 86400).toFixed(1));
+            const xanax = personalstats.xantaken || 0;
+            const refills = personalstats.refills || 0;
+            const se = personalstats.statenhancersused || 0;
+            const estStats = (xanax * 40000) + (refills * 15000) + (se * 50000000) + ((profile.level || 1) * 2500);
+            const donator = profile.donator === 1 || profile.donator === true;
 
                 return {
-                    id, name: profile.name, level, age: profile.age || 1, playtime: playtimeDays, xanax, donator,
+                    id, name: profile.name, level,
+                        age: profile.age || 1,
+                        playtime: playtimeDays,
+                        xanax,
+                        refills,
+                        se,
+                        estStats,
+                        donator,
                     status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
                     faction: "Factionless"
                 };
