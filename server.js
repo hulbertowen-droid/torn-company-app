@@ -1008,13 +1008,13 @@ app.get('/api/scan-recruits', async (req, res) => {
 
 // --- NEW RECRUITMENT SCANNING ENDPOINTS ---
 
-function calculateProgIndex(level, xanax, playtimeHours, weightPlaytime, weightLevel) {
-    const activeDays = (playtimeHours / 24) || 0.1;
+function calculateProgIndex(level, xanax, playtimeDays, weightPlaytime, weightLevel) {
+    const activeDays = playtimeDays || 0.1;
     const levelProg = level / (activeDays + 1);
     const xanaxProg = xanax / (activeDays + 1);
     const wp = parseFloat(weightPlaytime) || 1.0;
     const wl = parseFloat(weightLevel) || 1.0;
-    return parseFloat(((levelProg * wl) + (xanaxProg * 0.1) - (playtimeHours * wp * 0.01)).toFixed(2));
+    return parseFloat(((levelProg * wl) + (xanaxProg * 0.1) - (playtimeDays * wp * 0.01)).toFixed(2));
 }
 
 app.post('/api/analyze-player-list', async (req, res) => {
@@ -1038,23 +1038,24 @@ app.post('/api/analyze-player-list', async (req, res) => {
                     const profile = userData.profile || userData;
                     const personalstats = userData.personalstats || {};
                     const playtimeSec = personalstats.useractivity || 0;
-                    const playtimeHours = parseFloat((playtimeSec / 3600).toFixed(1));
-                    const xanax = personalstats.xanaxused || 0;
+                    const playtimeDays = parseFloat((playtimeSec / 86400).toFixed(1));
+                    const xanax = personalstats.xantaken || 0;
                     const donator = profile.donator === 1 || profile.donator === true;
+                    if (profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen")) return null;
                     const level = profile.level || 1;
 
                     if (donatorFilter === "donator" && !donator) return null;
                     if (donatorFilter === "nondonator" && donator) return null;
-                    if (maxPlaytime && playtimeHours > parseFloat(maxPlaytime)) return null;
+                    if (maxPlaytime && playtimeDays > parseFloat(maxPlaytime)) return null;
 
-                    const progIndex = calculateProgIndex(level, xanax, playtimeHours, weightPlaytime, weightLevel);
+                    const progIndex = calculateProgIndex(level, xanax, playtimeDays, weightPlaytime, weightLevel);
 
                     return {
                         id,
                         name: profile.name,
                         level,
                         age: profile.age || 1,
-                        playtime: playtimeHours,
+                        playtime: playtimeDays,
                         xanax,
                         donator,
                         status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
@@ -1114,22 +1115,23 @@ app.get('/api/scan-random-players', async (req, res) => {
                     if (maxLevel && level > parseInt(maxLevel)) return null;
 
                     const playtimeSec = personalstats.useractivity || 0;
-                    const playtimeHours = parseFloat((playtimeSec / 3600).toFixed(1));
-                    const xanax = personalstats.xanaxused || 0;
+                    const playtimeDays = parseFloat((playtimeSec / 86400).toFixed(1));
+                    const xanax = personalstats.xantaken || 0;
                     const donator = profile.donator === 1 || profile.donator === true;
+                    if (profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen")) return null;
 
                     if (donatorFilter === "donator" && !donator) return null;
                     if (donatorFilter === "nondonator" && donator) return null;
-                    if (maxPlaytime && playtimeHours > parseFloat(maxPlaytime)) return null;
+                    if (maxPlaytime && playtimeDays > parseFloat(maxPlaytime)) return null;
 
-                    const progIndex = calculateProgIndex(level, xanax, playtimeHours, weightPlaytime, weightLevel);
+                    const progIndex = calculateProgIndex(level, xanax, playtimeDays, weightPlaytime, weightLevel);
 
                     return {
                         id,
                         name: profile.name,
                         level,
                         age: profile.age || 1,
-                        playtime: playtimeHours,
+                        playtime: playtimeDays,
                         xanax,
                         donator,
                         status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
@@ -1164,7 +1166,7 @@ app.post('/api/generate-recruit-msg', async (req, res) => {
     if (!GEMINI_API_KEY) return res.json({ message: fallback, source: "template" });
 
     try {
-        const prompt = `You are writing a Torn City (browser game) faction recruitment message. Keep it short (3-4 paragraphs max), casual, direct and personalized. Do NOT use generic filler like "I hope this message finds you well". Sound like a real player, not a robot.\n\nPlayer: ${playerName}\nLevel: ${level || 'Unknown'}\nPlaytime: ${playtime ? playtime + ' hours' : 'Unknown'}\nXanax used: ${xanax || 'Unknown'}\nWar stats: ${score && score !== "N/A" ? score + " score, " + attacks + " hits" : "N/A"}\nEst. Battle Stats: ${estStats || "Unknown"}\nCurrent faction status: ${status}\nEnemy faction they fought for (if any): ${enemyFaction || "None"}\n\nWrite a compelling recruitment message. If they have high war stats, mention them. If they have low playtime but high level/xanax, praise their fast progression. ${factionless ? "They are now factionless — emphasize this is a perfect time." : "Be respectful that they are still in a faction."} Sign off from Owen777 [3776908].`;
+        const prompt = `You are writing a Torn City (browser game) faction recruitment message. Keep it short (3-4 paragraphs max), casual, direct and personalized. Do NOT use generic filler like "I hope this message finds you well". Sound like a real player, not a robot.\n\nPlayer: ${playerName}\nLevel: ${level || 'Unknown'}\nPlaytime: ${playtime ? playtime + ' days' : 'Unknown'}\nXanax taken: ${xanax || 'Unknown'}\nWar stats: ${score && score !== "N/A" ? score + " score, " + attacks + " hits" : "N/A"}\nEst. Battle Stats: ${estStats || "Unknown"}\nCurrent faction status: ${status}\nEnemy faction they fought for (if any): ${enemyFaction || "None"}\n\nWrite a compelling recruitment message. If they have high war stats, mention them. If they have low playtime but high level/xanax, praise their fast progression. ${factionless ? "They are now factionless — emphasize this is a perfect time." : "Be respectful that they are still in a faction."} Sign off from Owen777 [3776908].`;
 
         const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },

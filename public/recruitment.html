@@ -197,7 +197,7 @@
                 </select>
             </div>
             <div class="scout-field">
-                <label>Max Playtime (Hours)</label>
+                <label>Max Playtime (Days)</label>
                 <input type="number" id="maxPlaytime" placeholder="e.g. 500" value="">
             </div>
             <div class="scout-field">
@@ -537,7 +537,7 @@ function renderDynamicTable() {
     thead.innerHTML = `
         <th onclick="sortBy('name')">Player <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('level')">Level <span class="sort-arrow">↕</span></th>
-        <th onclick="sortBy('playtime')">Playtime (hrs) <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('playtime')">Playtime (Days) <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('xanax')">Xanax <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('progIndex')">Prog. Index <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('faction')">Faction <span class="sort-arrow">↕</span></th>
