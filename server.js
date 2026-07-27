@@ -4,6 +4,31 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
+const mongoose = require('mongoose');
+
+if (process.env.MONGODB_URI) {
+    mongoose.connect(process.env.MONGODB_URI)
+        .then(() => console.log("Connected to MongoDB Atlas"))
+        .catch(err => console.log("MongoDB connection error:", err));
+}
+
+const recruitSchema = new mongoose.Schema({
+    id: { type: Number, unique: true },
+    name: String,
+    level: Number,
+    donator: Number,
+    last_action: Object,
+    personalstats: Object,
+    playtime: Number,
+    xanax: Number,
+    refills: Number,
+    se: Number,
+    estStats: Number,
+    progIndex: Number
+}, { strict: false });
+const Recruit = mongoose.model('Recruit', recruitSchema);
+
+
 const app = express();
 global.isTurboMining = false;
 global.turboInterval = null;
@@ -373,14 +398,21 @@ setInterval(async () => {
         
         if (validRecruits.length > 0) {
             // Deduplicate
-            const existingIds = new Set(cachedRecruits.map(r => r.id));
-            validRecruits.forEach(r => {
-                if (!existingIds.has(r.id)) {
-                    cachedRecruits.push(r);
+            if (process.env.MONGODB_URI) {
+                    const bulkOps = validRecruits.map(r => ({
+                        updateOne: { filter: { id: r.id }, update: { $set: r }, upsert: true }
+                    }));
+                    try {
+                        await Recruit.bulkWrite(bulkOps);
+                        console.log(`[Cron] Upserted ${validRecruits.length} factionless recruits to MongoDB.`);
+                    } catch(e) { console.log('MongoDB bulkWrite error', e); }
+                } else {
+                    const existingIds = new Set(cachedRecruits.map(r => r.id));
+                    validRecruits.forEach(r => {
+                        if (!existingIds.has(r.id)) cachedRecruits.push(r);
+                    });
+                    try { fs.writeFileSync(recruitsFile, JSON.stringify(cachedRecruits, null, 2)); } catch(e){}
                 }
-            });
-            fs.writeFileSync(recruitsFile, JSON.stringify(cachedRecruits, null, 2));
-            console.log(`[Cron] Added ${validRecruits.length} factionless recruits to database. Total: ${cachedRecruits.length}`);
         }
     } catch (e) {
         // Silent fail for background tasks
@@ -1184,7 +1216,7 @@ app.post('/api/analyze-player-list', async (req, res) => {
     }
 });
 
-app.get('/api/scan-random-players', (req, res) => {
+app.get('/api/scan-random-players', async (req, res) => {
     const { minLevel, maxLevel, donatorFilter, maxPlaytime, weightPlaytime, weightLevel } = req.query;
     
     try {
@@ -1192,8 +1224,12 @@ app.get('/api/scan-random-players', (req, res) => {
         if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
         const recruitsFile = path.join(__dirname, 'data', 'recruits.json');
         let cachedRecruits = [];
-        if (fs.existsSync(recruitsFile)) {
-            cachedRecruits = JSON.parse(fs.readFileSync(recruitsFile, 'utf8'));
+        if (process.env.MONGODB_URI) {
+            cachedRecruits = await Recruit.find({}).lean();
+        } else {
+            if (fs.existsSync(recruitsFile)) {
+                cachedRecruits = JSON.parse(fs.readFileSync(recruitsFile, 'utf8'));
+            }
         }
 
         // Filter the cached database
@@ -1889,14 +1925,24 @@ app.post('/api/turbo/start', (req, res) => {
             const validRecruits = batchResults.filter(r => r !== null);
             
             if (validRecruits.length > 0) {
-                const existingIds = new Set(cachedRecruits.map(r => r.id));
-                validRecruits.forEach(r => {
-                    if (!existingIds.has(r.id)) {
-                        cachedRecruits.push(r);
-                        global.turboStats.found++;
-                    }
-                });
-                fs.writeFileSync(recruitsFile, JSON.stringify(cachedRecruits, null, 2));
+                if (process.env.MONGODB_URI) {
+                    const bulkOps = validRecruits.map(r => ({
+                        updateOne: { filter: { id: r.id }, update: { $set: r }, upsert: true }
+                    }));
+                    try {
+                        await Recruit.bulkWrite(bulkOps);
+                        global.turboStats.found += validRecruits.length;
+                    } catch(e) {}
+                } else {
+                    const existingIds = new Set(cachedRecruits.map(r => r.id));
+                    validRecruits.forEach(r => {
+                        if (!existingIds.has(r.id)) {
+                            cachedRecruits.push(r);
+                            global.turboStats.found++;
+                        }
+                    });
+                    try { fs.writeFileSync(recruitsFile, JSON.stringify(cachedRecruits, null, 2)); } catch(e){}
+                }
             }
         } catch (e) {}
     }, 7500); // 10 requests every 7.5s = 80 per minute
