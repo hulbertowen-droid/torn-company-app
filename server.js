@@ -302,7 +302,9 @@ setInterval(async () => {
     let watchKey = getNextApiKey();
     if (!watchKey) return; // Need an API key to scan
 
-    const recruitsFile = path.join(__dirname, 'data', 'recruits.json');
+            const dataDir = path.join(__dirname, 'data');
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
+        const recruitsFile = path.join(__dirname, 'data', 'recruits.json');
     let cachedRecruits = [];
     try {
         if (fs.existsSync(recruitsFile)) {
@@ -1174,6 +1176,8 @@ app.get('/api/scan-random-players', (req, res) => {
     const { minLevel, maxLevel, donatorFilter, maxPlaytime, weightPlaytime, weightLevel } = req.query;
     
     try {
+                const dataDir = path.join(__dirname, 'data');
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
         const recruitsFile = path.join(__dirname, 'data', 'recruits.json');
         let cachedRecruits = [];
         if (fs.existsSync(recruitsFile)) {
@@ -1816,6 +1820,8 @@ app.post('/api/turbo/start', (req, res) => {
         let watchKey = getNextApiKey();
         if (!watchKey) return;
 
+                const dataDir = path.join(__dirname, 'data');
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
         const recruitsFile = path.join(__dirname, 'data', 'recruits.json');
         let cachedRecruits = [];
         try { if (fs.existsSync(recruitsFile)) cachedRecruits = JSON.parse(fs.readFileSync(recruitsFile, 'utf8')); } catch (e) {}

@@ -220,13 +220,13 @@
 
             <!-- TURBO MINING -->
             <div style="background: rgba(255, 50, 50, 0.1); border: 1px solid #ff4757; border-radius: 8px; padding: 20px; text-align: center; max-width: 600px; margin: 0 auto;">
-                <h3 style="color: #ff4757; margin-top: 0;">🚀 TURBO MINING MODE</h3>
+                <h3 style="color: #ff4757; margin-top: 0;">🕵️ UNDERGROUND HEADHUNTER PROTOCOL</h3>
                 <p style="color: var(--text-dim); font-size: 0.9em; margin-bottom: 15px;">
                     Divert 100% of your API capacity to finding recruits.<br>
                     <b style="color:#ff4757;">WARNING:</b> This pauses ALL Live Warboard and Discord alerts while active. Auto-shuts off after 1 hour.
                 </p>
                 <button id="btn-turbo" onclick="toggleTurbo()" style="background: #ff4757; color: white; border: none; padding: 15px 30px; font-size: 1.2em; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.3s;">
-                    🚀 ENGAGE TURBO MINING
+                    🕵️ ENGAGE HEADHUNTER PROTOCOL
                 </button>
                 <div id="turbo-stats" style="margin-top: 15px; font-size: 0.9em; color: var(--gold); display: none;">
                     Scanning... Checked: <span id="ts-checked" style="color:white; font-weight:bold;">0</span> | Found: <span id="ts-found" style="color:white; font-weight:bold;">0</span>
@@ -325,17 +325,23 @@ async function pollTurboStatus() {
         const stats = document.getElementById('turbo-stats');
         
         if (isTurboActive) {
-            btn.innerHTML = '🛑 STOP TURBO MINING';
+            btn.innerHTML = '🛑 ABORT HEADHUNTER PROTOCOL';
             btn.style.background = '#2f3542';
             stats.style.display = 'block';
+            document.getElementById('app-sidebar').style.filter = 'blur(8px)';
+            document.getElementById('app-sidebar').style.pointerEvents = 'none';
+            if (document.getElementById('dvd-logo').style.display === 'none') startDvdScreensaver();
             document.getElementById('ts-checked').textContent = data.stats.checked;
             document.getElementById('ts-found').textContent = data.stats.found;
             
             if (!turboPoll) turboPoll = setInterval(pollTurboStatus, 3000);
         } else {
-            btn.innerHTML = '🚀 ENGAGE TURBO MINING';
+            btn.innerHTML = '🕵️ ENGAGE HEADHUNTER PROTOCOL';
             btn.style.background = '#ff4757';
             stats.style.display = 'none';
+            document.getElementById('app-sidebar').style.filter = 'none';
+            document.getElementById('app-sidebar').style.pointerEvents = 'auto';
+            stopDvdScreensaver();
             if (turboPoll) {
                 clearInterval(turboPoll);
                 turboPoll = null;
@@ -808,5 +814,34 @@ fetchWarList();
 </script>
 
     <script src="/global_settings.js"></script>
+
+    <div id="dvd-logo" style="display:none; position:fixed; color:var(--gold); font-size: 2.5em; font-weight: bold; z-index: 9999; text-shadow: 0 0 15px var(--gold);">Owen777</div>
+    <script>
+        let dvdInterval = null;
+        let dx = 3, dy = 3;
+        let pos = {x: 0, y: 0};
+
+        function startDvdScreensaver() {
+            const el = document.getElementById('dvd-logo');
+            el.style.display = 'block';
+            pos.x = Math.random() * (window.innerWidth - 150);
+            pos.y = Math.random() * (window.innerHeight - 50);
+            
+            if (dvdInterval) clearInterval(dvdInterval);
+            dvdInterval = setInterval(() => {
+                pos.x += dx; pos.y += dy;
+                if (pos.x <= 0 || pos.x + el.offsetWidth >= window.innerWidth) dx = -dx;
+                if (pos.y <= 0 || pos.y + el.offsetHeight >= window.innerHeight) dy = -dy;
+                el.style.left = pos.x + 'px';
+                el.style.top = pos.y + 'px';
+            }, 16);
+        }
+
+        function stopDvdScreensaver() {
+            const el = document.getElementById('dvd-logo');
+            el.style.display = 'none';
+            if (dvdInterval) clearInterval(dvdInterval);
+        }
+    </script>
 </body>
 </html>
