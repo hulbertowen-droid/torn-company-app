@@ -1098,7 +1098,10 @@ app.get('/api/scan-random-players', async (req, res) => {
             const batchPromises = batchIds.map(async (id) => {
                 const useKey = getNextApiKey() || apiKey;
                 try {
-                    const userRes = await fetch(`https://api.torn.com/user/${id}?selections=profile,personalstats&key=${useKey}`);
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 5000);
+                    const userRes = await fetch(`https://api.torn.com/user/${id}?selections=profile,personalstats&key=${useKey}`, { signal: controller.signal });
+                    clearTimeout(timeoutId);
                     const userData = await userRes.json();
                     if (userData.error) return null;
 

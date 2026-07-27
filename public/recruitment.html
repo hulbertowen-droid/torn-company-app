@@ -445,12 +445,20 @@ async function startGlobalScan() {
         donatorFilter: document.getElementById('donatorFilter').value,
         maxPlaytime: document.getElementById('maxPlaytime').value,
         weightLevel: document.getElementById('weightLevel').value,
-        scanCount: 30
+        scanCount: 15
     });
 
     try {
         const res = await fetch(`/api/scan-random-players?${p.toString()}`);
-        const data = await res.json();
+        let data;
+        const contentType = res.headers.get("content-type");
+        if (contentType && contentType.indexOf("application/json") !== -1) {
+            data = await res.json();
+        } else {
+            const text = await res.text();
+            throw new Error(`Server returned non-JSON response: ${text.substring(0, 50)}`);
+        }
+        
         if (data.error) throw new Error(data.error);
         
         allRecruits = data.recruits || [];
