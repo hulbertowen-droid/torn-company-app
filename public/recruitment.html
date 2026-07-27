@@ -172,9 +172,9 @@
         <p class="subtitle">Find high-value targets from past wars or scan Torn globally</p>
 
         <div class="mode-tabs">
-            <button class="btn-tab" onclick="openTab('poaching')">🎯 War Poaching</button>
-            <button class="btn-tab active" onclick="openTab('deep-scan')">🟢 Database Search</button>
-            <button class="btn-tab" onclick="openTab('paste-search')">📋 Paste Search Results</button>
+            <div class="mode-tab active" id="tab-poach" onclick="switchMode('poach')">⚔️ War Poaching</div>
+            <div class="mode-tab" id="tab-scan" onclick="switchMode('scan')">🟢 Database Search</div>
+            <div class="mode-tab" id="tab-import" onclick="switchMode('import')">📋 Paste Search Results</div>
         </div>
 
         <div id="error-box" class="error-box" style="display:none;"></div>
@@ -216,7 +216,7 @@
                 ⚠️ <b>Local Database Scanner Mode</b><br>
                 <span style="color: var(--text-dim);">This mode instantly searches the server's continuously updated database of active Factionless recruits. The server safely scans the game 24/7 in the background.</span>
             </div>
-            <button class="btn-scan" onclick="startDeepScan()">🌍 SEARCH DATABASE (INSTANT)</button>
+            <button class="btn-scan" id="btn-start-scan" onclick="startGlobalScan()" style="font-size: 1.1em; padding: 12px 30px;">🌍 SEARCH DATABASE (INSTANT)</button>
         </div>
 
         <!-- Import Mode Options -->
