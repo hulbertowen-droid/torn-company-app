@@ -290,6 +290,88 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
     hasBackfilledWar = true;
 }
 
+
+// Background Task 4: Global Recruitment Scanner
+setInterval(async () => {
+    let watchKey = getNextApiKey();
+    if (!watchKey) return; // Need an API key to scan
+
+    const recruitsFile = path.join(__dirname, 'data', 'recruits.json');
+    let cachedRecruits = [];
+    try {
+        if (fs.existsSync(recruitsFile)) {
+            cachedRecruits = JSON.parse(fs.readFileSync(recruitsFile, 'utf8'));
+        }
+    } catch (e) {}
+
+    // Only scan if we have less than 2000 recruits in database
+    if (cachedRecruits.length > 2000) {
+        // Rotate out the oldest 200 recruits
+        cachedRecruits = cachedRecruits.slice(200);
+    }
+
+    const batchSize = 20;
+    const randomIds = [];
+    // Target newer/mid-level players usually found in ID ranges 2,500,000 to 3,400,000
+    for (let i = 0; i < batchSize; i++) {
+        randomIds.push(Math.floor(Math.random() * (3400000 - 2500000 + 1) + 2500000));
+    }
+
+    try {
+        const batchPromises = randomIds.map(async (id) => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const userRes = await fetch(`https://api.torn.com/user/${id}?selections=profile,personalstats&key=${watchKey}`, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            const userData = await userRes.json();
+            if (userData.error) return null;
+
+            const profile = userData.profile || userData;
+            const personalstats = userData.personalstats || {};
+            
+            // Only care about active players
+            if (profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen")) return null;
+            
+            // Only care about Factionless players (No poaching rule!)
+            if (profile.faction && profile.faction.faction_id !== 0) return null;
+
+            const level = profile.level || 1;
+            const playtimeSec = personalstats.useractivity || 0;
+            const playtimeDays = parseFloat((playtimeSec / 86400).toFixed(1));
+            const xanax = personalstats.xantaken || 0;
+            const donator = profile.donator === 1 || profile.donator === true;
+
+            return {
+                id,
+                name: profile.name,
+                level,
+                age: profile.age || 1,
+                playtime: playtimeDays,
+                xanax,
+                donator,
+                status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
+                faction: "Factionless"
+            };
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+        const validRecruits = batchResults.filter(r => r !== null);
+        
+        if (validRecruits.length > 0) {
+            // Deduplicate
+            const existingIds = new Set(cachedRecruits.map(r => r.id));
+            validRecruits.forEach(r => {
+                if (!existingIds.has(r.id)) {
+                    cachedRecruits.push(r);
+                }
+            });
+            fs.writeFileSync(recruitsFile, JSON.stringify(cachedRecruits, null, 2));
+            console.log(`[Cron] Added ${validRecruits.length} factionless recruits to database. Total: ${cachedRecruits.length}`);
+        }
+    } catch (e) {
+        // Silent fail for background tasks
+    }
+}, 120000); // Run every 2 minutes
 // Background Task 1: Wall Watcher & Scraper
 setInterval(async () => {
     let watchFactionId = adminFactionId || discordConfig.factionId;
@@ -1079,80 +1161,41 @@ app.post('/api/analyze-player-list', async (req, res) => {
     }
 });
 
-app.get('/api/scan-random-players', async (req, res) => {
-    const { apiKey, minLevel, maxLevel, donatorFilter, maxPlaytime, weightPlaytime, weightLevel, scanCount } = req.query;
+app.get('/api/scan-random-players', (req, res) => {
+    const { minLevel, maxLevel, donatorFilter, maxPlaytime, weightPlaytime, weightLevel } = req.query;
     
     try {
-        const results = [];
-        const maxAttempts = 200; // Hard cap to prevent API ban
-        const targetMatches = 10; 
-        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-        const batchSize = 10;
-        let attempts = 0;
-        
-        while (results.length < targetMatches && attempts < maxAttempts) {
-            const batchIds = [];
-            for (let i = 0; i < batchSize; i++) {
-                batchIds.push(Math.floor(Math.random() * (3300000 - 2500000 + 1) + 2500000));
-            }
-            attempts += batchSize;
-
-            const batchPromises = batchIds.map(async (id) => {
-                const useKey = getNextApiKey() || apiKey;
-                try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 5000);
-                    const userRes = await fetch(`https://api.torn.com/user/${id}?selections=profile,personalstats&key=${useKey}`, { signal: controller.signal });
-                    clearTimeout(timeoutId);
-                    const userData = await userRes.json();
-                    if (userData.error) return null;
-
-                    const profile = userData.profile || userData;
-                    const personalstats = userData.personalstats || {};
-                    const level = profile.level || 1;
-                    
-                    if (minLevel && level < parseInt(minLevel)) return null;
-                    if (maxLevel && level > parseInt(maxLevel)) return null;
-
-                    const playtimeSec = personalstats.useractivity || 0;
-                    const playtimeDays = parseFloat((playtimeSec / 86400).toFixed(1));
-                    const xanax = personalstats.xantaken || 0;
-                    const donator = profile.donator === 1 || profile.donator === true;
-                    if (profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen")) return null;
-
-                    if (donatorFilter === "donator" && !donator) return null;
-                    if (donatorFilter === "nondonator" && donator) return null;
-                    if (maxPlaytime && playtimeDays > parseFloat(maxPlaytime)) return null;
-
-                    const progIndex = calculateProgIndex(level, xanax, playtimeDays, weightPlaytime, weightLevel);
-
-                    return {
-                        id,
-                        name: profile.name,
-                        level,
-                        age: profile.age || 1,
-                        playtime: playtimeDays,
-                        xanax,
-                        donator,
-                        status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
-                        faction: profile.faction && profile.faction.faction_id !== 0 ? profile.faction.faction_name : "Factionless",
-                        progIndex
-                    };
-                } catch (e) {
-                    return null;
-                }
-            });
-
-            const batchResults = await Promise.all(batchPromises);
-            results.push(...batchResults.filter(r => r !== null));
-            
-            if (results.length < targetMatches && attempts < maxAttempts) {
-                await delay(300); // 300ms delay between batches to respect API
-            }
+        const recruitsFile = path.join(__dirname, 'data', 'recruits.json');
+        let cachedRecruits = [];
+        if (fs.existsSync(recruitsFile)) {
+            cachedRecruits = JSON.parse(fs.readFileSync(recruitsFile, 'utf8'));
         }
 
+        // Filter the cached database
+        let results = cachedRecruits.filter(profile => {
+            const level = profile.level;
+            if (minLevel && level < parseInt(minLevel)) return false;
+            if (maxLevel && level > parseInt(maxLevel)) return false;
+            
+            if (donatorFilter === "donator" && !profile.donator) return false;
+            if (donatorFilter === "nondonator" && profile.donator) return false;
+            
+            if (maxPlaytime && profile.playtime > parseFloat(maxPlaytime)) return false;
+            
+            return true;
+        });
+
+        // Add progIndex dynamically based on sliders
+        results = results.map(r => {
+            r.progIndex = calculateProgIndex(r.level, r.xanax, r.playtime, weightPlaytime, weightLevel);
+            return r;
+        });
+
+        // Sort by progression index
         results.sort((a, b) => b.progIndex - a.progIndex);
-        res.json({ success: true, recruits: results });
+        
+        // Return top 100 max to keep UI snappy
+        res.json({ success: true, recruits: results.slice(0, 100) });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

@@ -172,9 +172,9 @@
         <p class="subtitle">Find high-value targets from past wars or scan Torn globally</p>
 
         <div class="mode-tabs">
-            <div class="mode-tab active" id="tab-poach" onclick="switchMode('poach')">⚔️ War Poaching</div>
-            <div class="mode-tab" id="tab-scan" onclick="switchMode('scan')">🌍 Deep Scan</div>
-            <div class="mode-tab" id="tab-import" onclick="switchMode('import')">📋 Paste Search Results</div>
+            <button class="btn-tab" onclick="openTab('poaching')">🎯 War Poaching</button>
+            <button class="btn-tab active" onclick="openTab('deep-scan')">🟢 Database Search</button>
+            <button class="btn-tab" onclick="openTab('paste-search')">📋 Paste Search Results</button>
         </div>
 
         <div id="error-box" class="error-box" style="display:none;"></div>
@@ -212,11 +212,11 @@
 
         <!-- Scan Mode Options -->
         <div id="scan-options" style="display:none; margin-bottom: 20px; text-align: center;">
-            <div style="background: rgba(255, 165, 2, 0.1); border: 1px solid rgba(255, 165, 2, 0.3); padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center;">
-                <h4 style="color: var(--gold); margin-top: 0; margin-bottom: 5px;">⚠️ Deep Scan Mode</h4>
-                <p style="color:var(--text-dim); font-size: 0.85em; margin: 0;">This mode randomly searches Torn until it finds 10 matches or hits the 200 API call limit. It can be slow and expensive on API usage. For best results, use the <b>Paste Search Results</b> tab instead.</p>
+            <div style="background: rgba(255, 165, 2, 0.1); border: 1px solid var(--gold); border-radius: 4px; padding: 10px; margin-bottom: 20px; color: var(--gold); text-align: center; font-size: 0.9em;">
+                ⚠️ <b>Local Database Scanner Mode</b><br>
+                <span style="color: var(--text-dim);">This mode instantly searches the server's continuously updated database of active Factionless recruits. The server safely scans the game 24/7 in the background.</span>
             </div>
-            <button class="btn-scan" id="btn-start-scan" onclick="startGlobalScan()" style="font-size: 1.1em; padding: 12px 30px;">🌍 Start Deep Scan</button>
+            <button class="btn-scan" onclick="startDeepScan()">🌍 SEARCH DATABASE (INSTANT)</button>
         </div>
 
         <!-- Import Mode Options -->
