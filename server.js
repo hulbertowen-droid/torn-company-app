@@ -355,7 +355,17 @@ setInterval(async () => {
     const randomIds = [];
     // Target newer/mid-level players usually found in ID ranges 2,500,000 to 3,400,000
     for (let i = 0; i < batchSize; i++) {
-        randomIds.push(Math.floor(Math.random() * (3400000 - 2500000 + 1) + 2500000));
+        const rand = Math.random();
+            if (rand < 0.60) {
+                // 60% chance for ultra-new players (IDs 3.35M to 3.45M)
+                randomIds.push(Math.floor(Math.random() * (3450000 - 3350000 + 1) + 3350000));
+            } else if (rand < 0.90) {
+                // 30% chance for mid players (IDs 2.8M to 3.35M)
+                randomIds.push(Math.floor(Math.random() * (3350000 - 2800000 + 1) + 2800000));
+            } else {
+                // 10% chance for veterans (IDs 1.5M to 2.8M)
+                randomIds.push(Math.floor(Math.random() * (2800000 - 1500000 + 1) + 1500000));
+            }
     }
 
     try {
@@ -1891,7 +1901,17 @@ app.post('/api/turbo/start', (req, res) => {
         const batchSize = 10;
         const randomIds = [];
         for (let i = 0; i < batchSize; i++) {
-            randomIds.push(Math.floor(Math.random() * (3400000 - 2500000 + 1) + 2500000));
+            const rand = Math.random();
+            if (rand < 0.60) {
+                // 60% chance for ultra-new players (IDs 3.35M to 3.45M)
+                randomIds.push(Math.floor(Math.random() * (3450000 - 3350000 + 1) + 3350000));
+            } else if (rand < 0.90) {
+                // 30% chance for mid players (IDs 2.8M to 3.35M)
+                randomIds.push(Math.floor(Math.random() * (3350000 - 2800000 + 1) + 2800000));
+            } else {
+                // 10% chance for veterans (IDs 1.5M to 2.8M)
+                randomIds.push(Math.floor(Math.random() * (2800000 - 1500000 + 1) + 1500000));
+            }
         }
         global.turboStats.checked += batchSize;
 
