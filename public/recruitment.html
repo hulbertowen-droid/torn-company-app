@@ -173,7 +173,7 @@
 
         <div class="mode-tabs">
             <div class="mode-tab active" id="tab-poach" onclick="switchMode('poach')">⚔️ War Poaching</div>
-            <div class="mode-tab" id="tab-scan" onclick="switchMode('scan')">🌍 Global Scan</div>
+            <div class="mode-tab" id="tab-scan" onclick="switchMode('scan')">🌍 Deep Scan</div>
             <div class="mode-tab" id="tab-import" onclick="switchMode('import')">📋 Paste Search Results</div>
         </div>
 
@@ -212,8 +212,11 @@
 
         <!-- Scan Mode Options -->
         <div id="scan-options" style="display:none; margin-bottom: 20px; text-align: center;">
-            <button class="btn-scan" id="btn-start-scan" onclick="startGlobalScan()" style="font-size: 1.1em; padding: 12px 30px;">🌍 Start Global Scan</button>
-            <p style="color:var(--text-dim); font-size: 0.8em; margin-top: 10px;">Randomly scans active players. May take up to 10 seconds.</p>
+            <div style="background: rgba(255, 165, 2, 0.1); border: 1px solid rgba(255, 165, 2, 0.3); padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center;">
+                <h4 style="color: var(--gold); margin-top: 0; margin-bottom: 5px;">⚠️ Deep Scan Mode</h4>
+                <p style="color:var(--text-dim); font-size: 0.85em; margin: 0;">This mode randomly searches Torn until it finds 10 matches or hits the 200 API call limit. It can be slow and expensive on API usage. For best results, use the <b>Paste Search Results</b> tab instead.</p>
+            </div>
+            <button class="btn-scan" id="btn-start-scan" onclick="startGlobalScan()" style="font-size: 1.1em; padding: 12px 30px;">🌍 Start Deep Scan</button>
         </div>
 
         <!-- Import Mode Options -->
@@ -462,7 +465,7 @@ async function startGlobalScan() {
         if (data.error) throw new Error(data.error);
         
         allRecruits = data.recruits || [];
-        btn.textContent = '🌍 Start Global Scan';
+        btn.textContent = '🌍 Start Deep Scan';
         btn.disabled = false;
         
         if(allRecruits.length === 0) showError("No players found matching those strict criteria in this random batch. Try again or loosen filters.");
@@ -474,7 +477,7 @@ async function startGlobalScan() {
         }
     } catch(e) {
         showError(e.message);
-        btn.textContent = '🌍 Start Global Scan';
+        btn.textContent = '🌍 Start Deep Scan';
         btn.disabled = false;
     }
 }

@@ -1083,18 +1083,19 @@ app.get('/api/scan-random-players', async (req, res) => {
     
     try {
         const results = [];
-        const maxScanAttempts = parseInt(scanCount) || 20; 
+        const maxAttempts = 200; // Hard cap to prevent API ban
+        const targetMatches = 10; 
         const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-        
-        // Randomly pick recent player IDs between 2,500,000 and 3,300,000
-        const randomIds = [];
-        for (let i = 0; i < maxScanAttempts; i++) {
-            randomIds.push(Math.floor(Math.random() * (3300000 - 2500000 + 1) + 2500000));
-        }
-
         const batchSize = 10;
-        for (let i = 0; i < randomIds.length; i += batchSize) {
-            const batchIds = randomIds.slice(i, i + batchSize);
+        let attempts = 0;
+        
+        while (results.length < targetMatches && attempts < maxAttempts) {
+            const batchIds = [];
+            for (let i = 0; i < batchSize; i++) {
+                batchIds.push(Math.floor(Math.random() * (3300000 - 2500000 + 1) + 2500000));
+            }
+            attempts += batchSize;
+
             const batchPromises = batchIds.map(async (id) => {
                 const useKey = getNextApiKey() || apiKey;
                 try {
@@ -1142,7 +1143,10 @@ app.get('/api/scan-random-players', async (req, res) => {
 
             const batchResults = await Promise.all(batchPromises);
             results.push(...batchResults.filter(r => r !== null));
-            if (i + batchSize < randomIds.length) await delay(200);
+            
+            if (results.length < targetMatches && attempts < maxAttempts) {
+                await delay(300); // 300ms delay between batches to respect API
+            }
         }
 
         results.sort((a, b) => b.progIndex - a.progIndex);
