@@ -1193,7 +1193,7 @@ app.get('/api/scan-random-players', (req, res) => {
             if (donatorFilter === "donator" && !profile.donator) return false;
             if (donatorFilter === "nondonator" && profile.donator) return false;
             
-            if (maxPlaytime && profile.playtime > parseFloat(maxPlaytime)) return false;
+            if (maxPlaytime && parseFloat(profile.playtime) > parseFloat(maxPlaytime)) return false;
             
             return true;
         });
