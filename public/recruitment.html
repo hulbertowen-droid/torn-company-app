@@ -140,6 +140,16 @@
     </style>
 </head>
 <body>
+    <div id="turbo-overlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background-color: #0b0d13; z-index: 10000; flex-direction: column; justify-content: center; align-items: center;">
+        <div style="z-index: 10001; text-align: center;">
+            <div id="turbo-overlay-stats" style="font-size: 1.5em; color: var(--gold); margin-bottom: 30px;">
+                Scanning... Checked: <span id="ts-checked-overlay" style="color:white; font-weight:bold;">0</span> | Found: <span id="ts-found-overlay" style="color:white; font-weight:bold;">0</span>
+            </div>
+            <button onclick="toggleTurbo()" style="background: #ff4757; color: white; border: none; padding: 20px 40px; font-size: 1.5em; font-weight: bold; border-radius: 8px; cursor: pointer; box-shadow: 0 0 20px rgba(255, 71, 87, 0.5);">
+                🛑 ABORT HEADHUNTER PROTOCOL
+            </button>
+        </div>
+    </div>
     <nav class="sidebar" id="app-sidebar">
         <div class="sidebar-header">
             <div class="sidebar-logo">Owen's Faction Tools</div>
@@ -327,35 +337,22 @@ async function pollTurboStatus() {
         if (isTurboActive) {
             btn.innerHTML = '🛑 ABORT HEADHUNTER PROTOCOL';
             btn.style.background = '#2f3542';
-            stats.style.display = 'block';
             document.getElementById('app-sidebar').style.display = 'none';
-            document.querySelector('.mode-selector').style.display = 'none';
-            document.getElementById('global-filters').style.display = 'none';
-            document.getElementById('local-db-warning').style.display = 'none';
-            document.getElementById('btn-start-scan').style.display = 'none';
-            const pageTitle = document.querySelector('.page-title');
-            if (pageTitle) pageTitle.style.display = 'none';
-            document.getElementById('results-section').style.display = 'none';
-            document.getElementById('stats-bar').style.display = 'none';
-            if (document.getElementById('dvd-logo').style.display === 'none') startDvdScreensaver();
-            document.getElementById('ts-checked').textContent = data.stats.checked;
-            document.getElementById('ts-found').textContent = data.stats.found;
+            const mc = document.querySelector('.main-content');
+            if (mc) mc.style.display = 'none';
+            document.getElementById('turbo-overlay').style.display = 'flex';
+            document.getElementById('ts-checked-overlay').textContent = data.stats.checked;
+            document.getElementById('ts-found-overlay').textContent = data.stats.found;
+            if (document.getElementById('dvd-logo') && document.getElementById('dvd-logo').style.display === 'none') startDvdScreensaver();
             
             if (!turboPoll) turboPoll = setInterval(pollTurboStatus, 3000);
         } else {
             btn.innerHTML = '🕵️ ENGAGE HEADHUNTER PROTOCOL';
             btn.style.background = '#ff4757';
-            stats.style.display = 'none';
             document.getElementById('app-sidebar').style.display = 'flex';
-            document.querySelector('.mode-selector').style.display = 'flex';
-            document.getElementById('global-filters').style.display = 'block';
-            document.getElementById('local-db-warning').style.display = 'block';
-            document.getElementById('btn-start-scan').style.display = 'inline-block';
-            const pageTitle = document.querySelector('.page-title');
-            if (pageTitle) pageTitle.style.display = 'block';
-            if (allRecruits.length > 0) {
-                document.getElementById('results-section').style.display = 'block';
-            }
+            const mc = document.querySelector('.main-content');
+            if (mc) mc.style.display = 'block';
+            document.getElementById('turbo-overlay').style.display = 'none';
             stopDvdScreensaver();
             if (turboPoll) {
                 clearInterval(turboPoll);
@@ -830,7 +827,7 @@ fetchWarList();
 
     <script src="/global_settings.js"></script>
 
-    <div id="dvd-logo" style="display:none; position:fixed; color:var(--gold); font-size: 2.5em; font-weight: bold; z-index: 9999; text-shadow: 0 0 15px var(--gold);">Owen777</div>
+    <div id="dvd-logo" style="display:none; position:fixed; color:var(--gold); font-size: 2.5em; font-weight: bold; z-index: 10002; text-shadow: 0 0 15px var(--gold);">Owen777</div>
     <script>
         let dvdInterval = null;
         let dx = 3, dy = 3;
