@@ -616,8 +616,10 @@ function renderDynamicTable() {
     thead.innerHTML = `
         <th onclick="sortBy('name')">Player <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('level')">Level <span class="sort-arrow">↕</span></th>
-        <th onclick="sortBy('playtime')">Playtime (Days) <span class="sort-arrow">↕</span></th>
-        <th onclick="sortBy('xanax')">Xanax <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('age')">Age (Days) <span class="sort-arrow"> </span></th>
+        <th onclick="sortBy('playtime')">Playtime <span class="sort-arrow"> </span></th>
+        <th onclick="sortBy('xanax')">Xanax <span class="sort-arrow"> </span></th>
+        <th onclick="sortBy('estStats')">Est. Stats <span class="sort-arrow"> </span></th>
         <th onclick="sortBy('progIndex')">Prog. Index <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('faction')">Faction <span class="sort-arrow">↕</span></th>
         <th>Actions</th>
@@ -660,8 +662,10 @@ function renderDynamicTable() {
                 <div class="player-id">[${r.id}]</div>
             </td>
             <td class="score-val">${r.level}</td>
+            <td>${r.age}</td>
             <td>${r.playtime}</td>
             <td>${r.xanax.toLocaleString()}</td>
+            <td class="score-val">${r.estStats ? r.estStats.toLocaleString() : 'N/A'}</td>
             <td class="eff-val">${r.progIndex}</td>
             <td>${badge}<div style="font-size:0.7em;color:var(--text-dim);margin-top:2px;">${r.status}</div></td>
             <td style="display:flex;gap:7px;align-items:center;">
