@@ -212,7 +212,7 @@
 
         <!-- Scan Mode Options -->
         <div id="scan-options" style="display:none; margin-bottom: 20px; text-align: center;">
-            <div style="background: rgba(255, 165, 2, 0.1); border: 1px solid var(--gold); border-radius: 4px; padding: 10px; margin-bottom: 20px; color: var(--gold); text-align: center; font-size: 0.9em;">
+            <div id="local-db-warning" style="background: rgba(255, 165, 2, 0.1); border: 1px solid var(--gold); border-radius: 4px; padding: 10px; margin-bottom: 20px; color: var(--gold); text-align: center; font-size: 0.9em;">
                 ⚠️ <b>Local Database Scanner Mode</b><br>
                 <span style="color: var(--text-dim);">This mode instantly searches the server's continuously updated database of active Factionless recruits. The server safely scans the game 24/7 in the background.</span>
             </div>
@@ -328,8 +328,15 @@ async function pollTurboStatus() {
             btn.innerHTML = '🛑 ABORT HEADHUNTER PROTOCOL';
             btn.style.background = '#2f3542';
             stats.style.display = 'block';
-            document.getElementById('app-sidebar').style.filter = 'blur(8px)';
-            document.getElementById('app-sidebar').style.pointerEvents = 'none';
+            document.getElementById('app-sidebar').style.display = 'none';
+            document.querySelector('.mode-selector').style.display = 'none';
+            document.getElementById('global-filters').style.display = 'none';
+            document.getElementById('local-db-warning').style.display = 'none';
+            document.getElementById('btn-start-scan').style.display = 'none';
+            const pageTitle = document.querySelector('.page-title');
+            if (pageTitle) pageTitle.style.display = 'none';
+            document.getElementById('results-section').style.display = 'none';
+            document.getElementById('stats-bar').style.display = 'none';
             if (document.getElementById('dvd-logo').style.display === 'none') startDvdScreensaver();
             document.getElementById('ts-checked').textContent = data.stats.checked;
             document.getElementById('ts-found').textContent = data.stats.found;
@@ -339,8 +346,16 @@ async function pollTurboStatus() {
             btn.innerHTML = '🕵️ ENGAGE HEADHUNTER PROTOCOL';
             btn.style.background = '#ff4757';
             stats.style.display = 'none';
-            document.getElementById('app-sidebar').style.filter = 'none';
-            document.getElementById('app-sidebar').style.pointerEvents = 'auto';
+            document.getElementById('app-sidebar').style.display = 'flex';
+            document.querySelector('.mode-selector').style.display = 'flex';
+            document.getElementById('global-filters').style.display = 'block';
+            document.getElementById('local-db-warning').style.display = 'block';
+            document.getElementById('btn-start-scan').style.display = 'inline-block';
+            const pageTitle = document.querySelector('.page-title');
+            if (pageTitle) pageTitle.style.display = 'block';
+            if (allRecruits.length > 0) {
+                document.getElementById('results-section').style.display = 'block';
+            }
             stopDvdScreensaver();
             if (turboPoll) {
                 clearInterval(turboPoll);
