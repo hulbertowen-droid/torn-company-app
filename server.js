@@ -397,7 +397,7 @@ setInterval(async () => {
             const xanax = personalstats.xantaken || 0;
             const refills = personalstats.refills || 0;
             const se = personalstats.statenhancersused || 0;
-            const estStats = (xanax * 40000) + (refills * 15000) + (se * 50000000) + ((profile.level || 1) * 2500);
+            const estStats = "?? FF Scouter Req.";
             const donator = profile.donator === 1 || profile.donator === true;
 
             return {
@@ -1196,7 +1196,7 @@ app.post('/api/analyze-player-list', async (req, res) => {
             const xanax = personalstats.xantaken || 0;
             const refills = personalstats.refills || 0;
             const se = personalstats.statenhancersused || 0;
-            const estStats = (xanax * 40000) + (refills * 15000) + (se * 50000000) + ((profile.level || 1) * 2500);
+            const estStats = "?? FF Scouter Req.";
             const donator = profile.donator === 1 || profile.donator === true;
                     if (profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen")) return null;
             // Filter out players who haven't logged in for over 7 days
@@ -1951,7 +1951,7 @@ app.post('/api/turbo/start', (req, res) => {
             const xanax = personalstats.xantaken || 0;
             const refills = personalstats.refills || 0;
             const se = personalstats.statenhancersused || 0;
-            const estStats = (xanax * 40000) + (refills * 15000) + (se * 50000000) + ((profile.level || 1) * 2500);
+            const estStats = "?? FF Scouter Req.";
             const donator = profile.donator === 1 || profile.donator === true;
 
                 return {
