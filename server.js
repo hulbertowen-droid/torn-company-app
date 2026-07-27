@@ -1006,15 +1006,158 @@ app.get('/api/scan-recruits', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
+// --- NEW RECRUITMENT SCANNING ENDPOINTS ---
+
+function calculateProgIndex(level, xanax, playtimeHours, weightPlaytime, weightLevel) {
+    const activeDays = (playtimeHours / 24) || 0.1;
+    const levelProg = level / (activeDays + 1);
+    const xanaxProg = xanax / (activeDays + 1);
+    const wp = parseFloat(weightPlaytime) || 1.0;
+    const wl = parseFloat(weightLevel) || 1.0;
+    return parseFloat(((levelProg * wl) + (xanaxProg * 0.1) - (playtimeHours * wp * 0.01)).toFixed(2));
+}
+
+app.post('/api/analyze-player-list', async (req, res) => {
+    const { apiKey, playerIds, donatorFilter, maxPlaytime, weightPlaytime, weightLevel } = req.body;
+    if (!playerIds || !Array.isArray(playerIds) || playerIds.length === 0) return res.status(400).json({ error: "Missing player IDs" });
+    
+    try {
+        const results = [];
+        const batchSize = 10;
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+        
+        for (let i = 0; i < playerIds.length; i += batchSize) {
+            const batchIds = playerIds.slice(i, i + batchSize);
+            const batchPromises = batchIds.map(async (id) => {
+                const useKey = getNextApiKey() || apiKey;
+                try {
+                    const userRes = await fetch(`https://api.torn.com/user/${id}?selections=profile,personalstats&key=${useKey}`);
+                    const userData = await userRes.json();
+                    if (userData.error) return null;
+
+                    const profile = userData.profile || userData;
+                    const personalstats = userData.personalstats || {};
+                    const playtimeSec = personalstats.useractivity || 0;
+                    const playtimeHours = parseFloat((playtimeSec / 3600).toFixed(1));
+                    const xanax = personalstats.xanaxused || 0;
+                    const donator = profile.donator === 1 || profile.donator === true;
+                    const level = profile.level || 1;
+
+                    if (donatorFilter === "donator" && !donator) return null;
+                    if (donatorFilter === "nondonator" && donator) return null;
+                    if (maxPlaytime && playtimeHours > parseFloat(maxPlaytime)) return null;
+
+                    const progIndex = calculateProgIndex(level, xanax, playtimeHours, weightPlaytime, weightLevel);
+
+                    return {
+                        id,
+                        name: profile.name,
+                        level,
+                        age: profile.age || 1,
+                        playtime: playtimeHours,
+                        xanax,
+                        donator,
+                        status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
+                        faction: profile.faction ? profile.faction.faction_name : "None",
+                        progIndex
+                    };
+                } catch (e) {
+                    return null;
+                }
+            });
+
+            const batchResults = await Promise.all(batchPromises);
+            results.push(...batchResults.filter(r => r !== null));
+            if (i + batchSize < playerIds.length) await delay(200);
+        }
+
+        results.sort((a, b) => b.progIndex - a.progIndex);
+        res.json({ success: true, recruits: results });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/scan-random-players', async (req, res) => {
+    const { apiKey, minLevel, maxLevel, donatorFilter, maxPlaytime, weightPlaytime, weightLevel, scanCount } = req.query;
+    
+    try {
+        const results = [];
+        const maxScanAttempts = parseInt(scanCount) || 20; 
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+        
+        // Randomly pick recent player IDs between 2,500,000 and 3,300,000
+        const randomIds = [];
+        for (let i = 0; i < maxScanAttempts; i++) {
+            randomIds.push(Math.floor(Math.random() * (3300000 - 2500000 + 1) + 2500000));
+        }
+
+        const batchSize = 10;
+        for (let i = 0; i < randomIds.length; i += batchSize) {
+            const batchIds = randomIds.slice(i, i + batchSize);
+            const batchPromises = batchIds.map(async (id) => {
+                const useKey = getNextApiKey() || apiKey;
+                try {
+                    const userRes = await fetch(`https://api.torn.com/user/${id}?selections=profile,personalstats&key=${useKey}`);
+                    const userData = await userRes.json();
+                    if (userData.error) return null;
+
+                    const profile = userData.profile || userData;
+                    const personalstats = userData.personalstats || {};
+                    const level = profile.level || 1;
+                    
+                    if (minLevel && level < parseInt(minLevel)) return null;
+                    if (maxLevel && level > parseInt(maxLevel)) return null;
+
+                    const playtimeSec = personalstats.useractivity || 0;
+                    const playtimeHours = parseFloat((playtimeSec / 3600).toFixed(1));
+                    const xanax = personalstats.xanaxused || 0;
+                    const donator = profile.donator === 1 || profile.donator === true;
+
+                    if (donatorFilter === "donator" && !donator) return null;
+                    if (donatorFilter === "nondonator" && donator) return null;
+                    if (maxPlaytime && playtimeHours > parseFloat(maxPlaytime)) return null;
+
+                    const progIndex = calculateProgIndex(level, xanax, playtimeHours, weightPlaytime, weightLevel);
+
+                    return {
+                        id,
+                        name: profile.name,
+                        level,
+                        age: profile.age || 1,
+                        playtime: playtimeHours,
+                        xanax,
+                        donator,
+                        status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
+                        faction: profile.faction && profile.faction.faction_id !== 0 ? profile.faction.faction_name : "Factionless",
+                        progIndex
+                    };
+                } catch (e) {
+                    return null;
+                }
+            });
+
+            const batchResults = await Promise.all(batchPromises);
+            results.push(...batchResults.filter(r => r !== null));
+            if (i + batchSize < randomIds.length) await delay(200);
+        }
+
+        results.sort((a, b) => b.progIndex - a.progIndex);
+        res.json({ success: true, recruits: results });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.post('/api/generate-recruit-msg', async (req, res) => {
-    const { playerName, score, attacks, efficiency, status, estStats, enemyFaction } = req.body;
+    const { playerName, score, attacks, efficiency, playtime, xanax, level, status, estStats, enemyFaction } = req.body;
     const factionless = status && status.toLowerCase().includes("factionless");
-    const fallback = `Hey ${playerName}!\n\nI was checking the war report from our recent fight against ${enemyFaction || "your faction"} and your performance stood out — ${score} score across ${attacks} hits is seriously impressive.\n\n${factionless ? "I noticed you've since left your faction, so the timing seems perfect." : "I know you're still with your faction, but I wanted to reach out anyway."}\n\nWe run a tight, active crew focused on ranked wars and organized crimes. We'd love to have someone with your stats on our side. If you're ever looking for a change, hit me back — happy to chat.\n\nGood fight either way.\nOwen777 [3776908]`;
+    const fallback = `Hey ${playerName}!\n\nI was looking at your stats and noticed your solid progression.\n\n${factionless ? "I noticed you're currently factionless, so the timing seems perfect." : "I know you're currently in a faction, but I wanted to reach out anyway."}\n\nWe run a tight, active crew focused on ranked wars and organized crimes. We'd love to have someone with your stats on our side. If you're ever looking for a change, hit me back — happy to chat.\n\nOwen777 [3776908]`;
 
     if (!GEMINI_API_KEY) return res.json({ message: fallback, source: "template" });
 
     try {
-        const prompt = `You are writing a Torn City (browser game) faction recruitment message. Keep it short (3-4 paragraphs max), casual, direct and personalized. Do NOT use generic filler like "I hope this message finds you well". Sound like a real player, not a robot.\n\nPlayer: ${playerName}\nWar stats: ${score} score, ${attacks} hits, ${efficiency} score/hit efficiency\nEst. Battle Stats: ${estStats || "Unknown"}\nCurrent faction status: ${status}\nEnemy faction they fought for: ${enemyFaction || "Unknown"}\n\nWrite a compelling recruitment message. Mention their specific war numbers. ${factionless ? "They are now factionless — emphasize this is a perfect time." : "Be respectful that they are still in a faction."} Sign off from Owen777 [3776908].`;
+        const prompt = `You are writing a Torn City (browser game) faction recruitment message. Keep it short (3-4 paragraphs max), casual, direct and personalized. Do NOT use generic filler like "I hope this message finds you well". Sound like a real player, not a robot.\n\nPlayer: ${playerName}\nLevel: ${level || 'Unknown'}\nPlaytime: ${playtime ? playtime + ' hours' : 'Unknown'}\nXanax used: ${xanax || 'Unknown'}\nWar stats: ${score && score !== "N/A" ? score + " score, " + attacks + " hits" : "N/A"}\nEst. Battle Stats: ${estStats || "Unknown"}\nCurrent faction status: ${status}\nEnemy faction they fought for (if any): ${enemyFaction || "None"}\n\nWrite a compelling recruitment message. If they have high war stats, mention them. If they have low playtime but high level/xanax, praise their fast progression. ${factionless ? "They are now factionless — emphasize this is a perfect time." : "Be respectful that they are still in a faction."} Sign off from Owen777 [3776908].`;
 
         const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1028,6 +1171,8 @@ app.post('/api/generate-recruit-msg', async (req, res) => {
         res.json({ message: fallback, source: "template" });
     }
 });
+
+
 
 app.get('/api/past-war', async (req, res) => {
     const { apiKey, reportId } = req.query;

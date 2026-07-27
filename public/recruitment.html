@@ -118,7 +118,25 @@
         .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.2); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        .error-box { background: rgba(255,71,87,0.1); border: 1px solid rgba(255,71,87,0.4); color: var(--red); padding: 12px 18px; border-radius: 8px; font-size: 0.88em; font-weight: 600; margin-bottom: 15px; }
+        /* Mode Switcher Tabs */
+        .mode-tabs { display: flex; justify-content: center; gap: 15px; margin-bottom: 25px; border-bottom: 1px solid #2f3542; padding-bottom: 15px; }
+        .mode-tab { background: var(--card); border: 1px solid #2f3542; color: var(--text-dim); padding: 10px 24px; border-radius: 8px; cursor: pointer; font-size: 0.9em; font-weight: 700; transition: 0.2s; }
+        .mode-tab:hover { background: #2f3542; color: white; }
+        .mode-tab.active { background: rgba(46,213,115,0.15); border-color: var(--green); color: var(--green); }
+
+        /* Form styling for scouting */
+        .scout-form { background: var(--card); border: 1px solid #2f3542; border-radius: 12px; padding: 22px; margin-bottom: 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; align-items: end; }
+        .scout-field { display: flex; flex-direction: column; gap: 8px; }
+        .scout-field label { font-size: 0.78em; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
+        .scout-field input[type="text"], .scout-field input[type="number"], .scout-field select { background: #0b0d13; border: 1px solid #2f3542; border-radius: 7px; color: white; padding: 10px 14px; font-size: 0.9em; width: 100%; transition: 0.2s; }
+        .scout-field input:focus, .scout-field select:focus { outline: none; border-color: var(--green); }
+        .scout-field .range-val { font-size: 0.85em; color: var(--gold); font-weight: 700; text-align: right; margin-top: -4px; }
+        .scout-slider-container { display: flex; align-items: center; gap: 10px; }
+        .scout-slider-container input[type="range"] { flex-grow: 1; accent-color: var(--green); }
+
+        /* Progress Bar */
+        .progress-container { width: 100%; background: #0b0d13; border-radius: 8px; height: 16px; margin-bottom: 20px; overflow: hidden; border: 1px solid #2f3542; display: none; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, var(--green), var(--blue)); width: 0%; transition: width 0.2s ease; }
     </style>
 </head>
 <body>
@@ -149,23 +167,74 @@
     </nav>
 
     <main class="main-content">
-        <h1>🎯 Enemy Poaching Scanner</h1>
-        <p class="subtitle">Find high-value targets from past wars who are ready to be recruited</p>
+        
+        <h1>🎯 Advanced Recruitment Scanner</h1>
+        <p class="subtitle">Find high-value targets from past wars or scan Torn globally</p>
+
+        <div class="mode-tabs">
+            <div class="mode-tab active" id="tab-poach" onclick="switchMode('poach')">⚔️ War Poaching</div>
+            <div class="mode-tab" id="tab-scan" onclick="switchMode('scan')">🌍 Global Scan</div>
+            <div class="mode-tab" id="tab-import" onclick="switchMode('import')">📋 Paste Search Results</div>
+        </div>
 
         <div id="error-box" class="error-box" style="display:none;"></div>
 
-        <!-- Stats overview bar -->
-        <div class="stats-bar" id="stats-bar" style="display:none;">
-            <div class="stat-card green"><div class="val" id="stat-total">0</div><div class="lbl">Poachable Targets</div></div>
-            <div class="stat-card gold"><div class="val" id="stat-factionless">0</div><div class="lbl">Already Factionless</div></div>
-            <div class="stat-card blue"><div class="val" id="stat-top-score">0</div><div class="lbl">Top War Score</div></div>
-            <div class="stat-card red"><div class="val" id="stat-avg-eff">0</div><div class="lbl">Avg Score/Hit</div></div>
+        <!-- Global Filters (shared between Scan & Import) -->
+        <div id="global-filters" class="scout-form" style="display:none;">
+            <div class="scout-field">
+                <label>Level Range</label>
+                <div style="display:flex;gap:5px;">
+                    <input type="number" id="minLevel" placeholder="Min (1)" value="15">
+                    <input type="number" id="maxLevel" placeholder="Max (100)" value="100">
+                </div>
+            </div>
+            <div class="scout-field">
+                <label>Donator Status</label>
+                <select id="donatorFilter">
+                    <option value="any">Any Status</option>
+                    <option value="donator">Donator/Subscriber Only</option>
+                    <option value="nondonator">Non-Donators Only</option>
+                </select>
+            </div>
+            <div class="scout-field">
+                <label>Max Playtime (Hours)</label>
+                <input type="number" id="maxPlaytime" placeholder="e.g. 500" value="">
+            </div>
+            <div class="scout-field">
+                <label>Progression Focus (Playtime vs Level)</label>
+                <div class="scout-slider-container">
+                    <span style="font-size:0.7em;color:var(--text-dim);">Balanced</span>
+                    <input type="range" id="weightLevel" min="0.5" max="2.0" step="0.1" value="1.0">
+                    <span style="font-size:0.7em;color:var(--gold);">Growth</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scan Mode Options -->
+        <div id="scan-options" style="display:none; margin-bottom: 20px; text-align: center;">
+            <button class="btn-scan" id="btn-start-scan" onclick="startGlobalScan()" style="font-size: 1.1em; padding: 12px 30px;">🌍 Start Global Scan</button>
+            <p style="color:var(--text-dim); font-size: 0.8em; margin-top: 10px;">Randomly scans active players. May take up to 10 seconds.</p>
+        </div>
+
+        <!-- Import Mode Options -->
+        <div id="import-options" style="display:none; margin-bottom: 20px;">
+            <p style="color:var(--text-dim); font-size: 0.85em; text-align:center; margin-bottom: 10px;">
+                1. Go to <a href="https://www.torn.com/advanced_search.php" target="_blank" style="color:var(--blue);">Torn Advanced Search</a> and run a search.<br>
+                2. Highlight the list of players on that page, copy (Ctrl+C), and paste below.
+            </p>
+            <textarea id="import-text" placeholder="Paste copied players from Torn here..." style="width: 100%; height: 100px; background: #0b0d13; color: white; border: 1px solid #2f3542; border-radius: 8px; padding: 10px; font-family: monospace; resize: vertical; margin-bottom: 10px;"></textarea>
+            <div style="text-align: center;">
+                <button class="btn-scan" id="btn-start-import" onclick="startImport()">📋 Analyze Pasted Players</button>
+            </div>
         </div>
 
         <!-- War selection -->
+        <div id="war-selection">
+
         <div class="section-header">📋 Select a Past War to Scan</div>
         <div id="war-grid" class="war-grid">
             <div style="color:var(--text-dim); font-style:italic;">Loading your past wars...</div>
+        </div>
         </div>
 
         <!-- Results -->
@@ -306,7 +375,7 @@ async function scanWar(reportId, enemyName) {
     }
 }
 
-function rescan() { if (currentReportId) scanWar(currentReportId, currentEnemy); }
+function rescan() { if (currentMode === 'poach' && currentReportId) scanWar(currentReportId, currentEnemy); }
 
 // --- STATS BAR ---
 function renderStats() {
@@ -342,6 +411,175 @@ function sortBy(col) {
         ths[idx].querySelector('.sort-arrow').textContent = sortDir === 1 ? '↑' : '↓';
     }
     renderTable();
+}
+
+
+let currentMode = 'poach';
+
+function switchMode(mode) {
+    currentMode = mode;
+    document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + mode).classList.add('active');
+    
+    document.getElementById('war-selection').style.display = mode === 'poach' ? 'block' : 'none';
+    document.getElementById('global-filters').style.display = (mode === 'scan' || mode === 'import') ? 'grid' : 'none';
+    document.getElementById('scan-options').style.display = mode === 'scan' ? 'block' : 'none';
+    document.getElementById('import-options').style.display = mode === 'import' ? 'block' : 'none';
+    document.getElementById('results-section').style.display = 'none';
+    document.getElementById('stats-bar').style.display = 'none';
+    allRecruits = [];
+}
+
+async function startGlobalScan() {
+    if (!myKey) return showError("No API key set.");
+    const btn = document.getElementById('btn-start-scan');
+    btn.textContent = '⏳ Scanning...';
+    btn.disabled = true;
+    showError('');
+    document.getElementById('results-section').style.display = 'none';
+
+    const p = new URLSearchParams({
+        apiKey: myKey,
+        minLevel: document.getElementById('minLevel').value,
+        maxLevel: document.getElementById('maxLevel').value,
+        donatorFilter: document.getElementById('donatorFilter').value,
+        maxPlaytime: document.getElementById('maxPlaytime').value,
+        weightLevel: document.getElementById('weightLevel').value,
+        scanCount: 30
+    });
+
+    try {
+        const res = await fetch(`/api/scan-random-players?${p.toString()}`);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        
+        allRecruits = data.recruits || [];
+        btn.textContent = '🌍 Start Global Scan';
+        btn.disabled = false;
+        
+        if(allRecruits.length === 0) showError("No players found matching those strict criteria in this random batch. Try again or loosen filters.");
+        else {
+            sortCol = 'progIndex';
+            sortDir = -1;
+            renderDynamicTable();
+            document.getElementById('results-section').style.display = 'block';
+        }
+    } catch(e) {
+        showError(e.message);
+        btn.textContent = '🌍 Start Global Scan';
+        btn.disabled = false;
+    }
+}
+
+async function startImport() {
+    if (!myKey) return showError("No API key set.");
+    const text = document.getElementById('import-text').value;
+    // Simple regex to extract numbers in brackets e.g. [3776908]
+    const ids = [...text.matchAll(/\[(\d+)\]/g)].map(m => parseInt(m[1]));
+    if (ids.length === 0) return showError("No Player IDs (e.g. [1234567]) found in the pasted text.");
+    
+    const uniqueIds = [...new Set(ids)].slice(0, 100); // Max 100
+    
+    const btn = document.getElementById('btn-start-import');
+    btn.textContent = '⏳ Analyzing ' + uniqueIds.length + ' players...';
+    btn.disabled = true;
+    showError('');
+
+    try {
+        const res = await fetch('/api/analyze-player-list', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                apiKey: myKey,
+                playerIds: uniqueIds,
+                donatorFilter: document.getElementById('donatorFilter').value,
+                maxPlaytime: document.getElementById('maxPlaytime').value,
+                weightLevel: document.getElementById('weightLevel').value
+            })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        
+        allRecruits = data.recruits || [];
+        btn.textContent = '📋 Analyze Pasted Players';
+        btn.disabled = false;
+        
+        sortCol = 'progIndex';
+        sortDir = -1;
+        renderDynamicTable();
+        document.getElementById('results-section').style.display = 'block';
+    } catch(e) {
+        showError(e.message);
+        btn.textContent = '📋 Analyze Pasted Players';
+        btn.disabled = false;
+    }
+}
+
+function renderDynamicTable() {
+    if (currentMode === 'poach') {
+        renderTable(); // Use existing war table renderer
+        return;
+    }
+
+    // New renderer for global search (progression based)
+    const thead = document.querySelector('thead tr');
+    thead.innerHTML = `
+        <th onclick="sortBy('name')">Player <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('level')">Level <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('playtime')">Playtime (hrs) <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('xanax')">Xanax <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('progIndex')">Prog. Index <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('faction')">Faction <span class="sort-arrow">↕</span></th>
+        <th>Actions</th>
+    `;
+
+    const search = (document.getElementById('search-box')?.value || '').toLowerCase();
+    let filtered = allRecruits.filter(r => {
+        if (activeFilter === 'Factionless' && (r.faction !== 'Factionless' && r.faction !== 'None')) return false;
+        if (activeFilter === 'Member' && (r.faction === 'Factionless' || r.faction === 'None')) return false;
+        if (search && !r.name.toLowerCase().includes(search)) return false;
+        return true;
+    });
+
+    filtered.sort((a, b) => {
+        let av = a[sortCol], bv = b[sortCol];
+        if (av < bv) return sortDir;
+        if (av > bv) return -sortDir;
+        return 0;
+    });
+
+    const tbody = document.getElementById('recruit-list');
+    if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:40px;font-style:italic;">No recruits match this filter.</td></tr>`;
+        return;
+    }
+
+    const topProg = filtered.length > 0 ? Math.max(...filtered.map(r => r.progIndex)) : 0;
+    tbody.innerHTML = filtered.map(r => {
+        const isPriority = r.progIndex >= topProg * 0.85;
+        const factionless = r.faction === 'Factionless' || r.faction === 'None';
+        const badge = !factionless
+            ? `<span class="badge badge-member">🟡 ${r.faction}</span>`
+            : `<span class="badge badge-gone">🟢 Factionless</span>`;
+        const priority = isPriority ? `<span class="priority-tag">⭐ HOT</span>` : '';
+        const donatorIcon = r.donator ? '💎 ' : '';
+        
+        return `<tr>
+            <td>
+                <a class="player-link" href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank">${donatorIcon}${r.name}</a>${priority}
+                <div class="player-id">[${r.id}]</div>
+            </td>
+            <td class="score-val">${r.level}</td>
+            <td>${r.playtime}</td>
+            <td>${r.xanax.toLocaleString()}</td>
+            <td class="eff-val">${r.progIndex}</td>
+            <td>${badge}<div style="font-size:0.7em;color:var(--text-dim);margin-top:2px;">${r.status}</div></td>
+            <td style="display:flex;gap:7px;align-items:center;">
+                <a class="btn-profile" href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank">Profile</a>
+                <button class="btn-ai" onclick='openMsgModal(JSON.parse(\`${JSON.stringify(r)}\`))'>✨ AI Draft</button>
+            </td>
+        </tr>`;
+    }).join('');
 }
 
 // --- RENDER TABLE ---
@@ -417,13 +655,18 @@ async function generateMsg(recruit) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                
                 playerName: recruit.name,
-                score: recruit.score,
-                attacks: recruit.attacks,
-                efficiency: recruit.efficiency,
+                score: recruit.score || "N/A",
+                attacks: recruit.attacks || "N/A",
+                efficiency: recruit.efficiency || "N/A",
+                playtime: recruit.playtime,
+                xanax: recruit.xanax,
+                level: recruit.level,
                 status: recruit.status,
                 estStats: typeof recruit.estStats === 'number' ? recruit.estStats.toLocaleString() : recruit.estStats,
-                enemyFaction: currentEnemy
+                enemyFaction: currentEnemy || recruit.faction
+
             })
         });
         const data = await res.json();
