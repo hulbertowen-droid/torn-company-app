@@ -211,6 +211,10 @@
                 <input type="number" id="maxPlaytime" placeholder="e.g. 500" value="">
             </div>
             <div class="scout-field">
+                <label>Max Age (Days)</label>
+                <input type="number" id="maxAge" placeholder="e.g. 500" value="">
+            </div>
+            <div class="scout-field">
                 <label>Progression Focus (Playtime vs Level)</label>
                 <div class="scout-slider-container">
                     <span style="font-size:0.7em;color:var(--text-dim);">Balanced</span>
@@ -526,6 +530,7 @@ async function startGlobalScan() {
         maxLevel: document.getElementById('maxLevel').value,
         donatorFilter: document.getElementById('donatorFilter').value,
         maxPlaytime: document.getElementById('maxPlaytime').value,
+        maxAge: document.getElementById('maxAge')?.value || '',
         weightLevel: document.getElementById('weightLevel').value,
         scanCount: 15
     });

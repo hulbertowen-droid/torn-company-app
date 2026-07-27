@@ -1225,7 +1225,7 @@ app.post('/api/analyze-player-list', async (req, res) => {
 });
 
 app.get('/api/scan-random-players', async (req, res) => {
-    const { minLevel, maxLevel, donatorFilter, maxPlaytime, weightPlaytime, weightLevel } = req.query;
+    const { minLevel, maxLevel, donatorFilter, maxPlaytime, maxAge, weightPlaytime, weightLevel } = req.query;
     
     try {
                 const dataDir = path.join(__dirname, 'data');
@@ -1253,6 +1253,7 @@ app.get('/api/scan-random-players', async (req, res) => {
             if (donatorFilter === "nondonator" && profile.donator) return false;
             
             if (maxPlaytime && parseFloat(profile.playtime) > parseFloat(maxPlaytime)) return false;
+            if (maxAge && parseFloat(profile.age) > parseFloat(maxAge)) return false;
             
             return true;
         });
