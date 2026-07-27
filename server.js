@@ -1278,14 +1278,41 @@ app.get('/api/scan-random-players', async (req, res) => {
             return true;
         });
 
-        // Add progIndex dynamically based on sliders
+        // Backward compatibility: wipe old estStats and dynamically calculate scoutGrade
         results = results.map(r => {
-            r.progIndex = calculateProgIndex(r.level, r.xanax, r.playtime, weightPlaytime, weightLevel);
+            // WIPE OLD FAKE STATS
+            r.estStats = "?? FF Scouter Req.";
+            r.xanPerDay = (r.xanax / (r.age || 1)).toFixed(2);
+            
+            // Generate Scout Grade for old database entries that don't have it
+            let score = 0;
+            if (r.donator) score += 20;
+            if (r.xanPerDay > 2.5) score += 40;
+            else if (r.xanPerDay > 1.5) score += 30;
+            else if (r.xanPerDay > 0.5) score += 15;
+            else if (r.xanPerDay > 0.1) score += 5;
+            else if (r.age > 100) score -= 20;
+            
+            const refPerDay = (r.refills || 0) / (r.age || 1);
+            if (refPerDay > 0.5) score += 20;
+            else if (refPerDay > 0.1) score += 10;
+            
+            const levelPerAge = r.level / (r.age || 1);
+            if (levelPerAge > 0.5) score += 20;
+            else if (levelPerAge > 0.2) score += 10;
+            
+            if (score >= 70) r.scoutGrade = "S";
+            else if (score >= 50) r.scoutGrade = "A";
+            else if (score >= 30) r.scoutGrade = "B";
+            else if (score >= 10) r.scoutGrade = "C";
+            else if (score > 0) r.scoutGrade = "D";
+            else r.scoutGrade = "F";
+            
             return r;
         });
 
-        // Sort by progression index
-        results.sort((a, b) => b.progIndex - a.progIndex);
+        // Sort by xanPerDay by default for best recruits
+        results.sort((a, b) => parseFloat(b.xanPerDay) - parseFloat(a.xanPerDay));
         
         // Return top 100 max to keep UI snappy
         res.json({ success: true, recruits: results.slice(0, 100) });
