@@ -173,35 +173,15 @@
 
         <div class="mode-tabs">
             <div class="mode-tab active" id="tab-poach" onclick="switchMode('poach')">⚔️ War Poaching</div>
-            <div class="mode-tab" id="tab-scan" onclick="switchMode('scan')">🌍 Global Scan</div>
-            <div class="mode-tab" id="tab-import" onclick="switchMode('import')">📋 Paste Search Results</div>
+            <div class="mode-tab" id="tab-import" onclick="switchMode('import')">🌍 Global Search (Torn)</div>
         </div>
 
         <div id="error-box" class="error-box" style="display:none;"></div>
 
         <!-- Global Filters (shared between Scan & Import) -->
-        <div id="global-filters" class="scout-form" style="display:none;">
-            <div class="scout-field">
-                <label>Level Range</label>
-                <div style="display:flex;gap:5px;">
-                    <input type="number" id="minLevel" placeholder="Min (1)" value="15">
-                    <input type="number" id="maxLevel" placeholder="Max (100)" value="100">
-                </div>
-            </div>
-            <div class="scout-field">
-                <label>Donator Status</label>
-                <select id="donatorFilter">
-                    <option value="any">Any Status</option>
-                    <option value="donator">Donator/Subscriber Only</option>
-                    <option value="nondonator">Non-Donators Only</option>
-                </select>
-            </div>
-            <div class="scout-field">
-                <label>Max Playtime (Hours)</label>
-                <input type="number" id="maxPlaytime" placeholder="e.g. 500" value="">
-            </div>
-            <div class="scout-field">
-                <label>Progression Focus (Playtime vs Level)</label>
+        <div id="global-filters" class="scout-form" style="display:none; justify-content: center;">
+            <div class="scout-field" style="max-width: 400px; width: 100%;">
+                <label style="text-align: center; display: block;">Progression Focus (Playtime vs Level)</label>
                 <div class="scout-slider-container">
                     <span style="font-size:0.7em;color:var(--text-dim);">Balanced</span>
                     <input type="range" id="weightLevel" min="0.5" max="2.0" step="0.1" value="1.0">
@@ -210,21 +190,19 @@
             </div>
         </div>
 
-        <!-- Scan Mode Options -->
-        <div id="scan-options" style="display:none; margin-bottom: 20px; text-align: center;">
-            <button class="btn-scan" id="btn-start-scan" onclick="startGlobalScan()" style="font-size: 1.1em; padding: 12px 30px;">🌍 Start Global Scan</button>
-            <p style="color:var(--text-dim); font-size: 0.8em; margin-top: 10px;">Randomly scans active players. May take up to 10 seconds.</p>
-        </div>
-
         <!-- Import Mode Options -->
         <div id="import-options" style="display:none; margin-bottom: 20px;">
-            <p style="color:var(--text-dim); font-size: 0.85em; text-align:center; margin-bottom: 10px;">
-                1. Go to <a href="https://www.torn.com/advanced_search.php" target="_blank" style="color:var(--blue);">Torn Advanced Search</a> and run a search.<br>
-                2. Highlight the list of players on that page, copy (Ctrl+C), and paste below.
-            </p>
-            <textarea id="import-text" placeholder="Paste copied players from Torn here..." style="width: 100%; height: 100px; background: #0b0d13; color: white; border: 1px solid #2f3542; border-radius: 8px; padding: 10px; font-family: monospace; resize: vertical; margin-bottom: 10px;"></textarea>
+            <div style="background: rgba(88,166,255,0.05); border: 1px solid rgba(88,166,255,0.2); padding: 20px; border-radius: 8px; margin-bottom: 20px; text-align: center;">
+                <h3 style="color: var(--blue); margin-top: 0;">Step 1: Get Players from Torn</h3>
+                <p style="color:var(--text-dim); font-size: 0.9em; margin-bottom: 15px;">
+                    Use Torn's official Advanced Search to find exactly the players you want (e.g. Level 15-30, Donators).<br>
+                    Then, highlight the list of players on that page, copy (Ctrl+C), and paste it below.
+                </p>
+                <a href="https://www.torn.com/page.php?sid=UserList" target="_blank" style="background: var(--blue); color: #000; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: bold; text-transform: uppercase; display: inline-block;">🔍 Open Torn Advanced Search</a>
+            </div>
+            <textarea id="import-text" placeholder="Step 2: Paste copied players from Torn here..." style="width: 100%; height: 120px; background: #0b0d13; color: white; border: 1px solid #2f3542; border-radius: 8px; padding: 15px; font-family: monospace; resize: vertical; margin-bottom: 15px;"></textarea>
             <div style="text-align: center;">
-                <button class="btn-scan" id="btn-start-import" onclick="startImport()">📋 Analyze Pasted Players</button>
+                <button class="btn-scan" id="btn-start-import" onclick="startImport()">📋 Step 3: Analyze Pasted Players</button>
             </div>
         </div>
 
@@ -422,61 +400,11 @@ function switchMode(mode) {
     document.getElementById('tab-' + mode).classList.add('active');
     
     document.getElementById('war-selection').style.display = mode === 'poach' ? 'block' : 'none';
-    document.getElementById('global-filters').style.display = (mode === 'scan' || mode === 'import') ? 'grid' : 'none';
-    document.getElementById('scan-options').style.display = mode === 'scan' ? 'block' : 'none';
+    document.getElementById('global-filters').style.display = mode === 'import' ? 'grid' : 'none';
     document.getElementById('import-options').style.display = mode === 'import' ? 'block' : 'none';
     document.getElementById('results-section').style.display = 'none';
     document.getElementById('stats-bar').style.display = 'none';
     allRecruits = [];
-}
-
-async function startGlobalScan() {
-    if (!myKey) return showError("No API key set.");
-    const btn = document.getElementById('btn-start-scan');
-    btn.textContent = '⏳ Scanning...';
-    btn.disabled = true;
-    showError('');
-    document.getElementById('results-section').style.display = 'none';
-
-    const p = new URLSearchParams({
-        apiKey: myKey,
-        minLevel: document.getElementById('minLevel').value,
-        maxLevel: document.getElementById('maxLevel').value,
-        donatorFilter: document.getElementById('donatorFilter').value,
-        maxPlaytime: document.getElementById('maxPlaytime').value,
-        weightLevel: document.getElementById('weightLevel').value,
-        scanCount: 15
-    });
-
-    try {
-        const res = await fetch(`/api/scan-random-players?${p.toString()}`);
-        let data;
-        const contentType = res.headers.get("content-type");
-        if (contentType && contentType.indexOf("application/json") !== -1) {
-            data = await res.json();
-        } else {
-            const text = await res.text();
-            throw new Error(`Server returned non-JSON response: ${text.substring(0, 50)}`);
-        }
-        
-        if (data.error) throw new Error(data.error);
-        
-        allRecruits = data.recruits || [];
-        btn.textContent = '🌍 Start Global Scan';
-        btn.disabled = false;
-        
-        if(allRecruits.length === 0) showError("No players found matching those strict criteria in this random batch. Try again or loosen filters.");
-        else {
-            sortCol = 'progIndex';
-            sortDir = -1;
-            renderDynamicTable();
-            document.getElementById('results-section').style.display = 'block';
-        }
-    } catch(e) {
-        showError(e.message);
-        btn.textContent = '🌍 Start Global Scan';
-        btn.disabled = false;
-    }
 }
 
 async function startImport() {
