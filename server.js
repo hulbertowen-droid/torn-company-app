@@ -6,10 +6,14 @@ require('dotenv').config();
 
 const mongoose = require('mongoose');
 
+global.mongoConnectionError = null;
 if (process.env.MONGODB_URI) {
     mongoose.connect(process.env.MONGODB_URI)
         .then(() => console.log("Connected to MongoDB Atlas"))
-        .catch(err => console.log("MongoDB connection error:", err));
+        .catch(err => {
+            console.log("MongoDB connection error:", err);
+            global.mongoConnectionError = err.message || err.toString();
+        });
 }
 
 const recruitSchema = new mongoose.Schema({
@@ -1225,6 +1229,9 @@ app.get('/api/scan-random-players', async (req, res) => {
         const recruitsFile = path.join(__dirname, 'data', 'recruits.json');
         let cachedRecruits = [];
         if (process.env.MONGODB_URI) {
+            if (mongoose.connection.readyState !== 1) { // 1 = connected
+                throw new Error("MongoDB Connection Failed! Reason: " + (global.mongoConnectionError || "Still trying to connect... check IP whitelist."));
+            }
             cachedRecruits = await Recruit.find({}).lean();
         } else {
             if (fs.existsSync(recruitsFile)) {
