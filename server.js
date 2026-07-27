@@ -4,6 +4,10 @@ const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 
+// Hardcoded MongoDB URI to bypass Render settings
+process.env.MONGODB_URI = "mongodb+srv://WarBoard:WarBoardPass123@cluster0.iwnnnj3.mongodb.net/?appName=Cluster0";
+
+
 const mongoose = require('mongoose');
 
 global.mongoConnectionError = null;
