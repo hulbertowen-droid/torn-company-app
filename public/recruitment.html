@@ -216,7 +216,22 @@
                 ⚠️ <b>Local Database Scanner Mode</b><br>
                 <span style="color: var(--text-dim);">This mode instantly searches the server's continuously updated database of active Factionless recruits. The server safely scans the game 24/7 in the background.</span>
             </div>
-            <button class="btn-scan" id="btn-start-scan" onclick="startGlobalScan()" style="font-size: 1.1em; padding: 12px 30px;">🌍 SEARCH DATABASE (INSTANT)</button>
+            <button class="btn-scan" id="btn-start-scan" onclick="startGlobalScan()" style="font-size: 1.1em; padding: 12px 30px; margin-bottom: 30px;">🌍 SEARCH DATABASE (INSTANT)</button>
+
+            <!-- TURBO MINING -->
+            <div style="background: rgba(255, 50, 50, 0.1); border: 1px solid #ff4757; border-radius: 8px; padding: 20px; text-align: center; max-width: 600px; margin: 0 auto;">
+                <h3 style="color: #ff4757; margin-top: 0;">🚀 TURBO MINING MODE</h3>
+                <p style="color: var(--text-dim); font-size: 0.9em; margin-bottom: 15px;">
+                    Divert 100% of your API capacity to finding recruits.<br>
+                    <b style="color:#ff4757;">WARNING:</b> This pauses ALL Live Warboard and Discord alerts while active. Auto-shuts off after 1 hour.
+                </p>
+                <button id="btn-turbo" onclick="toggleTurbo()" style="background: #ff4757; color: white; border: none; padding: 15px 30px; font-size: 1.2em; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.3s;">
+                    🚀 ENGAGE TURBO MINING
+                </button>
+                <div id="turbo-stats" style="margin-top: 15px; font-size: 0.9em; color: var(--gold); display: none;">
+                    Scanning... Checked: <span id="ts-checked" style="color:white; font-weight:bold;">0</span> | Found: <span id="ts-found" style="color:white; font-weight:bold;">0</span>
+                </div>
+            </div>
         </div>
 
         <!-- Import Mode Options -->
@@ -286,6 +301,52 @@
     </div>
 
 <script>
+let isTurboActive = false;
+let turboPoll = null;
+
+async function toggleTurbo() {
+    try {
+        if (!isTurboActive) {
+            await fetch('/api/turbo/start', { method: 'POST' });
+        } else {
+            await fetch('/api/turbo/stop', { method: 'POST' });
+        }
+        pollTurboStatus();
+    } catch(e) {}
+}
+
+async function pollTurboStatus() {
+    try {
+        const res = await fetch('/api/turbo/status');
+        const data = await res.json();
+        isTurboActive = data.active;
+        
+        const btn = document.getElementById('btn-turbo');
+        const stats = document.getElementById('turbo-stats');
+        
+        if (isTurboActive) {
+            btn.innerHTML = '🛑 STOP TURBO MINING';
+            btn.style.background = '#2f3542';
+            stats.style.display = 'block';
+            document.getElementById('ts-checked').textContent = data.stats.checked;
+            document.getElementById('ts-found').textContent = data.stats.found;
+            
+            if (!turboPoll) turboPoll = setInterval(pollTurboStatus, 3000);
+        } else {
+            btn.innerHTML = '🚀 ENGAGE TURBO MINING';
+            btn.style.background = '#ff4757';
+            stats.style.display = 'none';
+            if (turboPoll) {
+                clearInterval(turboPoll);
+                turboPoll = null;
+            }
+        }
+    } catch(e) {}
+}
+
+// Initial poll
+setTimeout(pollTurboStatus, 1000);
+
 const myKey = localStorage.getItem("warboard_apikey") || "";
 let allRecruits = [];
 let activeFilter = 'All';

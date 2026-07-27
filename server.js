@@ -5,6 +5,10 @@ const path = require('path');
 require('dotenv').config();
 
 const app = express();
+global.isTurboMining = false;
+global.turboInterval = null;
+global.turboTimeout = null;
+global.turboStats = { found: 0, checked: 0 };
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public', {
@@ -294,6 +298,7 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
 
 // Background Task 4: Global Recruitment Scanner
 setInterval(async () => {
+    if (global.isTurboMining) return;
     let watchKey = getNextApiKey();
     if (!watchKey) return; // Need an API key to scan
 
@@ -375,6 +380,7 @@ setInterval(async () => {
 }, 120000); // Run every 2 minutes
 // Background Task 1: Wall Watcher & Scraper
 setInterval(async () => {
+    if (global.isTurboMining) return;
     let watchFactionId = adminFactionId || discordConfig.factionId;
     let watchKey = discordConfig.apiKey || TORN_API_KEY;
     if (!watchKey || !watchFactionId) return;
@@ -540,6 +546,7 @@ setInterval(async () => {
 
 // Background Task 2: Market Watcher
 setInterval(async () => {
+    if (global.isTurboMining) return;
     let watchKey = getNextApiKey();
     if (!marketConfig.globalChannelId || !watchKey) return;
     
@@ -594,6 +601,7 @@ setInterval(async () => {
 
 // Background Task 3: Sniper & Target Status Watcher
 setInterval(async () => {
+    if (global.isTurboMining) return;
     let watchKey = getNextApiKey();
     let watchFactionId = adminFactionId || discordConfig.factionId;
     if (!watchKey || !watchFactionId) return;
@@ -1406,6 +1414,7 @@ app.post('/api/save-spy', async (req, res) => {
 });
 
 app.get('/api/warboard', async (req, res) => {
+    if (global.isTurboMining) return res.json({ error: "Turbo Mining Mode is active. Live Warboard is paused." });
     try {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
         const ffKey = req.query.ffKey && req.query.ffKey !== "null" && req.query.ffKey !== "" ? req.query.ffKey : null;
@@ -1788,5 +1797,93 @@ if (discordConfig.globalBotToken) {
 
 
 // ---------------------------------------------
+app.get('/api/turbo/status', (req, res) => {
+    res.json({ active: global.isTurboMining, stats: global.turboStats });
+});
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.post('/api/turbo/start', (req, res) => {
+    if (global.isTurboMining) return res.json({ success: true, msg: "Already running" });
+    global.isTurboMining = true;
+    global.turboStats = { found: 0, checked: 0 };
+    
+    // Auto shut-off after 1 hour (3600000 ms)
+    global.turboTimeout = setTimeout(() => {
+        global.isTurboMining = false;
+        clearInterval(global.turboInterval);
+    }, 3600000);
+
+    global.turboInterval = setInterval(async () => {
+        let watchKey = getNextApiKey();
+        if (!watchKey) return;
+
+        const recruitsFile = path.join(__dirname, 'data', 'recruits.json');
+        let cachedRecruits = [];
+        try { if (fs.existsSync(recruitsFile)) cachedRecruits = JSON.parse(fs.readFileSync(recruitsFile, 'utf8')); } catch (e) {}
+
+        if (cachedRecruits.length > 2000) cachedRecruits = cachedRecruits.slice(200);
+
+        const batchSize = 10;
+        const randomIds = [];
+        for (let i = 0; i < batchSize; i++) {
+            randomIds.push(Math.floor(Math.random() * (3400000 - 2500000 + 1) + 2500000));
+        }
+        global.turboStats.checked += batchSize;
+
+        try {
+            const batchPromises = randomIds.map(async (id) => {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 4000);
+                const userRes = await fetch(`https://api.torn.com/user/${id}?selections=profile,personalstats&key=${watchKey}`, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                const userData = await userRes.json();
+                if (userData.error) return null;
+
+                const profile = userData.profile || userData;
+                const personalstats = userData.personalstats || {};
+                
+                if (profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen")) return null;
+                if (profile.faction && profile.faction.faction_id !== 0) return null;
+
+                const level = profile.level || 1;
+                const playtimeSec = personalstats.useractivity || 0;
+                const playtimeDays = parseFloat((playtimeSec / 86400).toFixed(1));
+                const xanax = personalstats.xantaken || 0;
+                const donator = profile.donator === 1 || profile.donator === true;
+
+                return {
+                    id, name: profile.name, level, age: profile.age || 1, playtime: playtimeDays, xanax, donator,
+                    status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
+                    faction: "Factionless"
+                };
+            });
+
+            const batchResults = await Promise.all(batchPromises);
+            const validRecruits = batchResults.filter(r => r !== null);
+            
+            if (validRecruits.length > 0) {
+                const existingIds = new Set(cachedRecruits.map(r => r.id));
+                validRecruits.forEach(r => {
+                    if (!existingIds.has(r.id)) {
+                        cachedRecruits.push(r);
+                        global.turboStats.found++;
+                    }
+                });
+                fs.writeFileSync(recruitsFile, JSON.stringify(cachedRecruits, null, 2));
+            }
+        } catch (e) {}
+    }, 7500); // 10 requests every 7.5s = 80 per minute
+
+    res.json({ success: true, msg: "Turbo started" });
+});
+
+app.post('/api/turbo/stop', (req, res) => {
+    global.isTurboMining = false;
+    if (global.turboInterval) clearInterval(global.turboInterval);
+    if (global.turboTimeout) clearTimeout(global.turboTimeout);
+    res.json({ success: true, msg: "Turbo stopped" });
+});
+
+// Start Server
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server listening on port ${PORT}`);
+});
