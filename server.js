@@ -1078,7 +1078,79 @@ app.post('/api/analyze-player-list', async (req, res) => {
     }
 });
 
+app.get('/api/scan-random-players', async (req, res) => {
+    const { apiKey, minLevel, maxLevel, donatorFilter, maxPlaytime, weightPlaytime, weightLevel, scanCount } = req.query;
+    
+    try {
+        const results = [];
+        const maxScanAttempts = parseInt(scanCount) || 20; 
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+        
+        // Randomly pick recent player IDs between 2,500,000 and 3,300,000
+        const randomIds = [];
+        for (let i = 0; i < maxScanAttempts; i++) {
+            randomIds.push(Math.floor(Math.random() * (3300000 - 2500000 + 1) + 2500000));
+        }
 
+        const batchSize = 10;
+        for (let i = 0; i < randomIds.length; i += batchSize) {
+            const batchIds = randomIds.slice(i, i + batchSize);
+            const batchPromises = batchIds.map(async (id) => {
+                const useKey = getNextApiKey() || apiKey;
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 5000);
+                    const userRes = await fetch(`https://api.torn.com/user/${id}?selections=profile,personalstats&key=${useKey}`, { signal: controller.signal });
+                    clearTimeout(timeoutId);
+                    const userData = await userRes.json();
+                    if (userData.error) return null;
+
+                    const profile = userData.profile || userData;
+                    const personalstats = userData.personalstats || {};
+                    const level = profile.level || 1;
+                    
+                    if (minLevel && level < parseInt(minLevel)) return null;
+                    if (maxLevel && level > parseInt(maxLevel)) return null;
+
+                    const playtimeSec = personalstats.useractivity || 0;
+                    const playtimeHours = parseFloat((playtimeSec / 3600).toFixed(1));
+                    const xanax = personalstats.xanaxused || 0;
+                    const donator = profile.donator === 1 || profile.donator === true;
+
+                    if (donatorFilter === "donator" && !donator) return null;
+                    if (donatorFilter === "nondonator" && donator) return null;
+                    if (maxPlaytime && playtimeHours > parseFloat(maxPlaytime)) return null;
+
+                    const progIndex = calculateProgIndex(level, xanax, playtimeHours, weightPlaytime, weightLevel);
+
+                    return {
+                        id,
+                        name: profile.name,
+                        level,
+                        age: profile.age || 1,
+                        playtime: playtimeHours,
+                        xanax,
+                        donator,
+                        status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
+                        faction: profile.faction && profile.faction.faction_id !== 0 ? profile.faction.faction_name : "Factionless",
+                        progIndex
+                    };
+                } catch (e) {
+                    return null;
+                }
+            });
+
+            const batchResults = await Promise.all(batchPromises);
+            results.push(...batchResults.filter(r => r !== null));
+            if (i + batchSize < randomIds.length) await delay(200);
+        }
+
+        results.sort((a, b) => b.progIndex - a.progIndex);
+        res.json({ success: true, recruits: results });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 app.post('/api/generate-recruit-msg', async (req, res) => {
     const { playerName, score, attacks, efficiency, playtime, xanax, level, status, estStats, enemyFaction } = req.body;
