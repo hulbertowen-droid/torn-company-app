@@ -357,14 +357,14 @@ setInterval(async () => {
     for (let i = 0; i < batchSize; i++) {
         const rand = Math.random();
             if (rand < 0.60) {
-                // 60% chance for ultra-new players (IDs 3.35M to 3.45M)
-                randomIds.push(Math.floor(Math.random() * (3450000 - 3350000 + 1) + 3350000));
+                // 60% chance for ultra-new players in 2026 (IDs 4.5M to 5.0M)
+                randomIds.push(Math.floor(Math.random() * (5000000 - 4500000 + 1) + 4500000));
             } else if (rand < 0.90) {
-                // 30% chance for mid players (IDs 2.8M to 3.35M)
-                randomIds.push(Math.floor(Math.random() * (3350000 - 2800000 + 1) + 2800000));
+                // 30% chance for mid players (IDs 3.0M to 4.5M)
+                randomIds.push(Math.floor(Math.random() * (4500000 - 3000000 + 1) + 3000000));
             } else {
-                // 10% chance for veterans (IDs 1.5M to 2.8M)
-                randomIds.push(Math.floor(Math.random() * (2800000 - 1500000 + 1) + 1500000));
+                // 10% chance for veterans (IDs 1.5M to 3.0M)
+                randomIds.push(Math.floor(Math.random() * (3000000 - 1500000 + 1) + 1500000));
             }
     }
 
@@ -1903,14 +1903,14 @@ app.post('/api/turbo/start', (req, res) => {
         for (let i = 0; i < batchSize; i++) {
             const rand = Math.random();
             if (rand < 0.60) {
-                // 60% chance for ultra-new players (IDs 3.35M to 3.45M)
-                randomIds.push(Math.floor(Math.random() * (3450000 - 3350000 + 1) + 3350000));
+                // 60% chance for ultra-new players in 2026 (IDs 4.5M to 5.0M)
+                randomIds.push(Math.floor(Math.random() * (5000000 - 4500000 + 1) + 4500000));
             } else if (rand < 0.90) {
-                // 30% chance for mid players (IDs 2.8M to 3.35M)
-                randomIds.push(Math.floor(Math.random() * (3350000 - 2800000 + 1) + 2800000));
+                // 30% chance for mid players (IDs 3.0M to 4.5M)
+                randomIds.push(Math.floor(Math.random() * (4500000 - 3000000 + 1) + 3000000));
             } else {
-                // 10% chance for veterans (IDs 1.5M to 2.8M)
-                randomIds.push(Math.floor(Math.random() * (2800000 - 1500000 + 1) + 1500000));
+                // 10% chance for veterans (IDs 1.5M to 3.0M)
+                randomIds.push(Math.floor(Math.random() * (3000000 - 1500000 + 1) + 1500000));
             }
         }
         global.turboStats.checked += batchSize;
