@@ -382,6 +382,11 @@ setInterval(async () => {
             
             // Only care about active players
             if (profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen")) return null;
+            // Filter out players who haven't logged in for over 7 days
+            if (profile.last_action && profile.last_action.timestamp) {
+                const daysInactive = (Date.now() / 1000 - profile.last_action.timestamp) / 86400;
+                if (daysInactive > 7) return null;
+            }
             
             // Only care about Factionless players (No poaching rule!)
             if (profile.faction && profile.faction.faction_id !== 0) return null;
@@ -1194,6 +1199,11 @@ app.post('/api/analyze-player-list', async (req, res) => {
             const estStats = (xanax * 40000) + (refills * 15000) + (se * 50000000) + ((profile.level || 1) * 2500);
             const donator = profile.donator === 1 || profile.donator === true;
                     if (profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen")) return null;
+            // Filter out players who haven't logged in for over 7 days
+            if (profile.last_action && profile.last_action.timestamp) {
+                const daysInactive = (Date.now() / 1000 - profile.last_action.timestamp) / 86400;
+                if (daysInactive > 7) return null;
+            }
                     const level = profile.level || 1;
 
                     if (donatorFilter === "donator" && !donator) return null;
@@ -1928,6 +1938,11 @@ app.post('/api/turbo/start', (req, res) => {
                 const personalstats = userData.personalstats || {};
                 
                 if (profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen")) return null;
+            // Filter out players who haven't logged in for over 7 days
+            if (profile.last_action && profile.last_action.timestamp) {
+                const daysInactive = (Date.now() / 1000 - profile.last_action.timestamp) / 86400;
+                if (daysInactive > 7) return null;
+            }
                 if (profile.faction && profile.faction.faction_id !== 0) return null;
 
                 const level = profile.level || 1;
