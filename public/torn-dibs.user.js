@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.15
+// @version      1.16
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -38,7 +38,7 @@
         .dibs-btn-custom {
             margin-left: 8px;
             margin-right: 4px;
-            padding: 0px 20px; /* MADE MUCH WIDER */
+            padding: 4px 16px;
             font-size: 13px;
             border-radius: 6px;
             cursor: pointer;
@@ -48,16 +48,15 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            line-height: 24px;
-            height: 26px;
+            min-height: 26px;
             box-sizing: border-box;
             box-shadow: 0px 2px 4px rgba(0,0,0,0.6);
             transition: all 0.2s ease;
             flex-shrink: 0;
-            white-space: nowrap;
-            /* REMOVED MAX-WIDTH COMPLETELY SO IT NEVER CUTS OFF TEXT AGAIN */
-            width: auto;
-            min-width: 80px; 
+            /* REMOVED ALL CLIPPING SO NOTHING IS EVER CUT OFF */
+            white-space: normal;
+            overflow: visible;
+            word-break: break-word;
             z-index: 100;
         }
         
@@ -104,16 +103,24 @@
 
         @media (max-width: 768px) {
             .dibs-btn-custom {
-                font-size: 12px;
-                padding: 2px 24px; /* MASSIVELY WIDER PADDING ON MOBILE */
-                height: 28px;
-                line-height: 24px;
-                margin-top: 4px;
-                margin-bottom: 4px;
-                min-width: 100px; /* Guarantee a solid width */
-                /* Ensure no max-width on mobile either */
-                max-width: none;
-                box-shadow: 0px 2px 5px rgba(0,0,0,0.7);
+                /* MAKE IT A MASSIVE FULL-WIDTH BUTTON ON MOBILE */
+                font-size: 14px;
+                padding: 8px 12px;
+                min-height: 36px;
+                width: 100%;
+                margin: 4px 0px;
+                border-radius: 8px;
+                box-shadow: 0px 3px 6px rgba(0,0,0,0.7);
+                display: flex;
+                justify-content: center;
+                text-align: center;
+            }
+            .dibs-btn-container {
+                width: 100%;
+                display: block !important;
+                padding: 4px 12px;
+                box-sizing: border-box;
+                clear: both;
             }
         }
     `;
@@ -257,11 +264,6 @@
                     if (!btnContainer) {
                         btnContainer = document.createElement('div');
                         btnContainer.className = 'dibs-btn-container';
-                        btnContainer.style.width = '100%';
-                        btnContainer.style.display = 'flex';
-                        btnContainer.style.justifyContent = 'flex-end';
-                        btnContainer.style.paddingTop = '6px';
-                        btnContainer.style.paddingRight = '10px';
                         wrap.appendChild(btnContainer);
                     }
                     btnContainer.appendChild(btn);
