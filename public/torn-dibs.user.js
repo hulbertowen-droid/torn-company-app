@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.6
+// @version      1.7
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
-// @match        https://www.torn.com/factions.php*
+// @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -32,6 +32,7 @@
         }
         
         alert('Dibs Settings Saved!\\nURL: ' + backendUrl + '\\nName: ' + playerName);
+        fetchClaims();
     }
 
     // Tampermonkey menu
@@ -41,8 +42,7 @@
     const style = document.createElement('style');
     style.innerHTML = `
         .dibs-btn-custom {
-            margin-left: auto;
-            margin-right: 8px;
+            margin-right: 6px;
             padding: 0px 8px;
             font-size: 11px;
             border-radius: 5px;
@@ -63,6 +63,7 @@
             overflow: hidden;
             text-overflow: ellipsis;
             max-width: 150px;
+            z-index: 100;
         }
         
         .dibs-unclaimed {
@@ -89,18 +90,21 @@
             opacity: 1;
         }
 
-        .dibs-settings-btn {
-            float: right;
-            margin-top: 5px;
-            margin-right: 10px;
-            background: #333;
+        .dibs-settings-float {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.8);
             color: #fff;
-            border: 1px solid #000;
-            padding: 3px 6px;
-            border-radius: 4px;
+            border: 2px solid #555;
+            padding: 8px 12px;
+            border-radius: 20px;
             cursor: pointer;
-            font-size: 11px;
+            font-size: 12px;
             font-weight: bold;
+            z-index: 9999999;
+            box-shadow: 0px 4px 10px rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
         }
 
         /* Mobile Adjustments for Torn PDA and small screens */
@@ -108,10 +112,10 @@
             .dibs-btn-custom {
                 font-size: 9px;
                 padding: 0px 4px;
-                height: 18px;
-                line-height: 16px;
+                height: 20px;
+                line-height: 18px;
                 margin-right: 4px;
-                max-width: 70px;
+                max-width: 80px;
             }
         }
     `;
@@ -166,54 +170,29 @@
     }
 
     function injectSettingsButton() {
-        if (document.querySelector('.dibs-settings-btn')) return;
-        
-        // Find a good place to inject the settings button (usually near the top tabs or title)
-        const header = document.querySelector('.content-title') || document.querySelector('.faction-title') || document.querySelector('.faction-tabs');
-        if (header) {
+        // Floating button in bottom left so it is IMPOSSIBLE to miss on mobile
+        if (!document.querySelector('.dibs-settings-float')) {
             const btn = document.createElement('button');
-            btn.className = 'dibs-settings-btn';
+            btn.className = 'dibs-settings-float';
             btn.innerText = '⚙️ Dibs Settings';
             btn.onclick = (e) => {
                 e.preventDefault();
                 openSettings();
             };
-            header.appendChild(btn);
+            document.body.appendChild(btn);
         }
     }
 
     function updateUI() {
         injectSettingsButton();
 
-        // Target all possible links that point to a profile
-        const profileLinks = document.querySelectorAll('a[href*="profiles.php?XID="]');
+        // Use the Attack icon as the ultimate anchor point. 
+        // This works on Mobile, PC, TWSE, Vanilla, Faction page, Search page, and Profile page!
+        const attackLinks = document.querySelectorAll('a[href*="loader.php?sid=attack"]');
         
-        let friendlyContainers = new Set();
-        profileLinks.forEach(link => {
-            if (link.innerText.trim().toLowerCase() === playerName.toLowerCase()) {
-                const container = link.closest('tbody') || link.closest('ul') || link.closest('.faction-info-wrap') || link.closest('.members-list') || link.closest('.table-body');
-                if (container) friendlyContainers.add(container);
-            }
-        });
-        
-        profileLinks.forEach(link => {
-            if (link.innerText.trim().length === 0) return;
-            
-            // Aggressive row matching for mobile layouts
-            const row = link.closest('li') || link.closest('tr') || link.closest('.member-wrap') || link.closest('.table-row') || link.closest('.user-info-list-wrap');
-            if (!row) return;
-
-            let isFriendly = false;
-            for (let container of friendlyContainers) {
-                if (container.contains(row)) {
-                    isFriendly = true;
-                    break;
-                }
-            }
-            if (isFriendly) return;
-
-            const urlParams = new URLSearchParams(link.href.split('?')[1]);
-            const id = urlParams.get('XID');
+        attackLinks.forEach(attackLink => {
+            const urlParams = new URLSearchParams(attackLink.href.split('?')[1]);
+            const id = urlParams.get('user2ID');
             if (!id) return;
 
             let btn = document.querySelector('.dibs-btn-' + id);
@@ -222,21 +201,13 @@
                 btn = document.createElement('button');
                 btn.className = 'dibs-btn-custom dibs-btn-' + id;
                 
-                // On mobile, the attack link might just be an icon or tucked inside a div
-                const attackLink = row.querySelector('a[href*="loader.php?sid=attack"]');
-                
-                if (row.tagName === 'TR') {
-                    let targetCell = attackLink ? attackLink.closest('td') : row.lastElementChild;
-                    if (targetCell) targetCell.insertBefore(btn, targetCell.firstChild);
-                } else {
-                    if (attackLink && attackLink.parentNode) {
-                        attackLink.parentNode.insertBefore(btn, attackLink);
-                    } else {
-                        // Fallback for extreme mobile layouts: just stick it in the row wrapper
-                        row.appendChild(btn);
-                        row.style.display = 'flex';
-                        row.style.alignItems = 'center';
-                        row.style.flexWrap = 'wrap';
+                // Inject immediately before the attack button
+                if (attackLink.parentNode) {
+                    attackLink.parentNode.insertBefore(btn, attackLink);
+                    // Ensure the parent is a flex row so they sit next to each other nicely on mobile
+                    if (window.getComputedStyle(attackLink.parentNode).display !== 'flex') {
+                        attackLink.parentNode.style.display = 'flex';
+                        attackLink.parentNode.style.alignItems = 'center';
                     }
                 }
 
@@ -273,6 +244,12 @@
 
     setInterval(fetchClaims, 2500);
     setInterval(updateUI, 1000);
-    fetchClaims();
+    
+    // Fallback: Run once when DOM is fully loaded just in case Torn PDA delays execution
+    if (document.readyState === 'complete') {
+        fetchClaims();
+    } else {
+        window.addEventListener('load', fetchClaims);
+    }
 
 })();
