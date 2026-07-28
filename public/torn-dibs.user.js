@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.12
+// @version      1.13
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -38,42 +38,42 @@
         .dibs-btn-custom {
             margin-left: 8px;
             margin-right: 4px;
-            padding: 0px 8px;
-            font-size: 11px;
-            border-radius: 5px;
+            padding: 0px 12px;
+            font-size: 13px; /* Increased from 11px */
+            border-radius: 6px;
             cursor: pointer;
-            font-weight: bold;
+            font-weight: 900; /* Made bolder */
             text-transform: uppercase;
             vertical-align: middle;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            line-height: 20px;
-            height: 22px;
+            line-height: 24px;
+            height: 26px; /* Increased from 22px */
             box-sizing: border-box;
-            box-shadow: 0px 1px 3px rgba(0,0,0,0.5);
+            box-shadow: 0px 2px 4px rgba(0,0,0,0.6);
             transition: all 0.2s ease;
             flex-shrink: 0;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 150px;
+            max-width: 180px; /* Increased from 150px */
             z-index: 100;
         }
         
         .dibs-unclaimed {
-            background: linear-gradient(180deg, #353b48, #2f3640);
+            background: linear-gradient(180deg, #4b5261, #2f3640);
             color: #f5f6fa;
             border: 1px solid #111;
             text-shadow: none;
-            opacity: 0.9;
+            opacity: 1;
         }
         
         .dibs-mine {
             background: linear-gradient(180deg, #2ed573, #22a055);
             color: #fff;
             border: 1px solid #1e8f4c;
-            text-shadow: 1px 1px 1px rgba(0,0,0,0.4);
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
             opacity: 1;
         }
         
@@ -81,7 +81,7 @@
             background: linear-gradient(180deg, #ff4757, #cc3845);
             color: #fff;
             border: 1px solid #a32c37;
-            text-shadow: 1px 1px 1px rgba(0,0,0,0.4);
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
             opacity: 1;
         }
 
@@ -89,31 +89,33 @@
             position: fixed;
             bottom: 20px;
             left: 20px;
-            background: rgba(0,0,0,0.6);
+            background: rgba(0,0,0,0.8);
             color: #fff;
-            border: 2px solid #444;
-            padding: 6px 10px;
+            border: 2px solid #555;
+            padding: 10px 16px; /* Bigger settings button */
             border-radius: 20px;
             cursor: pointer;
-            font-size: 11px;
+            font-size: 13px;
+            font-weight: bold;
             z-index: 9999999;
             backdrop-filter: blur(4px);
             transition: opacity 0.3s;
         }
         .dibs-settings-float:hover {
-            background: rgba(0,0,0,0.9);
-            border-color: #777;
+            background: rgba(0,0,0,1);
+            border-color: #888;
         }
 
         @media (max-width: 768px) {
             .dibs-btn-custom {
-                font-size: 9px;
-                padding: 0px 6px;
-                height: 18px;
-                line-height: 16px;
-                max-width: 80px;
-                margin-top: 2px;
-                margin-bottom: 2px;
+                font-size: 11px; /* Increased from 9px */
+                padding: 2px 10px; /* Increased from 0px 6px */
+                height: 24px; /* Increased from 18px */
+                line-height: 20px;
+                max-width: 120px; /* Increased from 80px */
+                margin-top: 4px;
+                margin-bottom: 4px;
+                box-shadow: 0px 2px 5px rgba(0,0,0,0.7);
             }
         }
     `;
@@ -125,7 +127,6 @@
     function fetchClaims() {
         if (!backendUrl || isFetching) return;
         
-        // Performance: Only poll if we actually have buttons on screen or are looking at a faction profile
         const hasButtons = document.querySelectorAll('.dibs-btn-custom').length > 0;
         const isEnemyFactionPage = window.location.href.includes('step=profile&ID=');
         
@@ -181,7 +182,6 @@
         const isEnemyFactionPage = window.location.href.includes('step=profile&ID=');
         const settingsBtn = document.querySelector('.dibs-settings-float');
 
-        // Logic: ONLY show the floating settings button if we are looking at a specific faction!
         if (isEnemyFactionPage) {
             if (!settingsBtn) {
                 const btn = document.createElement('button');
@@ -206,16 +206,20 @@
         injectTimeout = setTimeout(() => {
             injectButtons();
             injectTimeout = null;
-        }, 100); // Debounce to prevent lag
+        }, 150); // Increased debounce to 150ms for smoother performance
     }
 
     function injectButtons() {
         injectSettingsButton();
 
-        const profileLinks = document.querySelectorAll('a[href*="profiles.php?XID="]');
+        // High-performance query: Native C++ filtering of already processed links instantly!
+        const profileLinks = document.querySelectorAll('a[href*="profiles.php?XID="]:not(.dibs-processed)');
         
+        if (profileLinks.length === 0) return; // Exit immediately if no new links exist!
+
         let friendlyContainers = new Set();
-        profileLinks.forEach(link => {
+        // Check ALL links (even processed ones) to find friendly containers efficiently
+        document.querySelectorAll('a[href*="profiles.php?XID="]').forEach(link => {
             if (link.innerText.trim().toLowerCase() === playerName.toLowerCase()) {
                 const container = link.closest('tbody') || link.closest('ul') || link.closest('.faction-info-wrap') || link.closest('.members-list') || link.closest('.table-body');
                 if (container) friendlyContainers.add(container);
@@ -224,7 +228,6 @@
 
         profileLinks.forEach(link => {
             if (link.innerText.trim().length === 0) return;
-            if (link.classList.contains('dibs-processed')) return;
 
             if (link.closest('#sidebar') || link.closest('#header') || link.closest('#top-page-links') || link.closest('.user-info')) return;
 
@@ -244,6 +247,7 @@
             const id = urlParams.get('XID');
             if (!id) return;
 
+            // Mark as processed permanently so the browser never checks this link again
             link.classList.add('dibs-processed');
 
             let btn = document.querySelector('.dibs-btn-' + id);
@@ -270,7 +274,7 @@
                         btnContainer.style.width = '100%';
                         btnContainer.style.display = 'flex';
                         btnContainer.style.justifyContent = 'flex-end';
-                        btnContainer.style.paddingTop = '4px';
+                        btnContainer.style.paddingTop = '6px';
                         btnContainer.style.paddingRight = '10px';
                         wrap.appendChild(btnContainer);
                     }
@@ -314,22 +318,29 @@
         });
     }
 
-    // High performance MutationObserver instead of heavy setInterval looping
     const observer = new MutationObserver((mutations) => {
         let shouldUpdate = false;
         for (let m of mutations) {
+            // Highly optimized filter: Only trigger injection if actual elements (not just text like clocks/chat) were added
             if (m.addedNodes.length > 0) {
-                shouldUpdate = true;
-                break;
+                for (let i = 0; i < m.addedNodes.length; i++) {
+                    const node = m.addedNodes[i];
+                    if (node.nodeType === 1) { // 1 == ELEMENT_NODE
+                        // If it's a list item, table row, or contains links, trigger an update!
+                        if (node.tagName === 'LI' || node.tagName === 'TR' || node.tagName === 'UL' || node.tagName === 'A' || node.querySelector?.('a')) {
+                            shouldUpdate = true;
+                            break;
+                        }
+                    }
+                }
             }
+            if (shouldUpdate) break;
         }
         if (shouldUpdate) requestInject();
     });
 
-    // Start observer
     observer.observe(document.body, { childList: true, subtree: true });
 
-    // Poll the backend every 2500ms
     setInterval(fetchClaims, 2500);
     
     if (document.readyState === 'complete') {
