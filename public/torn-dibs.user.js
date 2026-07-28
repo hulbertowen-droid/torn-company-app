@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.3
+// @version      1.4
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -9,6 +9,7 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_registerMenuCommand
+// @grant        GM_addStyle
 // @connect      *
 // ==/UserScript==
 
@@ -35,6 +36,70 @@
             alert('Player Name saved!');
         }
     });
+
+    // Inject Responsive CSS for PC and Mobile (Torn PDA)
+    const style = document.createElement('style');
+    style.innerHTML = `
+        .dibs-btn-custom {
+            margin-left: auto;
+            margin-right: 8px;
+            padding: 0px 8px;
+            font-size: 11px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            text-transform: uppercase;
+            vertical-align: middle;
+            display: inline-block;
+            line-height: 20px;
+            height: 22px;
+            box-sizing: border-box;
+            box-shadow: 0px 1px 3px rgba(0,0,0,0.5);
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 150px;
+        }
+        
+        .dibs-unclaimed {
+            background: linear-gradient(180deg, #353b48, #2f3640);
+            color: #f5f6fa;
+            border: 1px solid #111;
+            text-shadow: none;
+            opacity: 0.9;
+        }
+        
+        .dibs-mine {
+            background: linear-gradient(180deg, #2ed573, #22a055);
+            color: #fff;
+            border: 1px solid #1e8f4c;
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.4);
+            opacity: 1;
+        }
+        
+        .dibs-claimed {
+            background: linear-gradient(180deg, #ff4757, #cc3845);
+            color: #fff;
+            border: 1px solid #a32c37;
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.4);
+            opacity: 1;
+        }
+
+        /* Mobile Adjustments for Torn PDA and small screens */
+        @media (max-width: 768px) {
+            .dibs-btn-custom {
+                font-size: 9px;
+                padding: 0px 4px;
+                height: 18px;
+                line-height: 16px;
+                margin-right: 4px;
+                max-width: 70px; /* Prevent breaking mobile rows */
+            }
+        }
+    `;
+    document.head.appendChild(style);
 
     let activeClaims = {};
 
@@ -82,7 +147,6 @@
     function updateUI() {
         const profileLinks = document.querySelectorAll('a[href*="profiles.php?XID="]');
         
-        // Pass 1: Identify friendly containers based on the player's name
         let friendlyContainers = new Set();
         profileLinks.forEach(link => {
             if (link.innerText.trim().toLowerCase() === playerName.toLowerCase()) {
@@ -91,14 +155,12 @@
             }
         });
         
-        // Pass 2: Inject buttons only for enemies
         profileLinks.forEach(link => {
-            if (link.innerText.trim().length === 0) return; // Skip icons
+            if (link.innerText.trim().length === 0) return;
             
             const row = link.closest('li') || link.closest('tr') || link.closest('.member-wrap');
             if (!row) return;
 
-            // Check if this row is inside a friendly container
             let isFriendly = false;
             for (let container of friendlyContainers) {
                 if (container.contains(row)) {
@@ -106,7 +168,7 @@
                     break;
                 }
             }
-            if (isFriendly) return; // Do not inject dibs on our own faction
+            if (isFriendly) return;
 
             const urlParams = new URLSearchParams(link.href.split('?')[1]);
             const id = urlParams.get('XID');
@@ -116,35 +178,14 @@
             
             if (!btn) {
                 btn = document.createElement('button');
-                btn.className = 'dibs-btn-' + id;
+                btn.className = 'dibs-btn-custom dibs-btn-' + id;
                 
-                // Sleek, premium Torn-native styling
-                btn.style.marginLeft = 'auto';
-                btn.style.marginRight = '8px';
-                btn.style.padding = '0px 8px';
-                btn.style.fontSize = '11px';
-                btn.style.borderRadius = '5px';
-                btn.style.cursor = 'pointer';
-                btn.style.fontWeight = 'bold';
-                btn.style.textTransform = 'uppercase';
-                btn.style.verticalAlign = 'middle';
-                btn.style.display = 'inline-block';
-                btn.style.lineHeight = '20px';
-                btn.style.height = '22px';
-                btn.style.boxSizing = 'border-box';
-                btn.style.boxShadow = '0px 1px 3px rgba(0,0,0,0.5)';
-                btn.style.transition = 'all 0.2s ease';
-                btn.style.flexShrink = '0';
-                
-                // Smart injection for TWSE and Vanilla
                 const attackLink = row.querySelector('a[href*="loader.php?sid=attack"]');
                 
                 if (row.tagName === 'TR') {
-                    // Vanilla Torn table row
                     let targetCell = attackLink ? attackLink.closest('td') : row.lastElementChild;
                     if (targetCell) targetCell.insertBefore(btn, targetCell.firstChild);
                 } else {
-                    // TWSE Flexbox row
                     if (attackLink && attackLink.parentNode) {
                         attackLink.parentNode.insertBefore(btn, attackLink);
                     } else {
@@ -157,36 +198,29 @@
                     e.stopPropagation();
                     if (activeClaims[id]) {
                         if (activeClaims[id].playerName === playerName) {
-                            btn.innerText = 'Unclaiming...';
+                            btn.innerText = '...';
                             unclaimTarget(id);
                         } else {
                             alert('Already claimed by ' + activeClaims[id].playerName);
                         }
                     } else {
-                        btn.innerText = 'Claiming...';
+                        btn.innerText = '...';
                         claimTarget(id);
                     }
                 });
             }
 
+            // Update button visual state
             if (activeClaims[id]) {
                 const claimer = activeClaims[id].playerName;
                 const isMine = claimer === playerName;
                 
-                btn.innerText = isMine ? '★ DROP DIBS' : 'CLAIMED: ' + claimer;
-                btn.style.background = isMine ? 'linear-gradient(180deg, #2ed573, #22a055)' : 'linear-gradient(180deg, #ff4757, #cc3845)';
-                btn.style.color = '#fff';
-                btn.style.border = isMine ? '1px solid #1e8f4c' : '1px solid #a32c37';
-                btn.style.textShadow = '1px 1px 1px rgba(0,0,0,0.4)';
-                btn.style.opacity = '1';
-                
+                // Keep text short for mobile support (CSS handles the max-width clipping)
+                btn.innerText = isMine ? '★ YOURS' : '👑 ' + claimer;
+                btn.className = 'dibs-btn-custom dibs-btn-' + id + (isMine ? ' dibs-mine' : ' dibs-claimed');
             } else {
                 btn.innerText = '🎯 DIBS';
-                btn.style.background = 'linear-gradient(180deg, #353b48, #2f3640)';
-                btn.style.color = '#f5f6fa';
-                btn.style.border = '1px solid #111';
-                btn.style.textShadow = 'none';
-                btn.style.opacity = '0.9';
+                btn.className = 'dibs-btn-custom dibs-btn-' + id + ' dibs-unclaimed';
             }
         });
     }
