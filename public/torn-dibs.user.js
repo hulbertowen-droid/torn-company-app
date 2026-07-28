@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -21,7 +21,7 @@
     GM_registerMenuCommand('⚙️ Set Backend URL', () => {
         const url = prompt('Enter your Render App URL (e.g. https://torn-company-app.onrender.com):', backendUrl);
         if (url) {
-            backendUrl = url.replace(/\/$/, '');
+            backendUrl = url.replace(/\/$/, ''); // remove trailing slash
             GM_setValue('backendUrl', backendUrl);
             alert('Backend URL saved!');
         }
@@ -75,9 +75,13 @@
     }
 
     function updateUI() {
-        const profileLinks = document.querySelectorAll('a[href^="profiles.php?XID="]');
+        // Use *= to match TWSE paths like /profiles.php?XID= or https://www.torn.com/profiles.php?XID=
+        const profileLinks = document.querySelectorAll('a[href*="profiles.php?XID="]');
         
         profileLinks.forEach(link => {
+            // Skip invisible links or icon links that TWSE generates aggressively
+            if (link.innerText.trim().length === 0) return;
+            
             const row = link.closest('li') || link.closest('tr') || link.closest('.member-wrap') || link.parentElement;
             if (!row) return;
 
@@ -85,18 +89,27 @@
             const id = urlParams.get('XID');
             if (!id) return;
 
-            let btn = row.querySelector('.dibs-btn-' + id);
+            // Search by class to avoid row scoping issues if TWSE moves elements around
+            let btn = document.querySelector('.dibs-btn-' + id);
             
             if (!btn) {
                 btn = document.createElement('button');
                 btn.className = 'dibs-btn-' + id;
-                btn.style.marginLeft = '10px';
-                btn.style.padding = '2px 8px';
-                btn.style.fontSize = '11px';
-                btn.style.borderRadius = '3px';
+                
+                // Super resilient styling for flexbox
+                btn.style.marginLeft = '6px';
+                btn.style.padding = '0px 6px';
+                btn.style.fontSize = '10px';
+                btn.style.borderRadius = '4px';
                 btn.style.cursor = 'pointer';
-                btn.style.fontWeight = 'bold';
-                btn.style.border = '1px solid #333';
+                btn.style.fontWeight = '900';
+                btn.style.border = '1px solid #000';
+                btn.style.textTransform = 'uppercase';
+                btn.style.verticalAlign = 'middle';
+                btn.style.display = 'inline-block';
+                btn.style.lineHeight = '16px';
+                btn.style.height = '18px';
+                btn.style.boxSizing = 'border-box';
                 
                 if (link.nextSibling) {
                     link.parentNode.insertBefore(btn, link.nextSibling);
@@ -122,11 +135,13 @@
                 btn.style.backgroundColor = claimer === playerName ? '#2ed573' : '#ff4757';
                 btn.style.color = 'white';
                 btn.style.opacity = claimer === playerName ? '1' : '0.6';
+                btn.style.border = 'none';
             } else {
                 btn.innerText = 'Dibs';
                 btn.style.backgroundColor = '#2f3640';
                 btn.style.color = '#f5f6fa';
                 btn.style.opacity = '1';
+                btn.style.border = '1px solid #000';
             }
         });
     }
