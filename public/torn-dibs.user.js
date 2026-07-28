@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Responsive)
 // @namespace    http://tampermonkey.net/
-// @version      1.18
+// @version      1.19
 // @description  Integrates a faction dibs system into Torn profile/faction pages.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -12,6 +12,9 @@
 
 (function () {
   'use strict';
+
+  console.log('Dibs script loaded', location.href);
+  alert('Dibs script loaded');
 
   const STORAGE_URL = 'dibs_backendUrl';
   const STORAGE_NAME = 'dibs_playerName';
