@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.5
+// @version      1.6
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -9,7 +9,6 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_registerMenuCommand
-// @grant        GM_addStyle
 // @connect      *
 // ==/UserScript==
 
@@ -19,23 +18,24 @@
     let backendUrl = GM_getValue('backendUrl', 'https://spider-verse.net');
     let playerName = GM_getValue('playerName', 'MyName');
 
-    GM_registerMenuCommand('⚙️ Set Backend URL', () => {
-        const url = prompt('Enter your Render App URL (e.g. https://spider-verse.net):', backendUrl);
-        if (url) {
+    function openSettings() {
+        const url = prompt('Enter your App URL (e.g. https://spider-verse.net):', backendUrl);
+        if (url !== null) {
             backendUrl = url.replace(/\/$/, '');
             GM_setValue('backendUrl', backendUrl);
-            alert('Backend URL saved!');
         }
-    });
-
-    GM_registerMenuCommand('👤 Set Player Name', () => {
+        
         const name = prompt('Enter your name (this will show when you claim targets):', playerName);
-        if (name) {
+        if (name !== null) {
             playerName = name;
             GM_setValue('playerName', playerName);
-            alert('Player Name saved!');
         }
-    });
+        
+        alert('Dibs Settings Saved!\\nURL: ' + backendUrl + '\\nName: ' + playerName);
+    }
+
+    // Tampermonkey menu
+    GM_registerMenuCommand('⚙️ Dibs Settings', openSettings);
 
     // Inject Responsive CSS for PC and Mobile (Torn PDA)
     const style = document.createElement('style');
@@ -50,7 +50,9 @@
             font-weight: bold;
             text-transform: uppercase;
             vertical-align: middle;
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             line-height: 20px;
             height: 22px;
             box-sizing: border-box;
@@ -87,6 +89,20 @@
             opacity: 1;
         }
 
+        .dibs-settings-btn {
+            float: right;
+            margin-top: 5px;
+            margin-right: 10px;
+            background: #333;
+            color: #fff;
+            border: 1px solid #000;
+            padding: 3px 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
         /* Mobile Adjustments for Torn PDA and small screens */
         @media (max-width: 768px) {
             .dibs-btn-custom {
@@ -95,7 +111,7 @@
                 height: 18px;
                 line-height: 16px;
                 margin-right: 4px;
-                max-width: 70px; /* Prevent breaking mobile rows */
+                max-width: 70px;
             }
         }
     `;
@@ -104,7 +120,7 @@
     let activeClaims = {};
 
     function fetchClaims() {
-        if (!backendUrl || backendUrl === 'https://your-app.onrender.com') return;
+        if (!backendUrl) return;
 
         GM_xmlhttpRequest({
             method: 'GET',
@@ -117,14 +133,19 @@
                         updateUI();
                     }
                 } catch (e) {
-                    console.error('Failed to parse claims:', e);
+                    // silent fail
                 }
             }
         });
     }
 
     function claimTarget(enemyId) {
-        if (!backendUrl) return alert('Please set your Backend URL in the Tampermonkey menu first!');
+        if (!backendUrl) return alert('Please set your Backend URL in Dibs Settings!');
+        if (playerName === 'MyName' || !playerName) {
+            alert('Please set your Player Name in Dibs Settings first!');
+            return openSettings();
+        }
+        
         GM_xmlhttpRequest({
             method: 'POST',
             url: `${backendUrl}/api/claim`,
@@ -144,13 +165,33 @@
         });
     }
 
+    function injectSettingsButton() {
+        if (document.querySelector('.dibs-settings-btn')) return;
+        
+        // Find a good place to inject the settings button (usually near the top tabs or title)
+        const header = document.querySelector('.content-title') || document.querySelector('.faction-title') || document.querySelector('.faction-tabs');
+        if (header) {
+            const btn = document.createElement('button');
+            btn.className = 'dibs-settings-btn';
+            btn.innerText = '⚙️ Dibs Settings';
+            btn.onclick = (e) => {
+                e.preventDefault();
+                openSettings();
+            };
+            header.appendChild(btn);
+        }
+    }
+
     function updateUI() {
+        injectSettingsButton();
+
+        // Target all possible links that point to a profile
         const profileLinks = document.querySelectorAll('a[href*="profiles.php?XID="]');
         
         let friendlyContainers = new Set();
         profileLinks.forEach(link => {
             if (link.innerText.trim().toLowerCase() === playerName.toLowerCase()) {
-                const container = link.closest('tbody') || link.closest('ul') || link.closest('.faction-info-wrap') || link.closest('.members-list');
+                const container = link.closest('tbody') || link.closest('ul') || link.closest('.faction-info-wrap') || link.closest('.members-list') || link.closest('.table-body');
                 if (container) friendlyContainers.add(container);
             }
         });
@@ -158,7 +199,8 @@
         profileLinks.forEach(link => {
             if (link.innerText.trim().length === 0) return;
             
-            const row = link.closest('li') || link.closest('tr') || link.closest('.member-wrap');
+            // Aggressive row matching for mobile layouts
+            const row = link.closest('li') || link.closest('tr') || link.closest('.member-wrap') || link.closest('.table-row') || link.closest('.user-info-list-wrap');
             if (!row) return;
 
             let isFriendly = false;
@@ -180,6 +222,7 @@
                 btn = document.createElement('button');
                 btn.className = 'dibs-btn-custom dibs-btn-' + id;
                 
+                // On mobile, the attack link might just be an icon or tucked inside a div
                 const attackLink = row.querySelector('a[href*="loader.php?sid=attack"]');
                 
                 if (row.tagName === 'TR') {
@@ -189,7 +232,11 @@
                     if (attackLink && attackLink.parentNode) {
                         attackLink.parentNode.insertBefore(btn, attackLink);
                     } else {
+                        // Fallback for extreme mobile layouts: just stick it in the row wrapper
                         row.appendChild(btn);
+                        row.style.display = 'flex';
+                        row.style.alignItems = 'center';
+                        row.style.flexWrap = 'wrap';
                     }
                 }
 
@@ -215,7 +262,6 @@
                 const claimer = activeClaims[id].playerName;
                 const isMine = claimer === playerName;
                 
-                // Keep text short for mobile support (CSS handles the max-width clipping)
                 btn.innerText = isMine ? '★ YOURS' : '👑 ' + claimer;
                 btn.className = 'dibs-btn-custom dibs-btn-' + id + (isMine ? ' dibs-mine' : ' dibs-claimed');
             } else {
