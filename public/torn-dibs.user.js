@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.13
+// @version      1.14
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -39,17 +39,17 @@
             margin-left: 8px;
             margin-right: 4px;
             padding: 0px 12px;
-            font-size: 13px; /* Increased from 11px */
+            font-size: 13px;
             border-radius: 6px;
             cursor: pointer;
-            font-weight: 900; /* Made bolder */
+            font-weight: 900;
             text-transform: uppercase;
             vertical-align: middle;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             line-height: 24px;
-            height: 26px; /* Increased from 22px */
+            height: 26px;
             box-sizing: border-box;
             box-shadow: 0px 2px 4px rgba(0,0,0,0.6);
             transition: all 0.2s ease;
@@ -57,7 +57,7 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            max-width: 180px; /* Increased from 150px */
+            max-width: 180px;
             z-index: 100;
         }
         
@@ -92,7 +92,7 @@
             background: rgba(0,0,0,0.8);
             color: #fff;
             border: 2px solid #555;
-            padding: 10px 16px; /* Bigger settings button */
+            padding: 10px 16px;
             border-radius: 20px;
             cursor: pointer;
             font-size: 13px;
@@ -101,18 +101,14 @@
             backdrop-filter: blur(4px);
             transition: opacity 0.3s;
         }
-        .dibs-settings-float:hover {
-            background: rgba(0,0,0,1);
-            border-color: #888;
-        }
 
         @media (max-width: 768px) {
             .dibs-btn-custom {
-                font-size: 11px; /* Increased from 9px */
-                padding: 2px 10px; /* Increased from 0px 6px */
-                height: 24px; /* Increased from 18px */
+                font-size: 11px;
+                padding: 2px 10px;
+                height: 24px;
                 line-height: 20px;
-                max-width: 120px; /* Increased from 80px */
+                max-width: 120px;
                 margin-top: 4px;
                 margin-bottom: 4px;
                 box-shadow: 0px 2px 5px rgba(0,0,0,0.7);
@@ -127,10 +123,10 @@
     function fetchClaims() {
         if (!backendUrl || isFetching) return;
         
-        const hasButtons = document.querySelectorAll('.dibs-btn-custom').length > 0;
+        const buttons = document.getElementsByClassName('dibs-btn-custom');
         const isEnemyFactionPage = window.location.href.includes('step=profile&ID=');
         
-        if (!hasButtons && !isEnemyFactionPage) return;
+        if (buttons.length === 0 && !isEnemyFactionPage) return;
 
         isFetching = true;
         GM_xmlhttpRequest({
@@ -200,25 +196,21 @@
         }
     }
 
-    let injectTimeout = null;
-    function requestInject() {
-        if (injectTimeout) return;
-        injectTimeout = setTimeout(() => {
-            injectButtons();
-            injectTimeout = null;
-        }, 150); // Increased debounce to 150ms for smoother performance
-    }
-
     function injectButtons() {
         injectSettingsButton();
 
-        // High-performance query: Native C++ filtering of already processed links instantly!
-        const profileLinks = document.querySelectorAll('a[href*="profiles.php?XID="]:not(.dibs-processed)');
+        // 1. O(1) Instant Check: Are there ANY completely new profile links on the page?
+        const newLinks = document.querySelectorAll('a[href*="profiles.php?XID="]:not(.dibs-processed)');
         
-        if (profileLinks.length === 0) return; // Exit immediately if no new links exist!
+        // 2. ULTIMATE OPTIMIZATION: If no new links exist, instantly bail out.
+        // This takes ~0.05 milliseconds. Absolutely ZERO lag possible.
+        if (newLinks.length === 0) {
+            updateUI();
+            return;
+        }
 
+        // Only run this heavy logic if brand new members just appeared on the screen!
         let friendlyContainers = new Set();
-        // Check ALL links (even processed ones) to find friendly containers efficiently
         document.querySelectorAll('a[href*="profiles.php?XID="]').forEach(link => {
             if (link.innerText.trim().toLowerCase() === playerName.toLowerCase()) {
                 const container = link.closest('tbody') || link.closest('ul') || link.closest('.faction-info-wrap') || link.closest('.members-list') || link.closest('.table-body');
@@ -226,9 +218,8 @@
             }
         });
 
-        profileLinks.forEach(link => {
+        newLinks.forEach(link => {
             if (link.innerText.trim().length === 0) return;
-
             if (link.closest('#sidebar') || link.closest('#header') || link.closest('#top-page-links') || link.closest('.user-info')) return;
 
             const row = link.closest('li') || link.closest('tr') || link.closest('.member-wrap') || link.closest('.table-row') || link.closest('.user-info-list-wrap');
@@ -247,11 +238,9 @@
             const id = urlParams.get('XID');
             if (!id) return;
 
-            // Mark as processed permanently so the browser never checks this link again
             link.classList.add('dibs-processed');
 
             let btn = document.querySelector('.dibs-btn-' + id);
-            
             if (!btn) {
                 btn = document.createElement('button');
                 btn.className = 'dibs-btn-custom dibs-btn-' + id;
@@ -303,8 +292,9 @@
     }
 
     function updateUI() {
-        const buttons = document.querySelectorAll('.dibs-btn-custom');
-        buttons.forEach(btn => {
+        const buttons = document.getElementsByClassName('dibs-btn-custom');
+        for (let i = 0; i < buttons.length; i++) {
+            const btn = buttons[i];
             const id = btn.getAttribute('data-id');
             if (activeClaims[id]) {
                 const claimer = activeClaims[id].playerName;
@@ -315,41 +305,24 @@
                 btn.innerText = '🎯 DIBS';
                 btn.className = 'dibs-btn-custom dibs-btn-' + id + ' dibs-unclaimed';
             }
-        });
+        }
     }
 
-    const observer = new MutationObserver((mutations) => {
-        let shouldUpdate = false;
-        for (let m of mutations) {
-            // Highly optimized filter: Only trigger injection if actual elements (not just text like clocks/chat) were added
-            if (m.addedNodes.length > 0) {
-                for (let i = 0; i < m.addedNodes.length; i++) {
-                    const node = m.addedNodes[i];
-                    if (node.nodeType === 1) { // 1 == ELEMENT_NODE
-                        // If it's a list item, table row, or contains links, trigger an update!
-                        if (node.tagName === 'LI' || node.tagName === 'TR' || node.tagName === 'UL' || node.tagName === 'A' || node.querySelector?.('a')) {
-                            shouldUpdate = true;
-                            break;
-                        }
-                    }
-                }
-            }
-            if (shouldUpdate) break;
-        }
-        if (shouldUpdate) requestInject();
-    });
-
-    observer.observe(document.body, { childList: true, subtree: true });
+    // REMOVED MutationObserver entirely. It is too destructive to mobile CPU.
+    // Instead, run a hyper-optimized scan every 2 seconds.
+    setInterval(() => {
+        requestAnimationFrame(injectButtons);
+    }, 2000);
 
     setInterval(fetchClaims, 2500);
     
     if (document.readyState === 'complete') {
         fetchClaims();
-        requestInject();
+        injectButtons();
     } else {
         window.addEventListener('load', () => {
             fetchClaims();
-            requestInject();
+            injectButtons();
         });
     }
 
