@@ -1,42 +1,37 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.7
+// @version      1.8
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
 // @match        https://www.torn.com/*
-// @grant        GM_xmlhttpRequest
-// @grant        GM_setValue
-// @grant        GM_getValue
-// @grant        GM_registerMenuCommand
-// @connect      *
+// @grant        none
 // ==/UserScript==
 
 (function() {
     'use strict';
 
-    let backendUrl = GM_getValue('backendUrl', 'https://spider-verse.net');
-    let playerName = GM_getValue('playerName', 'MyName');
+    // Torn PDA often fails when using Tampermonkey-specific functions (GM_getValue).
+    // Using native localStorage ensures 100% compatibility across all devices.
+    let backendUrl = localStorage.getItem('dibs_backendUrl') || 'https://spider-verse.net';
+    let playerName = localStorage.getItem('dibs_playerName') || '';
 
     function openSettings() {
         const url = prompt('Enter your App URL (e.g. https://spider-verse.net):', backendUrl);
         if (url !== null) {
             backendUrl = url.replace(/\/$/, '');
-            GM_setValue('backendUrl', backendUrl);
+            localStorage.setItem('dibs_backendUrl', backendUrl);
         }
         
         const name = prompt('Enter your name (this will show when you claim targets):', playerName);
         if (name !== null) {
             playerName = name;
-            GM_setValue('playerName', playerName);
+            localStorage.setItem('dibs_playerName', playerName);
         }
         
         alert('Dibs Settings Saved!\\nURL: ' + backendUrl + '\\nName: ' + playerName);
         fetchClaims();
     }
-
-    // Tampermonkey menu
-    GM_registerMenuCommand('⚙️ Dibs Settings', openSettings);
 
     // Inject Responsive CSS for PC and Mobile (Torn PDA)
     const style = document.createElement('style');
@@ -126,51 +121,40 @@
     function fetchClaims() {
         if (!backendUrl) return;
 
-        GM_xmlhttpRequest({
-            method: 'GET',
-            url: `${backendUrl}/api/claims`,
-            onload: function(response) {
-                try {
-                    const data = JSON.parse(response.responseText);
-                    if (data.success && data.claims) {
-                        activeClaims = data.claims;
-                        updateUI();
-                    }
-                } catch (e) {
-                    // silent fail
+        fetch(`${backendUrl}/api/claims`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.claims) {
+                    activeClaims = data.claims;
+                    updateUI();
                 }
-            }
-        });
+            })
+            .catch(e => {});
     }
 
     function claimTarget(enemyId) {
         if (!backendUrl) return alert('Please set your Backend URL in Dibs Settings!');
-        if (playerName === 'MyName' || !playerName) {
+        if (!playerName || playerName === '') {
             alert('Please set your Player Name in Dibs Settings first!');
             return openSettings();
         }
         
-        GM_xmlhttpRequest({
+        fetch(`${backendUrl}/api/claim`, {
             method: 'POST',
-            url: `${backendUrl}/api/claim`,
             headers: { "Content-Type": "application/json" },
-            data: JSON.stringify({ enemyId: enemyId.toString(), playerName: playerName }),
-            onload: function() { fetchClaims(); }
-        });
+            body: JSON.stringify({ enemyId: enemyId.toString(), playerName: playerName })
+        }).then(() => fetchClaims());
     }
 
     function unclaimTarget(enemyId) {
-        GM_xmlhttpRequest({
+        fetch(`${backendUrl}/api/unclaim`, {
             method: 'POST',
-            url: `${backendUrl}/api/unclaim`,
             headers: { "Content-Type": "application/json" },
-            data: JSON.stringify({ enemyId: enemyId.toString(), playerName: playerName }),
-            onload: function() { fetchClaims(); }
-        });
+            body: JSON.stringify({ enemyId: enemyId.toString(), playerName: playerName })
+        }).then(() => fetchClaims());
     }
 
     function injectSettingsButton() {
-        // Floating button in bottom left so it is IMPOSSIBLE to miss on mobile
         if (!document.querySelector('.dibs-settings-float')) {
             const btn = document.createElement('button');
             btn.className = 'dibs-settings-float';
@@ -186,8 +170,6 @@
     function updateUI() {
         injectSettingsButton();
 
-        // Use the Attack icon as the ultimate anchor point. 
-        // This works on Mobile, PC, TWSE, Vanilla, Faction page, Search page, and Profile page!
         const attackLinks = document.querySelectorAll('a[href*="loader.php?sid=attack"]');
         
         attackLinks.forEach(attackLink => {
@@ -201,10 +183,8 @@
                 btn = document.createElement('button');
                 btn.className = 'dibs-btn-custom dibs-btn-' + id;
                 
-                // Inject immediately before the attack button
                 if (attackLink.parentNode) {
                     attackLink.parentNode.insertBefore(btn, attackLink);
-                    // Ensure the parent is a flex row so they sit next to each other nicely on mobile
                     if (window.getComputedStyle(attackLink.parentNode).display !== 'flex') {
                         attackLink.parentNode.style.display = 'flex';
                         attackLink.parentNode.style.alignItems = 'center';
@@ -228,7 +208,6 @@
                 });
             }
 
-            // Update button visual state
             if (activeClaims[id]) {
                 const claimer = activeClaims[id].playerName;
                 const isMine = claimer === playerName;
@@ -245,7 +224,6 @@
     setInterval(fetchClaims, 2500);
     setInterval(updateUI, 1000);
     
-    // Fallback: Run once when DOM is fully loaded just in case Torn PDA delays execution
     if (document.readyState === 'complete') {
         fetchClaims();
     } else {
