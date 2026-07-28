@@ -1,16 +1,18 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.9
+// @version      1.10
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
 // @match        https://www.torn.com/*
-// @grant        none
+// @grant        GM_xmlhttpRequest
+// @connect      *
 // ==/UserScript==
 
 (function() {
     'use strict';
 
+    // We use localStorage for settings to ensure 100% PDA compatibility without crashing.
     let backendUrl = localStorage.getItem('dibs_backendUrl') || 'https://spider-verse.net';
     let playerName = localStorage.getItem('dibs_playerName') || '';
 
@@ -31,12 +33,11 @@
         fetchClaims();
     }
 
-    // Inject Responsive CSS for PC and Mobile (Torn PDA)
     const style = document.createElement('style');
     style.innerHTML = `
         .dibs-btn-custom {
-            margin-right: 6px;
-            margin-left: 6px;
+            margin-left: 8px;
+            margin-right: 4px;
             padding: 0px 8px;
             font-size: 11px;
             border-radius: 5px;
@@ -101,15 +102,15 @@
             backdrop-filter: blur(4px);
         }
 
-        /* Mobile Adjustments for Torn PDA and small screens */
         @media (max-width: 768px) {
             .dibs-btn-custom {
                 font-size: 9px;
-                padding: 0px 4px;
-                height: 20px;
-                line-height: 18px;
-                margin-right: 4px;
+                padding: 0px 6px;
+                height: 18px;
+                line-height: 16px;
                 max-width: 80px;
+                margin-top: 2px;
+                margin-bottom: 2px;
             }
         }
     `;
@@ -120,15 +121,21 @@
     function fetchClaims() {
         if (!backendUrl) return;
 
-        fetch(`${backendUrl}/api/claims`)
-            .then(res => res.json())
-            .then(data => {
-                if (data.success && data.claims) {
-                    activeClaims = data.claims;
-                    updateUI();
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: `${backendUrl}/api/claims`,
+            onload: function(response) {
+                try {
+                    const data = JSON.parse(response.responseText);
+                    if (data.success && data.claims) {
+                        activeClaims = data.claims;
+                        updateUI();
+                    }
+                } catch (e) {
+                    // silent fail
                 }
-            })
-            .catch(e => {});
+            }
+        });
     }
 
     function claimTarget(enemyId) {
@@ -138,19 +145,23 @@
             return openSettings();
         }
         
-        fetch(`${backendUrl}/api/claim`, {
+        GM_xmlhttpRequest({
             method: 'POST',
+            url: `${backendUrl}/api/claim`,
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ enemyId: enemyId.toString(), playerName: playerName })
-        }).then(() => fetchClaims());
+            data: JSON.stringify({ enemyId: enemyId.toString(), playerName: playerName }),
+            onload: function() { fetchClaims(); }
+        });
     }
 
     function unclaimTarget(enemyId) {
-        fetch(`${backendUrl}/api/unclaim`, {
+        GM_xmlhttpRequest({
             method: 'POST',
+            url: `${backendUrl}/api/unclaim`,
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ enemyId: enemyId.toString(), playerName: playerName })
-        }).then(() => fetchClaims());
+            data: JSON.stringify({ enemyId: enemyId.toString(), playerName: playerName }),
+            onload: function() { fetchClaims(); }
+        });
     }
 
     function injectSettingsButton() {
@@ -204,20 +215,22 @@
                 btn = document.createElement('button');
                 btn.className = 'dibs-btn-custom dibs-btn-' + id;
                 
-                // Try to find the Attack button for ideal placement (PC/TWSE)
                 const attackLink = row.querySelector('a[href*="loader.php?sid=attack"]');
                 
                 if (attackLink && attackLink.parentNode) {
+                    // Ideal PC/TWSE placement
                     attackLink.parentNode.insertBefore(btn, attackLink);
                     if (window.getComputedStyle(attackLink.parentNode).display !== 'flex') {
                         attackLink.parentNode.style.display = 'flex';
                         attackLink.parentNode.style.alignItems = 'center';
                     }
-                } else if (link.nextSibling) {
-                    // Fallback for Mobile: Put it directly next to the player's name!
-                    link.parentNode.insertBefore(btn, link.nextSibling);
                 } else {
-                    link.parentNode.appendChild(btn);
+                    // Mobile fallback: append it AFTER the name/level container to avoid overlapping
+                    const nameContainer = link.closest('div') || link.parentNode;
+                    nameContainer.appendChild(btn);
+                    nameContainer.style.display = 'flex';
+                    nameContainer.style.alignItems = 'center';
+                    nameContainer.style.flexWrap = 'wrap'; // Allow it to wrap underneath if screen is too small
                 }
 
                 btn.addEventListener('click', (e) => {
