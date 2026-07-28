@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.10
+// @version      1.11
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
 // @match        https://www.torn.com/*
@@ -12,7 +12,6 @@
 (function() {
     'use strict';
 
-    // We use localStorage for settings to ensure 100% PDA compatibility without crashing.
     let backendUrl = localStorage.getItem('dibs_backendUrl') || 'https://spider-verse.net';
     let playerName = localStorage.getItem('dibs_playerName') || '';
 
@@ -177,7 +176,8 @@
         }
     }
 
-    function updateUI() {
+    // Runs every 1500ms to scan for new enemies appearing in the DOM
+    function injectButtons() {
         injectSettingsButton();
 
         const profileLinks = document.querySelectorAll('a[href*="profiles.php?XID="]');
@@ -192,6 +192,10 @@
 
         profileLinks.forEach(link => {
             if (link.innerText.trim().length === 0) return;
+            if (link.classList.contains('dibs-processed')) return; // Optimize: don't process again
+
+            // Ignore header/sidebar links (fixes the top-right errant button bug)
+            if (link.closest('#sidebar') || link.closest('#header') || link.closest('#top-page-links') || link.closest('.user-info')) return;
 
             const row = link.closest('li') || link.closest('tr') || link.closest('.member-wrap') || link.closest('.table-row') || link.closest('.user-info-list-wrap');
             if (!row) return;
@@ -209,11 +213,14 @@
             const id = urlParams.get('XID');
             if (!id) return;
 
+            link.classList.add('dibs-processed'); // Mark as processed for performance
+
             let btn = document.querySelector('.dibs-btn-' + id);
             
             if (!btn) {
                 btn = document.createElement('button');
                 btn.className = 'dibs-btn-custom dibs-btn-' + id;
+                btn.setAttribute('data-id', id);
                 
                 const attackLink = row.querySelector('a[href*="loader.php?sid=attack"]');
                 
@@ -225,12 +232,21 @@
                         attackLink.parentNode.style.alignItems = 'center';
                     }
                 } else {
-                    // Mobile fallback: append it AFTER the name/level container to avoid overlapping
-                    const nameContainer = link.closest('div') || link.parentNode;
-                    nameContainer.appendChild(btn);
-                    nameContainer.style.display = 'flex';
-                    nameContainer.style.alignItems = 'center';
-                    nameContainer.style.flexWrap = 'wrap'; // Allow it to wrap underneath if screen is too small
+                    // Mobile fallback: Instead of inserting it next to the name where it covers text, 
+                    // we append a new flex container to the absolute bottom of the row so it neatly sits underneath!
+                    const wrap = link.closest('.user-info-list-wrap') || link.closest('.member-wrap') || link.closest('li') || row;
+                    let btnContainer = wrap.querySelector('.dibs-btn-container');
+                    if (!btnContainer) {
+                        btnContainer = document.createElement('div');
+                        btnContainer.className = 'dibs-btn-container';
+                        btnContainer.style.width = '100%';
+                        btnContainer.style.display = 'flex';
+                        btnContainer.style.justifyContent = 'flex-end';
+                        btnContainer.style.paddingTop = '4px';
+                        btnContainer.style.paddingRight = '10px';
+                        wrap.appendChild(btnContainer);
+                    }
+                    btnContainer.appendChild(btn);
                 }
 
                 btn.addEventListener('click', (e) => {
@@ -249,11 +265,20 @@
                     }
                 });
             }
+        });
 
+        // Instantly sync UI text after injecting
+        updateUI();
+    }
+
+    // Updates text instantly based on data, fast O(N) loop
+    function updateUI() {
+        const buttons = document.querySelectorAll('.dibs-btn-custom');
+        buttons.forEach(btn => {
+            const id = btn.getAttribute('data-id');
             if (activeClaims[id]) {
                 const claimer = activeClaims[id].playerName;
                 const isMine = claimer === playerName;
-                
                 btn.innerText = isMine ? '★ YOURS' : '👑 ' + claimer;
                 btn.className = 'dibs-btn-custom dibs-btn-' + id + (isMine ? ' dibs-mine' : ' dibs-claimed');
             } else {
@@ -264,12 +289,16 @@
     }
 
     setInterval(fetchClaims, 2500);
-    setInterval(updateUI, 1000);
+    setInterval(injectButtons, 1500); // Increased interval to prevent stuttering, added heavy caching
     
     if (document.readyState === 'complete') {
         fetchClaims();
+        injectButtons();
     } else {
-        window.addEventListener('load', fetchClaims);
+        window.addEventListener('load', () => {
+            fetchClaims();
+            injectButtons();
+        });
     }
 
 })();
