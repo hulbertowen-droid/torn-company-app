@@ -1666,10 +1666,23 @@ app.get('/api/ocs', async (req, res) => {
         const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
         if (!userKey) return res.status(400).json({ error: "No API key provided. Please add your API key in Settings." });
 
-        // Fetch OC crimes AND faction members in parallel using the user's own key
+        // 1. Fetch user profile to get their faction ID (v2 API requires explicit ID)
+        const userRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`);
+        const userData = await userRes.json();
+        
+        if (userData.error) {
+            return res.status(400).json({ error: `API Key Error: ${userData.error.error}` });
+        }
+        if (!userData.faction || userData.faction.faction_id === 0) {
+            return res.status(400).json({ error: "You are not currently in a faction, so you cannot view Organized Crimes." });
+        }
+        
+        const fid = userData.faction.faction_id;
+
+        // 2. Fetch OC crimes AND faction members explicitly by faction ID
         const [crimeRes, memberRes] = await Promise.all([
-            fetch(`https://api.torn.com/v2/faction/crimes?cat=available&key=${userKey}`),
-            fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`)
+            fetch(`https://api.torn.com/v2/faction/${fid}/crimes?cat=available&key=${userKey}`),
+            fetch(`https://api.torn.com/faction/${fid}?selections=basic&key=${userKey}`)
         ]);
         const crimeData = await crimeRes.json();
         const memberData = await memberRes.json();
