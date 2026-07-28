@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.14
+// @version      1.15
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -38,7 +38,7 @@
         .dibs-btn-custom {
             margin-left: 8px;
             margin-right: 4px;
-            padding: 0px 12px;
+            padding: 0px 20px; /* MADE MUCH WIDER */
             font-size: 13px;
             border-radius: 6px;
             cursor: pointer;
@@ -55,9 +55,9 @@
             transition: all 0.2s ease;
             flex-shrink: 0;
             white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 180px;
+            /* REMOVED MAX-WIDTH COMPLETELY SO IT NEVER CUTS OFF TEXT AGAIN */
+            width: auto;
+            min-width: 80px; 
             z-index: 100;
         }
         
@@ -104,13 +104,15 @@
 
         @media (max-width: 768px) {
             .dibs-btn-custom {
-                font-size: 11px;
-                padding: 2px 10px;
-                height: 24px;
-                line-height: 20px;
-                max-width: 120px;
+                font-size: 12px;
+                padding: 2px 24px; /* MASSIVELY WIDER PADDING ON MOBILE */
+                height: 28px;
+                line-height: 24px;
                 margin-top: 4px;
                 margin-bottom: 4px;
+                min-width: 100px; /* Guarantee a solid width */
+                /* Ensure no max-width on mobile either */
+                max-width: none;
                 box-shadow: 0px 2px 5px rgba(0,0,0,0.7);
             }
         }
@@ -199,17 +201,12 @@
     function injectButtons() {
         injectSettingsButton();
 
-        // 1. O(1) Instant Check: Are there ANY completely new profile links on the page?
         const newLinks = document.querySelectorAll('a[href*="profiles.php?XID="]:not(.dibs-processed)');
-        
-        // 2. ULTIMATE OPTIMIZATION: If no new links exist, instantly bail out.
-        // This takes ~0.05 milliseconds. Absolutely ZERO lag possible.
         if (newLinks.length === 0) {
             updateUI();
             return;
         }
 
-        // Only run this heavy logic if brand new members just appeared on the screen!
         let friendlyContainers = new Set();
         document.querySelectorAll('a[href*="profiles.php?XID="]').forEach(link => {
             if (link.innerText.trim().toLowerCase() === playerName.toLowerCase()) {
@@ -308,8 +305,6 @@
         }
     }
 
-    // REMOVED MutationObserver entirely. It is too destructive to mobile CPU.
-    // Instead, run a hyper-optimized scan every 2 seconds.
     setInterval(() => {
         requestAnimationFrame(injectButtons);
     }, 2000);
