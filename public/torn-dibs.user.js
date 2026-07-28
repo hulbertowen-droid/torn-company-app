@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.16
+// @version      1.17
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -48,12 +48,13 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            height: auto;
             min-height: 26px;
+            line-height: normal;
             box-sizing: border-box;
             box-shadow: 0px 2px 4px rgba(0,0,0,0.6);
             transition: all 0.2s ease;
             flex-shrink: 0;
-            /* REMOVED ALL CLIPPING SO NOTHING IS EVER CUT OFF */
             white-space: normal;
             overflow: visible;
             word-break: break-word;
@@ -103,15 +104,17 @@
 
         @media (max-width: 768px) {
             .dibs-btn-custom {
-                /* MAKE IT A MASSIVE FULL-WIDTH BUTTON ON MOBILE */
-                font-size: 14px;
-                padding: 8px 12px;
-                min-height: 36px;
+                font-size: 13px;
+                padding: 6px 12px; /* Balanced padding */
+                height: auto; /* Let padding define height naturally */
+                min-height: 28px;
+                line-height: normal;
                 width: 100%;
                 margin: 4px 0px;
-                border-radius: 8px;
-                box-shadow: 0px 3px 6px rgba(0,0,0,0.7);
+                border-radius: 6px;
+                box-shadow: 0px 2px 4px rgba(0,0,0,0.6);
                 display: flex;
+                align-items: center; /* FIX: Vertically centers text perfectly */
                 justify-content: center;
                 text-align: center;
             }
