@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      1.2
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -60,27 +60,30 @@
 
     function claimTarget(enemyId) {
         if (!backendUrl) return alert('Please set your Backend URL in the Tampermonkey menu first!');
-        
         GM_xmlhttpRequest({
             method: 'POST',
             url: `${backendUrl}/api/claim`,
-            headers: {
-                "Content-Type": "application/json"
-            },
+            headers: { "Content-Type": "application/json" },
             data: JSON.stringify({ enemyId: enemyId.toString(), playerName: playerName }),
-            onload: function(response) {
-                fetchClaims();
-            }
+            onload: function() { fetchClaims(); }
+        });
+    }
+
+    function unclaimTarget(enemyId) {
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: `${backendUrl}/api/unclaim`,
+            headers: { "Content-Type": "application/json" },
+            data: JSON.stringify({ enemyId: enemyId.toString(), playerName: playerName }),
+            onload: function() { fetchClaims(); }
         });
     }
 
     function updateUI() {
-        // Use *= to match TWSE paths like /profiles.php?XID= or https://www.torn.com/profiles.php?XID=
         const profileLinks = document.querySelectorAll('a[href*="profiles.php?XID="]');
         
         profileLinks.forEach(link => {
-            // Skip invisible links or icon links that TWSE generates aggressively
-            if (link.innerText.trim().length === 0) return;
+            if (link.innerText.trim().length === 0) return; // Skip icons
             
             const row = link.closest('li') || link.closest('tr') || link.closest('.member-wrap') || link.parentElement;
             if (!row) return;
@@ -89,27 +92,27 @@
             const id = urlParams.get('XID');
             if (!id) return;
 
-            // Search by class to avoid row scoping issues if TWSE moves elements around
             let btn = document.querySelector('.dibs-btn-' + id);
             
             if (!btn) {
                 btn = document.createElement('button');
                 btn.className = 'dibs-btn-' + id;
                 
-                // Super resilient styling for flexbox
-                btn.style.marginLeft = '6px';
-                btn.style.padding = '0px 6px';
-                btn.style.fontSize = '10px';
-                btn.style.borderRadius = '4px';
+                // Sleek, premium Torn-native styling
+                btn.style.marginLeft = '8px';
+                btn.style.padding = '0px 8px';
+                btn.style.fontSize = '11px';
+                btn.style.borderRadius = '5px';
                 btn.style.cursor = 'pointer';
-                btn.style.fontWeight = '900';
-                btn.style.border = '1px solid #000';
+                btn.style.fontWeight = 'bold';
                 btn.style.textTransform = 'uppercase';
                 btn.style.verticalAlign = 'middle';
                 btn.style.display = 'inline-block';
-                btn.style.lineHeight = '16px';
-                btn.style.height = '18px';
+                btn.style.lineHeight = '18px';
+                btn.style.height = '20px';
                 btn.style.boxSizing = 'border-box';
+                btn.style.boxShadow = '0px 1px 3px rgba(0,0,0,0.5)';
+                btn.style.transition = 'all 0.2s ease';
                 
                 if (link.nextSibling) {
                     link.parentNode.insertBefore(btn, link.nextSibling);
@@ -121,7 +124,12 @@
                     e.preventDefault();
                     e.stopPropagation();
                     if (activeClaims[id]) {
-                        alert('Already claimed by ' + activeClaims[id].playerName);
+                        if (activeClaims[id].playerName === playerName) {
+                            btn.innerText = 'Unclaiming...';
+                            unclaimTarget(id);
+                        } else {
+                            alert('Already claimed by ' + activeClaims[id].playerName);
+                        }
                     } else {
                         btn.innerText = 'Claiming...';
                         claimTarget(id);
@@ -131,17 +139,22 @@
 
             if (activeClaims[id]) {
                 const claimer = activeClaims[id].playerName;
-                btn.innerText = claimer === playerName ? '★ Yours' : 'Claimed: ' + claimer;
-                btn.style.backgroundColor = claimer === playerName ? '#2ed573' : '#ff4757';
-                btn.style.color = 'white';
-                btn.style.opacity = claimer === playerName ? '1' : '0.6';
-                btn.style.border = 'none';
-            } else {
-                btn.innerText = 'Dibs';
-                btn.style.backgroundColor = '#2f3640';
-                btn.style.color = '#f5f6fa';
+                const isMine = claimer === playerName;
+                
+                btn.innerText = isMine ? '★ YOURS (CLICK TO DROP)' : 'CLAIMED: ' + claimer;
+                btn.style.background = isMine ? 'linear-gradient(180deg, #2ed573, #22a055)' : 'linear-gradient(180deg, #ff4757, #cc3845)';
+                btn.style.color = '#fff';
+                btn.style.border = isMine ? '1px solid #1e8f4c' : '1px solid #a32c37';
+                btn.style.textShadow = '1px 1px 1px rgba(0,0,0,0.4)';
                 btn.style.opacity = '1';
-                btn.style.border = '1px solid #000';
+                
+            } else {
+                btn.innerText = '🎯 DIBS';
+                btn.style.background = 'linear-gradient(180deg, #353b48, #2f3640)';
+                btn.style.color = '#f5f6fa';
+                btn.style.border = '1px solid #111';
+                btn.style.textShadow = 'none';
+                btn.style.opacity = '0.9';
             }
         });
     }
