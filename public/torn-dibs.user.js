@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.4
+// @version      1.5
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -16,11 +16,11 @@
 (function() {
     'use strict';
 
-    let backendUrl = GM_getValue('backendUrl', 'https://torn-company-app.onrender.com');
+    let backendUrl = GM_getValue('backendUrl', 'https://spider-verse.net');
     let playerName = GM_getValue('playerName', 'MyName');
 
     GM_registerMenuCommand('⚙️ Set Backend URL', () => {
-        const url = prompt('Enter your Render App URL (e.g. https://torn-company-app.onrender.com):', backendUrl);
+        const url = prompt('Enter your Render App URL (e.g. https://spider-verse.net):', backendUrl);
         if (url) {
             backendUrl = url.replace(/\/$/, '');
             GM_setValue('backendUrl', backendUrl);
