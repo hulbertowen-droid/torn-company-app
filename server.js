@@ -1453,6 +1453,7 @@ app.get('/api/past-war', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
+app.get('/api/claims', (req, res) => { res.json({ success: true, claims, backups, manualStats }); });
 app.post('/api/claim', (req, res) => { const { enemyId, playerName } = req.body; claims[enemyId] = { playerName, time: Date.now() }; res.json({ success: true }); });
 app.post('/api/unclaim', (req, res) => { const { enemyId, playerName } = req.body; if (claims[enemyId]?.playerName === playerName) delete claims[enemyId]; res.json({ success: true }); });
 app.post('/api/backup', (req, res) => { const { enemyId, playerName } = req.body; backups[enemyId] = { playerName, time: Date.now() }; res.json({ success: true }); });
