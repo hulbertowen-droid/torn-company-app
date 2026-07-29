@@ -1,11 +1,13 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.24
+// @version      1.25
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
-// @match        https://www.torn.com/factions.php*
-// @match        https://www.torn.com/profiles.php*
+// @match        *://torn.com/factions.php*
+// @match        *://www.torn.com/factions.php*
+// @match        *://torn.com/profiles.php*
+// @match        *://www.torn.com/profiles.php*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
