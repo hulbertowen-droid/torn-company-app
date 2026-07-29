@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.23
+// @version      1.24
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -9,6 +9,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        GM_registerMenuCommand
 // @connect      *
 // ==/UserScript==
 
@@ -288,6 +289,8 @@
                 clear: both;
             }
             .dibs-settings-float {
+                bottom: 80px;
+                left: 12px;
                 padding: 12px 18px;
                 font-size: 14px;
             }
@@ -365,6 +368,10 @@
     function closeSettingsModal() {
         const overlay = document.getElementById('dibsModalOverlay');
         if (overlay) overlay.classList.remove('dibs-modal-open');
+    }
+
+    if (typeof GM_registerMenuCommand !== 'undefined') {
+        GM_registerMenuCommand("⚙️ Dibs Settings", showSettingsModal);
     }
 
     function saveSettingsFromModal() {
@@ -637,42 +644,33 @@
         updateSettingsButtonStatus(stale);
     }
 
-    // ---- Timers, paused while the tab/page is hidden ----
-    function startTimers() {
+    // ---- Timers and Observer ----
+    let observer = null;
+
+    function startLoop() {
         if (!pollInterval) {
             fetchClaims();
             pollInterval = setInterval(fetchClaims, 2500);
         }
-        if (!injectInterval) {
-            injectInterval = setInterval(() => requestAnimationFrame(injectButtons), 2000);
-        }
+        
+        if (observer) observer.disconnect();
+        observer = new MutationObserver(() => {
+            clearTimeout(window.__dibs_timer);
+            window.__dibs_timer = setTimeout(injectButtons, 150);
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
     }
-
-    function stopTimers() {
-        if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
-        if (injectInterval) { clearInterval(injectInterval); injectInterval = null; }
-    }
-
-    document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-            stopTimers();
-        } else {
-            injectButtons();
-            startTimers();
-        }
-    });
 
     function init() {
         injectButtons();
-        if (!document.hidden) {
-            startTimers();
-        }
+        startLoop();
     }
 
-    if (document.readyState === 'complete') {
-        init();
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(init, 150);
     } else {
-        window.addEventListener('load', init);
+        window.addEventListener('DOMContentLoaded', () => setTimeout(init, 150));
     }
 
 })();
+
