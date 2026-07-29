@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.21
+// @version      1.22
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -109,7 +109,9 @@
 
         .dibs-settings-float {
             position: fixed;
+            bottom: 20px;
             bottom: max(20px, env(safe-area-inset-bottom, 20px));
+            left: 20px;
             left: max(20px, env(safe-area-inset-left, 20px));
             background: rgba(0,0,0,0.8);
             color: #fff;
@@ -131,6 +133,7 @@
 
         .dibs-toast {
             position: fixed;
+            bottom: 72px;
             bottom: calc(72px + env(safe-area-inset-bottom, 0px));
             left: 50%;
             transform: translateX(-50%) translateY(12px);
