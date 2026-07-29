@@ -1,410 +1,676 @@
 // ==UserScript==
-// @name         Torn Dibs Integration (PDA Safe)
+// @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.19
-// @description  Dibs system for Torn faction targets, mobile and desktop safe.
+// @version      1.18
+// @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
-// @match        *://torn.com/factions.php*
-// @match        *://www.torn.com/factions.php*
-// @match        *://torn.com/profiles.php*
-// @match        *://www.torn.com/profiles.php*
+// @match        https://www.torn.com/factions.php*
+// @match        https://www.torn.com/profiles.php*
 // @grant        GM_xmlhttpRequest
+// @grant        GM_setValue
+// @grant        GM_getValue
 // @connect      *
 // ==/UserScript==
 
-(function () {
-  'use strict';
+(function() {
+    'use strict';
 
-  const DEFAULT_URL = 'https://spider-verse.net';
-  const STORAGE_URL = 'dibs_backendUrl';
-  const STORAGE_NAME = 'dibs_playerName';
-
-  let backendUrl = DEFAULT_URL;
-  let playerName = '';
-  let activeClaims = {};
-  let busy = false;
-  let observer = null;
-  let statusEl = null;
-  let modalEl = null;
-
-  try {
-    backendUrl = (localStorage.getItem(STORAGE_URL) || DEFAULT_URL).replace(/\/$/, '');
-    playerName = localStorage.getItem(STORAGE_NAME) || '';
-  } catch (e) {}
-
-  function saveSettings() {
-    try {
-      localStorage.setItem(STORAGE_URL, backendUrl);
-      localStorage.setItem(STORAGE_NAME, playerName);
-    } catch (e) {}
-  }
-
-  function isEnemyPage() {
-    return location.href.includes('step=profile&ID=');
-  }
-
-  function showStatus(text, tone) {
-    if (!statusEl) {
-      statusEl = document.createElement('div');
-      statusEl.style.cssText = [
-        'position:fixed',
-        'top:12px',
-        'left:12px',
-        'z-index:99999999',
-        'padding:8px 12px',
-        'border-radius:10px',
-        'font:700 13px/1.2 Arial,sans-serif',
-        'color:#fff',
-        'background:rgba(0,0,0,.85)',
-        'box-shadow:0 4px 12px rgba(0,0,0,.35)',
-        'max-width:70vw'
-      ].join(';');
-      document.body.appendChild(statusEl);
+    // ---- Settings, migrated transparently from the old localStorage keys ----
+    function migrate(key) {
+        const val = GM_getValue(key, '');
+        if (val) return val;
+        const old = localStorage.getItem(key);
+        if (old) {
+            GM_setValue(key, old);
+            return old;
+        }
+        return '';
     }
-    const bg = tone === 'good' ? '#1f8f4c' : tone === 'bad' ? '#b8323a' : '#2d3748';
-    statusEl.style.background = bg;
-    statusEl.textContent = text;
-  }
 
-  function ensureStyles() {
-    if (document.getElementById('dibs-style')) return;
-    const s = document.createElement('style');
-    s.id = 'dibs-style';
-    s.textContent = `
-      .dibs-btn-custom {
-        margin: 4px 6px 4px 0;
-        padding: 6px 12px;
-        font-size: 12px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-weight: 800;
-        text-transform: uppercase;
-        line-height: 1;
-        box-sizing: border-box;
-        border: 1px solid #111;
-        box-shadow: 0 2px 4px rgba(0,0,0,.35);
-        transition: transform .12s ease, opacity .12s ease;
-        white-space: nowrap;
-        min-height: 28px;
-        flex: 0 0 auto;
-      }
-      .dibs-btn-custom:active { transform: scale(0.98); }
-      .dibs-unclaimed { background: linear-gradient(180deg, #4b5261, #2f3640); color: #f5f6fa; }
-      .dibs-mine { background: linear-gradient(180deg, #2ed573, #22a055); color: #fff; }
-      .dibs-claimed { background: linear-gradient(180deg, #ff4757, #cc3845); color: #fff; }
-      .dibs-settings-float {
-        position: fixed;
-        bottom: 16px;
-        left: 16px;
-        z-index: 99999999;
-        background: rgba(0,0,0,.82);
-        color: #fff;
-        border: 2px solid #555;
-        padding: 10px 14px;
-        border-radius: 18px;
-        cursor: pointer;
-        font-size: 13px;
-        font-weight: 700;
-        backdrop-filter: blur(4px);
-      }
-      .dibs-btn-container {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 6px;
-        width: 100%;
-        margin-top: 4px;
-      }
-      .dibs-modal-backdrop {
-        position: fixed;
-        inset: 0;
-        z-index: 99999998;
-        background: rgba(0,0,0,.65);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      .dibs-modal {
-        width: min(92vw, 420px);
-        background: #111827;
-        color: #fff;
-        border: 1px solid #374151;
-        border-radius: 14px;
-        padding: 16px;
-        box-shadow: 0 10px 30px rgba(0,0,0,.5);
-        font-family: Arial, sans-serif;
-      }
-      .dibs-modal h3 { margin: 0 0 12px 0; font-size: 18px; }
-      .dibs-modal label { display:block; font-size: 13px; margin: 10px 0 6px; }
-      .dibs-modal input {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 10px 12px;
-        border-radius: 8px;
-        border: 1px solid #4b5563;
-        background: #0b1220;
-        color: #fff;
-      }
-      .dibs-modal-actions {
-        display:flex;
-        gap:10px;
-        margin-top: 14px;
-      }
-      .dibs-modal-actions button {
-        flex: 1;
-        padding: 10px 12px;
-        border-radius: 8px;
-        border: 0;
-        font-weight: 800;
-        cursor: pointer;
-      }
-      .dibs-save { background: #22c55e; color: #fff; }
-      .dibs-cancel { background: #374151; color: #fff; }
+    let backendUrl = migrate('dibs_backendUrl') || 'https://spider-verse.net';
+    let playerName = migrate('dibs_playerName');
+    let playerId = GM_getValue('dibs_playerId', '');
 
-      @media (max-width: 768px) {
+    // ---- Claim / connection state ----
+    let activeClaims = {};
+    let isFetching = false;
+    let hasEverSucceeded = false;
+    let consecutiveFailures = 0;
+    let pollInterval = null;
+    let injectInterval = null;
+
+    const STALE_AFTER_FAILURES = 3; // ~7.5s of no successful contact at the 2.5s poll rate
+
+    // ---- Styles ----
+    const style = document.createElement('style');
+    style.innerHTML = `
         .dibs-btn-custom {
-          width: 100%;
-          margin: 4px 0;
-          padding: 8px 12px;
-          font-size: 13px;
-          justify-content: center;
+            margin-left: 8px;
+            margin-right: 4px;
+            padding: 4px 16px;
+            font-size: 13px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 900;
+            text-transform: uppercase;
+            vertical-align: middle;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: auto;
+            min-height: 26px;
+            line-height: normal;
+            box-sizing: border-box;
+            box-shadow: 0px 2px 4px rgba(0,0,0,0.6);
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+            white-space: normal;
+            overflow: visible;
+            word-break: break-word;
+            z-index: 100;
         }
-        .dibs-btn-container { display: block; width: 100%; }
-        .dibs-settings-float { bottom: 12px; left: 12px; }
-      }
+
+        .dibs-unclaimed {
+            background: linear-gradient(180deg, #4b5261, #2f3640);
+            color: #f5f6fa;
+            border: 1px solid #111;
+            text-shadow: none;
+            opacity: 1;
+        }
+
+        .dibs-mine {
+            background: linear-gradient(180deg, #2ed573, #22a055);
+            color: #fff;
+            border: 1px solid #1e8f4c;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
+            opacity: 1;
+        }
+
+        .dibs-claimed {
+            background: linear-gradient(180deg, #ff4757, #cc3845);
+            color: #fff;
+            border: 1px solid #a32c37;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
+            opacity: 1;
+        }
+
+        .dibs-loading {
+            background: linear-gradient(180deg, #3a3f4b, #262a33);
+            color: #9aa0ac;
+            border: 1px dashed #555;
+            cursor: not-allowed;
+            opacity: 0.85;
+        }
+
+        .dibs-stale {
+            opacity: 0.7;
+            border-style: dashed !important;
+        }
+
+        .dibs-settings-float {
+            position: fixed;
+            bottom: max(20px, env(safe-area-inset-bottom, 20px));
+            left: max(20px, env(safe-area-inset-left, 20px));
+            background: rgba(0,0,0,0.8);
+            color: #fff;
+            border: 2px solid #555;
+            padding: 10px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            z-index: 9999999;
+            backdrop-filter: blur(4px);
+            transition: background 0.3s, border-color 0.3s, opacity 0.3s;
+        }
+
+        .dibs-settings-float.dibs-offline {
+            background: rgba(100,45,20,0.9);
+            border-color: #e08a3d;
+        }
+
+        .dibs-toast {
+            position: fixed;
+            bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+            left: 50%;
+            transform: translateX(-50%) translateY(12px);
+            background: rgba(20,20,20,0.96);
+            color: #fff;
+            padding: 10px 18px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            z-index: 10000001;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease, transform 0.25s ease;
+            max-width: min(320px, 85vw);
+            text-align: center;
+            box-shadow: 0px 4px 12px rgba(0,0,0,0.5);
+            border: 1px solid #444;
+        }
+
+        .dibs-toast-visible {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .dibs-toast-error {
+            border-color: #a32c37;
+            background: rgba(60,20,22,0.96);
+        }
+
+        .dibs-modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 10000000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .dibs-modal-overlay.dibs-modal-open {
+            display: flex;
+        }
+
+        .dibs-modal {
+            background: #23262f;
+            color: #f5f6fa;
+            border-radius: 12px;
+            border: 1px solid #444;
+            padding: 20px;
+            width: min(360px, 100%);
+            box-shadow: 0px 10px 30px rgba(0,0,0,0.6);
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+
+        .dibs-modal h3 {
+            margin: 0 0 16px 0;
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .dibs-modal label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: #9aa0ac;
+            margin: 14px 0 6px 0;
+        }
+
+        .dibs-modal .dibs-optional {
+            text-transform: none;
+            font-weight: 400;
+            color: #6b7280;
+        }
+
+        .dibs-modal input {
+            width: 100%;
+            box-sizing: border-box;
+            background: #171920;
+            border: 1px solid #444;
+            color: #f5f6fa;
+            border-radius: 6px;
+            padding: 10px 12px;
+            font-size: 14px;
+            min-height: 40px;
+        }
+
+        .dibs-modal input:focus {
+            outline: 2px solid #2ed573;
+            outline-offset: 1px;
+            border-color: #2ed573;
+        }
+
+        .dibs-modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .dibs-modal-btn {
+            flex: 1;
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            border: 1px solid #444;
+            min-height: 40px;
+        }
+
+        .dibs-modal-btn-secondary {
+            background: #2f3640;
+            color: #f5f6fa;
+        }
+
+        .dibs-modal-btn-primary {
+            background: linear-gradient(180deg, #2ed573, #22a055);
+            color: #fff;
+            border-color: #1e8f4c;
+        }
+
+        @media (max-width: 768px) {
+            .dibs-btn-custom {
+                font-size: 13px;
+                padding: 8px 14px;
+                height: auto;
+                min-height: 40px;
+                line-height: normal;
+                width: 100%;
+                margin: 4px 0px;
+                border-radius: 6px;
+                box-shadow: 0px 2px 4px rgba(0,0,0,0.6);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+            }
+            .dibs-btn-container {
+                width: 100%;
+                display: block !important;
+                padding: 4px 12px;
+                box-sizing: border-box;
+                clear: both;
+            }
+            .dibs-settings-float {
+                padding: 12px 18px;
+                font-size: 14px;
+            }
+        }
     \`;
-    document.head.appendChild(s);
-  }
+    document.head.appendChild(style);
 
-  function request(method, url, data, onload, onerror) {
-    GM_xmlhttpRequest({
-      method,
-      url,
-      headers: { 'Content-Type': 'application/json' },
-      data: data ? JSON.stringify(data) : undefined,
-      onload,
-      onerror: onerror || function () {}
-    });
-  }
-
-  function fetchClaims() {
-    if (!backendUrl || busy) return;
-    busy = true;
-    request('GET', \`\${backendUrl}/api/claims\`, null, function (res) {
-      busy = false;
-      try {
-        const data = JSON.parse(res.responseText);
-        activeClaims = data && data.success && data.claims ? data.claims : {};
-        updateButtons();
-      } catch (e) {}
-    }, function () {
-      busy = false;
-      showStatus('Dibs: backend request failed', 'bad');
-    });
-  }
-
-  function claimTarget(enemyId) {
-    if (!backendUrl) return showStatus('Set backend URL first', 'bad');
-    if (!playerName) return openSettingsModal();
-
-    request('POST', \`\${backendUrl}/api/claim\`, {
-      enemyId: String(enemyId),
-      playerName
-    }, function () {
-      fetchClaims();
-      showStatus(\`Claimed \${enemyId}\`, 'good');
-    }, function () {
-      showStatus('Claim failed', 'bad');
-    });
-  }
-
-  function unclaimTarget(enemyId) {
-    request('POST', \`\${backendUrl}/api/unclaim\`, {
-      enemyId: String(enemyId),
-      playerName
-    }, function () {
-      fetchClaims();
-      showStatus(\`Released \${enemyId}\`, 'good');
-    }, function () {
-      showStatus('Unclaim failed', 'bad');
-    });
-  }
-
-  function openSettingsModal() {
-    if (modalEl) modalEl.remove();
-
-    const backdrop = document.createElement('div');
-    backdrop.className = 'dibs-modal-backdrop';
-
-    const modal = document.createElement('div');
-    modal.className = 'dibs-modal';
-    modal.innerHTML = \`
-      <h3>Dibs Settings</h3>
-      <label>Backend URL</label>
-      <input id="dibs-url" type="text" value="\${backendUrl.replace(/"/g, '&quot;')}" />
-      <label>Player Name</label>
-      <input id="dibs-name" type="text" value="\${playerName.replace(/"/g, '&quot;')}" />
-      <div class="dibs-modal-actions">
-        <button class="dibs-cancel" type="button">Cancel</button>
-        <button class="dibs-save" type="button">Save</button>
-      </div>
-    \`;
-
-    backdrop.appendChild(modal);
-    document.body.appendChild(backdrop);
-    modalEl = backdrop;
-
-    const urlInput = modal.querySelector('#dibs-url');
-    const nameInput = modal.querySelector('#dibs-name');
-    const cancelBtn = modal.querySelector('.dibs-cancel');
-    const saveBtn = modal.querySelector('.dibs-save');
-
-    cancelBtn.onclick = () => backdrop.remove();
-
-    saveBtn.onclick = () => {
-      backendUrl = (urlInput.value || '').trim().replace(/\\/$/, '');
-      playerName = (nameInput.value || '').trim();
-      saveSettings();
-      backdrop.remove();
-      showStatus('Dibs settings saved', 'good');
-      fetchClaims();
-      renderAll();
-    };
-
-    backdrop.addEventListener('click', e => {
-      if (e.target === backdrop) backdrop.remove();
-    });
-  }
-
-  function getProfileLinks() {
-    return [...document.querySelectorAll('a[href*="profiles.php?XID="]')].filter(a => {
-      const text = (a.textContent || '').trim();
-      return text && !a.classList.contains('dibs-processed');
-    });
-  }
-
-  function getRow(link) {
-    return link.closest('li, tr, .member-wrap, .table-row, .user-info-list-wrap, tbody') || link.parentElement;
-  }
-
-  function getEnemyIdFromLink(link) {
-    try {
-      const href = new URL(link.href, location.origin);
-      return href.searchParams.get('XID');
-    } catch (e) {
-      return null;
+    // ---- Toast ----
+    function showToast(message, isError) {
+        let toast = document.getElementById('dibsToast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.id = 'dibsToast';
+            toast.className = 'dibs-toast';
+            document.body.appendChild(toast);
+        }
+        toast.textContent = message;
+        toast.classList.toggle('dibs-toast-error', !!isError);
+        toast.classList.add('dibs-toast-visible');
+        clearTimeout(toast._dibsHideTimer);
+        toast._dibsHideTimer = setTimeout(() => {
+            toast.classList.remove('dibs-toast-visible');
+        }, 2600);
     }
-  }
 
-  function getInsertTarget(link, row) {
-    const attackLink = row ? row.querySelector('a[href*="loader.php?sid=attack"]') : null;
-    if (attackLink && attackLink.parentElement) return attackLink.parentElement;
-    return row || link.parentElement;
-  }
+    // ---- Settings modal (replaces the old prompt()/alert() flow) ----
+    function createModal() {
+        if (document.getElementById('dibsModalOverlay')) return;
 
-  function ensureSettingsButton() {
-    if (!isEnemyPage()) {
-      const old = document.querySelector('.dibs-settings-float');
-      if (old) old.remove();
-      return;
+        const overlay = document.createElement('div');
+        overlay.id = 'dibsModalOverlay';
+        overlay.className = 'dibs-modal-overlay';
+        overlay.innerHTML = \`
+            <div class="dibs-modal" role="dialog" aria-modal="true" aria-labelledby="dibsModalTitle">
+                <h3 id="dibsModalTitle">Dibs settings</h3>
+                <label for="dibsUrlInput">App URL</label>
+                <input type="text" id="dibsUrlInput" placeholder="https://your-app.onrender.com">
+                <label for="dibsNameInput">Your name</label>
+                <input type="text" id="dibsNameInput" placeholder="Shown to your faction when you claim">
+                <label for="dibsIdInput">Your Torn ID <span class="dibs-optional">(optional)</span></label>
+                <input type="text" id="dibsIdInput" placeholder="Hides Dibs buttons on your own profile">
+                <div class="dibs-modal-actions">
+                    <button type="button" id="dibsModalCancel" class="dibs-modal-btn dibs-modal-btn-secondary">Cancel</button>
+                    <button type="button" id="dibsModalSave" class="dibs-modal-btn dibs-modal-btn-primary">Save settings</button>
+                </div>
+            </div>
+        \`;
+        document.body.appendChild(overlay);
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) closeSettingsModal();
+        });
+        document.getElementById('dibsModalCancel').addEventListener('click', closeSettingsModal);
+        document.getElementById('dibsModalSave').addEventListener('click', saveSettingsFromModal);
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && overlay.classList.contains('dibs-modal-open')) {
+                closeSettingsModal();
+            }
+        });
     }
-    let btn = document.querySelector('.dibs-settings-float');
-    if (!btn) {
-      btn = document.createElement('button');
-      btn.className = 'dibs-settings-float';
-      btn.textContent = '⚙️ Dibs Settings';
-      btn.onclick = function (e) {
-        e.preventDefault();
-        openSettingsModal();
-      };
-      document.body.appendChild(btn);
+
+    function showSettingsModal() {
+        createModal();
+        document.getElementById('dibsUrlInput').value = backendUrl || '';
+        document.getElementById('dibsNameInput').value = playerName || '';
+        document.getElementById('dibsIdInput').value = playerId || '';
+        const overlay = document.getElementById('dibsModalOverlay');
+        overlay.classList.add('dibs-modal-open');
+        setTimeout(() => {
+            const input = document.getElementById('dibsUrlInput');
+            if (input) input.focus();
+        }, 50);
     }
-  }
 
-  function ensureButton(link, id, row) {
-    if (document.querySelector('.dibs-btn-' + id)) return;
-    const btn = document.createElement('button');
-    btn.className = 'dibs-btn-custom dibs-btn-' + id;
-    btn.setAttribute('data-id', id);
-    btn.textContent = '🎯 DIBS';
+    function closeSettingsModal() {
+        const overlay = document.getElementById('dibsModalOverlay');
+        if (overlay) overlay.classList.remove('dibs-modal-open');
+    }
 
-    btn.onclick = function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      const claim = activeClaims[id];
-      if (claim) {
-        if (claim.playerName === playerName) {
-          btn.textContent = '...';
-          unclaimTarget(id);
+    function saveSettingsFromModal() {
+        const url = document.getElementById('dibsUrlInput').value.trim().replace(/\\/$/, '');
+        const name = document.getElementById('dibsNameInput').value.trim();
+        const id = document.getElementById('dibsIdInput').value.trim();
+
+        if (!url || !name) {
+            showToast('App URL and name are both required', true);
+            return;
+        }
+
+        backendUrl = url;
+        playerName = name;
+        playerId = id;
+        GM_setValue('dibs_backendUrl', backendUrl);
+        GM_setValue('dibs_playerName', playerName);
+        GM_setValue('dibs_playerId', playerId);
+
+        closeSettingsModal();
+        showToast('Dibs settings saved');
+
+        // Re-run friendly-faction detection against the (possibly new) name/ID
+        // instead of leaving already-scanned rows locked to the old decision.
+        document.querySelectorAll('a.dibs-processed').forEach(link => link.classList.remove('dibs-processed'));
+        fetchClaims();
+        injectButtons();
+    }
+
+    // ---- Backend calls ----
+    function fetchClaims() {
+        if (!backendUrl || isFetching) return;
+
+        const buttons = document.getElementsByClassName('dibs-btn-custom');
+        const isEnemyFactionPage = window.location.href.includes('step=profile&ID=');
+
+        if (buttons.length === 0 && !isEnemyFactionPage) return;
+
+        isFetching = true;
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: \`\${backendUrl}/api/claims\`,
+            onload: function(response) {
+                isFetching = false;
+                let ok = false;
+                if (response.status >= 200 && response.status < 300) {
+                    try {
+                        const data = JSON.parse(response.responseText);
+                        if (data.success && data.claims) {
+                            activeClaims = data.claims;
+                            ok = true;
+                        }
+                    } catch (e) {}
+                }
+                if (ok) {
+                    hasEverSucceeded = true;
+                    consecutiveFailures = 0;
+                } else {
+                    consecutiveFailures++;
+                }
+                updateUI();
+            },
+            onerror: function() {
+                isFetching = false;
+                consecutiveFailures++;
+                updateUI();
+            }
+        });
+    }
+
+    function claimTarget(enemyId) {
+        if (!backendUrl) {
+            showToast('Set your App URL first', true);
+            return showSettingsModal();
+        }
+        if (!playerName) {
+            showToast('Set your name first', true);
+            return showSettingsModal();
+        }
+
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: \`\${backendUrl}/api/claim\`,
+            headers: { "Content-Type": "application/json" },
+            data: JSON.stringify({ enemyId: enemyId.toString(), playerName: playerName }),
+            onload: function() { fetchClaims(); },
+            onerror: function() {
+                showToast('Could not reach the Dibs server', true);
+                fetchClaims();
+            }
+        });
+    }
+
+    function unclaimTarget(enemyId) {
+        GM_xmlhttpRequest({
+            method: 'POST',
+            url: \`\${backendUrl}/api/unclaim\`,
+            headers: { "Content-Type": "application/json" },
+            data: JSON.stringify({ enemyId: enemyId.toString(), playerName: playerName }),
+            onload: function() { fetchClaims(); },
+            onerror: function() {
+                showToast('Could not reach the Dibs server', true);
+                fetchClaims();
+            }
+        });
+    }
+
+    // ---- DOM injection ----
+    function injectSettingsButton() {
+        const isEnemyFactionPage = window.location.href.includes('step=profile&ID=');
+        const settingsBtn = document.querySelector('.dibs-settings-float');
+
+        if (isEnemyFactionPage) {
+            if (!settingsBtn) {
+                const btn = document.createElement('button');
+                btn.className = 'dibs-settings-float';
+                btn.innerText = '⚙️ Dibs Settings';
+                btn.onclick = (e) => {
+                    e.preventDefault();
+                    showSettingsModal();
+                };
+                document.body.appendChild(btn);
+            } else {
+                settingsBtn.style.display = 'block';
+            }
+        } else if (settingsBtn) {
+            settingsBtn.style.display = 'none';
+        }
+    }
+
+    function injectButtons() {
+        injectSettingsButton();
+
+        const newLinks = document.querySelectorAll('a[href*="profiles.php?XID="]:not(.dibs-processed)');
+        if (newLinks.length === 0) {
+            updateUI();
+            return;
+        }
+
+        let friendlyContainers = new Set();
+        document.querySelectorAll('a[href*="profiles.php?XID="]').forEach(link => {
+            const linkParams = new URLSearchParams(link.href.split('?')[1]);
+            const linkId = linkParams.get('XID');
+            const matchesId = !!playerId && linkId === playerId;
+            const matchesName = !!playerName && link.innerText.trim().toLowerCase() === playerName.toLowerCase();
+            if (matchesId || matchesName) {
+                const container = link.closest('tbody') || link.closest('ul') || link.closest('.faction-info-wrap') || link.closest('.members-list') || link.closest('.table-body');
+                if (container) friendlyContainers.add(container);
+            }
+        });
+
+        newLinks.forEach(link => {
+            if (link.innerText.trim().length === 0) return;
+            if (link.closest('#sidebar') || link.closest('#header') || link.closest('#top-page-links') || link.closest('.user-info')) return;
+
+            const row = link.closest('li') || link.closest('tr') || link.closest('.member-wrap') || link.closest('.table-row') || link.closest('.user-info-list-wrap');
+            if (!row) return;
+
+            let isFriendly = false;
+            for (let container of friendlyContainers) {
+                if (container.contains(row)) {
+                    isFriendly = true;
+                    break;
+                }
+            }
+
+            // Mark processed either way. Previously only non-friendly links got
+            // flagged, so the entire friendly roster was rescanned every 2s, forever.
+            link.classList.add('dibs-processed');
+
+            if (isFriendly) return;
+
+            const urlParams = new URLSearchParams(link.href.split('?')[1]);
+            const id = urlParams.get('XID');
+            if (!id) return;
+
+            let btn = document.querySelector('.dibs-btn-' + id);
+            if (!btn) {
+                btn = document.createElement('button');
+                btn.className = 'dibs-btn-custom dibs-btn-' + id;
+                btn.setAttribute('data-id', id);
+
+                const attackLink = row.querySelector('a[href*="loader.php?sid=attack"]');
+
+                if (attackLink && attackLink.parentNode) {
+                    attackLink.parentNode.insertBefore(btn, attackLink);
+                    if (window.getComputedStyle(attackLink.parentNode).display !== 'flex') {
+                        attackLink.parentNode.style.display = 'flex';
+                        attackLink.parentNode.style.alignItems = 'center';
+                    }
+                } else {
+                    const wrap = link.closest('.user-info-list-wrap') || link.closest('.member-wrap') || link.closest('li') || row;
+                    let btnContainer = wrap.querySelector('.dibs-btn-container');
+                    if (!btnContainer) {
+                        btnContainer = document.createElement('div');
+                        btnContainer.className = 'dibs-btn-container';
+                        wrap.appendChild(btnContainer);
+                    }
+                    btnContainer.appendChild(btn);
+                }
+
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (btn.disabled) return;
+
+                    const claim = activeClaims[id];
+                    if (claim) {
+                        if (claim.playerName.toLowerCase() === playerName.toLowerCase()) {
+                            btn.disabled = true;
+                            btn.innerText = '...';
+                            unclaimTarget(id);
+                        } else {
+                            showToast('Already claimed by ' + claim.playerName, true);
+                        }
+                    } else {
+                        btn.disabled = true;
+                        btn.innerText = '...';
+                        claimTarget(id);
+                    }
+                });
+            }
+        });
+
+        updateUI();
+    }
+
+    function updateSettingsButtonStatus(stale) {
+        const settingsBtn = document.querySelector('.dibs-settings-float');
+        if (!settingsBtn) return;
+        if (stale) {
+            settingsBtn.classList.add('dibs-offline');
+            settingsBtn.innerText = '⚠️ Dibs (offline)';
         } else {
-          showStatus('Already claimed by ' + claim.playerName, 'bad');
+            settingsBtn.classList.remove('dibs-offline');
+            settingsBtn.innerText = '⚙️ Dibs Settings';
         }
-      } else {
-        btn.textContent = '...';
-        claimTarget(id);
-      }
-    };
-
-    const insertTarget = getInsertTarget(link, row);
-    if (insertTarget) {
-      if (window.getComputedStyle(insertTarget).display !== 'flex' && insertTarget.querySelector('a[href*="loader.php?sid=attack"]')) {
-        insertTarget.style.display = 'flex';
-        insertTarget.style.alignItems = 'center';
-        insertTarget.style.gap = '6px';
-      }
-      insertTarget.appendChild(btn);
     }
-  }
 
-  function updateButtons() {
-    document.querySelectorAll('.dibs-btn-custom').forEach(btn => {
-      const id = btn.getAttribute('data-id');
-      const claim = activeClaims[id];
-      if (claim) {
-        const mine = claim.playerName === playerName;
-        btn.textContent = mine ? '★ YOURS' : '👑 ' + claim.playerName;
-        btn.classList.remove('dibs-unclaimed', 'dibs-mine', 'dibs-claimed');
-        btn.classList.add(mine ? 'dibs-mine' : 'dibs-claimed');
-      } else {
-        btn.textContent = '🎯 DIBS';
-        btn.classList.remove('dibs-mine', 'dibs-claimed');
-        btn.classList.add('dibs-unclaimed');
-      }
+    function updateUI() {
+        const buttons = document.getElementsByClassName('dibs-btn-custom');
+        const stale = hasEverSucceeded && consecutiveFailures >= STALE_AFTER_FAILURES;
+
+        for (let i = 0; i < buttons.length; i++) {
+            const btn = buttons[i];
+            const id = btn.getAttribute('data-id');
+
+            if (!hasEverSucceeded) {
+                btn.innerText = '… loading';
+                btn.className = 'dibs-btn-custom dibs-btn-' + id + ' dibs-loading';
+                btn.disabled = true;
+                continue;
+            }
+
+            let label, cls;
+            const claim = activeClaims[id];
+            if (claim) {
+                const isMine = claim.playerName.toLowerCase() === playerName.toLowerCase();
+                label = isMine ? '★ YOURS' : '👑 ' + claim.playerName;
+                cls = isMine ? 'dibs-mine' : 'dibs-claimed';
+            } else {
+                label = '🎯 DIBS';
+                cls = 'dibs-unclaimed';
+            }
+
+            if (stale) {
+                label = '⚠ ' + label;
+                cls += ' dibs-stale';
+            }
+
+            btn.innerText = label;
+            btn.className = 'dibs-btn-custom dibs-btn-' + id + ' ' + cls;
+            btn.disabled = false;
+        }
+
+        updateSettingsButtonStatus(stale);
+    }
+
+    // ---- Timers, paused while the tab/page is hidden ----
+    function startTimers() {
+        if (!pollInterval) {
+            fetchClaims();
+            pollInterval = setInterval(fetchClaims, 2500);
+        }
+        if (!injectInterval) {
+            injectInterval = setInterval(() => requestAnimationFrame(injectButtons), 2000);
+        }
+    }
+
+    function stopTimers() {
+        if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+        if (injectInterval) { clearInterval(injectInterval); injectInterval = null; }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            stopTimers();
+        } else {
+            injectButtons();
+            startTimers();
+        }
     });
-  }
 
-  function renderAll() {
-    ensureStyles();
-    ensureSettingsButton();
+    function init() {
+        injectButtons();
+        if (!document.hidden) {
+            startTimers();
+        }
+    }
 
-    getProfileLinks().forEach(link => {
-      const id = getEnemyIdFromLink(link);
-      if (!id) return;
-      const row = getRow(link);
-      if (!row) return;
-      link.classList.add('dibs-processed');
-      ensureButton(link, id, row);
-    });
+    if (document.readyState === 'complete') {
+        init();
+    } else {
+        window.addEventListener('load', init);
+    }
 
-    updateButtons();
-  }
-
-  function startObserver() {
-    if (observer) observer.disconnect();
-    observer = new MutationObserver(() => {
-      clearTimeout(window.__dibs_timer);
-      window.__dibs_timer = setTimeout(renderAll, 150);
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-  }
-
-  function init() {
-    showStatus('Dibs loaded', 'good');
-    renderAll();
-    fetchClaims();
-    startObserver();
-    setInterval(fetchClaims, 3000);
-  }
-
-  setTimeout(init, 200);
 })();
