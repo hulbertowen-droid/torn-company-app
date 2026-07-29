@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.20
+// @version      1.21
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -390,11 +390,10 @@
     function fetchClaims() {
         if (!backendUrl || isFetching) return;
 
-        const buttons = document.getElementsByClassName('dibs-btn-custom');
-        const isEnemyFactionPage = window.location.href.includes('step=profile&ID=');
-
-        if (buttons.length === 0 && !isEnemyFactionPage) return;
-
+        // Used to skip fetching when no buttons existed yet, unless the URL
+        // looked like an enemy faction roster page. That URL check doesn't
+        // match the war pop-out, which delayed or blocked claims from ever
+        // loading there. Simpler and more robust to just always fetch.
         isFetching = true;
         GM_xmlhttpRequest({
             method: 'GET',
@@ -465,26 +464,21 @@
     }
 
     // ---- DOM injection ----
+    // Always present on any matched page. It used to only appear when the URL
+    // contained "step=profile&ID=" (viewing a faction's roster directly), but
+    // the war pop-out panel doesn't produce that URL, so the button was
+    // silently never showing up there - which was the actual bug report.
     function injectSettingsButton() {
-        const isEnemyFactionPage = window.location.href.includes('step=profile&ID=');
-        const settingsBtn = document.querySelector('.dibs-settings-float');
+        if (document.querySelector('.dibs-settings-float')) return;
 
-        if (isEnemyFactionPage) {
-            if (!settingsBtn) {
-                const btn = document.createElement('button');
-                btn.className = 'dibs-settings-float';
-                btn.innerText = '⚙️ Dibs Settings';
-                btn.onclick = (e) => {
-                    e.preventDefault();
-                    showSettingsModal();
-                };
-                document.body.appendChild(btn);
-            } else {
-                settingsBtn.style.display = 'block';
-            }
-        } else if (settingsBtn) {
-            settingsBtn.style.display = 'none';
-        }
+        const btn = document.createElement('button');
+        btn.className = 'dibs-settings-float';
+        btn.innerText = '⚙️ Dibs Settings';
+        btn.onclick = (e) => {
+            e.preventDefault();
+            showSettingsModal();
+        };
+        document.body.appendChild(btn);
     }
 
     function injectButtons() {
