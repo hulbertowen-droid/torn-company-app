@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.22
+// @version      1.23
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -17,19 +17,24 @@
 
     // ---- Settings, migrated transparently from the old localStorage keys ----
     function migrate(key) {
-        const val = GM_getValue(key, '');
-        if (val) return val;
-        const old = localStorage.getItem(key);
-        if (old) {
-            GM_setValue(key, old);
-            return old;
+        try {
+            const val = GM_getValue(key, '');
+            if (val) return val;
+            const old = localStorage.getItem(key);
+            if (old) {
+                GM_setValue(key, old);
+                return old;
+            }
+        } catch (e) {
+            console.error('Dibs storage error:', e);
         }
         return '';
     }
 
     let backendUrl = migrate('dibs_backendUrl') || 'https://spider-verse.net';
     let playerName = migrate('dibs_playerName');
-    let playerId = GM_getValue('dibs_playerId', '');
+    let playerId = '';
+    try { playerId = GM_getValue('dibs_playerId', ''); } catch (e) {}
 
     // ---- Claim / connection state ----
     let activeClaims = {};
