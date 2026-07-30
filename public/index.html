@@ -981,10 +981,7 @@ function renderFriendlyList(players, premiumActive) {
                 </div>
                 <div class="action-sub">➔ Last Action: ${p.lastActionRelative} ${etaString}</div>
             </div>
-            <div class="intel-wrap">
-                <div style="font-size: 0.85em; color:var(--text-dim);">Est. Stats</div>
-                ${estHtml}
-            </div>
+            <div class="intel-wrap"></div>
             <div class="card-actions">
                 <button class="btn-action" onclick="promptUpdateStats('${p.id}')">Update Stats</button>
             </div>
@@ -1067,7 +1064,7 @@ function renderEnemyList(players, premiumActive) {
                 
             </div>
             <div class="intel-wrap">
-                <div class="intel-badge">Intel: ${p.intelScore || 0}</div>
+                <div style="font-size: 0.85em; color:var(--text-dim);">Est. Stats</div>
                 ${estHtml}
             </div>
             <div class="card-actions" style="flex-direction: column; align-items: flex-end; justify-content: center; gap: 4px;">
