@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page, with a live "who's dibbing on who" overview.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -46,29 +46,25 @@
     const style = document.createElement('style');
     style.innerHTML = `
         .dibs-btn-custom {
-            margin-left: 8px;
-            margin-right: 4px;
-            padding: 4px 16px;
-            font-size: 13px;
-            border-radius: 6px;
+            margin-left: 6px;
+            padding: 2px 8px;
+            font-size: 11px;
+            border-radius: 4px;
             cursor: pointer;
-            font-weight: 900;
+            font-weight: 800;
             text-transform: uppercase;
             vertical-align: middle;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            height: auto;
-            min-height: 26px;
-            line-height: normal;
-            box-sizing: border-box;
-            box-shadow: 0px 2px 4px rgba(0,0,0,0.6);
-            transition: all 0.2s ease;
-            flex-shrink: 0;
-            white-space: normal;
-            overflow: visible;
-            word-break: break-word;
+            height: 20px;
+            box-shadow: 0px 1px 2px rgba(0,0,0,0.6);
+            white-space: nowrap;
             z-index: 100;
+        }
+        .dibs-btn-container {
+            display: inline-block;
+            vertical-align: middle;
         }
 
         .dibs-unclaimed {
@@ -245,7 +241,9 @@
 
         @media (max-width: 768px) {
             .dibs-claims-toggle {
-                padding: 12px 18px;
+                bottom: 130px;
+                left: 12px;
+                padding: 10px 14px;
                 font-size: 14px;
             }
         }
@@ -379,29 +377,25 @@
 
         @media (max-width: 768px) {
             .dibs-btn-custom {
-                font-size: 13px;
-                padding: 8px 14px;
-                height: auto;
-                min-height: 40px;
-                line-height: normal;
-                width: 100%;
-                margin: 4px 0px;
-                border-radius: 6px;
-                box-shadow: 0px 2px 4px rgba(0,0,0,0.6);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                text-align: center;
+                font-size: 10px;
+                padding: 2px 6px;
+                height: 18px;
+                min-height: 18px;
+                width: auto;
+                margin: 0 0 0 4px;
+                box-shadow: 0px 1px 2px rgba(0,0,0,0.6);
+                display: inline-flex;
             }
             .dibs-btn-container {
-                width: 100%;
-                display: block !important;
-                padding: 4px 12px;
-                box-sizing: border-box;
-                clear: both;
+                display: inline-block !important;
+                padding: 0;
+                clear: none;
+                width: auto;
             }
             .dibs-settings-float {
-                padding: 12px 18px;
+                bottom: 80px;
+                left: 12px;
+                padding: 10px 14px;
                 font-size: 14px;
             }
         }
@@ -703,8 +697,10 @@
             const matchesId = !!playerId && linkId === playerId;
             const matchesName = !!playerName && link.innerText.trim().toLowerCase() === playerName.toLowerCase();
             if (matchesId || matchesName) {
-                const container = link.closest('tbody') || link.closest('ul') || link.closest('.faction-info-wrap') || link.closest('.members-list') || link.closest('.table-body');
+                const container = link.closest('ul') || link.closest('tbody') || link.closest('.faction-info-wrap') || link.closest('.members-list') || link.closest('.table-body');
                 if (container) friendlyContainers.add(container);
+                const warContainer = link.closest('[class*="list"]') || link.closest('[class*="members"]');
+                if (warContainer) friendlyContainers.add(warContainer);
             }
         });
 
@@ -750,12 +746,15 @@
                         attackLink.parentNode.style.alignItems = 'center';
                     }
                 } else {
-                    const wrap = link.closest('.user-info-list-wrap') || link.closest('.member-wrap') || link.closest('li') || row;
-                    let btnContainer = wrap.querySelector('.dibs-btn-container');
+                    let btnContainer = link.parentNode.querySelector('.dibs-btn-container');
                     if (!btnContainer) {
                         btnContainer = document.createElement('div');
                         btnContainer.className = 'dibs-btn-container';
-                        wrap.appendChild(btnContainer);
+                        if (link.nextSibling) {
+                            link.parentNode.insertBefore(btnContainer, link.nextSibling);
+                        } else {
+                            link.parentNode.appendChild(btnContainer);
+                        }
                     }
                     btnContainer.appendChild(btn);
                 }
