@@ -8,6 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="/global.css">
     <style>
+
         .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; position: relative; }
 
         #refresh-bar-container { position: absolute; top: 0; left: 0; width: 100%; height: 3px; background: #0b0d13; z-index: 50; }
@@ -15,16 +16,13 @@
 
         h1 { text-align: center; color: var(--red); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; text-shadow: 0 4px 15px rgba(255,71,87,0.2); }
 
-        .container { max-width: 1500px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
         
-        .chart-row { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+        
+        
 
-        .dash-card { background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542; box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
-        .dash-card h2 { margin-top:0; color:var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; font-size:1.1em; text-transform:uppercase; display: flex; justify-content: space-between; align-items: center; }
+        
 
-        .watchlist-box { grid-column: 1 / -1; background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #2f3542; box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
-        .watchlist-box h3 { margin: 0 0 15px 0; color: var(--red); display: flex; align-items: center; gap: 10px; text-transform: uppercase; letter-spacing: 1px; }
-        .watchlist-items { display: flex; gap: 15px; overflow-x: auto; padding-bottom: 10px; }
+        
         
         .watch-card { background: #0b0d13; border: 1px solid #2f3542; padding: 12px 18px; border-radius: 8px; min-width: 260px; flex-shrink: 0; box-shadow: inset 0 0 20px rgba(0,0,0,0.5); }
         .watch-card.online { border-color: var(--green); background: rgba(46, 213, 115, 0.05); }
@@ -34,19 +32,14 @@
         .watch-name a:hover { text-decoration: underline; }
         .watch-highlight { font-weight: bold; font-size: 0.95em; margin-bottom: 2px; }
 
-        .faction-col { background: var(--card); padding: 20px; border-radius: 16px; border: 1px solid #2f3542; display: flex; flex-direction: column; box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
-        .faction-col h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center;}
+        
 
         .filter-group { display: flex; gap: 8px; margin-bottom: 15px; }
         .btn-filter { background: #0b0d13; color: var(--text-dim); border: 1px solid #2f3542; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold; transition: 0.2s; }
         .btn-filter:hover { background: #2f3542; color: white; }
         .btn-filter.active { background: rgba(88, 166, 255, 0.15); border-color: var(--blue); color: white; box-shadow: inset 0 0 10px rgba(88, 166, 255, 0.1); }
 
-        .member-card { background: #0b0d13; border: 1px solid #2f3542; padding: 15px; border-radius: 10px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; transition: 0.2s; }
-        .member-card:hover { border-color: #57606f; transform: translateY(-1px); box-shadow: 0 6px 15px rgba(0,0,0,0.4); }
-        .member-card.okay { border-left: 4px solid var(--green); }
-        .member-card.hospital { border-left: 4px solid var(--red); opacity: 0.85; }
-        .member-card.traveling { border-left: 4px solid var(--blue); }
+        
 
         .card-header { display: flex; justify-content: space-between; align-items: flex-start; }
         .profile { font-weight: bold; color: var(--text-main); text-decoration: none; font-size: 1.1em; }
@@ -110,7 +103,71 @@
         @keyframes fadeOut { to { opacity: 0; transform: translateX(100%); } }
         @media (max-width: 1000px) { .chart-row { grid-template-columns: 1fr; } .container { grid-template-columns: 1fr; } }
     
-    </style>
+    
+
+        .watchlist-items { display: flex; gap: 15px; overflow-x: auto; padding-bottom: 8px; }
+        .watch-card { background: #060810; border: 1px solid var(--border); padding: 12px 16px; border-radius: 8px; min-width: 240px; flex-shrink: 0; transition: 0.2s; }
+        .watch-card:hover { border-color: #30363d; }
+        .watch-card.online { border-left: 3px solid var(--green); }
+        .watch-card.flying { border-left: 3px solid var(--blue); }
+        .watch-name { font-weight: 700; font-size: 1em; margin-bottom: 4px; display: flex; justify-content: space-between; }
+        .watch-name a { color: var(--text-main); text-decoration: none; }
+        .watch-name a:hover { color: var(--blue); }
+        .watch-highlight { font-weight: 700; font-size: 0.9em; margin-bottom: 4px; }
+        .watch-desc { font-size: 0.8em; color: var(--text-dim); }
+
+        .filter-group { display: flex; gap: 8px; }
+        .btn-filter { background: #060810; color: var(--text-dim); border: 1px solid var(--border); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.75em; font-weight: 700; transition: 0.2s; }
+        .btn-filter:hover { background: #161b22; color: var(--text-main); }
+        .btn-filter.active { background: rgba(88, 166, 255, 0.1); border-color: var(--blue); color: var(--text-main); box-shadow: inset 0 0 10px rgba(88, 166, 255, 0.1); }
+
+        .wb-row { display: grid; grid-template-columns: 2fr 1.5fr 1fr; gap: 8px; padding: 12px 20px; border-bottom: 1px solid #161b22; align-items: center; font-size: 0.85em; transition: 0.15s; }
+        .wb-row:hover { background: #0d1117; }
+        .wb-row:last-child { border-bottom: none; }
+        .wb-row.hospital { border-left: 3px solid var(--red); }
+        .wb-row.okay { border-left: 3px solid var(--green); }
+        .wb-row.traveling { border-left: 3px solid var(--blue); }
+
+        .profile { font-weight: 700; color: var(--text-main); text-decoration: none; font-size: 1.05em; display: inline-flex; align-items: center; gap: 8px; margin-bottom: 6px;}
+        .profile:hover { color: var(--blue); }
+        
+        .btn-inspect { background: rgba(88, 166, 255, 0.1); color: var(--blue); border: 1px solid var(--blue); padding: 2px 6px; border-radius: 4px; font-size: 0.7em; font-weight: 700; text-transform: uppercase; cursor: pointer; transition: 0.2s; }
+        .btn-inspect:hover { background: var(--blue); color: #000; box-shadow: 0 0 8px rgba(88,166,255,0.4); }
+
+        .badge-bounty { background: rgba(255, 71, 87, 0.1); color: var(--red); border: 1px solid var(--red); padding: 2px 6px; border-radius: 4px; font-size: 0.7em; font-weight: 700; text-transform: uppercase; text-decoration: none; transition: 0.2s; }
+        .badge-bounty:hover { background: var(--red); color: white; box-shadow: 0 0 8px rgba(255,71,87,0.5); }
+
+        .status-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 0.78em; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+        .status-pill.online { background: rgba(46,213,115,0.12); color: var(--green); }
+        .status-pill.idle { background: rgba(255,165,2,0.12); color: var(--gold); }
+        .status-pill.offline { background: #161b22; color: var(--text-dim); }
+        .status-pill.hospital { background: rgba(255,71,87,0.12); color: var(--red); }
+        .status-pill.traveling { background: rgba(88,166,255,0.12); color: var(--blue); }
+        
+        .action-sub { font-size: 0.8em; color: var(--text-dim); margin-top: 4px; display: flex; align-items: center; gap: 6px; }
+        .flight-info { color: var(--blue); font-weight: 700; }
+
+        .intel-wrap { display: flex; flex-direction: column; gap: 4px; }
+        .intel-badge { background: rgba(255, 165, 2, 0.1); color: var(--gold); padding: 2px 8px; border-radius: 4px; font-size: 0.75em; font-weight: 700; border: 1px solid rgba(255,165,2,0.3); display: inline-block; width: fit-content; }
+        .stat-val { font-weight: 700; color: var(--gold); font-size: 0.95em; }
+        .stat-val.lock-badge { color: var(--red); font-size: 0.75em; border: 1px dashed var(--red); padding: 2px 6px; border-radius: 4px; display: inline-block; font-weight: 700; }
+
+        .card-actions { display: flex; gap: 6px; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
+        .btn-action { background: #161b22; color: var(--text-dim); border: 1px solid var(--border); padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 0.75em; font-weight: 700; transition: 0.2s; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+        .btn-action:hover { background: #30363d; color: var(--text-main); }
+        
+        .btn-claim { background: rgba(46, 213, 115, 0.1); color: var(--green); border-color: rgba(46, 213, 115, 0.3); }
+        .btn-claim:hover { background: var(--green); color: #000; box-shadow: 0 0 8px rgba(46,213,115,0.4); }
+        .btn-sos { background: rgba(255, 71, 87, 0.1); color: var(--red); border-color: rgba(255, 71, 87, 0.3); }
+        .btn-sos:hover { background: var(--red); color: white; box-shadow: 0 0 8px rgba(255,71,87,0.4); }
+
+        .btn-attack { background: var(--red); color: white; padding: 4px 12px; border-radius: 6px; font-size: 0.8em; font-weight: 700; text-decoration: none; border: 1px solid #ff2a40; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 0 10px rgba(255, 71, 87, 0.2); }
+        .btn-attack:hover { background: #ff2a40; box-shadow: 0 0 12px rgba(255, 71, 87, 0.4); }
+
+        .active-claim { font-size: 0.75em; color: var(--green); font-weight: 700; background: rgba(46,213,115,0.1); padding: 2px 6px; border-radius: 4px; display: inline-block; border: 1px solid rgba(46,213,115,0.3); margin-bottom: 4px; }
+        .active-sos { font-size: 0.75em; color: var(--red); font-weight: 700; background: rgba(255,71,87,0.1); padding: 2px 6px; border-radius: 4px; display: inline-block; border: 1px solid rgba(255,71,87,0.3); animation: pulse 2s infinite; margin-bottom: 4px; }
+    
+</style>
 </head>
 <body>
     <nav class="sidebar" id="app-sidebar">
@@ -150,6 +207,7 @@
             
         </div>
 
+        
         <details style="background: rgba(88, 166, 255, 0.05); border: 1px solid var(--blue); border-radius: 8px; margin-bottom: 25px; cursor: pointer; transition: 0.2s;">
             <summary style="padding: 12px 20px; font-weight: bold; color: var(--blue); display: flex; align-items: center; justify-content: space-between;">
                 <span>ℹ️ Advanced Features & Credits</span>
@@ -162,103 +220,75 @@
             </div>
         </details>
 
-        <div class="container">
-            <div class="chart-row">
-                <div class="dash-card" style="display: flex; flex-direction: column;">
-                    <h2>📊 Friendly Hit Performance</h2>
-                    <div style="position: relative; flex-grow: 1; min-height: 250px; width: 100%;">
+        <div class="dash-grid">
+            <div class="card">
+                <div class="card-header"><div class="card-title">📊 Friendly Hit Performance</div></div>
+                <div class="card-body" style="padding: 20px;">
+                    <div style="position: relative; width: 100%; height: 220px;">
                         <canvas id="warChart"></canvas>
                     </div>
                 </div>
+            </div>
 
-                <div class="dash-card" style="display: flex; flex-direction: column;">
-                    <h2>
-                        💤 Enemy Activity Heatmap (72H Avg)
-                        <span id="heatmap-status" style="font-size: 0.75em; color: var(--text-dim); background: #0b0d13; padding: 4px 8px; border-radius: 4px; border: 1px solid #2f3542; text-transform: none;">Waiting for Premium API...</span>
-                    </h2>
-                    <div style="position: relative; flex-grow: 1; min-height: 250px; width: 100%;">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">💤 Enemy Activity Heatmap (72H)</div>
+                    <span id="heatmap-status" style="font-size: 0.75em; color: var(--text-dim); background: #0b0d13; padding: 4px 8px; border-radius: 4px; border: 1px solid #2f3542;">Waiting for Premium API...</span>
+                </div>
+                <div class="card-body" style="padding: 20px;">
+                    <div style="position: relative; width: 100%; height: 220px;">
                         <canvas id="activityChart"></canvas>
                     </div>
                 </div>
-            </div>
-
-            <div class="watchlist-box">
-                <h3>🚨 Priority Watchlist</h3>
-                <div id="watchlist-items" class="watchlist-items">
-                    <div style="color:var(--text-dim); padding: 10px; font-style: italic;">Waiting for API Data...</div>
-                </div>
-            </div>
-
-            <div class="faction-col">
-                <h2>Friendly Team <span id="friendly-count" style="background: #2f3542; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.6em;">0</span></h2>
-                <div id="friendly-list"><div style="color:var(--text-dim); padding:20px; text-align: center; font-style: italic;">Connecting to Torn API...</div></div>
-            </div>
-            
-            <div class="faction-col">
-                <h2>Enemy Targets <span id="enemy-count" style="background: #2f3542; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.6em;">0</span></h2>
-                <div class="filter-group">
-                    <button id="flt-all" class="btn-filter active" onclick="setEnemyFilter('All')">ALL</button>
-                    <button id="flt-online" class="btn-filter" onclick="setEnemyFilter('Online')">ONLINE</button>
-                    <button id="flt-okay" class="btn-filter" onclick="setEnemyFilter('Okay')">OKAY (OUT Hosp)</button>
-                    <button id="flt-flying" class="btn-filter" onclick="setEnemyFilter('Flying')">FLYING</button>
-                </div>
-                <div id="enemy-list"><div style="color:var(--text-dim); padding:20px; text-align: center; font-style: italic;">Connecting to Torn API...</div></div>
             </div>
         </div>
 
-        <details style="background: rgba(88, 166, 255, 0.05); border: 1px solid var(--blue); border-radius: 8px; margin-bottom: 25px; cursor: pointer; transition: 0.2s;">
-            <summary style="padding: 12px 20px; font-weight: bold; color: var(--blue); display: flex; align-items: center; justify-content: space-between;">
-                <span>ℹ️ Advanced Features & Credits</span>
-                <span style="font-size: 0.85em; color: var(--text-dim); border: 1px solid #2f3542; padding: 2px 8px; border-radius: 4px; background: #0b0d13;">Click to Expand ▼</span>
-            </summary>
-            <div style="padding: 0 20px 20px 20px; color: var(--text-main); font-size: 0.9em; line-height: 1.6; border-top: 1px solid rgba(88, 166, 255, 0.2); margin-top: 5px; padding-top: 15px;">
-                Certain tactical features on this dashboard—such as exact battle stat estimates, player activity timelines, and live flight landing ETAs—require an active <a href="https://ffscouter.com" target="_blank" style="color: var(--blue); text-decoration: underline;">FF Scouter Premium</a> subscription and API Key linked in your Settings. All times are displayed in Official Torn City Time (TCT/UTC) alongside your local timezone.
-                <br><br>
-                <span style="color: var(--gold); font-weight: bold;">Owen's Faction Tools engineered and created by <a href="https://www.torn.com/profiles.php?XID=3776908" target="_blank" style="color: var(--gold); text-decoration: underline;">Owen777 [3776908]</a>.</span>
-            </div>
-        </details>
-
-        <div class="container">
-            <div class="chart-row">
-                <div class="dash-card" style="display: flex; flex-direction: column;">
-                    <h2>📊 Friendly Hit Performance</h2>
-                    <div style="position: relative; flex-grow: 1; min-height: 250px; width: 100%;">
-                        <canvas id="warChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="dash-card" style="display: flex; flex-direction: column;">
-                    <h2>
-                        💤 Enemy Activity Heatmap (72H Avg)
-                        <span id="heatmap-status" style="font-size: 0.75em; color: var(--text-dim); background: #0b0d13; padding: 4px 8px; border-radius: 4px; border: 1px solid #2f3542; text-transform: none;">Waiting for Premium API...</span>
-                    </h2>
-                    <div style="position: relative; flex-grow: 1; min-height: 250px; width: 100%;">
-                        <canvas id="activityChart"></canvas>
-                    </div>
-                </div>
-            </div>
-
-            <div class="watchlist-box">
-                <h3>🚨 Priority Watchlist</h3>
+        <div class="card" style="margin-bottom: 18px;">
+            <div class="card-header"><div class="card-title" style="color: var(--red);">🚨 Priority Watchlist</div></div>
+            <div class="card-body" style="padding: 16px 20px;">
                 <div id="watchlist-items" class="watchlist-items">
-                    <div style="color:var(--text-dim); padding: 10px; font-style: italic;">Waiting for API Data...</div>
+                    <div style="color:var(--text-dim); font-style: italic;">Waiting for API Data...</div>
                 </div>
             </div>
+        </div>
 
-            <div class="faction-col">
-                <h2>Friendly Team <span id="friendly-count" style="background: #2f3542; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.6em;">0</span></h2>
-                <div id="friendly-list"><div style="color:var(--text-dim); padding:20px; text-align: center; font-style: italic;">Connecting to Torn API...</div></div>
+        <div class="dash-grid">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title" style="color: var(--blue);">🔵 Friendly Team</div>
+                    <span id="friendly-count" style="background: rgba(88,166,255,0.15); color: var(--blue); padding: 2px 8px; border-radius: 12px; font-size: 0.75em; font-weight: bold; border: 1px solid rgba(88,166,255,0.3);">0</span>
+                </div>
+                <div class="card-body scrollable" style="max-height: 800px; background: #0b0d13;">
+                    <div class="member-row-header">
+                        <div>Player</div>
+                        <div>Status</div>
+                        <div style="text-align: right;">Action</div>
+                    </div>
+                    <div id="friendly-list"><div style="color:var(--text-dim); padding:20px; text-align: center; font-style: italic;">Connecting to Torn API...</div></div>
+                </div>
             </div>
             
-            <div class="faction-col">
-                <h2>Enemy Targets <span id="enemy-count" style="background: #2f3542; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.6em;">0</span></h2>
-                <div class="filter-group">
-                    <button id="flt-all" class="btn-filter active" onclick="setEnemyFilter('All')">ALL</button>
-                    <button id="flt-online" class="btn-filter" onclick="setEnemyFilter('Online')">ONLINE</button>
-                    <button id="flt-okay" class="btn-filter" onclick="setEnemyFilter('Okay')">OKAY (OUT Hosp)</button>
-                    <button id="flt-flying" class="btn-filter" onclick="setEnemyFilter('Flying')">FLYING</button>
+            <div class="card">
+                <div class="card-header" style="flex-direction: column; align-items: stretch; gap: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div class="card-title" style="color: var(--red);">🔴 Enemy Targets</div>
+                        <span id="enemy-count" style="background: rgba(255,71,87,0.15); color: var(--red); padding: 2px 8px; border-radius: 12px; font-size: 0.75em; font-weight: bold; border: 1px solid rgba(255,71,87,0.3);">0</span>
+                    </div>
+                    <div class="filter-group">
+                        <button id="flt-all" class="btn-filter active" onclick="setEnemyFilter('All')">ALL</button>
+                        <button id="flt-online" class="btn-filter" onclick="setEnemyFilter('Online')">ONLINE</button>
+                        <button id="flt-okay" class="btn-filter" onclick="setEnemyFilter('Okay')">OKAY (OUT Hosp)</button>
+                        <button id="flt-flying" class="btn-filter" onclick="setEnemyFilter('Flying')">FLYING</button>
+                    </div>
                 </div>
-                <div id="enemy-list"><div style="color:var(--text-dim); padding:20px; text-align: center; font-style: italic;">Connecting to Torn API...</div></div>
+                <div class="card-body scrollable" style="max-height: 800px; background: #0b0d13;">
+                    <div class="member-row-header">
+                        <div>Target</div>
+                        <div>Stats / Intel</div>
+                        <div style="text-align: right;">Actions</div>
+                    </div>
+                    <div id="enemy-list"><div style="color:var(--text-dim); padding:20px; text-align: center; font-style: italic;">Connecting to Torn API...</div></div>
+                </div>
             </div>
         </div>
 
