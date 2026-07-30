@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      2.5
+// @version      2.6
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page, with a live "who's dibbing on who" overview.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -779,27 +779,17 @@
                     btn.className = 'dibs-btn-custom dibs-btn-' + id;
                     btn.setAttribute('data-id', id);
 
-                    const attackLink = row.querySelector('a[href*="loader.php?sid=attack"]');
-
-                    if (attackLink && attackLink.parentNode) {
-                        attackLink.parentNode.insertBefore(btn, attackLink);
-                        if (window.getComputedStyle(attackLink.parentNode).display !== 'flex') {
-                            attackLink.parentNode.style.display = 'flex';
-                            attackLink.parentNode.style.alignItems = 'center';
-                        }
-                    } else {
-                        const wrap = link.closest('.user-info-list-wrap') || link.closest('.member-wrap') || link.closest('li') || row;
-                        let btnContainer = wrap.querySelector('.dibs-btn-container');
-                        if (!btnContainer) {
-                            btnContainer = document.createElement('div');
-                            btnContainer.className = 'dibs-btn-container';
-                            wrap.appendChild(btnContainer);
-                            
-                            wrap.classList.add('dibs-wrap-expanded');
-                            if (row) row.classList.add('dibs-wrap-expanded');
-                        }
-                        btnContainer.appendChild(btn);
+                    const wrap = link.closest('.user-info-list-wrap') || link.closest('.member-wrap') || link.closest('li') || row;
+                    let btnContainer = wrap.querySelector('.dibs-btn-container');
+                    if (!btnContainer) {
+                        btnContainer = document.createElement('div');
+                        btnContainer.className = 'dibs-btn-container';
+                        wrap.appendChild(btnContainer);
+                        
+                        wrap.classList.add('dibs-wrap-expanded');
+                        if (row) row.classList.add('dibs-wrap-expanded');
                     }
+                    btnContainer.appendChild(btn);
 
                     btn.addEventListener('click', (e) => {
                         e.preventDefault();
