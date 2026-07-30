@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      2.2
+// @version      2.3
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page, with a live "who's dibbing on who" overview.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -46,20 +46,20 @@
     const style = document.createElement('style');
     style.innerHTML = `
         .dibs-btn-custom {
-            margin-top: 4px;
-            padding: 4px 16px;
-            font-size: 13px;
-            border-radius: 6px;
+            margin-top: 2px;
+            padding: 2px 10px;
+            font-size: 11px;
+            border-radius: 4px;
             cursor: pointer;
-            font-weight: 900;
+            font-weight: 800;
             text-transform: uppercase;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             height: auto;
-            min-height: 26px;
+            min-height: 20px;
             box-sizing: border-box;
-            box-shadow: 0px 2px 4px rgba(0,0,0,0.6);
+            box-shadow: 0px 1px 2px rgba(0,0,0,0.6);
             white-space: normal;
             word-break: break-word;
             z-index: 100;
@@ -68,8 +68,11 @@
             width: 100%;
             display: block;
             clear: both;
+            margin-bottom: 4px;
         }
-        .dibs-wrap-expanded, .dibs-wrap-expanded > div, .dibs-wrap-expanded > span {
+        /* Aggressive overrides for FFScouter and TWSE fixed row heights */
+        .dibs-wrap-expanded, .dibs-wrap-expanded > div, .dibs-wrap-expanded > span, 
+        .dibs-wrap-expanded td, .dibs-wrap-expanded li, .dibs-wrap-expanded tr {
             height: auto !important;
             min-height: auto !important;
             max-height: none !important;
@@ -120,10 +123,10 @@
             background: rgba(0,0,0,0.8);
             color: #fff;
             border: 2px solid #555;
-            padding: 10px 16px;
-            border-radius: 20px;
+            padding: 6px 12px;
+            border-radius: 12px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 11px;
             font-weight: bold;
             z-index: 2147483645;
             backdrop-filter: blur(4px);
@@ -149,15 +152,15 @@
 
         .dibs-claims-toggle {
             position: fixed;
-            bottom: calc(68px + env(safe-area-inset-bottom, 20px));
+            bottom: calc(54px + env(safe-area-inset-bottom, 20px));
             left: max(20px, env(safe-area-inset-left, 20px));
             background: rgba(0,0,0,0.8);
             color: #fff;
             border: 2px solid #555;
-            padding: 10px 16px;
-            border-radius: 20px;
+            padding: 6px 12px;
+            border-radius: 12px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 11px;
             font-weight: bold;
             z-index: 2147483644;
             backdrop-filter: blur(4px);
@@ -248,12 +251,7 @@
             padding: 14px 0;
         }
 
-        @media (max-width: 768px) {
-            .dibs-claims-toggle {
-                bottom: 134px;
-                left: 12px;
-            }
-        }
+        
 
         .dibs-toast {
             position: fixed;
@@ -382,17 +380,17 @@
             border-color: #1e8f4c;
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 1000px) {
             .dibs-btn-custom {
-                font-size: 13px;
-                padding: 8px 14px;
-                min-height: 36px;
+                font-size: 11px;
+                padding: 4px 8px;
+                min-height: 24px;
                 width: 100%;
-                margin-top: 4px;
+                margin-top: 2px;
             }
             .dibs-settings-float, .dibs-claims-toggle {
-                width: 46px;
-                height: 46px;
+                width: 38px;
+                height: 38px;
                 padding: 0;
                 border-radius: 50%;
                 overflow: hidden;
@@ -400,11 +398,15 @@
                 display: flex;
                 align-items: center;
                 justify-content: flex-start;
-                padding-left: 12px;
-                font-size: 18px;
+                padding-left: 9px;
+                font-size: 16px;
             }
             .dibs-settings-float {
                 bottom: 80px;
+                left: 12px;
+            }
+            .dibs-claims-toggle {
+                bottom: 124px;
                 left: 12px;
             }
         }
@@ -706,14 +708,20 @@
             const matchesId = !!playerId && linkId === playerId;
             const matchesName = !!playerName && link.innerText.trim().toLowerCase() === playerName.toLowerCase();
             if (matchesId || matchesName) {
+                const allLinks = document.querySelectorAll('a[href*="profiles.php?XID="]');
+                const totalLinks = allLinks.length;
                 let curr = link.parentElement;
-                let levels = 0;
-                while (curr && levels < 8) {
-                    if (curr.tagName === 'UL' || curr.tagName === 'TBODY' || curr.classList.contains('table-body') || curr.classList.contains('members-list') || curr.classList.contains('faction-info-wrap')) {
-                        friendlyContainers.add(curr);
+                let bestMatch = curr;
+                while (curr && curr !== document.body) {
+                    let count = curr.querySelectorAll('a[href*="profiles.php?XID="]').length;
+                    if (count === totalLinks) {
+                        break; // We hit the common parent of both factions!
                     }
+                    bestMatch = curr;
                     curr = curr.parentElement;
-                    levels++;
+                }
+                if (bestMatch) {
+                    friendlyContainers.add(bestMatch);
                 }
             }
         });
