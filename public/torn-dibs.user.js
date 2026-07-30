@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      2.3
+// @version      2.4
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page, with a live "who's dibbing on who" overview.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -708,27 +708,20 @@
             const matchesId = !!playerId && linkId === playerId;
             const matchesName = !!playerName && link.innerText.trim().toLowerCase() === playerName.toLowerCase();
             if (matchesId || matchesName) {
-                const allLinks = document.querySelectorAll('a[href*="profiles.php?XID="]');
-                const totalLinks = allLinks.length;
-                let curr = link.parentElement;
-                let bestMatch = curr;
-                while (curr && curr !== document.body) {
-                    let count = curr.querySelectorAll('a[href*="profiles.php?XID="]').length;
-                    if (count === totalLinks) {
-                        break; // We hit the common parent of both factions!
+                const row = link.closest('li') || link.closest('tr') || link.closest('[class*="scouter-row"]') || link.closest('[class*="table-row"]') || link.closest('.member-wrap');
+                if (row && row.parentElement) {
+                    friendlyContainers.add(row.parentElement);
+                    if (row.parentElement.tagName === 'DIV') {
+                        // If it's a div structure, grab the grandparent just in case the parent is a wrapper for a single row
+                        friendlyContainers.add(row.parentElement.parentElement);
                     }
-                    bestMatch = curr;
-                    curr = curr.parentElement;
-                }
-                if (bestMatch) {
-                    friendlyContainers.add(bestMatch);
                 }
             }
         });
 
         newLinks.forEach(link => {
             if (link.innerText.trim().length === 0) return;
-            if (link.closest('#sidebar') || link.closest('#header') || link.closest('#top-page-links') || link.closest('.user-info')) return;
+            if (link.closest('#sidebar') || link.closest('#header') || link.closest('#top-page-links') || link.closest('.user-info') || link.closest('#chatRoot') || link.closest('.chat-box') || link.closest('[class*="chat"]')) return;
 
             const row = link.closest('li') || link.closest('tr') || link.closest('.member-wrap') || link.closest('.table-row') || link.closest('.user-info-list-wrap');
             if (!row) return;
