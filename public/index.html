@@ -121,7 +121,10 @@
         .btn-filter:hover { background: #161b22; color: var(--text-main); }
         .btn-filter.active { background: rgba(88, 166, 255, 0.1); border-color: var(--blue); color: var(--text-main); box-shadow: inset 0 0 10px rgba(88, 166, 255, 0.1); }
 
-        .wb-row { display: grid; grid-template-columns: 2fr 1.5fr 1fr; gap: 8px; padding: 12px 20px; border-bottom: 1px solid #161b22; align-items: center; font-size: 0.85em; transition: 0.15s; }
+        
+        .wb-row { display: grid; grid-template-columns: minmax(160px, 1.5fr) minmax(80px, 1fr) auto; gap: 15px; padding: 12px 20px; border-bottom: 1px solid #161b22; align-items: center; font-size: 0.85em; transition: 0.15s; }
+        .member-row-header { display: grid; grid-template-columns: minmax(160px, 1.5fr) minmax(80px, 1fr) auto; gap: 15px; color: var(--text-dim); font-size: 0.75em; font-weight: 700; text-transform: uppercase; padding: 10px 20px; border-bottom: 1px solid var(--border); }
+
         .wb-row:hover { background: #0d1117; }
         .wb-row:last-child { border-bottom: none; }
         .wb-row.hospital { border-left: 3px solid var(--red); }
@@ -958,30 +961,35 @@ function renderFriendlyList(players, premiumActive) {
             }
         }
 
+        let pClass = "offline";
+        if (p.onlineStatus === "Online") pClass = "online";
+        else if (p.state === "Idle") pClass = "idle";
+        
+        if (p.state === "Hospital" || p.state === "Jail") pClass = "hospital";
+        if (checkIsFlying(p)) pClass = "traveling";
+        
+        let statusPill = `<span class="status-pill ${pClass}"><span class="status-dot"></span>${displayStatus}</span>`;
+        
         let estHtml = formatEstStats(p.estStats, premiumActive);
 
         let innerContent = `
-            <div class="card-header">
-                <div>
-                    <div style="display: flex; align-items: center;">
-                        <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
-                        <a href="https://www.torn.com/bounties.php?p=add&XID=${p.id}&amount=150000&reason=WAR" target="_blank" class="badge-bounty" title="Place Bounty to keep in Hospital">🎯 Bounty</a>
-                    </div>
-                    <div class="action-arrow">
-                        <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
-                    </div>
-                    <div class="status">Status: <span>${displayStatus}</span></div>
+            <div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
+                    ${statusPill}
+                    <a href="https://www.torn.com/bounties.php?p=add&XID=${p.id}&amount=150000&reason=WAR" target="_blank" class="badge-bounty" title="Place Bounty to keep in Hospital">🎯 Bounty</a>
                 </div>
-                <div class="stat-box">
-                    <div style="color: var(--text-dim);">Est. Stats</div>
-                    ${estHtml}
-                </div>
+                <div class="action-sub">➔ Last Action: ${p.lastActionRelative} ${etaString}</div>
+            </div>
+            <div class="intel-wrap">
+                <div style="font-size: 0.85em; color:var(--text-dim);">Est. Stats</div>
+                ${estHtml}
             </div>
             <div class="card-actions">
                 <button class="btn-action" onclick="promptUpdateStats('${p.id}')">Update Stats</button>
             </div>
         `;
-        return { fullClass: `member-card ${stateClass}`, innerContent };
+        return { fullClass: `wb-row ${stateClass}`, innerContent };
     }, "No friendly members found.");
 }
 
@@ -1037,37 +1045,42 @@ function renderEnemyList(players, premiumActive) {
         if (!p.needsBackup) { sosButton = `<button class="btn-action btn-sos" onclick="requestBackup('${p.id}', '${p.name}')">Call SOS</button>`; } 
         else if (p.needsBackup === myName) { sosButton = `<button class="btn-action btn-sos" onclick="cancelBackup('${p.id}')">Cancel SOS</button>`; }
 
+        let pClass = "offline";
+        if (p.onlineStatus === "Online") pClass = "online";
+        else if (p.state === "Idle") pClass = "idle";
+        
+        if (p.state === "Hospital" || p.state === "Jail") pClass = "hospital";
+        if (checkIsFlying(p)) pClass = "traveling";
+        
+        let statusPill = `<span class="status-pill ${pClass}"><span class="status-dot"></span>${displayStatus}</span>`;
+        
         let estHtml = formatEstStats(p.estStats, premiumActive);
 
         let innerContent = `
-            <div class="card-header">
-                <div>
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
-                        <button class="btn-inspect" onclick="inspectTarget('${p.id}', '${p.name.replace(/'/g, "\\'")}')">🔍 Inspect</button>
-                    </div>
-                    <div class="action-arrow">
-                        <span class="arrow-icon">➔</span> Last Action: ${p.lastActionRelative} ${etaString}
-                    </div>
-                    <div class="status">Status: <span>${displayStatus}</span></div>
-                </div>
-                <div class="stat-box">
-                    <div class="intel-badge">Intel: ${p.intelScore || 0}</div>
-                    <div style="color: var(--text-dim); margin-top: 5px;">Est. Stats</div>
-                    ${estHtml}
-                </div>
-            </div>
             <div>
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                    <a class="profile" style="margin-bottom:0;" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
+                    ${statusPill}
+                    <button class="btn-inspect" onclick="inspectTarget('${p.id}', '${p.name.replace(/'/g, "\\'")}')">🔍 Inspect</button>
+                </div>
+                <div class="action-sub" style="margin-bottom:4px;">➔ Last Action: ${p.lastActionRelative} ${etaString}</div>
+                
+            </div>
+            <div class="intel-wrap">
+                <div class="intel-badge">Intel: ${p.intelScore || 0}</div>
+                ${estHtml}
+            </div>
+            <div class="card-actions" style="flex-direction: column; align-items: flex-end; justify-content: center; gap: 4px;">
                 ${claimDisplay}
                 ${sosDisplay}
-            </div>
-            <div class="card-actions">
-                <button class="btn-action" onclick="promptUpdateStats('${p.id}')">Override Stats</button>
-                ${claimButton}
-                ${sosButton}
+                <div style="display: flex; gap: 6px;">
+                    <button class="btn-action" onclick="promptUpdateStats('${p.id}')">Override Stats</button>
+                    ${claimButton}
+                    ${sosButton}
+                </div>
             </div>
         `;
-        return { fullClass: `member-card ${stateClass}`, innerContent };
+        return { fullClass: `wb-row ${stateClass}`, innerContent };
     }, `No targets match the "${activeFilter}" filter.`);
 }
 
