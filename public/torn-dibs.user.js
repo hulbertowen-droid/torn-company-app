@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      2.4
+// @version      2.5
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page, with a live "who's dibbing on who" overview.
 // @author       Owen
 // @match        https://www.torn.com/factions.php*
@@ -695,112 +695,142 @@
         injectSettingsButton();
         injectClaimsToggle();
 
-        const newLinks = document.querySelectorAll('a[href*="profiles.php?XID="]:not(.dibs-processed)');
-        if (newLinks.length === 0) {
+        const allLinks = document.querySelectorAll('a[href*="profiles.php?XID="]:not(.dibs-processed)');
+        if (allLinks.length === 0) {
             updateUI();
             return;
         }
 
-        let friendlyContainers = new Set();
-        document.querySelectorAll('a[href*="profiles.php?XID="]').forEach(link => {
-            const linkParams = new URLSearchParams(link.href.split('?')[1]);
-            const linkId = linkParams.get('XID');
-            const matchesId = !!playerId && linkId === playerId;
-            const matchesName = !!playerName && link.innerText.trim().toLowerCase() === playerName.toLowerCase();
-            if (matchesId || matchesName) {
-                const row = link.closest('li') || link.closest('tr') || link.closest('[class*="scouter-row"]') || link.closest('[class*="table-row"]') || link.closest('.member-wrap');
-                if (row && row.parentElement) {
-                    friendlyContainers.add(row.parentElement);
-                    if (row.parentElement.tagName === 'DIV') {
-                        // If it's a div structure, grab the grandparent just in case the parent is a wrapper for a single row
-                        friendlyContainers.add(row.parentElement.parentElement);
-                    }
-                }
-            }
-        });
+        let myContainer = null;
+        let containers = new Set();
 
-        newLinks.forEach(link => {
+        // 1. Locate all faction containers
+        allLinks.forEach(link => {
             if (link.innerText.trim().length === 0) return;
             if (link.closest('#sidebar') || link.closest('#header') || link.closest('#top-page-links') || link.closest('.user-info') || link.closest('#chatRoot') || link.closest('.chat-box') || link.closest('[class*="chat"]')) return;
 
-            const row = link.closest('li') || link.closest('tr') || link.closest('.member-wrap') || link.closest('.table-row') || link.closest('.user-info-list-wrap');
-            if (!row) return;
-
-            let isFriendly = false;
-            for (let container of friendlyContainers) {
-                if (container.contains(row)) {
-                    isFriendly = true;
-                    break;
-                }
+            let row = link.closest('li') || link.closest('tr') || link.closest('[class*="scouter-row"]') || link.closest('[class*="table-row"]') || link.closest('.member-wrap');
+            let container = row ? row.parentElement : link.parentElement;
+            
+            // If the parent is a generic row wrapper, step up one more to find the table/list
+            if (container && container.tagName === 'DIV' && container.children.length === 1) {
+                container = container.parentElement;
             }
+            if (container) containers.add(container);
 
-            // Mark processed either way. Previously only non-friendly links got
-            // flagged, so the entire friendly roster was rescanned every 2s, forever.
-            link.classList.add('dibs-processed');
+            const linkParams = new URLSearchParams(link.href.split('?')[1]);
+            const linkId = linkParams.get('XID');
+            const matchesId = !!playerId && linkId === playerId;
+            
+            const nameText = link.innerText.replace(/[\n\r]/g, '').trim().toLowerCase();
+            const matchesName = !!playerName && nameText.includes(playerName.toLowerCase());
 
-            if (isFriendly) return;
-
-            const urlParams = new URLSearchParams(link.href.split('?')[1]);
-            const id = urlParams.get('XID');
-            if (!id) return;
-
-            knownTargetNames[id] = link.innerText.trim();
-
-            let btn = document.querySelector('.dibs-btn-' + id);
-            if (!btn) {
-                btn = document.createElement('button');
-                btn.className = 'dibs-btn-custom dibs-btn-' + id;
-                btn.setAttribute('data-id', id);
-
-                const attackLink = row.querySelector('a[href*="loader.php?sid=attack"]');
-
-                if (attackLink && attackLink.parentNode) {
-                    attackLink.parentNode.insertBefore(btn, attackLink);
-                    if (window.getComputedStyle(attackLink.parentNode).display !== 'flex') {
-                        attackLink.parentNode.style.display = 'flex';
-                        attackLink.parentNode.style.alignItems = 'center';
-                    }
-                } else {
-                    const wrap = link.closest('.user-info-list-wrap') || link.closest('.member-wrap') || link.closest('li') || row;
-                    let btnContainer = wrap.querySelector('.dibs-btn-container');
-                    if (!btnContainer) {
-                        btnContainer = document.createElement('div');
-                        btnContainer.className = 'dibs-btn-container';
-                        wrap.appendChild(btnContainer);
-                        
-                        // Force overflow visible on the container so the button isn't cut off
-                        wrap.classList.add('dibs-wrap-expanded');
-                        if (row) row.classList.add('dibs-wrap-expanded');
-                    }
-                    btnContainer.appendChild(btn);
-                }
-
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (btn.disabled) return;
-
-                    const claim = activeClaims[id];
-                    if (claim) {
-                        if (claim.playerName.toLowerCase() === playerName.toLowerCase()) {
-                            btn.disabled = true;
-                            btn.innerText = '...';
-                            unclaimTarget(id);
-                        } else {
-                            showToast('Already claimed by ' + claim.playerName, true);
-                        }
-                    } else {
-                        btn.disabled = true;
-                        btn.innerText = '...';
-                        claimTarget(id);
-                    }
-                });
+            if (matchesId || matchesName) {
+                myContainer = container;
             }
         });
 
+        if (myContainer) {
+            console.log("Dibs: detected friendly faction container", myContainer);
+        } else {
+            console.log("Dibs: could not identify friendly container (is your name/ID correct?)");
+        }
+
+        let totalEnemyRows = 0;
+        let totalFriendlyRows = 0;
+
+        // 2. Identify which container belongs to the enemy faction and restrict searches
+        containers.forEach(container => {
+            const linksInContainer = container.querySelectorAll('a[href*="profiles.php?XID="]:not(.dibs-processed)');
+            
+            // Ignore the friendly faction container completely
+            if (container === myContainer) {
+                console.log("Dibs: detected friendly faction, ignoring " + linksInContainer.length + " rows");
+                totalFriendlyRows += linksInContainer.length;
+                linksInContainer.forEach(link => link.classList.add('dibs-processed'));
+                return;
+            }
+
+            console.log("Dibs: detected enemy faction container, scanning " + linksInContainer.length + " rows");
+            totalEnemyRows += linksInContainer.length;
+
+            // 3. Process attack eligibility and place DIBS only on those enemy rows
+            linksInContainer.forEach(link => {
+                if (link.closest('#sidebar') || link.closest('#header') || link.closest('#top-page-links') || link.closest('.user-info') || link.closest('#chatRoot') || link.closest('.chat-box') || link.closest('[class*="chat"]')) return;
+                
+                link.classList.add('dibs-processed');
+                
+                const urlParams = new URLSearchParams(link.href.split('?')[1]);
+                const id = urlParams.get('XID');
+                if (!id) return;
+
+                const nameText = link.innerText.replace(/[\n\r]/g, '').trim();
+                if (!nameText) return;
+                knownTargetNames[id] = nameText;
+
+                const row = link.closest('li') || link.closest('tr') || link.closest('[class*="scouter-row"]') || link.closest('[class*="table-row"]') || link.closest('.member-wrap');
+                if (!row) return;
+
+                console.log("Dibs: selected member for DIBS:", nameText, id);
+
+                let btn = document.querySelector('.dibs-btn-' + id);
+                if (!btn) {
+                    btn = document.createElement('button');
+                    btn.className = 'dibs-btn-custom dibs-btn-' + id;
+                    btn.setAttribute('data-id', id);
+
+                    const attackLink = row.querySelector('a[href*="loader.php?sid=attack"]');
+
+                    if (attackLink && attackLink.parentNode) {
+                        attackLink.parentNode.insertBefore(btn, attackLink);
+                        if (window.getComputedStyle(attackLink.parentNode).display !== 'flex') {
+                            attackLink.parentNode.style.display = 'flex';
+                            attackLink.parentNode.style.alignItems = 'center';
+                        }
+                    } else {
+                        const wrap = link.closest('.user-info-list-wrap') || link.closest('.member-wrap') || link.closest('li') || row;
+                        let btnContainer = wrap.querySelector('.dibs-btn-container');
+                        if (!btnContainer) {
+                            btnContainer = document.createElement('div');
+                            btnContainer.className = 'dibs-btn-container';
+                            wrap.appendChild(btnContainer);
+                            
+                            wrap.classList.add('dibs-wrap-expanded');
+                            if (row) row.classList.add('dibs-wrap-expanded');
+                        }
+                        btnContainer.appendChild(btn);
+                    }
+
+                    btn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (btn.disabled) return;
+
+                        const claim = activeClaims[id];
+                        if (claim) {
+                            if (claim.playerName.toLowerCase() === playerName.toLowerCase()) {
+                                btn.disabled = true;
+                                btn.innerText = '...';
+                                unclaimTarget(id);
+                            } else {
+                                showToast('Already claimed by ' + claim.playerName, true);
+                            }
+                        } else {
+                            btn.disabled = true;
+                            btn.innerText = '...';
+                            claimTarget(id);
+                        }
+                    });
+                }
+            });
+        });
+
+        if (totalEnemyRows > 0 || totalFriendlyRows > 0) {
+            console.log(`Dibs cycle complete: found ${totalEnemyRows} enemy rows, ignored ${totalFriendlyRows} friendly rows.`);
+        }
+
         updateUI();
     }
-
     function updateSettingsButtonStatus(stale) {
         const settingsBtn = document.querySelector('.dibs-settings-float');
         if (!settingsBtn) return;
