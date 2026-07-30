@@ -40,7 +40,39 @@
         .danger .timer-time { color: var(--red); animation: pulse 1s infinite; }
 
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
-    </style>
+    
+        .queue-card { background: var(--card); border: 1px solid #2f3542; border-radius: 12px; margin-bottom: 30px; }
+        .queue-header { padding: 20px; border-bottom: 1px solid #2f3542; display: flex; justify-content: space-between; align-items: center; }
+        .queue-title { margin: 0; color: var(--gold); text-transform: uppercase; letter-spacing: 1px; font-size: 1.1em; display: flex; align-items: center; gap: 8px; font-weight: bold; }
+        
+        .queue-row { display: grid; grid-template-columns: 100px 1.5fr 1fr; gap: 15px; padding: 12px 20px; border-bottom: 1px solid #161b22; align-items: center; font-size: 0.9em; transition: 0.15s; }
+        .queue-row:hover { background: #0d1117; }
+        .queue-row:last-child { border-bottom: none; }
+        .queue-row-header { display: grid; grid-template-columns: 100px 1.5fr 1fr; gap: 15px; padding: 10px 20px; color: var(--text-dim); font-size: 0.75em; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid #2f3542; }
+        
+        .timer-badge { background: #161b22; padding: 4px 8px; border-radius: 6px; font-family: monospace; font-size: 1.1em; font-weight: bold; border: 1px solid #30363d; text-align: center; }
+        .timer-badge.ready { background: rgba(46, 213, 115, 0.15); color: var(--green); border-color: rgba(46, 213, 115, 0.4); animation: pulseAlert 2s infinite; }
+        .timer-badge.soon { color: var(--gold); }
+        
+        .queue-profile { font-weight: 700; color: var(--text-main); text-decoration: none; font-size: 1.05em; display: inline-flex; align-items: center; gap: 8px; margin-bottom: 4px;}
+        .queue-profile:hover { color: var(--blue); }
+        .dibs-badge { background: rgba(255, 71, 87, 0.15); color: var(--red); padding: 4px 10px; border-radius: 6px; font-weight: 700; border: 1px solid rgba(255, 71, 87, 0.4); display: inline-flex; align-items: center; gap: 6px; }
+
+        .script-card { background: rgba(88, 166, 255, 0.05); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 12px; padding: 25px; margin-top: 30px; }
+        .script-card h3 { color: var(--blue); margin-top: 0; text-transform: uppercase; font-size: 1.1em; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;}
+        .script-steps { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .script-step { background: #0b0d13; padding: 15px; border-radius: 8px; border: 1px solid #2f3542; }
+        .script-step h4 { color: white; margin: 0 0 10px 0; border-bottom: 1px solid #2f3542; padding-bottom: 5px; }
+        .script-step ol { margin: 0; padding-left: 20px; color: var(--text-dim); font-size: 0.85em; line-height: 1.6; }
+        .script-step a { color: var(--blue); text-decoration: none; font-weight: bold; }
+        .script-step a:hover { text-decoration: underline; }
+        .btn-download { display: inline-block; background: var(--blue); color: #000; font-weight: bold; text-decoration: none; padding: 8px 16px; border-radius: 6px; margin-top: 15px; text-transform: uppercase; font-size: 0.85em; transition: 0.2s; }
+        .btn-download:hover { background: #79c0ff; transform: scale(1.02); }
+
+        @keyframes pulseAlert { 0% { opacity: 1; } 50% { opacity: 0.6; box-shadow: 0 0 10px rgba(46,213,115,0.4); } 100% { opacity: 1; } }
+        @media (max-width: 768px) { .script-steps { grid-template-columns: 1fr; } }
+
+</style>
 </head>
 <body>
     <nav class="sidebar" id="app-sidebar">
@@ -92,6 +124,22 @@
                 <div class="waiting-text" id="waiting-msg">WAITING FOR CHAIN TO START...</div>
             </div>
 
+
+            <div class="queue-card">
+                <div class="queue-header">
+                    <h3 class="queue-title">🎯 Automatic Chain Order</h3>
+                    <div style="font-size: 0.75em; color: var(--text-dim);">Live DIBS Integration</div>
+                </div>
+                <div class="queue-row-header">
+                    <div>Status</div>
+                    <div>Target</div>
+                    <div>Claimed By</div>
+                </div>
+                <div id="queue-content">
+                    <div style="text-align: center; color: var(--text-dim); padding: 30px; font-style: italic;">Connecting to Warboard...</div>
+                </div>
+            </div>
+
             <div class="ledger-card">
                 <h3>🏆 Bonus Hit Ledger</h3>
                 <div class="ledger-grid">
@@ -104,6 +152,38 @@
                     <div style="text-align: center; color: var(--text-dim); padding: 20px; font-style: italic;">Waiting for chain data...</div>
                 </div>
             </div>
+
+            <div class="script-card">
+                <h3>🛠️ DIBS Script Setup</h3>
+                <p style="color: var(--text-dim); font-size: 0.9em; margin-bottom: 20px;">To call dibs and appear on the Automatic Chain Order above, you need to install the Faction Dibs script into your browser or PDA.</p>
+                
+                <a href="/torn-dibs.user.js" class="btn-download" target="_blank">⬇️ Download / Install Script</a>
+                
+                <div class="script-steps" style="margin-top: 20px;">
+                    <div class="script-step">
+                        <h4>🖥️ PC / Desktop (Tampermonkey)</h4>
+                        <ol>
+                            <li>Install the <a href="https://www.tampermonkey.net/" target="_blank">Tampermonkey extension</a> for your browser.</li>
+                            <li>Click the Download button above. Tampermonkey will intercept it.</li>
+                            <li>Click <strong>Install</strong> on the Tampermonkey page.</li>
+                            <li>Go to Torn Faction page and click the floating <strong>DIBS SETTINGS</strong> button in the bottom left corner.</li>
+                            <li>Enter this App's URL: <code>https://spider-verse.net</code> or whatever server you are on.</li>
+                        </ol>
+                    </div>
+                    <div class="script-step">
+                        <h4>📱 Mobile (Torn PDA)</h4>
+                        <ol>
+                            <li>Open Torn PDA and go to <strong>Settings -> Advanced browser settings</strong>.</li>
+                            <li>Tap <strong>Manage scripts</strong>.</li>
+                            <li>Tap the <strong>+</strong> button and select <strong>Import from URL</strong>.</li>
+                            <li>Enter the exact URL of the script link above (long press the download button and copy link).</li>
+                            <li>Save the script and enable it. Refresh the faction page.</li>
+                            <li>Tap the floating DIBS SETTINGS button to configure your server.</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </main>
 
@@ -154,6 +234,92 @@ let warned90 = false;
 let isCooldown = false;
 
 const MILESTONES = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
+
+
+let queueInterval = null;
+let queueData = [];
+
+async function fetchWarboardQueue() {
+    if (!myKey) return;
+    try {
+        const res = await fetch(`/api/warboard?apiKey=${myKey}`);
+        const data = await res.json();
+        if (data.enemy) {
+            // Filter only claimed targets
+            queueData = data.enemy.filter(e => e.claimedBy);
+            
+            // Sort: Okay (ready) first, then by Hospital Time
+            queueData.sort((a, b) => {
+                if (a.state === 'Okay' && b.state !== 'Okay') return -1;
+                if (b.state === 'Okay' && a.state !== 'Okay') return 1;
+                if (a.state === 'Hospital' && b.state === 'Hospital') {
+                    return (a.until || 0) - (b.until || 0);
+                }
+                return 0; // fallback
+            });
+            
+            renderQueue();
+        }
+    } catch (e) {
+        console.error("Queue fetch error:", e);
+    }
+}
+
+function renderQueue() {
+    const container = document.getElementById("queue-content");
+    if (queueData.length === 0) {
+        container.innerHTML = `<div style="text-align: center; color: var(--text-dim); padding: 30px; font-style: italic;">No targets are currently claimed. Claim someone on the Warboard!</div>`;
+        return;
+    }
+    
+    const now = Math.floor(Date.now() / 1000);
+    let newHtml = '';
+    
+    queueData.forEach(p => {
+        let statusHtml = '';
+        if (p.state === 'Okay') {
+            statusHtml = `<div class="timer-badge ready">🟢 READY</div>`;
+        } else if (p.state === 'Hospital' && p.until) {
+            let secsLeft = Math.max(0, p.until - now);
+            let m = Math.floor(secsLeft / 60);
+            let s = secsLeft % 60;
+            let timeStr = (m < 10 ? "0" + m : m) + ":" + (s < 10 ? "0" + s : s);
+            
+            let extraClass = secsLeft < 60 ? 'soon' : '';
+            statusHtml = `<div class="timer-badge ${extraClass}">${timeStr}</div>`;
+        } else {
+            statusHtml = `<div class="timer-badge">${p.state.toUpperCase()}</div>`;
+        }
+        
+        newHtml += `
+            <div class="queue-row">
+                ${statusHtml}
+                <div>
+                    <a class="queue-profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
+                    <div style="font-size: 0.85em; color: var(--text-dim);">Est. Stats: ${formatEstStatsPlain(p.estStats)}</div>
+                </div>
+                <div>
+                    <div class="dibs-badge">🎯 ${p.claimedBy}</div>
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = newHtml;
+}
+
+function formatEstStatsPlain(estValue) {
+    if (!estValue || estValue === "Scanning...") return "Unknown";
+    let num = Number(estValue);
+    if (!isNaN(num)) return num.toLocaleString();
+    return estValue;
+}
+
+// Start queue loop
+fetchWarboardQueue();
+setInterval(fetchWarboardQueue, 5000); // Poll API every 5s
+setInterval(renderQueue, 1000); // Re-render every 1s for countdowns
+
 
 function getNextMilestone(current) {
     for (let m of MILESTONES) { if (current < m) return m; }
