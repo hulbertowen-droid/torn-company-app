@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Dibs Integration (Render App)
 // @namespace    http://tampermonkey.net/
-// @version      1.26
+// @version      1.27
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page.
 // @author       Owen
 // @match        *://torn.com/*
@@ -295,7 +295,7 @@
                 font-size: 14px;
             }
         }
-    \`;
+    `;
     document.head.appendChild(style);
 
     // ---- Toast ----
@@ -323,7 +323,7 @@
         const overlay = document.createElement('div');
         overlay.id = 'dibsModalOverlay';
         overlay.className = 'dibs-modal-overlay';
-        overlay.innerHTML = \`
+        overlay.innerHTML = `
             <div class="dibs-modal" role="dialog" aria-modal="true" aria-labelledby="dibsModalTitle">
                 <h3 id="dibsModalTitle">Dibs settings</h3>
                 <label for="dibsUrlInput">App URL</label>
@@ -337,7 +337,7 @@
                     <button type="button" id="dibsModalSave" class="dibs-modal-btn dibs-modal-btn-primary">Save settings</button>
                 </div>
             </div>
-        \`;
+        `;
         document.body.appendChild(overlay);
 
         overlay.addEventListener('click', (e) => {
@@ -375,7 +375,7 @@
     }
 
     function saveSettingsFromModal() {
-        const url = document.getElementById('dibsUrlInput').value.trim().replace(/\\/$/, '');
+        const url = document.getElementById('dibsUrlInput').value.trim().replace(/\/$/, '');
         const name = document.getElementById('dibsNameInput').value.trim();
         const id = document.getElementById('dibsIdInput').value.trim();
 
@@ -412,7 +412,7 @@
         isFetching = true;
         GM_xmlhttpRequest({
             method: 'GET',
-            url: \`\${backendUrl}/api/claims\`,
+            url: `\${backendUrl}/api/claims`,
             onload: function(response) {
                 isFetching = false;
                 let ok = false;
@@ -453,7 +453,7 @@
 
         GM_xmlhttpRequest({
             method: 'POST',
-            url: \`\${backendUrl}/api/claim\`,
+            url: `\${backendUrl}/api/claim`,
             headers: { "Content-Type": "application/json" },
             data: JSON.stringify({ enemyId: enemyId.toString(), playerName: playerName }),
             onload: function() { fetchClaims(); },
@@ -467,7 +467,7 @@
     function unclaimTarget(enemyId) {
         GM_xmlhttpRequest({
             method: 'POST',
-            url: \`\${backendUrl}/api/unclaim\`,
+            url: `\${backendUrl}/api/unclaim`,
             headers: { "Content-Type": "application/json" },
             data: JSON.stringify({ enemyId: enemyId.toString(), playerName: playerName }),
             onload: function() { fetchClaims(); },
