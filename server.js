@@ -2089,6 +2089,9 @@ app.post('/api/turbo/start', (req, res) => {
         // Just return success, but log it. We don't want to stop the autonomous pipeline.
         // Actually, we can run a parallel turbo interval that scans completely random IDs heavily.
         if (global.isTurboMining) return res.json({ success: true, msg: "Already running" });
+        
+        global.turboMinLevel = parseInt(req.body.minLevel) || 1;
+        global.turboMaxLevel = parseInt(req.body.maxLevel) || 100;
         global.isTurboMining = true;
         global.turboStats = { found: 0, checked: 0 };
         global.scannerCallLog = [];
@@ -2123,6 +2126,11 @@ app.post('/api/turbo/start', (req, res) => {
                     let isValid = true;
                     if (profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen")) isValid = false;
                     if (profile.faction && profile.faction.faction_id !== 0) isValid = false;
+                    
+                    if (isValid) {
+                        const level = profile.level || 1;
+                        if (level < global.turboMinLevel || level > global.turboMaxLevel) isValid = false;
+                    }
                     
                     if (isValid) {
                         const level = profile.level || 1;
