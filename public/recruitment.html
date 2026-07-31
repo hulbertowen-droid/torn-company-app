@@ -244,6 +244,18 @@
                 </p>
             </div>
             <button class="btn-scan" id="btn-start-scan" onclick="startGlobalScan()" style="font-size: 1.1em; padding: 12px 30px; margin-bottom: 30px; box-shadow: 0 0 15px rgba(0, 206, 201, 0.3);">🌍 LOAD DATABASE (INSTANT)</button>
+            
+            <!-- LIVE API SCANNER -->
+            <div style="background: rgba(88, 166, 255, 0.1); border: 1px solid var(--blue); border-radius: 8px; padding: 20px; text-align: center; max-width: 600px; margin: 0 auto;">
+                <h3 style="color: var(--blue); margin-top: 0;">📡 HEADHUNTER PROTOCOL</h3>
+                <p style="color: var(--text-dim); font-size: 0.9em; margin-bottom: 15px;">
+                    Divert your personal API capacity to scan profiles live (Cap: ~92 req/min).<br>
+                    <b style="color:var(--gold);">NOTE:</b> Pauses Live Warboard and Discord alerts to protect your API limits. Auto-shuts off after 1 hour.
+                </p>
+                <button id="btn-turbo" onclick="promptTurbo()" style="background: var(--blue); color: #000; border: none; padding: 15px 30px; font-size: 1.2em; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.3s;">
+                    🚀 ENGAGE LIVE SCANNER
+                </button>
+            </div>
         </div>
 
         <!-- Confirmation Modal -->
@@ -646,7 +658,6 @@ function renderDynamicTable() {
         <th onclick="sortBy('age')">Age <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('playtime')">Playtime <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('velocity')">Velocity (Lvls/Day) <span class="sort-arrow">↕</span></th>
-        <th onclick="sortBy('velocity')">Velocity (Lvls/Day) <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('awards')">Awards <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('last_action_timestamp')">Last Action <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('estStats')">Est. Stats <span class="sort-arrow">↕</span></th>
@@ -683,11 +694,15 @@ function renderDynamicTable() {
         const priority = isPriority && (r.faction === 'Factionless' || r.faction === 'None') ? `<span class="priority-tag">🔥 PRIME</span>` : '';
         
         let lastActionText = "Unknown";
-        if (r.last_action_timestamp) {
-            const hours = (Date.now() / 1000 - r.last_action_timestamp) / 3600;
-            if (hours < 1) lastActionText = "Just now";
-            else if (hours < 24) lastActionText = Math.floor(hours) + "h ago";
-            else lastActionText = Math.floor(hours / 24) + "d ago";
+        if (r.last_action_timestamp !== undefined) {
+            if (r.last_action_timestamp === 0) {
+                lastActionText = "Hidden";
+            } else {
+                const hours = (Date.now() / 1000 - r.last_action_timestamp) / 3600;
+                if (hours < 1) lastActionText = "Just now";
+                else if (hours < 24) lastActionText = Math.floor(hours) + "h ago";
+                else lastActionText = Math.floor(hours / 24) + "d ago";
+            }
         }
 
         return `<tr>
@@ -698,12 +713,11 @@ function renderDynamicTable() {
             <td class="score-val">${r.level || 0}</td>
             <td>${r.age || 0}d</td>
             <td>${r.playtime || 0}d</td>
-            <td style="color:var(--gold);">${(r.velocity || 0).toFixed(2)}</td>
-            <td style="color:var(--gold);">${typeof r.velocity === 'number' ? r.velocity.toFixed(2) : '-'}</td>
+            <td style="color:var(--gold);" title="Levels gained per day">${typeof r.velocity === 'number' ? r.velocity.toFixed(2) : '-'}</td>
             <td class="eff-val">${r.awards || 0}</td>
             <td style="color:${lastActionText === 'Just now' ? 'var(--green)' : 'inherit'}">${lastActionText}</td>
             <td class="score-val" title="Sourced from community API, not verified.">${statStr}</td>
-            <td class="score-val">${Math.floor(r.recruitScore || 0)}</td>
+            <td class="score-val" title="${r.score_breakdown || 'No breakdown available'}">${Math.floor(r.recruitScore || 0)}</td>
             <td><strong class="grade-${r.scoutGrade || 'D'}">${r.scoutGrade || 'D'}</strong></td>
             <td>
                 <div style="display:flex;gap:6px;">
