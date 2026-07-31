@@ -2034,53 +2034,132 @@ app.post('/api/scan-recruits', async (req, res) => {
         r.xanPerDay = (r.xanax / (r.age || 1)).toFixed(2);
         
         let score = 0;
+        let breakdown = [];
         const levelPerAge = r.level / (r.age || 1);
         
-        score += (levelPerAge * 100) * (focusMultiplier > 1 ? 1.5 : (focusMultiplier < 1 ? 0.5 : 1));
-        score += (r.xanPerDay * 15) * (focusMultiplier < 1 ? 1.5 : (focusMultiplier > 1 ? 0.5 : 1));
+        let lvlAgePts = Math.floor((levelPerAge * 100) * (focusMultiplier > 1 ? 1.5 : (focusMultiplier < 1 ? 0.5 : 1)));
+        score += lvlAgePts;
+        breakdown.push(`Lvl/Age: +${lvlAgePts}`);
+        
+        let xanPts = Math.floor((r.xanPerDay * 15) * (focusMultiplier < 1 ? 1.5 : (focusMultiplier > 1 ? 0.5 : 1)));
+        if (xanPts > 0) { score += xanPts; breakdown.push(`Xanax: +${xanPts}`); }
         
         if (r.last_action_timestamp) {
             const hoursInactive = (Date.now() / 1000 - r.last_action_timestamp) / 3600;
-            if (hoursInactive < 24) score += 30;
-            else if (hoursInactive < 72) score += 10;
+            if (hoursInactive < 24) { score += 30; breakdown.push(`Active <24h: +30`); }
+            else if (hoursInactive < 72) { score += 10; breakdown.push(`Active <72h: +10`); }
         }
         if (r.awards) {
-            if (r.awards > 50) score += 20;
-            else if (r.awards > 20) score += 10;
+            if (r.awards > 50) { score += 20; breakdown.push(`Awards >50: +20`); }
+            else if (r.awards > 20) { score += 10; breakdown.push(`Awards >20: +10`); }
         }
-        if (r.donator) score += 15;
+        if (r.donator) { score += 15; breakdown.push(`Donator: +15`); }
         
-        // Add Velocity Bonus
         if (r.velocity) {
-            score += (r.velocity * 50); // Heavily weight active velocity
+            let velPts = Math.floor(r.velocity * 50);
+            score += velPts; 
+            breakdown.push(`Velocity (${r.velocity.toFixed(2)}): +${velPts}`);
         }
         
-        // Young talent penalty/bonus
-        if (r.level < 15 && r.age > 14 && levelPerAge < 0.2) score -= 40;
-        else if (r.level < 15 && r.age < 7 && levelPerAge > 1.5) score += 30;
+        if (r.level < 15 && r.age > 14 && levelPerAge < 0.2) { score -= 40; breakdown.push(`Low Lvl/Old Penalty: -40`); }
+        else if (r.level < 15 && r.age < 7 && levelPerAge > 1.5) { score += 30; breakdown.push(`Young Talent Bonus: +30`); }
         
-        r.recruitScore = score;
+        r.recruitScore = Math.max(0, score);
+        r.score_breakdown = breakdown.join(' | ');
+        
+        if (r.recruitScore >= 120) r.scoutGrade = 'S';
+        else if (r.recruitScore >= 80) r.scoutGrade = 'A';
+        else if (r.recruitScore >= 50) r.scoutGrade = 'B';
+        else if (r.recruitScore >= 25) r.scoutGrade = 'C';
+        else r.scoutGrade = 'D';
+        
         return r;
     });
     
     results.sort((a, b) => b.recruitScore - a.recruitScore);
-    const topScore = results.length > 0 ? results[0].recruitScore : 1;
-    
-    results = results.map(r => {
-        const ratio = r.recruitScore / topScore;
-        if (ratio >= 0.85) r.scoutGrade = 'S';
-        else if (ratio >= 0.70) r.scoutGrade = 'A';
-        else if (ratio >= 0.50) r.scoutGrade = 'B';
-        else if (ratio >= 0.30) r.scoutGrade = 'C';
-        else r.scoutGrade = 'D';
-        return r;
-    });
 
     res.json({ success: true, recruits: results.slice(0, 500) });
 });
 
 
 // Start Server and Pipeline
+
+// ==========================================
+// HEADHUNTER PROTOCOL (MANUAL LIVE SCANNER)
+// ==========================================
+app.post('/api/turbo/start', (req, res) => {
+    if (isPipelineRunning) {
+        // Just return success, but log it. We don't want to stop the autonomous pipeline.
+        // Actually, we can run a parallel turbo interval that scans completely random IDs heavily.
+        if (global.isTurboMining) return res.json({ success: true, msg: "Already running" });
+        global.isTurboMining = true;
+        global.turboStats = { found: 0, checked: 0 };
+        global.scannerCallLog = [];
+        
+        global.turboTimeout = setTimeout(() => {
+            global.isTurboMining = false;
+            if(global.turboInterval) clearInterval(global.turboInterval);
+        }, 3600000);
+
+        // Uses same API limit logic but explicitly checks random IDs across the DB
+        global.turboInterval = setInterval(async () => {
+            let watchKey = getNextApiKey();
+            if (!watchKey) return;
+
+            let id = Math.floor(Math.random() * (5000000 - 1500000 + 1) + 1500000);
+            global.turboStats.checked++;
+
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 4000);
+                const userRes = await fetch(`https://api.torn.com/user/${id}?selections=profile,personalstats&key=${watchKey}`, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                const userData = await userRes.json();
+                
+                if (userData && !userData.error) {
+                    const profile = userData.profile || userData;
+                    const personalstats = userData.personalstats || {};
+                    
+                    global.scannerCallLog.unshift(`[${new Date().toLocaleTimeString()}] Checked [${id}] ${profile.name || 'Unknown'}`);
+                    if (global.scannerCallLog.length > 30) global.scannerCallLog.pop();
+
+                    let isValid = true;
+                    if (profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen")) isValid = false;
+                    if (profile.faction && profile.faction.faction_id !== 0) isValid = false;
+                    
+                    if (isValid) {
+                        const level = profile.level || 1;
+                        const playtimeSec = personalstats.useractivity || 0;
+                        const playtimeDays = parseFloat((playtimeSec / 86400).toFixed(1));
+                        
+                        const r = {
+                            id, name: profile.name, level,
+                            age: profile.age || 1, playtime: playtimeDays,
+                            xanax: personalstats.xantaken || 0, refills: personalstats.refills || 0,
+                            se: personalstats.statenhancersused || 0, estStats: "Not yet available",
+                            donator: profile.donator === 1 || profile.donator === true,
+                            awards: profile.awards || 0,
+                            last_action_timestamp: (profile.last_action && profile.last_action.timestamp) ? profile.last_action.timestamp : 0,
+                            status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
+                            faction: "Factionless", last_checked: Date.now()/1000, active_polling: true, velocity: 0
+                        };
+                        pipeline.prospects.push(r);
+                        savePipeline();
+                        global.turboStats.found++;
+                    }
+                }
+            } catch(e) {}
+        }, 650);
+        return res.json({ success: true });
+    }
+});
+app.post('/api/turbo/stop', (req, res) => {
+    global.isTurboMining = false;
+    if (global.turboInterval) clearInterval(global.turboInterval);
+    if (global.turboTimeout) clearTimeout(global.turboTimeout);
+    res.json({ success: true, msg: "Turbo stopped" });
+});
+
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server listening on port ${PORT}`);
     startFrontierPipeline();
@@ -2221,9 +2300,16 @@ async function fetchAndProcess(id, watchKey, mode) {
             const newLastAction = profile.last_action ? profile.last_action.timestamp : 0;
             
             // Check for real movement
-            if (isFederal || hasFaction || daysInactive > 3 || 
-                (profile.level <= c.initLevel && (stats.xantaken || 0) <= c.initXanax && newLastAction === c.lastAction)) {
-                // No change or joined faction -> Drop candidate
+            const isFederalOrFaction = isFederal || hasFaction;
+            const isInactive = daysInactive > 3;
+            // Strict evaluation: only promote if they have definitively proven activity
+            const levelGained = profile.level > c.initLevel;
+            const xanaxGained = (stats.xantaken || 0) > (c.initXanax || 0);
+            const actionChanged = newLastAction !== (c.lastAction || 0);
+            const hasMoved = levelGained || xanaxGained || actionChanged;
+
+            if (isFederalOrFaction || isInactive || !hasMoved) {
+                // No change, joined faction, or inactive -> Drop candidate
                 delete pipeline.candidates[id];
             } else {
                 // Movement detected! Promote to prospect
