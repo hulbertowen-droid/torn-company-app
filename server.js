@@ -398,7 +398,7 @@ setInterval(async () => {
             const xanax = personalstats.xantaken || 0;
             const refills = personalstats.refills || 0;
             const se = personalstats.statenhancersused || 0;
-            const estStats = "?? FF Scouter Req.";
+            const estStats = "Not yet available";
             const donator = profile.donator === 1 || profile.donator === true;
 
             return {
@@ -1197,7 +1197,7 @@ app.post('/api/analyze-player-list', async (req, res) => {
             const xanax = personalstats.xantaken || 0;
             const refills = personalstats.refills || 0;
             const se = personalstats.statenhancersused || 0;
-            const estStats = "?? FF Scouter Req.";
+            const estStats = "Not yet available";
             const donator = profile.donator === 1 || profile.donator === true;
                     if (profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen")) return null;
             // Filter out players who haven't logged in for over 7 days
@@ -1290,7 +1290,7 @@ app.get('/api/scan-random-players', async (req, res) => {
         const focusMultiplier = parseFloat(weightLevel) || 1.0;
         
         results = results.map(r => {
-            if (!r.estStats) r.estStats = "?? FF Scouter Req.";
+            if (!r.estStats) r.estStats = "Not yet available";
             r.xanPerDay = (r.xanax / (r.age || 1)).toFixed(2);
             
             let score = 0;
@@ -1349,13 +1349,12 @@ app.get('/api/scan-random-players', async (req, res) => {
                 if (batchIds.length > 0) {
                     const ffRes = await fetch(`https://ffscouter.com/api/v1/get-stats?key=${keyToUse}&targets=${batchIds}`);
                     const ffData = await ffRes.json();
-                    if (ffData && !ffData.error) {
+                    if (Array.isArray(ffData)) {
+                        const statsMap = {};
+                        ffData.forEach(p => { statsMap[p.player_id.toString()] = p.bs_estimate; });
                         finalRecruits = finalRecruits.map(r => {
-                            if (ffData[r.id] && ffData[r.id].stats) {
-                                r.estStats = ffData[r.id].stats;
-                            } else {
-                                r.estStats = "Unknown / Hidden";
-                            }
+                            if (statsMap[r.id.toString()]) r.estStats = statsMap[r.id.toString()];
+                            else r.estStats = "Not yet available";
                             return r;
                         });
                     }
@@ -2040,7 +2039,7 @@ app.post('/api/turbo/start', (req, res) => {
             const xanax = personalstats.xantaken || 0;
             const refills = personalstats.refills || 0;
             const se = personalstats.statenhancersused || 0;
-            const estStats = "?? FF Scouter Req.";
+            const estStats = "Not yet available";
             const donator = profile.donator === 1 || profile.donator === true;
 
                 return {

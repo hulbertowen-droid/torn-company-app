@@ -140,13 +140,17 @@
     </style>
 </head>
 <body>
-    <div id="turbo-overlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background-color: #0b0d13; z-index: 10000; flex-direction: column; justify-content: center; align-items: center;">
-        <div style="z-index: 10001; text-align: center;">
-            <div id="turbo-overlay-stats" style="font-size: 1.5em; color: var(--gold); margin-bottom: 30px;">
-                Scanning... Checked: <span id="ts-checked-overlay" style="color:white; font-weight:bold;">0</span> | Found: <span id="ts-found-overlay" style="color:white; font-weight:bold;">0</span>
+    <div id="turbo-overlay" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background-color: rgba(11, 13, 19, 0.95); z-index: 10000; flex-direction: column; justify-content: center; align-items: center; backdrop-filter: blur(8px);">
+        <div style="z-index: 10001; text-align: center; max-width: 800px; width: 90%;">
+            <h2 style="color: var(--blue); text-transform: uppercase; letter-spacing: 2px;">📡 Live Scanner Active</h2>
+            <div id="turbo-overlay-stats" style="font-size: 1.2em; color: var(--gold); margin-bottom: 20px;">
+                Rate: ~92 calls/min | Checked: <span id="ts-checked-overlay" style="color:white; font-weight:bold;">0</span> | Found: <span id="ts-found-overlay" style="color:white; font-weight:bold;">0</span>
             </div>
-            <button onclick="toggleTurbo()" style="background: #ff4757; color: white; border: none; padding: 20px 40px; font-size: 1.5em; font-weight: bold; border-radius: 8px; cursor: pointer; box-shadow: 0 0 20px rgba(255, 71, 87, 0.5);">
-                🛑 ABORT HEADHUNTER PROTOCOL
+            <div style="height: 300px; overflow-y: auto; background: #0b0d13; border: 1px solid #2f3542; border-radius: 8px; padding: 15px; font-family: monospace; font-size: 0.9em; text-align: left; color: var(--text-dim); margin-bottom: 30px;" id="turbo-log-overlay">
+                // Call log will appear here
+            </div>
+            <button onclick="toggleTurbo()" style="background: #ff4757; color: white; border: none; padding: 15px 30px; font-size: 1.2em; font-weight: bold; border-radius: 8px; cursor: pointer; box-shadow: 0 0 20px rgba(255, 71, 87, 0.4); transition: 0.3s;">
+                🛑 STOP SCANNER
             </button>
         </div>
     </div>
@@ -199,23 +203,29 @@
                 </div>
             </div>
             <div class="scout-field">
+                <label>Max Playtime & Age (Days)</label>
+                <div style="display:flex;gap:5px;">
+                    <input type="number" id="maxPlaytime" placeholder="Max Play (500)" value="">
+                    <input type="number" id="maxAge" placeholder="Max Age (500)" value="">
+                </div>
+            </div>
+            <div class="scout-field">
+                <label>Activity & Awards</label>
+                <div style="display:flex;gap:5px;">
+                    <input type="number" id="maxLastActionHours" placeholder="Active < X hrs" value="24" title="Max hours since last action">
+                    <input type="number" id="minAwards" placeholder="Min Awards" value="" title="Minimum awards/merits">
+                </div>
+            </div>
+            <div class="scout-field">
                 <label>Donator Status</label>
-                <select id="donatorFilter">
-                    <option value="any">Any Status</option>
-                    <option value="donator">Donator/Subscriber Only</option>
+                <select id="donatorFilter" style="background:#0b0d13; color:var(--gold); border-color:var(--gold); font-weight:bold;">
+                    <option value="any">Any Status (Default)</option>
+                    <option value="donator">Donator/Subscriber Only ⭐</option>
                     <option value="nondonator">Non-Donators Only</option>
                 </select>
             </div>
             <div class="scout-field">
-                <label>Max Playtime (Days)</label>
-                <input type="number" id="maxPlaytime" placeholder="e.g. 500" value="">
-            </div>
-            <div class="scout-field">
-                <label>Max Age (Days)</label>
-                <input type="number" id="maxAge" placeholder="e.g. 500" value="">
-            </div>
-            <div class="scout-field">
-                <label>Progression Focus (Playtime vs Level)</label>
+                <label>Progression Focus <span style="cursor:help;color:var(--blue);" title="Balanced values absolute stats and playtime. Growth heavily favors players who have leveled up extremely fast relative to their account age.">ℹ️</span></label>
                 <div class="scout-slider-container">
                     <span style="font-size:0.7em;color:var(--text-dim);">Balanced</span>
                     <input type="range" id="weightLevel" min="0.5" max="2.0" step="0.1" value="1.0">
@@ -228,22 +238,32 @@
         <div id="scan-options" style="display:none; margin-bottom: 20px; text-align: center;">
             <div id="local-db-warning" style="background: rgba(255, 165, 2, 0.1); border: 1px solid var(--gold); border-radius: 4px; padding: 10px; margin-bottom: 20px; color: var(--gold); text-align: center; font-size: 0.9em;">
                 ⚠️ <b>Local Database Scanner Mode</b><br>
-                <span style="color: var(--text-dim);">This mode instantly searches the server's continuously updated database of active Factionless recruits. The server safely scans the game 24/7 in the background.</span>
+                <span style="color: var(--text-dim);">Scans and caches the game 24/7. Results update dynamically on every search.</span>
             </div>
-            <button class="btn-scan" id="btn-start-scan" onclick="startGlobalScan()" style="font-size: 1.1em; padding: 12px 30px; margin-bottom: 30px;">🌍 SEARCH DATABASE (INSTANT)</button>
+            <button class="btn-scan" id="btn-start-scan" onclick="startGlobalScan()" style="font-size: 1.1em; padding: 12px 30px; margin-bottom: 30px;">🌍 SEARCH LOCAL DATABASE (INSTANT)</button>
 
-            <!-- TURBO MINING -->
-            <div style="background: rgba(255, 50, 50, 0.1); border: 1px solid #ff4757; border-radius: 8px; padding: 20px; text-align: center; max-width: 600px; margin: 0 auto;">
-                <h3 style="color: #ff4757; margin-top: 0;">🕵️ UNDERGROUND HEADHUNTER PROTOCOL</h3>
+            <!-- LIVE API SCANNER -->
+            <div style="background: rgba(88, 166, 255, 0.1); border: 1px solid var(--blue); border-radius: 8px; padding: 20px; text-align: center; max-width: 600px; margin: 0 auto;">
+                <h3 style="color: var(--blue); margin-top: 0;">📡 LIVE API SCANNER</h3>
                 <p style="color: var(--text-dim); font-size: 0.9em; margin-bottom: 15px;">
-                    Divert 100% of your API capacity to finding recruits.<br>
-                    <b style="color:#ff4757;">WARNING:</b> This pauses ALL Live Warboard and Discord alerts while active. Auto-shuts off after 1 hour.
+                    Divert your personal API capacity to scan profiles live (Cap: ~92 req/min).<br>
+                    <b style="color:var(--gold);">NOTE:</b> Pauses Live Warboard and Discord alerts to protect your API limits. Auto-shuts off after 1 hour.
                 </p>
-                <button id="btn-turbo" onclick="toggleTurbo()" style="background: #ff4757; color: white; border: none; padding: 15px 30px; font-size: 1.2em; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.3s;">
-                    🕵️ ENGAGE HEADHUNTER PROTOCOL
+                <button id="btn-turbo" onclick="promptTurbo()" style="background: var(--blue); color: #000; border: none; padding: 15px 30px; font-size: 1.2em; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.3s;">
+                    🚀 ENGAGE LIVE SCANNER
                 </button>
-                <div id="turbo-stats" style="margin-top: 15px; font-size: 0.9em; color: var(--gold); display: none;">
-                    Scanning... Checked: <span id="ts-checked" style="color:white; font-weight:bold;">0</span> | Found: <span id="ts-found" style="color:white; font-weight:bold;">0</span>
+            </div>
+        </div>
+
+        <!-- Confirmation Modal -->
+        <div id="turbo-confirm-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.85); z-index: 10001; justify-content:center; align-items:center;">
+            <div style="background: var(--card); border: 1px solid var(--blue); padding: 30px; border-radius: 12px; max-width: 450px; text-align: center;">
+                <h2 style="color: var(--blue); margin-top: 0;">Confirm Live API Scan</h2>
+                <p style="color: var(--text-dim); font-size: 0.95em;">Are you sure you want to engage the Live API Scanner?</p>
+                <p style="color: var(--gold); font-size: 0.85em; margin-bottom: 25px; border: 1px solid rgba(255, 165, 2, 0.4); padding: 10px; border-radius: 6px; background: rgba(255, 165, 2, 0.05);">⚠️ Your Live Warboard and Discord alerts will be <b>PAUSED</b> while this runs.</p>
+                <div style="display: flex; gap: 15px; justify-content: center;">
+                    <button onclick="document.getElementById('turbo-confirm-modal').style.display='none';" style="background: #2f3542; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">Cancel</button>
+                    <button onclick="toggleTurbo(); document.getElementById('turbo-confirm-modal').style.display='none';" style="background: var(--blue); color: #000; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold;">Yes, Start Scanning</button>
                 </div>
             </div>
         </div>
@@ -325,7 +345,8 @@
 let isTurboActive = false;
 let turboPoll = null;
 
-function promptTurbo() { document.getElementById('turbo-confirm-modal').style.display='flex'; } async function toggleTurbo() {
+function promptTurbo() { document.getElementById('turbo-confirm-modal').style.display='flex'; } function promptTurbo() { document.getElementById('turbo-confirm-modal').style.display='flex'; }
+async function toggleTurbo() {
     try {
         if (!isTurboActive) {
             await fetch('/api/turbo/start', { method: 'POST' });
@@ -346,8 +367,11 @@ async function pollTurboStatus() {
         const stats = document.getElementById('turbo-stats');
         
         if (isTurboActive) {
-            btn.innerHTML = '🛑 ABORT HEADHUNTER PROTOCOL';
+            btn.innerHTML = '🛑 STOP SCANNER';
             btn.style.background = '#2f3542';
+            btn.setAttribute('onclick', 'toggleTurbo()');
+            const logBox = document.getElementById('turbo-log-overlay');
+            if (data.logs && data.logs.length > 0) logBox.innerHTML = data.logs.join('<br>');
             document.getElementById('app-sidebar').style.display = 'none';
             const mc = document.querySelector('.main-content');
             if (mc) mc.style.display = 'none';
@@ -358,8 +382,9 @@ async function pollTurboStatus() {
             
             if (!turboPoll) turboPoll = setInterval(pollTurboStatus, 3000);
         } else {
-            btn.innerHTML = '🕵️ ENGAGE HEADHUNTER PROTOCOL';
-            btn.style.background = '#ff4757';
+            btn.innerHTML = '🚀 ENGAGE LIVE SCANNER';
+            btn.style.background = 'var(--blue)';
+            btn.setAttribute('onclick', 'promptTurbo()');
             document.getElementById('app-sidebar').style.display = 'flex';
             const mc = document.querySelector('.main-content');
             if (mc) mc.style.display = 'block';
@@ -627,11 +652,12 @@ function renderDynamicTable() {
     thead.innerHTML = `
         <th onclick="sortBy('name')">Player <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('level')">Level <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('age')">Age <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('playtime')">Playtime <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('awards')">Awards <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('last_action_timestamp')">Last Action <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('estStats')">Est. Stats <span class="sort-arrow">↕</span></th>
-        <th onclick="sortBy('recruitScore')">Score <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('recruitScore')" title="Score = (Level/Age) + Activity Bonus + Awards Bonus + Donator">Score ℹ️ <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('scoutGrade')">Grade <span class="sort-arrow">↕</span></th>
         <th>Actions</th>
     `;
@@ -653,15 +679,15 @@ function renderDynamicTable() {
 
     const tbody = document.getElementById('recruit-list');
     if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:40px;font-style:italic;">No recruits match this filter.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--text-dim);padding:40px;font-style:italic;">No recruits match this filter.</td></tr>`;
         return;
     }
 
-    const topScore = filtered.length > 0 ? Math.max(...filtered.map(r => r.recruitScore || 0)) : 0;
     tbody.innerHTML = filtered.map(r => {
-        const isPriority = (r.recruitScore || 0) >= topScore * 0.85;
+        // Fix for bug 4: PRIME is strictly Grade S or A
+        const isPriority = (r.scoutGrade === 'S' || r.scoutGrade === 'A');
         const statStr = typeof r.estStats === 'number' ? r.estStats.toLocaleString() : `<span class="stat-dim">${r.estStats}</span>`;
-        const priority = isPriority && r.faction === 'Factionless' ? `<span class="priority-tag">🔥 PRIME</span>` : '';
+        const priority = isPriority && (r.faction === 'Factionless' || r.faction === 'None') ? `<span class="priority-tag">🔥 PRIME</span>` : '';
         
         let lastActionText = "Unknown";
         if (r.last_action_timestamp) {
@@ -677,12 +703,13 @@ function renderDynamicTable() {
                 <div class="player-id">[${r.id}]</div>
             </td>
             <td class="score-val">${r.level || 0}</td>
+            <td>${r.age || 0}d</td>
             <td>${r.playtime || 0}d</td>
             <td class="eff-val">${r.awards || 0}</td>
             <td style="color:${lastActionText === 'Just now' ? 'var(--green)' : 'inherit'}">${lastActionText}</td>
             <td class="score-val" title="Sourced from community API, not verified.">${statStr}</td>
             <td class="score-val">${Math.floor(r.recruitScore || 0)}</td>
-            <td><strong>${r.scoutGrade || 'D'}</strong></td>
+            <td><strong class="grade-${r.scoutGrade || 'D'}">${r.scoutGrade || 'D'}</strong></td>
             <td>
                 <div style="display:flex;gap:6px;">
                     <a class="btn-profile" href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank">View</a>
