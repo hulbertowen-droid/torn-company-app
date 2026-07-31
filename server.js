@@ -1246,10 +1246,10 @@ app.post('/api/analyze-player-list', async (req, res) => {
 });
 
 app.get('/api/scan-random-players', async (req, res) => {
-    const { minLevel, maxLevel, donatorFilter, maxPlaytime, maxAge, weightPlaytime, weightLevel } = req.query;
+    const { minLevel, maxLevel, donatorFilter, maxPlaytime, maxAge, minAwards, maxLastActionHours, weightLevel, ffKey } = req.query;
     
     try {
-                const dataDir = path.join(__dirname, 'data');
+        const dataDir = path.join(__dirname, 'data');
         if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
         const recruitsFile = path.join(__dirname, 'data', 'recruits.json');
         let cachedRecruits = [];
@@ -1276,47 +1276,85 @@ app.get('/api/scan-random-players', async (req, res) => {
             if (maxPlaytime && parseFloat(profile.playtime) > parseFloat(maxPlaytime)) return false;
             if (maxAge && parseFloat(profile.age) > parseFloat(maxAge)) return false;
             
+            if (minAwards && (profile.awards || 0) < parseInt(minAwards)) return false;
+            
+            if (maxLastActionHours && profile.last_action_timestamp) {
+                const hoursInactive = (Date.now() / 1000 - profile.last_action_timestamp) / 3600;
+                if (hoursInactive > parseFloat(maxLastActionHours)) return false;
+            }
+            
             return true;
         });
 
-        // Backward compatibility: wipe old estStats and dynamically calculate scoutGrade
+        // Calculate Composite Recruit Score
+        const focusMultiplier = parseFloat(weightLevel) || 1.0;
+        
         results = results.map(r => {
-            // WIPE OLD FAKE STATS
-            r.estStats = "?? FF Scouter Req.";
+            if (!r.estStats) r.estStats = "?? FF Scouter Req.";
             r.xanPerDay = (r.xanax / (r.age || 1)).toFixed(2);
             
-            // Generate Scout Grade for old database entries that don't have it
             let score = 0;
-            if (r.donator) score += 20;
-            if (r.xanPerDay > 2.5) score += 40;
-            else if (r.xanPerDay > 1.5) score += 30;
-            else if (r.xanPerDay > 0.5) score += 15;
-            else if (r.xanPerDay > 0.1) score += 5;
-            else if (r.age > 100) score -= 20;
-            
-            const refPerDay = (r.refills || 0) / (r.age || 1);
-            if (refPerDay > 0.5) score += 20;
-            else if (refPerDay > 0.1) score += 10;
-            
             const levelPerAge = r.level / (r.age || 1);
-            if (levelPerAge > 0.5) score += 20;
-            else if (levelPerAge > 0.2) score += 10;
             
-            if (score >= 70) r.scoutGrade = "S";
-            else if (score >= 50) r.scoutGrade = "A";
-            else if (score >= 30) r.scoutGrade = "B";
-            else if (score >= 10) r.scoutGrade = "C";
-            else if (score > 0) r.scoutGrade = "D";
+            // Core stat progression
+            score += (levelPerAge * 100) * (focusMultiplier > 1 ? 1.5 : (focusMultiplier < 1 ? 0.5 : 1));
+            score += (r.xanPerDay * 15) * (focusMultiplier < 1 ? 1.5 : (focusMultiplier > 1 ? 0.5 : 1));
+            
+            // Activity Recency Bonus
+            if (r.last_action_timestamp) {
+                const hoursInactive = (Date.now() / 1000 - r.last_action_timestamp) / 3600;
+                if (hoursInactive < 24) score += 30;
+                else if (hoursInactive < 72) score += 10;
+            }
+            
+            // Awards Bonus
+            if (r.awards) {
+                score += (r.awards * 0.2);
+            }
+            
+            // Donator Status
+            if (r.donator) score += 25;
+            
+            r.recruitScore = score;
+            
+            if (score >= 120) r.scoutGrade = "S";
+            else if (score >= 90) r.scoutGrade = "A";
+            else if (score >= 60) r.scoutGrade = "B";
+            else if (score >= 30) r.scoutGrade = "C";
+            else if (score > 10) r.scoutGrade = "D";
             else r.scoutGrade = "F";
             
             return r;
         });
 
-        // Sort by xanPerDay by default for best recruits
-        results.sort((a, b) => parseFloat(b.xanPerDay) - parseFloat(a.xanPerDay));
+        // Sort by composite score
+        results.sort((a, b) => b.recruitScore - a.recruitScore);
         
-        // Return top 100 max to keep UI snappy
-        res.json({ success: true, recruits: results.slice(0, 100) });
+        let finalRecruits = results.slice(0, 100);
+        
+        // BULK FETCH FF SCOUTER STATS
+        const keyToUse = ffKey && ffKey !== "null" ? ffKey : (global.marketConfig && global.marketConfig.ffscouterKey ? global.marketConfig.ffscouterKey : "");
+        if (keyToUse && keyToUse.length > 5) {
+            try {
+                const batchIds = finalRecruits.map(r => r.id).join(',');
+                if (batchIds.length > 0) {
+                    const ffRes = await fetch(`https://ffscouter.com/api/v1/get-stats?key=${keyToUse}&targets=${batchIds}`);
+                    const ffData = await ffRes.json();
+                    if (ffData && !ffData.error) {
+                        finalRecruits = finalRecruits.map(r => {
+                            if (ffData[r.id] && ffData[r.id].stats) {
+                                r.estStats = ffData[r.id].stats;
+                            } else {
+                                r.estStats = "Unknown / Hidden";
+                            }
+                            return r;
+                        });
+                    }
+                }
+            } catch(e) { console.error("FFScouter Bulk Error", e); }
+        }
+        
+        res.json({ success: true, recruits: finalRecruits });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

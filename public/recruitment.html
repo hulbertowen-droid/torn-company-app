@@ -278,7 +278,14 @@
                 <button class="filter-btn blue" onclick="rescan()">🔄 Rescan</button>
                 <input class="search-box" type="text" id="search-box" placeholder="Search by name..." oninput="renderTable()">
             </div>
-            <div class="table-wrap">
+            
+        <div class="scout-form" style="margin-bottom: 20px;">
+            <div class="scout-field" style="grid-column: 1 / -1;">
+                <label>Custom Outreach Template (Use {name}, {level})</label>
+                <textarea id="msg-template" style="background: #0b0d13; border: 1px solid #2f3542; border-radius: 7px; color: white; padding: 10px; font-family: 'Inter', sans-serif; resize: vertical; min-height: 80px;">Hey {name}, I noticed your rapid progression to level {level}. You'd be a great fit for our faction. Let me know if you're looking for a new home!</textarea>
+            </div>
+        </div>
+        <div class="table-wrap">
                 <table>
                     <thead>
                         <tr>
@@ -318,7 +325,7 @@
 let isTurboActive = false;
 let turboPoll = null;
 
-async function toggleTurbo() {
+function promptTurbo() { document.getElementById('turbo-confirm-modal').style.display='flex'; } async function toggleTurbo() {
     try {
         if (!isTurboActive) {
             await fetch('/api/turbo/start', { method: 'POST' });
@@ -532,7 +539,7 @@ async function startGlobalScan() {
         maxPlaytime: document.getElementById('maxPlaytime').value,
         maxAge: document.getElementById('maxAge')?.value || '',
         weightLevel: document.getElementById('weightLevel').value,
-        scanCount: 15
+        minAwards: document.getElementById('minAwards')?.value || '', maxLastActionHours: document.getElementById('maxLastActionHours')?.value || '', ffKey: localStorage.getItem('warboard_ffkey') || ''
     });
 
     try {
@@ -549,7 +556,7 @@ async function startGlobalScan() {
         if (data.error) throw new Error(data.error);
         
         allRecruits = data.recruits || [];
-        btn.textContent = '🌍 Start Deep Scan';
+        btn.textContent = '🌍 SEARCH LOCAL DATABASE (INSTANT)';
         btn.disabled = false;
         
         if(allRecruits.length === 0) showError("No players found matching those strict criteria in this random batch. Try again or loosen filters.");
@@ -612,22 +619,20 @@ async function startImport() {
 
 function renderDynamicTable() {
     if (currentMode === 'poach') {
-        renderTable(); // Use existing war table renderer
+        renderTable(); 
         return;
     }
 
-    // New renderer for global search (progression based)
     const thead = document.querySelector('thead tr');
     thead.innerHTML = `
         <th onclick="sortBy('name')">Player <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('level')">Level <span class="sort-arrow">↕</span></th>
-        <th onclick="sortBy('age')">Age <span class="sort-arrow"> </span></th>
-        <th onclick="sortBy('playtime')">Playtime <span class="sort-arrow"> </span></th>
-        <th onclick="sortBy('xanax')">Xanax (Total) <span class="sort-arrow"> </span></th>
-        <th onclick="sortBy('xanPerDay')">Xan/Day <span class="sort-arrow"> </span></th>
-        <th onclick="sortBy('estStats')">Est. Stats <span class="sort-arrow"> </span></th>
-        <th onclick="sortBy('scoutGrade')">Scout Grade <span class="sort-arrow"> </span></th>
-        <th onclick="sortBy('faction')">Faction <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('playtime')">Playtime <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('awards')">Awards <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('last_action_timestamp')">Last Action <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('estStats')">Est. Stats <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('recruitScore')">Score <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('scoutGrade')">Grade <span class="sort-arrow">↕</span></th>
         <th>Actions</th>
     `;
 
@@ -648,42 +653,61 @@ function renderDynamicTable() {
 
     const tbody = document.getElementById('recruit-list');
     if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text-dim);padding:40px;font-style:italic;">No recruits match this filter.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text-dim);padding:40px;font-style:italic;">No recruits match this filter.</td></tr>`;
         return;
     }
 
-    const topProg = filtered.length > 0 ? Math.max(...filtered.map(r => r.progIndex)) : 0;
+    const topScore = filtered.length > 0 ? Math.max(...filtered.map(r => r.recruitScore || 0)) : 0;
     tbody.innerHTML = filtered.map(r => {
-        const isPriority = r.progIndex >= topProg * 0.85;
-        const factionless = r.faction === 'Factionless' || r.faction === 'None';
-        const badge = !factionless
-            ? `<span class="badge badge-member">🟡 ${r.faction}</span>`
-            : `<span class="badge badge-gone">🟢 Factionless</span>`;
-        const priority = isPriority ? `<span class="priority-tag">⭐ HOT</span>` : '';
-        const donatorIcon = r.donator ? '💎 ' : '';
+        const isPriority = (r.recruitScore || 0) >= topScore * 0.85;
+        const statStr = typeof r.estStats === 'number' ? r.estStats.toLocaleString() : `<span class="stat-dim">${r.estStats}</span>`;
+        const priority = isPriority && r.faction === 'Factionless' ? `<span class="priority-tag">🔥 PRIME</span>` : '';
         
+        let lastActionText = "Unknown";
+        if (r.last_action_timestamp) {
+            const hours = (Date.now() / 1000 - r.last_action_timestamp) / 3600;
+            if (hours < 1) lastActionText = "Just now";
+            else if (hours < 24) lastActionText = Math.floor(hours) + "h ago";
+            else lastActionText = Math.floor(hours / 24) + "d ago";
+        }
+
         return `<tr>
             <td>
-                <a class="player-link" href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank">${donatorIcon}${r.name}</a>${priority}
+                <a class="player-link" href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank">${r.name}</a>${priority}
                 <div class="player-id">[${r.id}]</div>
             </td>
-            <td class="score-val">${r.level}</td>
-            <td>${r.age}</td>
-            <td>${r.playtime}</td>
-            <td>${r.xanax.toLocaleString()}</td>
-            <td style="color: ${r.xanPerDay > 2 ? '#ff4757' : (r.xanPerDay > 1 ? '#ffa502' : 'var(--text-dim)')}; font-weight: bold;">${r.xanPerDay || 0}</td>
-            <td class="score-val" style="color: var(--text-dim); font-size: 0.85em;">${r.estStats}</td>
-            <td style="font-weight: 900; font-size: 1.2em; color: ${r.scoutGrade === 'S' ? '#ff4757' : (r.scoutGrade === 'A' ? '#ffa502' : (r.scoutGrade === 'B' ? '#2ed573' : 'var(--text-dim)'))};">${r.scoutGrade || 'N/A'}</td>
-            <td>${badge}<div style="font-size:0.7em;color:var(--text-dim);margin-top:2px;">${r.status}</div></td>
-            <td style="display:flex;gap:7px;align-items:center;">
-                <a class="btn-profile" href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank">Profile</a>
-                <button class="btn-ai" onclick='openMsgModal(JSON.parse(\`${JSON.stringify(r)}\`))'>✨ AI Draft</button>
+            <td class="score-val">${r.level || 0}</td>
+            <td>${r.playtime || 0}d</td>
+            <td class="eff-val">${r.awards || 0}</td>
+            <td style="color:${lastActionText === 'Just now' ? 'var(--green)' : 'inherit'}">${lastActionText}</td>
+            <td class="score-val" title="Sourced from community API, not verified.">${statStr}</td>
+            <td class="score-val">${Math.floor(r.recruitScore || 0)}</td>
+            <td><strong>${r.scoutGrade || 'D'}</strong></td>
+            <td>
+                <div style="display:flex;gap:6px;">
+                    <a class="btn-profile" href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank">View</a>
+                    <button class="btn-ai" onclick="copyAndMessage('${r.id}', '${r.name.replace(/'/g, "\\'")}', '${r.level || 0}')">💬 Message</button>
+                </div>
             </td>
         </tr>`;
     }).join('');
 }
 
-// --- RENDER TABLE ---
+function copyAndMessage(id, name, level) {
+    const template = document.getElementById('msg-template').value;
+    const msg = template.replace(/{name}/g, name).replace(/{level}/g, level);
+    
+    const el = document.createElement('textarea');
+    el.value = msg;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    
+    alert("Message copied to clipboard! Opening Torn...");
+    window.open(`https://www.torn.com/profiles.php?XID=${id}`, '_blank');
+}
+
 function renderTable() {
     const search = (document.getElementById('search-box')?.value || '').toLowerCase();
     let filtered = allRecruits.filter(r => {
