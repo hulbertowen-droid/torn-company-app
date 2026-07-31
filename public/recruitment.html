@@ -264,11 +264,17 @@
                 <h2 style="color: var(--blue); margin-top: 0;">Confirm Live API Scan</h2>
                 <p style="color: var(--text-dim); font-size: 0.95em;">Are you sure you want to engage the Live API Scanner?</p>
                 <p style="color: var(--gold); font-size: 0.85em; margin-bottom: 25px; border: 1px solid rgba(255, 165, 2, 0.4); padding: 10px; border-radius: 6px; background: rgba(255, 165, 2, 0.05);">⚠️ Your Live Warboard and Discord alerts will be <b>PAUSED</b> while this runs.</p>
-                <div style="margin-bottom: 25px; background: #0b0d13; padding: 15px; border-radius: 8px; border: 1px solid var(--border); display: flex; justify-content: center; gap: 15px; align-items: center;">
-                    <span style="color: var(--text-dim); font-size: 0.9em;">Target Levels:</span>
-                    <input type="number" id="turbo-min-level" placeholder="Min (1)" value="1" style="width: 80px; background: #111; color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 8px; text-align: center;">
-                    <span style="color: var(--text-dim);">to</span>
-                    <input type="number" id="turbo-max-level" placeholder="Max (100)" value="100" style="width: 80px; background: #111; color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 8px; text-align: center;">
+                <div style="margin-bottom: 25px; background: #0b0d13; padding: 15px; border-radius: 8px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 15px; align-items: center;">
+                    <div style="display: flex; gap: 15px; align-items: center;">
+                        <span style="color: var(--text-dim); font-size: 0.9em; width: 100px; text-align: right;">Target Levels:</span>
+                        <input type="number" id="turbo-min-level" placeholder="Min (1)" value="1" style="width: 80px; background: #111; color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 8px; text-align: center;">
+                        <span style="color: var(--text-dim);">to</span>
+                        <input type="number" id="turbo-max-level" placeholder="Max (100)" value="100" style="width: 80px; background: #111; color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 8px; text-align: center;">
+                    </div>
+                    <div style="display: flex; gap: 15px; align-items: center;">
+                        <span style="color: var(--text-dim); font-size: 0.9em; width: 100px; text-align: right;">Max Playtime:</span>
+                        <input type="number" id="turbo-max-playtime" placeholder="Days (e.g. 500)" value="500" style="width: 195px; background: #111; color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 8px; text-align: center;">
+                    </div>
                 </div>
                 <div style="display: flex; gap: 15px; justify-content: center;">
                     <button onclick="document.getElementById('turbo-confirm-modal').style.display='none';" style="background: #2f3542; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer;">Cancel</button>
@@ -360,10 +366,11 @@ async function toggleTurbo() {
         if (!isTurboActive) {
             const minLevel = document.getElementById('turbo-min-level')?.value || 1;
             const maxLevel = document.getElementById('turbo-max-level')?.value || 100;
+            const maxPlaytime = document.getElementById('turbo-max-playtime')?.value || 500;
             await fetch('/api/turbo/start', { 
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ minLevel, maxLevel })
+                body: JSON.stringify({ minLevel, maxLevel, maxPlaytime })
             });
         } else {
             await fetch('/api/turbo/stop', { method: 'POST' });

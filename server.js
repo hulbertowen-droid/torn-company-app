@@ -2092,6 +2092,7 @@ app.post('/api/turbo/start', (req, res) => {
         
         global.turboMinLevel = parseInt(req.body.minLevel) || 1;
         global.turboMaxLevel = parseInt(req.body.maxLevel) || 100;
+        global.turboMaxPlaytime = parseFloat(req.body.maxPlaytime) || 500;
         global.isTurboMining = true;
         global.turboStats = { found: 0, checked: 0 };
         global.scannerCallLog = [];
@@ -2137,9 +2138,12 @@ app.post('/api/turbo/start', (req, res) => {
                         const playtimeSec = personalstats.useractivity || 0;
                         const playtimeDays = parseFloat((playtimeSec / 86400).toFixed(1));
                         
-                        const r = {
-                            id, name: profile.name, level,
-                            age: profile.age || 1, playtime: playtimeDays,
+                        if (playtimeDays > global.turboMaxPlaytime) isValid = false;
+                        
+                        if (isValid) {
+                            const r = {
+                                id, name: profile.name, level,
+                                age: profile.age || 1, playtime: playtimeDays,
                             xanax: personalstats.xantaken || 0, refills: personalstats.refills || 0,
                             se: personalstats.statenhancersused || 0, estStats: "Not yet available",
                             donator: profile.donator === 1 || profile.donator === true,
@@ -2152,6 +2156,7 @@ app.post('/api/turbo/start', (req, res) => {
                         savePipeline();
                         global.turboStats.found++;
                     }
+                }
                 }
             } catch(e) {}
         }, 650);
