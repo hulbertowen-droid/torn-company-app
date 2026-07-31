@@ -1315,6 +1315,15 @@ app.get('/api/scan-random-players', async (req, res) => {
             // Donator Status
             if (r.donator) score += 25;
             
+            // Young Talent Check (Hit lower levels faster than age)
+            if (r.level < 15) {
+                if (r.level <= r.age) {
+                    score -= 100; // Heavy penalty for slow low levels
+                } else if (r.level >= r.age * 1.5) {
+                    score += 30; // Bonus for determined fast beginners
+                }
+            }
+            
             r.recruitScore = score;
             
             if (score >= 120) r.scoutGrade = "S";
