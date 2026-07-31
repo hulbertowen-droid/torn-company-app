@@ -2113,11 +2113,6 @@ app.post('/api/turbo/start', (req, res) => {
         global.isTurboMining = true;
         global.turboStats = { found: 0, checked: 0 };
         global.scannerCallLog = [];
-        
-        global.turboTimeout = setTimeout(() => {
-            global.isTurboMining = false;
-            if(global.turboInterval) clearInterval(global.turboInterval);
-        }, 3600000);
 
         // Uses same API limit logic but explicitly checks random IDs across the DB
         global.turboInterval = setInterval(async () => {
