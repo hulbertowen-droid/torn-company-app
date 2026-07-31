@@ -1977,6 +1977,7 @@ app.post('/api/turbo/start', (req, res) => {
     if (global.isTurboMining) return res.json({ success: true, msg: "Already running" });
     global.isTurboMining = true;
     global.turboStats = { found: 0, checked: 0 };
+    global.scannerCallLog = [];
     
     // Auto shut-off after 1 hour (3600000 ms)
     global.turboTimeout = setTimeout(() => {
@@ -1984,66 +1985,62 @@ app.post('/api/turbo/start', (req, res) => {
         clearInterval(global.turboInterval);
     }, 3600000);
 
+    // Hard-capped to ~92 calls per minute (1 call every 650ms) to stay safely under 100/min Torn limit
     global.turboInterval = setInterval(async () => {
         let watchKey = getNextApiKey();
         if (!watchKey) return;
 
-                const dataDir = path.join(__dirname, 'data');
+        const dataDir = path.join(__dirname, 'data');
         if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
         const recruitsFile = path.join(__dirname, 'data', 'recruits.json');
         let cachedRecruits = [];
         try { if (fs.existsSync(recruitsFile)) cachedRecruits = JSON.parse(fs.readFileSync(recruitsFile, 'utf8')); } catch (e) {}
-
         if (cachedRecruits.length > 2000) cachedRecruits = cachedRecruits.slice(200);
 
-        const batchSize = 10;
-        const randomIds = [];
-        for (let i = 0; i < batchSize; i++) {
-            const rand = Math.random();
-            if (rand < 0.60) {
-                // 60% chance for ultra-new players in 2026 (IDs 4.5M to 5.0M)
-                randomIds.push(Math.floor(Math.random() * (5000000 - 4500000 + 1) + 4500000));
-            } else if (rand < 0.90) {
-                // 30% chance for mid players (IDs 3.0M to 4.5M)
-                randomIds.push(Math.floor(Math.random() * (4500000 - 3000000 + 1) + 3000000));
-            } else {
-                // 10% chance for veterans (IDs 1.5M to 3.0M)
-                randomIds.push(Math.floor(Math.random() * (3000000 - 1500000 + 1) + 1500000));
-            }
+        // Generate ONE ID per loop iteration to strictly enforce 1 call per 650ms
+        let id;
+        const rand = Math.random();
+        if (rand < 0.60) {
+            id = Math.floor(Math.random() * (5000000 - 4500000 + 1) + 4500000); // Ultra-new
+        } else if (rand < 0.90) {
+            id = Math.floor(Math.random() * (4500000 - 3000000 + 1) + 3000000); // Mid
+        } else {
+            id = Math.floor(Math.random() * (3000000 - 1500000 + 1) + 1500000); // Vet
         }
-        global.turboStats.checked += batchSize;
+        
+        global.turboStats.checked++;
 
         try {
-            const batchPromises = randomIds.map(async (id) => {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 4000);
-                const userRes = await fetch(`https://api.torn.com/user/${id}?selections=profile,personalstats&key=${watchKey}`, { signal: controller.signal });
-                clearTimeout(timeoutId);
-                const userData = await userRes.json();
-                if (userData.error) return null;
-
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000);
+            const userRes = await fetch(`https://api.torn.com/user/${id}?selections=profile,personalstats&key=${watchKey}`, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            const userData = await userRes.json();
+            
+            if (userData && !userData.error) {
                 const profile = userData.profile || userData;
                 const personalstats = userData.personalstats || {};
                 
-                if (profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen")) return null;
-            // Filter out players who haven't logged in for over 7 days
-            if (profile.last_action && profile.last_action.timestamp) {
-                const daysInactive = (Date.now() / 1000 - profile.last_action.timestamp) / 86400;
-                if (daysInactive > 7) return null;
-            }
-                if (profile.faction && profile.faction.faction_id !== 0) return null;
+                // Add to live scanner log
+                global.scannerCallLog.unshift(`[${new Date().toLocaleTimeString()}] Checked [${id}] ${profile.name || 'Unknown'}`);
+                if (global.scannerCallLog.length > 30) global.scannerCallLog.pop();
 
-                const level = profile.level || 1;
-                const playtimeSec = personalstats.useractivity || 0;
-            const playtimeDays = parseFloat((playtimeSec / 86400).toFixed(1));
-            const xanax = personalstats.xantaken || 0;
-            const refills = personalstats.refills || 0;
-            const se = personalstats.statenhancersused || 0;
-            const estStats = "Not yet available";
-            const donator = profile.donator === 1 || profile.donator === true;
+                let isValid = true;
+                if (profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen")) isValid = false;
+                if (profile.faction && profile.faction.faction_id !== 0) isValid = false;
+                
+                if (isValid) {
+                    const level = profile.level || 1;
+                    const playtimeSec = personalstats.useractivity || 0;
+                    const playtimeDays = parseFloat((playtimeSec / 86400).toFixed(1));
+                    const xanax = personalstats.xantaken || 0;
+                    const refills = personalstats.refills || 0;
+                    const se = personalstats.statenhancersused || 0;
+                    const estStats = "Not yet available";
+                    const donator = profile.donator === 1 || profile.donator === true;
 
-                return {
-                    id, name: profile.name, level,
+                    const r = {
+                        id, name: profile.name, level,
                         age: profile.age || 1,
                         playtime: playtimeDays,
                         xanax,
@@ -2051,40 +2048,34 @@ app.post('/api/turbo/start', (req, res) => {
                         se,
                         estStats,
                         donator,
-                    status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
-                    faction: "Factionless"
-                };
-            });
+                        awards: profile.awards || 0,
+                        last_action_timestamp: (profile.last_action && profile.last_action.timestamp) ? profile.last_action.timestamp : 0,
+                        status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
+                        faction: "Factionless"
+                    };
 
-            const batchResults = await Promise.all(batchPromises);
-            const validRecruits = batchResults.filter(r => r !== null);
-            
-            if (validRecruits.length > 0) {
-                if (process.env.MONGODB_URI) {
-                    const bulkOps = validRecruits.map(r => ({
-                        updateOne: { filter: { id: r.id }, update: { $set: r }, upsert: true }
-                    }));
-                    try {
-                        await Recruit.bulkWrite(bulkOps);
-                        global.turboStats.found += validRecruits.length;
-                    } catch(e) {}
-                } else {
-                    const existingIds = new Set(cachedRecruits.map(r => r.id));
-                    validRecruits.forEach(r => {
-                        if (!existingIds.has(r.id)) {
+                    if (process.env.MONGODB_URI) {
+                        try {
+                            await Recruit.updateOne({ id: r.id }, { $set: r }, { upsert: true });
+                            global.turboStats.found++;
+                        } catch(e) {}
+                    } else {
+                        const existingIdx = cachedRecruits.findIndex(x => x.id === r.id);
+                        if (existingIdx === -1) {
                             cachedRecruits.push(r);
                             global.turboStats.found++;
+                        } else {
+                            cachedRecruits[existingIdx] = r;
                         }
-                    });
-                    try { fs.writeFileSync(recruitsFile, JSON.stringify(cachedRecruits, null, 2)); } catch(e){}
+                        try { fs.writeFileSync(recruitsFile, JSON.stringify(cachedRecruits, null, 2)); } catch(e){}
+                    }
                 }
             }
-        } catch (e) {}
-    }, 7500); // 10 requests every 7.5s = 80 per minute
+        } catch(e) {}
+    }, 650); // Hard cap: exactly 1 request per 650ms (~92 requests/min)
 
-    res.json({ success: true, msg: "Turbo started" });
+    res.json({ success: true });
 });
-
 app.post('/api/turbo/stop', (req, res) => {
     global.isTurboMining = false;
     if (global.turboInterval) clearInterval(global.turboInterval);
