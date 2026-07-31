@@ -1991,16 +1991,13 @@ function savePipeline() {
 let isPipelineRunning = false;
 let pipelineInterval = null;
 
-// Fake turbo status for UI compatibility
 app.get('/api/turbo/status', (req, res) => {
     res.json({ 
-        active: isPipelineRunning, 
-        stats: { checked: pipeline.watermark, found: pipeline.prospects.length },
-        logs: ["Background Frontier Scanner is permanently active."]
+        active: !!global.isTurboMining, 
+        stats: global.turboStats || {found: 0, checked: 0}, 
+        logs: global.scannerCallLog || [] 
     });
 });
-app.post('/api/turbo/start', (req, res) => res.json({ success: true, msg: "Already running autonomously" }));
-app.post('/api/turbo/stop', (req, res) => res.json({ success: true, msg: "Cannot stop autonomous service" }));
 
 // Overwrite the scan-recruits route to read from pipeline prospects
 app.post('/api/scan-recruits', async (req, res) => {
