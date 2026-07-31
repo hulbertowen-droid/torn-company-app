@@ -1969,121 +1969,308 @@ if (discordConfig.globalBotToken) {
 
 
 // ---------------------------------------------
+
+// ==========================================
+// FRONTIER PIPELINE (UNIFIED POLLING LOOP)
+// ==========================================
+const pipelineFile = path.join(__dirname, 'data', 'pipeline.json');
+let pipeline = { watermark: 0, searchHigh: 0, searchLow: 1, searchPhase: 'doubling', candidates: {}, prospects: [] };
+
+try {
+    if (fs.existsSync(pipelineFile)) {
+        pipeline = Object.assign(pipeline, JSON.parse(fs.readFileSync(pipelineFile, 'utf8')));
+    }
+} catch (e) { console.error("Error loading pipeline:", e); }
+
+function savePipeline() {
+    try {
+        fs.writeFileSync(pipelineFile, JSON.stringify(pipeline, null, 2));
+    } catch (e) { console.error("Error saving pipeline:", e); }
+}
+
+let isPipelineRunning = false;
+let pipelineInterval = null;
+
+// Fake turbo status for UI compatibility
 app.get('/api/turbo/status', (req, res) => {
-    res.json({ active: global.isTurboMining, stats: global.turboStats });
+    res.json({ 
+        active: isPipelineRunning, 
+        stats: { checked: pipeline.watermark, found: pipeline.prospects.length },
+        logs: ["Background Frontier Scanner is permanently active."]
+    });
 });
+app.post('/api/turbo/start', (req, res) => res.json({ success: true, msg: "Already running autonomously" }));
+app.post('/api/turbo/stop', (req, res) => res.json({ success: true, msg: "Cannot stop autonomous service" }));
 
-app.post('/api/turbo/start', (req, res) => {
-    if (global.isTurboMining) return res.json({ success: true, msg: "Already running" });
-    global.isTurboMining = true;
-    global.turboStats = { found: 0, checked: 0 };
-    global.scannerCallLog = [];
+// Overwrite the scan-recruits route to read from pipeline prospects
+app.post('/api/scan-recruits', async (req, res) => {
+    const { minLevel, maxLevel, donatorFilter, maxPlaytime, maxAge, weightLevel, weightPlaytime, minAwards, maxLastActionHours } = req.body;
+    let results = pipeline.prospects.filter(p => p.active_polling !== false);
     
-    // Auto shut-off after 1 hour (3600000 ms)
-    global.turboTimeout = setTimeout(() => {
-        global.isTurboMining = false;
-        clearInterval(global.turboInterval);
-    }, 3600000);
-
-    // Hard-capped to ~92 calls per minute (1 call every 650ms) to stay safely under 100/min Torn limit
-    global.turboInterval = setInterval(async () => {
-        let watchKey = getNextApiKey();
-        if (!watchKey) return;
-
-        const dataDir = path.join(__dirname, 'data');
-        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
-        const recruitsFile = path.join(__dirname, 'data', 'recruits.json');
-        let cachedRecruits = [];
-        try { if (fs.existsSync(recruitsFile)) cachedRecruits = JSON.parse(fs.readFileSync(recruitsFile, 'utf8')); } catch (e) {}
-        if (cachedRecruits.length > 2000) cachedRecruits = cachedRecruits.slice(200);
-
-        // Generate ONE ID per loop iteration to strictly enforce 1 call per 650ms
-        let id;
-        const rand = Math.random();
-        if (rand < 0.60) {
-            id = Math.floor(Math.random() * (5000000 - 4500000 + 1) + 4500000); // Ultra-new
-        } else if (rand < 0.90) {
-            id = Math.floor(Math.random() * (4500000 - 3000000 + 1) + 3000000); // Mid
-        } else {
-            id = Math.floor(Math.random() * (3000000 - 1500000 + 1) + 1500000); // Vet
+    // Apply filters
+    results = results.filter(profile => {
+        if (minLevel && profile.level < parseInt(minLevel)) return false;
+        if (maxLevel && profile.level > parseInt(maxLevel)) return false;
+        
+        const donator = profile.donator;
+        if (donatorFilter === "donator" && !donator) return false;
+        if (donatorFilter === "nondonator" && donator) return false;
+        
+        if (maxPlaytime && profile.playtime > parseFloat(maxPlaytime)) return false;
+        if (maxAge && profile.age > parseFloat(maxAge)) return false;
+        if (minAwards && profile.awards < parseInt(minAwards)) return false;
+        
+        if (maxLastActionHours && profile.last_action_timestamp) {
+            const hoursInactive = (Date.now() / 1000 - profile.last_action_timestamp) / 3600;
+            if (hoursInactive > parseFloat(maxLastActionHours)) return false;
+        }
+        return true;
+    });
+    
+    // Scoring
+    const focusMultiplier = parseFloat(weightLevel) || 1.0;
+    results = results.map(r => {
+        if (!r.estStats) r.estStats = "Not yet available";
+        r.xanPerDay = (r.xanax / (r.age || 1)).toFixed(2);
+        
+        let score = 0;
+        const levelPerAge = r.level / (r.age || 1);
+        
+        score += (levelPerAge * 100) * (focusMultiplier > 1 ? 1.5 : (focusMultiplier < 1 ? 0.5 : 1));
+        score += (r.xanPerDay * 15) * (focusMultiplier < 1 ? 1.5 : (focusMultiplier > 1 ? 0.5 : 1));
+        
+        if (r.last_action_timestamp) {
+            const hoursInactive = (Date.now() / 1000 - r.last_action_timestamp) / 3600;
+            if (hoursInactive < 24) score += 30;
+            else if (hoursInactive < 72) score += 10;
+        }
+        if (r.awards) {
+            if (r.awards > 50) score += 20;
+            else if (r.awards > 20) score += 10;
+        }
+        if (r.donator) score += 15;
+        
+        // Add Velocity Bonus
+        if (r.velocity) {
+            score += (r.velocity * 50); // Heavily weight active velocity
         }
         
-        global.turboStats.checked++;
+        // Young talent penalty/bonus
+        if (r.level < 15 && r.age > 14 && levelPerAge < 0.2) score -= 40;
+        else if (r.level < 15 && r.age < 7 && levelPerAge > 1.5) score += 30;
+        
+        r.recruitScore = score;
+        return r;
+    });
+    
+    results.sort((a, b) => b.recruitScore - a.recruitScore);
+    const topScore = results.length > 0 ? results[0].recruitScore : 1;
+    
+    results = results.map(r => {
+        const ratio = r.recruitScore / topScore;
+        if (ratio >= 0.85) r.scoutGrade = 'S';
+        else if (ratio >= 0.70) r.scoutGrade = 'A';
+        else if (ratio >= 0.50) r.scoutGrade = 'B';
+        else if (ratio >= 0.30) r.scoutGrade = 'C';
+        else r.scoutGrade = 'D';
+        return r;
+    });
 
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 4000);
-            const userRes = await fetch(`https://api.torn.com/user/${id}?selections=profile,personalstats&key=${watchKey}`, { signal: controller.signal });
-            clearTimeout(timeoutId);
-            const userData = await userRes.json();
-            
-            if (userData && !userData.error) {
-                const profile = userData.profile || userData;
-                const personalstats = userData.personalstats || {};
-                
-                // Add to live scanner log
-                global.scannerCallLog.unshift(`[${new Date().toLocaleTimeString()}] Checked [${id}] ${profile.name || 'Unknown'}`);
-                if (global.scannerCallLog.length > 30) global.scannerCallLog.pop();
-
-                let isValid = true;
-                if (profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen")) isValid = false;
-                if (profile.faction && profile.faction.faction_id !== 0) isValid = false;
-                
-                if (isValid) {
-                    const level = profile.level || 1;
-                    const playtimeSec = personalstats.useractivity || 0;
-                    const playtimeDays = parseFloat((playtimeSec / 86400).toFixed(1));
-                    const xanax = personalstats.xantaken || 0;
-                    const refills = personalstats.refills || 0;
-                    const se = personalstats.statenhancersused || 0;
-                    const estStats = "Not yet available";
-                    const donator = profile.donator === 1 || profile.donator === true;
-
-                    const r = {
-                        id, name: profile.name, level,
-                        age: profile.age || 1,
-                        playtime: playtimeDays,
-                        xanax,
-                        refills,
-                        se,
-                        estStats,
-                        donator,
-                        awards: profile.awards || 0,
-                        last_action_timestamp: (profile.last_action && profile.last_action.timestamp) ? profile.last_action.timestamp : 0,
-                        status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
-                        faction: "Factionless"
-                    };
-
-                    if (process.env.MONGODB_URI) {
-                        try {
-                            await Recruit.updateOne({ id: r.id }, { $set: r }, { upsert: true });
-                            global.turboStats.found++;
-                        } catch(e) {}
-                    } else {
-                        const existingIdx = cachedRecruits.findIndex(x => x.id === r.id);
-                        if (existingIdx === -1) {
-                            cachedRecruits.push(r);
-                            global.turboStats.found++;
-                        } else {
-                            cachedRecruits[existingIdx] = r;
-                        }
-                        try { fs.writeFileSync(recruitsFile, JSON.stringify(cachedRecruits, null, 2)); } catch(e){}
-                    }
-                }
-            }
-        } catch(e) {}
-    }, 650); // Hard cap: exactly 1 request per 650ms (~92 requests/min)
-
-    res.json({ success: true });
-});
-app.post('/api/turbo/stop', (req, res) => {
-    global.isTurboMining = false;
-    if (global.turboInterval) clearInterval(global.turboInterval);
-    if (global.turboTimeout) clearTimeout(global.turboTimeout);
-    res.json({ success: true, msg: "Turbo stopped" });
+    res.json({ success: true, recruits: results.slice(0, 500) });
 });
 
-// Start Server
+
+// Start Server and Pipeline
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server listening on port ${PORT}`);
+    startFrontierPipeline();
 });
+
+async function startFrontierPipeline() {
+    if (isPipelineRunning) return;
+    isPipelineRunning = true;
+    
+    console.log("Starting Unified Frontier Pipeline (650ms tick)...");
+    
+    // Safety fallback: if pipeline gets stuck in galloping, force a restart from 1
+    if (!pipeline.watermark && !pipeline.searchPhase) {
+        pipeline.searchPhase = 'doubling';
+        pipeline.searchLow = 1;
+        pipeline.searchHigh = 0;
+    }
+
+    pipelineInterval = setInterval(async () => {
+        let watchKey = getNextApiKey();
+        if (!watchKey) return;
+        
+        const now = Date.now() / 1000;
+        
+        // 1. WATERMARK DISCOVERY (Galloping Search)
+        if (!pipeline.watermark) {
+            let testId = pipeline.searchPhase === 'doubling' ? (pipeline.searchLow === 1 ? 1 : pipeline.searchLow * 2) : 
+                         Math.floor((pipeline.searchLow + pipeline.searchHigh) / 2);
+            
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 4000);
+                const userRes = await fetch(`https://api.torn.com/user/${testId}?selections=profile&key=${watchKey}`, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                const userData = await userRes.json();
+                
+                if (userData.error && userData.error.code === 6) { // Incorrect ID (Doesn't exist yet)
+                    if (pipeline.searchPhase === 'doubling') {
+                        pipeline.searchHigh = testId;
+                        pipeline.searchPhase = 'binary';
+                    } else {
+                        pipeline.searchHigh = testId - 1; // Narrow down
+                    }
+                } else if (!userData.error) { // Exists
+                    if (pipeline.searchPhase === 'doubling') {
+                        pipeline.searchLow = testId;
+                    } else {
+                        pipeline.searchLow = testId + 1; // Narrow up
+                    }
+                }
+                
+                if (pipeline.searchPhase === 'binary' && pipeline.searchLow > pipeline.searchHigh) {
+                    // Found the exact edge!
+                    pipeline.watermark = Math.max(1, pipeline.searchHigh - 200); // Start 200 IDs back for safety
+                    console.log(`[Frontier] Edge discovered! Starting watermark at ${pipeline.watermark}`);
+                }
+                savePipeline();
+            } catch(e) { }
+            return; // Skip rest of pipeline until watermark is found
+        }
+        
+        // 2. TICK ROUTER
+        const tickRand = Math.random();
+        
+        // Prospect Re-check (50%)
+        if (tickRand < 0.50 && pipeline.prospects.length > 0) {
+            // Find oldest checked active prospect
+            const activeProspects = pipeline.prospects.filter(p => p.active_polling !== false);
+            if (activeProspects.length > 0) {
+                const target = activeProspects.sort((a,b) => (a.last_checked || 0) - (b.last_checked || 0))[0];
+                if ((now - (target.last_checked || 0)) > 3600) { // Only check if older than 1 hour
+                    await fetchAndProcess(target.id, watchKey, 'prospect');
+                    return;
+                }
+            }
+        }
+        
+        // Candidate Re-check (25%)
+        const candidateKeys = Object.keys(pipeline.candidates);
+        if (tickRand < 0.75 && candidateKeys.length > 0) {
+            // Find a candidate older than 24 hours
+            const targetId = candidateKeys.find(id => (now - pipeline.candidates[id].initTimestamp) > 86400);
+            if (targetId) {
+                await fetchAndProcess(targetId, watchKey, 'candidate');
+                return;
+            }
+        }
+        
+        // Frontier Discovery (25% or fallback)
+        await fetchAndProcess(pipeline.watermark + 1, watchKey, 'frontier');
+        
+    }, 650); // Exactly ~92 requests per minute
+}
+
+async function fetchAndProcess(id, watchKey, mode) {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const userRes = await fetch(`https://api.torn.com/user/${id}?selections=profile,personalstats&key=${watchKey}`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        const userData = await userRes.json();
+        const now = Date.now() / 1000;
+        
+        if (userData.error) {
+            if (userData.error.code === 6 && mode === 'frontier') {
+                // We reached the absolute edge. Do not increment watermark.
+                return;
+            }
+            if (mode === 'prospect') {
+                const p = pipeline.prospects.find(x => x.id == id);
+                if (p) { p.last_checked = now; savePipeline(); }
+            }
+            return;
+        }
+
+        const profile = userData.profile || userData;
+        const stats = userData.personalstats || {};
+        
+        const isFederal = profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen");
+        const hasFaction = profile.faction && profile.faction.faction_id !== 0;
+        const daysInactive = profile.last_action && profile.last_action.timestamp ? (now - profile.last_action.timestamp) / 86400 : 0;
+        
+        if (mode === 'frontier') {
+            pipeline.watermark = Math.max(pipeline.watermark, parseInt(id));
+            if (!isFederal && !hasFaction) {
+                pipeline.candidates[id] = {
+                    initLevel: profile.level || 1,
+                    initXanax: stats.xantaken || 0,
+                    initAwards: profile.awards || 0,
+                    initTimestamp: now,
+                    lastAction: profile.last_action ? profile.last_action.timestamp : 0
+                };
+            }
+            savePipeline();
+        } 
+        else if (mode === 'candidate') {
+            const c = pipeline.candidates[id];
+            const newLastAction = profile.last_action ? profile.last_action.timestamp : 0;
+            
+            // Check for real movement
+            if (isFederal || hasFaction || daysInactive > 3 || 
+                (profile.level <= c.initLevel && (stats.xantaken || 0) <= c.initXanax && newLastAction === c.lastAction)) {
+                // No change or joined faction -> Drop candidate
+                delete pipeline.candidates[id];
+            } else {
+                // Movement detected! Promote to prospect
+                const playtimeDays = parseFloat(((stats.useractivity || 0) / 86400).toFixed(1));
+                const p = {
+                    id: parseInt(id), name: profile.name, level: profile.level || 1, age: profile.age || 1,
+                    playtime: playtimeDays, xanax: stats.xantaken || 0, refills: stats.refills || 0, 
+                    se: stats.statenhancersused || 0, estStats: "Not yet available", donator: profile.donator === 1 || profile.donator === true,
+                    awards: profile.awards || 0, last_action_timestamp: newLastAction,
+                    status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
+                    faction: "Factionless",
+                    last_checked: now,
+                    active_polling: true,
+                    velocity: (profile.level - c.initLevel) / ((now - c.initTimestamp) / 86400) // Levels per day during candidate phase
+                };
+                pipeline.prospects.push(p);
+                delete pipeline.candidates[id];
+            }
+            savePipeline();
+        }
+        else if (mode === 'prospect') {
+            const pIdx = pipeline.prospects.findIndex(x => x.id == id);
+            if (pIdx === -1) return;
+            const p = pipeline.prospects[pIdx];
+            
+            if (isFederal || hasFaction || daysInactive > 7) {
+                p.active_polling = false; // Stop checking them, but keep in history
+            } else {
+                // Update stats and calculate new velocity based on changes since last check
+                const daysSinceCheck = (now - p.last_checked) / 86400;
+                if (daysSinceCheck > 0 && profile.level > p.level) {
+                    p.velocity = (profile.level - p.level) / daysSinceCheck;
+                } else if (daysSinceCheck > 1) {
+                    // Decay velocity if no levels gained over a full day
+                    p.velocity = (p.velocity || 0) * 0.5;
+                }
+                
+                p.level = profile.level || p.level;
+                p.age = profile.age || p.age;
+                p.playtime = parseFloat(((stats.useractivity || 0) / 86400).toFixed(1));
+                p.xanax = stats.xantaken || p.xanax;
+                p.awards = profile.awards || p.awards;
+                p.last_action_timestamp = profile.last_action ? profile.last_action.timestamp : p.last_action_timestamp;
+                p.status = profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline";
+            }
+            p.last_checked = now;
+            savePipeline();
+        }
+    } catch(e) { }
+}

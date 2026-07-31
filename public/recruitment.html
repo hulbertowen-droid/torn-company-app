@@ -236,23 +236,14 @@
 
         <!-- Scan Mode Options -->
         <div id="scan-options" style="display:none; margin-bottom: 20px; text-align: center;">
-            <div id="local-db-warning" style="background: rgba(255, 165, 2, 0.1); border: 1px solid var(--gold); border-radius: 4px; padding: 10px; margin-bottom: 20px; color: var(--gold); text-align: center; font-size: 0.9em;">
-                ⚠️ <b>Local Database Scanner Mode</b><br>
-                <span style="color: var(--text-dim);">Scans and caches the game 24/7. Results update dynamically on every search.</span>
-            </div>
-            <button class="btn-scan" id="btn-start-scan" onclick="startGlobalScan()" style="font-size: 1.1em; padding: 12px 30px; margin-bottom: 30px;">🌍 SEARCH LOCAL DATABASE (INSTANT)</button>
-
-            <!-- LIVE API SCANNER -->
-            <div style="background: rgba(88, 166, 255, 0.1); border: 1px solid var(--blue); border-radius: 8px; padding: 20px; text-align: center; max-width: 600px; margin: 0 auto;">
-                <h3 style="color: var(--blue); margin-top: 0;">📡 LIVE API SCANNER</h3>
-                <p style="color: var(--text-dim); font-size: 0.9em; margin-bottom: 15px;">
-                    Divert your personal API capacity to scan profiles live (Cap: ~92 req/min).<br>
-                    <b style="color:var(--gold);">NOTE:</b> Pauses Live Warboard and Discord alerts to protect your API limits. Auto-shuts off after 1 hour.
+            <div id="local-db-warning" style="background: rgba(88, 166, 255, 0.1); border: 1px solid var(--blue); border-radius: 8px; padding: 20px; margin-bottom: 20px; color: var(--blue); text-align: center;">
+                <h3 style="margin-top:0;">🤖 Autonomous Frontier Pipeline Active</h3>
+                <p style="color: var(--text-dim); font-size: 0.9em; margin-bottom: 0;">
+                    The server is constantly scanning the frontier of new Torn IDs in the background.<br>
+                    Candidates are evaluated over 24-48h. Verified active prospects are automatically added here.
                 </p>
-                <button id="btn-turbo" onclick="promptTurbo()" style="background: var(--blue); color: #000; border: none; padding: 15px 30px; font-size: 1.2em; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.3s;">
-                    🚀 ENGAGE LIVE SCANNER
-                </button>
             </div>
+            <button class="btn-scan" id="btn-start-scan" onclick="startGlobalScan()" style="font-size: 1.1em; padding: 12px 30px; margin-bottom: 30px; box-shadow: 0 0 15px rgba(0, 206, 201, 0.3);">🌍 LOAD DATABASE (INSTANT)</button>
         </div>
 
         <!-- Confirmation Modal -->
@@ -654,6 +645,8 @@ function renderDynamicTable() {
         <th onclick="sortBy('level')">Level <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('age')">Age <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('playtime')">Playtime <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('velocity')">Velocity (Lvls/Day) <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('velocity')">Velocity (Lvls/Day) <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('awards')">Awards <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('last_action_timestamp')">Last Action <span class="sort-arrow">↕</span></th>
         <th onclick="sortBy('estStats')">Est. Stats <span class="sort-arrow">↕</span></th>
@@ -705,6 +698,8 @@ function renderDynamicTable() {
             <td class="score-val">${r.level || 0}</td>
             <td>${r.age || 0}d</td>
             <td>${r.playtime || 0}d</td>
+            <td style="color:var(--gold);">${(r.velocity || 0).toFixed(2)}</td>
+            <td style="color:var(--gold);">${typeof r.velocity === 'number' ? r.velocity.toFixed(2) : '-'}</td>
             <td class="eff-val">${r.awards || 0}</td>
             <td style="color:${lastActionText === 'Just now' ? 'var(--green)' : 'inherit'}">${lastActionText}</td>
             <td class="score-val" title="Sourced from community API, not verified.">${statStr}</td>
