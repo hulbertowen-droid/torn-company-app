@@ -1270,6 +1270,16 @@ app.get('/api/scan-random-players', async (req, res) => {
                 cachedRecruits = JSON.parse(fs.readFileSync(recruitsFile, 'utf8'));
             }
         }
+        
+        if (typeof pipeline !== 'undefined' && pipeline.prospects && Array.isArray(pipeline.prospects)) {
+            const existingIds = new Set(cachedRecruits.map(r => r.id));
+            for (let r of pipeline.prospects) {
+                if (!existingIds.has(r.id)) {
+                    cachedRecruits.push(r);
+                    existingIds.add(r.id);
+                }
+            }
+        }
 
         // Filter the cached database
         let results = cachedRecruits.filter(profile => {
