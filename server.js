@@ -144,6 +144,10 @@ if (ADMIN_API_KEY) {
         .catch(e => console.error("Failed to load admin profile"));
 }
 
+// API THROTTLING (Item 5)
+let globalApiUsage = {};
+setInterval(() => { globalApiUsage = {}; }, 60000);
+
 function getNextApiKey() {
     let activeKeys = [];
     const now = Date.now();
@@ -158,10 +162,13 @@ function getNextApiKey() {
     if (apiPoolConfig.keys && apiPoolConfig.keys.length > 0) activeKeys.push(...apiPoolConfig.keys);
     
     activeKeys = [...new Set(activeKeys.filter(k => k && typeof k === 'string' && k.trim() !== ""))];
-    if (activeKeys.length === 0) return null;
     
-    let key = activeKeys[activeKeyIndex % activeKeys.length];
+    let validKeys = activeKeys.filter(k => (globalApiUsage[k] || 0) < 90);
+    if (validKeys.length === 0) return null; // All keys are throttled for the remainder of this minute
+    
+    let key = validKeys[activeKeyIndex % validKeys.length];
     activeKeyIndex++;
+    globalApiUsage[key] = (globalApiUsage[key] || 0) + 1;
     return key;
 }
 
@@ -2092,7 +2099,7 @@ app.post('/api/turbo/start', (req, res) => {
         
         global.turboMinLevel = parseInt(req.body.minLevel) || 1;
         global.turboMaxLevel = parseInt(req.body.maxLevel) || 100;
-        global.turboMaxPlaytime = parseFloat(req.body.maxPlaytime) || 500;
+        global.turboMaxAge = parseInt(req.body.maxAge) || 500;
         global.isTurboMining = true;
         global.turboStats = { found: 0, checked: 0 };
         global.scannerCallLog = [];
@@ -2138,7 +2145,7 @@ app.post('/api/turbo/start', (req, res) => {
                         const playtimeSec = personalstats.useractivity || 0;
                         const playtimeDays = parseFloat((playtimeSec / 86400).toFixed(1));
                         
-                        if (playtimeDays > global.turboMaxPlaytime) isValid = false;
+                        if ((profile.age || 1) > global.turboMaxAge) isValid = false;
                         
                         if (isValid) {
                             const r = {

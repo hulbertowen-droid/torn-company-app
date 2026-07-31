@@ -272,8 +272,8 @@
                         <input type="number" id="turbo-max-level" placeholder="Max (100)" value="100" style="width: 80px; background: #111; color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 8px; text-align: center;">
                     </div>
                     <div style="display: flex; gap: 15px; align-items: center;">
-                        <span style="color: var(--text-dim); font-size: 0.9em; width: 100px; text-align: right;">Max Playtime:</span>
-                        <input type="number" id="turbo-max-playtime" placeholder="Days (e.g. 500)" value="500" style="width: 195px; background: #111; color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 8px; text-align: center;">
+                        <span style="color: var(--text-dim); font-size: 0.9em; width: 100px; text-align: right;">Max Age:</span>
+                        <input type="number" id="turbo-max-age" placeholder="Days old (e.g. 500)" value="500" style="width: 195px; background: #111; color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 8px; text-align: center;">
                     </div>
                 </div>
                 <div style="display: flex; gap: 15px; justify-content: center;">
@@ -366,11 +366,11 @@ async function toggleTurbo() {
         if (!isTurboActive) {
             const minLevel = document.getElementById('turbo-min-level')?.value || 1;
             const maxLevel = document.getElementById('turbo-max-level')?.value || 100;
-            const maxPlaytime = document.getElementById('turbo-max-playtime')?.value || 500;
+            const maxAge = document.getElementById('turbo-max-age')?.value || 500;
             await fetch('/api/turbo/start', { 
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ minLevel, maxLevel, maxPlaytime })
+                body: JSON.stringify({ minLevel, maxLevel, maxAge })
             });
         } else {
             await fetch('/api/turbo/stop', { method: 'POST' });
