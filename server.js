@@ -1386,6 +1386,26 @@ app.post('/api/analyze-player-list', async (req, res) => {
             } catch(e) { console.error("FFScouter import bulk:", e.message); }
         }
 
+        // Save good recruits to pipeline automatically
+        if (typeof pipeline !== 'undefined' && pipeline.prospects) {
+            let addedCount = 0;
+            const existingIds = new Set(pipeline.prospects.map(p => p.id));
+            
+            for (let r of results) {
+                if (r.scoutGrade === 'S' || r.scoutGrade === 'A' || r.scoutGrade === 'B' || r.recruitScore >= 50) {
+                    if (!existingIds.has(r.id)) {
+                        pipeline.prospects.push(r);
+                        existingIds.add(r.id);
+                        addedCount++;
+                    }
+                }
+            }
+            if (addedCount > 0) {
+                savePipeline();
+                console.log(`Saved ${addedCount} imported recruits to database.`);
+            }
+        }
+
         res.json({ success: true, recruits: results });
     } catch (err) {
         res.status(500).json({ error: err.message });
