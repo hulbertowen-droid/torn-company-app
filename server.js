@@ -2540,7 +2540,7 @@ async function fetchAndProcess(id, watchKey, mode) {
             const p = pipeline.prospects[pIdx];
             
             if (isFederal || hasFaction || daysInactive > 7) {
-                p.active_polling = false; // Stop checking them, but keep in history
+                pipeline.prospects.splice(pIdx, 1); // Permanently remove from saved database
             } else {
                 // Update stats and calculate new velocity based on changes since last check
                 const daysSinceCheck = (now - p.last_checked) / 86400;
