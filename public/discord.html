@@ -86,6 +86,10 @@
                     <label>Faction Alert Channel ID</label>
                     <input type="text" id="global-channelid" placeholder="Channel ID for Bot Pings">
                 </div>
+                <div class="form-group">
+                    <label>Your Personal Discord User ID (Optional, for pings)</label>
+                    <input type="text" id="discord-userid" placeholder="e.g. 123456789012345678">
+                </div>
                 <h3 style="color: #ffa502; border-bottom: 1px solid #2f3542; padding-bottom: 5px; margin-top: 20px;">Faction Alert Toggles</h3>
                 <div class="trigger-list">
 
@@ -175,6 +179,7 @@ document.addEventListener("DOMContentLoaded", async function() {
         
         document.getElementById('global-bottoken').value = config.globalBotToken || localStorage.getItem("warboard_bottoken") || "";
         document.getElementById('global-channelid').value = config.globalChannelId || localStorage.getItem("warboard_channelid") || "";
+        document.getElementById('discord-userid').value = localStorage.getItem("warboard_discordid") || "";
         document.getElementById('targetOnline').checked = config.targetOnline !== false;
         document.getElementById('targetLanded').checked = config.targetLanded !== false;
         document.getElementById('targetOutHosp').checked = config.targetOutHosp !== false;
@@ -212,9 +217,11 @@ async function saveDiscordConfig() {
 
     let globalBotToken = document.getElementById('global-bottoken').value.trim();
     let globalChannelId = document.getElementById('global-channelid').value.trim();
+    let discordUserId = document.getElementById('discord-userid').value.trim();
     
     localStorage.setItem("warboard_bottoken", globalBotToken);
     localStorage.setItem("warboard_channelid", globalChannelId);
+    localStorage.setItem("warboard_discordid", discordUserId);
 
     // Save Global Settings
     const payload = {
