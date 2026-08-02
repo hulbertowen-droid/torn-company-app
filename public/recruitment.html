@@ -387,11 +387,14 @@
     <!-- ══ IMPORT MODE ════════════════════════════════ -->
     <div id="import-options" style="display:none;">
         <div class="import-card">
+            <p style="color:var(--gold);font-weight:700;font-size:0.9em;margin-bottom:8px;">⚠️ Torn makes it hard to copy names directly. Use this trick:</p>
             <p>
-                1. Go to <a href="https://www.torn.com/advanced_search.php" target="_blank" style="color:var(--blue);">Torn Advanced Search</a> and run a search.<br>
-                2. Highlight the list of players on that page, copy (Ctrl+C), and paste below.
+                1. Drag this button to your Bookmarks Bar: <a href="javascript:(function(){let ids=Array.from(document.querySelectorAll('a[href*=\'XID=\']')).map(a=>{try{let x=a.href.match(/XID=(\d+)/)[1];return '['+x+']';}catch(e){return null;}}).filter(x=>x);let u=[...new Set(ids)];if(u.length>0){let el=document.createElement('textarea');el.value=u.join(' ');document.body.appendChild(el);el.select();document.execCommand('copy');document.body.removeChild(el);alert('✅ Copied '+u.length+' Player IDs to clipboard! Paste them into the Faction Tool.');}else{alert('No Torn profiles found on this page.');}})();" style="display:inline-block;background:var(--blue);color:#000;padding:3px 10px;border-radius:5px;font-weight:900;text-decoration:none;font-size:0.85em;cursor:grab;box-shadow:0 0 10px rgba(88,166,255,0.4);" onclick="event.preventDefault();alert('Drag this button to your bookmarks bar! Do not just click it here.')">✨ Copy Torn IDs ✨</a><br>
+                2. Go to <a href="https://www.torn.com/advanced_search.php" target="_blank" style="color:var(--blue);font-weight:700;text-decoration:none;">Torn Advanced Search</a> and run a search.<br>
+                3. Click your new bookmark — it will instantly copy everyone on the page.<br>
+                4. Paste the result below.
             </p>
-            <textarea id="import-text" placeholder="Paste copied players from Torn here..."></textarea>
+            <textarea id="import-text" placeholder="Paste the copied IDs here..."></textarea>
             <div style="text-align:center;">
                 <button class="btn-scan" id="btn-start-import" onclick="startImport()" style="font-size:0.95em;padding:10px 28px;">📋 Analyze Pasted Players</button>
             </div>
