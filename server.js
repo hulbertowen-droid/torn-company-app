@@ -1118,7 +1118,7 @@ app.get('/api/company', async (req, res) => {
 });
 
 app.get('/api/scan-recruits', async (req, res) => {
-    const { apiKey, reportId, ffKey } = req.query;
+    const { apiKey, reportId, ffKey, minLevel, maxLevel, donatorFilter, maxAge, maxLastActionHours } = req.query;
     try {
         const myUserId = await verifySubscription(apiKey);
         const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
@@ -1144,27 +1144,108 @@ app.get('/api/scan-recruits', async (req, res) => {
         const currentEnemyData = await currentEnemyRes.json();
         const currentRoster = currentEnemyData.members || {};
 
-        let potentialRecruits = [];
+        // Collect meaningful combatants (score > 50 OR attacks > 3 — lower threshold, let filters handle it)
+        let candidates = [];
         for (let [id, m] of Object.entries(enemyWarData.members || {})) {
-            if (m.score > 200 || m.attacks > 10) {
-                if (isPremium && !statQueue.has(id) && !statsCache[id]) statQueue.set(id, ffKey);
-                let currentStatus = "Factionless / Left"; let position = "None"; let daysInFaction = 0; let isPoachable = true;
-
-                if (currentRoster[id]) {
-                    position = currentRoster[id].position; daysInFaction = currentRoster[id].days_in_faction;
-                    if (position.toLowerCase().match(/(leader|management|council|co-leader)/)) { isPoachable = false; } 
-                    else { currentStatus = `Member (${position})`; }
-                }
-
-                if (isPoachable) {
-                    let efficiency = m.attacks > 0 ? (m.score / m.attacks).toFixed(1) : 0;
-                    let est = statsCache[id] ? statsCache[id].stats : (isPremium ? "Scanning..." : "🔒 FF Scouter Req.");
-                    potentialRecruits.push({ id, name: m.name, score: m.score, attacks: m.attacks, efficiency, status: currentStatus, days: daysInFaction, stillInFaction: !!currentRoster[id], estStats: est });
-                }
+            if (m.score <= 50 && m.attacks <= 3) continue;
+            let currentStatus = "Factionless"; let position = "None"; let daysInFaction = 0; let isPoachable = true;
+            if (currentRoster[id]) {
+                position = currentRoster[id].position || "Member"; daysInFaction = currentRoster[id].days_in_faction || 0;
+                if (position.toLowerCase().match(/(leader|management|council|co-leader)/)) { isPoachable = false; }
+                else { currentStatus = `Member (${position})`; }
+            }
+            if (isPoachable) {
+                const efficiency = m.attacks > 0 ? parseFloat((m.score / m.attacks).toFixed(1)) : 0;
+                candidates.push({ id, name: m.name, score: m.score, attacks: m.attacks, efficiency, status: currentStatus, days: daysInFaction, stillInFaction: !!currentRoster[id] });
             }
         }
-        potentialRecruits.sort((a, b) => b.score - a.score);
-        res.json({ success: true, recruits: potentialRecruits, enemyName: enemyWarData.name });
+
+        // Batch-fetch profiles for level/age/donator/last_action data (batches of 5 to stay under rate limits)
+        const delay = (ms) => new Promise(r => setTimeout(r, ms));
+        const profileBatchSize = 5;
+        for (let i = 0; i < candidates.length; i += profileBatchSize) {
+            const batch = candidates.slice(i, i + profileBatchSize);
+            await Promise.all(batch.map(async (c) => {
+                try {
+                    const useKey = getNextApiKey() || apiKey;
+                    const pRes = await fetch(`https://api.torn.com/user/${c.id}?selections=profile,personalstats&key=${useKey}`);
+                    const pData = await pRes.json();
+                    if (pData.error) return;
+                    const profile = pData.profile || pData;
+                    const ps = pData.personalstats || {};
+                    c.level = profile.level || 1;
+                    c.age = profile.age || 1;
+                    c.playtime = parseFloat(((ps.useractivity || 0) / 86400).toFixed(1));
+                    c.xanax = ps.xantaken || 0;
+                    c.refills = ps.refills || 0;
+                    c.se = ps.statenhancersused || 0;
+                    c.awards = profile.awards || 0;
+                    c.donator = profile.donator === 1 || profile.donator === true;
+                    c.last_action_timestamp = (profile.last_action && profile.last_action.timestamp) ? profile.last_action.timestamp : 0;
+                    c.velocity = parseFloat((c.level / c.age).toFixed(4));
+                    c.xanPerDay = parseFloat((c.xanax / c.age).toFixed(3));
+                    c.refillsPerDay = parseFloat((c.refills / c.age).toFixed(3));
+
+                    // Compute recruit grade for war targets too
+                    let score = 0;
+                    const fm = 1.0;
+                    score += (c.velocity * 100);
+                    score += (c.xanPerDay * 18);
+                    score += c.refillsPerDay * 8;
+                    if (c.last_action_timestamp) {
+                        const h = (Date.now() / 1000 - c.last_action_timestamp) / 3600;
+                        if (h < 6) score += 50; else if (h < 24) score += 30; else if (h < 72) score += 10;
+                    }
+                    if (c.awards) score += Math.min(c.awards * 0.4, 40);
+                    if (c.donator) score += 25;
+                    // Also factor in war performance
+                    score += Math.min(c.score / 100, 50);
+                    score += Math.min(c.efficiency * 2, 30);
+                    c.recruitScore = parseFloat(score.toFixed(1));
+                    if (score >= 150) c.scoutGrade = "S";
+                    else if (score >= 110) c.scoutGrade = "A";
+                    else if (score >= 70) c.scoutGrade = "B";
+                    else if (score >= 35) c.scoutGrade = "C";
+                    else if (score > 10) c.scoutGrade = "D";
+                    else c.scoutGrade = "F";
+                    c.estStats = statsCache[c.id] ? statsCache[c.id].stats : (isPremium ? "Scanning..." : "—");
+                } catch(e) {}
+            }));
+            if (i + profileBatchSize < candidates.length) await delay(300);
+        }
+
+        // Apply filters
+        let filtered = candidates.filter(c => {
+            if (c.level === undefined) return true; // profile fetch failed, keep it
+            if (minLevel && c.level < parseInt(minLevel)) return false;
+            if (maxLevel && c.level > parseInt(maxLevel)) return false;
+            if (maxAge && c.age > parseInt(maxAge)) return false;
+            if (donatorFilter === "donator" && !c.donator) return false;
+            if (donatorFilter === "nondonator" && c.donator) return false;
+            if (maxLastActionHours && c.last_action_timestamp) {
+                const h = (Date.now()/1000 - c.last_action_timestamp) / 3600;
+                if (h > parseFloat(maxLastActionHours)) return false;
+            }
+            return true;
+        });
+
+        // Bulk FFScouter
+        const ffKeyToUse = (ffKey && ffKey !== "null" && ffKey.trim().length > 5) ? ffKey : (global.marketConfig && global.marketConfig.ffscouterKey ? global.marketConfig.ffscouterKey : "");
+        if (ffKeyToUse && filtered.length > 0) {
+            try {
+                const batchIds = filtered.map(r => r.id).join(',');
+                const ffRes = await fetch(`https://ffscouter.com/api/v1/get-stats?key=${ffKeyToUse}&targets=${batchIds}`);
+                const ffData = await ffRes.json();
+                if (Array.isArray(ffData)) {
+                    const sm = {};
+                    ffData.forEach(p => { sm[p.player_id.toString()] = p.bs_estimate; });
+                    filtered.forEach(r => { if (sm[r.id.toString()]) r.estStats = sm[r.id.toString()]; });
+                }
+            } catch(e) {}
+        }
+
+        filtered.sort((a, b) => (b.recruitScore || b.score) - (a.recruitScore || a.score));
+        res.json({ success: true, recruits: filtered, enemyName: enemyWarData.name });
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
@@ -1180,7 +1261,7 @@ function calculateProgIndex(level, xanax, playtimeDays, weightPlaytime, weightLe
 }
 
 app.post('/api/analyze-player-list', async (req, res) => {
-    const { apiKey, playerIds, donatorFilter, maxPlaytime, weightPlaytime, weightLevel } = req.body;
+    const { apiKey, playerIds, donatorFilter, maxPlaytime, weightPlaytime, weightLevel, ffKey } = req.body;
     if (!playerIds || !Array.isArray(playerIds) || playerIds.length === 0) return res.status(400).json({ error: "Missing player IDs" });
     
     try {
@@ -1200,40 +1281,80 @@ app.post('/api/analyze-player-list', async (req, res) => {
                     const profile = userData.profile || userData;
                     const personalstats = userData.personalstats || {};
                     const playtimeSec = personalstats.useractivity || 0;
-            const playtimeDays = parseFloat((playtimeSec / 86400).toFixed(1));
-            const xanax = personalstats.xantaken || 0;
-            const refills = personalstats.refills || 0;
-            const se = personalstats.statenhancersused || 0;
-            const estStats = "Not yet available";
-            const donator = profile.donator === 1 || profile.donator === true;
-                    if (profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen")) return null;
-            // Filter out players who haven't logged in for over 7 days
-            if (profile.last_action && profile.last_action.timestamp) {
-                const daysInactive = (Date.now() / 1000 - profile.last_action.timestamp) / 86400;
-                if (daysInactive > 7) return null;
-            }
+                    const playtimeDays = parseFloat((playtimeSec / 86400).toFixed(1));
+                    const xanax = personalstats.xantaken || 0;
+                    const refills = personalstats.refills || 0;
+                    const se = personalstats.statenhancersused || 0;
+                    const donator = profile.donator === 1 || profile.donator === true;
+                    const age = profile.age || 1;
                     const level = profile.level || 1;
+                    const lastActionTs = (profile.last_action && profile.last_action.timestamp) ? profile.last_action.timestamp : 0;
+
+                    if (profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen")) return null;
 
                     if (donatorFilter === "donator" && !donator) return null;
                     if (donatorFilter === "nondonator" && donator) return null;
                     if (maxPlaytime && playtimeDays > parseFloat(maxPlaytime)) return null;
 
-                    const progIndex = calculateProgIndex(level, xanax, playtimeDays, weightPlaytime, weightLevel);
+                    const velocity = parseFloat((level / age).toFixed(4));
+                    const xanPerDay = parseFloat((xanax / age).toFixed(3));
+                    const refillsPerDay = parseFloat((refills / age).toFixed(3));
+                    const sePerDay = parseFloat((se / age).toFixed(3));
+                    const fm = parseFloat(weightLevel) || 1.0;
+
+                    // Compute recruit score (same formula as DB scan)
+                    let score = 0;
+                    score += (velocity * 100) * (fm > 1 ? fm * 1.2 : 1.0);
+                    score += (xanPerDay * 18) * (fm < 1.5 ? 1.2 : 0.6);
+                    score += refillsPerDay * 8;
+                    score += sePerDay * 5;
+                    if (lastActionTs) {
+                        const hoursInactive = (Date.now() / 1000 - lastActionTs) / 3600;
+                        if (hoursInactive < 6)  score += 50;
+                        else if (hoursInactive < 24) score += 30;
+                        else if (hoursInactive < 72) score += 10;
+                    }
+                    if (profile.awards) score += Math.min(profile.awards * 0.4, 40);
+                    if (donator) score += 25;
+                    if (level < 20) {
+                        if (level < age * 0.5) score -= 80;
+                        else if (level > age * 2.0) score += 35;
+                    }
+                    const recruitScore = parseFloat(score.toFixed(1));
+                    let scoutGrade = "F";
+                    if (score >= 150) scoutGrade = "S";
+                    else if (score >= 110) scoutGrade = "A";
+                    else if (score >= 70) scoutGrade = "B";
+                    else if (score >= 35) scoutGrade = "C";
+                    else if (score > 10) scoutGrade = "D";
+
+                    const factionName = profile.faction && profile.faction.faction_id && profile.faction.faction_id !== 0 
+                        ? profile.faction.faction_name || "In Faction"
+                        : "Factionless";
 
                     return {
-                        id,
+                        id: id.toString(),
                         name: profile.name,
                         level,
-                        age: profile.age || 1,
+                        age,
                         playtime: playtimeDays,
                         xanax,
                         refills,
                         se,
-                        estStats,
+                        estStats: "Not yet available",
                         donator,
+                        awards: profile.awards || 0,
+                        last_action_timestamp: lastActionTs,
                         status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
-                        faction: profile.faction ? profile.faction.faction_name : "None",
-                        progIndex
+                        faction: factionName,
+                        velocity,
+                        xanPerDay,
+                        refillsPerDay,
+                        sePerDay,
+                        progIndex: recruitScore,
+                        recruitScore,
+                        scoutGrade,
+                        score_breakdown: `Lvl/Day: ${velocity} | Xan/Day: ${xanPerDay} | Active: ${lastActionTs ? Math.floor((Date.now()/1000-lastActionTs)/3600)+'h ago' : '?'}`
                     };
                 } catch (e) {
                     return null;
@@ -1245,7 +1366,26 @@ app.post('/api/analyze-player-list', async (req, res) => {
             if (i + batchSize < playerIds.length) await delay(200);
         }
 
-        results.sort((a, b) => b.progIndex - a.progIndex);
+        // Sort by recruit score descending
+        results.sort((a, b) => b.recruitScore - a.recruitScore);
+
+        // Bulk FFScouter stats if key provided
+        const ffKeyToUse = ffKey && ffKey !== "null" ? ffKey : (global.marketConfig && global.marketConfig.ffscouterKey ? global.marketConfig.ffscouterKey : "");
+        if (ffKeyToUse && ffKeyToUse.length > 5 && results.length > 0) {
+            try {
+                const batchIds = results.map(r => r.id).join(',');
+                const ffRes = await fetch(`https://ffscouter.com/api/v1/get-stats?key=${ffKeyToUse}&targets=${batchIds}`);
+                const ffData = await ffRes.json();
+                if (Array.isArray(ffData)) {
+                    const statsMap = {};
+                    ffData.forEach(p => { statsMap[p.player_id.toString()] = p.bs_estimate; });
+                    results.forEach(r => {
+                        if (statsMap[r.id.toString()]) r.estStats = statsMap[r.id.toString()];
+                    });
+                }
+            } catch(e) { console.error("FFScouter import bulk:", e.message); }
+        }
+
         res.json({ success: true, recruits: results });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -1308,48 +1448,61 @@ app.get('/api/scan-random-players', async (req, res) => {
         
         results = results.map(r => {
             if (!r.estStats) r.estStats = "Not yet available";
-            r.xanPerDay = (r.xanax / (r.age || 1)).toFixed(2);
+            const age = r.age || 1;
+            const playtime = r.playtime || 0.1;
+            r.xanPerDay = parseFloat((r.xanax / age).toFixed(3));
+            r.refillsPerDay = parseFloat(((r.refills || 0) / age).toFixed(3));
+            r.sePerDay = parseFloat(((r.se || 0) / age).toFixed(3));
+            // velocity = levels gained per account day (stored for sorting)
+            r.velocity = parseFloat((r.level / age).toFixed(4));
             
             let score = 0;
-            const levelPerAge = r.level / (r.age || 1);
-            
-            // Core stat progression
-            score += (levelPerAge * 100) * (focusMultiplier > 1 ? 1.5 : (focusMultiplier < 1 ? 0.5 : 1));
-            score += (r.xanPerDay * 15) * (focusMultiplier < 1 ? 1.5 : (focusMultiplier > 1 ? 0.5 : 1));
-            
-            // Activity Recency Bonus
+            const levelPerAge = r.level / age;
+            const fm = focusMultiplier;
+
+            // Core: progression speed weighted by focus slider
+            // Growth mode (fm>1) rewards level/age velocity more
+            // Balanced mode rewards xanax consumption equally
+            score += (levelPerAge * 100) * (fm > 1 ? fm * 1.2 : 1.0);
+            score += (r.xanPerDay * 18) * (fm < 1.5 ? 1.2 : 0.6);
+
+            // Supplemental activity signals
+            score += r.refillsPerDay * 8;
+            score += r.sePerDay * 5;
+
+            // Activity recency bonus — strong incentive to find active players
             if (r.last_action_timestamp) {
                 const hoursInactive = (Date.now() / 1000 - r.last_action_timestamp) / 3600;
-                if (hoursInactive < 24) score += 30;
+                if (hoursInactive < 6)  score += 50;
+                else if (hoursInactive < 24) score += 30;
                 else if (hoursInactive < 72) score += 10;
             }
-            
-            // Awards Bonus
-            if (r.awards) {
-                score += (r.awards * 0.2);
-            }
-            
-            // Donator Status
+
+            // Awards — strong signal of engagement
+            if (r.awards) score += Math.min(r.awards * 0.4, 40);
+
+            // Donator/subscriber is a commitment signal
             if (r.donator) score += 25;
-            
-            // Young Talent Check (Hit lower levels faster than age)
-            if (r.level < 15) {
-                if (r.level <= r.age) {
-                    score -= 100; // Heavy penalty for slow low levels
-                } else if (r.level >= r.age * 1.5) {
-                    score += 30; // Bonus for determined fast beginners
-                }
+
+            // Fast starter bonus/penalty
+            if (r.level < 20) {
+                if (r.level < r.age * 0.5) score -= 80; // very slow for age
+                else if (r.level > r.age * 2.0) score += 35; // blazing fast
             }
-            
-            r.recruitScore = score;
-            
-            if (score >= 120) r.scoutGrade = "S";
-            else if (score >= 90) r.scoutGrade = "A";
-            else if (score >= 60) r.scoutGrade = "B";
-            else if (score >= 30) r.scoutGrade = "C";
-            else if (score > 10) r.scoutGrade = "D";
+
+            r.recruitScore = parseFloat(score.toFixed(1));
+
+            // Grade thresholds (tuned for new formula)
+            if (score >= 150) r.scoutGrade = "S";
+            else if (score >= 110) r.scoutGrade = "A";
+            else if (score >= 70)  r.scoutGrade = "B";
+            else if (score >= 35)  r.scoutGrade = "C";
+            else if (score > 10)   r.scoutGrade = "D";
             else r.scoutGrade = "F";
-            
+
+            // Score breakdown for tooltip
+            r.score_breakdown = `Lvl/Day: ${levelPerAge.toFixed(3)} | Xan/Day: ${r.xanPerDay} | Refills/Day: ${r.refillsPerDay} | Active: ${r.last_action_timestamp ? Math.floor((Date.now()/1000-r.last_action_timestamp)/3600)+'h ago' : '?'}`;
+
             return r;
         });
 
@@ -2153,17 +2306,26 @@ app.post('/api/turbo/start', (req, res) => {
                         if ((profile.age || 1) > global.turboMaxAge) isValid = false;
                         
                         if (isValid) {
+                            const _age = profile.age || 1;
+                            const _playtimeDays2 = playtimeDays;
+                            const _xanax = personalstats.xantaken || 0;
+                            const _refills = personalstats.refills || 0;
+                            const _se = personalstats.statenhancersused || 0;
                             const r = {
                                 id, name: profile.name, level,
-                                age: profile.age || 1, playtime: playtimeDays,
-                            xanax: personalstats.xantaken || 0, refills: personalstats.refills || 0,
-                            se: personalstats.statenhancersused || 0, estStats: "Not yet available",
-                            donator: profile.donator === 1 || profile.donator === true,
-                            awards: profile.awards || 0,
-                            last_action_timestamp: (profile.last_action && profile.last_action.timestamp) ? profile.last_action.timestamp : 0,
-                            status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
-                            faction: "Factionless", last_checked: Date.now()/1000, active_polling: true, velocity: 0
-                        };
+                                age: _age, playtime: _playtimeDays2,
+                                xanax: _xanax, refills: _refills,
+                                se: _se, estStats: "Not yet available",
+                                donator: profile.donator === 1 || profile.donator === true,
+                                awards: profile.awards || 0,
+                                last_action_timestamp: (profile.last_action && profile.last_action.timestamp) ? profile.last_action.timestamp : 0,
+                                status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
+                                faction: "Factionless", last_checked: Date.now()/1000, active_polling: true,
+                                velocity: parseFloat((level / _age).toFixed(4)),
+                                xanPerDay: parseFloat((_xanax / _age).toFixed(3)),
+                                refillsPerDay: parseFloat((_refills / _age).toFixed(3)),
+                                sePerDay: parseFloat((_se / _age).toFixed(3))
+                            };
                         pipeline.prospects.push(r);
                         savePipeline();
                         global.turboStats.found++;

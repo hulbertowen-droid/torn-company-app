@@ -417,7 +417,7 @@
         <div class="form-field">
             <label>Activity &amp; Min Awards</label>
             <div style="display:flex;gap:6px;">
-                <input type="number" id="maxLastActionHours" placeholder="Active &lt;Xh" value="24" title="Max hours since last action">
+                <input type="number" id="maxLastActionHours" placeholder="Active &lt;Xh" value="72" title="Max hours since last action">
                 <input type="number" id="minAwards" placeholder="Min awards">
             </div>
         </div>
@@ -463,7 +463,20 @@
         </div>
 
         <!-- Table -->
-        <div class="table-wrap">
+        
+        <div style="display:flex; gap:16px; font-size:0.75em; padding: 12px; background:var(--card); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 12px; align-items:center;">
+            <span style="color:var(--text-dim); text-transform:uppercase; font-weight:700;">Grades:</span>
+            <span><strong class="grade-S">S</strong> (Top tier / Fast growth)</span>
+            <span><strong class="grade-A">A</strong> (Great prospect)</span>
+            <span><strong class="grade-B">B</strong> (Solid)</span>
+            <span><strong class="grade-C">C</strong> (Average)</span>
+            <span><strong class="grade-D">D</strong> (Slow/Inactive)</span>
+            <span><strong class="grade-F">F</strong> (Very poor)</span>
+            <div style="flex-grow:1; text-align:right;">
+               <span style="color:var(--gold);">⭐</span> = Donator/Subscriber
+            </div>
+        </div>
+<div class="table-wrap">
             <table>
                 <thead><tr id="table-head-row"></tr></thead>
                 <tbody id="recruit-list"></tbody>
@@ -677,7 +690,7 @@ async function scanWar(reportId, enemyName) {
     } catch(e) { btn.textContent = '❌ Error'; showError('Failed to scan: ' + e.message); }
 }
 
-function rescan() { if (currentMode === 'poach' && currentReportId) scanWar(currentReportId, currentEnemy); }
+function rescan() { if (currentMode === 'poach' && currentReportId) scanWar(currentReportId, currentEnemy); else if (currentMode === 'scan') startGlobalScan(); else if (currentMode === 'import') startImport(); }
 
 // ─── Database Search ──────────────────────────────────────────────────────────
 async function startGlobalScan() {
@@ -724,7 +737,7 @@ async function startImport() {
     btn.innerHTML = `<span class="spinner"></span>Analyzing ${uniqueIds.length} players...`; btn.disabled = true;
     showError('');
     try {
-        const res = await fetch('/api/analyze-player-list', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ apiKey: myKey, playerIds: uniqueIds, donatorFilter: document.getElementById('donatorFilter').value, maxPlaytime: document.getElementById('maxPlaytime').value, weightLevel: document.getElementById('weightLevel').value }) });
+        const res = await fetch('/api/analyze-player-list', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ apiKey: myKey, playerIds: uniqueIds, donatorFilter: document.getElementById('donatorFilter').value, maxPlaytime: document.getElementById('maxPlaytime').value, weightLevel: document.getElementById('weightLevel').value, weightPlaytime: document.getElementById('weightLevel').value, ffKey: localStorage.getItem('warboard_ffkey') || '' }) });
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         allRecruits = data.recruits || [];
@@ -737,8 +750,8 @@ async function startImport() {
 
 // ─── Hero Stats ───────────────────────────────────────────────────────────────
 function renderHeroStats() {
-    const factionless = allRecruits.filter(r => !r.stillInFaction && r.faction !== 'Member').length;
-    const prime = allRecruits.filter(r => r.scoutGrade === 'S' || r.scoutGrade === 'A' || (r.score && r.score >= Math.max(...allRecruits.map(x => x.score||0)) * 0.85)).length;
+    const factionless = allRecruits.filter(r => !r.stillInFaction && (!r.faction || r.faction === 'Factionless' || r.faction === 'None')).length;
+    const prime = allRecruits.filter(r => (r.scoutGrade === 'S' || r.scoutGrade === 'A') || (!r.scoutGrade && r.score && r.score >= Math.max(...allRecruits.map(x => x.score||0)) * 0.85)).length;
     document.getElementById('hero-total').textContent = allRecruits.length;
     document.getElementById('hero-factionless').textContent = factionless;
     document.getElementById('hero-prime').textContent = prime;
@@ -768,8 +781,9 @@ function renderTable() { if (currentMode === 'poach') renderPoachTable(); else r
 function getSortedFiltered() {
     const search = (document.getElementById('search-box')?.value || '').toLowerCase();
     let filtered = allRecruits.filter(r => {
-        if (activeFilter === 'Factionless' && (r.stillInFaction || (r.faction && r.faction !== 'Factionless' && r.faction !== 'None'))) return false;
-        if (activeFilter === 'Member' && (!r.stillInFaction && (r.faction === 'Factionless' || r.faction === 'None'))) return false;
+        const isFactionless = !r.stillInFaction && (!r.faction || r.faction === 'Factionless' || r.faction === 'None');
+        if (activeFilter === 'Factionless' && !isFactionless) return false;
+        if (activeFilter === 'Member' && isFactionless) return false;
         if (search && !r.name.toLowerCase().includes(search)) return false;
         return true;
     });
@@ -787,10 +801,12 @@ function renderPoachTable() {
     const thead = document.getElementById('table-head-row');
     thead.innerHTML = `
         <th data-col="name" onclick="sortBy('name')">Player <span class="sort-arrow">↕</span></th>
+        <th data-col="level" onclick="sortBy('level')">Level <span class="sort-arrow">↕</span></th>
         <th data-col="estStats" onclick="sortBy('estStats')">Est. Stats <span class="sort-arrow">↕</span></th>
         <th data-col="score" onclick="sortBy('score')">War Score <span class="sort-arrow">↕</span></th>
         <th data-col="attacks" onclick="sortBy('attacks')">Hits <span class="sort-arrow">↕</span></th>
         <th data-col="efficiency" onclick="sortBy('efficiency')">Score/Hit <span class="sort-arrow">↕</span></th>
+        <th data-col="scoutGrade" onclick="sortBy('scoutGrade')">Grade <span class="sort-arrow">↕</span></th>
         <th data-col="stillInFaction" onclick="sortBy('stillInFaction')">Status <span class="sort-arrow">↕</span></th>
         <th>Actions</th>
     `;
@@ -799,21 +815,25 @@ function renderPoachTable() {
     if (filtered.length === 0) { tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">🔍</div><h3>No results</h3><p>No recruits match this filter.</p></div></td></tr>`; return; }
     const topScore = Math.max(...filtered.map(r => r.score || 0));
     tbody.innerHTML = filtered.map(r => {
-        const isPrime = r.score >= topScore * 0.85 && !r.stillInFaction;
+        const isPrime = (r.scoutGrade === 'S' || r.scoutGrade === 'A') && !r.stillInFaction;
         const statStr = typeof r.estStats === 'number' ? r.estStats.toLocaleString() : `<span style="color:var(--text-dim);font-style:italic;">${r.estStats}</span>`;
         const badge = r.stillInFaction ? `<span class="badge badge-member">🟡 ${r.status || 'In Faction'}</span>` : `<span class="badge badge-gone">🟢 Factionless</span>`;
         const prime = isPrime ? `<span class="priority-tag">⭐ PRIME</span>` : '';
+        const donatorIcon = r.donator ? '<span style="color:var(--gold);" title="Donator/Subscriber">⭐</span> ' : '';
         return `<tr>
             <td>
-                <a class="player-link" href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank">${r.name}</a>${prime}
+                ${donatorIcon}<a class="player-link" href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank">${r.name}</a>${prime}
                 <div class="player-id">[${r.id}]</div>
             </td>
+            <td style="color:var(--blue);font-weight:700;">${r.level||'—'}</td>
             <td style="color:var(--blue);font-weight:700;">${statStr}</td>
             <td style="color:var(--green);font-weight:700;">${(r.score||0).toLocaleString()}</td>
             <td>${r.attacks}</td>
             <td style="color:var(--gold);font-weight:700;">${r.efficiency}</td>
+            <td><strong class="grade-${r.scoutGrade||'D'}">${r.scoutGrade||'D'}</strong><div style="font-size:0.7em;color:var(--text-dim);margin-top:2px;">${(!r.faction || r.faction === 'Factionless' || r.faction === 'None') ? '<span style="color:var(--green)">Factionless</span>' : r.faction}</div></td>
             <td>${badge}</td>
             <td><div style="display:flex;gap:6px;align-items:center;">
+                <button class="btn-profile" onclick="copyProfileLink('${r.id}')" title="Copy profile link">📋</button>
                 <a class="btn-profile" href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank">Profile</a>
                 <button class="btn-ai" onclick='openMsgModal(${JSON.stringify(r)})'>✨ AI Draft</button>
             </div></td>
@@ -852,7 +872,7 @@ function renderDatabaseTable() {
         const vel = typeof r.velocity === 'number' ? r.velocity.toFixed(2) : '—';
         return `<tr>
             <td>
-                <a class="player-link" href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank">${r.name}</a>${prime}
+                ${r.donator ? '<span style="color:var(--gold);" title="Donator/Subscriber">⭐</span> ' : ''}<a class="player-link" href="https://www.torn.com/profiles.php?XID=${r.id}" target="_blank">${r.name}</a>${prime}
                 <div class="player-id">[${r.id}]</div>
             </td>
             <td style="color:var(--blue);font-weight:700;">${r.level||0}</td>
@@ -870,6 +890,13 @@ function renderDatabaseTable() {
             </div></td>
         </tr>`;
     }).join('');
+}
+
+
+function copyProfileLink(id) {
+    navigator.clipboard.writeText('https://www.torn.com/profiles.php?XID=' + id)
+        .then(() => alert('Profile link copied!'))
+        .catch(() => alert('Failed to copy.'));
 }
 
 // ─── Template copy ────────────────────────────────────────────────────────────
