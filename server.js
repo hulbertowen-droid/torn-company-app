@@ -137,6 +137,32 @@ function saveTracking() { fs.writeFileSync('user_tracking.json', JSON.stringify(
 function saveApiPool() { fs.writeFileSync('api_pool.json', JSON.stringify(apiPoolConfig)); }
 function saveCompanyConfig() { fs.writeFileSync('company_config.json', JSON.stringify(companyConfig)); }
 
+async function sendChannelMessage(token, channelId, embed, content = "") {
+    if (!token || !channelId) return { success: false, error: "Missing token or channel ID" };
+    try {
+        const payload = { embeds: [embed] };
+        if (content) payload.content = content;
+        
+        const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bot ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            console.error("Discord API Error:", data);
+            return { success: false, error: data.message || "Discord API error" };
+        }
+        return { success: true };
+    } catch (err) {
+        console.error("Discord send error:", err);
+        return { success: false, error: err.message };
+    }
+}
+
 if (ADMIN_API_KEY) {
     fetch(`https://api.torn.com/user/?selections=profile&key=${ADMIN_API_KEY}`)
         .then(r => r.json())
