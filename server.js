@@ -1026,7 +1026,7 @@ app.post('/api/discord-ping', async (req, res) => {
 
 
 app.get('/api/war-list', async (req, res) => {
-    const userKey = req.query.apiKey;
+    const userKey = (req.headers['x-api-key'] || req.query.apiKey);
     try {
         await verifySubscription(userKey);
         const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`);
@@ -1050,8 +1050,8 @@ app.get('/api/war-list', async (req, res) => {
 });
 
 app.get('/api/dashboard-data', async (req, res) => {
-    const userKey = req.query.apiKey;
-    const ffKey = req.query.ffKey || null;
+    const userKey = (req.headers['x-api-key'] || req.query.apiKey);
+    const ffKey = (req.headers['x-ff-key'] || req.query.ffKey) || null;
     try {
         await verifySubscription(userKey);
         const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
@@ -1146,7 +1146,7 @@ app.get('/api/dashboard-data', async (req, res) => {
 });
 
 app.get('/api/company', async (req, res) => {
-    const { apiKey } = req.query;
+    const apiKey = req.headers['x-api-key'] || req.query.apiKey;
     try {
         await verifySubscription(apiKey);
         const resp = await fetch(`https://api.torn.com/company/?selections=profile,detailed,employees,stock&key=${apiKey}`);
@@ -1163,7 +1163,9 @@ app.get('/api/company', async (req, res) => {
 });
 
 app.get('/api/scan-recruits', async (req, res) => {
-    const { apiKey, reportId, ffKey, minLevel, maxLevel, donatorFilter, maxAge, maxLastActionHours } = req.query;
+    const apiKey = req.headers['x-api-key'] || req.query.apiKey;
+    const ffKey = req.headers['x-ff-key'] || req.query.ffKey;
+    const { reportId, minLevel, maxLevel, donatorFilter, maxAge, maxLastActionHours } = req.query;
     try {
         const myUserId = await verifySubscription(apiKey);
         const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
@@ -1629,7 +1631,8 @@ app.post('/api/generate-recruit-msg', async (req, res) => {
 
 
 app.get('/api/past-war', async (req, res) => {
-    const { apiKey, reportId } = req.query;
+    const apiKey = req.headers['x-api-key'] || req.query.apiKey;
+    const reportId = req.query.reportId;
     try {
         await verifySubscription(apiKey);
         const [userRes, reportRes, itemsRes] = await Promise.all([
@@ -1743,7 +1746,9 @@ app.post('/api/unbackup', (req, res) => { const { enemyId } = req.body; delete b
 app.post('/api/update-stats', (req, res) => { const { enemyId, stats } = req.body; manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() }; res.json({ success: true }); });
 
 app.get('/api/inspect', async (req, res) => {
-    const { apiKey, targetId, tsKey } = req.query;
+    const apiKey = req.headers['x-api-key'] || req.query.apiKey;
+    const tsKey = req.headers['x-ts-key'] || req.query.tsKey;
+    const targetId = req.query.targetId;
     try {
         await verifySubscription(apiKey);
         const r = await fetch(`https://api.torn.com/user/${targetId}?selections=profile,personalstats,bazaar,display&key=${apiKey}`);
@@ -1810,12 +1815,12 @@ app.post('/api/save-spy', async (req, res) => {
 app.get('/api/warboard', async (req, res) => {
     if (global.isTurboMining) return res.json({ error: "Turbo Mining Mode is active. Live Warboard is paused." });
     try {
-        const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
-        const ffKey = req.query.ffKey && req.query.ffKey !== "null" && req.query.ffKey !== "" ? req.query.ffKey : null;
+        const userKey = (req.headers['x-api-key'] || req.query.apiKey) && (req.headers['x-api-key'] || req.query.apiKey) !== "null" ? (req.headers['x-api-key'] || req.query.apiKey) : TORN_API_KEY;
+        const ffKey = (req.headers['x-ff-key'] || req.query.ffKey) && (req.headers['x-ff-key'] || req.query.ffKey) !== "null" && (req.headers['x-ff-key'] || req.query.ffKey) !== "" ? (req.headers['x-ff-key'] || req.query.ffKey) : null;
         await verifySubscription(userKey);
 
         const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
-        let enemyId = req.query.enemyFaction || null;
+        let enemyId = (req.headers['x-enemy-id'] || req.query.enemyFaction) || null;
         
         let activeKey = userKey;
         let [myData, enemyDataResult] = await Promise.all([
@@ -1946,7 +1951,7 @@ app.get('/api/company-config', (req, res) => {
 
 app.get('/api/ocs', async (req, res) => {
     try {
-        const userKey = req.query.apiKey && req.query.apiKey !== "null" ? req.query.apiKey : TORN_API_KEY;
+        const userKey = (req.headers['x-api-key'] || req.query.apiKey) && (req.headers['x-api-key'] || req.query.apiKey) !== "null" ? (req.headers['x-api-key'] || req.query.apiKey) : TORN_API_KEY;
         if (!userKey) return res.status(400).json({ error: "No API key provided. Please add your API key in Settings." });
 
         // 1. Fetch user profile to get their faction ID (v2 API requires explicit ID)
@@ -2083,7 +2088,7 @@ Keep your advice specific to the data provided. Be concise, punchy, and use emoj
 });
 
 app.get('/api/travel-profits', async (req, res) => {
-    const { apiKey } = req.query;
+    const apiKey = req.headers['x-api-key'] || req.query.apiKey;
     if (!apiKey) return res.status(400).json({ error: "API Key required" });
     try {
         await verifySubscription(apiKey);

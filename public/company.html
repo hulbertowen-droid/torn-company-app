@@ -437,7 +437,7 @@ async function loadCompanyData() {
         return;
     }
     try {
-        const res = await fetch(`/api/company?apiKey=${encodeURIComponent(myKey)}`);
+        const res = await fetch(`/api/company`, { headers: { 'x-api-key': myKey } });
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         companyData = data.company;

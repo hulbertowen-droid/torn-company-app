@@ -242,7 +242,7 @@ let queueData = [];
 async function fetchWarboardQueue() {
     if (!myKey) return;
     try {
-        const res = await fetch(`/api/warboard?apiKey=${myKey}`);
+        const res = await fetch(`/api/warboard`, { headers: { 'x-api-key': myKey } });
         const data = await res.json();
         if (data.enemy) {
             // Filter only claimed targets

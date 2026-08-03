@@ -289,7 +289,7 @@ async function fetchOCs() {
     }
 
     try {
-        const res = await fetch(`/api/ocs?apiKey=${encodeURIComponent(myKey)}`);
+        const res = await fetch(`/api/ocs`, { headers: { 'x-api-key': myKey } });
         const data = await res.json();
 
         if (data.error) {

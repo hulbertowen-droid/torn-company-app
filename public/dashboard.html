@@ -401,8 +401,8 @@ async function loadAll() {
     document.getElementById('last-updated').innerText = 'Refreshing...';
     try {
         const [dashRes, warRes] = await Promise.all([
-            fetch(`/api/dashboard-data?apiKey=${myKey}`),
-            fetch(`/api/war-list?apiKey=${myKey}`)
+            fetch(`/api/dashboard-data`, { headers: { 'x-api-key': myKey } }),
+            fetch(`/api/war-list`, { headers: { 'x-api-key': myKey } })
         ]);
         const dash = await dashRes.json();
         const wars = await warRes.json();

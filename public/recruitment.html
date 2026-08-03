@@ -648,7 +648,7 @@ async function fetchWarList() {
         return;
     }
     try {
-        const res = await fetch(`/api/war-list?apiKey=${myKey}`);
+        const res = await fetch(`/api/war-list`, { headers: { 'x-api-key': myKey } });
         const data = await res.json();
         const grid = document.getElementById('war-grid');
         if (data.error) { grid.innerHTML = `<div style="color:var(--red);font-size:0.88em;">API Error: ${data.error}</div>`; return; }
@@ -682,7 +682,7 @@ async function scanWar(reportId, enemyName) {
     document.getElementById('results-section').style.display = 'none';
     document.getElementById('hero-stats').style.display = 'none';
     try {
-        const res = await fetch(`/api/scan-recruits?apiKey=${myKey}&reportId=${reportId}`);
+        const res = await fetch(`/api/scan-recruits?reportId=${reportId}`, { headers: { 'x-api-key': myKey } });
         const data = await res.json();
         if (data.error) { showError(data.error); btn.textContent = '❌ Error'; return; }
         btn.textContent = '✅ Done'; btn.className = 'btn-scan done';

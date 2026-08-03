@@ -423,7 +423,7 @@
         window.onload = async () => {
             if (!myKey) return;
             try {
-                const res = await fetch('/api/war-list?apiKey=' + myKey);
+                const res = await fetch('/api/war-list', { headers: { 'x-api-key': myKey } });
                 const data = await res.json();
                 if (data.wars) {
                     const sel = document.getElementById('war-selector');
@@ -452,7 +452,7 @@
             window.currentReportId = id;
             setLoading(true);
             try {
-                const res = await fetch(`/api/past-war?apiKey=${myKey}&reportId=${id}`);
+                const res = await fetch(`/api/past-war?reportId=${id}`, { headers: { 'x-api-key': myKey } });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
                 rawMembers = data.members;

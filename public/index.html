@@ -705,7 +705,7 @@ function getStatusPillClass(p) {
 async function fetchWarboard() {
     if (!myKey) return;
     try {
-        const res = await fetch(`/api/warboard?apiKey=${myKey}&enemyFaction=${enemyFacId}&ffKey=${ffKey}`);
+        const res = await fetch(`/api/warboard`, { headers: { 'x-api-key': myKey, 'x-enemy-id': enemyFacId, 'x-ff-key': ffKey } });
         const data = await res.json();
         if (data.error) {
             document.getElementById("friendly-list").innerHTML = `<div style="color:var(--red);padding:20px;font-weight:700;text-align:center;">${data.error}</div>`;
@@ -1002,7 +1002,7 @@ async function inspectTarget(id, name) {
     document.getElementById('inspect-body').innerHTML = `<div class="empty-state">Establishing secure uplink to Torn database...</div>`;
     document.getElementById('inspect-modal').style.display = "flex";
     try {
-        const res = await fetch(`/api/inspect?apiKey=${myKey}&targetId=${id}&tsKey=${tsKey}`);
+        const res = await fetch(`/api/inspect?targetId=${id}`, { headers: { 'x-api-key': myKey, 'x-ts-key': tsKey } });
         const json = await res.json();
         if (json.error) { document.getElementById('inspect-body').innerHTML = `<div style="color:var(--red);font-weight:700;text-align:center;padding:20px;">${json.error}</div>`; return; }
         const p = json.data; const stats = p.personalstats || {};
