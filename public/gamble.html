@@ -3,106 +3,259 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Casino Tools - Torn Company App</title>
+<title>Casino Tools | Owen's Faction Tools</title>
+<meta name="description" content="Advanced Torn casino odds calculator — Russian Roulette EV, Blackjack basic strategy, Poker pot odds, High-Low, Bookie arbitrage, Craps and Roulette house edge breakdowns.">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/global.css">
-    <style>
-    :root {
-        --bg: #0b0d13;
-        --sidebar: #11141d;
-        --border: #2f3542;
-        --text-main: #c9d1d9;
-        --text-dim: #8b949e;
-        --blue: #58a6ff;
-        --red: #ff4757;
-        --green: #2ecc71;
-        --gold: #ffa502;
-        --purple: #9b59b6;
-        --teal: #00cec9;
+<style>
+    /* ── Casino-specific accent ── */
+    :root { --casino: #a29bfe; }
+
+    /* ── Tab Navigation ── */
+    .tab-bar {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 8px;
+        margin-bottom: 20px;
     }
-    
-    .sidebar { width: 250px; background: var(--sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; }
-    .sidebar-header { padding: 20px; font-weight: 900; font-size: 1.2em; color: white; letter-spacing: 1px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-    .nav-items { display: flex; flex-direction: column; padding: 15px 10px; gap: 5px; flex-grow: 1; }
-    .nav-link { display: flex; align-items: center; gap: 15px; color: var(--text-dim); text-decoration: none; font-weight: bold; padding: 12px 15px; border-radius: 8px; transition: 0.2s; white-space: nowrap; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; }
-    .nav-link:hover { background: #2f3542; color: white; }
-    .nav-link.active { background: rgba(0, 206, 201, 0.1); border-left: 4px solid var(--teal); color: white; border-radius: 0 8px 8px 0; }
-    
-    .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
-    h1 { text-align: center; color: var(--teal); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; text-shadow: 0 4px 15px rgba(0,206,201,0.2); }
-    
-    .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
-    
-    .panel { background: var(--sidebar); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
-    .panel-header { background: rgba(0,0,0,0.2); padding: 15px 20px; border-bottom: 1px solid var(--border); font-weight: 800; font-size: 1.1em; color: var(--text-main); text-transform: uppercase; display: flex; align-items: center; gap: 10px; }
-    .panel-body { padding: 25px; display: flex; flex-direction: column; gap: 20px; }
-    
-    .input-group { display: flex; flex-direction: column; gap: 8px; }
-    label { font-size: 0.85em; font-weight: bold; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
-    input, select { background: #0b0d13; border: 1px solid var(--border); padding: 12px 15px; border-radius: 8px; color: white; font-size: 1em; outline: none; transition: 0.2s; }
-    input:focus, select:focus { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(0,206,201,0.2); }
-    
-    .btn-action { background: var(--teal); color: #000; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; font-size: 1em; text-transform: uppercase; cursor: pointer; transition: 0.2s; }
-    .btn-action:hover { background: #00b8b8; transform: translateY(-2px); }
-    
-    .result-box { background: rgba(0,206,201,0.05); border: 1px solid rgba(0,206,201,0.2); border-radius: 8px; padding: 20px; margin-top: 10px; }
-    .result-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px dashed rgba(255,255,255,0.1); }
+    .tab-btn {
+        padding: 8px 16px;
+        border-radius: 8px;
+        border: none;
+        background: transparent;
+        color: var(--text-dim);
+        font-size: 0.83em;
+        font-weight: 700;
+        font-family: 'Inter', system-ui, sans-serif;
+        cursor: pointer;
+        transition: 0.18s;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+    }
+    .tab-btn:hover { background: var(--item); color: var(--text-main); }
+    .tab-btn.active { background: rgba(162,155,254,0.12); color: var(--casino); border: 1px solid rgba(162,155,254,0.25); }
+
+    /* ── Panels ── */
+    .calc-panel { display: none; }
+    .calc-panel.active { display: block; }
+
+    .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .dash-grid.single { grid-template-columns: 1fr; max-width: 640px; }
+    .span-full { grid-column: 1 / -1; }
+
+    .calc-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+    .calc-card-header {
+        padding: 14px 20px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .calc-card-title {
+        font-size: 0.85em;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: var(--gold);
+        margin: 0;
+    }
+    .calc-card-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+    .calc-desc { color: var(--text-dim); font-size: 0.87em; line-height: 1.6; margin: 0; }
+
+    /* ── Form fields ── */
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field-grid.single { grid-template-columns: 1fr; }
+    .field-group { display: flex; flex-direction: column; gap: 5px; }
+    .field-label { font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); }
+    .field-input, .field-select {
+        padding: 10px 13px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--text-main);
+        font-size: 0.92em;
+        font-family: 'Inter', system-ui, sans-serif;
+        transition: border-color 0.2s;
+        width: 100%;
+    }
+    .field-input:focus, .field-select:focus { outline: none; border-color: var(--casino); box-shadow: 0 0 0 3px rgba(162,155,254,0.12); }
+
+    /* ── Action button ── */
+    .btn-calc {
+        padding: 11px 20px;
+        border-radius: 8px;
+        border: none;
+        font-weight: 700;
+        font-size: 0.92em;
+        font-family: 'Inter', system-ui, sans-serif;
+        cursor: pointer;
+        transition: 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+    }
+    .btn-calc.purple { background: var(--casino); color: #0d1117; }
+    .btn-calc.purple:hover { background: #b8b0ff; box-shadow: 0 0 14px rgba(162,155,254,0.35); }
+    .btn-calc.blue { background: var(--blue); color: #0d1117; }
+    .btn-calc.blue:hover { background: #79c0ff; box-shadow: 0 0 14px rgba(88,166,255,0.35); }
+    .btn-calc.gold { background: var(--gold); color: #0d1117; }
+    .btn-calc.gold:hover { background: #ffb52e; box-shadow: 0 0 14px rgba(255,165,2,0.35); }
+    .btn-calc.teal { background: var(--teal); color: #0d1117; }
+    .btn-calc.teal:hover { background: #00e5e0; box-shadow: 0 0 14px rgba(0,206,201,0.35); }
+
+    /* ── Result box ── */
+    .result-box {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+        display: none;
+    }
+    .result-box.visible { display: block; }
+    .result-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--item);
+    }
     .result-row:last-child { border-bottom: none; }
-    .res-label { color: var(--text-dim); font-weight: bold; font-size: 0.9em; text-transform: uppercase; }
-    .res-val { font-size: 1.2em; font-weight: 900; color: var(--white); }
+    .res-label { font-size: 0.82em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); }
+    .res-val { font-size: 1.05em; font-weight: 900; color: var(--text-main); }
     .res-val.good { color: var(--green); }
     .res-val.bad { color: var(--red); }
-    
-    .light-mode { --bg: #f0f2f5; --sidebar: #ffffff; --border: #dcdde1; --text-main: #2f3640; --text-dim: #718093; }
-    .light-mode input, .light-mode select { background: #f5f6fa; color: #2f3640; }
-    
-    @media (max-width: 1000px) { .container { grid-template-columns: 1fr; } }
+    .res-val.warn { color: var(--gold); }
+    .res-val.info { color: var(--blue); }
+
+    /* ── Big decision display ── */
+    .decision-box {
+        text-align: center;
+        padding: 20px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        display: none;
+    }
+    .decision-box.visible { display: block; }
+    .decision-label { font-size: 0.78em; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin-bottom: 8px; }
+    .decision-value { font-size: 3em; font-weight: 900; line-height: 1; text-transform: uppercase; transition: color 0.3s; }
+    .decision-sub { font-size: 0.82em; color: var(--text-dim); margin-top: 8px; }
+
+    /* ── Odds comparison ── */
+    .odds-compare {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        padding: 16px;
+        border-radius: 10px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+    }
+    .odds-block { text-align: center; padding: 10px; border-radius: 8px; border: 1px solid var(--border); }
+    .odds-block.winner { border-color: var(--green); background: rgba(46,213,115,0.05); }
+    .odds-block-label { font-size: 0.72em; font-weight: 700; text-transform: uppercase; color: var(--text-dim); margin-bottom: 4px; }
+    .odds-block-val { font-size: 1.6em; font-weight: 900; }
+
+    /* ── Static info table ── */
+    .info-table { border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
+    .info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--item);
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-row:hover { background: rgba(255,255,255,0.02); }
+    .info-label { font-size: 0.85em; font-weight: 600; color: var(--text-main); }
+    .info-edge { font-size: 0.85em; font-weight: 700; padding: 3px 10px; border-radius: 12px; }
+    .edge-good { background: rgba(46,213,115,0.1); color: var(--green); border: 1px solid rgba(46,213,115,0.2); }
+    .edge-ok { background: rgba(0,206,201,0.1); color: var(--teal); border: 1px solid rgba(0,206,201,0.2); }
+    .edge-warn { background: rgba(255,165,2,0.1); color: var(--gold); border: 1px solid rgba(255,165,2,0.2); }
+    .edge-bad { background: rgba(255,71,87,0.1); color: var(--red); border: 1px solid rgba(255,71,87,0.2); }
+
+    @media(max-width: 800px) {
+        .dash-grid { grid-template-columns: 1fr; }
+        .field-grid { grid-template-columns: 1fr; }
+        .tab-btn span.tab-label { display: none; }
+    }
 </style>
 </head>
 <body>
-    <nav class="sidebar" id="app-sidebar">
-        <div class="sidebar-header">
-            <div class="sidebar-logo">Owen's Faction Tools</div>
-        </div>
-        <div class="nav-items">
-            <a href="/" class="nav-link">🎯 <span class="nav-text">Live Warboard</span></a>
-            <a href="/chain.html" class="nav-link">⛓️ <span class="nav-text">Chain Watcher</span></a>
-            <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
-            <a href="/dashboard.html" class="nav-link">📊 <span class="nav-text">Dashboard</span></a>
-            <a href="/members.html" class="nav-link">👥 <span class="nav-text">Members</span></a>
-            <a href="/recruitment.html" class="nav-link">🤝 <span class="nav-text">Recruitment</span></a>
-            <a href="/travel.html" class="nav-link">✈️ <span class="nav-text">Travel Calculator</span></a>
-            <a href="/bazaar.html" class="nav-link">🏪 <span class="nav-text">Bazaar Watcher</span></a>
-            <a href="/discord.html" class="nav-link">🔔 <span class="nav-text">Discord Alerts</span></a>
-            <a href="/oc.html" class="nav-link">💣 <span class="nav-text">OC Manager</span></a>
-            <div style="margin-top:auto; padding: 0 10px;"><div style="height:1px; background:#2f3542; margin: 10px 0;"></div><div style="font-size:0.65em; color:#57606f; text-transform:uppercase; letter-spacing:2px; padding:0 5px 8px; font-weight:700;">Company</div></div>
-            <a href="/company.html" class="nav-link" style="background: rgba(0,206,201,0.1); border: 1px solid rgba(0,206,201,0.3); color: #00cec9; border-radius: 8px;">🏢 <span class="nav-text">Company Tools</span></a>
-            <div style="padding: 0 10px; margin-top: 12px;"><div style="height:1px; background:#2f3542;"></div></div>
-            <a href="/gamble.html" class="nav-link active">🎰 <span class="nav-text">Casino Tools</span></a>
-            <a onclick="openGlobalSettings()" class="nav-link" style="margin-top: 8px; cursor: pointer;" style="cursor:pointer; margin-top: 15px; border-top: 1px solid #2f3542; border-radius: 0; padding-top: 15px;">⚙️ <span class="nav-text">Settings</span></a>
-        </div>
-    </nav>
-    <div class="main-content">
-        <h1>Advanced Casino Odds & Strategy</h1>
-        <div class="container">
-            <!-- Russian Roulette Panel -->
-            <div class="panel">
-                <div class="panel-header">🔫 Russian Roulette Engine</div>
-                <div class="panel-body">
-                    <p style="color:var(--text-dim); font-size:0.9em; line-height:1.5; margin:0;">Calculate exact odds of survival and expected value (EV) based on game size. This engine computes the raw mathematical probabilities down to the smallest percentage.</p>
-                    
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
-                        <div class="input-group">
-                            <label>Number of Players</label>
-                            <input type="number" id="rr-players" min="2" max="6" value="2">
+<nav class="sidebar" id="app-sidebar">
+    <div class="sidebar-header">
+        <div class="sidebar-logo">Owen's Faction Tools</div>
+        <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Theme" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:1.2em;display:flex;justify-content:center;align-items:center;width:35px;height:35px;border-radius:6px;transition:0.2s;margin-right:10px;">🌗</button>
+        <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
+    </div>
+    <div class="nav-items">
+        <a href="/" class="nav-link">📡 <span class="nav-text">Live Warboard</span></a>
+        <a href="/chain.html" class="nav-link">🔗 <span class="nav-text">Chain Watcher</span></a>
+        <a href="/payout.html" class="nav-link">💰 <span class="nav-text">Payouts</span></a>
+        <a href="/dashboard.html" class="nav-link">🛡️ <span class="nav-text">Dashboard</span></a>
+        <a href="/members.html" class="nav-link">👥 <span class="nav-text">Members</span></a>
+        <a href="/recruitment.html" class="nav-link">🎯 <span class="nav-text">Recruitment</span></a>
+        <a href="/travel.html" class="nav-link">✈️ <span class="nav-text">Travel Calculator</span></a>
+        <a href="/bazaar.html" class="nav-link">🛒 <span class="nav-text">Bazaar Watcher</span></a>
+        <a href="/discord.html" class="nav-link">📢 <span class="nav-text">Discord Alerts</span></a>
+        <a href="/oc.html" class="nav-link">💼 <span class="nav-text">OC Manager</span></a>
+        <a href="/company.html" class="nav-link" style="margin-top:auto;background:rgba(0,206,201,0.1);border:1px solid var(--teal);color:var(--teal);border-radius:8px;">🏢 <span class="nav-text">Company Tools</span></a>
+        <a href="/gamble.html" class="nav-link active">🎰 <span class="nav-text">Casino Tools</span></a>
+        <a onclick="openGlobalSettings()" class="nav-link" style="border-top:1px solid var(--border);border-radius:0;padding-top:15px;margin-top:4px;cursor:pointer;">⚙️ <span class="nav-text">Settings</span></a>
+    </div>
+</nav>
+
+<main class="main-content">
+    <!-- Header -->
+    <div class="page-header">
+        <div class="page-title">🎰 Casino <span>Odds</span> &amp; Strategy</div>
+        <span style="font-size:0.8em;color:var(--text-dim);">All calculators use exact mathematical models</span>
+    </div>
+
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+        <button class="tab-btn active" onclick="showTab('rr', this)">🔫 <span class="tab-label">Russian Roulette</span></button>
+        <button class="tab-btn" onclick="showTab('bj', this)">🃏 <span class="tab-label">Blackjack</span></button>
+        <button class="tab-btn" onclick="showTab('hl', this)">🔢 <span class="tab-label">High-Low</span></button>
+        <button class="tab-btn" onclick="showTab('poker', this)">♠️ <span class="tab-label">Poker</span></button>
+        <button class="tab-btn" onclick="showTab('bookie', this)">🏅 <span class="tab-label">Bookie</span></button>
+        <button class="tab-btn" onclick="showTab('craps', this)">🎲 <span class="tab-label">Craps</span></button>
+        <button class="tab-btn" onclick="showTab('roulette', this)">🔴 <span class="tab-label">Roulette</span></button>
+        <button class="tab-btn" onclick="showTab('slots', this)">🎰 <span class="tab-label">Slots</span></button>
+    </div>
+
+    <!-- ── RUSSIAN ROULETTE ── -->
+    <div class="calc-panel active" id="panel-rr">
+        <div class="dash-grid">
+            <div class="calc-card">
+                <div class="calc-card-header"><p class="calc-card-title">🔫 Russian Roulette Engine</p></div>
+                <div class="calc-card-body">
+                    <p class="calc-desc">Calculate exact survival probability and expected value (EV) for your position. Uses the no-respin model (barrel decrements each turn).</p>
+                    <div class="field-grid">
+                        <div class="field-group">
+                            <label class="field-label">Number of Players</label>
+                            <input type="number" id="rr-players" class="field-input" min="2" max="6" value="2">
                         </div>
-                        <div class="input-group">
-                            <label>Total Bet Pool ($)</label>
-                            <input type="number" id="rr-pool" value="10000000">
+                        <div class="field-group">
+                            <label class="field-label">Total Bet Pool ($)</label>
+                            <input type="number" id="rr-pool" class="field-input" value="10000000">
                         </div>
                     </div>
-                    <div class="input-group">
-                        <label>Your Position (Turn Order)</label>
-                        <select id="rr-turn">
+                    <div class="field-group">
+                        <label class="field-label">Your Position (Turn Order)</label>
+                        <select id="rr-turn" class="field-select">
                             <option value="1">1st to shoot</option>
                             <option value="2">2nd to shoot</option>
                             <option value="3">3rd to shoot</option>
@@ -111,78 +264,51 @@
                             <option value="6">6th to shoot</option>
                         </select>
                     </div>
-                    
-                    <button class="btn-action" onclick="calcRR()">Calculate RR Odds</button>
-                    
-                    <div class="result-box" id="rr-results" style="display:none;">
+                    <button class="btn-calc purple" onclick="calcRR()">🔫 Calculate My Odds</button>
+                </div>
+            </div>
+            <div class="calc-card">
+                <div class="calc-card-header"><p class="calc-card-title">📊 Results</p></div>
+                <div class="calc-card-body">
+                    <div class="result-box" id="rr-results">
                         <div class="result-row">
                             <span class="res-label">Survival Probability</span>
-                            <span class="res-val" id="rr-surv">0%</span>
+                            <span class="res-val" id="rr-surv">—</span>
                         </div>
                         <div class="result-row">
-                            <span class="res-label">Win Probability</span>
-                            <span class="res-val" id="rr-win">0%</span>
+                            <span class="res-label">Death Probability</span>
+                            <span class="res-val" id="rr-death">—</span>
                         </div>
                         <div class="result-row">
                             <span class="res-label">Expected Value (EV)</span>
-                            <span class="res-val" id="rr-ev">$0</span>
+                            <span class="res-val" id="rr-ev">—</span>
                         </div>
                         <div class="result-row">
                             <span class="res-label">Mathematical Edge</span>
-                            <span class="res-val" id="rr-edge">0%</span>
+                            <span class="res-val" id="rr-edge">—</span>
+                        </div>
+                        <div class="result-row">
+                            <span class="res-label">Your Buy-In</span>
+                            <span class="res-val" id="rr-buyin">—</span>
                         </div>
                     </div>
+                    <p style="color:var(--text-dim);font-size:0.82em;line-height:1.6;margin:0;" id="rr-empty">Run the calculator on the left to see your exact odds and EV breakdown.</p>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <!-- Bookie Arbitrage & Implied Odds -->
-            <div class="panel">
-                <div class="panel-header">🏅 Bookie Arbitrage & Odds</div>
-                <div class="panel-body">
-                    <p style="color:var(--text-dim); font-size:0.9em; line-height:1.5; margin:0;">Convert fractional odds (e.g., 5/2) to implied probabilities. Enter opposing odds to check for arbitrage (guaranteed profit) opportunities.</p>
-                    
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
-                        <div class="input-group">
-                            <label>Team A Odds (e.g. 1.5 or 1/2)</label>
-                            <input type="text" id="bookie-odds-a" value="1.5">
-                        </div>
-                        <div class="input-group">
-                            <label>Team B Odds (e.g. 3.0 or 2/1)</label>
-                            <input type="text" id="bookie-odds-b" value="3.0">
-                        </div>
-                    </div>
-                    
-                    <button class="btn-action" style="background:var(--blue);" onclick="calcBookie()">Calculate Bookie Lines</button>
-                    
-                    <div class="result-box" id="bookie-results" style="display:none; border-color:rgba(88,166,255,0.2); background:rgba(88,166,255,0.05);">
-                        <div class="result-row">
-                            <span class="res-label">Team A Implied Prob.</span>
-                            <span class="res-val" id="book-prob-a">0%</span>
-                        </div>
-                        <div class="result-row">
-                            <span class="res-label">Team B Implied Prob.</span>
-                            <span class="res-val" id="book-prob-b">0%</span>
-                        </div>
-                        <div class="result-row">
-                            <span class="res-label">Total Vig (House Edge)</span>
-                            <span class="res-val" id="book-vig">0%</span>
-                        </div>
-                        <div class="result-row">
-                            <span class="res-label">Arbitrage Possible?</span>
-                            <span class="res-val" id="book-arb">No</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Blackjack Basic Strategy -->
-            <div class="panel" style="grid-column: 1 / -1;">
-                <div class="panel-header">🃏 Blackjack Basic Strategy Engine</div>
-                <div class="panel-body">
-                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:15px; align-items:end;">
-                        <div class="input-group">
-                            <label>Your Hand Total (or Pair)</label>
-                            <select id="bj-player">
+    <!-- ── BLACKJACK ── -->
+    <div class="calc-panel" id="panel-bj">
+        <div class="dash-grid">
+            <div class="calc-card">
+                <div class="calc-card-header"><p class="calc-card-title">🃏 Blackjack Basic Strategy</p></div>
+                <div class="calc-card-body">
+                    <p class="calc-desc">Uses the mathematically proven Basic Strategy table. Reduces the house edge to under 0.5% when followed perfectly. Select your hand total and the dealer's face-up card.</p>
+                    <div class="field-grid">
+                        <div class="field-group">
+                            <label class="field-label">Your Hand Total</label>
+                            <select id="bj-player" class="field-select">
                                 <option value="8">8 or less</option>
                                 <option value="9">9</option>
                                 <option value="10">10</option>
@@ -195,9 +321,9 @@
                                 <option value="17">17 or more</option>
                             </select>
                         </div>
-                        <div class="input-group">
-                            <label>Dealer's Face-Up Card</label>
-                            <select id="bj-dealer">
+                        <div class="field-group">
+                            <label class="field-label">Dealer's Face-Up Card</label>
+                            <select id="bj-dealer" class="field-select">
                                 <option value="2">2</option>
                                 <option value="3">3</option>
                                 <option value="4">4</option>
@@ -206,83 +332,45 @@
                                 <option value="7">7</option>
                                 <option value="8">8</option>
                                 <option value="9">9</option>
-                                <option value="10">10 / Face</option>
+                                <option value="10">10 / Face Card</option>
                                 <option value="11">Ace</option>
                             </select>
                         </div>
-                        <button class="btn-action" style="background:var(--gold);" onclick="calcBJ()">Get Optimal Move</button>
                     </div>
-                    
-                    <div class="result-box" id="bj-results" style="display:none; border-color:rgba(255,165,2,0.2); background:rgba(255,165,2,0.05); text-align:center;">
-                        <div style="font-size: 0.9em; color: var(--text-dim); text-transform: uppercase; font-weight: bold; margin-bottom: 5px;">Mathematically Optimal Decision</div>
-                        <div id="bj-decision" style="font-size: 3em; font-weight: 900; color: var(--gold); text-shadow: 0 0 10px rgba(255,165,2,0.3); text-transform: uppercase;">HIT</div>
-                    </div>
+                    <button class="btn-calc gold" onclick="calcBJ()">🃏 Get Optimal Move</button>
                 </div>
             </div>
-        
-            <!-- Poker Pot Odds & Implied Prob -->
-            <div class="panel">
-                <div class="panel-header">♠️ Poker Pot Odds & Implied</div>
-                <div class="panel-body">
-                    <p style="color:var(--text-dim); font-size:0.9em; line-height:1.5; margin:0;">Input pot size, bet to call, and your number of outs (cards that give you a winning hand) to see if a call is mathematically profitable.</p>
-                    
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
-                        <div class="input-group">
-                            <label>Current Pot Size ($)</label>
-                            <input type="number" id="poker-pot" value="1000">
-                        </div>
-                        <div class="input-group">
-                            <label>Amount to Call ($)</label>
-                            <input type="number" id="poker-call" value="200">
-                        </div>
-                        <div class="input-group">
-                            <label>Your Outs (1-20)</label>
-                            <input type="number" id="poker-outs" value="9">
-                        </div>
-                        <div class="input-group">
-                            <label>Streets Remaining</label>
-                            <select id="poker-streets">
-                                <option value="1">1 (Turn or River)</option>
-                                <option value="2">2 (Flop to River)</option>
-                            </select>
-                        </div>
+            <div class="calc-card">
+                <div class="calc-card-header"><p class="calc-card-title">🧠 Optimal Decision</p></div>
+                <div class="calc-card-body" style="justify-content:center;align-items:center;min-height:200px;">
+                    <div class="decision-box" id="bj-results" style="width:100%;">
+                        <div class="decision-label">Mathematically Optimal Move</div>
+                        <div class="decision-value" id="bj-decision">HIT</div>
+                        <div class="decision-sub" id="bj-reason">—</div>
                     </div>
-                    
-                    <button class="btn-action" style="background:var(--purple); color:white;" onclick="calcPoker()">Calculate Call Equity</button>
-                    
-                    <div class="result-box" id="poker-results" style="display:none; border-color:rgba(155,89,182,0.2); background:rgba(155,89,182,0.05);">
-                        <div class="result-row">
-                            <span class="res-label">Pot Odds (Required Equity)</span>
-                            <span class="res-val" id="poker-pot-odds">0%</span>
-                        </div>
-                        <div class="result-row">
-                            <span class="res-label">Card Odds (Actual Equity)</span>
-                            <span class="res-val" id="poker-card-odds">0%</span>
-                        </div>
-                        <div class="result-row">
-                            <span class="res-label">Decision</span>
-                            <span class="res-val" id="poker-decision">FOLD</span>
-                        </div>
-                    </div>
+                    <p style="color:var(--text-dim);font-size:0.85em;text-align:center;" id="bj-empty">Select your hand and the dealer's card, then click to get the optimal move.</p>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <!-- High-Low Probability Engine -->
-            <div class="panel">
-                <div class="panel-header">🃏 High-Low Probability</div>
-                <div class="panel-body">
-                    <p style="color:var(--text-dim); font-size:0.9em; line-height:1.5; margin:0;">Torn High-Low uses a standard 52-card deck. Select the current face-up card to find the mathematically optimal choice (High or Low).</p>
-                    
-                    <div class="input-group">
-                        <label>Current Face-Up Card</label>
-                        <select id="hl-card">
+    <!-- ── HIGH-LOW ── -->
+    <div class="calc-panel" id="panel-hl">
+        <div class="dash-grid">
+            <div class="calc-card">
+                <div class="calc-card-header"><p class="calc-card-title">🔢 High-Low Probability</p></div>
+                <div class="calc-card-body">
+                    <p class="calc-desc">Torn High-Low uses a standard 52-card deck. Select the current face-up card to calculate the mathematically correct call — Higher or Lower — based on remaining deck probability.</p>
+                    <div class="field-group">
+                        <label class="field-label">Current Face-Up Card</label>
+                        <select id="hl-card" class="field-select">
                             <option value="2">2</option>
                             <option value="3">3</option>
                             <option value="4">4</option>
                             <option value="5">5</option>
                             <option value="6">6</option>
                             <option value="7">7</option>
-                            <option value="8">8</option>
+                            <option value="8">8 (Middle)</option>
                             <option value="9">9</option>
                             <option value="10">10</option>
                             <option value="11">Jack (J)</option>
@@ -291,301 +379,442 @@
                             <option value="14">Ace (A)</option>
                         </select>
                     </div>
-                    
-                    <button class="btn-action" style="background:var(--teal); color:black;" onclick="calcHL()">Get Optimal Move</button>
-                    
-                    <div class="result-box" id="hl-results" style="display:none; border-color:rgba(0,206,201,0.2); background:rgba(0,206,201,0.05); text-align:center;">
-                        <div style="display:flex; justify-content: space-around; margin-bottom: 10px;">
-                            <div>
-                                <div style="font-size:0.8em; color:var(--text-dim); text-transform:uppercase;">Odds Lower</div>
-                                <div id="hl-low-odds" style="font-size:1.5em; font-weight:bold; color:var(--text-main);">0%</div>
+                    <button class="btn-calc teal" onclick="calcHL()">🔢 Calculate Best Call</button>
+                </div>
+            </div>
+            <div class="calc-card">
+                <div class="calc-card-header"><p class="calc-card-title">📊 Probability Breakdown</p></div>
+                <div class="calc-card-body" style="justify-content:center;align-items:center;min-height:200px;">
+                    <div class="decision-box" id="hl-results" style="width:100%;">
+                        <div class="odds-compare" style="margin-bottom:16px;">
+                            <div class="odds-block" id="hl-low-block">
+                                <div class="odds-block-label">Odds Lower</div>
+                                <div class="odds-block-val" id="hl-low-odds" style="color:var(--blue);">—</div>
                             </div>
-                            <div>
-                                <div style="font-size:0.8em; color:var(--text-dim); text-transform:uppercase;">Odds Higher</div>
-                                <div id="hl-high-odds" style="font-size:1.5em; font-weight:bold; color:var(--text-main);">0%</div>
+                            <div class="odds-block" id="hl-high-block">
+                                <div class="odds-block-label">Odds Higher</div>
+                                <div class="odds-block-val" id="hl-high-odds" style="color:var(--teal);">—</div>
                             </div>
                         </div>
-                        <div style="font-size: 0.9em; color: var(--text-dim); text-transform: uppercase; font-weight: bold; margin-bottom: 5px;">Mathematically Optimal Decision</div>
-                        <div id="hl-decision" style="font-size: 3em; font-weight: 900; color: var(--teal); text-shadow: 0 0 10px rgba(0,206,201,0.3); text-transform: uppercase;">HIGH</div>
+                        <div class="decision-label">Optimal Call</div>
+                        <div class="decision-value" id="hl-decision">—</div>
                     </div>
+                    <p style="color:var(--text-dim);font-size:0.85em;text-align:center;" id="hl-empty">Select the face-up card and click to see the odds breakdown.</p>
                 </div>
             </div>
-
-            <!-- Craps Odds Breakdown -->
-            <div class="panel">
-                <div class="panel-header">🎲 Craps Odds & House Edge</div>
-                <div class="panel-body">
-                    <p style="color:var(--text-dim); font-size:0.9em; line-height:1.5; margin:0;">Craps is one of the only games in the casino where you can get the house edge down to almost 0% with Odds bets.</p>
-                    
-                    <div class="result-box" style="margin-top:0;">
-                        <div class="result-row"><span class="res-label">Pass Line / Come</span><span class="res-val" style="color:var(--teal); font-size:1em;">1.41% Edge</span></div>
-                        <div class="result-row"><span class="res-label">Don't Pass / Don't Come</span><span class="res-val" style="color:var(--teal); font-size:1em;">1.36% Edge</span></div>
-                        <div class="result-row"><span class="res-label">Pass Line + Max Odds</span><span class="res-val" style="color:var(--green); font-size:1em;">~0.00% Edge</span></div>
-                        <div class="result-row"><span class="res-label">Place 6 or 8</span><span class="res-val" style="color:var(--gold); font-size:1em;">1.52% Edge</span></div>
-                        <div class="result-row"><span class="res-label">Hardways / Prop Bets</span><span class="res-val" style="color:var(--red); font-size:1em;">9% - 16% Edge</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Roulette Strategy Breakdown -->
-            <div class="panel">
-                <div class="panel-header">🔴 Roulette Odds Breakdown</div>
-                <div class="panel-body">
-                    <p style="color:var(--text-dim); font-size:0.9em; line-height:1.5; margin:0;">Torn uses European Roulette (Single Zero). The house edge on almost every bet is exactly 2.70%.</p>
-                    
-                    <div class="result-box" style="margin-top:0;">
-                        <div class="result-row"><span class="res-label">Red/Black, Odd/Even</span><span class="res-val" style="color:var(--teal); font-size:1em;">48.65% Win</span></div>
-                        <div class="result-row"><span class="res-label">Dozens / Columns</span><span class="res-val" style="color:var(--teal); font-size:1em;">32.43% Win</span></div>
-                        <div class="result-row"><span class="res-label">Single Number</span><span class="res-val" style="color:var(--teal); font-size:1em;">2.70% Win</span></div>
-                        <div class="result-row"><span class="res-label">House Edge (Constant)</span><span class="res-val" style="color:var(--red); font-size:1em;">2.70% Edge</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Slots ROI Breakdown -->
-            <div class="panel">
-                <div class="panel-header">🎰 Slots ROI Estimation</div>
-                <div class="panel-body">
-                    <p style="color:var(--text-dim); font-size:0.9em; line-height:1.5; margin:0;">Slot machines are purely RNG with no player edge. While Torn's exact Return to Player (RTP) is hidden, most casino slots operate at a 90-95% RTP.</p>
-                    
-                    <div class="result-box" style="margin-top:0;">
-                        <div class="result-row"><span class="res-label">Estimated RTP</span><span class="res-val" style="color:var(--gold); font-size:1em;">~90% - 95%</span></div>
-                        <div class="result-row"><span class="res-label">House Edge</span><span class="res-val" style="color:var(--red); font-size:1em;">5% - 10%</span></div>
-                        <div class="result-row" style="border:none; padding-bottom:0;"><span class="res-label" style="font-size:0.8em; text-transform:none;">Mathematically, slots are a net loss over infinite spins. Play for merits or fun only.</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Keno Odds Breakdown -->
-            <div class="panel">
-                <div class="panel-header">🔢 Keno Mathematical Odds</div>
-                <div class="panel-body">
-                    <p style="color:var(--text-dim); font-size:0.9em; line-height:1.5; margin:0;">Keno has historically the worst odds of any casino game. The house edge can exceed 25% depending on how many numbers you pick.</p>
-                    
-                    <div class="result-box" style="margin-top:0;">
-                        <div class="result-row"><span class="res-label">Pick 10, Catch 10 Odds</span><span class="res-val" style="color:var(--red); font-size:1em;">1 in 8,911,711</span></div>
-                        <div class="result-row"><span class="res-label">Optimal Strategy</span><span class="res-val" style="color:var(--gold); font-size:1em;">Don't Play</span></div>
-                    </div>
-                </div>
-            </div>
-
-</div>
+        </div>
     </div>
 
+    <!-- ── POKER ── -->
+    <div class="calc-panel" id="panel-poker">
+        <div class="dash-grid">
+            <div class="calc-card">
+                <div class="calc-card-header"><p class="calc-card-title">♠️ Poker Pot Odds Calculator</p></div>
+                <div class="calc-card-body">
+                    <p class="calc-desc">Input pot size, bet to call, and your number of outs (cards that complete your hand) to see if calling is mathematically profitable using the Rule of 2 &amp; 4.</p>
+                    <div class="field-grid">
+                        <div class="field-group">
+                            <label class="field-label">Current Pot Size ($)</label>
+                            <input type="number" id="poker-pot" class="field-input" value="1000">
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label">Amount to Call ($)</label>
+                            <input type="number" id="poker-call" class="field-input" value="200">
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label">Your Outs (1–20)</label>
+                            <input type="number" id="poker-outs" class="field-input" value="9" min="1" max="20">
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label">Streets Remaining</label>
+                            <select id="poker-streets" class="field-select">
+                                <option value="1">1 (Turn or River)</option>
+                                <option value="2">2 (Flop to River)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn-calc purple" onclick="calcPoker()">♠️ Calculate Call Equity</button>
+                </div>
+            </div>
+            <div class="calc-card">
+                <div class="calc-card-header"><p class="calc-card-title">📊 Results</p></div>
+                <div class="calc-card-body" style="justify-content:center;align-items:center;min-height:220px;">
+                    <div class="result-box" id="poker-results" style="width:100%;">
+                        <div class="result-row">
+                            <span class="res-label">Pot Odds (Required Equity)</span>
+                            <span class="res-val" id="poker-pot-odds">—</span>
+                        </div>
+                        <div class="result-row">
+                            <span class="res-label">Your Actual Equity</span>
+                            <span class="res-val" id="poker-card-odds">—</span>
+                        </div>
+                        <div class="result-row" style="padding:20px 16px;justify-content:center;">
+                            <span class="decision-value" id="poker-decision" style="font-size:2.2em;">—</span>
+                        </div>
+                    </div>
+                    <p style="color:var(--text-dim);font-size:0.85em;text-align:center;" id="poker-empty">Enter the hand details and click to see if you should call or fold.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── BOOKIE ── -->
+    <div class="calc-panel" id="panel-bookie">
+        <div class="dash-grid">
+            <div class="calc-card">
+                <div class="calc-card-header"><p class="calc-card-title">🏅 Bookie Arbitrage &amp; Implied Odds</p></div>
+                <div class="calc-card-body">
+                    <p class="calc-desc">Convert fractional or decimal odds to implied win probabilities and check for arbitrage — a guaranteed profit opportunity when the combined implied probability is under 100%.</p>
+                    <div class="field-grid">
+                        <div class="field-group">
+                            <label class="field-label">Team A Odds</label>
+                            <input type="text" id="bookie-odds-a" class="field-input" value="1.5" placeholder="e.g. 1.5 or 3/2">
+                        </div>
+                        <div class="field-group">
+                            <label class="field-label">Team B Odds</label>
+                            <input type="text" id="bookie-odds-b" class="field-input" value="3.0" placeholder="e.g. 3.0 or 2/1">
+                        </div>
+                    </div>
+                    <button class="btn-calc blue" onclick="calcBookie()">🏅 Calculate Lines</button>
+                </div>
+            </div>
+            <div class="calc-card">
+                <div class="calc-card-header"><p class="calc-card-title">📊 Results</p></div>
+                <div class="calc-card-body">
+                    <div class="result-box" id="bookie-results">
+                        <div class="result-row">
+                            <span class="res-label">Team A Implied Prob.</span>
+                            <span class="res-val info" id="book-prob-a">—</span>
+                        </div>
+                        <div class="result-row">
+                            <span class="res-label">Team B Implied Prob.</span>
+                            <span class="res-val info" id="book-prob-b">—</span>
+                        </div>
+                        <div class="result-row">
+                            <span class="res-label">Vig (House Edge)</span>
+                            <span class="res-val" id="book-vig">—</span>
+                        </div>
+                        <div class="result-row">
+                            <span class="res-label">Arbitrage Opportunity</span>
+                            <span class="res-val" id="book-arb">—</span>
+                        </div>
+                    </div>
+                    <p style="color:var(--text-dim);font-size:0.85em;" id="bookie-empty">Enter both sides' odds and click to check for an arbitrage window.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── CRAPS ── -->
+    <div class="calc-panel" id="panel-craps">
+        <div class="calc-card">
+            <div class="calc-card-header"><p class="calc-card-title">🎲 Craps Odds &amp; House Edge Reference</p></div>
+            <div class="calc-card-body">
+                <p class="calc-desc">Craps is one of the only casino games where the house edge can be driven almost to 0% by combining Pass Line bets with Odds bets. The Odds bet has literally zero house edge.</p>
+                <div class="info-table">
+                    <div class="info-row"><span class="info-label">Pass Line / Come</span><span class="info-edge edge-ok">1.41% House Edge</span></div>
+                    <div class="info-row"><span class="info-label">Don't Pass / Don't Come</span><span class="info-edge edge-ok">1.36% House Edge</span></div>
+                    <div class="info-row"><span class="info-label">Pass Line + Max Odds Bet</span><span class="info-edge edge-good">~0.00% House Edge 🏆</span></div>
+                    <div class="info-row"><span class="info-label">Place 6 or 8</span><span class="info-edge edge-ok">1.52% House Edge</span></div>
+                    <div class="info-row"><span class="info-label">Place 5 or 9</span><span class="info-edge edge-warn">4.00% House Edge</span></div>
+                    <div class="info-row"><span class="info-label">Place 4 or 10</span><span class="info-edge edge-warn">6.67% House Edge</span></div>
+                    <div class="info-row"><span class="info-label">Hardways (6, 8)</span><span class="info-edge edge-bad">9.09% House Edge</span></div>
+                    <div class="info-row"><span class="info-label">Hardways (4, 10)</span><span class="info-edge edge-bad">11.11% House Edge</span></div>
+                    <div class="info-row"><span class="info-label">Any 7 / Any Craps (Prop Bets)</span><span class="info-edge edge-bad">11% – 16% House Edge ❌</span></div>
+                </div>
+                <p style="font-size:0.82em;color:var(--text-dim);margin:0;line-height:1.6;">💡 <strong>Strategy:</strong> Stick to Pass Line + Come bets with max Odds for the best possible return. Avoid all Proposition bets entirely.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── ROULETTE ── -->
+    <div class="calc-panel" id="panel-roulette">
+        <div class="calc-card">
+            <div class="calc-card-header"><p class="calc-card-title">🔴 European Roulette Odds Breakdown</p></div>
+            <div class="calc-card-body">
+                <p class="calc-desc">Torn uses <strong>European Roulette (Single Zero)</strong>. The house edge is a constant 2.70% on almost every bet — your choice of bet only affects volatility, not the expected return.</p>
+                <div class="info-table">
+                    <div class="info-row"><span class="info-label">Red / Black, Odd / Even, 1-18 / 19-36</span><span class="info-edge edge-ok">48.65% Win Chance · 2.70% Edge</span></div>
+                    <div class="info-row"><span class="info-label">Dozens (1-12, 13-24, 25-36)</span><span class="info-edge edge-ok">32.43% Win Chance · 2.70% Edge</span></div>
+                    <div class="info-row"><span class="info-label">Columns</span><span class="info-edge edge-ok">32.43% Win Chance · 2.70% Edge</span></div>
+                    <div class="info-row"><span class="info-label">Six Line (6 numbers)</span><span class="info-edge edge-ok">16.22% Win Chance · 2.70% Edge</span></div>
+                    <div class="info-row"><span class="info-label">Corner (4 numbers)</span><span class="info-edge edge-ok">10.81% Win Chance · 2.70% Edge</span></div>
+                    <div class="info-row"><span class="info-label">Street (3 numbers)</span><span class="info-edge edge-ok">8.11% Win Chance · 2.70% Edge</span></div>
+                    <div class="info-row"><span class="info-label">Split (2 numbers)</span><span class="info-edge edge-ok">5.41% Win Chance · 2.70% Edge</span></div>
+                    <div class="info-row"><span class="info-label">Single Number (Straight Up)</span><span class="info-edge edge-warn">2.70% Win Chance · 2.70% Edge · High Variance</span></div>
+                </div>
+                <p style="font-size:0.82em;color:var(--text-dim);margin:0;line-height:1.6;">💡 <strong>Strategy:</strong> The house edge is identical regardless of bet. Bet Even-Money (Red/Black) for the slowest bankroll drain and most playtime per dollar.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── SLOTS ── -->
+    <div class="calc-panel" id="panel-slots">
+        <div class="calc-card">
+            <div class="calc-card-header"><p class="calc-card-title">🎰 Slots ROI &amp; Merit Farming Guide</p></div>
+            <div class="calc-card-body">
+                <p class="calc-desc">Slot machines are pure RNG with no player input or strategy. Torn's exact Return to Player (RTP) is hidden, but standard casino slots range between 90–95%.</p>
+                <div class="info-table">
+                    <div class="info-row"><span class="info-label">Estimated RTP (Return to Player)</span><span class="info-edge edge-warn">~90% – 95%</span></div>
+                    <div class="info-row"><span class="info-label">House Edge per Spin</span><span class="info-edge edge-bad">5% – 10%</span></div>
+                    <div class="info-row"><span class="info-label">Expected Loss per $1,000,000 Spun</span><span class="info-edge edge-bad">$50,000 – $100,000</span></div>
+                    <div class="info-row"><span class="info-label">Player Strategy Available?</span><span class="info-edge edge-bad">None — Pure RNG ❌</span></div>
+                    <div class="info-row"><span class="info-label">Best Use Case</span><span class="info-edge edge-good">Merit Farming ✅</span></div>
+                </div>
+                <div style="background:rgba(162,155,254,0.06);border:1px solid rgba(162,155,254,0.2);border-radius:10px;padding:16px;">
+                    <div style="font-size:0.78em;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--casino);margin-bottom:8px;">💡 Merit Farming Tip</div>
+                    <p style="font-size:0.85em;color:var(--text-dim);line-height:1.6;margin:0;">If you need to grind casino merits, slots are the fastest way to rack up play counts per dollar. Bet the minimum amount possible to maximize merit count while minimizing total cash burned. Don't expect to profit — budget only what you're happy to lose.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</main>
+
 <script>
+// ── Sidebar / Theme ────────────────────────────────────────────────────────
+function toggleSidebar() {
+    if (window.innerWidth <= 768) {
+        const nav = document.querySelector('.nav-items');
+        if (nav) nav.classList.toggle('mobile-open');
+    } else {
+        const s = document.getElementById('app-sidebar');
+        s.classList.toggle('collapsed');
+        localStorage.setItem('sidebar_collapsed', s.classList.contains('collapsed'));
+    }
+}
+function toggleTheme() {
+    document.body.classList.toggle('light-mode');
+    localStorage.setItem('theme', document.body.classList.contains('light-mode') ? 'light' : 'dark');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const sidebar = document.getElementById('app-sidebar');
+    if (localStorage.getItem('sidebar_collapsed') === 'true') sidebar.classList.add('collapsed');
     if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-mode');
+});
 
-    function calcRR() {
-        const players = parseInt(document.getElementById('rr-players').value);
-        const turn = parseInt(document.getElementById('rr-turn').value);
-        const pool = parseFloat(document.getElementById('rr-pool').value);
-        
-        if (turn > players) {
-            alert("Your turn cannot be greater than the number of players!");
-            return;
-        }
+// ── Tab switching ──────────────────────────────────────────────────────────
+function showTab(id, btn) {
+    document.querySelectorAll('.calc-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('panel-' + id).classList.add('active');
+    btn.classList.add('active');
+}
 
-        // Mathematical Model for Russian Roulette (1 bullet, 6 chambers, spin after every pull or no spin?)
-        // Assuming Torn RR: No spin after each pull (barrel decreases).
-        // Odds of surviving turn n: (6-n)/ (7-n).
-        // Actually, in standard Torn RR, there is 1 bullet. The gun holds 6.
-        // Wait, Torn RR uses a 6 chamber revolver. The bullet is placed, cylinder is spun once.
-        // If players take turns, the probability of firing on turn 1 is 1/6. Turn 2 is 1/5. Turn 3 is 1/4...
-        // But if you are player 1, your chance of dying is 1/6 + (5/6 * 4/5 * 1/4) = 1/6 + 1/6 = ...
-        // Actually, if it's not spun, every chamber has an equal 1/6 chance of holding the bullet.
-        // If there are N players, your chance of winning depends on whether the bullet falls on your turns.
-        // For a 2 player game: P1 fires on 1, 3, 5. P2 fires on 2, 4, 6.
-        // P1 death chance = 3/6 = 50%. P2 death chance = 50%.
-        
-        // Let's implement a dynamic EV calculator.
-        let bulletPositions = [1,2,3,4,5,6];
-        let yourDeathCount = 0;
-        
-        for (let b of bulletPositions) {
-            // b is the chamber the bullet is in (1 to 6)
-            // Who dies on chamber b?
-            // The person whose turn corresponds to chamber b.
-            // Turn sequence: 1, 2, ..., P, 1, 2, ..., P
-            let deathTurn = ((b - 1) % players) + 1;
-            if (deathTurn === turn) yourDeathCount++;
-        }
-        
-        let deathProb = yourDeathCount / 6.0;
-        let winProb = 1.0 - deathProb;
-        
-        // Expected Value
-        // You bet: pool / players (assuming equal buy-in)
-        let buyIn = pool / players;
-        let ev = (winProb * pool) - buyIn;
-        let edge = (ev / buyIn) * 100;
-        
-        document.getElementById('rr-surv').textContent = (winProb * 100).toFixed(2) + "%";
-        document.getElementById('rr-win').textContent = (winProb * 100).toFixed(2) + "%";
-        
-        let evEl = document.getElementById('rr-ev');
-        evEl.textContent = (ev >= 0 ? "+$" : "-$") + Math.abs(ev).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
-        evEl.className = "res-val " + (ev >= 0 ? "good" : "bad");
-        
-        let edgeEl = document.getElementById('rr-edge');
-        edgeEl.textContent = (edge >= 0 ? "+" : "") + edge.toFixed(2) + "%";
-        edgeEl.className = "res-val " + (edge >= 0 ? "good" : "bad");
-        
-        document.getElementById('rr-results').style.display = 'block';
+// ── Russian Roulette ───────────────────────────────────────────────────────
+function calcRR() {
+    const players = parseInt(document.getElementById('rr-players').value);
+    const turn    = parseInt(document.getElementById('rr-turn').value);
+    const pool    = parseFloat(document.getElementById('rr-pool').value);
+
+    if (turn > players) {
+        alert('Your turn position cannot be greater than the number of players!');
+        return;
     }
 
-    function parseOdds(str) {
-        if (str.includes('/')) {
-            let parts = str.split('/');
-            return (parseFloat(parts[0]) / parseFloat(parts[1])) + 1;
-        }
-        return parseFloat(str);
+    // No-respin model: 1 bullet in 6-chamber revolver. Each chamber equally likely.
+    // Player at turn `turn` fires on chambers: turn, turn+players, turn+2*players, ...
+    let yourDeathCount = 0;
+    for (let b = 1; b <= 6; b++) {
+        const deathTurn = ((b - 1) % players) + 1;
+        if (deathTurn === turn) yourDeathCount++;
     }
 
-    function calcBookie() {
-        let oddA = parseOdds(document.getElementById('bookie-odds-a').value);
-        let oddB = parseOdds(document.getElementById('bookie-odds-b').value);
-        
-        if (isNaN(oddA) || isNaN(oddB) || oddA <= 1 || oddB <= 1) {
-            alert("Invalid odds format. Use decimal (1.5) or fractional (1/2)");
-            return;
-        }
-        
-        let probA = 1 / oddA;
-        let probB = 1 / oddB;
-        let vig = (probA + probB) - 1;
-        
-        document.getElementById('book-prob-a').textContent = (probA * 100).toFixed(2) + "%";
-        document.getElementById('book-prob-b').textContent = (probB * 100).toFixed(2) + "%";
-        document.getElementById('book-vig').textContent = (vig * 100).toFixed(2) + "%";
-        
-        let arbEl = document.getElementById('book-arb');
-        if (vig < 0) {
-            let guaranteed = Math.abs(vig * 100);
-            arbEl.textContent = "YES! " + guaranteed.toFixed(2) + "% Profit Margin";
-            arbEl.className = "res-val good";
+    const deathProb  = yourDeathCount / 6;
+    const survProb   = 1 - deathProb;
+    const buyIn      = pool / players;
+    const ev         = (survProb * pool) - buyIn;
+    const edge       = (ev / buyIn) * 100;
+
+    const fmt = n => '$' + Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    document.getElementById('rr-surv').textContent  = (survProb * 100).toFixed(2) + '%';
+    document.getElementById('rr-surv').className = 'res-val ' + (survProb >= 0.5 ? 'good' : 'bad');
+    document.getElementById('rr-death').textContent = (deathProb * 100).toFixed(2) + '%';
+    document.getElementById('rr-death').className = 'res-val ' + (deathProb <= 0.5 ? 'warn' : 'bad');
+
+    const evEl = document.getElementById('rr-ev');
+    evEl.textContent = (ev >= 0 ? '+' : '-') + fmt(ev);
+    evEl.className   = 'res-val ' + (ev >= 0 ? 'good' : 'bad');
+
+    const edgeEl = document.getElementById('rr-edge');
+    edgeEl.textContent = (edge >= 0 ? '+' : '') + edge.toFixed(2) + '%';
+    edgeEl.className   = 'res-val ' + (edge >= 0 ? 'good' : 'bad');
+
+    document.getElementById('rr-buyin').textContent = fmt(buyIn);
+
+    document.getElementById('rr-results').classList.add('visible');
+    document.getElementById('rr-empty').style.display = 'none';
+}
+
+// ── Blackjack ──────────────────────────────────────────────────────────────
+function calcBJ() {
+    const player = parseInt(document.getElementById('bj-player').value);
+    const dealer = parseInt(document.getElementById('bj-dealer').value);
+
+    let decision, color, reason;
+
+    if (player >= 17) {
+        decision = 'STAND'; color = 'var(--green)';
+        reason = 'You are likely to bust if you hit. Always stand on 17+.';
+    } else if (player >= 13 && player <= 16) {
+        if (dealer >= 2 && dealer <= 6) {
+            decision = 'STAND'; color = 'var(--green)';
+            reason = 'Dealer is showing a weak card (bust range). Stand and let the dealer bust.';
         } else {
-            arbEl.textContent = "No Arbitrage";
-            arbEl.className = "res-val bad";
+            decision = 'HIT'; color = 'var(--gold)';
+            reason = 'Dealer shows a strong card. Your 13–16 hand is likely losing — hit to improve.';
         }
-        
-        document.getElementById('bookie-results').style.display = 'block';
-    }
-
-    function calcBJ() {
-        const player = parseInt(document.getElementById('bj-player').value);
-        const dealer = parseInt(document.getElementById('bj-dealer').value);
-        
-        let decision = "HIT";
-        let color = "var(--gold)";
-        
-        if (player >= 17) {
-            decision = "STAND";
-            color = "var(--green)";
-        } else if (player >= 13 && player <= 16) {
-            if (dealer >= 2 && dealer <= 6) { decision = "STAND"; color = "var(--green)"; }
-            else { decision = "HIT"; color = "var(--gold)"; }
-        } else if (player === 12) {
-            if (dealer >= 4 && dealer <= 6) { decision = "STAND"; color = "var(--green)"; }
-            else { decision = "HIT"; color = "var(--gold)"; }
-        } else if (player === 11) {
-            decision = "DOUBLE DOWN"; color = "var(--blue)";
-        } else if (player === 10) {
-            if (dealer >= 2 && dealer <= 9) { decision = "DOUBLE DOWN"; color = "var(--blue)"; }
-            else { decision = "HIT"; color = "var(--gold)"; }
-        } else if (player === 9) {
-            if (dealer >= 3 && dealer <= 6) { decision = "DOUBLE DOWN"; color = "var(--blue)"; }
-            else { decision = "HIT"; color = "var(--gold)"; }
+    } else if (player === 12) {
+        if (dealer >= 4 && dealer <= 6) {
+            decision = 'STAND'; color = 'var(--green)';
+            reason = 'Dealer in bust danger zone (4–6). Don\'t risk busting yourself.';
         } else {
-            decision = "HIT"; color = "var(--gold)";
+            decision = 'HIT'; color = 'var(--gold)';
+            reason = 'Dealer shows 7+ or 2–3. Hit — only a 10-value card busts you.';
         }
-        
-        const decEl = document.getElementById('bj-decision');
-        decEl.textContent = decision;
-        decEl.style.color = color;
-        
-        document.getElementById('bj-results').style.display = 'block';
-    }
-
-    function calcPoker() {
-        let pot = parseFloat(document.getElementById('poker-pot').value);
-        let call = parseFloat(document.getElementById('poker-call').value);
-        let outs = parseInt(document.getElementById('poker-outs').value);
-        let streets = parseInt(document.getElementById('poker-streets').value);
-        
-        if (isNaN(pot) || isNaN(call) || isNaN(outs)) return;
-        
-        // Required Equity (Pot Odds)
-        // If pot is 1000, call is 200, total pot after call is 1200. You are risking 200 to win 1200.
-        let requiredEquity = (call / (pot + call)) * 100;
-        
-        // Rule of 2 and 4 for Hold'em
-        // 1 street = outs * 2. 2 streets = outs * 4.
-        let actualEquity = (streets === 2) ? (outs * 4) : (outs * 2);
-        // Better approximation for 2 streets if outs > 8: (outs * 4) - (outs - 8)
-        if (streets === 2 && outs > 8) {
-            actualEquity = (outs * 4) - (outs - 8);
-        }
-        
-        document.getElementById('poker-pot-odds').textContent = requiredEquity.toFixed(1) + "%";
-        document.getElementById('poker-card-odds').textContent = actualEquity.toFixed(1) + "%";
-        
-        let decEl = document.getElementById('poker-decision');
-        if (actualEquity >= requiredEquity) {
-            decEl.textContent = "CALL";
-            decEl.style.color = "var(--green)";
-            decEl.style.textShadow = "0 0 10px rgba(46, 204, 113, 0.3)";
+    } else if (player === 11) {
+        decision = 'DOUBLE DOWN'; color = 'var(--casino)';
+        reason = 'Always Double Down on 11. Maximum statistical advantage — high chance of landing 21.';
+    } else if (player === 10) {
+        if (dealer >= 2 && dealer <= 9) {
+            decision = 'DOUBLE DOWN'; color = 'var(--casino)';
+            reason = 'Strong 10-hand vs. weak dealer. Double Down to maximise EV.';
         } else {
-            decEl.textContent = "FOLD";
-            decEl.style.color = "var(--red)";
-            decEl.style.textShadow = "0 0 10px rgba(255, 71, 87, 0.3)";
+            decision = 'HIT'; color = 'var(--gold)';
+            reason = 'Dealer shows 10 or Ace. Don\'t double — just hit.';
         }
-        
-        document.getElementById('poker-results').style.display = "block";
-    }
-
-    function calcHL() {
-        let card = parseInt(document.getElementById('hl-card').value);
-        if (isNaN(card)) return;
-        
-        // Standard deck is 52 cards (2 through Ace). 4 of each rank.
-        // Number of ranks below = card - 2. (e.g. if card is 8, ranks below are 2,3,4,5,6,7 = 6 ranks)
-        // Number of cards below = ranks below * 4
-        // Total cards left in deck = 51 (1 drawn)
-        
-        let ranksBelow = card - 2;
-        let ranksAbove = 14 - card;
-        
-        // Assuming single deck, no card counting history.
-        let cardsBelow = ranksBelow * 4;
-        let cardsAbove = ranksAbove * 4;
-        // Remaining 3 cards of the SAME rank result in a push/loss depending on game rules.
-        // We will just calculate probability of strictly lower or strictly higher.
-        
-        let probLow = (cardsBelow / 51) * 100;
-        let probHigh = (cardsAbove / 51) * 100;
-        
-        document.getElementById('hl-low-odds').textContent = probLow.toFixed(1) + "%";
-        document.getElementById('hl-high-odds').textContent = probHigh.toFixed(1) + "%";
-        
-        let decEl = document.getElementById('hl-decision');
-        if (probLow > probHigh) {
-            decEl.textContent = "LOWER";
-            decEl.style.color = "var(--blue)";
-            decEl.style.textShadow = "0 0 10px rgba(88, 166, 255, 0.3)";
-        } else if (probHigh > probLow) {
-            decEl.textContent = "HIGHER";
-            decEl.style.color = "var(--teal)";
-            decEl.style.textShadow = "0 0 10px rgba(0, 206, 201, 0.3)";
+    } else if (player === 9) {
+        if (dealer >= 3 && dealer <= 6) {
+            decision = 'DOUBLE DOWN'; color = 'var(--casino)';
+            reason = 'Dealer in bust zone. Double Down on 9 for extra pressure.';
         } else {
-            decEl.textContent = "EVEN ODDS";
-            decEl.style.color = "var(--gold)";
-            decEl.style.textShadow = "0 0 10px rgba(255, 165, 2, 0.3)";
+            decision = 'HIT'; color = 'var(--gold)';
+            reason = 'Hit — not enough advantage to double here.';
         }
-        
-        document.getElementById('hl-results').style.display = "block";
+    } else {
+        decision = 'HIT'; color = 'var(--gold)';
+        reason = 'Low total — always hit on 8 or less, no risk of busting.';
     }
 
+    const decEl = document.getElementById('bj-decision');
+    decEl.textContent = decision;
+    decEl.style.color = color;
+    decEl.style.textShadow = `0 0 12px ${color}55`;
+    document.getElementById('bj-reason').textContent = reason;
+    document.getElementById('bj-results').classList.add('visible');
+    document.getElementById('bj-empty').style.display = 'none';
+}
+
+// ── High-Low ───────────────────────────────────────────────────────────────
+function calcHL() {
+    const card = parseInt(document.getElementById('hl-card').value);
+
+    const ranksBelow = card - 2;
+    const ranksAbove = 14 - card;
+    const cardsBelow = ranksBelow * 4;
+    const cardsAbove = ranksAbove * 4;
+
+    const probLow  = (cardsBelow / 51) * 100;
+    const probHigh = (cardsAbove / 51) * 100;
+
+    document.getElementById('hl-low-odds').textContent  = probLow.toFixed(1) + '%';
+    document.getElementById('hl-high-odds').textContent = probHigh.toFixed(1) + '%';
+
+    const lowBlock  = document.getElementById('hl-low-block');
+    const highBlock = document.getElementById('hl-high-block');
+    lowBlock.classList.remove('winner');
+    highBlock.classList.remove('winner');
+
+    let decision, color;
+    if (probLow > probHigh) {
+        decision = 'LOWER'; color = 'var(--blue)';
+        lowBlock.classList.add('winner');
+    } else if (probHigh > probLow) {
+        decision = 'HIGHER'; color = 'var(--teal)';
+        highBlock.classList.add('winner');
+    } else {
+        decision = 'EVEN ODDS'; color = 'var(--gold)';
+    }
+
+    const decEl = document.getElementById('hl-decision');
+    decEl.textContent = decision;
+    decEl.style.color = color;
+    decEl.style.textShadow = `0 0 12px ${color}55`;
+    document.getElementById('hl-results').classList.add('visible');
+    document.getElementById('hl-empty').style.display = 'none';
+}
+
+// ── Poker ──────────────────────────────────────────────────────────────────
+function calcPoker() {
+    const pot     = parseFloat(document.getElementById('poker-pot').value);
+    const call    = parseFloat(document.getElementById('poker-call').value);
+    const outs    = parseInt(document.getElementById('poker-outs').value);
+    const streets = parseInt(document.getElementById('poker-streets').value);
+
+    if (isNaN(pot) || isNaN(call) || isNaN(outs)) return;
+
+    const requiredEquity = (call / (pot + call)) * 100;
+
+    let actualEquity = streets === 2 ? (outs * 4) : (outs * 2);
+    if (streets === 2 && outs > 8) actualEquity = (outs * 4) - (outs - 8);
+
+    document.getElementById('poker-pot-odds').textContent  = requiredEquity.toFixed(1) + '%';
+    document.getElementById('poker-card-odds').textContent = actualEquity.toFixed(1) + '%';
+
+    const decEl = document.getElementById('poker-decision');
+    const shouldCall = actualEquity >= requiredEquity;
+    decEl.textContent    = shouldCall ? 'CALL' : 'FOLD';
+    decEl.style.color    = shouldCall ? 'var(--green)' : 'var(--red)';
+    decEl.style.textShadow = shouldCall ? '0 0 12px rgba(46,213,115,0.4)' : '0 0 12px rgba(255,71,87,0.4)';
+
+    document.getElementById('poker-results').classList.add('visible');
+    document.getElementById('poker-empty').style.display = 'none';
+}
+
+// ── Bookie ─────────────────────────────────────────────────────────────────
+function parseOdds(str) {
+    if (str.includes('/')) {
+        const [a, b] = str.split('/');
+        return (parseFloat(a) / parseFloat(b)) + 1;
+    }
+    return parseFloat(str);
+}
+
+function calcBookie() {
+    const oddA = parseOdds(document.getElementById('bookie-odds-a').value.trim());
+    const oddB = parseOdds(document.getElementById('bookie-odds-b').value.trim());
+
+    if (isNaN(oddA) || isNaN(oddB) || oddA <= 1 || oddB <= 1) {
+        alert('Invalid odds format. Use decimal (1.5) or fractional (3/2).');
+        return;
+    }
+
+    const probA = 1 / oddA;
+    const probB = 1 / oddB;
+    const vig   = (probA + probB) - 1;
+
+    document.getElementById('book-prob-a').textContent = (probA * 100).toFixed(2) + '%';
+    document.getElementById('book-prob-b').textContent = (probB * 100).toFixed(2) + '%';
+
+    const vigEl = document.getElementById('book-vig');
+    vigEl.textContent = (vig * 100).toFixed(2) + '%';
+    vigEl.className   = 'res-val ' + (vig < 0 ? 'good' : 'bad');
+
+    const arbEl = document.getElementById('book-arb');
+    if (vig < 0) {
+        arbEl.textContent = `YES! ${Math.abs(vig * 100).toFixed(2)}% Guaranteed Profit 🎯`;
+        arbEl.className   = 'res-val good';
+    } else {
+        arbEl.textContent = 'No Arbitrage Window';
+        arbEl.className   = 'res-val bad';
+    }
+
+    document.getElementById('bookie-results').classList.add('visible');
+    document.getElementById('bookie-empty').style.display = 'none';
+}
 </script>
-    <script src="/global_settings.js"></script>
+<script src="/global_settings.js"></script>
 </body>
 </html>
