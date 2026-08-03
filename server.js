@@ -98,6 +98,7 @@ let processedAttackIds = new Set();
 let friendlyHitTracker = {};
 let travelAlerts = {};
 let currentEnemyFacId = null;
+let globalTornCache = {};
 let enemyMembersCache = {};
 let lastEnemyScrape = 0;
 
@@ -921,6 +922,24 @@ function computeWarIntel(p, cache = {}) {
         else score += 10;
     }
     return score;
+}
+
+
+async function cachedTornFetch(url, cacheKey, ttlMs = 2500) {
+    const now = Date.now();
+    if (globalTornCache[cacheKey] && (now - globalTornCache[cacheKey].timestamp) < ttlMs) {
+        return globalTornCache[cacheKey].data;
+    }
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!data.error) {
+            globalTornCache[cacheKey] = { timestamp: now, data };
+        }
+        return data;
+    } catch (e) {
+        return { members: {} };
+    }
 }
 
 function autoDetectEnemyFaction(data) {
@@ -1800,13 +1819,13 @@ app.get('/api/warboard', async (req, res) => {
         
         let activeKey = userKey;
         let [myData, enemyDataResult] = await Promise.all([
-            fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`).then(r => r.json()).catch(() => ({ members: {} })),
-            enemyId ? fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()||userKey}`).then(r => r.json()).catch(() => ({ members: {} })) : Promise.resolve({ members: {} })
+            cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`, `my_faction_${userKey}`, 2500),
+            enemyId ? cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()||userKey}`, `enemy_faction_${enemyId}`, 2500) : Promise.resolve({ members: {} })
         ]);
         
         if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
         if (enemyId && Object.keys(enemyDataResult.members || {}).length === 0) { 
-            enemyDataResult = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()||userKey}`).then(r => r.json()).catch(() => ({ members: {} })); 
+            enemyDataResult = await cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()||userKey}`, `enemy_faction_${enemyId}`, 2500); 
         }
 
         if (myData && myData.ID) dynamicFactionId = myData.ID.toString();
