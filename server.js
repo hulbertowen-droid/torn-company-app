@@ -1094,7 +1094,7 @@ app.get('/api/dashboard-data', async (req, res) => {
         let parsedMembers = {};
         if (basicData.members) {
             Object.entries(basicData.members).forEach(([id, m]) => {
-                parsedMembers[id] = { ...m, timeline: isPremium ? (activityCache[id]?.timeline || null) : null };
+                parsedMembers[id] = { ...m, timeline: isPremium ? (activityCache[id]?.timeline || null) : null, timelineTime: isPremium ? (activityCache[id]?.time || null) : null };
             });
         }
 
@@ -1873,7 +1873,7 @@ app.get('/api/warboard', async (req, res) => {
                 let defends = 0;
                 if (enemyId && persistentDefends[id]?.[enemyId]) { defends = persistentDefends[id][enemyId]; }
 
-                let timeline = activityCache[id]?.timeline || null;
+                let timeline = activityCache[id]?.timeline || null; let timelineTime = activityCache[id]?.time || null;
 
                 return { id, name: m.name, level: m.level || 0, position: m.position || '', daysInFaction: m.days_in_faction || 0, state: m.status?.state, until: finalUntil, statusDescription: m.status?.description || "", onlineStatus: m.last_action?.status || "Offline", lastActionRelative: m.last_action?.relative || "Unknown", lastActionTimestamp: m.last_action?.timestamp || 0, landingTime: finalLandingTime, needsFfScouterForFlights, claimedBy: isEnemy ? claims[id]?.playerName || null : null, needsBackup: isEnemy ? backups[id]?.playerName || null : null, estStats: est, intelScore: isEnemy ? computeWarIntel({ id, state: m.status?.state, until: finalUntil, onlineStatus: m.last_action?.status || "Offline", estStats: typeof est === 'number' ? est : null }, statsCache) : null, isManual: !!manualStats[id], attacks, score, defends, timeline };
             });

@@ -743,7 +743,7 @@ async function fetchWarboard() {
 
 // ─── Charts ───────────────────────────────────────────────────────────────────
 function renderChart(players) {
-    const sorted = [...players].sort((a,b) => b.attacks !== a.attacks ? b.attacks - a.attacks : b.defends - a.defends || a.name.localeCompare(b.name));
+    const sorted = [...players].sort((a,b) => b.attacks !== a.attacks ? b.attacks - a.attacks : b.defends - a.defends || a.name.localeCompare(b.name)).slice(0, 15);
     const labels = sorted.map(p => p.name);
     const attData = sorted.map(p => p.attacks);
     const defData = sorted.map(p => p.defends);
@@ -785,33 +785,47 @@ function renderHeatmap(enemies, premium) {
         return;
     }
     let global24h = new Array(24).fill(0); let loaded = 0;
-    let curUTCHour = new Date().getUTCHours();
+    let maxTimeHour = new Date().getUTCHours();
+    
     enemies.forEach(p => {
         if (p.timeline && Array.isArray(p.timeline) && p.timeline.length > 0) {
             loaded++;
+            let refHour = p.timelineTime ? new Date(p.timelineTime).getUTCHours() : new Date().getUTCHours();
+            maxTimeHour = refHour;
+            
             p.timeline.forEach((v, i) => {
-                let h = ((curUTCHour - (p.timeline.length - 1 - i)) % 24 + 24) % 24;
+                let h = ((refHour - (p.timeline.length - 1 - i)) % 24 + 24) % 24;
                 global24h[h] += v;
             });
         }
     });
+    
     if (loaded === 0) { statusEl.innerText = "📡 Scanning deep intelligence..."; statusEl.style.color = "var(--gold)"; statusEl.style.borderColor = "rgba(255,165,2,0.3)"; return; }
+    
     let minSum = Infinity, sleepStart = 0;
     for (let i = 0; i < 24; i++) { let s = 0; for (let j = 0; j < 6; j++) s += global24h[(i+j)%24]; if (s < minSum) { minSum = s; sleepStart = i; } }
     let sleepEnd = (sleepStart + 6) % 24;
     statusEl.innerHTML = `✅ ${loaded} tracked | <span style="color:var(--red);">Sleep: ${sleepStart.toString().padStart(2,'0')}:00–${sleepEnd.toString().padStart(2,'0')}:00 TCT</span>`;
     statusEl.style.color = "var(--green)"; statusEl.style.borderColor = "rgba(46,213,115,0.3)";
-    const labels = Array.from({length:24},(_,i) => formatHourTCT(i));
+    
+    const labels = [];
+    const chartData = [];
+    for (let i = 23; i >= 0; i--) {
+        let h = ((maxTimeHour - i) % 24 + 24) % 24;
+        labels.push(formatHourTCT(h));
+        chartData.push(global24h[h]);
+    }
+    
     const ctx = document.getElementById('activityChart').getContext('2d');
     const grad = ctx.createLinearGradient(0,0,0,250); grad.addColorStop(0,'rgba(88,166,255,0.3)'); grad.addColorStop(1,'rgba(88,166,255,0)');
     if (activityChartInstance) {
         activityChartInstance.data.labels = labels;
-        activityChartInstance.data.datasets[0].data = global24h;
+        activityChartInstance.data.datasets[0].data = chartData;
         activityChartInstance.update();
     } else {
         activityChartInstance = new Chart(ctx, {
             type: 'line',
-            data: { labels, datasets: [{ label: 'Avg Activity', data: global24h, borderColor: '#58a6ff', backgroundColor: grad, borderWidth: 2, fill: true, tension: 0.4, pointRadius: 2, pointHoverRadius: 5, pointBackgroundColor: '#fff', pointBorderColor: '#0d1117', pointBorderWidth: 2 }] },
+            data: { labels, datasets: [{ label: 'Avg Activity', data: chartData, borderColor: '#58a6ff', backgroundColor: grad, borderWidth: 2, fill: true, tension: 0.4, pointRadius: 2, pointHoverRadius: 5, pointBackgroundColor: '#fff', pointBorderColor: '#0d1117', pointBorderWidth: 2 }] },
             options: {
                 responsive: true, maintainAspectRatio: false,
                 scales: {
