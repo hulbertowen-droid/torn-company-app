@@ -524,6 +524,14 @@ input:focus, select:focus {
 
         <button class="btn-outline" onclick="resetFilters()">↺ Reset Filters</button>
 
+        <div style="margin-top:4px;">
+            <div class="sidebar-title" style="margin-bottom:8px;">Quick Seed</div>
+            <button class="btn-outline" style="border-color:rgba(255,166,87,0.4);color:var(--gold);" onclick="openImportModal()">
+                ⚡ Import from ffscouter
+            </button>
+            <div style="font-size:0.72em;color:var(--text-faint);margin-top:6px;line-height:1.4;">Seeds the database instantly with real factionless players. Use this if you just installed and the DB is empty.</div>
+        </div>
+
         <div id="your-faction" style="display:none;">
             <div class="sidebar-title" style="margin-bottom:8px;">Your Faction</div>
             <div id="faction-name" style="font-size:0.85em;font-weight:700;color:var(--teal);"></div>
@@ -565,14 +573,56 @@ input:focus, select:focus {
 
         <!-- Results -->
         <div class="results-area" id="results-area">
-            <div class="state-box">
+            <div class="state-box" id="empty-state">
                 <div class="icon">🎯</div>
                 <div class="title">Ready to Search</div>
-                <div class="sub">Apply your filters on the left and click Search to instantly find recruitable players. Register your faction first to auto-exclude your own members.</div>
+                <div class="sub">Click <strong>Search Players</strong> to find recruitable players matching your filters. If no results appear, click <strong>⚡ Import from ffscouter</strong> on the left to seed your database instantly with real player data.</div>
+                <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;justify-content:center;">
+                    <button class="btn-search" style="width:auto;padding:10px 20px;" onclick="doSearch()">🔍 Search Now</button>
+                    <button class="btn-outline" style="border-color:rgba(255,166,87,0.4);color:var(--gold);padding:10px 20px;" onclick="openImportModal()">⚡ Seed Database</button>
+                </div>
             </div>
         </div>
 
     </main>
+</div>
+
+<!-- ── Import Modal ── -->
+<div class="modal-backdrop" id="import-modal" style="display:none;">
+    <div class="modal" style="width:520px;">
+        <div>
+            <div class="modal-title">⚡ Seed Database from ffscouter</div>
+            <div class="modal-sub" style="margin-top:6px;">Instantly pulls factionless players from ffscouter.com and loads them into your local MongoDB. Use this to get results immediately without waiting for the background scanner to build up data over time.</div>
+        </div>
+        <div style="display:flex;gap:10px;">
+            <div class="filter-group" style="flex:1;">
+                <div class="filter-label">Min Level</div>
+                <input type="number" id="imp-min-level" value="10" min="1" max="100">
+            </div>
+            <div class="filter-group" style="flex:1;">
+                <div class="filter-label">Max Level</div>
+                <input type="number" id="imp-max-level" value="100" min="1" max="100">
+            </div>
+            <div class="filter-group" style="flex:1;">
+                <div class="filter-label">Pages to fetch</div>
+                <input type="number" id="imp-pages" value="10" min="1" max="50">
+            </div>
+        </div>
+        <div id="import-log" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;max-height:160px;overflow-y:auto;font-size:0.78em;font-family:monospace;color:var(--text-dim);display:none;"></div>
+        <div id="import-progress" style="display:none;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                <span style="font-size:0.8em;color:var(--text-dim);" id="import-prog-label">Importing...</span>
+                <span style="font-size:0.8em;font-weight:700;color:var(--teal);" id="import-prog-count">0 players</span>
+            </div>
+            <div style="background:var(--item);border-radius:4px;height:6px;overflow:hidden;">
+                <div id="import-prog-bar" style="background:linear-gradient(90deg,var(--teal),var(--purple));height:100%;width:0%;transition:width 0.3s;"></div>
+            </div>
+        </div>
+        <div class="modal-btns">
+            <button class="btn-modal-primary" onclick="runImport()" id="btn-import">⚡ Start Import</button>
+            <button class="btn-modal-secondary" onclick="closeImportModal()" id="btn-import-close">Close</button>
+        </div>
+    </div>
 </div>
 
 <!-- ── Register Faction Modal ── -->
@@ -924,8 +974,105 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Enter' && document.getElementById('register-modal').style.display !== 'none') {
         registerFaction();
     }
-    if (e.key === 'Escape') closeRegisterModal();
+    if (e.key === 'Escape') { closeRegisterModal(); closeImportModal(); }
 });
+
+// ── Import Modal ───────────────────────────────────────────────────────────
+function openImportModal() {
+    document.getElementById('import-modal').style.display = 'flex';
+    document.getElementById('import-log').style.display = 'none';
+    document.getElementById('import-log').textContent = '';
+    document.getElementById('import-progress').style.display = 'none';
+    document.getElementById('import-prog-bar').style.width = '0%';
+    document.getElementById('import-prog-count').textContent = '0 players';
+    document.getElementById('btn-import').disabled = false;
+    document.getElementById('btn-import').textContent = '⚡ Start Import';
+    document.getElementById('btn-import-close').textContent = 'Close';
+}
+
+function closeImportModal() {
+    document.getElementById('import-modal').style.display = 'none';
+}
+
+async function runImport() {
+    const minLevel = document.getElementById('imp-min-level').value || 10;
+    const maxLevel = document.getElementById('imp-max-level').value || 100;
+    const pages    = document.getElementById('imp-pages').value || 10;
+
+    const btn = document.getElementById('btn-import');
+    const logEl = document.getElementById('import-log');
+    const progEl = document.getElementById('import-progress');
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Importing...';
+    logEl.style.display = 'block';
+    logEl.textContent = '';
+    progEl.style.display = 'block';
+
+    const addLog = (msg, color) => {
+        const line = document.createElement('div');
+        line.style.color = color || 'var(--text-dim)';
+        line.textContent = msg;
+        logEl.appendChild(line);
+        logEl.scrollTop = logEl.scrollHeight;
+    };
+
+    try {
+        const resp = await fetch('/api/admin/import-ffscouter', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ minLevel: parseInt(minLevel), maxLevel: parseInt(maxLevel), pages: parseInt(pages) }),
+        });
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const lines = buffer.split('\n');
+            buffer = lines.pop(); // Keep incomplete line in buffer
+
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                try {
+                    const msg = JSON.parse(line.slice(6));
+                    if (msg.type === 'progress') {
+                        const pct = Math.round((msg.page / parseInt(pages)) * 100);
+                        document.getElementById('import-prog-bar').style.width = pct + '%';
+                        document.getElementById('import-prog-count').textContent = `${msg.total.toLocaleString()} players`;
+                        document.getElementById('import-prog-label').textContent = `Page ${msg.page}/${pages} — imported ${msg.imported} players`;
+                        addLog(`✓ Page ${msg.page}: +${msg.imported} players (total: ${msg.total})`, 'var(--green)');
+                    } else if (msg.type === 'complete') {
+                        document.getElementById('import-prog-bar').style.width = '100%';
+                        document.getElementById('import-prog-count').textContent = `${msg.totalImported.toLocaleString()} players`;
+                        document.getElementById('import-prog-label').textContent = 'Done!';
+                        addLog(`🎉 ${msg.message}`, 'var(--teal)');
+                        btn.textContent = '✅ Done!';
+                        btn.disabled = false;
+                        document.getElementById('btn-import-close').textContent = 'Close & Search';
+                        // Reload status KPIs
+                        loadStatus();
+                        // Auto search after import
+                        setTimeout(() => { closeImportModal(); doSearch(); }, 1500);
+                    } else if (msg.type === 'warn') {
+                        addLog(`⚠ ${msg.message}`, 'var(--gold)');
+                    } else if (msg.type === 'start') {
+                        addLog(msg.message, 'var(--text-dim)');
+                    }
+                } catch(e) {}
+            }
+        }
+    } catch (err) {
+        addLog(`❌ Error: ${err.message}`, 'var(--red)');
+        btn.disabled = false;
+        btn.textContent = '⚡ Retry';
+    }
+}
+
 
 // ── Util ───────────────────────────────────────────────────────────────────
 function escHtml(str) {

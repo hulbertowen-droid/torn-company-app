@@ -1,12 +1,9 @@
 'use strict';
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
-const { Worker } = require('bullmq');
 const { connectDB } = require('../db/mongo');
 const Player = require('../db/models/Player');
-const { scheduleRefresh, scheduleSeedBatch, getConnection } = require('../queues/playerQueue');
-
-// Config stored in DB
+const { scheduleRefresh, scheduleSeedBatch, getPlayerSeedQueue } = require('../queues/playerQueue');
 const mongoose = require('mongoose');
 
 const CONFIG_COL = 'seeder_config';
@@ -28,12 +25,12 @@ async function setWatermark(value) {
     );
 }
 
-let worker;
-
 async function startSeederWorker() {
     await connectDB();
 
-    worker = new Worker('player-seed', async (job) => {
+    const queue = getPlayerSeedQueue();
+
+    queue.process(1, async (job) => {
         const { startId, endId } = job.data;
 
         // Find which IDs in this range we DON'T already have in the DB
@@ -52,13 +49,9 @@ async function startSeederWorker() {
 
         // Update watermark
         await setWatermark(endId + 1);
-
-    }, {
-        connection: getConnection(),
-        concurrency: 1, // Seeder is sequential — one batch at a time
     });
 
-    worker.on('failed', (job, err) => {
+    queue.on('failed', (job, err) => {
         console.error(`[SeederWorker] Batch failed:`, err.message);
     });
 

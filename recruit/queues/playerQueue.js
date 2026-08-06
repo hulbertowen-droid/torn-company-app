@@ -1,30 +1,21 @@
 'use strict';
-const { Queue } = require('bullmq');
-const IORedis = require('ioredis');
+const Queue = require('bull');
 
-let connection;
 let playerRefreshQueue;
 let playerSeedQueue;
 
-function getConnection() {
-    if (!connection) {
-        const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-        connection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
-        connection.on('connect', () => console.log('[Redis] Connected'));
-        connection.on('error', (e) => console.error('[Redis] Error:', e.message));
-    }
-    return connection;
+function getRedisUrl() {
+    return process.env.REDIS_URL || 'redis://localhost:6379';
 }
 
 function getPlayerRefreshQueue() {
     if (!playerRefreshQueue) {
-        playerRefreshQueue = new Queue('player-refresh', {
-            connection: getConnection(),
+        playerRefreshQueue = new Queue('player-refresh', getRedisUrl(), {
             defaultJobOptions: {
                 attempts: 3,
                 backoff: { type: 'exponential', delay: 5000 },
-                removeOnComplete: { count: 100 },
-                removeOnFail: { count: 50 },
+                removeOnComplete: 100,
+                removeOnFail: 50,
             },
         });
     }
@@ -33,13 +24,12 @@ function getPlayerRefreshQueue() {
 
 function getPlayerSeedQueue() {
     if (!playerSeedQueue) {
-        playerSeedQueue = new Queue('player-seed', {
-            connection: getConnection(),
+        playerSeedQueue = new Queue('player-seed', getRedisUrl(), {
             defaultJobOptions: {
                 attempts: 2,
                 backoff: { type: 'fixed', delay: 2000 },
-                removeOnComplete: { count: 10 },
-                removeOnFail: { count: 20 },
+                removeOnComplete: 10,
+                removeOnFail: 20,
             },
         });
     }
@@ -53,10 +43,9 @@ function getPlayerSeedQueue() {
  */
 async function scheduleRefresh(playerId, delayMs = 0) {
     const q = getPlayerRefreshQueue();
-    await q.add('refresh', { playerId }, {
+    await q.add({ playerId }, {
         delay: delayMs,
         jobId: `player-${playerId}`,  // Prevents duplicate jobs for same player
-        deduplication: { id: `player-${playerId}` },
     });
 }
 
@@ -67,13 +56,12 @@ async function scheduleRefresh(playerId, delayMs = 0) {
  */
 async function scheduleSeedBatch(startId, endId) {
     const q = getPlayerSeedQueue();
-    await q.add('seed', { startId, endId }, {
+    await q.add({ startId, endId }, {
         jobId: `seed-${startId}-${endId}`,
     });
 }
 
 module.exports = {
-    getConnection,
     getPlayerRefreshQueue,
     getPlayerSeedQueue,
     scheduleRefresh,

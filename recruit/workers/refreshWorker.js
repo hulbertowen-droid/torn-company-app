@@ -1,23 +1,22 @@
 'use strict';
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
-const { Worker } = require('bullmq');
 const { connectDB } = require('../db/mongo');
 const Player = require('../db/models/Player');
 const { fetchPlayer, parsePlayer } = require('../lib/tornClient');
-const { scheduleRefresh } = require('../queues/playerQueue');
-const { getConnection } = require('../queues/playerQueue');
+const { scheduleRefresh, getPlayerRefreshQueue } = require('../queues/playerQueue');
 
 // WebSocket broadcast — injected from server.js when running in-process
 let broadcastFn = null;
 function setBroadcast(fn) { broadcastFn = fn; }
 
-let worker;
-
 async function startRefreshWorker() {
     await connectDB();
 
-    worker = new Worker('player-refresh', async (job) => {
+    const queue = getPlayerRefreshQueue();
+    
+    // Process jobs from Bull queue
+    queue.process(8, async (job) => {
         const { playerId } = job.data;
         let raw;
 
@@ -67,13 +66,9 @@ async function startRefreshWorker() {
         // Schedule the next refresh based on new state
         const delayMs = parsed.nextRefreshAt.getTime() - Date.now();
         await scheduleRefresh(playerId, Math.max(delayMs, 10_000));
-
-    }, {
-        connection: getConnection(),
-        concurrency: 8,   // 8 concurrent jobs — keeps API pool busy without flooding
     });
 
-    worker.on('failed', (job, err) => {
+    queue.on('failed', (job, err) => {
         if (process.env.NODE_ENV !== 'production') {
             console.error(`[RefreshWorker] Job ${job?.id} failed:`, err.message);
         }
