@@ -577,7 +577,7 @@ function switchMode(mode) {
     document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
     document.getElementById('tab-' + mode).classList.add('active');
     document.getElementById('war-selection').style.display = mode === 'poach' ? 'block' : 'none';
-    document.getElementById('global-filters').style.display = (mode === 'scan' || mode === 'import') ? 'grid' : 'none';
+    document.getElementById('global-filters').style.display = (mode === 'scan') ? 'grid' : 'none';
     document.getElementById('scan-options').style.display = mode === 'scan' ? 'block' : 'none';
     document.getElementById('import-options').style.display = mode === 'import' ? 'block' : 'none';
     document.getElementById('results-section').style.display = 'none';
