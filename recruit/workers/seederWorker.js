@@ -7,8 +7,8 @@ const { scheduleRefresh, scheduleSeedBatch, getPlayerSeedQueue } = require('../q
 const mongoose = require('mongoose');
 
 const CONFIG_COL = 'seeder_config';
-const BATCH_SIZE = 100; // IDs per seed batch
-const MAX_TORN_ID = 5_000_000; // Torn IDs go up to roughly this range
+const BATCH_SIZE = 20; // Keep batches small — 20 IDs per tick
+const MAX_TORN_ID = 5_000_000;
 
 async function getWatermark() {
     const db = mongoose.connection.db;
@@ -74,9 +74,9 @@ async function seedLoop() {
             
             await scheduleSeedBatch(startId, endId);
 
-            // Wait for the batch to likely be processed before scheduling next
-            // This keeps us from flooding the queue with millions of batch jobs
-            await new Promise(r => setTimeout(r, 5000));
+            // Wait 30s between batches — this paces the scanner to ~40 players/min with 1 key.
+            // With more keys in the pool, you can reduce this or the system auto-adapts.
+            await new Promise(r => setTimeout(r, 30_000));
 
             if (endId >= MAX_TORN_ID) {
                 console.log('[SeederWorker] Reached max ID, restarting from 1');

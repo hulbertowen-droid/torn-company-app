@@ -15,8 +15,9 @@ async function startRefreshWorker() {
 
     const queue = getPlayerRefreshQueue();
     
-    // Process jobs from Bull queue
-    queue.process(8, async (job) => {
+    // Process jobs from Bull queue — low concurrency to respect Torn API rate limit
+    // With 1 key: 100 calls/min = ~1.67/sec. Concurrency 2 with 700ms gap = ~1.4/sec. Safe.
+    queue.process(2, async (job) => {
         const { playerId } = job.data;
         let raw;
 
@@ -74,7 +75,7 @@ async function startRefreshWorker() {
         }
     });
 
-    console.log('[RefreshWorker] Started (concurrency=8)');
+    console.log('[RefreshWorker] Started (concurrency=2, paced for 1 API key)');
 }
 
 module.exports = { startRefreshWorker, setBroadcast };
