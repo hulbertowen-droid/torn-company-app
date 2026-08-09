@@ -591,21 +591,17 @@ input:focus, select:focus {
 <div class="modal-backdrop" id="import-modal" style="display:none;">
     <div class="modal" style="width:520px;">
         <div>
-            <div class="modal-title">⚡ Seed Database from ffscouter</div>
-            <div class="modal-sub" style="margin-top:6px;">Instantly pulls factionless players from ffscouter.com and loads them into your local MongoDB. Use this to get results immediately without waiting for the background scanner to build up data over time.</div>
+            <div class="modal-title">⚡ Seed Database (Direct Torn API)</div>
+            <div class="modal-sub" style="margin-top:6px;">Samples random recent Torn player IDs (2M–5M) directly via the Torn API using your registered key. Only stores players who have been <strong>active recently</strong> — no dead accounts. Typically finds 10-30% factionless and ready to recruit.</div>
         </div>
         <div style="display:flex;gap:10px;">
             <div class="filter-group" style="flex:1;">
-                <div class="filter-label">Min Level</div>
-                <input type="number" id="imp-min-level" value="10" min="1" max="100">
+                <div class="filter-label">Players to scan</div>
+                <input type="number" id="imp-pages" value="200" min="50" max="1000">
             </div>
             <div class="filter-group" style="flex:1;">
-                <div class="filter-label">Max Level</div>
-                <input type="number" id="imp-max-level" value="100" min="1" max="100">
-            </div>
-            <div class="filter-group" style="flex:1;">
-                <div class="filter-label">Pages to fetch</div>
-                <input type="number" id="imp-pages" value="10" min="1" max="50">
+                <div class="filter-label">Active within (hours)</div>
+                <input type="number" id="imp-active-h" value="168" min="24" max="720">
             </div>
         </div>
         <div id="import-log" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;max-height:160px;overflow-y:auto;font-size:0.78em;font-family:monospace;color:var(--text-dim);display:none;"></div>
@@ -995,16 +991,15 @@ function closeImportModal() {
 }
 
 async function runImport() {
-    const minLevel = document.getElementById('imp-min-level').value || 10;
-    const maxLevel = document.getElementById('imp-max-level').value || 100;
-    const pages    = document.getElementById('imp-pages').value || 10;
+    const count  = document.getElementById('imp-pages').value || 200;
+    const minActiveH = document.getElementById('imp-active-h').value || 168;
 
     const btn = document.getElementById('btn-import');
     const logEl = document.getElementById('import-log');
     const progEl = document.getElementById('import-progress');
 
     btn.disabled = true;
-    btn.textContent = '⏳ Importing...';
+    btn.textContent = '⏳ Scanning...';
     logEl.style.display = 'block';
     logEl.textContent = '';
     progEl.style.display = 'block';
@@ -1018,11 +1013,16 @@ async function runImport() {
     };
 
     try {
-        const resp = await fetch('/api/admin/import-ffscouter', {
+        const resp = await fetch('/api/admin/import-torn-api', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ minLevel: parseInt(minLevel), maxLevel: parseInt(maxLevel), pages: parseInt(pages) }),
+            body: JSON.stringify({ count: parseInt(count), minActiveH: parseInt(minActiveH) }),
         });
+
+        if (!resp.ok) {
+            const err = await resp.json();
+            throw new Error(err.error || 'Request failed');
+        }
 
         const reader = resp.body.getReader();
         const decoder = new TextDecoder();
@@ -1034,29 +1034,26 @@ async function runImport() {
             buffer += decoder.decode(value, { stream: true });
 
             const lines = buffer.split('\n');
-            buffer = lines.pop(); // Keep incomplete line in buffer
+            buffer = lines.pop();
 
             for (const line of lines) {
                 if (!line.startsWith('data: ')) continue;
                 try {
                     const msg = JSON.parse(line.slice(6));
                     if (msg.type === 'progress') {
-                        const pct = Math.round((msg.page / parseInt(pages)) * 100);
+                        const pct = Math.round((msg.fetched / parseInt(count)) * 100);
                         document.getElementById('import-prog-bar').style.width = pct + '%';
-                        document.getElementById('import-prog-count').textContent = `${msg.total.toLocaleString()} players`;
-                        document.getElementById('import-prog-label').textContent = `Page ${msg.page}/${pages} — imported ${msg.imported} players`;
-                        addLog(`✓ Page ${msg.page}: +${msg.imported} players (total: ${msg.total})`, 'var(--green)');
+                        document.getElementById('import-prog-count').textContent = `${msg.recruitable} recruitable found`;
+                        document.getElementById('import-prog-label').textContent = `Scanned ${msg.fetched}/${count} — ${msg.stored} active stored`;
                     } else if (msg.type === 'complete') {
                         document.getElementById('import-prog-bar').style.width = '100%';
-                        document.getElementById('import-prog-count').textContent = `${msg.totalImported.toLocaleString()} players`;
+                        document.getElementById('import-prog-count').textContent = `${msg.recruitable} recruitable!`;
                         document.getElementById('import-prog-label').textContent = 'Done!';
                         addLog(`🎉 ${msg.message}`, 'var(--teal)');
                         btn.textContent = '✅ Done!';
                         btn.disabled = false;
                         document.getElementById('btn-import-close').textContent = 'Close & Search';
-                        // Reload status KPIs
                         loadStatus();
-                        // Auto search after import
                         setTimeout(() => { closeImportModal(); doSearch(); }, 1500);
                     } else if (msg.type === 'warn') {
                         addLog(`⚠ ${msg.message}`, 'var(--gold)');

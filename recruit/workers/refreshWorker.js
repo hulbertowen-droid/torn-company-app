@@ -44,12 +44,27 @@ async function startRefreshWorker() {
             ? (Date.now() - parsed.lastActionTs.getTime()) / 3_600_000
             : 9999;
         const isActive = hoursSinceLast < 72;
+        const daysSinceLast = hoursSinceLast / 24;
+
+        // ── Intelligent skip logic ──────────────────────────────────────────
+        // Don't waste DB space or future API quota on:
+        // - Players in a faction AND inactive for >30 days (dead, not recruitable anytime soon)
+        // We DO keep: factionless players (any activity), and active in-faction players (might leave)
+        if (parsed.factionId !== 0 && daysSinceLast > 30) {
+            // Mark as skipped, don't re-queue for a long time
+            await Player.updateOne(
+                { _id: playerId },
+                { $set: { ...parsed, nextRefreshAt: new Date(Date.now() + 14 * 86_400_000) } },
+                { upsert: true }
+            );
+            return; // Don't broadcast or schedule frequent refreshes
+        }
 
         // Upsert into players collection
         const prev = await Player.findOneAndUpdate(
             { _id: playerId },
             { $set: parsed },
-            { upsert: true, new: false }
+            { upsert: true, returnDocument: 'before' }
         ).lean();
 
         // Detect state changes for WebSocket broadcasts

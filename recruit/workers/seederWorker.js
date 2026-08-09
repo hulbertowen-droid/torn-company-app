@@ -3,17 +3,29 @@ require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
 const { connectDB } = require('../db/mongo');
 const Player = require('../db/models/Player');
-const { scheduleRefresh, scheduleSeedBatch, getPlayerSeedQueue } = require('../queues/playerQueue');
+const { fetchPlayer, parsePlayer } = require('../lib/tornClient');
+const { poolSize } = require('../lib/apiKeyPool');
 const mongoose = require('mongoose');
 
 const CONFIG_COL = 'seeder_config';
-const BATCH_SIZE = 20; // Keep batches small — 20 IDs per tick
-const MAX_TORN_ID = 5_000_000;
+
+// How long to wait between each API call (milliseconds).
+// 700ms = ~85 calls/min, safely under 100/min limit with 1 key.
+// With 2 keys: can reduce to 350ms, etc.
+const MS_PER_CALL = 700;
+
+// Start scanning at recent Torn IDs — active new players are here
+// Old IDs (1-2M) = 2004-2017 accounts, mostly inactive/dead
+const DEFAULT_START_ID = 3_500_000;
+const MAX_TORN_ID = 5_500_000;
+
+let broadcastFn = null;
+function setBroadcast(fn) { broadcastFn = fn; }
 
 async function getWatermark() {
     const db = mongoose.connection.db;
     const doc = await db.collection(CONFIG_COL).findOne({ _id: 'watermark' });
-    return doc?.value || 1;
+    return doc?.value || DEFAULT_START_ID;
 }
 
 async function setWatermark(value) {
@@ -27,66 +39,85 @@ async function setWatermark(value) {
 
 async function startSeederWorker() {
     await connectDB();
-
-    const queue = getPlayerSeedQueue();
-
-    queue.process(1, async (job) => {
-        const { startId, endId } = job.data;
-
-        // Find which IDs in this range we DON'T already have in the DB
-        const existing = await Player.find(
-            { _id: { $gte: startId, $lte: endId } },
-            { _id: 1 }
-        ).lean();
-        const existingSet = new Set(existing.map(p => p._id));
-
-        for (let id = startId; id <= endId; id++) {
-            if (!existingSet.has(id)) {
-                // Schedule an immediate refresh for this new ID
-                await scheduleRefresh(id, 0);
-            }
-        }
-
-        // Update watermark
-        await setWatermark(endId + 1);
-    });
-
-    queue.on('failed', (job, err) => {
-        console.error(`[SeederWorker] Batch failed:`, err.message);
-    });
-
-    console.log('[SeederWorker] Started');
-
-    // Kick off continuous seeding loop
-    seedLoop();
+    console.log('[SeederWorker] Started — paced loop, 1 API call per 700ms');
+    scanLoop();
 }
 
 /**
- * Continuously schedule seed batches, advancing the watermark forward.
- * When we reach MAX_TORN_ID, wrap back to 1 (re-verify old players).
+ * The main scan loop.
+ * - Fetches one player ID at a time
+ * - Waits MS_PER_CALL ms between each request
+ * - Skips players that are in a faction AND inactive (not useful for recruiting)
+ * - Wraps around from MAX_TORN_ID back to DEFAULT_START_ID
  */
-async function seedLoop() {
+async function scanLoop() {
     while (true) {
-        try {
-            const watermark = await getWatermark();
-            const startId = watermark;
-            const endId = Math.min(startId + BATCH_SIZE - 1, MAX_TORN_ID);
-            
-            await scheduleSeedBatch(startId, endId);
-
-            // Wait 30s between batches — this paces the scanner to ~40 players/min with 1 key.
-            // With more keys in the pool, you can reduce this or the system auto-adapts.
-            await new Promise(r => setTimeout(r, 30_000));
-
-            if (endId >= MAX_TORN_ID) {
-                console.log('[SeederWorker] Reached max ID, restarting from 1');
-                await setWatermark(1);
-            }
-        } catch (e) {
-            console.error('[SeederWorker] Loop error:', e.message);
-            await new Promise(r => setTimeout(r, 10_000));
+        // Pause if no API keys available
+        if (poolSize() === 0) {
+            await new Promise(r => setTimeout(r, 5000));
+            continue;
         }
+
+        let currentId;
+        try {
+            currentId = await getWatermark();
+
+            // Fetch the player
+            let raw;
+            try {
+                raw = await fetchPlayer(currentId);
+            } catch (err) {
+                // API error — wait a bit longer and retry same ID
+                const isRateLimit = err.message.includes('[5]') || err.message.includes('Too many');
+                const delay = isRateLimit ? 2000 : 1000;
+                await new Promise(r => setTimeout(r, delay));
+                continue; // Don't advance watermark on error
+            }
+
+            if (raw !== null) {
+                const parsed = parsePlayer(currentId, raw);
+                const hoursSinceLast = parsed.lastActionTs
+                    ? (Date.now() - parsed.lastActionTs.getTime()) / 3_600_000
+                    : 9999;
+                const daysSinceLast = hoursSinceLast / 24;
+                const isRecruitableNow = parsed.factionId === 0 && parsed.status === 'Okay';
+                const isActive = hoursSinceLast < 72;
+
+                // Only store if: factionless OR recently active (last 30 days)
+                // Skip in-faction + inactive — they're useless for recruiting
+                if (isRecruitableNow || daysSinceLast < 30) {
+                    const prev = await Player.findOneAndUpdate(
+                        { _id: currentId },
+                        { $set: parsed },
+                        { upsert: true, returnDocument: 'before' }
+                    ).lean();
+
+                    // Broadcast live update if player just became recruitable
+                    if (broadcastFn && isRecruitableNow && isActive) {
+                        const wasRecruitable = prev && prev.factionId === 0 && prev.status === 'Okay';
+                        if (!wasRecruitable) {
+                            broadcastFn({ type: 'player_available', player: parsed });
+                        }
+                    }
+                }
+            }
+
+            // Advance to next ID
+            const nextId = currentId >= MAX_TORN_ID ? DEFAULT_START_ID : currentId + 1;
+            await setWatermark(nextId);
+
+            if (nextId === DEFAULT_START_ID) {
+                console.log('[SeederWorker] Completed full scan cycle, restarting from', DEFAULT_START_ID);
+            }
+
+        } catch (err) {
+            console.error('[SeederWorker] Loop error at ID', currentId, ':', err.message);
+            await new Promise(r => setTimeout(r, 5000));
+        }
+
+        // Pace ourselves — wait between each API call
+        await new Promise(r => setTimeout(r, MS_PER_CALL));
     }
 }
 
-module.exports = { startSeederWorker };
+module.exports = { startSeederWorker, setBroadcast };

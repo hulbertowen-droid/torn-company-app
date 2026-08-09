@@ -9,8 +9,8 @@ const mongoose = require('mongoose');
 
 const { connectDB } = require('./db/mongo');
 const { addKey, poolSize } = require('./lib/apiKeyPool');
-const { startRefreshWorker, setBroadcast } = require('./workers/refreshWorker');
-const { startSeederWorker } = require('./workers/seederWorker');
+const { startRefreshWorker, setBroadcast: setRefreshBroadcast } = require('./workers/refreshWorker');
+const { startSeederWorker, setBroadcast: setSeederBroadcast } = require('./workers/seederWorker');
 const Faction = require('./db/models/Faction');
 
 const authRoutes   = require('./routes/auth');
@@ -59,8 +59,9 @@ function broadcast(data) {
     }
 }
 
-// Inject broadcast into the refresh worker
-setBroadcast(broadcast);
+// Inject broadcast into both workers
+setRefreshBroadcast(broadcast);
+setSeederBroadcast(broadcast);
 
 // ── Startup ─────────────────────────────────────────────────────────────────
 async function main() {

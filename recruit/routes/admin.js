@@ -1,11 +1,11 @@
 'use strict';
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
 const Player = require('../db/models/Player');
 const Faction = require('../db/models/Faction');
 const { poolSize, poolStats } = require('../lib/apiKeyPool');
 const { getPlayerRefreshQueue, scheduleRefresh } = require('../queues/playerQueue');
+const { fetchPlayer, parsePlayer } = require('../lib/tornClient');
 
 /**
  * GET /api/admin/status
@@ -66,17 +66,28 @@ router.post('/queue-player', async (req, res) => {
 });
 
 /**
- * POST /api/admin/import-ffscouter
+ * POST /api/admin/import-torn-api
  * 
- * Fetches factionless candidates from ffscouter.com and bulk-imports them
- * into MongoDB so the recruiter has real data to search immediately.
+ * Samples random recent Torn player IDs (3M-5M range) directly via the Torn API.
+ * This gives us REAL, fresh activity data — not third-party stale data.
  * 
- * This seeds the database without waiting for the background scanner.
- * Query: { minLevel, maxLevel, pages } 
+ * Uses the faction's registered API key from the pool.
+ * Streams progress back via Server-Sent Events.
+ * 
+ * Body: { count: number (default 200), minActive: number hours (default 168 = 7 days) }
  */
-router.post('/import-ffscouter', async (req, res) => {
+router.post('/import-torn-api', async (req, res) => {
     try {
-        const { minLevel = 10, maxLevel = 100, pages = 5 } = req.body;
+        const { count = 200, minActiveH = 168 } = req.body;
+        const totalToFetch = Math.min(parseInt(count) || 200, 1000);
+        const activeThresholdMs = (parseInt(minActiveH) || 168) * 3_600_000;
+
+        // Need at least one key in pool
+        if (poolSize() === 0) {
+            return res.status(400).json({
+                error: 'No API key registered. Register your faction first to add a key to the pool.'
+            });
+        }
 
         res.writeHead(200, {
             'Content-Type': 'text/event-stream',
@@ -84,95 +95,87 @@ router.post('/import-ffscouter', async (req, res) => {
             'Connection': 'keep-alive',
         });
 
-        const send = (msg) => res.write(`data: ${JSON.stringify(msg)}\n\n`);
-        send({ type: 'start', message: 'Starting ffscouter import...' });
+        const send = (msg) => {
+            try { res.write(`data: ${JSON.stringify(msg)}\n\n`); } catch(e) {}
+        };
 
-        let totalImported = 0;
-        let totalSkipped = 0;
+        send({ type: 'start', message: `Scanning ${totalToFetch} random recent Torn IDs via API...` });
 
-        for (let page = 1; page <= pages; page++) {
-            try {
-                // ffscouter targets endpoint - search for factionless players
-                const url = `https://www.ffscouter.com/api/targets?minlevel=${minLevel}&maxlevel=${maxLevel}&status=0&faction=none&page=${page}`;
-                const resp = await fetch(url, {
-                    headers: { 'User-Agent': 'TornRecruit/1.0' },
-                    signal: AbortSignal.timeout(10000),
+        // Recent Torn IDs — players created roughly 2018-2026
+        // Torn has ~5.5M total IDs; most active players are in the 2M-5M range
+        const MIN_ID = 2_000_000;
+        const MAX_ID = 5_200_000;
+
+        let fetched = 0;
+        let stored = 0;
+        let recruitable = 0;
+
+        // Fetch in parallel batches of 5 (respects rate limit with 1 key)
+        while (fetched < totalToFetch) {
+            const batchSize = Math.min(5, totalToFetch - fetched);
+            const batch = [];
+
+            for (let i = 0; i < batchSize; i++) {
+                const id = Math.floor(Math.random() * (MAX_ID - MIN_ID)) + MIN_ID;
+                batch.push(id);
+            }
+
+            const results = await Promise.allSettled(
+                batch.map(id => fetchPlayer(id))
+            );
+
+            const ops = [];
+            for (let i = 0; i < results.length; i++) {
+                const r = results[i];
+                if (r.status !== 'fulfilled' || r.value === null) continue;
+
+                const raw = r.value;
+                const id = batch[i];
+                const parsed = parsePlayer(id, raw);
+
+                // Only store players who have been active recently
+                const hoursSince = parsed.lastActionTs
+                    ? (Date.now() - parsed.lastActionTs.getTime()) / 3_600_000
+                    : 9999;
+                const msAgo = hoursSince * 3_600_000;
+
+                if (msAgo > activeThresholdMs) continue; // Skip inactive players
+
+                ops.push({
+                    updateOne: {
+                        filter: { _id: id },
+                        update: { $set: parsed },
+                        upsert: true,
+                    }
                 });
 
-                if (!resp.ok) {
-                    send({ type: 'warn', message: `ffscouter page ${page} returned ${resp.status}` });
-                    continue;
-                }
-
-                const data = await resp.json();
-                const players = data?.data || data?.players || data?.targets || [];
-
-                if (players.length === 0) {
-                    send({ type: 'done', message: `No more data at page ${page}. Stopping.` });
-                    break;
-                }
-
-                // Bulk upsert into MongoDB
-                const ops = players.map(p => {
-                    const playerId = parseInt(p.id || p.player_id || p.torn_id);
-                    if (!playerId) return null;
-
-                    const lastActionTs = p.last_action ? new Date(p.last_action * 1000) : null;
-                    const hoursSinceLast = lastActionTs
-                        ? (Date.now() - lastActionTs.getTime()) / 3_600_000
-                        : 9999;
-
-                    const calcDelay = () => {
-                        if (hoursSinceLast < 1)  return 20 * 60_000;
-                        if (hoursSinceLast < 12) return 60 * 60_000;
-                        if (hoursSinceLast < 48) return 4 * 3_600_000;
-                        return 24 * 3_600_000;
-                    };
-
-                    return {
-                        updateOne: {
-                            filter: { _id: playerId },
-                            update: {
-                                $set: {
-                                    _id: playerId,
-                                    name: p.name || p.player_name || '',
-                                    level: parseInt(p.level) || 0,
-                                    factionId: 0,
-                                    factionName: '',
-                                    status: 'Okay',
-                                    lastActionTs,
-                                    lastActionRelative: p.last_action_relative || '',
-                                    networth: parseInt(p.networth || p.net_worth) || 0,
-                                    rank: p.rank || '',
-                                    awards: parseInt(p.awards) || 0,
-                                    donator: p.donator === 1 || p.donator === true,
-                                    daysInTorn: parseInt(p.age || p.days_in_torn) || 0,
-                                    gender: p.gender || '',
-                                    refreshedAt: new Date(),
-                                    nextRefreshAt: new Date(Date.now() + calcDelay()),
-                                }
-                            },
-                            upsert: true,
-                        }
-                    };
-                }).filter(Boolean);
-
-                if (ops.length > 0) {
-                    await Player.bulkWrite(ops, { ordered: false });
-                    totalImported += ops.length;
-                }
-
-                send({ type: 'progress', page, imported: ops.length, total: totalImported });
-                
-                // Small delay between pages to be polite
-                await new Promise(r => setTimeout(r, 500));
-
-            } catch (pageErr) {
-                send({ type: 'warn', message: `Page ${page} error: ${pageErr.message}` });
+                stored++;
+                if (parsed.factionId === 0 && parsed.status === 'Okay') recruitable++;
             }
+
+            if (ops.length > 0) {
+                await Player.bulkWrite(ops, { ordered: false });
+            }
+
+            fetched += batchSize;
+            send({
+                type: 'progress',
+                fetched,
+                total: totalToFetch,
+                stored,
+                recruitable,
+            });
+
+            // Small pause to avoid overwhelming the API
+            await new Promise(r => setTimeout(r, 500));
         }
 
-        send({ type: 'complete', totalImported, message: `Import complete! ${totalImported} players added to the database.` });
+        send({
+            type: 'complete',
+            stored,
+            recruitable,
+            message: `Done! Scanned ${totalToFetch} players, stored ${stored} active ones, found ${recruitable} factionless recruitables.`,
+        });
         res.end();
 
     } catch (err) {
@@ -182,5 +185,6 @@ router.post('/import-ffscouter', async (req, res) => {
         }
     }
 });
+
 
 module.exports = router;
