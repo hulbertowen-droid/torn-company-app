@@ -97,6 +97,14 @@ async function watchLoop() {
             const hoursSinceLast = parsed.lastActionTs
                 ? (Date.now() - parsed.lastActionTs.getTime()) / 3_600_000
                 : 9999;
+            
+            // Automatically prune players who have been inactive for > 5 days (120 hours)
+            if (hoursSinceLast > 120) {
+                await WatchPool.deleteOne({ _id: playerId });
+                await Player.deleteOne({ _id: playerId });
+                continue;
+            }
+
             const isRecruitableNow = parsed.factionId === 0 && parsed.status === 'Okay';
             const isActive = hoursSinceLast < 72;
 
