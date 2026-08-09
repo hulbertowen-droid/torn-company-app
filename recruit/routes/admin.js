@@ -41,12 +41,16 @@ router.get('/status', async (req, res) => {
             refreshedAt: { $gte: fourHoursAgo },
         });
 
+        const doc = await require('mongoose').connection.db.collection('seeder_config').findOne({ _id: 'global_faction' });
+        const globalScannerProgress = doc?.value || 1;
+
         return res.json({
             success: true,
             database: {
                 totalPlayers,
                 recruitable,
                 watchPoolSize,
+                globalScannerProgress,
                 freshnessRate: recruitable > 0
                     ? `${Math.round((freshRecruitables / recruitable) * 100)}%`
                     : 'Building...',

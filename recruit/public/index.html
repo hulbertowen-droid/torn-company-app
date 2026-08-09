@@ -543,10 +543,16 @@ input:focus, select:focus {
             <div style="font-size:0.72em;color:var(--text-faint);margin-bottom:10px;line-height:1.4;">Monitors all members of a faction. When anyone leaves, they appear here instantly.</div>
 
             <!-- Scan a range of factions -->
-            <button class="btn-outline" style="border-color:rgba(255,166,87,0.3);color:var(--gold);font-size:0.8em;" onclick="openFactionRangeModal()">
-                🔭 Scan Faction ID Range
-            </button>
-            <div style="font-size:0.72em;color:var(--text-faint);margin-top:6px;line-height:1.4;">Bulk-scan a range of faction IDs to build your watch pool fast.</div>
+            <div style="margin-top:10px;padding:10px;background:rgba(255,166,87,0.05);border:1px solid rgba(255,166,87,0.2);border-radius:6px;">
+                <div style="font-size:0.75em;color:var(--gold);font-weight:700;display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                    <div class="live-dot" style="background:var(--gold);box-shadow:0 0 6px var(--gold);"></div>
+                    Global Auto-Scanner
+                </div>
+                <div style="font-size:0.7em;color:var(--text-dim);line-height:1.4;">
+                    Running in background...<br>
+                    Scanning faction <span id="gs-progress" style="color:var(--text-main);font-weight:700;">1</span> / 55,000
+                </div>
+            </div>
 
             <!-- Watch pool status -->
             <div id="watchpool-status" style="margin-top:10px;padding:8px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:0.75em;color:var(--text-dim);display:none;">
@@ -704,6 +710,11 @@ async function loadStatus() {
             wp.style.display = 'block';
         } else {
             wp.style.display = 'none';
+        }
+
+        const gsProgress = document.getElementById('gs-progress');
+        if (gsProgress && d.database.globalScannerProgress) {
+            gsProgress.textContent = d.database.globalScannerProgress.toLocaleString();
         }
     } catch(e) {}
 }

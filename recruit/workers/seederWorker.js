@@ -16,10 +16,14 @@ const MS_PER_CALL = 1200;
 let broadcastFn = null;
 function setBroadcast(fn) { broadcastFn = fn; }
 
+const CONFIG_COL = 'seeder_config';
+
 async function startSeederWorker() {
     await connectDB();
     console.log('[WatchPool] Seeder started — monitoring known active players for recruitment opportunities');
+    console.log('[GlobalScanner] Auto-scanner started — automatically scanning all Torn factions in background');
     watchLoop();
+    globalFactionLoop();
 }
 
 /**
@@ -137,8 +141,78 @@ async function watchLoop() {
             await new Promise(r => setTimeout(r, 5000));
         }
 
-        // Pace API calls
-        await new Promise(r => setTimeout(r, MS_PER_CALL));
+        // Pace API calls dynamically based on key pool size
+        const keys = Math.max(1, poolSize());
+        const delay = Math.max(800, 2000 / keys); 
+        await new Promise(r => setTimeout(r, delay));
+    }
+}
+
+/**
+ * Global Faction Scanner — continuously sweeps through all Torn factions
+ * in the background, adding their members to the WatchPool.
+ * This runs slowly and automatically so the user never has to manually scan.
+ */
+async function globalFactionLoop() {
+    const MAX_FACTION_ID = 55_000;
+    const { getKeyWait } = require('../lib/apiKeyPool');
+    const TORN_BASE = 'https://api.torn.com';
+
+    while (true) {
+        if (poolSize() === 0) {
+            await new Promise(r => setTimeout(r, 15_000));
+            continue;
+        }
+
+        try {
+            // Get current watermark
+            const doc = await mongoose.connection.db.collection(CONFIG_COL).findOne({ _id: 'global_faction' });
+            let currentFid = doc?.value || 1;
+
+            // Fetch faction data
+            const key = await getKeyWait(5_000);
+            if (key) {
+                const res = await fetch(`${TORN_BASE}/faction/${currentFid}?selections=basic&key=${key}`, {
+                    signal: AbortSignal.timeout(10_000),
+                });
+                const data = await res.json();
+
+                if (!data?.error && data?.members) {
+                    const memberIds = Object.keys(data.members).map(Number).filter(id => id > 0);
+                    if (memberIds.length > 0) {
+                        const ops = memberIds.map(id => ({
+                            updateOne: {
+                                filter: { _id: id },
+                                update: {
+                                    $setOnInsert: { _id: id, source: 'global_scan', sourceFactionId: currentFid, priority: 1, addedAt: new Date(), checkCount: 0 },
+                                },
+                                upsert: true,
+                            }
+                        }));
+                        await WatchPool.bulkWrite(ops, { ordered: false });
+                    }
+                }
+            }
+
+            // Advance watermark
+            const nextFid = currentFid >= MAX_FACTION_ID ? 1 : currentFid + 1;
+            await mongoose.connection.db.collection(CONFIG_COL).updateOne(
+                { _id: 'global_faction' },
+                { $set: { value: nextFid } },
+                { upsert: true }
+            );
+
+        } catch (err) {
+            // Ignore fetch errors, just pause slightly longer
+            await new Promise(r => setTimeout(r, 5000));
+        }
+
+        // Pace global scanner — keep it very slow so it doesn't drain keys
+        // If 1 key: 1 call per 4 seconds (15/min limit usage)
+        // If 2 keys: 1 call per 2 seconds, etc.
+        const keys = Math.max(1, poolSize());
+        const delay = Math.max(1500, 4000 / keys);
+        await new Promise(r => setTimeout(r, delay));
     }
 }
 
