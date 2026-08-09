@@ -525,11 +525,33 @@ input:focus, select:focus {
         <button class="btn-outline" onclick="resetFilters()">↺ Reset Filters</button>
 
         <div style="margin-top:4px;">
-            <div class="sidebar-title" style="margin-bottom:8px;">Quick Seed</div>
-            <button class="btn-outline" style="border-color:rgba(255,166,87,0.4);color:var(--gold);" onclick="openImportModal()">
-                ⚡ Import from ffscouter
+            <div class="sidebar-title" style="margin-bottom:8px;">🎯 Find Recruits</div>
+
+            <!-- Seed from own war history -->
+            <button class="btn-outline" style="border-color:rgba(0,206,201,0.4);color:var(--teal);margin-bottom:6px;" onclick="seedFromWars()" id="btn-seed-wars">
+                ⚔️ Seed from My War History
             </button>
-            <div style="font-size:0.72em;color:var(--text-faint);margin-top:6px;line-height:1.4;">Seeds the database instantly with real factionless players. Use this if you just installed and the DB is empty.</div>
+            <div style="font-size:0.72em;color:var(--text-faint);margin-bottom:10px;line-height:1.4;">Pulls players from your faction's wars &amp; attacks — guaranteed active.</div>
+
+            <!-- Watch a specific faction -->
+            <div style="display:flex;gap:6px;margin-bottom:4px;">
+                <input type="number" id="watch-faction-id" placeholder="Faction ID..." style="flex:1;">
+                <button class="btn-outline" style="border-color:rgba(162,155,254,0.4);color:var(--purple);padding:8px 10px;font-size:0.8em;white-space:nowrap;" onclick="watchFaction()">
+                    👁 Watch
+                </button>
+            </div>
+            <div style="font-size:0.72em;color:var(--text-faint);margin-bottom:10px;line-height:1.4;">Monitors all members of a faction. When anyone leaves, they appear here instantly.</div>
+
+            <!-- Scan a range of factions -->
+            <button class="btn-outline" style="border-color:rgba(255,166,87,0.3);color:var(--gold);font-size:0.8em;" onclick="openFactionRangeModal()">
+                🔭 Scan Faction ID Range
+            </button>
+            <div style="font-size:0.72em;color:var(--text-faint);margin-top:6px;line-height:1.4;">Bulk-scan a range of faction IDs to build your watch pool fast.</div>
+
+            <!-- Watch pool status -->
+            <div id="watchpool-status" style="margin-top:10px;padding:8px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:0.75em;color:var(--text-dim);display:none;">
+                <span style="color:var(--teal);font-weight:700;" id="wp-count">0</span> players in watch pool
+            </div>
         </div>
 
         <div id="your-faction" style="display:none;">
@@ -576,10 +598,10 @@ input:focus, select:focus {
             <div class="state-box" id="empty-state">
                 <div class="icon">🎯</div>
                 <div class="title">Ready to Search</div>
-                <div class="sub">Click <strong>Search Players</strong> to find recruitable players matching your filters. If no results appear, click <strong>⚡ Import from ffscouter</strong> on the left to seed your database instantly with real player data.</div>
+                <div class="sub">Click <strong>Search Players</strong> to find recruits. To get data fast, use <strong>⚔️ Seed from My War History</strong> in the left sidebar — it instantly pulls players your faction has fought, who are guaranteed to be active.</div>
                 <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;justify-content:center;">
                     <button class="btn-search" style="width:auto;padding:10px 20px;" onclick="doSearch()">🔍 Search Now</button>
-                    <button class="btn-outline" style="border-color:rgba(255,166,87,0.4);color:var(--gold);padding:10px 20px;" onclick="openImportModal()">⚡ Seed Database</button>
+                    <button class="btn-outline" style="border-color:rgba(0,206,201,0.4);color:var(--teal);padding:10px 20px;" onclick="seedFromWars()">⚔️ Seed from Wars</button>
                 </div>
             </div>
         </div>
@@ -587,36 +609,39 @@ input:focus, select:focus {
     </main>
 </div>
 
-<!-- ── Import Modal ── -->
-<div class="modal-backdrop" id="import-modal" style="display:none;">
-    <div class="modal" style="width:520px;">
+<!-- ── Faction Range Scan Modal ── -->
+<div class="modal-backdrop" id="faction-range-modal" style="display:none;">
+    <div class="modal" style="width:540px;">
         <div>
-            <div class="modal-title">⚡ Seed Database (Direct Torn API)</div>
-            <div class="modal-sub" style="margin-top:6px;">Samples random recent Torn player IDs (2M–5M) directly via the Torn API using your registered key. Only stores players who have been <strong>active recently</strong> — no dead accounts. Typically finds 10-30% factionless and ready to recruit.</div>
+            <div class="modal-title">🔭 Bulk Scan Factions</div>
+            <div class="modal-sub" style="margin-top:6px;">Scans a range of faction IDs and adds all their members to your watch pool. Every faction call returns 10–100 <strong>real active players</strong> — this is the fastest way to build up your monitor pool. Torn factions go up to ~45,000.</div>
+        </div>
+        <div class="modal-note" style="font-size:0.8em;">
+            💡 Tip: Start with factions 1–500 (oldest, biggest factions), then jump to 40,000–45,000 (newest active factions). Each range takes about 6 minutes with 1 API key.
         </div>
         <div style="display:flex;gap:10px;">
             <div class="filter-group" style="flex:1;">
-                <div class="filter-label">Players to scan</div>
-                <input type="number" id="imp-pages" value="200" min="50" max="1000">
+                <div class="filter-label">Start Faction ID</div>
+                <input type="number" id="fr-start" value="1" min="1" max="50000">
             </div>
             <div class="filter-group" style="flex:1;">
-                <div class="filter-label">Active within (hours)</div>
-                <input type="number" id="imp-active-h" value="168" min="24" max="720">
+                <div class="filter-label">End Faction ID</div>
+                <input type="number" id="fr-end" value="200" min="1" max="50000">
             </div>
         </div>
-        <div id="import-log" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;max-height:160px;overflow-y:auto;font-size:0.78em;font-family:monospace;color:var(--text-dim);display:none;"></div>
-        <div id="import-progress" style="display:none;">
+        <div id="fr-log" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;max-height:160px;overflow-y:auto;font-size:0.78em;font-family:monospace;color:var(--text-dim);display:none;"></div>
+        <div id="fr-progress" style="display:none;">
             <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-                <span style="font-size:0.8em;color:var(--text-dim);" id="import-prog-label">Importing...</span>
-                <span style="font-size:0.8em;font-weight:700;color:var(--teal);" id="import-prog-count">0 players</span>
+                <span style="font-size:0.8em;color:var(--text-dim);" id="fr-prog-label">Scanning...</span>
+                <span style="font-size:0.8em;font-weight:700;color:var(--teal);" id="fr-prog-count">0 players</span>
             </div>
             <div style="background:var(--item);border-radius:4px;height:6px;overflow:hidden;">
-                <div id="import-prog-bar" style="background:linear-gradient(90deg,var(--teal),var(--purple));height:100%;width:0%;transition:width 0.3s;"></div>
+                <div id="fr-prog-bar" style="background:linear-gradient(90deg,var(--gold),var(--teal));height:100%;width:0%;transition:width 0.3s;"></div>
             </div>
         </div>
         <div class="modal-btns">
-            <button class="btn-modal-primary" onclick="runImport()" id="btn-import">⚡ Start Import</button>
-            <button class="btn-modal-secondary" onclick="closeImportModal()" id="btn-import-close">Close</button>
+            <button class="btn-modal-primary" onclick="runFactionRangeScan()" id="btn-fr-scan">🔭 Start Scan</button>
+            <button class="btn-modal-secondary" onclick="closeFactionRangeModal()" id="btn-fr-close">Close</button>
         </div>
     </div>
 </div>
@@ -672,6 +697,14 @@ async function loadStatus() {
         document.getElementById('kpi-freshness').textContent = d.database.freshnessRate;
         document.getElementById('kpi-total').textContent = d.database.totalPlayers.toLocaleString();
         document.getElementById('kpi-keys').textContent = d.apiPool.keyCount;
+
+        const wp = document.getElementById('watchpool-status');
+        if (d.database.watchPoolSize > 0) {
+            document.getElementById('wp-count').textContent = d.database.watchPoolSize.toLocaleString();
+            wp.style.display = 'block';
+        } else {
+            wp.style.display = 'none';
+        }
     } catch(e) {}
 }
 setInterval(loadStatus, 30_000);
@@ -970,33 +1003,32 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Enter' && document.getElementById('register-modal').style.display !== 'none') {
         registerFaction();
     }
-    if (e.key === 'Escape') { closeRegisterModal(); closeImportModal(); }
+    if (e.key === 'Escape') { closeRegisterModal(); closeFactionRangeModal(); }
 });
 
-// ── Import Modal ───────────────────────────────────────────────────────────
-function openImportModal() {
-    document.getElementById('import-modal').style.display = 'flex';
-    document.getElementById('import-log').style.display = 'none';
-    document.getElementById('import-log').textContent = '';
-    document.getElementById('import-progress').style.display = 'none';
-    document.getElementById('import-prog-bar').style.width = '0%';
-    document.getElementById('import-prog-count').textContent = '0 players';
-    document.getElementById('btn-import').disabled = false;
-    document.getElementById('btn-import').textContent = '⚡ Start Import';
-    document.getElementById('btn-import-close').textContent = 'Close';
+// ── Faction Range Scan Modal ────────────────────────────────────────────────
+function openFactionRangeModal() {
+    document.getElementById('faction-range-modal').style.display = 'flex';
+    document.getElementById('fr-log').style.display = 'none';
+    document.getElementById('fr-log').textContent = '';
+    document.getElementById('fr-progress').style.display = 'none';
+    document.getElementById('fr-prog-bar').style.width = '0%';
+    document.getElementById('fr-prog-count').textContent = '0 players';
+    document.getElementById('btn-fr-scan').disabled = false;
+    document.getElementById('btn-fr-scan').textContent = '🔭 Start Scan';
 }
 
-function closeImportModal() {
-    document.getElementById('import-modal').style.display = 'none';
+function closeFactionRangeModal() {
+    document.getElementById('faction-range-modal').style.display = 'none';
 }
 
-async function runImport() {
-    const count  = document.getElementById('imp-pages').value || 200;
-    const minActiveH = document.getElementById('imp-active-h').value || 168;
+async function runFactionRangeScan() {
+    const start = document.getElementById('fr-start').value || 1;
+    const end = document.getElementById('fr-end').value || 200;
 
-    const btn = document.getElementById('btn-import');
-    const logEl = document.getElementById('import-log');
-    const progEl = document.getElementById('import-progress');
+    const btn = document.getElementById('btn-fr-scan');
+    const logEl = document.getElementById('fr-log');
+    const progEl = document.getElementById('fr-progress');
 
     btn.disabled = true;
     btn.textContent = '⏳ Scanning...';
@@ -1013,10 +1045,10 @@ async function runImport() {
     };
 
     try {
-        const resp = await fetch('/api/admin/import-torn-api', {
+        const resp = await fetch('/api/admin/seed-faction-range', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ count: parseInt(count), minActiveH: parseInt(minActiveH) }),
+            body: JSON.stringify({ startFactionId: parseInt(start), endFactionId: parseInt(end) }),
         });
 
         if (!resp.ok) {
@@ -1041,20 +1073,19 @@ async function runImport() {
                 try {
                     const msg = JSON.parse(line.slice(6));
                     if (msg.type === 'progress') {
-                        const pct = Math.round((msg.fetched / parseInt(count)) * 100);
-                        document.getElementById('import-prog-bar').style.width = pct + '%';
-                        document.getElementById('import-prog-count').textContent = `${msg.recruitable} recruitable found`;
-                        document.getElementById('import-prog-label').textContent = `Scanned ${msg.fetched}/${count} — ${msg.stored} active stored`;
+                        const pct = Math.round((msg.factionsScanned / msg.total) * 100);
+                        document.getElementById('fr-prog-bar').style.width = pct + '%';
+                        document.getElementById('fr-prog-count').textContent = `+${msg.totalPlayersAdded} players`;
+                        document.getElementById('fr-prog-label').textContent = `Scanned ${msg.factionsScanned}/${msg.total}`;
                     } else if (msg.type === 'complete') {
-                        document.getElementById('import-prog-bar').style.width = '100%';
-                        document.getElementById('import-prog-count').textContent = `${msg.recruitable} recruitable!`;
-                        document.getElementById('import-prog-label').textContent = 'Done!';
+                        document.getElementById('fr-prog-bar').style.width = '100%';
+                        document.getElementById('fr-prog-count').textContent = `${msg.totalPlayersAdded} added!`;
+                        document.getElementById('fr-prog-label').textContent = 'Done!';
                         addLog(`🎉 ${msg.message}`, 'var(--teal)');
                         btn.textContent = '✅ Done!';
                         btn.disabled = false;
-                        document.getElementById('btn-import-close').textContent = 'Close & Search';
+                        document.getElementById('btn-fr-close').textContent = 'Close';
                         loadStatus();
-                        setTimeout(() => { closeImportModal(); doSearch(); }, 1500);
                     } else if (msg.type === 'warn') {
                         addLog(`⚠ ${msg.message}`, 'var(--gold)');
                     } else if (msg.type === 'start') {
@@ -1067,6 +1098,79 @@ async function runImport() {
         addLog(`❌ Error: ${err.message}`, 'var(--red)');
         btn.disabled = false;
         btn.textContent = '⚡ Retry';
+    }
+}
+
+// ── Watch Actions ──────────────────────────────────────────────────────────
+async function seedFromWars() {
+    const btn = document.getElementById('btn-seed-wars');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Fetching...';
+
+    try {
+        const resp = await fetch('/api/admin/seed-from-wars', { method: 'POST' });
+        
+        // SSE parsing for war seed
+        if (resp.headers.get('content-type')?.includes('text/event-stream')) {
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue;
+                    try {
+                        const msg = JSON.parse(line.slice(6));
+                        if (msg.type === 'complete') {
+                            alert(msg.message);
+                            loadStatus();
+                            btn.innerHTML = '✅ Done!';
+                            setTimeout(() => { btn.innerHTML = originalText; btn.disabled = false; }, 3000);
+                        } else if (msg.type === 'warn') {
+                            alert(msg.message);
+                            btn.innerHTML = originalText;
+                            btn.disabled = false;
+                        }
+                    } catch(e) {}
+                }
+            }
+            return;
+        }
+
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error);
+        
+    } catch (err) {
+        alert('Error: ' + err.message);
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
+async function watchFaction() {
+    const input = document.getElementById('watch-faction-id');
+    const id = parseInt(input.value);
+    if (!id) return alert('Enter a valid faction ID');
+
+    try {
+        const resp = await fetch('/api/admin/watch-faction', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ factionId: id })
+        });
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error);
+
+        alert(data.message);
+        input.value = '';
+        loadStatus();
+    } catch (err) {
+        alert('Error: ' + err.message);
     }
 }
 

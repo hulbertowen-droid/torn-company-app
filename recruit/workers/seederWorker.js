@@ -3,119 +3,141 @@ require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
 const { connectDB } = require('../db/mongo');
 const Player = require('../db/models/Player');
+const WatchPool = require('../db/models/WatchPool');
 const { fetchPlayer, parsePlayer } = require('../lib/tornClient');
 const { poolSize } = require('../lib/apiKeyPool');
 const mongoose = require('mongoose');
 
-const CONFIG_COL = 'seeder_config';
-
-// How long to wait between each API call (milliseconds).
-// 700ms = ~85 calls/min, safely under 100/min limit with 1 key.
-// With 2 keys: can reduce to 350ms, etc.
-const MS_PER_CALL = 700;
-
-// Start scanning at recent Torn IDs — active new players are here
-// Old IDs (1-2M) = 2004-2017 accounts, mostly inactive/dead
-const DEFAULT_START_ID = 3_500_000;
-const MAX_TORN_ID = 5_500_000;
+// Pacing — stay well under Torn's 100 req/min per key
+// We share the rate limit with the refreshWorker, so use 1200ms (50/min)
+// The refreshWorker uses the other ~35/min for re-refreshing known recruitables
+const MS_PER_CALL = 1200;
 
 let broadcastFn = null;
 function setBroadcast(fn) { broadcastFn = fn; }
 
-async function getWatermark() {
-    const db = mongoose.connection.db;
-    const doc = await db.collection(CONFIG_COL).findOne({ _id: 'watermark' });
-    return doc?.value || DEFAULT_START_ID;
-}
-
-async function setWatermark(value) {
-    const db = mongoose.connection.db;
-    await db.collection(CONFIG_COL).updateOne(
-        { _id: 'watermark' },
-        { $set: { value } },
-        { upsert: true }
-    );
-}
-
 async function startSeederWorker() {
     await connectDB();
-    console.log('[SeederWorker] Started — paced loop, 1 API call per 700ms');
-    scanLoop();
+    console.log('[WatchPool] Seeder started — monitoring known active players for recruitment opportunities');
+    watchLoop();
 }
 
 /**
- * The main scan loop.
- * - Fetches one player ID at a time
- * - Waits MS_PER_CALL ms between each request
- * - Skips players that are in a faction AND inactive (not useful for recruiting)
- * - Wraps around from MAX_TORN_ID back to DEFAULT_START_ID
+ * Core loop — pulls the highest-priority player from the WatchPool
+ * and checks if they've gone factionless (recruitable).
+ * 
+ * Priority ordering:
+ *   1. Players not checked in the last 4 hours (priority=0)
+ *   2. Players not checked in the last 24 hours (priority=1)
+ *   3. Players not checked in the last 7 days (priority=2+)
  */
-async function scanLoop() {
+async function watchLoop() {
     while (true) {
-        // Pause if no API keys available
+        // Pause if no API keys registered yet
         if (poolSize() === 0) {
-            await new Promise(r => setTimeout(r, 5000));
+            await new Promise(r => setTimeout(r, 10_000));
             continue;
         }
 
-        let currentId;
+        let watched = null;
         try {
-            currentId = await getWatermark();
+            // Pull the next player to check — prioritize those we haven't checked recently
+            const cutoffs = [
+                { priority: 0, since: new Date(Date.now() - 4 * 3_600_000) },
+                { priority: 1, since: new Date(Date.now() - 24 * 3_600_000) },
+                { priority: 2, since: new Date(Date.now() - 3 * 86_400_000) },
+                { priority: 3, since: new Date(Date.now() - 7 * 86_400_000) },
+            ];
 
-            // Fetch the player
-            let raw;
-            try {
-                raw = await fetchPlayer(currentId);
-            } catch (err) {
-                // API error — wait a bit longer and retry same ID
-                const isRateLimit = err.message.includes('[5]') || err.message.includes('Too many');
-                const delay = isRateLimit ? 2000 : 1000;
-                await new Promise(r => setTimeout(r, delay));
-                continue; // Don't advance watermark on error
+            for (const { priority, since } of cutoffs) {
+                watched = await WatchPool.findOneAndUpdate(
+                    {
+                        priority,
+                        $or: [
+                            { lastChecked: null },
+                            { lastChecked: { $lt: since } },
+                        ]
+                    },
+                    { $set: { lastChecked: new Date() }, $inc: { checkCount: 1 } },
+                    { sort: { lastChecked: 1 }, returnDocument: 'before' }
+                ).lean();
+                if (watched) break;
             }
 
-            if (raw !== null) {
-                const parsed = parsePlayer(currentId, raw);
-                const hoursSinceLast = parsed.lastActionTs
-                    ? (Date.now() - parsed.lastActionTs.getTime()) / 3_600_000
-                    : 9999;
-                const daysSinceLast = hoursSinceLast / 24;
-                const isRecruitableNow = parsed.factionId === 0 && parsed.status === 'Okay';
-                const isActive = hoursSinceLast < 72;
+            if (!watched) {
+                // Nothing to check right now — wait before trying again
+                await new Promise(r => setTimeout(r, 5000));
+                continue;
+            }
 
-                // Only store if: factionless OR recently active (last 30 days)
-                // Skip in-faction + inactive — they're useless for recruiting
-                if (isRecruitableNow || daysSinceLast < 30) {
-                    const prev = await Player.findOneAndUpdate(
-                        { _id: currentId },
-                        { $set: parsed },
-                        { upsert: true, returnDocument: 'before' }
-                    ).lean();
+            const playerId = watched._id;
 
-                    // Broadcast live update if player just became recruitable
-                    if (broadcastFn && isRecruitableNow && isActive) {
-                        const wasRecruitable = prev && prev.factionId === 0 && prev.status === 'Okay';
-                        if (!wasRecruitable) {
-                            broadcastFn({ type: 'player_available', player: parsed });
-                        }
-                    }
+            // Fetch fresh data from Torn API
+            let raw;
+            try {
+                raw = await fetchPlayer(playerId);
+            } catch (err) {
+                const isRateLimit = err.message.includes('[5]') || err.message.includes('Too many');
+                await new Promise(r => setTimeout(r, isRateLimit ? 3000 : 1500));
+                continue;
+            }
+
+            if (raw === null) {
+                // Player deleted — remove from watch pool entirely
+                await WatchPool.deleteOne({ _id: playerId });
+                await Player.updateOne({ _id: playerId }, { $set: { status: 'Deleted', factionId: -1 } });
+                continue;
+            }
+
+            const parsed = parsePlayer(playerId, raw);
+            const hoursSinceLast = parsed.lastActionTs
+                ? (Date.now() - parsed.lastActionTs.getTime()) / 3_600_000
+                : 9999;
+            const isRecruitableNow = parsed.factionId === 0 && parsed.status === 'Okay';
+            const isActive = hoursSinceLast < 72;
+
+            // Update player record
+            const prev = await Player.findOneAndUpdate(
+                { _id: playerId },
+                { $set: parsed },
+                { upsert: true, returnDocument: 'before' }
+            ).lean();
+
+            // Update watch pool priority based on what we found
+            let newPriority;
+            if (isRecruitableNow && isActive) {
+                newPriority = 0; // Check frequently — they just went factionless!
+            } else if (hoursSinceLast < 24) {
+                newPriority = 1; // Very active — might leave soon
+            } else if (hoursSinceLast < 168) {
+                newPriority = 1; // Active in last week
+            } else if (hoursSinceLast < 720) {
+                newPriority = 2; // Somewhat active
+            } else {
+                newPriority = 3; // Mostly inactive — low priority
+            }
+
+            await WatchPool.updateOne({ _id: playerId }, { $set: { priority: newPriority } });
+
+            // Broadcast live update if newly recruitable
+            if (broadcastFn && isRecruitableNow && isActive) {
+                const wasRecruitable = prev && prev.factionId === 0 && prev.status === 'Okay';
+                if (!wasRecruitable) {
+                    broadcastFn({ type: 'player_available', player: parsed });
+                }
+            } else if (broadcastFn && !isRecruitableNow) {
+                const wasRecruitable = prev && prev.factionId === 0 && prev.status === 'Okay';
+                if (wasRecruitable) {
+                    broadcastFn({ type: 'player_gone', playerId });
                 }
             }
 
-            // Advance to next ID
-            const nextId = currentId >= MAX_TORN_ID ? DEFAULT_START_ID : currentId + 1;
-            await setWatermark(nextId);
-
-            if (nextId === DEFAULT_START_ID) {
-                console.log('[SeederWorker] Completed full scan cycle, restarting from', DEFAULT_START_ID);
-            }
-
         } catch (err) {
-            console.error('[SeederWorker] Loop error at ID', currentId, ':', err.message);
+            console.error('[WatchPool] Loop error:', err.message);
             await new Promise(r => setTimeout(r, 5000));
         }
 
-        // Pace ourselves — wait between each API call
+        // Pace API calls
         await new Promise(r => setTimeout(r, MS_PER_CALL));
     }
 }

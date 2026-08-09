@@ -3,28 +3,41 @@ const express = require('express');
 const router = express.Router();
 const Player = require('../db/models/Player');
 const Faction = require('../db/models/Faction');
-const { poolSize, poolStats } = require('../lib/apiKeyPool');
+const WatchPool = require('../db/models/WatchPool');
+const { poolSize, poolStats, getKeyWait } = require('../lib/apiKeyPool');
 const { getPlayerRefreshQueue, scheduleRefresh } = require('../queues/playerQueue');
 const { fetchPlayer, parsePlayer } = require('../lib/tornClient');
 
+const TORN_BASE = 'https://api.torn.com';
+
+// Helper to make a Torn API call with the key pool
+async function tornGet(path) {
+    const key = await getKeyWait(15_000);
+    if (!key) throw new Error('No API key available');
+    const res = await fetch(`${TORN_BASE}${path}&key=${key}`, {
+        signal: AbortSignal.timeout(10_000),
+    });
+    const data = await res.json();
+    if (data?.error) throw new Error(`Torn API [${data.error.code}]: ${data.error.error}`);
+    return data;
+}
+
 /**
  * GET /api/admin/status
- * Returns platform health stats.
  */
 router.get('/status', async (req, res) => {
     try {
-        const [totalPlayers, recruitable, factionCount, queueCounts] = await Promise.all([
+        const [totalPlayers, recruitable, factionCount, queueCounts, watchPoolSize] = await Promise.all([
             Player.estimatedDocumentCount(),
             Player.countDocuments({ factionId: 0, status: 'Okay' }),
             Faction.estimatedDocumentCount(),
             getPlayerRefreshQueue().getJobCounts(),
+            WatchPool.estimatedDocumentCount(),
         ]);
 
-        // Freshness: how many recruitable players were refreshed in the last 4 hours
         const fourHoursAgo = new Date(Date.now() - 4 * 3_600_000);
         const freshRecruitables = await Player.countDocuments({
-            factionId: 0,
-            status: 'Okay',
+            factionId: 0, status: 'Okay',
             refreshedAt: { $gte: fourHoursAgo },
         });
 
@@ -33,16 +46,14 @@ router.get('/status', async (req, res) => {
             database: {
                 totalPlayers,
                 recruitable,
+                watchPoolSize,
                 freshnessRate: recruitable > 0
                     ? `${Math.round((freshRecruitables / recruitable) * 100)}%`
                     : 'Building...',
                 factions: factionCount,
             },
             queue: queueCounts,
-            apiPool: {
-                keyCount: poolSize(),
-                keys: poolStats(),
-            },
+            apiPool: { keyCount: poolSize(), keys: poolStats() },
         });
     } catch (err) {
         return res.status(500).json({ error: err.message });
@@ -51,42 +62,82 @@ router.get('/status', async (req, res) => {
 
 /**
  * POST /api/admin/queue-player
- * Manually queue a specific player ID for immediate refresh.
- * Body: { playerId: number }
  */
 router.post('/queue-player', async (req, res) => {
     try {
         const { playerId } = req.body;
         if (!playerId) return res.status(400).json({ error: 'playerId required' });
         await scheduleRefresh(parseInt(playerId), 0);
-        return res.json({ success: true, message: `Player ${playerId} queued for immediate refresh.` });
+        return res.json({ success: true });
     } catch (err) {
         return res.status(500).json({ error: err.message });
     }
 });
 
 /**
- * POST /api/admin/import-torn-api
+ * POST /api/admin/watch-faction
  * 
- * Samples random recent Torn player IDs (3M-5M range) directly via the Torn API.
- * This gives us REAL, fresh activity data — not third-party stale data.
+ * Fetches a faction's member list and adds all members to the WatchPool.
+ * These are REAL, ACTIVE players — when any of them go factionless, they'll
+ * appear instantly in search results.
  * 
- * Uses the faction's registered API key from the pool.
- * Streams progress back via Server-Sent Events.
- * 
- * Body: { count: number (default 200), minActive: number hours (default 168 = 7 days) }
+ * Body: { factionId: number }
  */
-router.post('/import-torn-api', async (req, res) => {
+router.post('/watch-faction', async (req, res) => {
     try {
-        const { count = 200, minActiveH = 168 } = req.body;
-        const totalToFetch = Math.min(parseInt(count) || 200, 1000);
-        const activeThresholdMs = (parseInt(minActiveH) || 168) * 3_600_000;
-
-        // Need at least one key in pool
         if (poolSize() === 0) {
-            return res.status(400).json({
-                error: 'No API key registered. Register your faction first to add a key to the pool.'
-            });
+            return res.status(400).json({ error: 'Register your faction first to get an API key.' });
+        }
+
+        const { factionId } = req.body;
+        if (!factionId) return res.status(400).json({ error: 'factionId required' });
+
+        const data = await tornGet(`/faction/${factionId}?selections=basic`);
+        const members = data?.members || {};
+        const memberIds = Object.keys(members).map(Number).filter(Boolean);
+
+        if (memberIds.length === 0) {
+            return res.status(404).json({ error: 'Faction not found or has no members' });
+        }
+
+        // Bulk upsert into WatchPool
+        const ops = memberIds.map(id => ({
+            updateOne: {
+                filter: { _id: id },
+                update: {
+                    $setOnInsert: { _id: id, source: 'faction_roster', sourceFactionId: parseInt(factionId), priority: 1, addedAt: new Date(), checkCount: 0 },
+                },
+                upsert: true,
+            }
+        }));
+
+        const result = await WatchPool.bulkWrite(ops, { ordered: false });
+        const factionName = data?.name || `Faction ${factionId}`;
+
+        return res.json({
+            success: true,
+            factionName,
+            memberCount: memberIds.length,
+            newlyAdded: result.upsertedCount,
+            message: `Watching ${memberIds.length} members from "${factionName}". ${result.upsertedCount} new players added to monitor pool.`,
+        });
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
+});
+
+/**
+ * POST /api/admin/seed-from-wars
+ * 
+ * Pulls war/attack history from the registered faction's Torn API key and adds
+ * all opponents to the WatchPool. These are GUARANTEED to be active players.
+ * 
+ * Uses Server-Sent Events to stream progress.
+ */
+router.post('/seed-from-wars', async (req, res) => {
+    try {
+        if (poolSize() === 0) {
+            return res.status(400).json({ error: 'Register your faction first.' });
         }
 
         res.writeHead(200, {
@@ -94,97 +145,187 @@ router.post('/import-torn-api', async (req, res) => {
             'Cache-Control': 'no-cache',
             'Connection': 'keep-alive',
         });
+        const send = (msg) => { try { res.write(`data: ${JSON.stringify(msg)}\n\n`); } catch(e){} };
 
-        const send = (msg) => {
-            try { res.write(`data: ${JSON.stringify(msg)}\n\n`); } catch(e) {}
-        };
+        send({ type: 'start', message: 'Fetching your faction\'s war history from Torn...' });
 
-        send({ type: 'start', message: `Scanning ${totalToFetch} random recent Torn IDs via API...` });
+        // Get faction info + news (which contains attack/war records)
+        const factionData = await tornGet('/faction/?selections=basic,wars,rankedwars,attacks');
+        
+        const playerIds = new Set();
 
-        // Recent Torn IDs — players created roughly 2018-2026
-        // Torn has ~5.5M total IDs; most active players are in the 2M-5M range
-        const MIN_ID = 2_000_000;
-        const MAX_ID = 5_200_000;
-
-        let fetched = 0;
-        let stored = 0;
-        let recruitable = 0;
-
-        // Fetch in parallel batches of 5 (respects rate limit with 1 key)
-        while (fetched < totalToFetch) {
-            const batchSize = Math.min(5, totalToFetch - fetched);
-            const batch = [];
-
-            for (let i = 0; i < batchSize; i++) {
-                const id = Math.floor(Math.random() * (MAX_ID - MIN_ID)) + MIN_ID;
-                batch.push(id);
+        // Extract from ranked wars
+        const rankedWars = factionData?.rankedwars || {};
+        for (const war of Object.values(rankedWars)) {
+            const factions = war?.factions || {};
+            for (const [fId, fInfo] of Object.entries(factions)) {
+                const members = fInfo?.members || {};
+                for (const id of Object.keys(members)) {
+                    playerIds.add(parseInt(id));
+                }
             }
-
-            const results = await Promise.allSettled(
-                batch.map(id => fetchPlayer(id))
-            );
-
-            const ops = [];
-            for (let i = 0; i < results.length; i++) {
-                const r = results[i];
-                if (r.status !== 'fulfilled' || r.value === null) continue;
-
-                const raw = r.value;
-                const id = batch[i];
-                const parsed = parsePlayer(id, raw);
-
-                // Only store players who have been active recently
-                const hoursSince = parsed.lastActionTs
-                    ? (Date.now() - parsed.lastActionTs.getTime()) / 3_600_000
-                    : 9999;
-                const msAgo = hoursSince * 3_600_000;
-
-                if (msAgo > activeThresholdMs) continue; // Skip inactive players
-
-                ops.push({
-                    updateOne: {
-                        filter: { _id: id },
-                        update: { $set: parsed },
-                        upsert: true,
-                    }
-                });
-
-                stored++;
-                if (parsed.factionId === 0 && parsed.status === 'Okay') recruitable++;
-            }
-
-            if (ops.length > 0) {
-                await Player.bulkWrite(ops, { ordered: false });
-            }
-
-            fetched += batchSize;
-            send({
-                type: 'progress',
-                fetched,
-                total: totalToFetch,
-                stored,
-                recruitable,
-            });
-
-            // Small pause to avoid overwhelming the API
-            await new Promise(r => setTimeout(r, 500));
         }
+
+        // Extract from regular wars
+        const wars = factionData?.wars || {};
+        for (const war of Object.values(wars)) {
+            const members = war?.enemy?.members || {};
+            for (const id of Object.keys(members)) {
+                playerIds.add(parseInt(id));
+            }
+        }
+
+        // Extract from attack log (most valuable — guaranteed active)
+        const attacks = factionData?.attacks || {};
+        for (const attack of Object.values(attacks)) {
+            if (attack?.defender_id) playerIds.add(attack.defender_id);
+            if (attack?.attacker_id) playerIds.add(attack.attacker_id);
+        }
+
+        send({ type: 'progress', message: `Found ${playerIds.size} unique player IDs from war/attack history` });
+
+        if (playerIds.size === 0) {
+            send({ type: 'warn', message: 'No war/attack history found. Try manually adding faction IDs to watch.' });
+            res.end();
+            return;
+        }
+
+        // Bulk add to WatchPool with high priority (these are known active players)
+        const ids = [...playerIds].filter(id => id > 0);
+        const ops = ids.map(id => ({
+            updateOne: {
+                filter: { _id: id },
+                update: {
+                    $setOnInsert: { _id: id, source: 'war_history', priority: 1, addedAt: new Date(), checkCount: 0 },
+                },
+                upsert: true,
+            }
+        }));
+
+        const result = await WatchPool.bulkWrite(ops, { ordered: false });
 
         send({
             type: 'complete',
-            stored,
-            recruitable,
-            message: `Done! Scanned ${totalToFetch} players, stored ${stored} active ones, found ${recruitable} factionless recruitables.`,
+            total: ids.length,
+            newlyAdded: result.upsertedCount,
+            message: `Added ${result.upsertedCount} new active players to your watch pool. The seeder will now monitor these specifically and alert you when any go factionless.`,
         });
         res.end();
 
     } catch (err) {
-        console.error('[Admin] Import error:', err.message);
-        if (!res.headersSent) {
-            return res.status(500).json({ error: err.message });
-        }
+        console.error('[Admin] Seed from wars error:', err.message);
+        if (!res.headersSent) return res.status(500).json({ error: err.message });
+        try { res.end(); } catch(e) {}
     }
 });
 
+/**
+ * POST /api/admin/seed-faction-range
+ * 
+ * Scans a range of faction IDs, fetches member lists, adds all to WatchPool.
+ * Much more efficient than random ID scanning — every call gives us 10-100 known players.
+ * 
+ * Body: { startFactionId, endFactionId }
+ * Uses SSE for progress.
+ */
+router.post('/seed-faction-range', async (req, res) => {
+    try {
+        if (poolSize() === 0) {
+            return res.status(400).json({ error: 'Register your faction first.' });
+        }
+
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+        });
+        const send = (msg) => { try { res.write(`data: ${JSON.stringify(msg)}\n\n`); } catch(e){} };
+
+        const { startFactionId = 1, endFactionId = 500 } = req.body;
+        const start = Math.max(1, parseInt(startFactionId));
+        const end = Math.min(start + 999, parseInt(endFactionId)); // Max 1000 factions per scan
+
+        send({ type: 'start', message: `Scanning factions ${start}–${end} for member lists...` });
+
+        let totalPlayersAdded = 0;
+        let factionsScanned = 0;
+        let factionsFound = 0;
+
+        for (let fId = start; fId <= end; fId++) {
+            try {
+                const data = await tornGet(`/faction/${fId}?selections=basic`);
+                const members = data?.members || {};
+                const memberIds = Object.keys(members).map(Number).filter(id => id > 0);
+
+                if (memberIds.length > 0) {
+                    factionsFound++;
+                    const ops = memberIds.map(id => ({
+                        updateOne: {
+                            filter: { _id: id },
+                            update: {
+                                $setOnInsert: { _id: id, source: 'faction_roster', sourceFactionId: fId, priority: 1, addedAt: new Date(), checkCount: 0 },
+                            },
+                            upsert: true,
+                        }
+                    }));
+                    const result = await WatchPool.bulkWrite(ops, { ordered: false });
+                    totalPlayersAdded += result.upsertedCount;
+                }
+            } catch (err) {
+                // Skip factions that don't exist or error
+            }
+
+            factionsScanned++;
+
+            // Report progress every 10 factions
+            if (factionsScanned % 10 === 0) {
+                send({
+                    type: 'progress',
+                    factionsScanned,
+                    total: end - start + 1,
+                    factionsFound,
+                    totalPlayersAdded,
+                });
+            }
+
+            // Pace API calls — one faction = one API call
+            await new Promise(r => setTimeout(r, 700));
+        }
+
+        send({
+            type: 'complete',
+            factionsScanned,
+            factionsFound,
+            totalPlayersAdded,
+            message: `Scanned ${factionsScanned} factions, found ${factionsFound} active ones, added ${totalPlayersAdded} unique players to the watch pool.`,
+        });
+        res.end();
+
+    } catch (err) {
+        console.error('[Admin] Faction range scan error:', err.message);
+        if (!res.headersSent) return res.status(500).json({ error: err.message });
+        try { res.end(); } catch(e) {}
+    }
+});
+
+/**
+ * GET /api/admin/watchpool-stats
+ * Returns WatchPool breakdown by priority/source.
+ */
+router.get('/watchpool-stats', async (req, res) => {
+    try {
+        const stats = await WatchPool.aggregate([
+            { $group: { _id: '$priority', count: { $sum: 1 } } },
+            { $sort: { _id: 1 } },
+        ]);
+        const bySource = await WatchPool.aggregate([
+            { $group: { _id: '$source', count: { $sum: 1 } } },
+        ]);
+        const total = await WatchPool.estimatedDocumentCount();
+        return res.json({ success: true, total, byPriority: stats, bySource });
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
+});
 
 module.exports = router;
