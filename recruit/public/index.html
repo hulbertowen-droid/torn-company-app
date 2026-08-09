@@ -527,20 +527,7 @@ input:focus, select:focus {
         <div style="margin-top:4px;">
             <div class="sidebar-title" style="margin-bottom:8px;">🎯 Find Recruits</div>
 
-            <!-- Seed from own war history -->
-            <button class="btn-outline" style="border-color:rgba(0,206,201,0.4);color:var(--teal);margin-bottom:6px;" onclick="seedFromWars()" id="btn-seed-wars">
-                ⚔️ Seed from My War History
-            </button>
-            <div style="font-size:0.72em;color:var(--text-faint);margin-bottom:10px;line-height:1.4;">Pulls players from your faction's wars &amp; attacks — guaranteed active.</div>
 
-            <!-- Watch a specific faction -->
-            <div style="display:flex;gap:6px;margin-bottom:4px;">
-                <input type="number" id="watch-faction-id" placeholder="Faction ID..." style="flex:1;">
-                <button class="btn-outline" style="border-color:rgba(162,155,254,0.4);color:var(--purple);padding:8px 10px;font-size:0.8em;white-space:nowrap;" onclick="watchFaction()">
-                    👁 Watch
-                </button>
-            </div>
-            <div style="font-size:0.72em;color:var(--text-faint);margin-bottom:10px;line-height:1.4;">Monitors all members of a faction. When anyone leaves, they appear here instantly.</div>
 
             <!-- Scan a range of factions -->
             <div style="margin-top:10px;padding:10px;background:rgba(255,166,87,0.05);border:1px solid rgba(255,166,87,0.2);border-radius:6px;">
@@ -604,10 +591,9 @@ input:focus, select:focus {
             <div class="state-box" id="empty-state">
                 <div class="icon">🎯</div>
                 <div class="title">Ready to Search</div>
-                <div class="sub">Click <strong>Search Players</strong> to find recruits. To get data fast, use <strong>⚔️ Seed from My War History</strong> in the left sidebar — it instantly pulls players your faction has fought, who are guaranteed to be active.</div>
+                <div class="sub">Click <strong>Search Players</strong> to find recruits. The system is automatically monitoring all factions in the background and will alert you instantly when players become available.</div>
                 <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;justify-content:center;">
                     <button class="btn-search" style="width:auto;padding:10px 20px;" onclick="doSearch()">🔍 Search Now</button>
-                    <button class="btn-outline" style="border-color:rgba(0,206,201,0.4);color:var(--teal);padding:10px 20px;" onclick="seedFromWars()">⚔️ Seed from Wars</button>
                 </div>
             </div>
         </div>
