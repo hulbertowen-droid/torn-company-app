@@ -498,6 +498,13 @@ input:focus, select:focus {
         </div>
 
         <div class="sidebar-section">
+            <div class="sidebar-title">Min Progression Rate
+                <span style="font-size:0.72em;color:var(--text-faint);font-weight:400;"> (levels/day)</span>
+            </div>
+            <input type="number" id="f-minProgression" placeholder="e.g. 1.0" step="0.1" min="0">
+        </div>
+
+        <div class="sidebar-section">
             <div class="sidebar-title">Donator Status</div>
             <div class="toggle-group">
                 <button class="toggle-btn active" data-donator="" onclick="setDonatorFilter(this)">Any</button>
@@ -511,6 +518,7 @@ input:focus, select:focus {
             <div class="sidebar-title">Sort By</div>
             <select id="f-sort" onchange="doSearch()">
                 <option value="lastAction">Last Active</option>
+                <option value="progression">Progression Rate</option>
                 <option value="level">Level (High→Low)</option>
                 <option value="networth">Networth</option>
                 <option value="awards">Awards</option>
@@ -750,6 +758,7 @@ function resetFilters() {
     document.getElementById('f-minAge').value = '';
     document.getElementById('f-maxAge').value = '';
     document.getElementById('f-minAwards').value = '';
+    document.getElementById('f-minProgression').value = '';
     setActiveFilter(document.querySelector('[data-hours="24"]'));
     setDonatorFilter(document.querySelector('[data-donator=""]'));
     document.getElementById('f-sort').value = 'lastAction';
@@ -790,6 +799,9 @@ async function doSearch(append = false) {
 
     const minAwards = document.getElementById('f-minAwards').value;
     if (minAwards) params.set('minAwards', minAwards);
+
+    const minProgression = document.getElementById('f-minProgression').value;
+    if (minProgression) params.set('minProgressionRate', minProgression);
 
     const donator = document.getElementById('f-donator').value;
     if (donator !== '') params.set('donator', donator);
@@ -843,6 +855,7 @@ function renderResults(data) {
             <th>Networth</th>
             <th>Awards</th>
             <th>Age</th>
+            <th>Progression</th>
             <th>Actions</th>
         </tr></thead>
         <tbody>`;
@@ -877,6 +890,7 @@ function renderRow(p, isNew = false) {
         <td style="color:var(--gold);font-weight:700;">${nw}</td>
         <td style="color:var(--text-dim);">${p.awards || '—'}</td>
         <td style="color:var(--text-dim);">${p.daysInTorn ? p.daysInTorn + 'd' : '—'}</td>
+        <td style="color:${p.progressionRate >= 1.0 ? 'var(--teal)' : p.progressionRate >= 0.5 ? 'var(--gold)' : 'var(--text-dim)'};font-weight:${p.progressionRate >= 1.0 ? '700' : '400'}" title="${p.progressionRate} levels/day">${p.progressionRate >= 0.01 ? p.progressionRate.toFixed(2) + '/d' : '—'}</td>
         <td><div class="action-btns">
             <a href="${p.profileUrl}" target="_blank" class="btn-profile">👤 Profile</a>
             <a href="${p.messageUrl}" target="_blank" class="btn-message">✉️ Message</a>
@@ -897,7 +911,7 @@ function showSkeleton() {
     </tr>`).join('');
 
     document.getElementById('results-area').innerHTML = `<table class="player-table">
-        <thead><tr><th>Player</th><th>Level</th><th>Status</th><th>Last Active</th><th>Networth</th><th>Awards</th><th>Age</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Player</th><th>Level</th><th>Status</th><th>Last Active</th><th>Networth</th><th>Awards</th><th>Age</th><th>Progression</th><th>Actions</th></tr></thead>
         <tbody>${rows}</tbody></table>`;
 }
 

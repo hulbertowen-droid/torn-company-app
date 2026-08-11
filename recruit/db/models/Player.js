@@ -17,6 +17,7 @@ const playerSchema = new mongoose.Schema({
     daysInTorn: { type: Number, default: 0 },      // Account age in days
     gender: { type: String, default: '' },
     life: { type: Number, default: 0 },
+    progressionRate: { type: Number, default: 0 },  // level / daysInTorn — measure of dedication
     // Refresh scheduling
     refreshedAt: { type: Date, default: null },
     nextRefreshAt: { type: Date, default: () => new Date() },

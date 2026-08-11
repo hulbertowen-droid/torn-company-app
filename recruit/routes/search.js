@@ -40,6 +40,7 @@ router.get('/', async (req, res) => {
             minAwards,
             minAge,
             maxAge,
+            minProgressionRate,
             donator,
             status = 'Okay',
             sort = 'lastActionTs',
@@ -72,6 +73,10 @@ router.get('/', async (req, res) => {
             query.daysInTorn = {};
             if (minAge) query.daysInTorn.$gte = parseInt(minAge);
             if (maxAge) query.daysInTorn.$lte = parseInt(maxAge);
+        }
+
+        if (minProgressionRate) {
+            query.progressionRate = { $gte: parseFloat(minProgressionRate) };
         }
 
         // Anti-poaching: exclude the requesting faction's own members
@@ -111,6 +116,7 @@ router.get('/', async (req, res) => {
             lastActionTs: 'lastActionTs',
             awards: 'awards',
             age: 'daysInTorn',
+            progression: 'progressionRate',
         };
         const sortField = sortMap[sort] || 'lastActionTs';
         const sortDir = order === 'asc' ? 1 : -1;
@@ -170,6 +176,7 @@ function formatPlayer(p) {
         awards: p.awards,
         donator: p.donator,
         daysInTorn: p.daysInTorn,
+        progressionRate: p.progressionRate || 0,
         gender: p.gender,
         refreshedAt: p.refreshedAt,
         profileUrl: `https://www.torn.com/profiles.php?XID=${p._id}`,
