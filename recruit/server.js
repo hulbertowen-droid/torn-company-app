@@ -94,6 +94,19 @@ async function main() {
     server.listen(PORT, () => {
         console.log(`[Recruit] Server running on http://localhost:${PORT}`);
         console.log(`[Recruit] WebSocket live feed on ws://localhost:${PORT}/live`);
+
+        // Keep-alive: ping ourselves every 14 minutes so Render never spins us down.
+        // RENDER_EXTERNAL_URL is automatically injected by Render in production.
+        const appUrl = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL;
+        if (appUrl) {
+            const PING_MS = 14 * 60 * 1000; // 14 minutes
+            setInterval(() => {
+                fetch(`${appUrl}/api/admin/health`, { signal: AbortSignal.timeout(10_000) })
+                    .then(() => console.log('[KeepAlive] Ping OK'))
+                    .catch(e => console.warn('[KeepAlive] Ping failed:', e.message));
+            }, PING_MS);
+            console.log(`[KeepAlive] Self-ping active every 14 min → ${appUrl}`);
+        }
     });
 }
 
