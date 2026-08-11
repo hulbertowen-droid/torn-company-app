@@ -150,11 +150,9 @@ router.post('/seed-from-wars', async (req, res) => {
             return res.status(400).json({ error: 'Register your faction first.' });
         }
 
-        res.writeHead(200, {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-        });
+        res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' });
+        res.status(200);
+        res.flushHeaders();
         const send = (msg) => { try { res.write(`data: ${JSON.stringify(msg)}\n\n`); } catch(e){} };
 
         send({ type: 'start', message: 'Fetching your faction\'s war history from Torn...' });
@@ -244,11 +242,9 @@ router.post('/seed-faction-range', async (req, res) => {
             return res.status(400).json({ error: 'Register your faction first.' });
         }
 
-        res.writeHead(200, {
-            'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
-        });
+        res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' });
+        res.status(200);
+        res.flushHeaders();
         const send = (msg) => { try { res.write(`data: ${JSON.stringify(msg)}\n\n`); } catch(e){} };
 
         const { startFactionId = 1, endFactionId = 500 } = req.body;
@@ -355,11 +351,14 @@ router.post('/bulk-import', async (req, res) => {
         return res.status(400).json({ error: 'Register your faction first to get an API key.' });
     }
 
-    res.writeHead(200, {
+    res.set({
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',  // Disables nginx/Render proxy buffering — critical for SSE
     });
+    res.status(200);
+    res.flushHeaders(); // Send headers immediately so client can start reading the stream
     const send = (msg) => { try { res.write(`data: ${JSON.stringify(msg)}\n\n`); } catch(e){} };
 
     // Curated list of top known active Torn factions.
