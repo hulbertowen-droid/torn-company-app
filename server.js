@@ -2414,9 +2414,13 @@ app.post('/api/turbo/stop', (req, res) => {
     res.json({ success: true, msg: "Turbo stopped" });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server listening on port ${PORT}`);
     startFrontierPipeline();
+    
+    // Boot up the integrated recruitment platform
+    const { initRecruitPlatform } = require('./recruit/index');
+    initRecruitPlatform(app, server).catch(e => console.error("[Recruit Init Error]", e));
 });
 
 async function startFrontierPipeline() {

@@ -710,8 +710,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // ── Status ─────────────────────────────────────────────────────────────────
 async function loadStatus() {
     try {
-        const r = await fetch('/api/admin/status');
-        const d = await r.json();
+        const res = await fetch('/recruit-api/admin/status');
+        const d = await res.json();
         if (!d.success) return;
         document.getElementById('kpi-recruitable').textContent = d.database.recruitable.toLocaleString();
         document.getElementById('kpi-freshness').textContent = d.database.freshnessRate;
@@ -752,7 +752,7 @@ async function runBulkImport() {
     addedText.textContent = '';
 
     try {
-        const response = await fetch('/api/admin/bulk-import', { method: 'POST' });
+        const response = await fetch('/recruit-api/admin/bulk-import', { method: 'POST' });
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
@@ -797,7 +797,7 @@ async function runBulkImport() {
 // ── WebSocket ──────────────────────────────────────────────────────────────
 function connectWS() {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${proto}//${location.host}/live`);
+    ws = new WebSocket(`${proto}//${location.host}/recruit-live`);
 
     ws.onopen = () => {
         document.getElementById('live-status').innerHTML = `<div class="live-dot"></div><span class="live-label">Live</span>`;
@@ -890,7 +890,7 @@ async function doSearch(append = false) {
     if (nextCursor && append) params.set('cursor', nextCursor);
 
     try {
-        const r = await fetch('/api/search?' + params.toString());
+        const r = await fetch('/recruit-api/search?' + params.toString());
         const d = await r.json();
 
         if (!d.success) throw new Error(d.error || 'Search failed');
@@ -1057,12 +1057,12 @@ async function registerFaction() {
     msgEl.style.display = 'none';
 
     try {
-        const r = await fetch('/api/auth/register', {
+        const res = await fetch('/recruit-api/auth/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ apiKey }),
         });
-        const d = await r.json();
+        const d = await res.json();
         if (!d.success) throw new Error(d.error);
 
         myFactionId = d.factionId;

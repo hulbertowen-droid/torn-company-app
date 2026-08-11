@@ -14,6 +14,11 @@ async function connectDB() {
 
 async function ensureIndexes() {
     const db = mongoose.connection.db;
+    if (!db) {
+        console.warn('[MongoDB] recruit/db/mongo: Database not connected yet.');
+        return;
+    }
+
     const col = db.collection('players');
 
     // Unique ID index
@@ -39,7 +44,7 @@ async function ensureIndexes() {
     await facCol.createIndex({ _id: 1 }, { unique: true }).catch(() => {});
     await facCol.createIndex({ memberIds: 1 }).catch(() => {});
 
-    console.log('[MongoDB] Indexes ensured');
+    console.log('[MongoDB] Recruit indexes ensured');
 }
 
-module.exports = { connectDB };
+module.exports = { ensureIndexes };
