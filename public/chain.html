@@ -72,6 +72,53 @@
         @keyframes pulseAlert { 0% { opacity: 1; } 50% { opacity: 0.6; box-shadow: 0 0 10px rgba(46,213,115,0.4); } 100% { opacity: 1; } }
         @media (max-width: 768px) { .script-steps { grid-template-columns: 1fr; } }
 
+        /* ── Chain Lineup ─────────────────────────────────────────────────── */
+        .lineup-card { background: var(--card); border: 1px solid #2f3542; border-radius: 12px; overflow: hidden; }
+        .lineup-header { padding: 18px 22px; border-bottom: 1px solid #2f3542; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .lineup-title { margin: 0; color: var(--teal, #00cec9); text-transform: uppercase; letter-spacing: 1px; font-size: 1.1em; display: flex; align-items: center; gap: 8px; font-weight: bold; }
+        .lineup-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .lineup-btn { background: #161b22; border: 1px solid #30363d; color: var(--text-dim); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; transition: 0.15s; }
+        .lineup-btn:hover { border-color: var(--teal, #00cec9); color: var(--teal, #00cec9); }
+        .lineup-btn.danger:hover { border-color: var(--red); color: var(--red); }
+        .lineup-btn.active { background: rgba(0,206,201,0.12); border-color: var(--teal, #00cec9); color: var(--teal, #00cec9); }
+        .lineup-cycle-badge { background: rgba(0,206,201,0.1); border: 1px solid rgba(0,206,201,0.3); color: var(--teal,#00cec9); padding: 4px 10px; border-radius: 6px; font-size: 0.75em; font-weight: 700; }
+        .lineup-meta { padding: 10px 22px; background: rgba(0,206,201,0.04); border-bottom: 1px solid #2f3542; display: flex; align-items: center; gap: 10px; font-size: 0.82em; color: var(--text-dim); }
+        .lineup-myname-input { background: #0b0d13; border: 1px solid #2f3542; color: var(--text-main); padding: 4px 10px; border-radius: 6px; font-size: 0.85em; width: 160px; outline: none; }
+        .lineup-myname-input:focus { border-color: var(--teal,#00cec9); }
+        .lineup-list { list-style: none; margin: 0; padding: 0; }
+        .lineup-item { display: flex; align-items: center; gap: 12px; padding: 12px 22px; border-bottom: 1px solid #161b22; transition: background 0.15s; cursor: grab; position: relative; }
+        .lineup-item:last-child { border-bottom: none; }
+        .lineup-item:hover { background: #0d1117; }
+        .lineup-item.current { background: rgba(0,206,201,0.07); border-left: 3px solid var(--teal,#00cec9); animation: lineupPulse 2s ease-in-out infinite; }
+        .lineup-item.hit-done { opacity: 0.45; }
+        .lineup-item.dragging { opacity: 0.4; background: #0d1117; }
+        .lineup-item.drag-over { border-top: 2px solid var(--teal, #00cec9); }
+        @keyframes lineupPulse { 0%,100% { box-shadow: none; } 50% { box-shadow: inset 0 0 18px rgba(0,206,201,0.08); } }
+        .lineup-slot { width: 28px; text-align: center; font-weight: 900; font-size: 1em; color: var(--text-dim); flex-shrink: 0; }
+        .lineup-item.current .lineup-slot { color: var(--teal,#00cec9); font-size: 1.2em; }
+        .lineup-drag-handle { color: #3a4050; font-size: 1.1em; cursor: grab; flex-shrink: 0; user-select: none; }
+        .lineup-name { font-weight: 700; font-size: 0.98em; color: var(--text-main); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .lineup-item.current .lineup-name { color: var(--teal,#00cec9); }
+        .online-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+        .online-dot.online { background: var(--green); box-shadow: 0 0 5px rgba(46,213,115,0.6); }
+        .online-dot.idle { background: var(--gold); }
+        .online-dot.offline { background: #444; }
+        .online-label { font-size: 0.75em; color: var(--text-dim); }
+        .hit-check { font-size: 1.1em; flex-shrink: 0; }
+        .lineup-remove-btn { background: none; border: none; color: #3a4050; font-size: 1em; cursor: pointer; padding: 4px 6px; border-radius: 4px; transition: 0.15s; flex-shrink: 0; }
+        .lineup-remove-btn:hover { color: var(--red); background: rgba(255,71,87,0.1); }
+        .lineup-skip-btn { background: none; border: 1px solid #2f3542; color: var(--text-dim); font-size: 0.7em; cursor: pointer; padding: 3px 8px; border-radius: 4px; transition: 0.15s; flex-shrink: 0; text-transform: uppercase; font-weight: 700; }
+        .lineup-skip-btn:hover { border-color: var(--gold); color: var(--gold); }
+        .lineup-add-row { padding: 14px 22px; border-top: 1px solid #2f3542; display: flex; gap: 8px; }
+        .lineup-add-input { flex: 1; background: #0b0d13; border: 1px solid #2f3542; color: var(--text-main); padding: 8px 12px; border-radius: 6px; font-size: 0.88em; outline: none; }
+        .lineup-add-input:focus { border-color: var(--teal,#00cec9); }
+        .lineup-add-btn { background: rgba(0,206,201,0.12); border: 1px solid rgba(0,206,201,0.35); color: var(--teal,#00cec9); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.85em; transition: 0.15s; white-space: nowrap; }
+        .lineup-add-btn:hover { background: rgba(0,206,201,0.22); }
+        .lineup-suggest { position: absolute; left: 22px; right: 22px; bottom: 100%; background: #161b22; border: 1px solid #2f3542; border-radius: 6px; z-index: 50; max-height: 200px; overflow-y: auto; margin-bottom: 4px; }
+        .lineup-suggest-item { padding: 8px 12px; cursor: pointer; font-size: 0.88em; display: flex; align-items: center; gap: 8px; transition: 0.1s; }
+        .lineup-suggest-item:hover { background: #0d1117; color: var(--teal,#00cec9); }
+        .lineup-empty { text-align: center; color: var(--text-dim); padding: 28px; font-style: italic; font-size: 0.9em; }
+
 </style>
 </head>
 <body>
@@ -125,6 +172,32 @@
                 <div class="waiting-text" id="waiting-msg">WAITING FOR CHAIN TO START...</div>
             </div>
 
+
+            <!-- ── Chain Lineup ──────────────────────────────────────────── -->
+            <div class="lineup-card">
+                <div class="lineup-header">
+                    <h3 class="lineup-title">⚡ Chain Lineup</h3>
+                    <div class="lineup-controls">
+                        <span class="lineup-cycle-badge" id="lineup-cycle-badge">Cycle 1</span>
+                        <button class="lineup-btn active" id="lineup-loop-btn" onclick="lineupToggleLoop()" title="Loop back to start when everyone has hit">🔁 Loop</button>
+                        <button class="lineup-btn" onclick="lineupNext()" title="Manually advance to next person">⏭ Next</button>
+                        <button class="lineup-btn" onclick="lineupReset()" title="Clear hit marks and restart from top">↺ Reset</button>
+                        <button class="lineup-btn danger" onclick="lineupClear()" title="Remove all members">🗑 Clear</button>
+                    </div>
+                </div>
+                <div class="lineup-meta">
+                    <span>Your name (for alerts):</span>
+                    <input id="lineup-myname" class="lineup-myname-input" placeholder="Your Torn name" oninput="lineupSaveMyName()" />
+                    <span id="lineup-status-msg" style="margin-left:auto;"></span>
+                </div>
+                <ul class="lineup-list" id="lineup-list"></ul>
+                <div class="lineup-add-row" style="position:relative;">
+                    <input id="lineup-add-input" class="lineup-add-input" placeholder="Add faction member by name..." autocomplete="off"
+                        oninput="lineupFilterSuggest()" onkeydown="lineupAddKeydown(event)" />
+                    <button class="lineup-add-btn" onclick="lineupAddFromInput()">+ Add</button>
+                    <div class="lineup-suggest" id="lineup-suggest" style="display:none;"></div>
+                </div>
+            </div>
 
             <div class="queue-card">
                 <div class="queue-header">
@@ -510,6 +583,295 @@ if (myKey) {
     let cpm = parseInt(localStorage.getItem("warboard_cpm")) || 12;
     let refreshMs = Math.floor(60000 / cpm);
     setInterval(fetchChainData, Math.max(refreshMs, 2000));
+}
+</script>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+//  CHAIN LINEUP
+// ══════════════════════════════════════════════════════════════════
+
+// ── State ─────────────────────────────────────────────────────────
+let lineupMembers    = [];   // [{ name, id, hit, skipped }]
+let lineupCurrent    = 0;    // index of who hits next
+let lineupLoop       = true;
+let lineupCycleNum   = 1;
+let onlineStatus     = {};   // { memberName: 'online'|'idle'|'offline' }
+let factionMemberList = [];  // [{ name, id }] for autocomplete
+let lineupAlertedIdx = -1;
+let lastProcessedAtks = new Set();
+
+const LINEUP_LS = 'chain_lineup_v2';
+
+// ── Persist ────────────────────────────────────────────────────────
+function lineupLoad() {
+    try {
+        const d = JSON.parse(localStorage.getItem(LINEUP_LS) || '{}');
+        lineupMembers  = d.members  || [];
+        lineupCurrent  = d.current  || 0;
+        lineupLoop     = d.loop     !== undefined ? d.loop : true;
+        lineupCycleNum = d.cycle    || 1;
+        document.getElementById('lineup-loop-btn').classList.toggle('active', lineupLoop);
+        const el = document.getElementById('lineup-myname');
+        if (d.myName && el) el.value = d.myName;
+    } catch(e) {}
+}
+
+function lineupSave() {
+    localStorage.setItem(LINEUP_LS, JSON.stringify({
+        members: lineupMembers,
+        current: lineupCurrent,
+        loop:    lineupLoop,
+        cycle:   lineupCycleNum,
+        myName:  (document.getElementById('lineup-myname') || {}).value || ''
+    }));
+}
+
+function lineupSaveMyName() { lineupSave(); }
+
+// ── Render ─────────────────────────────────────────────────────────
+function lineupRender() {
+    const ul    = document.getElementById('lineup-list');
+    const badge = document.getElementById('lineup-cycle-badge');
+    if (badge) badge.textContent = `Cycle ${lineupCycleNum}`;
+    if (!ul) return;
+
+    if (lineupMembers.length === 0) {
+        ul.innerHTML = `<div class="lineup-empty">No members yet. Add faction members below to build the hit order.</div>`;
+        return;
+    }
+
+    ul.innerHTML = '';
+    lineupMembers.forEach((m, i) => {
+        const isCurrent = (i === lineupCurrent && !m.hit);
+        const status     = onlineStatus[m.name] || 'offline';
+        const statusLbl  = status.charAt(0).toUpperCase() + status.slice(1);
+        const li         = document.createElement('li');
+        li.className = 'lineup-item' + (isCurrent ? ' current' : '') + (m.hit ? ' hit-done' : '');
+        li.dataset.idx = i;
+        li.draggable   = true;
+
+        li.innerHTML = `
+            <span class="lineup-drag-handle" title="Drag to reorder">⠿</span>
+            <span class="lineup-slot">${i + 1}</span>
+            <span class="online-dot ${status}" title="${statusLbl}"></span>
+            <span class="lineup-name">${m.name}</span>
+            <span class="online-label">${statusLbl}</span>
+            ${m.hit ? '<span class="hit-check" title="Hit detected">✅</span>' : ''}
+            ${isCurrent ? `<button class="lineup-skip-btn" onclick="lineupSkip(${i})">Skip</button>` : ''}
+            <button class="lineup-remove-btn" onclick="lineupRemove(${i})" title="Remove">✕</button>
+        `;
+
+        li.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', i); li.classList.add('dragging'); });
+        li.addEventListener('dragend',   () => li.classList.remove('dragging'));
+        li.addEventListener('dragover',  e => { e.preventDefault(); li.classList.add('drag-over'); });
+        li.addEventListener('dragleave', () => li.classList.remove('drag-over'));
+        li.addEventListener('drop', e => {
+            e.preventDefault();
+            li.classList.remove('drag-over');
+            const from = parseInt(e.dataTransfer.getData('text/plain'));
+            const to   = i;
+            if (from === to) return;
+            const moved = lineupMembers.splice(from, 1)[0];
+            lineupMembers.splice(to, 0, moved);
+            if (lineupCurrent === from) lineupCurrent = to;
+            else if (from < lineupCurrent && to >= lineupCurrent) lineupCurrent--;
+            else if (from > lineupCurrent && to <= lineupCurrent) lineupCurrent++;
+            lineupSave(); lineupRender();
+        });
+
+        ul.appendChild(li);
+    });
+
+    const curEl = ul.querySelector('.current');
+    if (curEl) curEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ── Controls ───────────────────────────────────────────────────────
+function lineupToggleLoop() {
+    lineupLoop = !lineupLoop;
+    document.getElementById('lineup-loop-btn').classList.toggle('active', lineupLoop);
+    lineupSave();
+}
+
+function lineupAdvance() {
+    lineupCurrent++;
+    if (lineupCurrent >= lineupMembers.length) {
+        if (lineupLoop) {
+            lineupCycleNum++;
+            lineupCurrent = 0;
+            lineupMembers.forEach(m => { m.hit = false; m.skipped = false; });
+        } else {
+            lineupCurrent = lineupMembers.length; // past end — done
+        }
+    }
+    lineupAlertedIdx = -1;
+}
+
+function lineupNext() {
+    if (!lineupMembers.length) return;
+    lineupAdvance();
+    lineupSave(); lineupRender(); lineupCheckAlert();
+}
+
+function lineupSkip(idx) {
+    if (lineupMembers[idx]) lineupMembers[idx].skipped = true;
+    if (lineupCurrent === idx) lineupAdvance();
+    lineupSave(); lineupRender(); lineupCheckAlert();
+}
+
+function lineupRemove(idx) {
+    lineupMembers.splice(idx, 1);
+    if (lineupCurrent >= lineupMembers.length) lineupCurrent = Math.max(0, lineupMembers.length - 1);
+    lineupSave(); lineupRender();
+}
+
+function lineupReset() {
+    lineupCurrent = 0; lineupCycleNum = 1; lineupAlertedIdx = -1;
+    lineupMembers.forEach(m => { m.hit = false; m.skipped = false; });
+    lineupSave(); lineupRender();
+}
+
+function lineupClear() {
+    if (!confirm('Remove all members from the lineup?')) return;
+    lineupMembers = []; lineupCurrent = 0; lineupCycleNum = 1;
+    lineupSave(); lineupRender();
+}
+
+// ── Add Member ─────────────────────────────────────────────────────
+function lineupAdd(name, id) {
+    name = (name || '').trim();
+    if (!name) return;
+    if (lineupMembers.some(m => m.name.toLowerCase() === name.toLowerCase())) {
+        lineupSetStatus(`${name} is already in the lineup.`); return;
+    }
+    lineupMembers.push({ name, id: id || null, hit: false, skipped: false });
+    lineupSave(); lineupRender(); lineupSetStatus(`Added ${name}.`);
+}
+
+function lineupAddFromInput() {
+    const input = document.getElementById('lineup-add-input');
+    const val = input.value.trim();
+    if (!val) return;
+    const match = factionMemberList.find(m => m.name.toLowerCase() === val.toLowerCase());
+    lineupAdd(match ? match.name : val, match ? match.id : null);
+    input.value = '';
+    document.getElementById('lineup-suggest').style.display = 'none';
+}
+
+function lineupAddKeydown(e) {
+    if (e.key === 'Enter') lineupAddFromInput();
+    if (e.key === 'Escape') document.getElementById('lineup-suggest').style.display = 'none';
+}
+
+function lineupFilterSuggest() {
+    const val = document.getElementById('lineup-add-input').value.trim().toLowerCase();
+    const box = document.getElementById('lineup-suggest');
+    if (!val || !factionMemberList.length) { box.style.display = 'none'; return; }
+    const matches = factionMemberList
+        .filter(m => m.name.toLowerCase().includes(val))
+        .filter(m => !lineupMembers.some(lm => lm.name.toLowerCase() === m.name.toLowerCase()))
+        .slice(0, 12);
+    if (!matches.length) { box.style.display = 'none'; return; }
+    box.innerHTML = matches.map(m => {
+        const st = onlineStatus[m.name] || 'offline';
+        return `<div class="lineup-suggest-item" onclick="lineupAdd('${m.name.replace(/'/g,"\\'")}',${m.id})">
+            <span class="online-dot ${st}"></span><span>${m.name}</span>
+        </div>`;
+    }).join('');
+    box.style.display = 'block';
+}
+
+document.addEventListener('click', e => {
+    if (!e.target.closest('.lineup-add-row')) {
+        const b = document.getElementById('lineup-suggest');
+        if (b) b.style.display = 'none';
+    }
+});
+
+// ── Status message ─────────────────────────────────────────────────
+function lineupSetStatus(msg) {
+    const el = document.getElementById('lineup-status-msg');
+    if (!el) return;
+    el.textContent = msg;
+    setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 3000);
+}
+
+// ── Audio alert when it's your turn ───────────────────────────────
+function lineupCheckAlert() {
+    const myName = ((document.getElementById('lineup-myname') || {}).value || '').trim().toLowerCase();
+    if (!myName || !lineupMembers.length) return;
+    const cur = lineupMembers[lineupCurrent];
+    if (!cur || cur.hit) return;
+    if (cur.name.toLowerCase() === myName && lineupAlertedIdx !== lineupCurrent) {
+        lineupAlertedIdx = lineupCurrent;
+        playAlertSound();
+        setTimeout(playAlertSound, 300);
+        lineupSetStatus('⚡ YOUR TURN TO HIT!');
+    }
+}
+
+// ── Hit detection (auto-advance) ───────────────────────────────────
+async function lineupDetectHits() {
+    if (!myKey || !lineupMembers.length) return;
+    try {
+        const res  = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${myKey}`);
+        const data = await res.json();
+        if (!data.attacks || !data.ID) return;
+
+        const facId  = data.ID;
+        const atks   = Object.values(data.attacks).filter(a => a.attacker_faction === facId && a.chain > 0);
+        let advanced = false;
+
+        for (const atk of atks) {
+            const uid = atk.code || (`${atk.attacker_id}_${atk.timestamp_ended}`);
+            if (lastProcessedAtks.has(uid)) continue;
+            lastProcessedAtks.add(uid);
+
+            const atkName = (atk.attacker_name || '').toLowerCase();
+            const idx = lineupMembers.findIndex(m => m.name.toLowerCase() === atkName);
+            if (idx === -1 || lineupMembers[idx].hit) continue;
+
+            lineupMembers[idx].hit = true;
+            if (idx === lineupCurrent) { lineupAdvance(); advanced = true; }
+        }
+
+        if (lastProcessedAtks.size > 600) {
+            lastProcessedAtks = new Set([...lastProcessedAtks].slice(-300));
+        }
+
+        if (advanced) { lineupSave(); lineupRender(); lineupCheckAlert(); }
+    } catch(e) { /* silent */ }
+}
+
+// ── Online status + faction member list ───────────────────────────
+async function lineupFetchOnlineStatus() {
+    if (!myKey) return;
+    try {
+        const res  = await fetch(`https://api.torn.com/faction/?selections=basic&key=${myKey}`);
+        const data = await res.json();
+        if (!data.members) return;
+        factionMemberList = [];
+        const ns = {};
+        for (const [id, m] of Object.entries(data.members)) {
+            factionMemberList.push({ name: m.name, id: parseInt(id) });
+            const st = ((m.last_action || {}).status || '').toLowerCase();
+            ns[m.name] = st === 'online' ? 'online' : st === 'idle' ? 'idle' : 'offline';
+        }
+        onlineStatus = ns;
+        lineupRender();
+    } catch(e) { /* silent */ }
+}
+
+// ── Boot ───────────────────────────────────────────────────────────
+lineupLoad();
+lineupRender();
+
+if (myKey) {
+    lineupFetchOnlineStatus();
+    setInterval(lineupFetchOnlineStatus, 60000); // refresh every 60s
+    setInterval(lineupDetectHits, 4000);          // check hits every 4s
+    lineupCheckAlert();
 }
 </script>
 
