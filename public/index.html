@@ -755,7 +755,7 @@ function renderChart(players) {
         warChartInstance.data.labels = labels;
         warChartInstance.data.datasets[0].data = attData;
         warChartInstance.data.datasets[1].data = defData;
-        warChartInstance.update();
+        warChartInstance.update('none');
     } else {
         warChartInstance = new Chart(ctx, {
             type: 'bar',
@@ -772,7 +772,8 @@ function renderChart(players) {
                 plugins: {
                     legend: { labels: { color: '#e6edf3', font: { weight: '700' } } },
                     tooltip: { backgroundColor: '#0d1117', titleColor: '#ffa502', bodyColor: '#e6edf3', borderColor: '#21262d', borderWidth: 1, padding: 10, cornerRadius: 8 }
-                }
+                },
+                animation: false
             }
         });
     }
@@ -792,7 +793,7 @@ function renderHeatmap(enemies, premium) {
         if (p.timeline && Array.isArray(p.timeline) && p.timeline.length > 0) {
             loaded++;
             let refHour = p.timelineTime ? new Date(p.timelineTime).getUTCHours() : new Date().getUTCHours();
-            maxTimeHour = refHour;
+            
             
             p.timeline.forEach((v, i) => {
                 let h = ((refHour - (p.timeline.length - 1 - i)) % 24 + 24) % 24;
@@ -822,7 +823,7 @@ function renderHeatmap(enemies, premium) {
     if (activityChartInstance) {
         activityChartInstance.data.labels = labels;
         activityChartInstance.data.datasets[0].data = chartData;
-        activityChartInstance.update();
+        activityChartInstance.update('none');
     } else {
         activityChartInstance = new Chart(ctx, {
             type: 'line',
@@ -833,7 +834,8 @@ function renderHeatmap(enemies, premium) {
                     y: { beginAtZero: true, grid: { color: 'rgba(33,38,45,0.8)', drawBorder: false }, ticks: { display: false } },
                     x: { grid: { display: false }, ticks: { color: '#8b949e', font: { size: 9 }, maxRotation: 45, minRotation: 45 } }
                 },
-                plugins: { legend: { display: false }, tooltip: { backgroundColor: '#0d1117', titleColor: '#58a6ff', bodyColor: '#e6edf3', borderColor: '#21262d', borderWidth: 1, padding: 10, cornerRadius: 8 } }
+                plugins: { legend: { display: false }, tooltip: { backgroundColor: '#0d1117', titleColor: '#58a6ff', bodyColor: '#e6edf3', borderColor: '#21262d', borderWidth: 1, padding: 10, cornerRadius: 8 } },
+                animation: false
             }
         });
     }
