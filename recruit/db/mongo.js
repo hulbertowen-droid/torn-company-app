@@ -47,4 +47,4 @@ async function ensureIndexes() {
     console.log('[MongoDB] Recruit indexes ensured');
 }
 
-module.exports = { ensureIndexes };
+module.exports = { connectDB, ensureIndexes };

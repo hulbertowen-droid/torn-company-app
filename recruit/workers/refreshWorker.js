@@ -1,7 +1,6 @@
 'use strict';
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
-const { connectDB } = require('../db/mongo');
 const Player = require('../db/models/Player');
 const { fetchPlayer, parsePlayer } = require('../lib/tornClient');
 const { scheduleRefresh, getPlayerRefreshQueue } = require('../queues/playerQueue');
@@ -11,7 +10,7 @@ let broadcastFn = null;
 function setBroadcast(fn) { broadcastFn = fn; }
 
 async function startRefreshWorker() {
-    await connectDB();
+    // DB connection is managed by the main app — no connectDB() needed here
 
     const queue = getPlayerRefreshQueue();
     

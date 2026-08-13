@@ -1,7 +1,6 @@
-﻿'use strict';
+'use strict';
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
-const { connectDB } = require('../db/mongo');
 const Player = require('../db/models/Player');
 const WatchPool = require('../db/models/WatchPool');
 const { fetchPlayer, parsePlayer } = require('../lib/tornClient');
@@ -15,7 +14,7 @@ let broadcastFn = null;
 function setBroadcast(fn) { broadcastFn = fn; }
 
 async function startSeederWorker() {
-    await connectDB();
+    // DB connection is managed by the main app — no connectDB() needed here
     console.log('[WatchPool] Seeder started — monitoring known active players');
     console.log('[GlobalScanner] Auto-scanner started — scanning all Torn factions + detecting dying factions');
     console.log('[NewPlayerScanner] Rapid-progression scanner started — finding dedicated new players');
