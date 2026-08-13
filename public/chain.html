@@ -591,12 +591,13 @@ if (myKey) {
 // ══════════════════════════════════════════════════════════════════
 
 // ── State ─────────────────────────────────────────────────────────
+const LINEUP_KEY = localStorage.getItem('warboard_apikey') || '';
 let lineupMembers    = [];   // [{ name, id, hit, skipped }]
-let lineupCurrent    = 0;    // index of who hits next
+let lineupCurrent    = 0;
 let lineupLoop       = true;
 let lineupCycleNum   = 1;
-let onlineStatus     = {};   // { memberName: 'online'|'idle'|'offline' }
-let factionMemberList = [];  // [{ name, id }] for autocomplete
+let onlineStatus     = {};   // { name: 'online'|'idle'|'offline' }
+let factionMemberList = [];  // [{ name, id }]
 let lineupAlertedIdx = -1;
 let lastProcessedAtks = new Set();
 
@@ -610,9 +611,8 @@ function lineupLoad() {
         lineupCurrent  = d.current  || 0;
         lineupLoop     = d.loop     !== undefined ? d.loop : true;
         lineupCycleNum = d.cycle    || 1;
-        document.getElementById('lineup-loop-btn').classList.toggle('active', lineupLoop);
-        const el = document.getElementById('lineup-myname');
-        if (d.myName && el) el.value = d.myName;
+        const btn = document.getElementById('lineup-loop-btn');
+        if (btn) btn.classList.toggle('active', lineupLoop);
     } catch(e) {}
 }
 
@@ -762,33 +762,47 @@ function lineupAddKeydown(e) {
 }
 
 function lineupFilterSuggest() {
-    const val = document.getElementById('lineup-add-input').value.trim().toLowerCase();
-    const box = document.getElementById('lineup-suggest');
+    const input = document.getElementById('lineup-add-input');
+    const box   = document.getElementById('lineup-suggest');
+    if (!input || !box) return;
+    const val = input.value.trim().toLowerCase();
+
     if (!factionMemberList.length) {
-        // List not loaded yet — try to fetch then show
-        if (myKey) lineupFetchOnlineStatus().then(() => lineupFilterSuggest());
+        // Not loaded yet — show loading state and kick off fetch
+        box.innerHTML = `<div class="lineup-suggest-item" style="color:var(--text-dim);cursor:default;">Loading members...</div>`;
+        box.style.display = 'block';
+        lineupFetchMembers().then(() => lineupFilterSuggest());
         return;
     }
+
     const matches = factionMemberList
         .filter(m => !val || m.name.toLowerCase().includes(val))
         .filter(m => !lineupMembers.some(lm => lm.name.toLowerCase() === m.name.toLowerCase()))
-        .sort((a, b) => {
-            // Online first, then idle, then offline
-            const order = { online: 0, idle: 1, offline: 2 };
-            return (order[onlineStatus[a.name] || 'offline'] || 0) - (order[onlineStatus[b.name] || 'offline'] || 0);
-        })
-        .slice(0, 15);
-    if (!matches.length) { box.style.display = 'none'; return; }
+        .slice(0, 20);
+
+    if (!matches.length) {
+        box.innerHTML = `<div class="lineup-suggest-item" style="color:var(--text-dim);cursor:default;">No matching members</div>`;
+        box.style.display = 'block';
+        return;
+    }
+
     box.innerHTML = matches.map(m => {
-        const st = onlineStatus[m.name] || 'offline';
+        const st    = onlineStatus[m.name] || 'offline';
         const stLbl = st.charAt(0).toUpperCase() + st.slice(1);
-        return `<div class="lineup-suggest-item" onclick="lineupAdd('${m.name.replace(/'/g,"\\'")}',${m.id})">
+        return `<div class="lineup-suggest-item" onclick="lineupAddFromSuggest('${m.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}',${m.id})">
             <span class="online-dot ${st}"></span>
             <span>${m.name}</span>
-            <span style="margin-left:auto;font-size:0.75em;color:var(--text-dim);">${stLbl}</span>
+            <span style="margin-left:auto;font-size:0.72em;color:var(--text-dim);">${stLbl}</span>
         </div>`;
     }).join('');
     box.style.display = 'block';
+}
+
+function lineupAddFromSuggest(name, id) {
+    lineupAdd(name, id);
+    const input = document.getElementById('lineup-add-input');
+    if (input) input.value = '';
+    lineupFilterSuggest(); // refresh list
 }
 
 document.addEventListener('click', e => {
@@ -843,33 +857,60 @@ async function lineupDetectHits() {
 }
 
 // ── Online status + faction member list ───────────────────────────
-async function lineupFetchOnlineStatus() {
-    if (!myKey) return;
+// ── Fetch faction members (own faction, for autocomplete + online status) ──
+async function lineupFetchMembers() {
+    const key = LINEUP_KEY;
+    if (!key) {
+        lineupSetStatus('No API key set — go to Settings.');
+        return;
+    }
     try {
-        const res  = await fetch(`https://api.torn.com/faction/?selections=basic&key=${myKey}`);
+        const res  = await fetch(`https://api.torn.com/faction/?selections=basic&key=${key}`);
         const data = await res.json();
-        if (data.error) { console.warn('[Lineup] API error:', data.error.error); return; }
-        if (!data.members) return;
+        if (data.error) {
+            lineupSetStatus('API error: ' + data.error.error);
+            return;
+        }
+        if (!data.members) {
+            lineupSetStatus('No member data returned from API.');
+            return;
+        }
         factionMemberList = [];
         const ns = {};
         for (const [id, m] of Object.entries(data.members)) {
             factionMemberList.push({ name: m.name, id: parseInt(id) });
-            // Torn API: last_action.status is 'Online', 'Idle', or 'Offline'
             const st = ((m.last_action || {}).status || 'Offline').toLowerCase();
-            ns[m.name] = st;
+            // Torn returns 'Online', 'Idle', 'Offline'
+            ns[m.name] = (st === 'online' || st === 'idle') ? st : 'offline';
         }
-        // Sort list: online first, then idle, then offline, then alpha
+        // Sort: online → idle → offline → alpha
         factionMemberList.sort((a, b) => {
-            const order = { online: 0, idle: 1, offline: 2 };
-            const oa = order[ns[a.name] || 'offline'];
-            const ob = order[ns[b.name] || 'offline'];
+            const ord = { online: 0, idle: 1, offline: 2 };
+            const oa = ord[ns[a.name]] ?? 2;
+            const ob = ord[ns[b.name]] ?? 2;
             return oa !== ob ? oa - ob : a.name.localeCompare(b.name);
         });
         onlineStatus = ns;
         lineupRender();
-        console.log(`[Lineup] Loaded ${factionMemberList.length} faction members`);
-    } catch(e) { console.warn('[Lineup] Failed to fetch faction members:', e); }
+
+        // Auto-add online members if lineup is completely empty
+        if (lineupMembers.length === 0) {
+            const onlineMembers = factionMemberList.filter(m => ns[m.name] === 'online');
+            if (onlineMembers.length > 0) {
+                onlineMembers.forEach(m => lineupMembers.push({ name: m.name, id: m.id, hit: false, skipped: false }));
+                lineupSave();
+                lineupRender();
+                lineupSetStatus(`Auto-added ${onlineMembers.length} online member${onlineMembers.length > 1 ? 's' : ''}.`);
+            }
+        }
+    } catch(e) {
+        lineupSetStatus('Failed to fetch members: ' + e.message);
+        console.error('[Lineup] fetch error:', e);
+    }
 }
+
+// Keep old name as alias so existing calls still work
+const lineupFetchOnlineStatus = lineupFetchMembers;
 
 
 // ── Import from current chain ──────────────────────────────────────
@@ -934,15 +975,13 @@ function lineupCopyToChat() {
 }
 
 // ── Boot ───────────────────────────────────────────────────────────
-
 lineupLoad();
 lineupRender();
 
-if (myKey) {
-    lineupFetchOnlineStatus();
-    setInterval(lineupFetchOnlineStatus, 60000); // refresh every 60s
-    setInterval(lineupDetectHits, 4000);          // check hits every 4s
-    lineupCheckAlert();
+if (LINEUP_KEY) {
+    lineupFetchMembers();
+    setInterval(lineupFetchMembers, 60000);  // refresh online status every 60s
+    setInterval(lineupDetectHits, 4000);      // check hits every 4s
 }
 </script>
 
