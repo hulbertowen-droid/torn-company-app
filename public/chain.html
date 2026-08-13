@@ -114,7 +114,7 @@
         .lineup-add-input:focus { border-color: var(--teal,#00cec9); }
         .lineup-add-btn { background: rgba(0,206,201,0.12); border: 1px solid rgba(0,206,201,0.35); color: var(--teal,#00cec9); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.85em; transition: 0.15s; white-space: nowrap; }
         .lineup-add-btn:hover { background: rgba(0,206,201,0.22); }
-        .lineup-suggest { position: absolute; left: 22px; right: 22px; bottom: 100%; background: #161b22; border: 1px solid #2f3542; border-radius: 6px; z-index: 50; max-height: 200px; overflow-y: auto; margin-bottom: 4px; }
+        .lineup-suggest { position: absolute; left: 0; right: 80px; top: 100%; margin-top: 4px; background: #161b22; border: 1px solid #2f3542; border-radius: 6px; z-index: 50; max-height: 200px; overflow-y: auto; }
         .lineup-suggest-item { padding: 8px 12px; cursor: pointer; font-size: 0.88em; display: flex; align-items: center; gap: 8px; transition: 0.1s; }
         .lineup-suggest-item:hover { background: #0d1117; color: var(--teal,#00cec9); }
         .lineup-empty { text-align: center; color: var(--text-dim); padding: 28px; font-style: italic; font-size: 0.9em; }
@@ -179,6 +179,8 @@
                     <h3 class="lineup-title">⚡ Chain Lineup</h3>
                     <div class="lineup-controls">
                         <span class="lineup-cycle-badge" id="lineup-cycle-badge">Cycle 1</span>
+                        <button class="lineup-btn" onclick="lineupImportFromChain()" title="Auto-detect who has been hitting in the current chain and add them">⚡ Import Chain</button>
+                        <button class="lineup-btn" onclick="lineupCopyToChat()" title="Copy lineup as text for Torn faction chat">📋 Copy</button>
                         <button class="lineup-btn active" id="lineup-loop-btn" onclick="lineupToggleLoop()" title="Loop back to start when everyone has hit">🔁 Loop</button>
                         <button class="lineup-btn" onclick="lineupNext()" title="Manually advance to next person">⏭ Next</button>
                         <button class="lineup-btn" onclick="lineupReset()" title="Clear hit marks and restart from top">↺ Reset</button>
@@ -192,10 +194,10 @@
                 </div>
                 <ul class="lineup-list" id="lineup-list"></ul>
                 <div class="lineup-add-row" style="position:relative;">
-                    <input id="lineup-add-input" class="lineup-add-input" placeholder="Add faction member by name..." autocomplete="off"
-                        oninput="lineupFilterSuggest()" onkeydown="lineupAddKeydown(event)" />
+                    <input id="lineup-add-input" class="lineup-add-input" placeholder="Type to search faction members..." autocomplete="off"
+                        oninput="lineupFilterSuggest()" onkeydown="lineupAddKeydown(event)" onfocus="lineupFilterSuggest()" />
                     <button class="lineup-add-btn" onclick="lineupAddFromInput()">+ Add</button>
-                    <div class="lineup-suggest" id="lineup-suggest" style="display:none;"></div>
+                    <div class="lineup-suggest" id="lineup-suggest" style="display:none;position:absolute;left:0;right:80px;top:100%;margin-top:4px;bottom:auto;"></div>
                 </div>
             </div>
 
@@ -863,7 +865,70 @@ async function lineupFetchOnlineStatus() {
     } catch(e) { /* silent */ }
 }
 
+
+// ── Import from current chain ──────────────────────────────────────
+async function lineupImportFromChain() {
+    if (!myKey) { lineupSetStatus('API key required.'); return; }
+    lineupSetStatus('Scanning chain attacks...');
+    try {
+        const res  = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${myKey}`);
+        const data = await res.json();
+        if (!data.attacks || !data.ID) { lineupSetStatus('No attack data found.'); return; }
+
+        const facId = data.ID;
+        // All chain attacks by THIS faction, sorted oldest → newest
+        const chainAtks = Object.values(data.attacks)
+            .filter(a => a.attacker_faction === facId && a.chain > 0)
+            .sort((a, b) => a.timestamp_ended - b.timestamp_ended);
+
+        // Unique attackers in order of first hit
+        const seen = new Set();
+        const chainMembers = [];
+        for (const atk of chainAtks) {
+            if (!seen.has(atk.attacker_id)) {
+                seen.add(atk.attacker_id);
+                chainMembers.push({ name: atk.attacker_name, id: atk.attacker_id });
+            }
+        }
+
+        if (chainMembers.length === 0) { lineupSetStatus('No chain hits found yet.'); return; }
+
+        let added = 0;
+        for (const m of chainMembers) {
+            if (!lineupMembers.some(lm => lm.name.toLowerCase() === m.name.toLowerCase())) {
+                lineupMembers.push({ name: m.name, id: m.id, hit: false, skipped: false });
+                added++;
+            }
+        }
+        lineupSave(); lineupRender();
+        lineupSetStatus(added > 0 ? `Imported ${added} member${added > 1 ? 's' : ''} from chain.` : 'All chain members already in lineup.');
+    } catch(e) { lineupSetStatus('Error fetching chain data.'); }
+}
+
+// ── Copy lineup to clipboard (Torn chat format) ────────────────────
+function lineupCopyToChat() {
+    if (!lineupMembers.length) { lineupSetStatus('Lineup is empty.'); return; }
+    const lines = lineupMembers.map((m, i) => {
+        const marker = i === lineupCurrent && !m.hit ? ' ← UP NEXT' : m.hit ? ' ✓' : '';
+        return `${i + 1}. ${m.name}${marker}`;
+    });
+    const header = `⚡ Chain Lineup (Cycle ${lineupCycleNum})`;
+    const text = [header, ...lines].join('\n');
+    navigator.clipboard.writeText(text)
+        .then(() => lineupSetStatus('📋 Copied to clipboard!'))
+        .catch(() => {
+            // Fallback for browsers that block clipboard
+            const ta = document.createElement('textarea');
+            ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.focus(); ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            lineupSetStatus('📋 Copied to clipboard!');
+        });
+}
+
 // ── Boot ───────────────────────────────────────────────────────────
+
 lineupLoad();
 lineupRender();
 
