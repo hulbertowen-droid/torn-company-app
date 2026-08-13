@@ -83,8 +83,6 @@
         .lineup-btn.active { background: rgba(0,206,201,0.12); border-color: var(--teal, #00cec9); color: var(--teal, #00cec9); }
         .lineup-cycle-badge { background: rgba(0,206,201,0.1); border: 1px solid rgba(0,206,201,0.3); color: var(--teal,#00cec9); padding: 4px 10px; border-radius: 6px; font-size: 0.75em; font-weight: 700; }
         .lineup-meta { padding: 10px 22px; background: rgba(0,206,201,0.04); border-bottom: 1px solid #2f3542; display: flex; align-items: center; gap: 10px; font-size: 0.82em; color: var(--text-dim); }
-        .lineup-myname-input { background: #0b0d13; border: 1px solid #2f3542; color: var(--text-main); padding: 4px 10px; border-radius: 6px; font-size: 0.85em; width: 160px; outline: none; }
-        .lineup-myname-input:focus { border-color: var(--teal,#00cec9); }
         .lineup-list { list-style: none; margin: 0; padding: 0; }
         .lineup-item { display: flex; align-items: center; gap: 12px; padding: 12px 22px; border-bottom: 1px solid #161b22; transition: background 0.15s; cursor: grab; position: relative; }
         .lineup-item:last-child { border-bottom: none; }
@@ -114,7 +112,7 @@
         .lineup-add-input:focus { border-color: var(--teal,#00cec9); }
         .lineup-add-btn { background: rgba(0,206,201,0.12); border: 1px solid rgba(0,206,201,0.35); color: var(--teal,#00cec9); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.85em; transition: 0.15s; white-space: nowrap; }
         .lineup-add-btn:hover { background: rgba(0,206,201,0.22); }
-        .lineup-suggest { position: absolute; left: 0; right: 80px; top: 100%; margin-top: 4px; background: #161b22; border: 1px solid #2f3542; border-radius: 6px; z-index: 50; max-height: 200px; overflow-y: auto; }
+        .lineup-suggest { position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; background: #161b22; border: 1px solid #2f3542; border-radius: 6px; z-index: 100; max-height: 240px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
         .lineup-suggest-item { padding: 8px 12px; cursor: pointer; font-size: 0.88em; display: flex; align-items: center; gap: 8px; transition: 0.1s; }
         .lineup-suggest-item:hover { background: #0d1117; color: var(--teal,#00cec9); }
         .lineup-empty { text-align: center; color: var(--text-dim); padding: 28px; font-style: italic; font-size: 0.9em; }
@@ -194,7 +192,7 @@
                     <input id="lineup-add-input" class="lineup-add-input" placeholder="Type to search faction members..." autocomplete="off"
                         oninput="lineupFilterSuggest()" onkeydown="lineupAddKeydown(event)" onfocus="lineupFilterSuggest()" />
                     <button class="lineup-add-btn" onclick="lineupAddFromInput()">+ Add</button>
-                    <div class="lineup-suggest" id="lineup-suggest" style="display:none;position:absolute;left:0;right:80px;top:100%;margin-top:4px;bottom:auto;"></div>
+                    <div class="lineup-suggest" id="lineup-suggest" style="display:none;"></div>
                 </div>
             </div>
 
@@ -825,9 +823,9 @@ function lineupCheckAlert() { /* no-op */ }
 
 // ── Hit detection (auto-advance) ───────────────────────────────────
 async function lineupDetectHits() {
-    if (!myKey || !lineupMembers.length) return;
+    if (!LINEUP_KEY || !lineupMembers.length) return;
     try {
-        const res  = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${myKey}`);
+        const res  = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${LINEUP_KEY}`);
         const data = await res.json();
         if (!data.attacks || !data.ID) return;
 
@@ -856,8 +854,7 @@ async function lineupDetectHits() {
     } catch(e) { /* silent */ }
 }
 
-// ── Online status + faction member list ───────────────────────────
-// ── Fetch faction members (own faction, for autocomplete + online status) ──
+// ── Fetch faction members (autocomplete + online status + auto-add) ──────────
 async function lineupFetchMembers() {
     const key = LINEUP_KEY;
     if (!key) {
@@ -915,10 +912,10 @@ const lineupFetchOnlineStatus = lineupFetchMembers;
 
 // ── Import from current chain ──────────────────────────────────────
 async function lineupImportFromChain() {
-    if (!myKey) { lineupSetStatus('API key required.'); return; }
+    if (!LINEUP_KEY) { lineupSetStatus('API key required.'); return; }
     lineupSetStatus('Scanning chain attacks...');
     try {
-        const res  = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${myKey}`);
+        const res  = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${LINEUP_KEY}`);
         const data = await res.json();
         if (!data.attacks || !data.ID) { lineupSetStatus('No attack data found.'); return; }
 
