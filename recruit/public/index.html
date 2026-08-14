@@ -3,1046 +3,1762 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Recruit Platform | Torn City Faction Recruitment</title>
-<meta name="description" content="State-of-the-art Torn City faction recruiting platform. Live 55,000 faction auto-scanner, ranked war poacher, stat grading, and instant outreach.">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<title>Recruit Platform — Torn City Intelligence</title>
+<meta name="description" content="Elite Torn City faction recruitment intelligence. Live global scanner, ranked war poacher, AI-powered candidate grading, and precision outreach tools.">
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;0,14..32,900;1,14..32,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-    --bg: #0a0d14;
-    --surface: #111622;
-    --card: #161c2b;
-    --item: #1d2538;
-    --item-hover: #252f47;
-    --border: #273147;
-    --border-light: #34425e;
+    /* Core palette */
+    --ink-900: #060810;
+    --ink-800: #0c1018;
+    --ink-700: #101420;
+    --ink-600: #161c2d;
+    --ink-500: #1d2537;
+    --ink-400: #283047;
+    --ink-300: #354058;
+    --ink-200: #47567a;
+    --ink-100: #6b7ea6;
     
-    --text-main: #f0f6fc;
-    --text-dim: #94a3b8;
-    --text-faint: #64748b;
+    /* Text */
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --text-faint: #3f4f6a;
     
-    --teal: #00cec9;
-    --teal-glow: rgba(0, 206, 201, 0.15);
-    --blue: #38bdf8;
-    --green: #22c55e;
-    --green-glow: rgba(34, 197, 94, 0.15);
-    --red: #f43f5e;
-    --gold: #f59e0b;
-    --gold-glow: rgba(245, 158, 11, 0.15);
-    --purple: #a855f7;
+    /* Accents */
+    --cyan: #06b6d4;
+    --cyan-soft: rgba(6, 182, 212, 0.12);
+    --cyan-border: rgba(6, 182, 212, 0.25);
+    --emerald: #10b981;
+    --emerald-soft: rgba(16, 185, 129, 0.1);
+    --emerald-border: rgba(16, 185, 129, 0.25);
+    --amber: #f59e0b;
+    --amber-soft: rgba(245, 158, 11, 0.1);
+    --amber-border: rgba(245, 158, 11, 0.25);
+    --rose: #f43f5e;
+    --rose-soft: rgba(244, 63, 94, 0.1);
+    --rose-border: rgba(244, 63, 94, 0.25);
+    --violet: #8b5cf6;
+    --violet-soft: rgba(139, 92, 246, 0.1);
+    --violet-border: rgba(139, 92, 246, 0.25);
+    --sky: #38bdf8;
+    --sky-soft: rgba(56, 189, 248, 0.1);
+    
+    /* Gradients */
+    --grad-cyan: linear-gradient(135deg, #06b6d4, #0ea5e9);
+    --grad-emerald: linear-gradient(135deg, #10b981, #059669);
+    --grad-rank-s: linear-gradient(135deg, #f59e0b, #ef4444);
+    
+    /* Surfaces */
+    --surface-0: #060810;
+    --surface-1: #0c1018;
+    --surface-2: #101420;
+    --surface-3: #161c2d;
+    --surface-4: #1d2537;
+    
+    /* Border */
+    --border: rgba(255,255,255,0.06);
+    --border-strong: rgba(255,255,255,0.1);
+    --border-accent: rgba(6,182,212,0.25);
+    
+    /* Radii */
+    --r-sm: 6px;
+    --r-md: 10px;
+    --r-lg: 14px;
+    --r-xl: 20px;
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.4), 0 2px 6px rgba(0,0,0,0.3);
+    --shadow-lg: 0 12px 32px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.4);
+    --shadow-cyan: 0 0 20px rgba(6,182,212,0.15), 0 4px 12px rgba(0,0,0,0.4);
 }
 
 body {
     font-family: 'Inter', system-ui, sans-serif;
-    background: var(--bg);
-    color: var(--text-main);
+    background: var(--surface-0);
+    color: var(--text-primary);
     min-height: 100vh;
-    overflow-x: hidden;
+    overflow: hidden;
+    font-size: 14px;
+    line-height: 1.5;
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
+code, .mono { font-family: 'JetBrains Mono', monospace; }
+
+/* ═══════════════════════════════ SCROLLBAR ═══════════════════════════════ */
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #2a374f; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #3b4d6e; }
+::-webkit-scrollbar-thumb { background: var(--ink-400); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ink-300); }
 
-/* ── Header ── */
-.header {
-    background: var(--surface);
+/* ═══════════════════════════════ TOPBAR ═══════════════════════════════ */
+.topbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 56px;
+    background: rgba(12, 16, 24, 0.92);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     border-bottom: 1px solid var(--border);
-    padding: 0 24px;
-    height: 60px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    position: sticky;
-    top: 0;
-    z-index: 100;
+    padding: 0 20px;
+    gap: 0;
+    z-index: 200;
 }
-.header-left { display: flex; align-items: center; gap: 20px; }
-.logo {
-    font-size: 1.15em;
-    font-weight: 900;
+
+.topbar-brand {
     display: flex;
     align-items: center;
-    gap: 8px;
-    color: #fff;
+    gap: 10px;
+    padding-right: 20px;
+    border-right: 1px solid var(--border);
     text-decoration: none;
-    letter-spacing: -0.3px;
+    color: inherit;
+    flex-shrink: 0;
 }
-.logo-badge {
-    background: linear-gradient(135deg, var(--teal), var(--blue));
-    color: #000;
-    font-size: 0.62em;
+
+.brand-icon {
+    width: 30px; height: 30px;
+    background: var(--grad-cyan);
+    border-radius: var(--r-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1em;
+    box-shadow: 0 0 12px rgba(6,182,212,0.35);
+}
+
+.brand-name {
+    font-size: 0.95em;
     font-weight: 800;
-    padding: 2px 7px;
-    border-radius: 6px;
+    letter-spacing: -0.3px;
+    color: var(--text-primary);
+}
+
+.brand-tag {
+    font-size: 0.58em;
+    font-weight: 700;
+    background: var(--cyan-soft);
+    border: 1px solid var(--cyan-border);
+    color: var(--cyan);
+    padding: 2px 6px;
+    border-radius: 4px;
     letter-spacing: 0.5px;
     text-transform: uppercase;
 }
-.nav-tabs {
+
+/* ── Primary mode tabs ── */
+.mode-tabs {
     display: flex;
-    gap: 4px;
-    background: var(--card);
-    padding: 4px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
+    align-items: center;
+    gap: 2px;
+    padding: 0 16px;
+    flex: 1;
+    overflow: hidden;
 }
-.nav-tab {
+
+.mode-tab {
     background: transparent;
     border: none;
-    color: var(--text-dim);
-    padding: 6px 14px;
-    font-size: 0.82em;
-    font-weight: 700;
-    font-family: inherit;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: 0.15s;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-.nav-tab:hover { color: var(--text-main); background: rgba(255,255,255,0.04); }
-.nav-tab.active { background: var(--item); color: var(--teal); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
-
-.header-right { display: flex; align-items: center; gap: 12px; }
-.header-link {
-    color: var(--text-dim);
-    text-decoration: none;
+    color: var(--text-muted);
+    padding: 8px 16px;
     font-size: 0.82em;
     font-weight: 600;
-    padding: 6px 12px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    transition: 0.15s;
+    font-family: inherit;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    transition: all 0.18s ease;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
+    position: relative;
+    white-space: nowrap;
 }
-.header-link:hover { color: var(--text-main); background: var(--card); border-color: var(--border-light); }
 
-.live-badge {
+.mode-tab .tab-icon { font-size: 0.95em; }
+.mode-tab:hover { color: var(--text-secondary); background: rgba(255,255,255,0.04); }
+
+.mode-tab.active {
+    color: var(--text-primary);
+    background: var(--surface-4);
+    box-shadow: var(--shadow-sm);
+}
+.mode-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 16px; right: 16px;
+    height: 2px;
+    background: var(--grad-cyan);
+    border-radius: 2px 2px 0 0;
+}
+
+/* ── Right actions ── */
+.topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-left: 16px;
+    border-left: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.live-pill {
     display: flex;
     align-items: center;
     gap: 6px;
-    background: rgba(34, 197, 94, 0.1);
-    border: 1px solid rgba(34, 197, 94, 0.3);
-    padding: 4px 10px;
-    border-radius: 20px;
+    padding: 5px 12px;
+    background: var(--emerald-soft);
+    border: 1px solid var(--emerald-border);
+    border-radius: 99px;
     font-size: 0.75em;
     font-weight: 700;
-    color: var(--green);
+    color: var(--emerald);
+    letter-spacing: 0.3px;
 }
-.live-dot {
-    width: 7px; height: 7px;
+
+.pulse-dot {
+    width: 6px; height: 6px;
     border-radius: 50%;
-    background: var(--green);
-    box-shadow: 0 0 8px var(--green);
-    animation: pulse 2s infinite;
+    background: currentColor;
+    animation: heartbeat 2s ease-in-out infinite;
 }
-@keyframes pulse { 0%,100%{opacity:1; transform:scale(1);} 50%{opacity:0.4; transform:scale(0.85);} }
 
-/* ── Layout ── */
-.app { display: flex; height: calc(100vh - 60px); }
+@keyframes heartbeat {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.45; transform: scale(0.78); }
+}
 
-/* ── Sidebar Filters ── */
-.sidebar {
-    width: 300px;
-    min-width: 300px;
-    background: var(--surface);
+.icon-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    width: 34px; height: 34px;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95em;
+    text-decoration: none;
+}
+.icon-btn:hover { background: var(--surface-3); border-color: var(--border-strong); color: var(--text-primary); }
+
+/* ═══════════════════════════════ LAYOUT ═══════════════════════════════ */
+.workspace {
+    display: flex;
+    height: calc(100vh - 56px);
+    margin-top: 56px;
+}
+
+/* ═══════════════════════════════ PANEL (left sidebar) ═══════════════════════════════ */
+.panel {
+    width: 272px;
+    min-width: 272px;
+    background: var(--surface-1);
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
-    padding: 18px 16px;
-    gap: 16px;
+    overflow: hidden;
 }
-.sidebar-section { display: flex; flex-direction: column; gap: 6px; }
-.sidebar-title {
-    font-size: 0.72em;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: var(--text-faint);
+
+.panel-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+/* ── Scanner status widget ── */
+.scanner-widget {
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 12px 14px;
+    position: relative;
+    overflow: hidden;
+}
+.scanner-widget::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(6,182,212,0.04) 0%, transparent 60%);
+    pointer-events: none;
+}
+
+.sw-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    margin-bottom: 10px;
 }
-.filter-row { display: flex; gap: 8px; }
+.sw-title {
+    font-size: 0.72em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--cyan);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.sw-status {
+    font-size: 0.68em;
+    font-weight: 600;
+    color: var(--emerald);
+    background: var(--emerald-soft);
+    border: 1px solid var(--emerald-border);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
 
-input[type="number"], input[type="text"], select, textarea {
-    background: var(--item);
+.sw-progress {
+    background: var(--surface-4);
+    border-radius: 4px;
+    height: 5px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+.sw-bar {
+    height: 100%;
+    background: var(--grad-cyan);
+    border-radius: 4px;
+    transition: width 0.4s ease;
+    box-shadow: 0 0 8px rgba(6,182,212,0.4);
+}
+
+.sw-nums {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.72em;
+}
+.sw-faction { color: var(--text-primary); font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+.sw-total { color: var(--text-faint); }
+
+/* ── Filter section ── */
+.filter-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.fs-label {
+    font-size: 0.68em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.9px;
+    color: var(--text-faint);
+    padding-left: 2px;
+}
+
+/* ── Inputs ── */
+input[type="number"],
+input[type="text"],
+input[type="password"],
+select,
+textarea {
+    background: var(--surface-3);
     border: 1px solid var(--border);
-    border-radius: 7px;
-    color: var(--text-main);
-    font-size: 0.85em;
+    border-radius: var(--r-sm);
+    color: var(--text-primary);
+    font-size: 0.83em;
     font-family: inherit;
-    padding: 8px 12px;
+    padding: 8px 10px;
     width: 100%;
-    transition: 0.2s;
-}
-input:focus, select:focus, textarea:focus {
+    transition: border-color 0.18s, box-shadow 0.18s;
     outline: none;
-    border-color: var(--teal);
-    box-shadow: 0 0 0 3px var(--teal-glow);
 }
+input::placeholder, textarea::placeholder { color: var(--text-faint); }
+input:focus, select:focus, textarea:focus {
+    border-color: var(--cyan-border);
+    box-shadow: 0 0 0 3px rgba(6,182,212,0.08);
+}
+select option { background: var(--surface-3); }
 
-.toggle-group { display: flex; background: var(--item); border: 1px solid var(--border); border-radius: 7px; padding: 2px; }
-.toggle-btn {
+.input-row { display: flex; gap: 6px; }
+.input-row input { flex: 1; min-width: 0; }
+
+/* ── Segmented control ── */
+.seg {
+    display: flex;
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    padding: 2px;
+}
+.seg-btn {
     flex: 1;
     background: transparent;
     border: none;
-    color: var(--text-dim);
-    padding: 6px 4px;
+    color: var(--text-muted);
+    padding: 6px 6px;
     font-size: 0.75em;
-    font-weight: 700;
+    font-weight: 600;
     font-family: inherit;
-    border-radius: 5px;
+    border-radius: 4px;
     cursor: pointer;
-    transition: 0.15s;
+    transition: all 0.15s;
     text-align: center;
 }
-.toggle-btn:hover { color: var(--text-main); }
-.toggle-btn.active { background: var(--card); color: var(--teal); box-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+.seg-btn:hover { color: var(--text-secondary); }
+.seg-btn.on {
+    background: var(--surface-4);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-sm);
+}
 
-.btn-primary {
-    background: linear-gradient(135deg, var(--teal), #00b4b0);
+/* ── Primary action btn ── */
+.btn-cta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    background: var(--grad-cyan);
     color: #000;
     border: none;
-    border-radius: 8px;
-    padding: 10px 16px;
+    border-radius: var(--r-sm);
+    padding: 10px 14px;
+    font-size: 0.85em;
     font-weight: 800;
-    font-size: 0.88em;
     font-family: inherit;
     cursor: pointer;
     width: 100%;
-    transition: 0.2s;
+    transition: all 0.2s;
+    letter-spacing: 0.2px;
+    box-shadow: 0 2px 8px rgba(6,182,212,0.2);
+}
+.btn-cta:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(6,182,212,0.3); }
+.btn-cta:active { transform: translateY(0); }
+.btn-cta:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.btn-ghost {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
-    box-shadow: 0 2px 8px var(--teal-glow);
-}
-.btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
-.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-
-.btn-outline {
     background: transparent;
-    color: var(--text-dim);
+    color: var(--text-muted);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--r-sm);
     padding: 8px 12px;
-    font-weight: 700;
     font-size: 0.8em;
+    font-weight: 600;
     font-family: inherit;
     cursor: pointer;
     width: 100%;
-    transition: 0.15s;
+    transition: all 0.15s;
+}
+.btn-ghost:hover { background: var(--surface-3); color: var(--text-primary); border-color: var(--border-strong); }
+
+/* ── KPI strip ── */
+.stats-bar {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-}
-.btn-outline:hover { background: var(--card); color: var(--text-main); border-color: var(--border-light); }
-
-/* ── Main Area ── */
-.main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; background: var(--bg); }
-
-/* ── KPI Strip ── */
-.kpi-bar {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
-    padding: 16px 24px;
-    background: var(--surface);
     border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
 }
-.kpi-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
+
+.stat-cell {
+    flex: 1;
     padding: 12px 16px;
+    border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
+    min-width: 0;
 }
-.kpi-label { font-size: 0.72em; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
-.kpi-val { font-size: 1.4em; font-weight: 900; color: var(--text-main); }
-.kpi-sub { font-size: 0.7em; color: var(--text-faint); }
+.stat-cell:last-child { border-right: none; }
 
-/* ── Tab Views ── */
-.tab-content { padding: 20px 24px; display: none; flex-direction: column; gap: 16px; }
-.tab-content.active { display: flex; }
+.stat-label {
+    font-size: 0.68em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: var(--text-faint);
+}
+.stat-val {
+    font-size: 1.45em;
+    font-weight: 900;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+.stat-sub {
+    font-size: 0.68em;
+    color: var(--text-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 
-/* ── Table & Cards ── */
-.table-wrap {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
+/* ═══════════════════════════════ CANVAS (right main area) ═══════════════════════════════ */
+.canvas {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
 }
-table { width: 100%; border-collapse: collapse; text-align: left; }
-thead { background: var(--card); border-bottom: 1px solid var(--border); }
-th {
-    padding: 11px 16px;
+
+/* ── Tab view container ── */
+.view { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+.view.active { display: flex; }
+
+/* ── Results toolbar ── */
+.results-bar {
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-shrink: 0;
+    background: var(--surface-1);
+}
+.results-bar h2 {
+    font-size: 0.82em;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+.result-count-badge {
     font-size: 0.72em;
-    font-weight: 800;
+    font-weight: 700;
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    padding: 2px 9px;
+    border-radius: 99px;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Table ── */
+.tbl-wrap {
+    flex: 1;
+    overflow-y: auto;
+}
+
+table.rec-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table.rec-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+table.rec-table th {
+    background: var(--surface-2);
+    padding: 10px 14px;
+    font-size: 0.67em;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: var(--text-dim);
+    letter-spacing: 0.9px;
+    color: var(--text-faint);
+    border-bottom: 1px solid var(--border);
+    text-align: left;
     white-space: nowrap;
 }
-td {
-    padding: 12px 16px;
-    border-bottom: 1px solid rgba(255,255,255,0.03);
-    font-size: 0.85em;
-    vertical-align: middle;
-}
-tr:hover td { background: rgba(255,255,255,0.015); }
-tr:last-child td { border-bottom: none; }
 
-/* ── Badges & Grades ── */
-.grade-badge {
+table.rec-table td {
+    padding: 11px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    vertical-align: middle;
+    font-size: 0.84em;
+}
+
+table.rec-table tbody tr {
+    transition: background 0.1s;
+}
+table.rec-table tbody tr:hover td {
+    background: rgba(255,255,255,0.018);
+}
+
+/* ── Grade badges ── */
+.grade {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 28px; height: 28px;
-    border-radius: 6px;
-    font-size: 0.85em;
+    width: 30px; height: 30px;
+    border-radius: var(--r-sm);
+    font-size: 0.82em;
     font-weight: 900;
+    letter-spacing: -0.5px;
+    font-family: 'JetBrains Mono', monospace;
+    flex-shrink: 0;
 }
-.grade-S { background: linear-gradient(135deg, #ef4444, #f59e0b); color: #fff; box-shadow: 0 0 10px rgba(245,158,11,0.3); }
-.grade-A { background: rgba(34,197,94,0.15); border: 1px solid var(--green); color: var(--green); }
-.grade-B { background: rgba(56,189,248,0.15); border: 1px solid var(--blue); color: var(--blue); }
-.grade-C { background: rgba(245,158,11,0.15); border: 1px solid var(--gold); color: var(--gold); }
-.grade-D { background: rgba(148,163,184,0.15); border: 1px solid var(--text-dim); color: var(--text-dim); }
-.grade-F { background: rgba(244,63,94,0.15); border: 1px solid var(--red); color: var(--red); }
+.g-S { background: linear-gradient(135deg, #f59e0b, #ef4444); color: #fff; box-shadow: 0 0 12px rgba(239,68,68,0.25); }
+.g-A { background: var(--emerald-soft); border: 1px solid var(--emerald-border); color: var(--emerald); }
+.g-B { background: var(--sky-soft); border: 1px solid rgba(56,189,248,0.3); color: var(--sky); }
+.g-C { background: var(--amber-soft); border: 1px solid var(--amber-border); color: var(--amber); }
+.g-D { background: rgba(100,116,139,0.1); border: 1px solid rgba(100,116,139,0.25); color: var(--text-muted); }
+.g-F { background: var(--rose-soft); border: 1px solid var(--rose-border); color: var(--rose); }
 
-.status-badge {
+/* ── Player name cell ── */
+.player-name {
+    font-weight: 700;
+    color: var(--text-primary);
+    text-decoration: none;
+    transition: color 0.15s;
+}
+.player-name:hover { color: var(--cyan); }
+.player-id-tag { color: var(--text-faint); font-size: 0.8em; font-family: 'JetBrains Mono', monospace; }
+
+/* ── Status chips ── */
+.chip {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 0.72em;
+    padding: 3px 8px;
+    border-radius: 99px;
+    font-size: 0.7em;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.4px;
+    letter-spacing: 0.3px;
 }
-.status-okay { background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.3); color: var(--green); }
-.status-hosp { background: rgba(244,63,94,0.1); border: 1px solid rgba(244,63,94,0.3); color: var(--red); }
-.status-abroad { background: rgba(56,189,248,0.1); border: 1px solid rgba(56,189,248,0.3); color: var(--blue); }
-.status-jail { background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); color: var(--gold); }
+.chip-ok { background: var(--emerald-soft); border: 1px solid var(--emerald-border); color: var(--emerald); }
+.chip-hosp { background: var(--rose-soft); border: 1px solid var(--rose-border); color: var(--rose); }
+.chip-travel { background: var(--sky-soft); border: 1px solid rgba(56,189,248,0.25); color: var(--sky); }
+.chip-jail { background: var(--amber-soft); border: 1px solid var(--amber-border); color: var(--amber); }
+.chip-free { background: var(--emerald-soft); border: 1px solid var(--emerald-border); color: var(--emerald); }
+.chip-infac { background: var(--amber-soft); border: 1px solid var(--amber-border); color: var(--amber); }
 
-.btn-action {
-    background: var(--item);
+/* ── Donator dot ── */
+.donor-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 0 5px rgba(245,158,11,0.6);
+    margin-left: 5px;
+    flex-shrink: 0;
+}
+
+/* ── Action buttons ── */
+.action-group { display: flex; align-items: center; gap: 5px; justify-content: flex-end; }
+
+.act {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--surface-4);
     border: 1px solid var(--border);
-    color: var(--text-main);
-    padding: 5px 10px;
-    border-radius: 6px;
-    font-size: 0.78em;
-    font-weight: 700;
+    color: var(--text-secondary);
+    padding: 5px 9px;
+    border-radius: var(--r-sm);
+    font-size: 0.76em;
+    font-weight: 600;
     font-family: inherit;
     cursor: pointer;
-    transition: 0.15s;
     text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
+    transition: all 0.14s;
 }
-.btn-action:hover { background: var(--item-hover); border-color: var(--border-light); transform: translateY(-1px); }
-.btn-action.btn-msg { background: rgba(0,206,201,0.1); border-color: rgba(0,206,201,0.3); color: var(--teal); }
-.btn-action.btn-msg:hover { background: rgba(0,206,201,0.2); }
-.btn-action.btn-atk { background: rgba(244,63,94,0.1); border-color: rgba(244,63,94,0.3); color: var(--red); }
-.btn-action.btn-atk:hover { background: rgba(244,63,94,0.2); }
-.btn-action.btn-claim { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.3); color: var(--gold); }
-.btn-action.btn-claim.claimed { background: rgba(168,85,247,0.15); border-color: var(--purple); color: var(--purple); }
+.act:hover { background: var(--ink-300); border-color: var(--border-strong); color: var(--text-primary); transform: translateY(-1px); }
 
-/* ── War Grid ── */
-.war-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
-.war-card {
-    background: var(--surface);
+.act-msg { background: var(--cyan-soft); border-color: var(--cyan-border); color: var(--cyan); }
+.act-msg:hover { background: rgba(6,182,212,0.2); }
+
+.act-atk { background: var(--rose-soft); border-color: var(--rose-border); color: var(--rose); }
+.act-atk:hover { background: rgba(244,63,94,0.18); }
+
+.act-claim { background: var(--amber-soft); border-color: var(--amber-border); color: var(--amber); }
+.act-claim:hover { background: rgba(245,158,11,0.18); }
+.act-claim.is-claimed { background: var(--violet-soft); border-color: var(--violet-border); color: var(--violet); }
+
+/* ── Score bar ── */
+.score-bar-wrap { display: flex; align-items: center; gap: 6px; }
+.score-bar-track {
+    flex: 1;
+    height: 4px;
+    background: var(--surface-4);
+    border-radius: 2px;
+    overflow: hidden;
+    min-width: 36px;
+}
+.score-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--grad-cyan);
+}
+.score-num { font-size: 0.76em; font-weight: 700; color: var(--text-secondary); font-variant-numeric: tabular-nums; min-width: 28px; }
+
+/* ═══════════════════════════════ EMPTY / LOADING ═══════════════════════════════ */
+.placeholder-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    color: var(--text-faint);
+    padding: 40px;
+    text-align: center;
+}
+.placeholder-icon { font-size: 2.8em; opacity: 0.6; filter: grayscale(0.3); }
+.placeholder-title { font-size: 0.92em; font-weight: 700; color: var(--text-muted); }
+.placeholder-sub { font-size: 0.8em; max-width: 340px; line-height: 1.6; }
+
+/* ═══════════════════════════════ WAR POACHER ═══════════════════════════════ */
+.poacher-view { padding: 20px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+
+.poacher-hero {
+    background: var(--surface-2);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--r-lg);
+    padding: 18px 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+.poacher-hero-text h3 {
+    font-size: 1em;
+    font-weight: 800;
+    color: var(--sky);
+    margin-bottom: 5px;
+}
+.poacher-hero-text p {
+    font-size: 0.8em;
+    color: var(--text-secondary);
+    line-height: 1.55;
+}
+
+.war-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 10px; }
+
+.war-card {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
     padding: 14px 16px;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    cursor: pointer;
+    transition: all 0.16s;
+    position: relative;
+    overflow: hidden;
+}
+.war-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px; height: 100%;
+    background: var(--sky);
+    opacity: 0.6;
+}
+.war-card.victory::before { background: var(--emerald); }
+.war-card.defeat::before { background: var(--rose); }
+
+.war-card:hover { border-color: var(--border-strong); background: var(--surface-3); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+
+.war-card-header { display: flex; align-items: center; justify-content: space-between; }
+.war-enemy-name { font-weight: 800; font-size: 0.92em; color: var(--text-primary); }
+.war-outcome { font-size: 0.7em; font-weight: 700; padding: 2px 7px; border-radius: 4px; }
+.war-outcome.w { background: var(--emerald-soft); border: 1px solid var(--emerald-border); color: var(--emerald); }
+.war-outcome.l { background: var(--rose-soft); border: 1px solid var(--rose-border); color: var(--rose); }
+
+.war-card-meta { font-size: 0.74em; color: var(--text-muted); line-height: 1.5; }
+.war-score-row { display: flex; gap: 10px; font-size: 0.8em; font-weight: 700; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+/* ═══════════════════════════════ IMPORTER ═══════════════════════════════ */
+.importer-view { padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+
+.import-card {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 20px 24px;
+    max-width: 680px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.import-card h3 { font-size: 0.95em; font-weight: 800; }
+.import-card p { font-size: 0.8em; color: var(--text-secondary); line-height: 1.6; }
+.import-card textarea { resize: vertical; min-height: 120px; font-family: 'JetBrains Mono', monospace; font-size: 0.8em; }
+
+.import-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.import-feedback { font-size: 0.8em; font-weight: 700; }
+
+/* ═══════════════════════════════ OUTREACH ═══════════════════════════════ */
+.outreach-view { padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+
+.outreach-card {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 20px 24px;
+    max-width: 680px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.outreach-card h3 { font-size: 0.95em; font-weight: 800; }
+.outreach-card p { font-size: 0.8em; color: var(--text-secondary); line-height: 1.6; }
+.tag-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.tag-chip {
+    background: var(--surface-4);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 0.73em;
+    font-weight: 600;
+    color: var(--cyan);
+    padding: 3px 8px;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: pointer;
     transition: 0.15s;
 }
-.war-card:hover { border-color: var(--border-light); transform: translateY(-1px); }
-.war-header { display: flex; justify-content: space-between; align-items: center; }
-.war-name { font-weight: 800; font-size: 0.95em; color: var(--text-main); }
-.war-meta { font-size: 0.75em; color: var(--text-dim); }
+.tag-chip:hover { background: var(--cyan-soft); border-color: var(--cyan-border); }
 
-/* ── Modals ── */
-.modal-backdrop {
+.outreach-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.save-feedback { font-size: 0.8em; font-weight: 700; color: var(--emerald); }
+
+/* ═══════════════════════════════ MODALS ═══════════════════════════════ */
+.modal-veil {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.75);
-    backdrop-filter: blur(4px);
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1000;
+    padding: 20px;
 }
-.modal {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 14px;
+
+.modal-box {
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-xl);
     padding: 24px;
-    width: 520px;
-    max-width: 90vw;
+    width: 100%;
+    max-width: 520px;
     display: flex;
     flex-direction: column;
     gap: 16px;
-    box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    box-shadow: var(--shadow-lg);
+    animation: modal-in 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.modal-title { font-size: 1.1em; font-weight: 800; display: flex; align-items: center; gap: 8px; }
-.modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
 
-/* Empty state */
-.empty-box {
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--text-dim);
+@keyframes modal-in {
+    from { opacity: 0; transform: scale(0.92) translateY(12px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-header { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+.modal-title { font-size: 1.05em; font-weight: 800; color: var(--text-primary); }
+.modal-close {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1em;
+    transition: 0.15s;
+}
+.modal-close:hover { background: var(--surface-4); color: var(--text-primary); }
+.modal-desc { font-size: 0.82em; color: var(--text-secondary); line-height: 1.55; }
+.modal-footer { display: flex; gap: 10px; justify-content: flex-end; }
+
+.msg-preview {
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 14px;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 12px;
+    gap: 8px;
 }
-.empty-icon { font-size: 3em; opacity: 0.8; }
+.msg-player {
+    font-size: 0.78em;
+    font-weight: 700;
+    color: var(--cyan);
+}
+.msg-target {
+    font-size: 0.8em;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    line-height: 1.6;
+    font-family: inherit;
+    background: transparent;
+    border: none;
+    outline: none;
+    width: 100%;
+    resize: none;
+    min-height: 100px;
+}
+
+.msg-action-row { display: flex; gap: 8px; }
+.btn-sm {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--surface-4);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 7px 12px;
+    border-radius: var(--r-sm);
+    font-size: 0.8em;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: 0.14s;
+}
+.btn-sm:hover { background: var(--ink-300); color: var(--text-primary); }
+.btn-sm.primary { background: var(--grad-cyan); color: #000; border-color: transparent; box-shadow: 0 2px 8px rgba(6,182,212,0.2); }
+.btn-sm.primary:hover { filter: brightness(1.08); }
+
+/* ── Scrollable war candidates section ── */
+.war-results-zone { display: flex; flex-direction: column; gap: 10px; }
+.war-results-zone h4 { font-size: 0.9em; font-weight: 800; }
+
+/* ── Inline notice ── */
+.notice {
+    padding: 10px 14px;
+    border-radius: var(--r-sm);
+    font-size: 0.8em;
+    font-weight: 600;
+    background: var(--amber-soft);
+    border: 1px solid var(--amber-border);
+    color: var(--amber);
+}
+
+/* ═══════════════════════════════ BULK IMPORT PROGRESS ═══════════════════════════════ */
+.bulk-zone {
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+.bulk-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.72em; color: var(--text-muted); }
+.bulk-progress-track {
+    height: 3px;
+    background: var(--surface-4);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.bulk-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--violet), var(--cyan));
+    width: 0%;
+    transition: width 0.3s;
+}
+
+/* ═══════════════════════════════ MISC ═══════════════════════════════ */
+.sep { height: 1px; background: var(--border); flex-shrink: 0; }
+
+.faction-excluded {
+    font-size: 0.7em;
+    color: var(--emerald);
+    background: var(--emerald-soft);
+    border: 1px solid var(--emerald-border);
+    padding: 4px 8px;
+    border-radius: 4px;
+    display: none;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .topbar { padding: 0 12px; }
+    .mode-tab span.tab-label { display: none; }
+    .panel { width: 220px; min-width: 220px; }
+    .kpi-bar { display: none; }
+}
 </style>
 </head>
 <body>
 
-<!-- ── Header ── -->
-<header class="header">
-    <div class="header-left">
-        <a href="/recruit/" class="logo">
-            🎯 Recruit Platform
-            <span class="logo-badge">PRO</span>
-        </a>
-        <div class="nav-tabs">
-            <button class="nav-tab active" onclick="switchTab('search')">🎯 Search & Live Feed</button>
-            <button class="nav-tab" onclick="switchTab('poacher')">⚔️ Ranked War Poacher</button>
-            <button class="nav-tab" onclick="switchTab('importer')">📥 Quick Import</button>
-            <button class="nav-tab" onclick="switchTab('outreach')">💬 Outreach & AI</button>
+<!-- ═══════════════════════════════ TOP BAR ═══════════════════════════════ -->
+<header class="topbar">
+    <a href="/recruit/" class="topbar-brand">
+        <div class="brand-icon">🎯</div>
+        <span class="brand-name">Recruit Platform</span>
+        <span class="brand-tag">PRO</span>
+    </a>
+
+    <nav class="mode-tabs">
+        <button class="mode-tab active" id="tab-btn-search" onclick="switchMode('search', this)">
+            <span class="tab-icon">🔍</span>
+            <span class="tab-label">Candidate Search</span>
+        </button>
+        <button class="mode-tab" id="tab-btn-poacher" onclick="switchMode('poacher', this)">
+            <span class="tab-icon">⚔️</span>
+            <span class="tab-label">War Poacher</span>
+        </button>
+        <button class="mode-tab" id="tab-btn-importer" onclick="switchMode('importer', this)">
+            <span class="tab-icon">📥</span>
+            <span class="tab-label">Quick Import</span>
+        </button>
+        <button class="mode-tab" id="tab-btn-outreach" onclick="switchMode('outreach', this)">
+            <span class="tab-icon">💬</span>
+            <span class="tab-label">Outreach</span>
+        </button>
+    </nav>
+
+    <div class="topbar-actions">
+        <div class="live-pill" id="live-pill">
+            <div class="pulse-dot"></div>
+            <span id="live-pill-txt">Connecting</span>
         </div>
-    </div>
-    <div class="header-right">
-        <div class="live-badge" id="live-status">
-            <div class="live-dot"></div>
-            <span>Connected</span>
-        </div>
-        <a href="/" class="header-link">📡 Live Warboard</a>
-        <a href="/dashboard.html" class="header-link">🛡️ Dashboard</a>
-        <button class="header-link" onclick="openRegisterModal()" style="cursor:pointer;background:transparent;">🔑 API Keys</button>
+        <a href="/" class="icon-btn" title="Live Warboard">📡</a>
+        <a href="/dashboard.html" class="icon-btn" title="Dashboard">🛡️</a>
+        <button class="icon-btn" title="API Keys & Settings" onclick="openKeyModal()">🔑</button>
     </div>
 </header>
 
-<div class="app">
-    
-    <!-- ── Sidebar Filters ── -->
-    <aside class="sidebar">
-        
-        <div class="sidebar-section">
-            <div class="sidebar-title">🔍 Quick Search</div>
-            <input type="text" id="f-search" placeholder="Player name or ID..." onkeydown="if(event.key==='Enter') doSearch()">
-        </div>
+<!-- ═══════════════════════════════ WORKSPACE ═══════════════════════════════ -->
+<div class="workspace">
 
-        <div class="sidebar-section">
-            <div class="sidebar-title">Target Status</div>
-            <div class="toggle-group">
-                <button class="toggle-btn active" data-type="Factionless" onclick="setTargetType(this)">🟢 Factionless</button>
-                <button class="toggle-btn" data-type="Member" onclick="setTargetType(this)">🟡 In Faction</button>
-                <button class="toggle-btn" data-type="All" onclick="setTargetType(this)">All</button>
-            </div>
-            <input type="hidden" id="f-targetType" value="Factionless">
-        </div>
+    <!-- ── LEFT PANEL (filters) ── -->
+    <aside class="panel">
+        <div class="panel-scroll">
 
-        <div class="sidebar-section">
-            <div class="sidebar-title">Level Range</div>
-            <div class="filter-row">
-                <input type="number" id="f-minLevel" placeholder="Min (1)" value="1" min="1" max="100">
-                <input type="number" id="f-maxLevel" placeholder="Max (100)" value="100" min="1" max="100">
-            </div>
-        </div>
-
-        <div class="sidebar-section">
-            <div class="sidebar-title">Last Active</div>
-            <select id="f-maxLastActionH" onchange="doSearch()">
-                <option value="">Any Time (< 7 days)</option>
-                <option value="1">< 1 Hour Ago</option>
-                <option value="6">< 6 Hours Ago</option>
-                <option value="24" selected>< 24 Hours Ago</option>
-                <option value="72">< 3 Days Ago</option>
-            </select>
-        </div>
-
-        <div class="sidebar-section">
-            <div class="sidebar-title">Account Age (Days)</div>
-            <div class="filter-row">
-                <input type="number" id="f-minAge" placeholder="Min days" min="0">
-                <input type="number" id="f-maxAge" placeholder="Max days" min="0">
-            </div>
-        </div>
-
-        <div class="sidebar-section">
-            <div class="sidebar-title">Donator Status</div>
-            <div class="toggle-group">
-                <button class="toggle-btn active" data-donator="" onclick="setDonatorFilter(this)">Any</button>
-                <button class="toggle-btn" data-donator="true" onclick="setDonatorFilter(this)">⭐ Only</button>
-                <button class="toggle-btn" data-donator="false" onclick="setDonatorFilter(this)">Non</button>
-            </div>
-            <input type="hidden" id="f-donator" value="">
-        </div>
-
-        <div class="sidebar-section">
-            <div class="sidebar-title">Sort By</div>
-            <select id="f-sort" onchange="doSearch()">
-                <option value="score">Scout Grade & Progression</option>
-                <option value="lastAction" selected>Last Active</option>
-                <option value="level">Level (High → Low)</option>
-                <option value="networth">Networth</option>
-                <option value="awards">Awards</option>
-                <option value="age">Account Age</option>
-            </select>
-        </div>
-
-        <button class="btn-primary" onclick="doSearch()" id="btn-search">
-            🔍 Search Players
-        </button>
-
-        <button class="btn-outline" onclick="resetFilters()">↺ Reset Filters</button>
-
-        <!-- Global Auto-Scanner Widget -->
-        <div style="margin-top:auto;padding:12px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.2);border-radius:8px;">
-            <div style="font-size:0.75em;color:var(--gold);font-weight:800;display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-                <div class="live-dot" style="background:var(--gold);box-shadow:0 0 6px var(--gold);"></div>
-                24/7 Cloud Auto-Scanner
-            </div>
-            <div style="font-size:0.72em;color:var(--text-dim);line-height:1.4;">
-                Scanning faction <span id="gs-progress" style="color:#fff;font-weight:800;">1</span> / 55,000<br>
-                <span style="color:var(--text-faint);">Runs 24/7 in background</span>
-            </div>
-            <button class="btn-outline" style="margin-top:8px;font-size:0.72em;border-color:rgba(168,85,247,0.3);color:var(--purple);" onclick="runBulkImport()" id="btn-bulk-import">
-                ⚡ Quick Fill — Bulk Import
-            </button>
-            <div id="bulk-import-progress" style="display:none;margin-top:6px;">
-                <div style="display:flex;justify-content:space-between;font-size:0.68em;color:var(--text-dim);">
-                    <span id="bulk-status-text">Scanning...</span>
-                    <span id="bulk-pct">0%</span>
+            <!-- Scanner widget -->
+            <div class="scanner-widget">
+                <div class="sw-header">
+                    <span class="sw-title">
+                        <div class="pulse-dot" style="background:var(--cyan);box-shadow:0 0 5px rgba(6,182,212,0.6);"></div>
+                        Cloud Auto-Scanner
+                    </span>
+                    <span class="sw-status">24/7 ON</span>
                 </div>
-                <div style="background:rgba(255,255,255,0.08);border-radius:4px;height:4px;overflow:hidden;margin-top:3px;">
-                    <div id="bulk-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--purple),var(--teal));"></div>
+                <div class="sw-progress">
+                    <div class="sw-bar" id="sw-bar" style="width:0.5%"></div>
+                </div>
+                <div class="sw-nums">
+                    <span class="sw-faction" id="gs-progress">—</span>
+                    <span class="sw-total">/ 55,000 factions</span>
                 </div>
             </div>
-        </div>
 
+            <!-- Faction status filter -->
+            <div class="filter-section">
+                <div class="fs-label">Candidate Pool</div>
+                <div class="seg">
+                    <button class="seg-btn on" data-type="Factionless" onclick="setSeg(this,'f-targetType')">🟢 Free</button>
+                    <button class="seg-btn" data-type="Member" onclick="setSeg(this,'f-targetType')">🟡 In Fac</button>
+                    <button class="seg-btn" data-type="All" onclick="setSeg(this,'f-targetType')">All</button>
+                </div>
+                <input type="hidden" id="f-targetType" value="Factionless">
+            </div>
+
+            <!-- Level -->
+            <div class="filter-section">
+                <div class="fs-label">Level</div>
+                <div class="input-row">
+                    <input type="number" id="f-minLevel" value="1" min="1" max="100" placeholder="Min">
+                    <input type="number" id="f-maxLevel" value="100" min="1" max="100" placeholder="Max">
+                </div>
+            </div>
+
+            <!-- Last active -->
+            <div class="filter-section">
+                <div class="fs-label">Last Active</div>
+                <select id="f-maxLastActionH" onchange="doSearch()">
+                    <option value="">Any (< 7 days)</option>
+                    <option value="1">Within 1 hour</option>
+                    <option value="6">Within 6 hours</option>
+                    <option value="24" selected>Within 24 hours</option>
+                    <option value="72">Within 3 days</option>
+                </select>
+            </div>
+
+            <!-- Age -->
+            <div class="filter-section">
+                <div class="fs-label">Account Age (days)</div>
+                <div class="input-row">
+                    <input type="number" id="f-minAge" placeholder="Min">
+                    <input type="number" id="f-maxAge" placeholder="Max">
+                </div>
+            </div>
+
+            <!-- Donator -->
+            <div class="filter-section">
+                <div class="fs-label">Donator Status</div>
+                <div class="seg">
+                    <button class="seg-btn on" data-donator="" onclick="setSeg(this,'f-donator')">Any</button>
+                    <button class="seg-btn" data-donator="true" onclick="setSeg(this,'f-donator')">⭐ Yes</button>
+                    <button class="seg-btn" data-donator="false" onclick="setSeg(this,'f-donator')">No</button>
+                </div>
+                <input type="hidden" id="f-donator" value="">
+            </div>
+
+            <!-- Sort -->
+            <div class="filter-section">
+                <div class="fs-label">Sort By</div>
+                <select id="f-sort" onchange="doSearch()">
+                    <option value="score">Scout Grade</option>
+                    <option value="lastAction" selected>Last Active</option>
+                    <option value="level">Level ↓</option>
+                    <option value="networth">Networth ↓</option>
+                    <option value="awards">Awards ↓</option>
+                    <option value="age">Account Age ↓</option>
+                </select>
+            </div>
+
+            <!-- Name search -->
+            <div class="filter-section">
+                <div class="fs-label">Name / ID Search</div>
+                <input type="text" id="f-search" placeholder="Search name or player ID…" onkeydown="if(event.key==='Enter') doSearch()">
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                <button class="btn-cta" id="btn-search" onclick="doSearch()">🔍 Search Candidates</button>
+                <button class="btn-ghost" onclick="resetFilters()">↺ Reset</button>
+            </div>
+
+            <!-- Bulk import zone -->
+            <div class="sep"></div>
+
+            <div class="filter-section">
+                <div class="fs-label">Quick Fill</div>
+                <p style="font-size:0.72em;color:var(--text-faint);line-height:1.5;">Seed 10,000+ players from top Torn factions instantly</p>
+                <button class="btn-ghost" id="btn-bulk" onclick="runBulkImport()" style="border-color:var(--violet-border);color:var(--violet);">⚡ Bulk Import Factions</button>
+                <div id="bulk-zone" style="display:none;" class="bulk-zone">
+                    <div class="bulk-row">
+                        <span id="bulk-txt">Scanning...</span>
+                        <span id="bulk-pct" style="font-weight:700;color:var(--cyan);">0%</span>
+                    </div>
+                    <div class="bulk-progress-track"><div class="bulk-progress-fill" id="bulk-bar"></div></div>
+                </div>
+            </div>
+
+            <!-- Faction indicator -->
+            <div class="faction-excluded" id="faction-excluded">
+                ✓ Your members excluded
+            </div>
+
+        </div>
     </aside>
 
-    <!-- ── Main Content Area ── -->
-    <main class="main">
-        
-        <!-- KPI Strip -->
-        <div class="kpi-bar">
-            <div class="kpi-card">
-                <span class="kpi-label">Recruitable Targets</span>
-                <span class="kpi-val" id="kpi-recruitable" style="color:var(--green);">—</span>
-                <span class="kpi-sub">Active & factionless</span>
+    <!-- ── RIGHT CANVAS ── -->
+    <div class="canvas">
+
+        <!-- KPI stats bar -->
+        <div class="stats-bar" id="stats-bar">
+            <div class="stat-cell">
+                <span class="stat-label">Recruitable</span>
+                <span class="stat-val" id="kpi-recruitable" style="color:var(--emerald);">—</span>
+                <span class="stat-sub">Factionless &amp; active</span>
             </div>
-            <div class="kpi-card">
-                <span class="kpi-label">Total Players Monitored</span>
-                <span class="kpi-val" id="kpi-total" style="color:var(--blue);">—</span>
-                <span class="kpi-sub">In database</span>
+            <div class="stat-cell">
+                <span class="stat-label">Monitored</span>
+                <span class="stat-val" id="kpi-total" style="color:var(--sky);">—</span>
+                <span class="stat-sub">Players in database</span>
             </div>
-            <div class="kpi-card">
-                <span class="kpi-label">Data Freshness</span>
-                <span class="kpi-val" id="kpi-freshness" style="color:var(--teal);">—</span>
-                <span class="kpi-sub">Refreshed recently</span>
+            <div class="stat-cell">
+                <span class="stat-label">Freshness</span>
+                <span class="stat-val" id="kpi-freshness" style="color:var(--cyan);">—</span>
+                <span class="stat-sub">Recently refreshed</span>
             </div>
-            <div class="kpi-card">
-                <span class="kpi-label">API Key Pool</span>
-                <span class="kpi-val" id="kpi-keys" style="color:var(--gold);">—</span>
-                <span class="kpi-sub">Active keys</span>
+            <div class="stat-cell">
+                <span class="stat-label">API Keys</span>
+                <span class="stat-val" id="kpi-keys" style="color:var(--amber);">—</span>
+                <span class="stat-sub">In scan pool</span>
+            </div>
+            <div class="stat-cell">
+                <span class="stat-label">Scanning</span>
+                <span class="stat-val" id="kpi-faction" style="color:var(--violet);">—</span>
+                <span class="stat-sub">Current faction #</span>
             </div>
         </div>
 
-        <!-- ── TAB 1: Search & Live Monitor ── -->
-        <div id="tab-search" class="tab-content active">
-            
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-                <div style="font-size:0.85em;color:var(--text-dim);" id="results-count">Showing matching recruits...</div>
-                <div style="display:flex;gap:8px;align-items:center;font-size:0.75em;color:var(--text-faint);">
-                    <span>Grades: <strong style="color:#ef4444;">S</strong> Top Tier • <strong style="color:var(--green);">A</strong> Great • <strong style="color:var(--blue);">B</strong> Solid • <strong style="color:var(--gold);">C</strong> Avg</span>
+        <!-- ═══ VIEW: SEARCH ═══ -->
+        <div class="view active" id="view-search">
+            <div class="results-bar">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <h2 id="results-count">Run a search to find recruits</h2>
+                    <span class="result-count-badge" id="result-badge" style="display:none;">0</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;font-size:0.73em;color:var(--text-faint);">
+                    <span><span style="color:var(--amber);font-weight:800;">S</span> Elite&nbsp;</span>
+                    <span><span style="color:var(--emerald);font-weight:800;">A</span> Great&nbsp;</span>
+                    <span><span style="color:var(--sky);font-weight:800;">B</span> Solid&nbsp;</span>
+                    <span><span style="color:var(--amber);font-weight:800;">C</span> Average</span>
                 </div>
             </div>
 
-            <div class="table-wrap">
-                <table>
+            <div class="tbl-wrap" id="tbl-wrap">
+                <div class="placeholder-state" id="search-empty">
+                    <div class="placeholder-icon">🎯</div>
+                    <div class="placeholder-title">Ready to Recruit</div>
+                    <div class="placeholder-sub">Set your filters and click <strong>Search Candidates</strong> to browse the player pool. The 24/7 cloud scanner continuously monitors all 55,000 factions.</div>
+                    <button class="btn-cta" style="width:auto;padding:9px 20px;margin-top:6px;" onclick="doSearch()">Search Now →</button>
+                </div>
+
+                <table class="rec-table" id="candidates-table" style="display:none;">
                     <thead>
                         <tr>
-                            <th style="width:50px;">Grade</th>
+                            <th style="width:46px;">Grade</th>
                             <th>Player</th>
                             <th>Level / Age</th>
-                            <th>Status / Faction</th>
-                            <th>Est. Stats / Xanax</th>
+                            <th>Faction Status</th>
+                            <th>Score / Progression</th>
                             <th>Last Active</th>
-                            <th>Claim Status</th>
+                            <th style="width:80px;">Claim</th>
                             <th style="text-align:right;">Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="player-rows">
-                        <tr><td colspan="8"><div class="empty-box"><div class="empty-icon">🎯</div><div>Click <strong>Search Players</strong> to browse recruits.</div></div></td></tr>
-                    </tbody>
+                    <tbody id="candidates-body"></tbody>
                 </table>
             </div>
-
         </div>
 
-        <!-- ── TAB 2: Ranked War Poacher ── -->
-        <div id="tab-poacher" class="tab-content">
-            <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;">
-                <div>
-                    <h3 style="font-size:1em;font-weight:800;color:var(--blue);margin-bottom:4px;">⚔️ Ranked War Poacher</h3>
-                    <p style="font-size:0.82em;color:var(--text-dim);">Inspect recent ranked wars against enemy factions. The poacher flags players who left their faction or became uncommitted after the war.</p>
+        <!-- ═══ VIEW: WAR POACHER ═══ -->
+        <div class="view" id="view-poacher">
+            <div class="poacher-view">
+                <div class="poacher-hero">
+                    <div class="poacher-hero-text">
+                        <h3>⚔️ Ranked War Poacher</h3>
+                        <p>Inspect your faction's ranked war history to identify enemy combatants who've since left their faction or lost commitment. Add them directly to your high-priority watch pool.</p>
+                    </div>
+                    <button class="btn-cta" style="width:auto;padding:9px 18px;flex-shrink:0;" onclick="loadRankedWars()">Load War History</button>
                 </div>
-                <button class="btn-primary" style="width:auto;padding:8px 18px;" onclick="loadRankedWars()">🔄 Fetch War History</button>
-            </div>
 
-            <div class="war-grid" id="war-grid">
-                <div class="empty-box" style="grid-column: 1 / -1;"><div class="empty-icon">⚔️</div><div>Click <strong>Fetch War History</strong> to load your faction's ranked wars.</div></div>
-            </div>
-
-            <div id="war-results-section" style="display:none;flex-direction:column;gap:12px;margin-top:10px;">
-                <h4 style="font-size:0.9em;font-weight:800;color:var(--text-main);" id="war-results-title">Poachable Candidates</h4>
-                <div class="table-wrap">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Player</th>
-                                <th>Level</th>
-                                <th>War Score / Hits</th>
-                                <th>Current Status</th>
-                                <th style="text-align:right;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="war-candidates-rows"></tbody>
-                    </table>
+                <div class="war-grid" id="war-grid">
+                    <div class="placeholder-state" style="grid-column:1/-1;padding:30px 20px;">
+                        <div class="placeholder-icon">⚔️</div>
+                        <div class="placeholder-title">No Wars Loaded</div>
+                        <div class="placeholder-sub">Click "Load War History" to fetch your faction's past ranked wars.</div>
+                    </div>
                 </div>
-            </div>
-        </div>
 
-        <!-- ── TAB 3: Quick Import ── -->
-        <div id="tab-importer" class="tab-content">
-            <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:14px;max-width:700px;">
-                <h3 style="font-size:1em;font-weight:800;color:var(--teal);">📥 Manual Candidate Importer</h3>
-                <p style="font-size:0.82em;color:var(--text-dim);line-height:1.5;">Paste player IDs, profile URLs (e.g. <code>profiles.php?XID=123456</code>), or raw text containing player IDs. All players will be immediately added to the high-priority watch pool and inspected for faction status.</p>
-                
-                <textarea id="import-text" rows="6" placeholder="Paste player IDs or URLs here... e.g. 123456, 7891011, https://www.torn.com/profiles.php?XID=234567"></textarea>
-                
-                <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <span id="import-status" style="font-size:0.8em;font-weight:700;color:var(--teal);"></span>
-                    <button class="btn-primary" style="width:auto;padding:10px 24px;" onclick="runManualImport()">📥 Import to Watch Pool</button>
+                <div id="war-results" class="war-results-zone" style="display:none;">
+                    <h4 id="war-results-title">Poachable Candidates</h4>
+                    <div class="tbl-wrap" style="max-height:400px;border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;">
+                        <table class="rec-table">
+                            <thead>
+                                <tr>
+                                    <th>Player</th>
+                                    <th>Level</th>
+                                    <th>War Score</th>
+                                    <th>Hits</th>
+                                    <th>Current Status</th>
+                                    <th style="text-align:right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="war-candidates-body"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- ── TAB 4: Outreach & AI Templates ── -->
-        <div id="tab-outreach" class="tab-content">
-            <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:14px;max-width:700px;">
-                <h3 style="font-size:1em;font-weight:800;color:var(--purple);">💬 Outreach Template Editor</h3>
-                <p style="font-size:0.82em;color:var(--text-dim);">Customize the message sent when you click the <strong>Message</strong> button next to any candidate. Available dynamic tags: <code>{name}</code>, <code>{level}</code>, <code>{faction}</code>, <code>{sender}</code>.</p>
-                
-                <textarea id="template-text" rows="5">Hey {name}, I noticed your fast progression to level {level}. You'd be an awesome fit for {faction}. Let me know if you're looking for an active, rewarding faction! - {sender}</textarea>
-                
-                <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <button class="btn-outline" style="width:auto;padding:8px 16px;" onclick="saveTemplate()">💾 Save Template</button>
-                    <span id="template-status" style="font-size:0.8em;color:var(--green);font-weight:700;"></span>
+        <!-- ═══ VIEW: QUICK IMPORT ═══ -->
+        <div class="view" id="view-importer">
+            <div class="importer-view">
+                <div class="import-card">
+                    <h3 style="color:var(--cyan);">📥 Manual Candidate Importer</h3>
+                    <p>Paste any combination of player IDs, profile URLs (<code>profiles.php?XID=XXXXXX</code>), or comma-separated lists. All detected IDs are immediately queued as <strong>high priority</strong> in the watch pool — they'll appear in search results within minutes.</p>
+
+                    <div class="notice">💡 Tip: You can paste a full Torn faction roster page or any text containing player IDs.</div>
+
+                    <textarea id="import-text" placeholder="123456, 789012&#10;https://www.torn.com/profiles.php?XID=345678&#10;901234..."></textarea>
+
+                    <div class="import-footer">
+                        <span id="import-feedback" class="import-feedback"></span>
+                        <button class="btn-cta" style="width:auto;padding:9px 20px;" onclick="runManualImport()">📥 Import Players</button>
+                    </div>
                 </div>
             </div>
         </div>
 
-    </main>
+        <!-- ═══ VIEW: OUTREACH ═══ -->
+        <div class="view" id="view-outreach">
+            <div class="outreach-view">
+                <div class="outreach-card">
+                    <h3 style="color:var(--violet);">💬 Outreach Template</h3>
+                    <p>Write your recruitment message once. When you click <strong>Message</strong> on any candidate, this template renders with their real data, copies to clipboard, and opens Torn's message composer. Available dynamic tags:</p>
+
+                    <div class="tag-chips">
+                        <span class="tag-chip" onclick="insertTag('{name}')">{name}</span>
+                        <span class="tag-chip" onclick="insertTag('{level}')">{level}</span>
+                        <span class="tag-chip" onclick="insertTag('{faction}')">{faction}</span>
+                        <span class="tag-chip" onclick="insertTag('{sender}')">{sender}</span>
+                        <span class="tag-chip" onclick="insertTag('{age}')">{age}</span>
+                    </div>
+
+                    <textarea id="template-text" rows="7" placeholder="Write your recruitment message here...">Hey {name}! I've been watching your progression and you're genuinely impressive — level {level} shows real dedication.
+
+We're {faction}, a tight-knit crew built around ranked wars, organized crimes, and people who actually show up. We'd love to have someone with your drive.
+
+If you're ever looking for a change or just want to see what we're about, drop me a message back.
+
+— {sender}</textarea>
+
+                    <div class="outreach-footer">
+                        <button class="btn-ghost" style="width:auto;padding:8px 14px;" onclick="saveTemplate()">💾 Save Template</button>
+                        <span class="save-feedback" id="template-saved"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
 </div>
 
-<!-- ── Outreach Message Modal ── -->
-<div class="modal-backdrop" id="msg-modal" style="display:none;">
-    <div class="modal">
-        <div class="modal-title">💬 Candidate Outreach Message</div>
-        <div style="font-size:0.82em;color:var(--text-dim);">Review your message before sending to <strong id="modal-player-name" style="color:var(--teal);"></strong>:</div>
-        <textarea id="modal-msg-text" rows="5"></textarea>
-        <div class="modal-btns">
-            <button class="btn-outline" style="width:auto;" onclick="closeMsgModal()">Cancel</button>
-            <button class="btn-primary" style="width:auto;" onclick="copyAndOpenTorn()">📋 Copy & Open in Torn</button>
+<!-- ═══════════════════════════════ MESSAGE PREVIEW MODAL ═══════════════════════════════ -->
+<div class="modal-veil" id="msg-modal" style="display:none;" onclick="if(event.target===this) closeMsgModal()">
+    <div class="modal-box">
+        <div class="modal-header">
+            <span class="modal-title">💬 Outreach Preview</span>
+            <button class="modal-close" onclick="closeMsgModal()">✕</button>
+        </div>
+        <div class="modal-desc">Review your message before sending to <strong id="msg-player-name" style="color:var(--cyan);"></strong></div>
+        <div class="msg-preview">
+            <span class="msg-player" id="msg-recipient-label"></span>
+            <textarea class="msg-target" id="msg-text" rows="7"></textarea>
+        </div>
+        <div class="msg-action-row">
+            <button class="btn-sm" onclick="closeMsgModal()">Cancel</button>
+            <button class="btn-sm primary" onclick="copyAndOpen()">📋 Copy &amp; Open in Torn</button>
         </div>
     </div>
 </div>
 
-<!-- ── Register Modal ── -->
-<div class="modal-backdrop" id="register-modal" style="display:none;">
-    <div class="modal">
-        <div class="modal-title">🔑 Connect Torn API Key</div>
-        <div style="font-size:0.82em;color:var(--text-dim);">Add your API key to contribute to the background scan pool and auto-exclude your faction members.</div>
-        <input type="password" id="reg-api-key" placeholder="Paste your Torn API key here...">
-        <div id="reg-msg" style="font-size:0.8em;font-weight:700;display:none;"></div>
-        <div class="modal-btns">
-            <button class="btn-outline" style="width:auto;" onclick="closeRegisterModal()">Cancel</button>
-            <button class="btn-primary" style="width:auto;" onclick="registerFaction()">Save API Key</button>
+<!-- ═══════════════════════════════ API KEY MODAL ═══════════════════════════════ -->
+<div class="modal-veil" id="key-modal" style="display:none;" onclick="if(event.target===this) closeKeyModal()">
+    <div class="modal-box">
+        <div class="modal-header">
+            <span class="modal-title">🔑 Connect Torn API Key</span>
+            <button class="modal-close" onclick="closeKeyModal()">✕</button>
+        </div>
+        <div class="modal-desc">Your API key contributes to the shared background scanner pool and ensures your own faction members are auto-excluded from search results. Uses HTTPS. A public-access key works fine.</div>
+        <input type="password" id="reg-key" placeholder="Paste your Torn API key…" autocomplete="off">
+        <div id="reg-feedback" style="font-size:0.8em;font-weight:700;display:none;"></div>
+        <div class="modal-footer">
+            <button class="btn-sm" onclick="closeKeyModal()">Cancel</button>
+            <button class="btn-sm primary" onclick="registerKey()">Connect Key</button>
         </div>
     </div>
 </div>
 
 <script>
-// ── State ──
-let currentTarget = null;
-let myFactionId = localStorage.getItem('recruit_faction_id') || '';
+'use strict';
+
+// ═══════════════════════════════ STATE ═══════════════════════════════
+let myFactionId   = localStorage.getItem('recruit_faction_id')   || '';
 let myFactionName = localStorage.getItem('recruit_faction_name') || 'our faction';
-let myName = localStorage.getItem('warboard_myname') || 'Agent';
-let ws = null;
+let myName        = localStorage.getItem('warboard_myname')       || 'Agent';
+let currentTarget = null;
+let ws            = null;
+let wsRetryTimer  = null;
 
-// ── Boot ──
+// ═══════════════════════════════ BOOT ═══════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
-    // Load saved template
-    const savedTpl = localStorage.getItem('recruit_outreach_template');
-    if (savedTpl) document.getElementById('template-text').value = savedTpl;
+    // Restore saved template
+    const saved = localStorage.getItem('recruit_template');
+    if (saved) document.getElementById('template-text').value = saved;
 
-    // Auto-sync API key from Warboard
-    const storedApiKey = localStorage.getItem('warboard_apikey');
-    if (storedApiKey) {
-        fetch('/recruit-api/auth/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ apiKey: storedApiKey }),
-        }).then(r => r.json()).then(d => {
-            if (d.success) {
-                myFactionId = d.factionId;
-                myFactionName = d.factionName;
-                localStorage.setItem('recruit_faction_id', myFactionId);
-                localStorage.setItem('recruit_faction_name', myFactionName);
-            }
-        }).catch(() => {});
-    }
+    // Auto-sync API key silently
+    const k = localStorage.getItem('warboard_apikey');
+    if (k) silentRegister(k);
 
     loadStatus();
     connectWS();
     doSearch();
 });
 
-// ── Navigation ──
-function switchTab(tabId) {
-    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    
-    event.currentTarget.classList.add('active');
-    document.getElementById('tab-' + tabId).classList.add('active');
+// ═══════════════════════════════ MODE SWITCHING ═══════════════════════════════
+function switchMode(id, btn) {
+    document.querySelectorAll('.mode-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-' + id).classList.add('active');
+
+    // Hide stats bar on non-search views to save vertical space
+    const statsBar = document.getElementById('stats-bar');
+    if (statsBar) statsBar.style.display = id === 'search' ? '' : 'none';
 }
 
-// ── Status Polling ──
+// ═══════════════════════════════ STATUS / KPI ═══════════════════════════════
 async function loadStatus() {
     try {
-        const res = await fetch('/recruit-api/admin/status');
-        if (!res.ok) return;
-        const d = await res.json();
+        const r = await fetch('/recruit-api/admin/status');
+        if (!r.ok) return;
+        const d = await r.json();
         if (!d.success) return;
 
-        document.getElementById('kpi-recruitable').textContent = Number(d.database.recruitable || 0).toLocaleString();
-        document.getElementById('kpi-total').textContent = Number(d.database.totalPlayers || 0).toLocaleString();
-        document.getElementById('kpi-freshness').textContent = d.database.freshnessRate || '100%';
-        document.getElementById('kpi-keys').textContent = d.apiPool.keyCount || 0;
+        setText('kpi-recruitable', fmt(d.database?.recruitable));
+        setText('kpi-total',       fmt(d.database?.totalPlayers));
+        setText('kpi-freshness',   d.database?.freshnessRate || '—');
+        setText('kpi-keys',        d.apiPool?.keyCount ?? '—');
 
-        const gs = document.getElementById('gs-progress');
-        if (gs && d.database.globalScannerProgress) {
-            gs.textContent = Number(d.database.globalScannerProgress).toLocaleString();
+        const gp = d.database?.globalScannerProgress;
+        if (gp) {
+            setText('gs-progress', fmt(gp));
+            setText('kpi-faction', fmt(gp));
+            const pct = Math.min((gp / 55000) * 100, 100);
+            el('sw-bar').style.width = pct.toFixed(2) + '%';
         }
-    } catch(e) {}
+    } catch(_) {}
 }
-setInterval(loadStatus, 3000);
+setInterval(loadStatus, 4000);
 
-// ── WebSocket ──
+// ═══════════════════════════════ WEBSOCKET ═══════════════════════════════
 function connectWS() {
+    if (ws) { try { ws.close(); } catch(_) {} }
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${proto}//${location.host}/recruit-live`);
 
     ws.onopen = () => {
-        document.getElementById('live-status').innerHTML = `<div class="live-dot"></div><span>Live</span>`;
+        setPillState('live');
+        if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
     };
 
     ws.onmessage = (evt) => {
         try {
             const msg = JSON.parse(evt.data);
             if (msg.type === 'scanner_progress') {
-                const el = document.getElementById('gs-progress');
-                if (el) el.textContent = Number(msg.factionId).toLocaleString();
+                const n = Number(msg.factionId);
+                setText('gs-progress', fmt(n));
+                setText('kpi-faction', fmt(n));
+                const pct = Math.min((n / 55000) * 100, 100);
+                el('sw-bar').style.width = pct.toFixed(2) + '%';
             }
-        } catch(e) {}
+        } catch(_) {}
     };
 
     ws.onclose = () => {
-        document.getElementById('live-status').innerHTML = `<div class="live-dot" style="background:var(--red);box-shadow:none;"></div><span style="color:var(--red);">Reconnecting</span>`;
-        setTimeout(connectWS, 3000);
+        setPillState('offline');
+        wsRetryTimer = setTimeout(connectWS, 3500);
+    };
+
+    ws.onerror = () => {
+        setPillState('offline');
     };
 }
 
-// ── Candidate Search ──
+function setPillState(state) {
+    const pill = el('live-pill');
+    const txt  = el('live-pill-txt');
+    if (state === 'live') {
+        pill.style.background = 'var(--emerald-soft)';
+        pill.style.borderColor = 'var(--emerald-border)';
+        pill.style.color = 'var(--emerald)';
+        txt.textContent = 'Live';
+    } else {
+        pill.style.background = 'var(--rose-soft)';
+        pill.style.borderColor = 'var(--rose-border)';
+        pill.style.color = 'var(--rose)';
+        txt.textContent = 'Reconnecting…';
+    }
+}
+
+// ═══════════════════════════════ SEARCH ═══════════════════════════════
 async function doSearch() {
-    const btn = document.getElementById('btn-search');
+    const btn = el('btn-search');
     btn.disabled = true;
-    btn.textContent = 'Searching...';
+    btn.textContent = 'Searching…';
 
-    const params = new URLSearchParams();
-    const query = document.getElementById('f-search').value.trim();
-    if (query) params.set('searchQuery', query);
+    const params = new URLSearchParams({
+        targetType:     el('f-targetType').value,
+        minLevel:       el('f-minLevel').value  || '1',
+        maxLevel:       el('f-maxLevel').value  || '100',
+        sort:           el('f-sort').value,
+    });
 
-    params.set('targetType', document.getElementById('f-targetType').value);
-    params.set('minLevel', document.getElementById('f-minLevel').value || '1');
-    params.set('maxLevel', document.getElementById('f-maxLevel').value || '100');
-    
-    const lastAction = document.getElementById('f-maxLastActionH').value;
-    if (lastAction) params.set('maxLastActionH', lastAction);
+    const q = el('f-search').value.trim();
+    if (q) params.set('searchQuery', q);
 
-    const minAge = document.getElementById('f-minAge').value;
-    if (minAge) params.set('minAge', minAge);
-    const maxAge = document.getElementById('f-maxAge').value;
-    if (maxAge) params.set('maxAge', maxAge);
+    const h = el('f-maxLastActionH').value;
+    if (h) params.set('maxLastActionH', h);
 
-    const donator = document.getElementById('f-donator').value;
-    if (donator) params.set('donator', donator);
+    const minA = el('f-minAge').value;
+    const maxA = el('f-maxAge').value;
+    if (minA) params.set('minAge', minA);
+    if (maxA) params.set('maxAge', maxA);
 
-    params.set('sort', document.getElementById('f-sort').value);
+    const don = el('f-donator').value;
+    if (don) params.set('donator', don);
+
     if (myFactionId) params.set('factionId', myFactionId);
 
     try {
-        const res = await fetch(`/recruit-api/search?${params.toString()}`);
-        const data = await res.json();
-        btn.disabled = false;
-        btn.textContent = '🔍 Search Players';
+        const r = await fetch(`/recruit-api/search?${params}`);
+        const d = await r.json();
 
-        if (!data.success || !data.players || data.players.length === 0) {
-            document.getElementById('player-rows').innerHTML = `<tr><td colspan="8"><div class="empty-box"><div class="empty-icon">🎯</div><div>No matching recruits found with these filters.</div></div></td></tr>`;
-            document.getElementById('results-count').textContent = '0 candidates found';
+        btn.disabled = false;
+        btn.textContent = '🔍 Search Candidates';
+
+        if (!d.success || !d.players?.length) {
+            showSearchEmpty();
+            setText('results-count', '0 candidates found');
+            el('result-badge').style.display = 'none';
             return;
         }
 
-        document.getElementById('results-count').textContent = `Showing ${data.players.length} recruitable candidates`;
-        renderPlayers(data.players);
+        renderPlayers(d.players);
+        setText('results-count', `${d.players.length} candidate${d.players.length !== 1 ? 's' : ''} found`);
+        el('result-badge').style.display = '';
+        el('result-badge').textContent = d.players.length;
 
     } catch(e) {
         btn.disabled = false;
-        btn.textContent = '🔍 Search Players';
+        btn.textContent = '🔍 Search Candidates';
     }
+}
+
+function showSearchEmpty() {
+    el('search-empty').style.display = 'flex';
+    el('candidates-table').style.display = 'none';
 }
 
 function renderPlayers(players) {
-    const tbody = document.getElementById('player-rows');
-    tbody.innerHTML = players.map(p => {
-        const isClaimed = !!p.claimedBy;
-        const statusClass = p.status === 'Okay' ? 'status-okay' : (p.status === 'Hospital' ? 'status-hosp' : 'status-abroad');
-        const donatorStar = p.donator ? '<span style="color:var(--gold);margin-left:4px;">⭐</span>' : '';
-        const grade = p.scoutGrade || 'C';
+    el('search-empty').style.display = 'none';
+    el('candidates-table').style.display = '';
 
-        return `
-        <tr>
-            <td><div class="grade-badge grade-${grade}">${grade}</div></td>
+    el('candidates-body').innerHTML = players.map(p => {
+        const g       = p.scoutGrade || 'C';
+        const isClaimed = !!p.claimedBy;
+        const sDot    = p.donator ? '<span class="donor-dot" title="Donator"></span>' : '';
+        const sc      = statusChip(p.status);
+        const factionTxt = p.factionId === 0
+            ? `<span style="color:var(--emerald);font-size:0.78em;">🟢 Factionless</span>`
+            : `<span style="color:var(--amber);font-size:0.78em;">🟡 ${xss(p.factionName)}</span>`;
+
+        const scoreWidth = Math.min(100, Math.round((p.recruitScore || 0) / 2));
+        const scoreColor = g === 'S' ? '#f59e0b' : g === 'A' ? 'var(--emerald)' : g === 'B' ? 'var(--sky)' : g === 'C' ? 'var(--amber)' : 'var(--text-faint)';
+
+        const safeP = encodeData(p);
+
+        return `<tr>
+            <td><div class="grade g-${g}">${g}</div></td>
             <td>
-                <a href="${p.profileUrl}" target="_blank" style="color:#fff;font-weight:700;text-decoration:none;">${escapeHtml(p.name)}</a>${donatorStar}<br>
-                <span style="font-size:0.75em;color:var(--text-dim);">[${p.id}]</span>
+                <div style="display:flex;align-items:center;gap:5px;">
+                    <a href="${p.profileUrl}" target="_blank" class="player-name">${xss(p.name)}</a>${sDot}
+                </div>
+                <span class="player-id-tag">[${p.id}]</span>
             </td>
             <td>
-                <strong>Lvl ${p.level}</strong><br>
-                <span style="font-size:0.75em;color:var(--text-faint);">${p.daysInTorn} days old</span>
+                <strong>Lv ${p.level}</strong>
+                <div style="color:var(--text-muted);font-size:0.78em;">${p.daysInTorn}d old</div>
             </td>
             <td>
-                <span class="status-badge ${statusClass}">${p.status || 'Okay'}</span><br>
-                <span style="font-size:0.75em;color:var(--text-dim);">${p.factionId === 0 ? '🟢 Factionless' : escapeHtml(p.factionName)}</span>
+                ${sc}
+                <div style="margin-top:4px;">${factionTxt}</div>
             </td>
             <td>
-                <span style="font-weight:700;color:var(--text-main);">${p.estStats && p.estStats !== 'Not yet available' ? escapeHtml(p.estStats) : '~' + (p.level * 2500).toLocaleString() + ' (Est)'}</span><br>
-                <span style="font-size:0.72em;color:var(--text-faint);">Prog: ${(p.progressionRate || 0).toFixed(2)} lvl/d</span>
+                <div class="score-bar-wrap">
+                    <div class="score-bar-track">
+                        <div class="score-bar-fill" style="width:${scoreWidth}%;background:${scoreColor};"></div>
+                    </div>
+                    <span class="score-num">${Math.round(p.recruitScore || 0)}</span>
+                </div>
+                <div style="font-size:0.73em;color:var(--text-faint);margin-top:3px;">${(p.progressionRate||0).toFixed(2)} lvl/d</div>
             </td>
             <td>
-                <span style="color:var(--text-main);">${p.lastAction}</span>
+                <span style="color:var(--text-secondary);">${xss(p.lastAction)}</span>
             </td>
             <td>
-                <button class="btn-action btn-claim ${isClaimed ? 'claimed' : ''}" onclick="toggleClaim(${p.id}, '${isClaimed ? 'release' : 'claim'}')">
-                    ${isClaimed ? '📌 Claimed (' + escapeHtml(p.claimedBy) + ')' : '+ Claim'}
+                <button class="act act-claim ${isClaimed?'is-claimed':''}" onclick="toggleClaim(${p.id},'${isClaimed?'release':'claim'}')">
+                    ${isClaimed ? `📌 ${xss(p.claimedBy)}` : '+ Claim'}
                 </button>
             </td>
-            <td style="text-align:right;white-space:nowrap;">
-                <button class="btn-action btn-msg" onclick="openOutreachModal(${JSON.stringify(p).replace(/"/g, '&quot;')})">💬 Message</button>
-                <a href="${p.attackUrl}" target="_blank" class="btn-action btn-atk">⚔️ Attack</a>
+            <td>
+                <div class="action-group">
+                    <button class="act act-msg" onclick="openMsgModal(${safeP})">💬</button>
+                    <a href="${p.attackUrl}" target="_blank" class="act act-atk">⚔️</a>
+                    <a href="${p.profileUrl}" target="_blank" class="act">👤</a>
+                </div>
             </td>
-        </tr>
-        `;
+        </tr>`;
     }).join('');
 }
 
-// ── Claim / Dibs ──
+function statusChip(status) {
+    const map = {
+        'Okay': ['chip-ok','OK'],
+        'Hospital': ['chip-hosp','HOSP'],
+        'Traveling': ['chip-travel','TRAVEL'],
+        'Jail': ['chip-jail','JAIL'],
+    };
+    const [cls, label] = map[status] || ['chip-ok', status || 'OK'];
+    return `<span class="chip ${cls}">${label}</span>`;
+}
+
+// ═══════════════════════════════ CLAIM / DIBS ═══════════════════════════════
 async function toggleClaim(playerId, action) {
     try {
-        const res = await fetch('/recruit-api/admin/dibs', {
+        const r = await fetch('/recruit-api/admin/dibs', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ playerId, agentName: myName, action })
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ playerId, agentName: myName, action }),
         });
-        const d = await res.json();
+        const d = await r.json();
         if (d.success) doSearch();
-    } catch(e) {}
+    } catch(_) {}
 }
 
-// ── Ranked War Poacher ──
-async function loadRankedWars() {
-    const grid = document.getElementById('war-grid');
-    grid.innerHTML = '<div class="empty-box" style="grid-column:1/-1;"><div>Loading ranked wars...</div></div>';
-
-    try {
-        const res = await fetch('/recruit-api/admin/ranked-wars');
-        const d = await res.json();
-        if (!d.success || !d.wars || d.wars.length === 0) {
-            grid.innerHTML = '<div class="empty-box" style="grid-column:1/-1;"><div>No ranked wars found.</div></div>';
-            return;
-        }
-
-        grid.innerHTML = d.wars.map(w => `
-            <div class="war-card">
-                <div class="war-header">
-                    <span class="war-name">vs ${escapeHtml(w.enemyName)}</span>
-                    <span class="status-badge ${w.isWinner ? 'status-okay' : 'status-hosp'}">${w.isWinner ? 'VICTORY' : 'DEFEAT'}</span>
-                </div>
-                <div class="war-meta">
-                    Report ID: #${w.reportId} • ${w.start}<br>
-                    Score: ${w.friendlyScore} - ${w.enemyScore}
-                </div>
-                <button class="btn-outline" style="color:var(--blue);border-color:rgba(56,189,248,0.3);" onclick="scanWar('${w.reportId}', '${escapeHtml(w.enemyName)}')">
-                    🔎 Scan for Poachable Members
-                </button>
-            </div>
-        `).join('');
-
-    } catch(e) {
-        grid.innerHTML = '<div class="empty-box" style="grid-column:1/-1;"><div>Error loading wars: ' + e.message + '</div></div>';
-    }
-}
-
-async function scanWar(reportId, enemyName) {
-    const sec = document.getElementById('war-results-section');
-    sec.style.display = 'flex';
-    document.getElementById('war-results-title').textContent = `Poachable Candidates from vs ${enemyName}`;
-    const tbody = document.getElementById('war-candidates-rows');
-    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-box">Scanning war members...</div></td></tr>';
-
-    try {
-        const res = await fetch('/recruit-api/admin/scan-war', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ reportId })
-        });
-        const d = await res.json();
-        if (!d.success || !d.candidates || d.candidates.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5"><div class="empty-box">No poachable members found in this war.</div></td></tr>';
-            return;
-        }
-
-        tbody.innerHTML = d.candidates.map(c => `
-            <tr>
-                <td><a href="https://www.torn.com/profiles.php?XID=${c.id}" target="_blank" style="color:#fff;font-weight:700;">${escapeHtml(c.name)}</a> [${c.id}]</td>
-                <td>Lvl ${c.level}</td>
-                <td>${c.score} score (${c.attacks} hits)</td>
-                <td><span class="status-badge ${c.isFactionless ? 'status-okay' : 'status-hosp'}">${c.status}</span></td>
-                <td style="text-align:right;">
-                    <button class="btn-action btn-msg" onclick="openOutreachModal(${JSON.stringify(c).replace(/"/g, '&quot;')})">💬 Message</button>
-                </td>
-            </tr>
-        `).join('');
-
-    } catch(e) {
-        tbody.innerHTML = '<tr><td colspan="5"><div class="empty-box">Error scanning war: ' + e.message + '</div></td></tr>';
-    }
-}
-
-// ── Manual Import ──
-async function runManualImport() {
-    const text = document.getElementById('import-text').value.trim();
-    const status = document.getElementById('import-status');
-    if (!text) { status.textContent = 'Please paste some player IDs or URLs.'; return; }
-
-    status.textContent = 'Importing...';
-    try {
-        const res = await fetch('/recruit-api/admin/import-players', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ rawText: text })
-        });
-        const d = await res.json();
-        if (d.success) {
-            status.style.color = 'var(--green)';
-            status.textContent = `✅ ${d.message}`;
-            document.getElementById('import-text').value = '';
-            loadStatus();
-        } else {
-            status.style.color = 'var(--red)';
-            status.textContent = '❌ ' + (d.error || 'Import failed');
-        }
-    } catch(e) {
-        status.style.color = 'var(--red)';
-        status.textContent = '❌ ' + e.message;
-    }
-}
-
-// ── Outreach Modal ──
-function openOutreachModal(player) {
+// ═══════════════════════════════ OUTREACH MODAL ═══════════════════════════════
+function openMsgModal(player) {
     currentTarget = player;
-    document.getElementById('modal-player-name').textContent = `${player.name} [${player.id}]`;
-    
-    const template = document.getElementById('template-text').value;
-    let msg = template.replace(/{name}/g, player.name)
-                      .replace(/{level}/g, player.level || 'your level')
-                      .replace(/{faction}/g, myFactionName || 'our faction')
-                      .replace(/{sender}/g, myName || 'Agent');
+    el('msg-player-name').textContent = `${player.name} [${player.id}]`;
+    el('msg-recipient-label').textContent = `To: ${player.name}`;
 
-    document.getElementById('modal-msg-text').value = msg;
-    document.getElementById('msg-modal').style.display = 'flex';
+    const tpl = el('template-text').value;
+    el('msg-text').value = tpl
+        .replace(/{name}/g,    player.name    || '')
+        .replace(/{level}/g,   player.level   || '')
+        .replace(/{age}/g,     player.daysInTorn || '')
+        .replace(/{faction}/g, myFactionName  || 'our faction')
+        .replace(/{sender}/g,  myName         || 'Agent');
+
+    el('msg-modal').style.display = 'flex';
 }
 
-function closeMsgModal() { document.getElementById('msg-modal').style.display = 'none'; }
+function closeMsgModal() { el('msg-modal').style.display = 'none'; currentTarget = null; }
 
-function copyAndOpenTorn() {
-    const text = document.getElementById('modal-msg-text').value;
-    navigator.clipboard.writeText(text);
+function copyAndOpen() {
+    const text = el('msg-text').value;
+    navigator.clipboard.writeText(text).catch(() => {});
     if (currentTarget) {
         window.open(`https://www.torn.com/messages.php?action=send&XID=${currentTarget.id}`, '_blank');
     }
     closeMsgModal();
 }
 
-function saveTemplate() {
-    const tpl = document.getElementById('template-text').value;
-    localStorage.setItem('recruit_outreach_template', tpl);
-    const s = document.getElementById('template-status');
-    s.textContent = '✅ Saved!';
-    setTimeout(() => { s.textContent = ''; }, 2000);
-}
-
-// ── Bulk Import ──
-async function runBulkImport() {
-    const btn = document.getElementById('btn-bulk-import');
-    const bar = document.getElementById('bulk-progress-bar');
-    const pct = document.getElementById('bulk-pct');
-    const txt = document.getElementById('bulk-status-text');
-    const box = document.getElementById('bulk-import-progress');
-
-    btn.disabled = true;
-    box.style.display = 'block';
+// ═══════════════════════════════ WAR POACHER ═══════════════════════════════
+async function loadRankedWars() {
+    const grid = el('war-grid');
+    grid.innerHTML = '<div class="placeholder-state" style="grid-column:1/-1;padding:24px;"><div>Loading ranked wars…</div></div>';
 
     try {
-        const res = await fetch('/recruit-api/admin/bulk-import', {
+        const r = await fetch('/recruit-api/admin/ranked-wars');
+        const d = await r.json();
+
+        if (!d.success || !d.wars?.length) {
+            grid.innerHTML = '<div class="placeholder-state" style="grid-column:1/-1;padding:24px;"><div class="placeholder-icon">⚔️</div><div>No ranked wars found for your faction.</div></div>';
+            return;
+        }
+
+        grid.innerHTML = d.wars.map(w => {
+            const isW = !!w.isWinner;
+            return `<div class="war-card ${isW?'victory':'defeat'}" onclick="scanWar('${w.reportId}','${xss(w.enemyName)}')">
+                <div class="war-card-header">
+                    <span class="war-enemy-name">vs ${xss(w.enemyName)}</span>
+                    <span class="war-outcome ${isW?'w':'l'}">${isW?'VICTORY':'DEFEAT'}</span>
+                </div>
+                <div class="war-card-meta">${w.start} · Report #${w.reportId}</div>
+                <div class="war-score-row">
+                    <span>Your score: <strong style="color:${isW?'var(--emerald)':'var(--rose)'}">${fmt(w.friendlyScore)}</strong></span>
+                    <span>Enemy: ${fmt(w.enemyScore)}</span>
+                </div>
+                <button class="btn-ghost" style="font-size:0.78em;color:var(--sky);border-color:rgba(56,189,248,0.25);">🔎 Scan for Poachable Members</button>
+            </div>`;
+        }).join('');
+
+    } catch(e) {
+        grid.innerHTML = `<div class="placeholder-state" style="grid-column:1/-1;padding:24px;color:var(--rose);">Error: ${xss(e.message)}</div>`;
+    }
+}
+
+async function scanWar(reportId, enemyName) {
+    el('war-results').style.display = 'flex';
+    el('war-results-title').textContent = `Poachable Candidates — vs ${enemyName}`;
+    el('war-candidates-body').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">Scanning war report…</td></tr>';
+
+    try {
+        const r = await fetch('/recruit-api/admin/scan-war', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ maxFactions: 100 })
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ reportId }),
         });
-        const reader = res.body.getReader();
+        const d = await r.json();
+
+        if (!d.success || !d.candidates?.length) {
+            el('war-candidates-body').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">No poachable members found in this war.</td></tr>';
+            return;
+        }
+
+        el('war-candidates-body').innerHTML = d.candidates.map(c => {
+            const freeBadge = c.isFactionless
+                ? `<span class="chip chip-free">🟢 FREE</span>`
+                : `<span class="chip chip-infac">In Faction</span>`;
+            const safeC = encodeData(c);
+
+            return `<tr>
+                <td>
+                    <a href="https://www.torn.com/profiles.php?XID=${c.id}" target="_blank" class="player-name">${xss(c.name)}</a>
+                    <div class="player-id-tag">[${c.id}]</div>
+                </td>
+                <td><strong>Lv ${c.level}</strong></td>
+                <td><strong style="color:var(--sky);">${fmt(c.score)}</strong></td>
+                <td>${c.attacks}</td>
+                <td>${freeBadge}</td>
+                <td>
+                    <div class="action-group">
+                        <button class="act act-msg" onclick="openMsgModal(${safeC})">💬</button>
+                        <a href="https://www.torn.com/profiles.php?XID=${c.id}" target="_blank" class="act">👤</a>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+
+    } catch(e) {
+        el('war-candidates-body').innerHTML = `<tr><td colspan="6" style="color:var(--rose);padding:16px;">Error: ${xss(e.message)}</td></tr>`;
+    }
+}
+
+// ═══════════════════════════════ MANUAL IMPORT ═══════════════════════════════
+async function runManualImport() {
+    const text = el('import-text').value.trim();
+    const fb   = el('import-feedback');
+    if (!text) { setFeedback(fb, '⚠️ Paste some player IDs first', 'amber'); return; }
+
+    setFeedback(fb, 'Importing…', 'cyan');
+
+    try {
+        const r = await fetch('/recruit-api/admin/import-players', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ rawText: text }),
+        });
+        const d = await r.json();
+        if (d.success) {
+            setFeedback(fb, `✅ ${d.message}`, 'emerald');
+            el('import-text').value = '';
+            loadStatus();
+        } else {
+            setFeedback(fb, `❌ ${d.error || 'Import failed'}`, 'rose');
+        }
+    } catch(e) {
+        setFeedback(fb, `❌ ${e.message}`, 'rose');
+    }
+}
+
+// ═══════════════════════════════ BULK IMPORT ═══════════════════════════════
+async function runBulkImport() {
+    const btn  = el('btn-bulk');
+    const zone = el('bulk-zone');
+    const bar  = el('bulk-bar');
+    const pct  = el('bulk-pct');
+    const txt  = el('bulk-txt');
+
+    btn.disabled = true;
+    zone.style.display = 'block';
+
+    try {
+        const r = await fetch('/recruit-api/admin/bulk-import', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ maxFactions: 100 }),
+        });
+
+        const reader  = r.body.getReader();
         const decoder = new TextDecoder();
         let buf = '';
 
@@ -1052,23 +1768,23 @@ async function runBulkImport() {
             buf += decoder.decode(value, { stream: true });
             const lines = buf.split('\n');
             buf = lines.pop();
-
             for (const line of lines) {
                 if (!line.trim()) continue;
                 try {
                     const msg = JSON.parse(line);
                     if (msg.type === 'progress') {
-                        bar.style.width = `${msg.pct}%`;
-                        pct.textContent = `${msg.pct}%`;
-                        txt.textContent = `[${msg.current}/${msg.total}] ${msg.factionName || 'Scanning...'}`;
+                        const p = msg.pct || 0;
+                        bar.style.width = p + '%';
+                        pct.textContent = p + '%';
+                        txt.textContent = `[${msg.current}/${msg.total}] Scanning…`;
                     } else if (msg.type === 'complete') {
                         bar.style.width = '100%';
                         pct.textContent = '100%';
-                        txt.textContent = 'Done!';
-                        btn.textContent = '✅ Quick Fill Complete';
+                        txt.textContent = '✅ Done!';
+                        btn.textContent = '✅ Complete';
                         loadStatus();
                     }
-                } catch(e) {}
+                } catch(_) {}
             }
         }
     } catch(e) {
@@ -1077,74 +1793,139 @@ async function runBulkImport() {
     }
 }
 
-// ── Filters & Helpers ──
-function setTargetType(btn) {
-    document.querySelectorAll('[data-type]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('f-targetType').value = btn.dataset.type;
-    doSearch();
+// ═══════════════════════════════ OUTREACH TEMPLATE ═══════════════════════════════
+function saveTemplate() {
+    localStorage.setItem('recruit_template', el('template-text').value);
+    const fb = el('template-saved');
+    fb.textContent = '✓ Saved';
+    setTimeout(() => { fb.textContent = ''; }, 2200);
 }
 
-function setDonatorFilter(btn) {
-    document.querySelectorAll('[data-donator]').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('f-donator').value = btn.dataset.donator;
+function insertTag(tag) {
+    const ta = el('template-text');
+    const start = ta.selectionStart;
+    const end   = ta.selectionEnd;
+    const v = ta.value;
+    ta.value = v.slice(0, start) + tag + v.slice(end);
+    ta.selectionStart = ta.selectionEnd = start + tag.length;
+    ta.focus();
+}
+
+// ═══════════════════════════════ FILTERS ═══════════════════════════════
+function setSeg(btn, hiddenId) {
+    const parent = btn.closest('.seg');
+    parent.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    el(hiddenId).value = btn.dataset[hiddenId === 'f-targetType' ? 'type' : 'donator'];
     doSearch();
 }
 
 function resetFilters() {
-    document.getElementById('f-search').value = '';
-    document.getElementById('f-minLevel').value = '1';
-    document.getElementById('f-maxLevel').value = '100';
-    document.getElementById('f-maxLastActionH').value = '24';
-    document.getElementById('f-minAge').value = '';
-    document.getElementById('f-maxAge').value = '';
-    document.getElementById('f-donator').value = '';
-    document.getElementById('f-sort').value = 'score';
+    el('f-minLevel').value = '1';
+    el('f-maxLevel').value = '100';
+    el('f-maxLastActionH').value = '24';
+    el('f-minAge').value = '';
+    el('f-maxAge').value = '';
+    el('f-sort').value = 'score';
+    el('f-search').value = '';
+
+    el('f-targetType').value = 'Factionless';
+    el('f-donator').value = '';
+
+    document.querySelectorAll('.seg').forEach(seg => {
+        seg.querySelectorAll('.seg-btn').forEach((b, i) => b.classList.toggle('on', i === 0));
+    });
+
     doSearch();
 }
 
-function openRegisterModal() { document.getElementById('register-modal').style.display = 'flex'; }
-function closeRegisterModal() { document.getElementById('register-modal').style.display = 'none'; }
+// ═══════════════════════════════ API KEY / REGISTRATION ═══════════════════════════════
+function openKeyModal() { el('key-modal').style.display = 'flex'; }
+function closeKeyModal() { el('key-modal').style.display = 'none'; }
 
-async function registerFaction() {
-    const key = document.getElementById('reg-api-key').value.trim();
-    const msg = document.getElementById('reg-msg');
-    if (!key) return;
+async function registerKey() {
+    const k  = el('reg-key').value.trim();
+    const fb = el('reg-feedback');
+    if (!k) return;
 
-    msg.style.display = 'block';
-    msg.style.color = 'var(--teal)';
-    msg.textContent = 'Verifying API key...';
+    fb.style.display = 'block';
+    fb.style.color = 'var(--cyan)';
+    fb.textContent = 'Verifying…';
 
     try {
-        const res = await fetch('/recruit-api/auth/register', {
+        const r = await fetch('/recruit-api/auth/register', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ apiKey: key })
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ apiKey: k }),
         });
-        const d = await res.json();
+        const d = await r.json();
         if (d.success) {
-            localStorage.setItem('warboard_apikey', key);
-            localStorage.setItem('recruit_faction_id', d.factionId);
+            localStorage.setItem('warboard_apikey', k);
+            localStorage.setItem('recruit_faction_id',   d.factionId);
             localStorage.setItem('recruit_faction_name', d.factionName);
-            myFactionId = d.factionId;
+            myFactionId   = d.factionId;
             myFactionName = d.factionName;
-            msg.style.color = 'var(--green)';
-            msg.textContent = `✅ Registered faction: ${d.factionName}!`;
-            setTimeout(() => { closeRegisterModal(); loadStatus(); doSearch(); }, 1500);
+
+            el('faction-excluded').style.display = 'block';
+            fb.style.color = 'var(--emerald)';
+            fb.textContent = `✅ Connected: ${d.factionName}`;
+
+            setTimeout(() => { closeKeyModal(); doSearch(); loadStatus(); }, 1400);
         } else {
-            msg.style.color = 'var(--red)';
-            msg.textContent = '❌ ' + (d.error || 'Registration failed');
+            fb.style.color = 'var(--rose)';
+            fb.textContent = `❌ ${d.error || 'Failed'}`;
         }
     } catch(e) {
-        msg.style.color = 'var(--red)';
-        msg.textContent = '❌ ' + e.message;
+        fb.style.color = 'var(--rose)';
+        fb.textContent = `❌ ${e.message}`;
     }
 }
 
-function escapeHtml(str) {
-    if (!str) return '';
-    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+async function silentRegister(k) {
+    try {
+        const r = await fetch('/recruit-api/auth/register', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ apiKey: k }),
+        });
+        const d = await r.json();
+        if (d.success) {
+            myFactionId   = d.factionId;
+            myFactionName = d.factionName;
+            localStorage.setItem('recruit_faction_id',   d.factionId);
+            localStorage.setItem('recruit_faction_name', d.factionName);
+            el('faction-excluded').style.display = 'block';
+        }
+    } catch(_) {}
+}
+
+// ═══════════════════════════════ HELPERS ═══════════════════════════════
+const el = id => document.getElementById(id);
+const setText = (id, val) => { const e = el(id); if (e) e.textContent = val; };
+const fmt = n => n != null && !isNaN(n) ? Number(n).toLocaleString() : '—';
+
+function xss(str) {
+    if (str == null) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function encodeData(obj) {
+    return "'" + btoa(unescape(encodeURIComponent(JSON.stringify(obj)))) + "'";
+}
+
+// Override openMsgModal to accept base64
+const _openMsgModal = openMsgModal;
+window.openMsgModal = function(arg) {
+    let player = arg;
+    if (typeof arg === 'string') {
+        try { player = JSON.parse(decodeURIComponent(escape(atob(arg)))); } catch(_) {}
+    }
+    _openMsgModal(player);
+};
+
+function setFeedback(el, text, color) {
+    el.textContent = text;
+    el.style.color = `var(--${color})`;
 }
 </script>
 </body>
