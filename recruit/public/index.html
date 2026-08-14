@@ -540,11 +540,11 @@ input:focus, select:focus {
             <!-- Global Auto-Scanner status -->
             <div style="margin-top:10px;padding:10px;background:rgba(255,166,87,0.05);border:1px solid rgba(255,166,87,0.2);border-radius:6px;">
                 <div style="font-size:0.75em;color:var(--gold);font-weight:700;display:flex;align-items:center;gap:6px;margin-bottom:4px;">
-                    <div class="live-dot" style="background:var(--gold);box-shadow:0 0 6px var(--gold);"></div>
+                    <div class="live-dot" id="gs-dot" style="background:var(--gold);box-shadow:0 0 6px var(--gold);"></div>
                     Global Auto-Scanner
                 </div>
                 <div style="font-size:0.7em;color:var(--text-dim);line-height:1.4;">
-                    Running in background...<br>
+                    <span id="gs-status-label">Running in background...</span><br>
                     Scanning faction <span id="gs-progress" style="color:var(--text-main);font-weight:700;">1</span> / 55,000
                 </div>
             </div>
@@ -697,6 +697,28 @@ let ws = null;
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+    // Auto-sync API key from Warboard/main app if available
+    const storedApiKey = localStorage.getItem('warboard_apikey');
+    if (storedApiKey) {
+        fetch('/recruit-api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiKey: storedApiKey }),
+        }).then(r => r.json()).then(d => {
+            if (d.success) {
+                myFactionId = d.factionId;
+                myFactionName = d.factionName;
+                localStorage.setItem('recruit_faction_id', myFactionId);
+                localStorage.setItem('recruit_faction_name', myFactionName);
+                if (document.getElementById('your-faction')) {
+                    document.getElementById('your-faction').style.display = 'block';
+                    document.getElementById('faction-name').textContent = myFactionName;
+                }
+                loadStatus();
+            }
+        }).catch(() => {});
+    }
+
     loadStatus();
     connectWS();
     if (myFactionId) {
@@ -731,13 +753,23 @@ async function loadStatus() {
         if (gsProgress && d.database.globalScannerProgress) {
             gsProgress.textContent = d.database.globalScannerProgress.toLocaleString();
         }
+
+        const gsLabel = document.getElementById('gs-status-label');
+        const gsDot = document.getElementById('gs-dot');
+        if (d.apiPool.keyCount === 0) {
+            if (gsLabel) gsLabel.textContent = 'Waiting for API key (click Register Faction)...';
+            if (gsDot) { gsDot.style.background = 'var(--text-faint)'; gsDot.style.boxShadow = 'none'; }
+        } else {
+            if (gsLabel) gsLabel.textContent = 'Running in background...';
+            if (gsDot) { gsDot.style.background = 'var(--gold)'; gsDot.style.boxShadow = '0 0 6px var(--gold)'; }
+        }
     } catch(e) {
         document.getElementById('kpi-recruitable').textContent = 'ERR';
         document.getElementById('kpi-total').textContent = 'ERR';
         console.error('[Status] Failed to load:', e.message);
     }
 }
-setInterval(loadStatus, 10_000);
+setInterval(loadStatus, 5_000);
 
 // ── Bulk Import ─────────────────────────────────────────────────────────────
 async function runBulkImport() {

@@ -60,7 +60,15 @@ async function initRecruitPlatform(app, server) {
                 keysLoaded++;
             }
         }
-        console.log(`[KeyPool] Reloaded ${keysLoaded} keys from ${factions.length} factions`);
+        if (process.env.TORN_API_KEY) {
+            addKey(process.env.TORN_API_KEY, 0, null);
+            keysLoaded++;
+        }
+        if (process.env.API_KEY && process.env.API_KEY !== process.env.TORN_API_KEY) {
+            addKey(process.env.API_KEY, 0, null);
+            keysLoaded++;
+        }
+        console.log(`[KeyPool] Reloaded ${keysLoaded} keys from ${factions.length} factions + env`);
 
         if (keysLoaded > 0) {
             startRefreshWorker().catch(e => console.error('[RefreshWorker] Error:', e));
