@@ -24,14 +24,14 @@ const recruitSchema = new mongoose.Schema({
     id: { type: Number, unique: true },
     name: String,
     level: Number,
-    donator: Number,
+    donator: mongoose.Schema.Types.Mixed,
     last_action: Object,
     personalstats: Object,
     playtime: Number,
     xanax: Number,
     refills: Number,
     se: Number,
-    estStats: Number,
+    estStats: mongoose.Schema.Types.Mixed,
     progIndex: Number
 }, { strict: false });
 const Recruit = mongoose.model('Recruit', recruitSchema);
