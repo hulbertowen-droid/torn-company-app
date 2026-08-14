@@ -5,7 +5,7 @@ let isConnected = false;
 
 async function connectDB() {
     if (isConnected) return;
-    const uri = process.env.MONGO_URI || 'mongodb://localhost:27017/torn_recruit';
+    const uri = process.env.MONGODB_URI || process.env.MONGO_URI || "mongodb+srv://WarBoard:WarBoardPass123@cluster0.iwnnnj3.mongodb.net/?appName=Cluster0";
     await mongoose.connect(uri);
     isConnected = true;
     console.log('[MongoDB] Connected →', uri.replace(/\/\/.*@/, '//***@'));

@@ -168,7 +168,7 @@ async function globalFactionLoop() {
                     const priority = isDying ? 0 : 1;
 
                     if (memberIds.length > 0) {
-                        const ops = memberIds.map(id => ({
+                        const watchOps = memberIds.map(id => ({
                             updateOne: {
                                 filter: { _id: id },
                                 update: {
@@ -184,7 +184,34 @@ async function globalFactionLoop() {
                                 upsert: true,
                             }
                         }));
-                        await WatchPool.bulkWrite(ops, { ordered: false });
+                        await WatchPool.bulkWrite(watchOps, { ordered: false });
+
+                        // Also save/update players in Player collection
+                        const playerOps = memberIds.map(id => {
+                            const mem = data.members[id.toString()] || {};
+                            const lastActionTs = mem.last_action?.timestamp ? new Date(mem.last_action.timestamp * 1000) : null;
+                            return {
+                                updateOne: {
+                                    filter: { _id: id },
+                                    update: {
+                                        $set: {
+                                            _id: id,
+                                            name: mem.name || '',
+                                            level: mem.level || 1,
+                                            factionId: isDying ? 0 : currentFid,
+                                            factionName: isDying ? '' : (data.name || ''),
+                                            status: mem.status?.state || 'Okay',
+                                            lastActionTs,
+                                            lastActionRelative: mem.last_action?.relative || '',
+                                            refreshedAt: new Date(),
+                                            nextRefreshAt: new Date(Date.now() + (isDying ? 60 * 60_000 : 7 * 86_400_000)),
+                                        }
+                                    },
+                                    upsert: true
+                                }
+                            };
+                        });
+                        await Player.bulkWrite(playerOps, { ordered: false });
 
                         if (isDying) {
                             await WatchPool.updateMany(
