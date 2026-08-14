@@ -11,8 +11,13 @@ function setBroadcast(fn) { broadcastFn = fn; }
 
 async function startRefreshWorker() {
     // DB connection is managed by the main app — no connectDB() needed here
+    if (!process.env.REDIS_URL) {
+        console.log('[RefreshWorker] No REDIS_URL configured — using MongoDB WatchPool engine for monitoring.');
+        return;
+    }
 
-    const queue = getPlayerRefreshQueue();
+    try {
+        const queue = getPlayerRefreshQueue();
     
     // Process jobs from Bull queue — low concurrency to respect Torn API rate limit
     // With 1 key: 100 calls/min = ~1.67/sec. Concurrency 2 with 700ms gap = ~1.4/sec. Safe.
@@ -90,6 +95,9 @@ async function startRefreshWorker() {
     });
 
     console.log('[RefreshWorker] Started (concurrency=2, paced for 1 API key)');
+    } catch (err) {
+        console.warn('[RefreshWorker] Queue init error:', err.message);
+    }
 }
 
 module.exports = { startRefreshWorker, setBroadcast };

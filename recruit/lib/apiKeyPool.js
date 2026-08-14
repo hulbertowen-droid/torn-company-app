@@ -35,9 +35,9 @@ function makeEntry(apiKey, factionId, tornUserId) {
 function refillTokens(entry) {
     const now = Date.now();
     const elapsed = now - entry.lastRefill;
-    if (elapsed >= REFILL_INTERVAL_MS) {
-        entry.tokens = MAX_TOKENS;
-        entry.callsThisMinute = 0;
+    if (elapsed >= 600) {
+        const newTokens = Math.floor(elapsed / 600); // 100 tokens per 60s = 1 token per 600ms
+        entry.tokens = Math.min(MAX_TOKENS, entry.tokens + newTokens);
         entry.lastRefill = now;
     }
 }

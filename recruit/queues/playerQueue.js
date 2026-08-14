@@ -18,6 +18,7 @@ function getPlayerRefreshQueue() {
                 removeOnFail: 50,
             },
         });
+        playerRefreshQueue.on('error', () => {}); // Prevent unhandled error crashes if redis is not running
     }
     return playerRefreshQueue;
 }
@@ -32,6 +33,7 @@ function getPlayerSeedQueue() {
                 removeOnFail: 20,
             },
         });
+        playerSeedQueue.on('error', () => {}); // Prevent unhandled error crashes if redis is not running
     }
     return playerSeedQueue;
 }

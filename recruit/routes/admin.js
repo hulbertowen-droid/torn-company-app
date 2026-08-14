@@ -33,21 +33,20 @@ router.get('/health', (req, res) => res.json({ ok: true }));
  */
 router.get('/status', async (req, res) => {
     try {
-        const [totalPlayers, recruitable, factionCount, queueCounts, watchPoolSize] = await Promise.all([
-            Player.estimatedDocumentCount(),
-            Player.countDocuments({ factionId: 0, status: 'Okay' }),
-            Faction.estimatedDocumentCount(),
-            getPlayerRefreshQueue().getJobCounts(),
-            WatchPool.estimatedDocumentCount(),
+        const db = require('mongoose').connection.db;
+        const [totalPlayers, recruitable, factionCount, queueCounts, watchPoolSize, freshRecruitables, doc] = await Promise.all([
+            Player.estimatedDocumentCount().catch(() => 0),
+            Player.countDocuments({ factionId: 0, status: 'Okay' }).catch(() => 0),
+            Faction.estimatedDocumentCount().catch(() => 0),
+            getPlayerRefreshQueue().getJobCounts().catch(() => ({ waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0 })),
+            WatchPool.estimatedDocumentCount().catch(() => 0),
+            Player.countDocuments({
+                factionId: 0, status: 'Okay',
+                refreshedAt: { $gte: new Date(Date.now() - 4 * 3_600_000) },
+            }).catch(() => 0),
+            db ? db.collection('seeder_config').findOne({ _id: 'global_faction' }).catch(() => null) : Promise.resolve(null),
         ]);
 
-        const fourHoursAgo = new Date(Date.now() - 4 * 3_600_000);
-        const freshRecruitables = await Player.countDocuments({
-            factionId: 0, status: 'Okay',
-            refreshedAt: { $gte: fourHoursAgo },
-        });
-
-        const doc = await require('mongoose').connection.db.collection('seeder_config').findOne({ _id: 'global_faction' });
         const globalScannerProgress = doc?.value || 1;
 
         return res.json({
@@ -66,6 +65,7 @@ router.get('/status', async (req, res) => {
             apiPool: { keyCount: poolSize(), keys: poolStats() },
         });
     } catch (err) {
+        console.error('[Admin] Status route error:', err.message);
         return res.status(500).json({ error: err.message });
     }
 });

@@ -208,6 +208,9 @@ async function globalFactionLoop() {
                 { $set: { value: nextFid } },
                 { upsert: true }
             );
+            if (currentFid % 20 === 0) {
+                console.log(`[GlobalScanner] Progress: faction #${currentFid} / 55,000 (Pool keys: ${poolSize()})`);
+            }
         } catch (err) {
             console.error('[GlobalScanner] Failed to save progress:', err.message);
         }
