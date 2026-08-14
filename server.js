@@ -81,42 +81,80 @@ async function loadConfigFromMongo() {
 async function syncRecruitsToPlayers() {
     try {
         const Player = require('./recruit/db/models/Player');
+        
+        // 1. Purge dead / junk / sluggish accounts from the Player database
+        await Player.deleteMany({
+            $or: [
+                { status: { $in: ['Fallen', 'Federal', 'Deleted'] } },
+                { lastActionTs: { $lt: new Date(Date.now() - 7 * 86_400_000) } },
+                { daysInTorn: { $gt: 30 }, level: { $lt: 10 } },
+                { daysInTorn: { $gt: 90 }, level: { $lt: 15 } },
+                { daysInTorn: { $gt: 365 }, level: { $lt: 25 } },
+                { daysInTorn: { $gt: 730 }, level: { $lt: 35 } },
+            ]
+        }).catch(() => {});
+
+        // 2. Filter and sync quality recruits into Player search pool
         const recruits = await Recruit.find({}).lean();
         if (recruits.length > 0) {
-            const ops = recruits.map(r => {
+            const qualityRecruits = recruits.filter(r => {
+                const state = r.status || 'Okay';
+                if (state === 'Fallen' || state === 'Federal' || state === 'Deleted') return false;
+                
                 const lastActionTs = r.last_action?.timestamp
                     ? new Date(r.last_action.timestamp * 1000)
                     : new Date();
-                const daysInTorn = r.age || 0;
-                const level = r.level || 1;
-                const progressionRate = daysInTorn > 0 ? parseFloat((level / daysInTorn).toFixed(3)) : 0;
-                
-                return {
-                    updateOne: {
-                        filter: { _id: r.id },
-                        update: {
-                            $set: {
-                                _id: r.id,
-                                name: r.name || '',
-                                level: r.level || 1,
-                                factionId: 0,
-                                factionName: '',
-                                status: 'Okay',
-                                lastActionTs,
-                                lastActionRelative: r.last_action?.relative || '',
-                                donator: !!r.donator,
-                                daysInTorn,
-                                progressionRate,
-                                refreshedAt: new Date(),
-                                nextRefreshAt: new Date(Date.now() + 60 * 60_000),
-                            }
-                        },
-                        upsert: true
-                    }
-                };
+                const hoursSinceLast = (Date.now() - lastActionTs.getTime()) / 3_600_000;
+                if (hoursSinceLast > 168) return false; // Inactive > 7 days
+
+                const age = r.age || 1;
+                const lvl = r.level || 1;
+
+                // Discard low progression sluggish accounts (e.g. 500 days old lvl 5)
+                if (age > 30 && lvl < 10) return false;
+                if (age > 90 && lvl < 15) return false;
+                if (age > 365 && lvl < 25) return false;
+                if (age > 730 && lvl < 35) return false;
+
+                return true;
             });
-            await Player.bulkWrite(ops, { ordered: false });
-            console.log(`[RecruitSync] Synced ${recruits.length} recruits into Player search pool.`);
+
+            if (qualityRecruits.length > 0) {
+                const ops = qualityRecruits.map(r => {
+                    const lastActionTs = r.last_action?.timestamp
+                        ? new Date(r.last_action.timestamp * 1000)
+                        : new Date();
+                    const daysInTorn = r.age || 0;
+                    const level = r.level || 1;
+                    const progressionRate = daysInTorn > 0 ? parseFloat((level / daysInTorn).toFixed(3)) : 0;
+                    
+                    return {
+                        updateOne: {
+                            filter: { _id: r.id },
+                            update: {
+                                $set: {
+                                    _id: r.id,
+                                    name: r.name || '',
+                                    level,
+                                    factionId: 0,
+                                    factionName: '',
+                                    status: 'Okay',
+                                    lastActionTs,
+                                    lastActionRelative: r.last_action?.relative || '',
+                                    donator: !!r.donator,
+                                    daysInTorn,
+                                    progressionRate,
+                                    refreshedAt: new Date(),
+                                    nextRefreshAt: new Date(Date.now() + 60 * 60_000),
+                                }
+                            },
+                            upsert: true
+                        }
+                    };
+                });
+                await Player.bulkWrite(ops, { ordered: false });
+                console.log(`[RecruitSync] Synced ${qualityRecruits.length} quality recruits into Player search pool.`);
+            }
         }
     } catch(e) {
         console.error('[RecruitSync] Error syncing recruits to players:', e.message);
@@ -2560,11 +2598,28 @@ app.post('/api/turbo/stop', (req, res) => {
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server listening on port ${PORT}`);
     startFrontierPipeline();
+    startKeepAlive();
     
     // Boot up the integrated recruitment platform
     const { initRecruitPlatform } = require('./recruit/index');
     initRecruitPlatform(app, server).catch(e => console.error("[Recruit Init Error]", e));
 });
+
+// ── Keep-Alive Self-Ping (Ensures 24/7 scanning on Render even when computer is turned off) ──
+function startKeepAlive() {
+    const appUrl = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL;
+    if (appUrl) {
+        console.log(`[KeepAlive] 24/7 Self-Ping active for ${appUrl} (pings every 10 min)`);
+        setInterval(async () => {
+            try {
+                const res = await fetch(`${appUrl}/recruit-api/admin/health`, { signal: AbortSignal.timeout(10_000) });
+                if (res.ok) console.log('[KeepAlive] Heartbeat ping OK — Render kept awake');
+            } catch(e) {
+                console.warn('[KeepAlive] Ping:', e.message);
+            }
+        }, 10 * 60_000);
+    }
+}
 
 async function startFrontierPipeline() {
     if (isPipelineRunning) return;

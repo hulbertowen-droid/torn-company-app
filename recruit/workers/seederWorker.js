@@ -13,6 +13,29 @@ const CONFIG_COL = 'seeder_config';
 let broadcastFn = null;
 function setBroadcast(fn) { broadcastFn = fn; }
 
+/**
+ * Quality Recruitment Candidate Filter
+ * Filters out:
+ * - Fallen, Federal, or deleted accounts
+ * - Inactive accounts (> 7 days)
+ * - Abandoned/sluggish progression (e.g. 500 days old at lvl 5)
+ */
+function isQualityCandidate({ level = 1, daysInTorn = 1, status = 'Okay', hoursSinceLast = 0 }) {
+    if (status === 'Fallen' || status === 'Federal' || status === 'Deleted') return false;
+    if (hoursSinceLast > 168) return false; // Inactive for > 7 days
+
+    const age = daysInTorn || 1;
+    const lvl = level || 1;
+
+    // Discard sluggish/abandoned accounts
+    if (age > 30 && lvl < 10) return false;
+    if (age > 90 && lvl < 15) return false;
+    if (age > 365 && lvl < 25) return false;
+    if (age > 730 && lvl < 35) return false;
+
+    return true;
+}
+
 async function startSeederWorker() {
     // DB connection is managed by the main app — no connectDB() needed here
     console.log('[WatchPool] Seeder started — monitoring known active players');
@@ -80,8 +103,8 @@ async function watchLoop() {
                 ? (Date.now() - parsed.lastActionTs.getTime()) / 3_600_000
                 : 9999;
 
-            // Prune players inactive for > 5 days
-            if (hoursSinceLast > 120) {
+            // Prune players that fail the quality candidate filter
+            if (!isQualityCandidate({ level: parsed.level, daysInTorn: parsed.daysInTorn, status: parsed.status, hoursSinceLast })) {
                 await WatchPool.deleteOne({ _id: playerId });
                 await Player.deleteOne({ _id: playerId });
                 continue;
@@ -167,8 +190,20 @@ async function globalFactionLoop() {
                     const isDying = respect < 10_000 || memberCount < 5;
                     const priority = isDying ? 0 : 1;
 
-                    if (memberIds.length > 0) {
-                        const watchOps = memberIds.map(id => ({
+                    // Filter for quality active candidates only
+                    const qualityMemberIds = memberIds.filter(id => {
+                        const mem = data.members[id.toString()] || {};
+                        const state = mem.status?.state || 'Okay';
+                        if (state === 'Fallen' || state === 'Federal') return false;
+                        const lastTs = mem.last_action?.timestamp;
+                        const hoursSinceLast = lastTs ? (Date.now() - lastTs * 1000) / 3_600_000 : 9999;
+                        if (hoursSinceLast > 168) return false;
+                        if ((mem.level || 1) < 5) return false;
+                        return true;
+                    });
+
+                    if (qualityMemberIds.length > 0) {
+                        const watchOps = qualityMemberIds.map(id => ({
                             updateOne: {
                                 filter: { _id: id },
                                 update: {
@@ -186,36 +221,36 @@ async function globalFactionLoop() {
                         }));
                         await WatchPool.bulkWrite(watchOps, { ordered: false });
 
-                        // Also save/update players in Player collection
-                        const playerOps = memberIds.map(id => {
-                            const mem = data.members[id.toString()] || {};
-                            const lastActionTs = mem.last_action?.timestamp ? new Date(mem.last_action.timestamp * 1000) : null;
-                            return {
-                                updateOne: {
-                                    filter: { _id: id },
-                                    update: {
-                                        $set: {
-                                            _id: id,
-                                            name: mem.name || '',
-                                            level: mem.level || 1,
-                                            factionId: isDying ? 0 : currentFid,
-                                            factionName: isDying ? '' : (data.name || ''),
-                                            status: mem.status?.state || 'Okay',
-                                            lastActionTs,
-                                            lastActionRelative: mem.last_action?.relative || '',
-                                            refreshedAt: new Date(),
-                                            nextRefreshAt: new Date(Date.now() + (isDying ? 60 * 60_000 : 7 * 86_400_000)),
-                                        }
-                                    },
-                                    upsert: true
-                                }
-                            };
-                        });
-                        await Player.bulkWrite(playerOps, { ordered: false });
-
+                        // If dying faction, save directly as prime recruitable targets
                         if (isDying) {
+                            const playerOps = qualityMemberIds.map(id => {
+                                const mem = data.members[id.toString()] || {};
+                                const lastActionTs = mem.last_action?.timestamp ? new Date(mem.last_action.timestamp * 1000) : null;
+                                return {
+                                    updateOne: {
+                                        filter: { _id: id },
+                                        update: {
+                                            $set: {
+                                                _id: id,
+                                                name: mem.name || '',
+                                                level: mem.level || 1,
+                                                factionId: 0,
+                                                factionName: '',
+                                                status: mem.status?.state || 'Okay',
+                                                lastActionTs,
+                                                lastActionRelative: mem.last_action?.relative || '',
+                                                refreshedAt: new Date(),
+                                                nextRefreshAt: new Date(Date.now() + 60 * 60_000),
+                                            }
+                                        },
+                                        upsert: true
+                                    }
+                                };
+                            });
+                            await Player.bulkWrite(playerOps, { ordered: false });
+
                             await WatchPool.updateMany(
-                                { _id: { $in: memberIds }, priority: { $gt: 0 } },
+                                { _id: { $in: qualityMemberIds }, priority: { $gt: 0 } },
                                 { $set: { priority: 0, source: 'graveyard' } }
                             );
                         }
