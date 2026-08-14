@@ -36,9 +36,17 @@ async function fetchPlayer(playerId) {
  */
 async function fetchFaction(factionId, apiKey) {
     const url = `${TORN_BASE}/faction/${factionId}?selections=basic&key=${apiKey}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    const data = await res.json();
-    if (data.error) throw new Error(`Torn API error: ${data.error.error}`);
+    let res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    let data = await res.json();
+    if (data.error) {
+        if (data.error.code === 5 || (data.error.error && data.error.error.includes('Too many'))) {
+            await new Promise(r => setTimeout(r, 2500));
+            res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            data = await res.json();
+            if (!data.error) return data;
+        }
+        throw new Error(`Torn API error: ${data.error.error}`);
+    }
     return data;
 }
 
@@ -48,9 +56,17 @@ async function fetchFaction(factionId, apiKey) {
  */
 async function verifyKey(apiKey) {
     const url = `${TORN_BASE}/user/?selections=profile&key=${apiKey}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    const data = await res.json();
-    if (data.error) throw new Error(`Invalid API key: ${data.error.error}`);
+    let res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    let data = await res.json();
+    if (data.error) {
+        if (data.error.code === 5 || (data.error.error && data.error.error.includes('Too many'))) {
+            await new Promise(r => setTimeout(r, 2500));
+            res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            data = await res.json();
+            if (!data.error) return data;
+        }
+        throw new Error(`Invalid API key: ${data.error.error}`);
+    }
     return data;
 }
 

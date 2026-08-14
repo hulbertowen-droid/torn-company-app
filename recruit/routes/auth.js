@@ -22,6 +22,18 @@ router.post('/register', async (req, res) => {
             return res.status(400).json({ error: 'Valid Torn API key required.' });
         }
 
+        // Fast-path: if this key is already registered in DB, activate immediately without burning API calls
+        const existingFaction = await Faction.findOne({ apiKeys: apiKey }).lean();
+        if (existingFaction) {
+            addKey(apiKey, existingFaction._id, existingFaction.registeredBy || 0);
+            return res.json({
+                success: true,
+                factionId: existingFaction._id,
+                factionName: existingFaction.name || `Faction #${existingFaction._id}`,
+                membersLoaded: (existingFaction.memberIds || []).length,
+            });
+        }
+
         // Verify the key and get the user's profile
         const profile = await verifyKey(apiKey);
         const tornUserId = profile.player_id;
@@ -31,10 +43,16 @@ router.post('/register', async (req, res) => {
             return res.status(400).json({ error: 'You must be in a faction to register.' });
         }
 
-        // Fetch the faction's member list
-        const factionData = await fetchFaction(factionId, apiKey);
-        const memberIds = Object.keys(factionData.members || {}).map(Number);
-        const factionName = factionData.name || '';
+        // Fetch the faction's member list (with graceful fallback if rate-limited)
+        let memberIds = [];
+        let factionName = profile.faction?.faction_name || '';
+        try {
+            const factionData = await fetchFaction(factionId, apiKey);
+            memberIds = Object.keys(factionData.members || {}).map(Number).filter(Boolean);
+            if (factionData.name) factionName = factionData.name;
+        } catch (fErr) {
+            console.warn('[Auth] Faction basic fetch warning:', fErr.message);
+        }
 
         // Upsert faction into DB
         await Faction.findOneAndUpdate(
