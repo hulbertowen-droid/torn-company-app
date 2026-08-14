@@ -141,10 +141,17 @@ async function globalFactionLoop() {
             continue;
         }
 
+        let currentFid = 1;
         try {
             const doc = await mongoose.connection.db.collection(CONFIG_COL).findOne({ _id: 'global_faction' });
-            let currentFid = doc?.value || 1;
+            currentFid = doc?.value || 1;
+        } catch (err) {
+            console.error('[GlobalScanner] Failed to read progress:', err.message);
+            await new Promise(r => setTimeout(r, 5000));
+            continue;
+        }
 
+        try {
             const key = await getKeyWait(5_000);
             if (key) {
                 const res = await fetch(`${TORN_BASE}/faction/${currentFid}?selections=basic&key=${key}`, {
@@ -157,8 +164,6 @@ async function globalFactionLoop() {
                     const memberCount = memberIds.length;
                     const respect = data.respect || 0;
 
-                    // Dying faction: low respect OR very few active members
-                    // Members of dying factions are likely about to go factionless — high priority
                     const isDying = respect < 10_000 || memberCount < 5;
                     const priority = isDying ? 0 : 1;
 
@@ -181,7 +186,6 @@ async function globalFactionLoop() {
                         }));
                         await WatchPool.bulkWrite(ops, { ordered: false });
 
-                        // For dying factions, also force-upgrade existing WatchPool entries
                         if (isDying) {
                             await WatchPool.updateMany(
                                 { _id: { $in: memberIds }, priority: { $gt: 0 } },
@@ -191,21 +195,26 @@ async function globalFactionLoop() {
                     }
                 }
             }
+        } catch (err) {
+            // Log but don't retry — always advance cursor so we don't get stuck
+            console.error(`[GlobalScanner] Error on faction ${currentFid}:`, err.message);
+        }
 
+        // Always advance cursor, even on error — never get stuck on one faction
+        try {
             const nextFid = currentFid >= MAX_FACTION_ID ? 1 : currentFid + 1;
             await mongoose.connection.db.collection(CONFIG_COL).updateOne(
                 { _id: 'global_faction' },
                 { $set: { value: nextFid } },
                 { upsert: true }
             );
-
         } catch (err) {
-            await new Promise(r => setTimeout(r, 5000));
+            console.error('[GlobalScanner] Failed to save progress:', err.message);
         }
 
-        // Slower pace — uses leftover API budget
+        // Pace — uses leftover API budget
         const keys = Math.max(1, poolSize());
-        await new Promise(r => setTimeout(r, Math.max(1500, 4000 / keys)));
+        await new Promise(r => setTimeout(r, Math.max(1000, 3000 / keys)));
     }
 }
 

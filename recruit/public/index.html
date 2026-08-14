@@ -711,6 +711,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadStatus() {
     try {
         const res = await fetch('/recruit-api/admin/status');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const d = await res.json();
         if (!d.success) return;
         document.getElementById('kpi-recruitable').textContent = d.database.recruitable.toLocaleString();
@@ -730,9 +731,13 @@ async function loadStatus() {
         if (gsProgress && d.database.globalScannerProgress) {
             gsProgress.textContent = d.database.globalScannerProgress.toLocaleString();
         }
-    } catch(e) {}
+    } catch(e) {
+        document.getElementById('kpi-recruitable').textContent = 'ERR';
+        document.getElementById('kpi-total').textContent = 'ERR';
+        console.error('[Status] Failed to load:', e.message);
+    }
 }
-setInterval(loadStatus, 30_000);
+setInterval(loadStatus, 10_000);
 
 // ── Bulk Import ─────────────────────────────────────────────────────────────
 async function runBulkImport() {
@@ -810,6 +815,10 @@ function connectWS() {
         } else if (msg.type === 'player_gone') {
             removePlayerRow(msg.playerId);
         }
+    };
+
+    ws.onerror = () => {
+        document.getElementById('live-status').innerHTML = `<div class="live-dot" style="background:var(--red);box-shadow:0 0 8px var(--red);"></div><span class="live-label" style="color:var(--red);">Disconnected</span>`;
     };
 
     ws.onclose = () => {
