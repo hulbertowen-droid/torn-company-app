@@ -54,7 +54,7 @@ function injectGlobalSettings() {
     document.body.appendChild(div);
 }
 
-window.openGlobalSettings = function() {
+window.openGlobalSettings = async function() {
     injectGlobalSettings();
     document.getElementById('global-settings-modal').style.display = 'flex';
     document.getElementById('gs-api-key').value = localStorage.getItem('warboard_apikey') || "";
@@ -64,6 +64,22 @@ window.openGlobalSettings = function() {
     document.getElementById('gs-my-name').value = localStorage.getItem('warboard_myname') || "";
     document.getElementById('gs-discord-webhook').value = localStorage.getItem('warboard_discord') || "";
     document.getElementById('gs-api-cpm').value = localStorage.getItem('warboard_cpm') || "12";
+
+    if (!document.getElementById('gs-api-key').value) {
+        try {
+            const res = await fetch('/api/master-config');
+            const data = await res.json();
+            if (data.apiKey) {
+                document.getElementById('gs-api-key').value = data.apiKey;
+                localStorage.setItem('warboard_apikey', data.apiKey);
+            }
+            if (data.ffKey) document.getElementById('gs-ff-key').value = data.ffKey;
+            if (data.tsKey) document.getElementById('gs-ts-key').value = data.tsKey;
+            if (data.enemyFacId) document.getElementById('gs-enemy-id').value = data.enemyFacId;
+            if (data.myName) document.getElementById('gs-my-name').value = data.myName;
+            if (data.globalChannelId) document.getElementById('gs-discord-webhook').value = data.globalChannelId;
+        } catch(e) {}
+    }
 };
 
 window.closeGlobalSettings = function() {
@@ -71,25 +87,34 @@ window.closeGlobalSettings = function() {
 };
 
 window.saveGlobalSettings = function() {
-    localStorage.setItem('warboard_apikey', document.getElementById('gs-api-key').value.trim());
-    localStorage.setItem('warboard_ffkey', document.getElementById('gs-ff-key').value.trim());
-    localStorage.setItem('warboard_tskey', document.getElementById('gs-ts-key').value.trim());
-    localStorage.setItem('warboard_enemyId', document.getElementById('gs-enemy-id').value.trim());
-    localStorage.setItem('warboard_myname', document.getElementById('gs-my-name').value.trim());
-    localStorage.setItem('warboard_discord', document.getElementById('gs-discord-webhook').value.trim());
-    localStorage.setItem('warboard_cpm', document.getElementById('gs-api-cpm').value.trim() || "12");
+    const apiKey = document.getElementById('gs-api-key').value.trim();
+    const ffKey = document.getElementById('gs-ff-key').value.trim();
+    const tsKey = document.getElementById('gs-ts-key').value.trim();
+    const enemyFacId = document.getElementById('gs-enemy-id').value.trim();
+    const myName = document.getElementById('gs-my-name').value.trim();
+    const discord = document.getElementById('gs-discord-webhook').value.trim();
+    const cpm = document.getElementById('gs-api-cpm').value.trim() || "12";
+
+    localStorage.setItem('warboard_apikey', apiKey);
+    localStorage.setItem('warboard_ffkey', ffKey);
+    localStorage.setItem('warboard_tskey', tsKey);
+    localStorage.setItem('warboard_enemyId', enemyFacId);
+    localStorage.setItem('warboard_myname', myName);
+    localStorage.setItem('warboard_discord', discord);
+    localStorage.setItem('warboard_cpm', cpm);
+    localStorage.setItem('master_faction_config', JSON.stringify({ apiKey, ffKey, tsKey, enemyFacId, myName, discord, cpm }));
 
     try {
         fetch('/api/master-config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
-                apiKey: document.getElementById('gs-api-key').value.trim(), 
-                discordWebhook: document.getElementById('gs-discord-webhook').value.trim(), 
-                ffKey: document.getElementById('gs-ff-key').value.trim(), 
-                tsKey: document.getElementById('gs-ts-key').value.trim(), 
-                enemyId: document.getElementById('gs-enemy-id').value.trim(), 
-                myName: document.getElementById('gs-my-name').value.trim() 
+                apiKey, 
+                discordWebhook: discord, 
+                ffKey, 
+                tsKey, 
+                enemyId: enemyFacId, 
+                myName 
             })
         });
     } catch(e) {}

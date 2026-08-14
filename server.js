@@ -10,10 +10,27 @@ process.env.MONGODB_URI = "mongodb+srv://WarBoard:WarBoardPass123@cluster0.iwnnn
 
 const mongoose = require('mongoose');
 
+const configSchema = new mongoose.Schema({
+    _id: { type: String, default: 'master' },
+    discordConfig: Object,
+    companyConfig: Object,
+    ocConfig: Object,
+    marketConfig: Object,
+    spyDatabase: Object,
+    userTracking: Object,
+    apiPoolConfig: Object,
+    updatedAt: { type: Date, default: Date.now },
+}, { strict: false });
+const AppConfig = mongoose.model('AppConfig', configSchema, 'app_configs');
+
 global.mongoConnectionError = null;
 if (process.env.MONGODB_URI) {
     mongoose.connect(process.env.MONGODB_URI)
-        .then(() => console.log("Connected to MongoDB Atlas"))
+        .then(async () => {
+            console.log("Connected to MongoDB Atlas");
+            await loadConfigFromMongo();
+            await syncRecruitsToPlayers();
+        })
         .catch(err => {
             console.log("MongoDB connection error:", err);
             global.mongoConnectionError = err.message || err.toString();
@@ -35,6 +52,76 @@ const recruitSchema = new mongoose.Schema({
     progIndex: Number
 }, { strict: false });
 const Recruit = mongoose.model('Recruit', recruitSchema);
+
+async function loadConfigFromMongo() {
+    try {
+        const saved = await AppConfig.findById('master').lean();
+        if (saved) {
+            if (saved.discordConfig) discordConfig = { ...discordConfig, ...saved.discordConfig };
+            if (saved.companyConfig) companyConfig = { ...companyConfig, ...saved.companyConfig };
+            if (saved.ocConfig) ocConfig = { ...ocConfig, ...saved.ocConfig };
+            if (saved.marketConfig) marketConfig = { ...marketConfig, ...saved.marketConfig };
+            if (saved.spyDatabase) spyDatabase = { ...spyDatabase, ...saved.spyDatabase };
+            if (saved.userTracking) userTracking = { ...userTracking, ...saved.userTracking };
+            if (saved.apiPoolConfig) apiPoolConfig = { ...apiPoolConfig, ...saved.apiPoolConfig };
+            console.log('[Mongo] Restored master configurations from MongoDB Atlas.');
+            
+            if (discordConfig.apiKey) {
+                try {
+                    const { addKey } = require('./recruit/lib/apiKeyPool');
+                    addKey(discordConfig.apiKey, discordConfig.factionId || 0, null);
+                } catch(e) {}
+            }
+        }
+    } catch(e) {
+        console.error('[Mongo] Config load error:', e.message);
+    }
+}
+
+async function syncRecruitsToPlayers() {
+    try {
+        const Player = require('./recruit/db/models/Player');
+        const recruits = await Recruit.find({}).lean();
+        if (recruits.length > 0) {
+            const ops = recruits.map(r => {
+                const lastActionTs = r.last_action?.timestamp
+                    ? new Date(r.last_action.timestamp * 1000)
+                    : new Date();
+                const daysInTorn = r.age || 0;
+                const level = r.level || 1;
+                const progressionRate = daysInTorn > 0 ? parseFloat((level / daysInTorn).toFixed(3)) : 0;
+                
+                return {
+                    updateOne: {
+                        filter: { _id: r.id },
+                        update: {
+                            $set: {
+                                _id: r.id,
+                                name: r.name || '',
+                                level: r.level || 1,
+                                factionId: 0,
+                                factionName: '',
+                                status: 'Okay',
+                                lastActionTs,
+                                lastActionRelative: r.last_action?.relative || '',
+                                donator: !!r.donator,
+                                daysInTorn,
+                                progressionRate,
+                                refreshedAt: new Date(),
+                                nextRefreshAt: new Date(Date.now() + 60 * 60_000),
+                            }
+                        },
+                        upsert: true
+                    }
+                };
+            });
+            await Player.bulkWrite(ops, { ordered: false });
+            console.log(`[RecruitSync] Synced ${recruits.length} recruits into Player search pool.`);
+        }
+    } catch(e) {
+        console.error('[RecruitSync] Error syncing recruits to players:', e.message);
+    }
+}
 
 
 const app = express();
@@ -129,14 +216,35 @@ try { if (fs.existsSync('user_tracking.json')) userTracking = JSON.parse(fs.read
 try { if (fs.existsSync('api_pool.json')) apiPoolConfig = JSON.parse(fs.readFileSync('api_pool.json')); } catch(e) {}
 try { if (fs.existsSync('company_config.json')) companyConfig = { ...companyConfig, ...JSON.parse(fs.readFileSync('company_config.json')) }; } catch(e) {}
 
-function saveDiscordConfig() { fs.writeFileSync('discord_config.json', JSON.stringify(discordConfig)); }
-function saveMarketConfig() { fs.writeFileSync('market_config.json', JSON.stringify(marketConfig)); }
-function saveOcConfig() { fs.writeFileSync('oc_config.json', JSON.stringify(ocConfig)); }
+function saveToMongo() {
+    if (mongoose.connection.readyState === 1) {
+        AppConfig.updateOne(
+            { _id: 'master' },
+            {
+                $set: {
+                    discordConfig,
+                    companyConfig,
+                    ocConfig,
+                    marketConfig,
+                    spyDatabase,
+                    userTracking,
+                    apiPoolConfig,
+                    updatedAt: new Date()
+                }
+            },
+            { upsert: true }
+        ).catch(e => console.error('[Mongo] Config save error:', e.message));
+    }
+}
 
-function saveSpyDb() { fs.writeFileSync('spy_db.json', JSON.stringify(spyDatabase)); }
-function saveTracking() { fs.writeFileSync('user_tracking.json', JSON.stringify(userTracking)); }
-function saveApiPool() { fs.writeFileSync('api_pool.json', JSON.stringify(apiPoolConfig)); }
-function saveCompanyConfig() { fs.writeFileSync('company_config.json', JSON.stringify(companyConfig)); }
+function saveDiscordConfig() { fs.writeFileSync('discord_config.json', JSON.stringify(discordConfig)); saveToMongo(); }
+function saveMarketConfig() { fs.writeFileSync('market_config.json', JSON.stringify(marketConfig)); saveToMongo(); }
+function saveOcConfig() { fs.writeFileSync('oc_config.json', JSON.stringify(ocConfig)); saveToMongo(); }
+
+function saveSpyDb() { fs.writeFileSync('spy_db.json', JSON.stringify(spyDatabase)); saveToMongo(); }
+function saveTracking() { fs.writeFileSync('user_tracking.json', JSON.stringify(userTracking)); saveToMongo(); }
+function saveApiPool() { fs.writeFileSync('api_pool.json', JSON.stringify(apiPoolConfig)); saveToMongo(); }
+function saveCompanyConfig() { fs.writeFileSync('company_config.json', JSON.stringify(companyConfig)); saveToMongo(); }
 
 async function sendChannelMessage(token, channelId, embed, content = "") {
     if (!token || !channelId) return { success: false, error: "Missing token or channel ID" };
@@ -1904,17 +2012,28 @@ app.get('/api/master-config', (req, res) => {
         discordConfig,
         companyConfig,
         ocConfig,
-        marketConfig
+        marketConfig,
+        apiKey: discordConfig.apiKey || companyConfig.apiKey || TORN_API_KEY || "",
+        globalBotToken: discordConfig.globalBotToken || "",
+        globalChannelId: discordConfig.globalChannelId || "",
+        myName: discordConfig.myName || "Agent",
+        enemyFacId: discordConfig.enemyFacId || "",
+        ffKey: discordConfig.ffKey || "",
+        tsKey: discordConfig.tsKey || "",
+        cpm: discordConfig.cpm || 12
     });
 });
 
 app.post('/api/master-config', (req, res) => {
-    const { apiKey, discordWebhook, companyWebhook, ocWebhook, myName, globalToggles } = req.body;
+    const { apiKey, discordWebhook, companyWebhook, ocWebhook, myName, globalToggles, ffKey, tsKey, enemyId } = req.body;
     
     // Save to discord config
     if (discordWebhook !== undefined) discordConfig.globalChannelId = discordWebhook;
-    if (apiKey !== undefined) discordConfig.apiKey = apiKey;
-    if (myName !== undefined) discordConfig.myName = myName; // Generic storage
+    if (apiKey !== undefined && apiKey !== '') discordConfig.apiKey = apiKey;
+    if (myName !== undefined) discordConfig.myName = myName;
+    if (enemyId !== undefined) discordConfig.enemyFacId = enemyId;
+    if (ffKey !== undefined) discordConfig.ffKey = ffKey;
+    if (tsKey !== undefined) discordConfig.tsKey = tsKey;
     
     if (globalToggles) {
         discordConfig.chainUnder90 = globalToggles.chain;
@@ -1929,19 +2048,43 @@ app.post('/api/master-config', (req, res) => {
     
     saveDiscordConfig();
     
-    // Also save API key to company config for redundancy if needed
-    if (apiKey !== undefined) { companyConfig.apiKey = apiKey; saveCompanyConfig(); }
+    if (apiKey !== undefined && apiKey !== '') {
+        companyConfig.apiKey = apiKey;
+        saveCompanyConfig();
+        try {
+            const { addKey } = require('./recruit/lib/apiKeyPool');
+            addKey(apiKey, discordConfig.factionId || 0, null);
+        } catch(e) {}
+    }
     
     res.json({ success: true });
 });
 
 app.post('/api/sync-configs', (req, res) => {
-    // Restores configs from the client's browser (acting as a persistent database)
-    const { company, discord, oc, market } = req.body;
+    const { company, discord, oc, market, apiKey, globalBotToken, globalChannelId, ffKey, tsKey, enemyFacId, myName, cpm } = req.body;
     if (company) { companyConfig = { ...companyConfig, ...company }; saveCompanyConfig(); }
     if (discord) { discordConfig = { ...discordConfig, ...discord }; saveDiscordConfig(); }
     if (oc) { ocConfig = { ...ocConfig, ...oc }; saveOcConfig(); }
     if (market) { marketConfig = { ...marketConfig, ...market }; saveMarketConfig(); }
+    
+    // Handle flat payload from localStorage master_faction_config
+    if (apiKey) {
+        discordConfig.apiKey = apiKey;
+        companyConfig.apiKey = apiKey;
+        try {
+            const { addKey } = require('./recruit/lib/apiKeyPool');
+            addKey(apiKey, discordConfig.factionId || 0, null);
+        } catch(e) {}
+    }
+    if (globalBotToken) discordConfig.globalBotToken = globalBotToken;
+    if (globalChannelId) discordConfig.globalChannelId = globalChannelId;
+    if (myName) discordConfig.myName = myName;
+    if (enemyFacId) discordConfig.enemyFacId = enemyFacId;
+    if (ffKey) discordConfig.ffKey = ffKey;
+    if (tsKey) discordConfig.tsKey = tsKey;
+    if (cpm) discordConfig.cpm = cpm;
+    
+    saveDiscordConfig();
     res.json({ success: true });
 });
 
