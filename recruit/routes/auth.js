@@ -48,7 +48,7 @@ router.post('/register', async (req, res) => {
                 },
                 $addToSet: { apiKeys: apiKey }, // Store plaintext key for pool reloading on restart
             },
-            { upsert: true, new: true }
+            { upsert: true, returnDocument: 'after' }
         );
 
         // Add to live API key pool
