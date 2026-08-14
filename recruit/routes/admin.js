@@ -463,4 +463,225 @@ router.post('/bulk-import', async (req, res) => {
     res.end();
 });
 
+/**
+ * GET /api/admin/ranked-wars
+ * Fetch user's faction ranked war history
+ */
+router.get('/ranked-wars', async (req, res) => {
+    try {
+        const key = await getKeyWait(10_000);
+        if (!key) return res.status(400).json({ error: "No API key available" });
+
+        const userRes = await fetch(`${TORN_BASE}/user/?selections=profile&key=${key}`);
+        const userData = await userRes.json();
+        if (userData.error) return res.status(400).json({ error: userData.error.error });
+
+        const myFacId = userData.faction?.faction_id;
+        if (!myFacId) return res.status(400).json({ error: "You are not in a faction" });
+
+        const facRes = await fetch(`${TORN_BASE}/faction/${myFacId}?selections=rankedwars&key=${key}`);
+        const facData = await facRes.json();
+        if (facData.error) return res.status(400).json({ error: facData.error.error });
+
+        const wars = facData.rankedwars || {};
+        const parsedWars = Object.entries(wars).map(([reportId, w]) => {
+            const factions = w.factions || {};
+            const enemyId = Object.keys(factions).find(id => id.toString() !== myFacId.toString());
+            const enemy = factions[enemyId] || {};
+            const friendly = factions[myFacId.toString()] || {};
+
+            return {
+                reportId,
+                start: w.war?.start ? new Date(w.war.start * 1000).toLocaleDateString() : 'Unknown',
+                winner: w.war?.winner,
+                isWinner: w.war?.winner === myFacId,
+                enemyFactionId: enemyId,
+                enemyName: enemy.name || 'Enemy Faction',
+                enemyScore: enemy.score || 0,
+                friendlyScore: friendly.score || 0,
+            };
+        });
+
+        res.json({ success: true, wars: parsedWars, myFactionId: myFacId });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * POST /api/admin/scan-war
+ * Scan members of a ranked war report to identify poachable players
+ */
+router.post('/scan-war', async (req, res) => {
+    const { reportId } = req.body;
+    if (!reportId) return res.status(400).json({ error: "Missing reportId" });
+
+    try {
+        const key = await getKeyWait(10_000);
+        if (!key) return res.status(400).json({ error: "No API key available" });
+
+        const reportRes = await fetch(`${TORN_BASE}/torn/${reportId}?selections=rankedwarreport&key=${key}`);
+        const reportData = await reportRes.json();
+        if (reportData.error) return res.status(400).json({ error: reportData.error.error });
+
+        const factions = reportData.rankedwarreport?.factions || {};
+        const facIds = Object.keys(factions);
+        if (facIds.length === 0) return res.status(400).json({ error: "No factions in war report" });
+
+        const userRes = await fetch(`${TORN_BASE}/user/?selections=profile&key=${key}`);
+        const userData = await userRes.json();
+        const myFacId = userData.faction?.faction_id?.toString();
+
+        const enemyFacId = facIds.find(id => id !== myFacId) || facIds[0];
+        const enemyData = factions[enemyFacId] || {};
+        const warMembers = enemyData.members || {};
+
+        const currentEnemyRes = await fetch(`${TORN_BASE}/faction/${enemyFacId}?selections=basic&key=${key}`);
+        const currentEnemyData = await currentEnemyRes.json();
+        const currentRoster = currentEnemyData.members || {};
+
+        const candidates = [];
+        const watchOps = [];
+
+        for (const [idStr, m] of Object.entries(warMembers)) {
+            const id = Number(idStr);
+            if (!id) continue;
+
+            const inCurrentRoster = !!currentRoster[idStr];
+            const currentPosition = currentRoster[idStr]?.position || 'None';
+            const isLeader = currentPosition.toLowerCase().match(/(leader|management|council|co-leader)/);
+
+            if (isLeader) continue;
+
+            const isFactionless = !inCurrentRoster;
+
+            candidates.push({
+                id,
+                name: m.name || '',
+                level: m.level || 1,
+                attacks: m.attacks || 0,
+                score: m.score || 0,
+                status: isFactionless ? 'Factionless (Left Faction)' : `In Faction (${currentPosition})`,
+                factionId: isFactionless ? 0 : Number(enemyFacId),
+                factionName: isFactionless ? '' : (enemyData.name || ''),
+                isFactionless,
+                enemyFaction: enemyData.name || '',
+            });
+
+            watchOps.push({
+                updateOne: {
+                    filter: { _id: id },
+                    update: {
+                        $setOnInsert: {
+                            _id: id,
+                            source: isFactionless ? 'war_poacher_free' : 'war_poacher',
+                            sourceFactionId: Number(enemyFacId),
+                            priority: isFactionless ? 0 : 1,
+                            addedAt: new Date(),
+                            checkCount: 0,
+                        }
+                    },
+                    upsert: true
+                }
+            });
+        }
+
+        if (watchOps.length > 0) await WatchPool.bulkWrite(watchOps, { ordered: false });
+
+        res.json({
+            success: true,
+            enemyName: enemyData.name || 'Enemy Faction',
+            enemyFactionId: enemyFacId,
+            candidates,
+        });
+
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * POST /api/admin/import-players
+ * Manual ID or profile URL bulk importer
+ */
+router.post('/import-players', async (req, res) => {
+    const { rawText } = req.body;
+    if (!rawText || typeof rawText !== 'string') return res.status(400).json({ error: "Missing player text" });
+
+    const matches = rawText.match(/\d+/g);
+    if (!matches || matches.length === 0) return res.status(400).json({ error: "No valid player IDs found in text" });
+
+    const playerIds = Array.from(new Set(matches.map(Number))).filter(id => id > 100 && id < 6000000);
+    if (playerIds.length === 0) return res.status(400).json({ error: "No valid player IDs" });
+
+    try {
+        const watchOps = playerIds.map(id => ({
+            updateOne: {
+                filter: { _id: id },
+                update: {
+                    $setOnInsert: {
+                        _id: id,
+                        source: 'manual_import',
+                        priority: 0,
+                        addedAt: new Date(),
+                        checkCount: 0,
+                    }
+                },
+                upsert: true
+            }
+        }));
+        await WatchPool.bulkWrite(watchOps, { ordered: false });
+
+        res.json({
+            success: true,
+            importedCount: playerIds.length,
+            message: `Successfully imported ${playerIds.length} players to the high-priority watch pool!`
+        });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * POST /api/admin/dibs
+ * Claim or release a recruit candidate
+ */
+router.post('/dibs', async (req, res) => {
+    const { playerId, agentName, action } = req.body;
+    if (!playerId) return res.status(400).json({ error: "Missing playerId" });
+
+    try {
+        if (action === 'release') {
+            await Player.updateOne({ _id: playerId }, { $set: { claimedBy: '', claimedAt: null } });
+            return res.json({ success: true, claimedBy: '', action: 'released' });
+        } else {
+            const agent = agentName || 'Agent';
+            await Player.updateOne({ _id: playerId }, { $set: { claimedBy: agent, claimedAt: new Date() } });
+            return res.json({ success: true, claimedBy: agent, action: 'claimed' });
+        }
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+/**
+ * POST /api/admin/generate-outreach
+ * Generate personalized recruit outreach message
+ */
+router.post('/generate-outreach', async (req, res) => {
+    const { playerName, level, daysInTorn, xanax, template, myName, myFactionName } = req.body;
+    const name = playerName || 'there';
+    const lvl = level || 'your level';
+    const sender = myName || 'Agent';
+    const fac = myFactionName || 'our faction';
+
+    let message = template || "Hey {name}, I noticed your rapid progression to level {level}. You'd be a great fit for {faction}. Let me know if you're looking for a new home! - {sender}";
+    message = message.replace(/{name}/g, name)
+                     .replace(/{level}/g, lvl)
+                     .replace(/{faction}/g, fac)
+                     .replace(/{sender}/g, sender);
+
+    res.json({ success: true, message });
+});
+
 module.exports = router;

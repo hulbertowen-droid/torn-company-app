@@ -17,7 +17,22 @@ const playerSchema = new mongoose.Schema({
     daysInTorn: { type: Number, default: 0 },      // Account age in days
     gender: { type: String, default: '' },
     life: { type: Number, default: 0 },
-    progressionRate: { type: Number, default: 0 },  // level / daysInTorn — measure of dedication
+    progressionRate: { type: Number, default: 0 },  // level / daysInTorn
+    
+    // Combat & Activity Intel
+    xanax: { type: Number, default: 0 },
+    refills: { type: Number, default: 0 },
+    se: { type: Number, default: 0 },
+    playtime: { type: Number, default: 0 },
+    estStats: { type: mongoose.Schema.Types.Mixed, default: null },
+    scoutGrade: { type: String, default: 'C' },     // S, A, B, C, D, F
+    recruitScore: { type: Number, default: 0 },
+
+    // Dibs / Claims
+    claimedBy: { type: String, default: '' },
+    claimedAt: { type: Date, default: null },
+    notes: { type: String, default: '' },
+
     // Refresh scheduling
     refreshedAt: { type: Date, default: null },
     nextRefreshAt: { type: Date, default: () => new Date() },

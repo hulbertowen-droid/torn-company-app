@@ -169,6 +169,11 @@ global.turboTimeout = null;
 global.turboStats = { found: 0, checked: 0 };
 app.use(cors());
 app.use(express.json());
+
+app.get('/recruitment.html', (req, res) => {
+    res.redirect(301, '/recruit/');
+});
+
 app.use(express.static('public', {
     setHeaders: (res, path) => {
         if (path.endsWith('.html')) {
