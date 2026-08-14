@@ -11,7 +11,9 @@ const TORN_BASE = 'https://api.torn.com';
 const CONFIG_COL = 'seeder_config';
 
 let broadcastFn = null;
+let liveGlobalScannerProgress = 1;
 function setBroadcast(fn) { broadcastFn = fn; }
+function getGlobalScannerProgress() { return liveGlobalScannerProgress; }
 
 /**
  * Quality Recruitment Candidate Filter
@@ -168,6 +170,7 @@ async function globalFactionLoop() {
         try {
             const doc = await mongoose.connection.db.collection(CONFIG_COL).findOne({ _id: 'global_faction' });
             currentFid = doc?.value || 1;
+            liveGlobalScannerProgress = currentFid;
         } catch (err) {
             console.error('[GlobalScanner] Failed to read progress:', err.message);
             await new Promise(r => setTimeout(r, 5000));
@@ -265,6 +268,14 @@ async function globalFactionLoop() {
         // Always advance cursor, even on error — never get stuck on one faction
         try {
             const nextFid = currentFid >= MAX_FACTION_ID ? 1 : currentFid + 1;
+            liveGlobalScannerProgress = nextFid;
+            
+            if (broadcastFn) {
+                try {
+                    broadcastFn({ type: 'scanner_progress', factionId: nextFid });
+                } catch(e) {}
+            }
+
             await mongoose.connection.db.collection(CONFIG_COL).updateOne(
                 { _id: 'global_faction' },
                 { $set: { value: nextFid } },
@@ -448,4 +459,4 @@ async function bountyBoardLoop() {
     }
 }
 
-module.exports = { startSeederWorker, setBroadcast };
+module.exports = { startSeederWorker, setBroadcast, getGlobalScannerProgress };

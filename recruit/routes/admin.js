@@ -7,6 +7,7 @@ const WatchPool = require('../db/models/WatchPool');
 const { poolSize, poolStats, getKeyWait } = require('../lib/apiKeyPool');
 const { getPlayerRefreshQueue, scheduleRefresh } = require('../queues/playerQueue');
 const { fetchPlayer, parsePlayer } = require('../lib/tornClient');
+const { getGlobalScannerProgress } = require('../workers/seederWorker');
 
 const TORN_BASE = 'https://api.torn.com';
 
@@ -47,7 +48,7 @@ router.get('/status', async (req, res) => {
             db ? db.collection('seeder_config').findOne({ _id: 'global_faction' }).catch(() => null) : Promise.resolve(null),
         ]);
 
-        const globalScannerProgress = doc?.value || 1;
+        const globalScannerProgress = getGlobalScannerProgress() || doc?.value || 1;
 
         return res.json({
             success: true,
