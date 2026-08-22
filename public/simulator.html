@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Combat Simulator | Owen's Faction Tools</title>
+    <link rel="stylesheet" href="/global.css">
+    <style>
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 25px 35px; height: 100vh; box-sizing: border-box; }
+        .sim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+        @media (max-width: 900px) { .sim-grid { grid-template-columns: 1fr; } }
+        .stat-input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 10px; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-group label { font-size: 0.76em; color: var(--text-dim); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
+        .form-group input, .form-group select { background: var(--item); border: 1px solid var(--border); color: var(--text-main); padding: 9px 12px; border-radius: 8px; font-family: inherit; font-size: 0.9em; transition: 0.2s; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(88,166,255,0.15); }
+        .btn-sim { background: linear-gradient(135deg, #ff4757, #ff6b81); color: white; border: none; padding: 14px 28px; border-radius: 10px; font-size: 1.05em; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 20px rgba(255,71,87,0.35); display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; font-family: inherit; }
+        .btn-sim:hover { transform: translateY(-2px); box-shadow: 0 6px 25px rgba(255,71,87,0.5); }
+        .res-hero { background: linear-gradient(135deg, rgba(13,17,23,0.95), rgba(22,27,34,0.95)); border: 1px solid var(--border); border-radius: 14px; padding: 24px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-around; flex-wrap: wrap; gap: 20px; }
+        .win-rate-badge { font-size: 3.5em; font-weight: 900; line-height: 1; }
+        .win-rate-badge.danger { color: var(--red); text-shadow: 0 0 25px rgba(255,71,87,0.4); }
+        .win-rate-badge.moderate { color: var(--gold); text-shadow: 0 0 25px rgba(255,165,2,0.4); }
+        .win-rate-badge.safe { color: var(--green); text-shadow: 0 0 25px rgba(46,213,115,0.4); }
+        .kpi-stat-box { background: var(--item); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; min-width: 140px; text-align: center; }
+        .kpi-stat-box .kpi-num { font-size: 1.6em; font-weight: 900; color: var(--text-main); margin-top: 4px; }
+        .kpi-stat-box .kpi-lbl { font-size: 0.72em; color: var(--text-dim); text-transform: uppercase; font-weight: 700; }
+        .advice-card { background: rgba(88,166,255,0.06); border: 1px solid rgba(88,166,255,0.25); border-radius: 10px; padding: 16px 20px; }
+        .advice-title { font-weight: 800; font-size: 0.9em; color: var(--blue); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+        .advice-item { font-size: 0.85em; color: var(--text-main); margin-bottom: 6px; display: flex; align-items: flex-start; gap: 8px; line-height: 1.5; }
+    </style>
+</head>
+<body>
+    
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <div class="logo-icon">⚔️</div>
+                <div class="logo-text">
+                    <span class="title">OWEN'S FACTION TOOLS</span>
+                    <span class="subtitle">Elite Warfare Suite</span>
+                </div>
+            </div>
+        </div>
+                <div class="nav-items">
+            <a href="/" class="nav-link ">📡 <span class="nav-text">Live Warboard</span></a>
+            <a href="/simulator.html" class="nav-link active">🧠 <span class="nav-text">Combat Simulator</span></a>
+            <a href="/weapons.html" class="nav-link ">💎 <span class="nav-text">RW Weapon Appraiser</span></a>
+            <a href="/hitman.html" class="nav-link ">🎯 <span class="nav-text">Hitman &amp; Whale Radar</span></a>
+            <a href="/forensics.html" class="nav-link ">🕵️ <span class="nav-text">Attack Forensics</span></a>
+            <a href="/chain.html" class="nav-link ">🔗 <span class="nav-text">Chain Watcher</span></a>
+            <a href="/payout.html" class="nav-link ">💰 <span class="nav-text">Payouts</span></a>
+            <a href="/dashboard.html" class="nav-link ">🛡️ <span class="nav-text">Dashboard</span></a>
+            <a href="/members.html" class="nav-link ">👥 <span class="nav-text">Members</span></a>
+            <a href="/recruit/" class="nav-link ">🎯 <span class="nav-text">Recruit Platform</span></a>
+            <a href="/travel.html" class="nav-link ">✈️ <span class="nav-text">Travel Calculator</span></a>
+            <a href="/bazaar.html" class="nav-link ">🛒 <span class="nav-text">Bazaar Watcher</span></a>
+            <a href="/discord.html" class="nav-link ">📢 <span class="nav-text">Discord Alerts</span></a>
+            <a href="/oc.html" class="nav-link ">💼 <span class="nav-text">OC Manager</span></a>
+            <a href="/oc-optimizer.html" class="nav-link ">📊 <span class="nav-text">OC 2.0 Optimizer</span></a>
+            <div style="margin-top: auto; padding: 0 4px;">
+                <div style="height:1px; background:var(--border); margin: 10px 0;"></div>
+                <div style="font-size:0.65em; color:var(--text-dim); text-transform:uppercase; letter-spacing:2px; padding:0 8px 6px; font-weight:700;">Company</div>
+            </div>
+            <a href="/company.html" class="nav-link " style="background:rgba(0,206,201,0.08);border:1px solid rgba(0,206,201,0.25);color:var(--teal);">🏢 <span class="nav-text">Company Tools</span></a>
+            <div style="padding: 0 4px; margin-top:8px;"><div style="height:1px; background:var(--border);"></div></div>
+            <a href="/gamble.html" class="nav-link ">🎰 <span class="nav-text">Casino Tools</span></a>
+            <a onclick="openSettings()" class="nav-link" style="cursor:pointer; margin-top:6px;">⚙️ <span class="nav-text">Settings</span></a>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <div class="page-header" style="margin-bottom:20px;">
+            <div class="page-title">
+                <div class="live-dot" style="background:var(--blue);box-shadow:0 0 10px var(--blue);"></div>
+                🧠 AI Combat Simulator &amp; 1v1 Odds Engine
+            </div>
+            <div style="font-size:0.8em;color:var(--text-dim);">Simulate 500 rounds of combat with weapons, temp items, and armor mitigation</div>
+        </div>
+
+        <div class="sim-grid">
+            <!-- ATTACKER -->
+            <div class="card">
+                <div class="card-header" style="border-bottom:1px solid rgba(88,166,255,0.2);display:flex;justify-content:space-between;align-items:center;padding:14px 20px;">
+                    <div class="card-title" style="color:var(--blue);font-weight:800;text-transform:uppercase;">⚔️ Attacker (You)</div>
+                    <button onclick="loadMyProfileStats()" style="background:rgba(88,166,255,0.1);border:1px solid var(--blue);color:var(--blue);padding:4px 10px;border-radius:6px;font-size:0.72em;font-weight:700;cursor:pointer;font-family:inherit;">Fetch My Stats</button>
+                </div>
+                <div class="card-body" style="padding:18px 22px;">
+                    <div class="stat-input-grid">
+                        <div class="form-group"><label>💪 Strength</label><input type="number" id="a-str" value="25000000"></div>
+                        <div class="form-group"><label>⚡ Speed</label><input type="number" id="a-spd" value="30000000"></div>
+                        <div class="form-group"><label>🛡️ Defense</label><input type="number" id="a-def" value="20000000"></div>
+                        <div class="form-group"><label>🎯 Dexterity</label><input type="number" id="a-dex" value="25000000"></div>
+                    </div>
+                    <div class="stat-input-grid" style="margin-top:14px;">
+                        <div class="form-group"><label>🔫 Weapon DMG</label><input type="number" id="a-wep-dmg" value="68"></div>
+                        <div class="form-group"><label>🎯 Weapon ACC</label><input type="number" id="a-wep-acc" value="58"></div>
+                        <div class="form-group"><label>💣 Temp Weapon</label>
+                            <select id="a-temp">
+                                <option value="None">None</option>
+                                <option value="Smoke Grenade">Smoke Grenade (-50% Spd/Dex)</option>
+                                <option value="Flashbang">Flashbang (-50% Str/Dex)</option>
+                                <option value="Tear Gas">Tear Gas (-75% Def/Dex)</option>
+                                <option value="Pepper Spray">Pepper Spray (Blind/Stun)</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>🛡️ Armor Set</label>
+                            <select id="a-armor">
+                                <option value="Combat">Combat Armor (25% Red.)</option>
+                                <option value="Riot">Riot Armor (35% Red.)</option>
+                                <option value="Dune">Dune Armor (40% Red.)</option>
+                                <option value="Assault">Assault Armor (48% Red.)</option>
+                                <option value="Leather">Leather Armor (12% Red.)</option>
+                                <option value="None">No Armor (0% Red.)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DEFENDER -->
+            <div class="card">
+                <div class="card-header" style="border-bottom:1px solid rgba(255,71,87,0.2);display:flex;justify-content:space-between;align-items:center;padding:14px 20px;">
+                    <div class="card-title" style="color:var(--red);font-weight:800;text-transform:uppercase;">🎯 Defender (Target)</div>
+                    <div style="display:flex;gap:6px;">
+                        <input type="text" id="target-id-input" placeholder="Torn ID" style="width:90px;padding:3px 8px;font-size:0.75em;background:var(--item);border:1px solid var(--border);color:white;border-radius:4px;font-family:inherit;">
+                        <button onclick="fetchTargetSpy()" style="background:rgba(255,71,87,0.1);border:1px solid var(--red);color:var(--red);padding:4px 8px;border-radius:6px;font-size:0.72em;font-weight:700;cursor:pointer;font-family:inherit;">Spy Lookup</button>
+                    </div>
+                </div>
+                <div class="card-body" style="padding:18px 22px;">
+                    <div class="stat-input-grid">
+                        <div class="form-group"><label>💪 Strength</label><input type="number" id="d-str" value="20000000"></div>
+                        <div class="form-group"><label>⚡ Speed</label><input type="number" id="d-spd" value="20000000"></div>
+                        <div class="form-group"><label>🛡️ Defense</label><input type="number" id="d-def" value="20000000"></div>
+                        <div class="form-group"><label>🎯 Dexterity</label><input type="number" id="d-dex" value="20000000"></div>
+                    </div>
+                    <div class="stat-input-grid" style="margin-top:14px;">
+                        <div class="form-group"><label>🔫 Weapon DMG</label><input type="number" id="d-wep-dmg" value="62"></div>
+                        <div class="form-group"><label>🎯 Weapon ACC</label><input type="number" id="d-wep-acc" value="52"></div>
+                        <div class="form-group"><label>💣 Temp Weapon</label>
+                            <select id="d-temp">
+                                <option value="None">None</option>
+                                <option value="Smoke Grenade">Smoke Grenade (-50% Spd/Dex)</option>
+                                <option value="Flashbang">Flashbang (-50% Str/Dex)</option>
+                                <option value="Tear Gas">Tear Gas (-75% Def/Dex)</option>
+                                <option value="Pepper Spray">Pepper Spray (Blind/Stun)</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>🛡️ Armor Set</label>
+                            <select id="d-armor">
+                                <option value="Combat">Combat Armor (25% Red.)</option>
+                                <option value="Riot">Riot Armor (35% Red.)</option>
+                                <option value="Dune">Dune Armor (40% Red.)</option>
+                                <option value="Assault">Assault Armor (48% Red.)</option>
+                                <option value="Leather">Leather Armor (12% Red.)</option>
+                                <option value="None">No Armor (0% Red.)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button class="btn-sim" onclick="runSimulation()">⚡ Run 500-Round AI Combat Simulation</button>
+
+        <div id="sim-results" style="display:none;margin-top:28px;">
+            <div class="res-hero">
+                <div style="text-align:center;">
+                    <div style="font-size:0.75em;color:var(--text-dim);text-transform:uppercase;font-weight:700;letter-spacing:1px;margin-bottom:6px;">Estimated Win Probability</div>
+                    <div id="res-win-rate" class="win-rate-badge safe">85.4%</div>
+                </div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
+                    <div class="kpi-stat-box"><div class="kpi-lbl">Avg Turns to Win</div><div id="res-turns-win" class="kpi-num" style="color:var(--green);">3.2</div></div>
+                    <div class="kpi-stat-box"><div class="kpi-lbl">Avg DMG per Hit</div><div id="res-dmg-hit" class="kpi-num" style="color:var(--blue);">842</div></div>
+                    <div class="kpi-stat-box"><div class="kpi-lbl">Your Hit Accuracy</div><div id="res-hit-acc" class="kpi-num" style="color:var(--gold);">78.4%</div></div>
+                    <div class="kpi-stat-box"><div class="kpi-lbl">Target DMG to You</div><div id="res-def-dmg" class="kpi-num" style="color:var(--red);">310</div></div>
+                </div>
+            </div>
+
+            <div class="advice-card">
+                <div class="advice-title">🎯 Tactical Loadout &amp; Strategy Recommendations</div>
+                <div id="res-advice-list"></div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        async function runSimulation() {
+            const payload = {
+                attackerStr: document.getElementById('a-str').value,
+                attackerSpd: document.getElementById('a-spd').value,
+                attackerDef: document.getElementById('a-def').value,
+                attackerDex: document.getElementById('a-dex').value,
+                attackerWeaponDmg: document.getElementById('a-wep-dmg').value,
+                attackerWeaponAcc: document.getElementById('a-wep-acc').value,
+                attackerTemp: document.getElementById('a-temp').value,
+                attackerArmor: document.getElementById('a-armor').value,
+                defenderStr: document.getElementById('d-str').value,
+                defenderSpd: document.getElementById('d-spd').value,
+                defenderDef: document.getElementById('d-def').value,
+                defenderDex: document.getElementById('d-dex').value,
+                defenderWeaponDmg: document.getElementById('d-wep-dmg').value,
+                defenderWeaponAcc: document.getElementById('d-wep-acc').value,
+                defenderTemp: document.getElementById('d-temp').value,
+                defenderArmor: document.getElementById('d-armor').value,
+                rounds: 500
+            };
+
+            try {
+                const res = await fetch('/api/simulate-combat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!data.success) return alert('Simulation error: ' + (data.error || 'Unknown'));
+
+                document.getElementById('sim-results').style.display = 'block';
+                const winEl = document.getElementById('res-win-rate');
+                winEl.innerText = data.winRate + '%';
+                winEl.className = data.winRate >= 80 ? 'win-rate-badge safe' : (data.winRate >= 50 ? 'win-rate-badge moderate' : 'win-rate-badge danger');
+
+                document.getElementById('res-turns-win').innerText = data.avgTurnsWin || '—';
+                document.getElementById('res-dmg-hit').innerText = (data.avgAtkDmgPerHit || 0).toLocaleString();
+                document.getElementById('res-hit-acc').innerText = (data.atkHitAcc || 0) + '%';
+                document.getElementById('res-def-dmg').innerText = (data.avgDefDmgPerHit || 0).toLocaleString();
+
+                const adviceList = document.getElementById('res-advice-list');
+                adviceList.innerHTML = (data.tacticalAdvice || []).map(adv => `<div class="advice-item">${adv}</div>`).join('');
+                document.getElementById('sim-results').scrollIntoView({ behavior: 'smooth' });
+            } catch (e) {
+                alert('Simulation request failed: ' + e.message);
+            }
+        }
+
+        async function fetchTargetSpy() {
+            const tId = document.getElementById('target-id-input').value.trim();
+            if (!tId) return alert('Please enter a target ID.');
+            try {
+                const res = await fetch('/api/spy/' + tId);
+                const data = await res.json();
+                if (data.data && data.data.total) {
+                    const str = data.data.strength || Math.round(data.data.total / 4);
+                    const spd = data.data.speed || Math.round(data.data.total / 4);
+                    const def = data.data.defense || Math.round(data.data.total / 4);
+                    const dex = data.data.dexterity || Math.round(data.data.total / 4);
+                    document.getElementById('d-str').value = str;
+                    document.getElementById('d-spd').value = spd;
+                    document.getElementById('d-def').value = def;
+                    document.getElementById('d-dex').value = dex;
+                    alert('Loaded spy stats for ' + (data.data.name || tId) + ' (Total: ' + data.data.total.toLocaleString() + ')');
+                } else {
+                    alert('No exact spy report found for [' + tId + ']. You can input estimated stats manually.');
+                }
+            } catch (e) {
+                alert('Spy lookup error: ' + e.message);
+            }
+        }
+
+        async function loadMyProfileStats() {
+            const key = localStorage.getItem('warboard_apikey');
+            if (!key) return alert('Please configure your API key in Settings first.');
+            try {
+                const res = await fetch('https://api.torn.com/user/?selections=battlestats,profile&key=' + key);
+                const d = await res.json();
+                if (d.error) return alert('Torn API error: ' + d.error.error);
+                if (d.strength) document.getElementById('a-str').value = d.strength;
+                if (d.speed) document.getElementById('a-spd').value = d.speed;
+                if (d.defense) document.getElementById('a-def').value = d.defense;
+                if (d.dexterity) document.getElementById('a-dex').value = d.dexterity;
+                alert('Loaded battle stats for ' + d.name + '! Total: ' + ((d.strength||0)+(d.speed||0)+(d.defense||0)+(d.dexterity||0)).toLocaleString());
+            } catch (e) {
+                alert('Failed to fetch user battle stats: ' + e.message);
+            }
+        }
+    </script>
+</body>
+</html>

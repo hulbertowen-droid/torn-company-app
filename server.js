@@ -2483,6 +2483,408 @@ app.post('/api/save-company-config', (req, res) => {
     res.json({ success: true });
 });
 
+// =============================================================================
+// --- AI COMBAT SIMULATOR & 1v1 ODDS ENGINE ---
+// =============================================================================
+app.post('/api/simulate-combat', (req, res) => {
+    try {
+        const {
+            attackerStr = 1000000, attackerSpd = 1000000, attackerDef = 1000000, attackerDex = 1000000,
+            defenderStr = 1000000, defenderSpd = 1000000, defenderDef = 1000000, defenderDex = 1000000,
+            attackerWeaponDmg = 65, attackerWeaponAcc = 55, attackerTemp = "None", attackerArmor = "Combat",
+            defenderWeaponDmg = 60, defenderWeaponAcc = 50, defenderTemp = "None", defenderArmor = "Combat",
+            rounds = 500
+        } = req.body;
+
+        const aStrRaw = Math.max(1, Number(attackerStr) || 1);
+        const aSpdRaw = Math.max(1, Number(attackerSpd) || 1);
+        const aDefRaw = Math.max(1, Number(attackerDef) || 1);
+        const aDexRaw = Math.max(1, Number(attackerDex) || 1);
+
+        const dStrRaw = Math.max(1, Number(defenderStr) || 1);
+        const dSpdRaw = Math.max(1, Number(defenderSpd) || 1);
+        const dDefRaw = Math.max(1, Number(defenderDef) || 1);
+        const dDexRaw = Math.max(1, Number(defenderDex) || 1);
+
+        const aWepDmg = Math.max(10, Number(attackerWeaponDmg) || 60);
+        const aWepAcc = Math.max(10, Math.min(100, Number(attackerWeaponAcc) || 50));
+        const dWepDmg = Math.max(10, Number(defenderWeaponDmg) || 60);
+        const dWepAcc = Math.max(10, Math.min(100, Number(defenderWeaponAcc) || 50));
+
+        let wins = 0, losses = 0, draws = 0;
+        let totalTurnsToWin = 0, totalTurnsToLose = 0;
+        let totalAttackerDmg = 0, totalDefenderDmg = 0;
+        let totalAttackerHits = 0, totalAttackerAttacks = 0;
+        let totalDefenderHits = 0, totalDefenderAttacks = 0;
+
+        const simCount = Math.min(1000, Math.max(100, Number(rounds) || 500));
+
+        for (let r = 0; r < simCount; r++) {
+            let aStr = aStrRaw, aSpd = aSpdRaw, aDef = aDefRaw, aDex = aDexRaw;
+            let dStr = dStrRaw, dSpd = dSpdRaw, dDef = dDefRaw, dDex = dDexRaw;
+
+            if (attackerTemp === "Smoke Grenade") { dSpd *= 0.5; dDex *= 0.5; }
+            else if (attackerTemp === "Flashbang") { dStr *= 0.5; dDex *= 0.5; }
+            else if (attackerTemp === "Tear Gas") { dDef *= 0.25; dDex *= 0.25; }
+            else if (attackerTemp === "Pepper Spray") { dDex *= 0.2; }
+
+            if (defenderTemp === "Smoke Grenade") { aSpd *= 0.5; aDex *= 0.5; }
+            else if (defenderTemp === "Flashbang") { aStr *= 0.5; aDex *= 0.5; }
+            else if (defenderTemp === "Tear Gas") { aDef *= 0.25; aDex *= 0.25; }
+            else if (defenderTemp === "Pepper Spray") { aDex *= 0.2; }
+
+            const armorMap = { "None": 1.0, "Leather": 0.88, "Combat": 0.75, "Riot": 0.65, "Dune": 0.60, "Assault": 0.52 };
+            const aArmorMit = armorMap[attackerArmor] || 0.75;
+            const dArmorMit = armorMap[defenderArmor] || 0.75;
+
+            const aHitChance = Math.min(0.95, Math.max(0.05, 0.5 * (1 + (aSpd - dDex) / (aSpd + dDex)) * (aWepAcc / 50)));
+            const dHitChance = Math.min(0.95, Math.max(0.05, 0.5 * (1 + (dSpd - aDex) / (dSpd + aDex)) * (dWepAcc / 50)));
+
+            let aLife = 2500, dLife = 2500;
+            let turn = 0;
+            const maxTurns = 25;
+
+            while (aLife > 0 && dLife > 0 && turn < maxTurns) {
+                turn++;
+                totalAttackerAttacks++;
+                if (Math.random() < aHitChance) {
+                    totalAttackerHits++;
+                    const isCrit = Math.random() < 0.15;
+                    const variance = 0.85 + Math.random() * 0.3;
+                    const dmg = Math.max(1, Math.round(70 * Math.pow(aStr / dDef, 0.4) * (aWepDmg / 50) * variance * dArmorMit * (isCrit ? 1.5 : 1.0)));
+                    dLife -= dmg;
+                    totalAttackerDmg += dmg;
+                }
+                if (dLife <= 0) break;
+
+                totalDefenderAttacks++;
+                if (Math.random() < dHitChance) {
+                    totalDefenderHits++;
+                    const isCrit = Math.random() < 0.15;
+                    const variance = 0.85 + Math.random() * 0.3;
+                    const dmg = Math.max(1, Math.round(70 * Math.pow(dStr / aDef, 0.4) * (dWepDmg / 50) * variance * aArmorMit * (isCrit ? 1.5 : 1.0)));
+                    aLife -= dmg;
+                    totalDefenderDmg += dmg;
+                }
+            }
+
+            if (dLife <= 0 && aLife > 0) { wins++; totalTurnsToWin += turn; }
+            else if (aLife <= 0) { losses++; totalTurnsToLose += turn; }
+            else { draws++; }
+        }
+
+        const winRate = parseFloat(((wins / simCount) * 100).toFixed(1));
+        const lossRate = parseFloat(((losses / simCount) * 100).toFixed(1));
+        const drawRate = parseFloat(((draws / simCount) * 100).toFixed(1));
+        const avgTurnsWin = wins > 0 ? parseFloat((totalTurnsToWin / wins).toFixed(1)) : 0;
+        const avgTurnsLoss = losses > 0 ? parseFloat((totalTurnsToLose / losses).toFixed(1)) : 0;
+        const avgAtkDmgPerHit = totalAttackerHits > 0 ? Math.round(totalAttackerDmg / totalAttackerHits) : 0;
+        const avgDefDmgPerHit = totalDefenderHits > 0 ? Math.round(totalDefenderDmg / totalDefenderHits) : 0;
+        const atkHitAcc = totalAttackerAttacks > 0 ? parseFloat(((totalAttackerHits / totalAttackerAttacks) * 100).toFixed(1)) : 0;
+        const defHitAcc = totalDefenderAttacks > 0 ? parseFloat(((totalDefenderHits / totalDefenderAttacks) * 100).toFixed(1)) : 0;
+
+        let tacticalAdvice = [];
+        const strRatio = aStrRaw / dDefRaw;
+        const spdRatio = aSpdRaw / dDexRaw;
+        const defRatio = aDefRaw / dStrRaw;
+
+        if (winRate >= 85) tacticalAdvice.push("🔥 Overwhelming Advantage: Fast takedown likely.");
+        else if (winRate >= 55) tacticalAdvice.push("⚡ Moderate Advantage: Fair fight. Bring high damage weapon.");
+        else tacticalAdvice.push("⚠️ High Risk: Enemy has stat or gear superiority.");
+
+        if (spdRatio < 0.6) tacticalAdvice.push("🎯 Accuracy Warning: Your speed is outmatched. Throw Smoke Grenade or Pepper Spray to land hits.");
+        if (strRatio < 0.5) tacticalAdvice.push("🛡️ Armor Piercing Needed: Enemy defense is soaking damage. Throw Tear Gas to drop their defense.");
+        if (defRatio < 0.5) tacticalAdvice.push("💥 Defense Alert: Enemy hits hard. Equip Assault / Riot armor and throw Flashbang.");
+
+        res.json({
+            success: true,
+            simCount,
+            winRate,
+            lossRate,
+            drawRate,
+            avgTurnsWin,
+            avgTurnsLoss,
+            avgAtkDmgPerHit,
+            avgDefDmgPerHit,
+            atkHitAcc,
+            defHitAcc,
+            tacticalAdvice
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// =============================================================================
+// --- RANKED WAR WEAPON APPRAISER & META EVALUATOR ---
+// =============================================================================
+app.post('/api/weapon-valuator', (req, res) => {
+    try {
+        const { weaponName = "ArmaLite M-15A2", category = "Primary", quality = "Yellow", bonus1 = "Bloodlust", bonus1Val = 25, bonus2 = "None", bonus2Val = 0, damage = 65, accuracy = 55 } = req.body;
+
+        const bonusTiers = {
+            "Bloodlust": { tier: "S+", weight: 1.8, desc: "Restores life on hit. God-tier sustain." },
+            "Warlord": { tier: "S+", weight: 1.75, desc: "Increases respect earned in faction wars." },
+            "Revitalize": { tier: "S+", weight: 1.7, desc: "Restores energy upon defeating opponents." },
+            "Specialist": { tier: "S", weight: 1.5, desc: "Massive damage bonus to specific weapon class." },
+            "Expose": { tier: "S", weight: 1.45, desc: "Increases crit chance against the target." },
+            "Execute": { tier: "S", weight: 1.4, desc: "Instantly hospitalizes low-health enemies." },
+            "Eviscerate": { tier: "S", weight: 1.35, desc: "Extends enemy hospital duration substantially." },
+            "Powerful": { tier: "A", weight: 1.25, desc: "Flat percentage increase to all damage dealt." },
+            "Quicken": { tier: "A", weight: 1.2, desc: "Substantially boosts your speed stat." },
+            "Penetrate": { tier: "A", weight: 1.15, desc: "Ignores a portion of enemy armor." },
+            "Deadeye": { tier: "A", weight: 1.15, desc: "Boosts critical hit damage multiplier." },
+            "Plunder": { tier: "A", weight: 1.1, desc: "Increases cash mugged from enemy wallet." },
+            "Freeze": { tier: "A", weight: 1.1, desc: "Reduces enemy speed to 0 for upcoming turns." },
+            "Double-Edged": { tier: "B", weight: 1.0, desc: "High damage buff at cost of self-damage." },
+            "Disarm": { tier: "B", weight: 0.95, desc: "Forces enemy to temporarily drop primary." },
+            "Irradiated": { tier: "B", weight: 0.9, desc: "Causes radiation sickness & hosp time." },
+            "Puncture": { tier: "B", weight: 0.85, desc: "Applies bleeding damage over turns." },
+            "Slow": { tier: "B", weight: 0.8, desc: "Reduces enemy speed significantly." },
+            "Weaken": { tier: "B", weight: 0.8, desc: "Reduces enemy strength." },
+            "Smurf": { tier: "C", weight: 0.6, desc: "Damage bonus against higher-level players." },
+            "Fury": { tier: "C", weight: 0.55, desc: "Damage bonus when health is low." },
+            "None": { tier: "—", weight: 0, desc: "No bonus." }
+        };
+
+        const b1Info = bonusTiers[bonus1] || { tier: "B", weight: 0.8, desc: "Standard combat bonus." };
+        const b2Info = bonusTiers[bonus2] || { tier: "—", weight: 0, desc: "None" };
+
+        let baseValMillions = 40;
+        if (quality === "Orange") baseValMillions = 150;
+        if (quality === "Red") baseValMillions = 600;
+
+        const dmgBonusMultiplier = Math.max(0.7, Number(damage) / 60);
+        const accBonusMultiplier = Math.max(0.7, Number(accuracy) / 50);
+
+        const b1Contribution = (b1Info.weight * (Number(bonus1Val) / 25)) * 120;
+        const b2Contribution = (b2Info.weight * (Number(bonus2Val) / 25)) * 140;
+
+        let estimatedValue = Math.round(baseValMillions * dmgBonusMultiplier * accBonusMultiplier + b1Contribution + b2Contribution);
+        if (quality === "Red" && b1Info.tier.startsWith("S")) estimatedValue = Math.round(estimatedValue * 1.5);
+
+        const bargainPrice = Math.round(estimatedValue * 0.8);
+        const premiumPrice = Math.round(estimatedValue * 1.25);
+        const dpsRating = Math.round((Number(damage) * (Number(accuracy) / 100)) * (1 + (b1Info.weight * 0.2)));
+
+        let overallTier = "B";
+        if (b1Info.tier === "S+" || (b1Info.tier === "S" && quality !== "Yellow")) overallTier = "S+";
+        else if (b1Info.tier === "S" || b1Info.tier === "A") overallTier = "A";
+        else if (b1Info.tier === "C") overallTier = "C";
+
+        res.json({
+            success: true,
+            weaponName,
+            quality,
+            category,
+            overallTier,
+            dpsRating,
+            estimatedValueMillions: estimatedValue,
+            bargainPriceMillions: bargainPrice,
+            premiumPriceMillions: premiumPrice,
+            bonus1Details: { name: bonus1, value: bonus1Val, tier: b1Info.tier, desc: b1Info.desc },
+            bonus2Details: { name: bonus2, value: bonus2Val, tier: b2Info.tier, desc: b2Info.desc },
+            verdict: overallTier.startsWith("S") ? "👑 God-Roll / Elite Meta Weapon" : (overallTier === "A" ? "⚔️ High-Tier War Asset" : "🛡️ Viable Mid-Tier Weapon")
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// =============================================================================
+// --- HITMAN & WHALE RADAR ---
+// =============================================================================
+let hitmanTargets = [];
+try {
+    if (fs.existsSync('hitman_targets.json')) {
+        hitmanTargets = JSON.parse(fs.readFileSync('hitman_targets.json', 'utf8'));
+    }
+} catch (e) {}
+function saveHitmanTargets() { fs.writeFileSync('hitman_targets.json', JSON.stringify(hitmanTargets, null, 2)); }
+
+app.get('/api/hitman/targets', (req, res) => {
+    res.json({ success: true, targets: hitmanTargets });
+});
+
+app.post('/api/hitman/add', (req, res) => {
+    const { id, name, notes, bounty, alertSound } = req.body;
+    if (!id) return res.status(400).json({ error: "Missing player ID" });
+    const existingIdx = hitmanTargets.findIndex(t => t.id.toString() === id.toString());
+    const targetObj = {
+        id: id.toString(),
+        name: name || `Target #${id}`,
+        notes: notes || "",
+        bounty: Number(bounty) || 0,
+        alertSound: alertSound || "ping",
+        addedAt: Date.now()
+    };
+    if (existingIdx >= 0) hitmanTargets[existingIdx] = targetObj;
+    else hitmanTargets.push(targetObj);
+    saveHitmanTargets();
+    res.json({ success: true, targets: hitmanTargets });
+});
+
+app.post('/api/hitman/remove', (req, res) => {
+    const { id } = req.body;
+    hitmanTargets = hitmanTargets.filter(t => t.id.toString() !== (id || '').toString());
+    saveHitmanTargets();
+    res.json({ success: true, targets: hitmanTargets });
+});
+
+app.get('/api/hitman/status', async (req, res) => {
+    try {
+        const key = getNextApiKey() || TORN_API_KEY;
+        if (!key || hitmanTargets.length === 0) return res.json({ success: true, targets: hitmanTargets, liveData: [] });
+
+        const results = await Promise.all(hitmanTargets.map(async (t) => {
+            try {
+                const r = await fetch(`https://api.torn.com/user/${t.id}?selections=profile,travel&key=${key}`, { signal: AbortSignal.timeout(5000) });
+                const d = await r.json();
+                if (d.error) return { ...t, state: "Unknown", onlineStatus: "Offline", isOnline: false };
+                
+                const isTraveling = d.status?.state === "Traveling" || d.status?.description?.includes("Traveling");
+                const isHosp = d.status?.state === "Hospital";
+                const isOnline = d.last_action?.status === "Online" || d.last_action?.status === "Idle";
+                const estWallet = isTraveling ? Math.round(29 * 45000) : 0;
+
+                return {
+                    ...t,
+                    name: d.name || t.name,
+                    level: d.level || 0,
+                    state: d.status?.state || "Okay",
+                    statusDesc: d.status?.description || "",
+                    until: d.status?.until || 0,
+                    onlineStatus: d.last_action?.status || "Offline",
+                    isOnline,
+                    isTraveling,
+                    isHosp,
+                    travelDestination: d.travel?.destination || "Unknown",
+                    travelTimeLeft: d.travel?.time_left || 0,
+                    estWallet
+                };
+            } catch (e) {
+                return { ...t, state: "Unknown", onlineStatus: "Offline", isOnline: false };
+            }
+        }));
+
+        res.json({ success: true, liveData: results });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// =============================================================================
+// --- COMBAT FORENSICS & STEALTH UNMASKER ---
+// =============================================================================
+app.post('/api/unmask-attack', (req, res) => {
+    try {
+        const { damageDealt = 450, weaponDmg = 65, defenderDefense = 500000, defenderArmor = "Combat", isCritical = false } = req.body;
+        const dmg = Math.max(1, Number(damageDealt));
+        const wDmg = Math.max(10, Number(weaponDmg));
+        const def = Math.max(1, Number(defenderDefense));
+
+        const armorMap = { "None": 1.0, "Leather": 0.88, "Combat": 0.75, "Riot": 0.65, "Dune": 0.60, "Assault": 0.52 };
+        const mit = armorMap[defenderArmor] || 0.75;
+        const critMult = isCritical ? 1.5 : 1.0;
+
+        const baseConst = 70 * (wDmg / 50) * mit * critMult;
+        const ratioPow = dmg / baseConst;
+        const strDefRatio = Math.pow(Math.max(0.01, ratioPow), 2.5);
+
+        const estStrMid = Math.round(def * strDefRatio);
+        const estStrMin = Math.round(estStrMid * 0.75);
+        const estStrMax = Math.round(estStrMid * 1.35);
+
+        const suspects = [];
+        for (const [id, spy] of Object.entries(spyDatabase)) {
+            const str = spy.strength || (spy.total ? Math.round(spy.total / 4) : 0);
+            if (str >= estStrMin && str <= estStrMax) {
+                suspects.push({
+                    id,
+                    name: spy.name || `Player [${id}]`,
+                    strength: str,
+                    totalStats: spy.total || (str * 4),
+                    matchConfidence: Math.round((1 - Math.abs(str - estStrMid) / estStrMid) * 100)
+                });
+            }
+        }
+        suspects.sort((a, b) => b.matchConfidence - a.matchConfidence);
+
+        res.json({
+            success: true,
+            estStrMin,
+            estStrMid,
+            estStrMax,
+            suspects: suspects.slice(0, 10)
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// =============================================================================
+// --- OC 2.0 OPTIMIZER ---
+// =============================================================================
+app.get('/api/oc-optimize', async (req, res) => {
+    try {
+        const key = req.headers['x-api-key'] || req.query.apiKey || discordConfig.apiKey || TORN_API_KEY;
+        if (!key) return res.status(400).json({ error: "Missing API key" });
+
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,crimes&key=${key}`);
+        const data = await facRes.json();
+        if (data.error) return res.status(400).json({ error: data.error.error || "Torn API error" });
+
+        const members = Object.entries(data.members || {}).map(([id, m]) => ({
+            id,
+            name: m.name,
+            level: m.level || 1,
+            daysInFaction: m.days_in_faction || 0,
+            status: m.status?.state || "Okay"
+        }));
+
+        const crimeTemplates = [
+            { name: "Political Assassination", slots: 5, minLevel: 40, expWeight: 10, estPayout: 25000000, estRespect: 28 },
+            { name: "Plane Hijacking", slots: 4, minLevel: 30, expWeight: 8, estPayout: 16000000, estRespect: 18 },
+            { name: "Bombing Threat", slots: 4, minLevel: 25, expWeight: 6, estPayout: 10000000, estRespect: 12 },
+            { name: "Mob Kidnapping", slots: 4, minLevel: 20, expWeight: 5, estPayout: 7500000, estRespect: 9 },
+            { name: "Armored Car Robbery", slots: 3, minLevel: 15, expWeight: 4, estPayout: 4000000, estRespect: 6 },
+            { name: "Blackmail", slots: 2, minLevel: 5, expWeight: 2, estPayout: 1500000, estRespect: 3 }
+        ];
+
+        members.sort((a, b) => b.level - a.level);
+
+        const assigned = new Set();
+        const teams = [];
+
+        for (const ct of crimeTemplates) {
+            const candidates = members.filter(m => !assigned.has(m.id) && m.level >= ct.minLevel);
+            if (candidates.length >= ct.slots) {
+                const teamMembers = candidates.slice(0, ct.slots);
+                teamMembers.forEach(m => assigned.add(m.id));
+                const teamSuccessProb = Math.min(99, Math.round(85 + (teamMembers.reduce((acc, m) => acc + m.level, 0) / (ct.slots * 100)) * 15));
+                teams.push({
+                    crimeName: ct.name,
+                    slots: ct.slots,
+                    successProb: teamSuccessProb,
+                    estPayout: ct.estPayout,
+                    estRespect: ct.estRespect,
+                    members: teamMembers
+                });
+            }
+        }
+
+        res.json({
+            success: true,
+            totalMembers: members.length,
+            assignedMembers: assigned.size,
+            unassignedMembers: members.length - assigned.size,
+            recommendedTeams: teams
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 
 app.get('/api/master-config', (req, res) => {
     res.json({
