@@ -307,12 +307,18 @@ function saveCompanyConfig() { fs.writeFileSync('company_config.json', JSON.stri
 // --- CENTRALIZED DISCORD RATE-LIMIT QUEUE ---
 let discordSendQueue = [];
 let isProcessingDiscordQueue = false;
+let lastDiscordSendTime = 0;
 
-async function sendChannelMessage(token, channelId, embed, content = "") {
+async function sendChannelMessage(token, channelId, embed, content = "", priority = false) {
     if (!token && !channelId) return { success: false, error: "Missing Discord Bot Token or Channel ID / Webhook URL." };
 
     return new Promise((resolve) => {
-        discordSendQueue.push({ token, channelId, embed, content, resolve, addedAt: Date.now() });
+        const item = { token, channelId, embed, content, resolve, addedAt: Date.now() };
+        if (priority) {
+            discordSendQueue.unshift(item); // jump to front
+        } else {
+            discordSendQueue.push(item);
+        }
         processDiscordQueue();
     });
 }
@@ -322,6 +328,12 @@ async function processDiscordQueue() {
     isProcessingDiscordQueue = true;
 
     while (discordSendQueue.length > 0) {
+        // Enforce minimum 1200ms between sends to stay within Discord rate limits
+        const elapsed = Date.now() - lastDiscordSendTime;
+        if (elapsed < 1200) {
+            await new Promise(r => setTimeout(r, 1200 - elapsed));
+        }
+
         const item = discordSendQueue.shift();
         try {
             const result = await executeDiscordSend(item.token, item.channelId, item.embed, item.content);
@@ -329,8 +341,7 @@ async function processDiscordQueue() {
         } catch (e) {
             item.resolve({ success: false, error: e.message });
         }
-        // Strict rate-limit spacing: 1000ms delay between deliveries to guarantee 0 rate-limits
-        await new Promise(r => setTimeout(r, 1000));
+        lastDiscordSendTime = Date.now();
     }
 
     isProcessingDiscordQueue = false;
@@ -937,25 +948,43 @@ setInterval(async () => {
         if (liveData.members && Object.keys(enemyMembersCache).length > 0) {
             const COUNTRIES = ["Mexico", "Cayman Islands", "Canada", "Hawaii", "United Kingdom", "Argentina", "Switzerland", "Japan", "China", "UAE", "South Africa"];
             
+            // Track which enemy IDs are currently traveling (key: `${enemyId}_${country}`)
+            let currentTravelingEnemies = new Set();
             let enemyThreats = {}; 
             for (let [eId, eMem] of Object.entries(enemyMembersCache)) {
                 let det = (eMem.status && eMem.status.details) ? eMem.status.details : "";
                 if (det.includes("Traveling to ")) {
                     let country = COUNTRIES.find(c => det.includes(c));
                     if (country) {
+                        let travelKey = `${eId}_${country}`;
+                        currentTravelingEnemies.add(travelKey);
                         if (!enemyThreats[country]) enemyThreats[country] = [];
-                        enemyThreats[country].push(eMem.name);
+                        // Only add threat if this enemy just started traveling (not seen last cycle)
+                        if (!travelAlerts[`enemy_${travelKey}`]) {
+                            enemyThreats[country].push(eMem.name);
+                        }
                     }
                 }
+            }
+
+            // Update known traveling enemies for next cycle (prune arrived enemies)
+            for (let key of Object.keys(travelAlerts)) {
+                if (key.startsWith('enemy_') && !currentTravelingEnemies.has(key.replace('enemy_', ''))) {
+                    delete travelAlerts[key];
+                }
+            }
+            for (let travelKey of currentTravelingEnemies) {
+                travelAlerts[`enemy_${travelKey}`] = Date.now();
             }
 
             for (let [uId, fMem] of Object.entries(liveData.members)) {
                 let det = (fMem.status && fMem.status.details) ? fMem.status.details : "";
                 let fCountry = COUNTRIES.find(c => det.includes(c));
                 if (fCountry && enemyThreats[fCountry] && enemyThreats[fCountry].length > 0) {
-                    let lastAlert = travelAlerts[uId] || 0;
-                    if (Date.now() - lastAlert > 15 * 60 * 1000) {
-                        travelAlerts[uId] = Date.now();
+                    let alertKey = `friendly_${uId}_${fCountry}`;
+                    let lastAlert = travelAlerts[alertKey] || 0;
+                    if (Date.now() - lastAlert > 30 * 60 * 1000) { // 30 min per friendly per country
+                        travelAlerts[alertKey] = Date.now();
                         let dId = await getDiscordId(uId);
                         let pingStr = (dId && /^\d{17,20}$/.test(dId)) ? `<@${dId}>` : (discordConfig.personalDiscordId ? `<@${discordConfig.personalDiscordId}>` : "");
                         if (discordConfig.travelWarnings !== false && discordConfig.globalChannelId) {
@@ -1363,7 +1392,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
         return res.json({ success: false, error: "Unknown test type." });
     }
 
-    let result = await sendChannelMessage(botToken, chanId, embed, pingStr);
+    let result = await executeDiscordSend(botToken, chanId, embed, pingStr);
     console.log(`[Discord Test] Result:`, result);
     if (!result.success) return res.json({ success: false, error: result.error });
     
