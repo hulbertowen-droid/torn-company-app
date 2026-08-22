@@ -370,6 +370,17 @@ async function executeDiscordSend(token, channelId, embed, content = "") {
         webhookUrl = token.trim();
     }
 
+    // Detect if bot token was accidentally pasted into the channel ID field
+    const channelStr = channelId ? String(channelId).trim() : "";
+    const tokenStr = token ? String(token).trim() : "";
+    if (!webhookUrl && channelStr && channelStr.includes('.') && channelStr.length > 40) {
+        return { success: false, error: "It looks like your Bot Token was pasted into the Channel ID field. The Channel ID should be numbers only (e.g. 1521966816891502713). Alternatively, paste a Discord Webhook URL into the Bot Token field." };
+    }
+    if (!webhookUrl && tokenStr && /^\d{15,22}$/.test(tokenStr) && (!channelStr || channelStr.length > 40)) {
+        return { success: false, error: "It looks like the Channel ID and Bot Token may be swapped. The Bot Token is a long string with dots (from Discord Developer Portal), and the Channel ID is numbers only." };
+    }
+
+
     let cleanContent = content ? String(content).trim() : "";
     if (cleanContent.startsWith('<@') && cleanContent.endsWith('>')) {
         const mentionId = cleanContent.replace(/[<@!>]/g, '');
