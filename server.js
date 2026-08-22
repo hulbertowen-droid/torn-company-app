@@ -1364,7 +1364,6 @@ app.post('/api/save-discord-config', async (req, res) => {
         } catch(e) {}
     }
     saveDiscordConfig(); 
-    if (discordConfig.globalBotToken) getDiscordClient(discordConfig.globalBotToken);
     res.json({ success: true }); 
 });
 
@@ -2638,9 +2637,7 @@ async function getDiscordClient(token) {
     return botLoginPromises[cleanToken];
 }
 
-if (discordConfig.globalBotToken) {
-    getDiscordClient(discordConfig.globalBotToken);
-}
+// Gateway login removed — all Discord sends go via direct REST API, not gateway.
 
 
 
