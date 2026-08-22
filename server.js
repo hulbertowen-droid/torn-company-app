@@ -2483,6 +2483,45 @@ app.post('/api/save-company-config', (req, res) => {
     res.json({ success: true });
 });
 
+// --- MY USER BATTLE STATS (RESILIENT CACHED) ---
+let myUserStatsMemoryCache = {};
+
+app.get('/api/my-stats', async (req, res) => {
+    try {
+        const key = req.headers['x-api-key'] || req.query.apiKey || discordConfig.apiKey || TORN_API_KEY;
+        if (!key) return res.status(400).json({ error: "Missing API key" });
+
+        const cacheKey = key.slice(-8);
+        const cached = myUserStatsMemoryCache[cacheKey];
+
+        try {
+            const r = await cachedTornFetch(`https://api.torn.com/user/?selections=battlestats,profile&key=${key}`, `my_stats_${cacheKey}`, 300000);
+            if (r && !r.error && (r.strength || r.name)) {
+                const payload = {
+                    success: true,
+                    name: r.name || "Agent",
+                    level: r.level || 0,
+                    strength: r.strength || 0,
+                    speed: r.speed || 0,
+                    defense: r.defense || 0,
+                    dexterity: r.dexterity || 0,
+                    total: (r.strength || 0) + (r.speed || 0) + (r.defense || 0) + (r.dexterity || 0)
+                };
+                myUserStatsMemoryCache[cacheKey] = payload;
+                return res.json(payload);
+            }
+        } catch (e) {}
+
+        if (cached) {
+            return res.json({ ...cached, fromCache: true });
+        }
+
+        res.status(429).json({ error: "Torn API rate limited. Please wait a few moments." });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // =============================================================================
 // --- AI COMBAT SIMULATOR & 1v1 ODDS ENGINE ---
 // =============================================================================

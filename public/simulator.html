@@ -256,22 +256,50 @@
             }
         }
 
-        async function loadMyProfileStats() {
-            const key = localStorage.getItem('warboard_apikey');
-            if (!key) return alert('Please configure your API key in Settings first.');
+        async function loadMyProfileStats(silent = false) {
+            // First check local storage cache for instantaneous fill
             try {
-                const res = await fetch('https://api.torn.com/user/?selections=battlestats,profile&key=' + key);
+                const localStats = localStorage.getItem('my_battle_stats');
+                if (localStats) {
+                    const parsed = JSON.parse(localStats);
+                    if (parsed.strength) document.getElementById('a-str').value = parsed.strength;
+                    if (parsed.speed) document.getElementById('a-spd').value = parsed.speed;
+                    if (parsed.defense) document.getElementById('a-def').value = parsed.defense;
+                    if (parsed.dexterity) document.getElementById('a-dex').value = parsed.dexterity;
+                }
+            } catch(e) {}
+
+            const key = localStorage.getItem('warboard_apikey') || '';
+            try {
+                const res = await fetch('/api/my-stats' + (key ? '?apiKey=' + encodeURIComponent(key) : ''));
                 const d = await res.json();
-                if (d.error) return alert('Torn API error: ' + d.error.error);
-                if (d.strength) document.getElementById('a-str').value = d.strength;
-                if (d.speed) document.getElementById('a-spd').value = d.speed;
-                if (d.defense) document.getElementById('a-def').value = d.defense;
-                if (d.dexterity) document.getElementById('a-dex').value = d.dexterity;
-                alert('Loaded battle stats for ' + d.name + '! Total: ' + ((d.strength||0)+(d.speed||0)+(d.defense||0)+(d.dexterity||0)).toLocaleString());
+                if (d.success) {
+                    if (d.strength) document.getElementById('a-str').value = d.strength;
+                    if (d.speed) document.getElementById('a-spd').value = d.speed;
+                    if (d.defense) document.getElementById('a-def').value = d.defense;
+                    if (d.dexterity) document.getElementById('a-dex').value = d.dexterity;
+
+                    localStorage.setItem('my_battle_stats', JSON.stringify({
+                        strength: d.strength,
+                        speed: d.speed,
+                        defense: d.defense,
+                        dexterity: d.dexterity
+                    }));
+
+                    if (!silent) {
+                        alert('Loaded battle stats for ' + (d.name || 'Agent') + '! Total: ' + (d.total || 0).toLocaleString());
+                    }
+                } else if (!silent) {
+                    alert(d.error || 'Failed to fetch user battle stats.');
+                }
             } catch (e) {
-                alert('Failed to fetch user battle stats: ' + e.message);
+                if (!silent) alert('Network error loading battle stats: ' + e.message);
             }
         }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadMyProfileStats(true);
+        });
     </script>
 </body>
 </html>
