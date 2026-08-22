@@ -304,7 +304,39 @@ function saveTracking() { fs.writeFileSync('user_tracking.json', JSON.stringify(
 function saveApiPool() { fs.writeFileSync('api_pool.json', JSON.stringify(apiPoolConfig)); saveToMongo(); }
 function saveCompanyConfig() { fs.writeFileSync('company_config.json', JSON.stringify(companyConfig)); saveToMongo(); }
 
-async function sendChannelMessage(token, channelId, embed, content = "", attempt = 1) {
+// --- CENTRALIZED DISCORD RATE-LIMIT QUEUE ---
+let discordSendQueue = [];
+let isProcessingDiscordQueue = false;
+
+async function sendChannelMessage(token, channelId, embed, content = "") {
+    if (!token && !channelId) return { success: false, error: "Missing Discord Bot Token or Channel ID / Webhook URL." };
+
+    return new Promise((resolve) => {
+        discordSendQueue.push({ token, channelId, embed, content, resolve, addedAt: Date.now() });
+        processDiscordQueue();
+    });
+}
+
+async function processDiscordQueue() {
+    if (isProcessingDiscordQueue) return;
+    isProcessingDiscordQueue = true;
+
+    while (discordSendQueue.length > 0) {
+        const item = discordSendQueue.shift();
+        try {
+            const result = await executeDiscordSend(item.token, item.channelId, item.embed, item.content);
+            item.resolve(result);
+        } catch (e) {
+            item.resolve({ success: false, error: e.message });
+        }
+        // Strict rate-limit spacing: 1000ms delay between deliveries to guarantee 0 rate-limits
+        await new Promise(r => setTimeout(r, 1000));
+    }
+
+    isProcessingDiscordQueue = false;
+}
+
+async function executeDiscordSend(token, channelId, embed, content = "", attempt = 1) {
     if (!token && !channelId) return { success: false, error: "Missing Discord Bot Token or Channel ID / Webhook URL." };
 
     // 1. Detect if channelId or token is a Webhook URL
@@ -328,7 +360,7 @@ async function sendChannelMessage(token, channelId, embed, content = "", attempt
 
     // A. Webhook route
     if (webhookUrl) {
-        console.log(`[Discord Webhook] Sending alert to webhook: ${webhookUrl.slice(0, 45)}...`);
+        console.log(`[Discord Webhook] Sending alert '${embed.title || 'alert'}' to webhook...`);
         try {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 8000);
@@ -346,10 +378,10 @@ async function sendChannelMessage(token, channelId, embed, content = "", attempt
 
             if (res.status === 429 && attempt <= 2) {
                 const retryAfterHeader = res.headers.get('retry-after');
-                const delayMs = retryAfterHeader ? Math.min(Math.ceil(parseFloat(retryAfterHeader) * 1000), 4000) : 2000;
-                console.warn(`[Discord Webhook] Rate limited (429). Retrying in ${delayMs}ms...`);
+                const delayMs = retryAfterHeader ? Math.min(Math.ceil(parseFloat(retryAfterHeader) * 1000), 5000) : 2500;
+                console.warn(`[Discord Webhook] Rate limited (429). Waiting ${delayMs}ms before retrying...`);
                 await new Promise(r => setTimeout(r, delayMs));
-                return sendChannelMessage(token, channelId, embed, content, attempt + 1);
+                return executeDiscordSend(token, channelId, embed, content, attempt + 1);
             }
 
             if (!res.ok) {
@@ -409,13 +441,13 @@ async function sendChannelMessage(token, channelId, embed, content = "", attempt
 
         if (res.status === 429 && attempt <= 2) {
             const retryAfterHeader = res.headers.get('retry-after');
-            let delayMs = 2000;
+            let delayMs = 2500;
             if (retryAfterHeader) {
-                delayMs = Math.min(Math.ceil(parseFloat(retryAfterHeader) * 1000), 4000);
+                delayMs = Math.min(Math.ceil(parseFloat(retryAfterHeader) * 1000), 5000);
             }
-            console.warn(`[Discord REST] Rate limited (429). Retrying in ${delayMs}ms...`);
+            console.warn(`[Discord REST] Rate limited (429). Waiting ${delayMs}ms before retrying...`);
             await new Promise(r => setTimeout(r, delayMs));
-            return sendChannelMessage(token, channelId, embed, content, attempt + 1);
+            return executeDiscordSend(token, channelId, embed, content, attempt + 1);
         }
 
         if (res.status === 429) {
@@ -814,6 +846,7 @@ setInterval(async () => {
                     if (!persistentDefends[uId]) persistentDefends[uId] = {};
                     persistentDefends[uId][attFacId] = (persistentDefends[uId][attFacId] || 0) + 1;
                     
+                    let isRecent = atk.timestamp_ended > (Math.floor(Date.now() / 1000) - 180);
                     let friendlyMem = liveData.members ? liveData.members[uId] : null;
                     if (friendlyMem && friendlyMem.status.state !== "Traveling") {
                         if (!friendlyHitTracker[uId]) friendlyHitTracker[uId] = { count: 0, lastHit: 0, alertedAt: 0 };
@@ -824,7 +857,7 @@ setInterval(async () => {
                         
                         let isOnline = friendlyMem.last_action && (friendlyMem.last_action.status === "Online" || friendlyMem.last_action.status === "Idle");
                         
-                        if (friendlyHitTracker[uId].count >= 3 && (now - friendlyHitTracker[uId].alertedAt > 30 * 60 * 1000) && !isOnline) {
+                        if (hasBackfilledWar && isRecent && friendlyHitTracker[uId].count >= 3 && (now - friendlyHitTracker[uId].alertedAt > 30 * 60 * 1000) && !isOnline) {
                             friendlyHitTracker[uId].alertedAt = now;
                             friendlyHitTracker[uId].count = 0;
                             let dId = await getDiscordId(uId);
@@ -842,7 +875,7 @@ setInterval(async () => {
                         }
                     }
                     
-                    if (hasBackfilledWar && discordConfig.friendlyAttacked === true && discordConfig.globalChannelId) {
+                    if (hasBackfilledWar && isRecent && discordConfig.friendlyAttacked === true && discordConfig.globalChannelId) {
                         let attackerName = atk.attacker_name || "Unknown"; 
                         let attackerFactionName = atk.attacker_faction_name || "None"; 
                         let defenderName = atk.defender_name || uId;
@@ -873,8 +906,9 @@ setInterval(async () => {
                     if (!liveAttacks[uId]) liveAttacks[uId] = {};
                     liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
 
+                    let isRecent = atk.timestamp_ended > (Math.floor(Date.now() / 1000) - 180);
                     if (atk.chain && BONUS_THRESHOLDS.has(atk.chain)) {
-                        if (hasBackfilledWar && discordConfig.chainMilestone !== false && discordConfig.globalChannelId) {
+                        if (hasBackfilledWar && isRecent && discordConfig.chainMilestone !== false && discordConfig.globalChannelId) {
                             if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { title: "🏆 Chain Milestone Secured", description: `Hit **#${atk.chain}** executed by \`${atk.attacker_name || uId}\` (+${atk.respect_gain || 0} respect)!`,
                                 color: 16753922
                             });
