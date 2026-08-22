@@ -349,6 +349,7 @@ async function processDiscordQueue() {
 
 // Track global Discord rate limit (when the whole bot token is blocked)
 let discordGlobalRateLimitUntil = 0;
+const DISCORD_GLOBAL_BLOCK_CAP_MS = 30000; // max 30s self-block; Discord enforces the rest server-side
 
 async function executeDiscordSend(token, channelId, embed, content = "") {
     if (!token && !channelId) return { success: false, error: "Missing Discord Bot Token or Channel ID / Webhook URL." };
@@ -402,7 +403,7 @@ async function executeDiscordSend(token, channelId, embed, content = "") {
                 const retryAfterHeader = res.headers.get('retry-after');
                 const isGlobal = res.headers.get('x-ratelimit-global') === 'true';
                 const delayMs = retryAfterHeader ? Math.ceil(parseFloat(retryAfterHeader) * 1000) : 5000;
-                discordGlobalRateLimitUntil = Date.now() + delayMs + 1000;
+                discordGlobalRateLimitUntil = Date.now() + Math.min(delayMs + 1000, DISCORD_GLOBAL_BLOCK_CAP_MS);
                 console.warn(`[Discord Webhook] ${isGlobal ? 'GLOBAL ' : ''}Rate limited (429). Blocking for ${delayMs}ms.`);
                 return { success: false, error: `Discord rate limit hit. Please wait ${Math.ceil(delayMs/1000)} seconds.` };
             }
@@ -463,7 +464,7 @@ async function executeDiscordSend(token, channelId, embed, content = "") {
             const retryAfterHeader = res.headers.get('retry-after');
             const isGlobal = res.headers.get('x-ratelimit-global') === 'true';
             const delayMs = retryAfterHeader ? Math.ceil(parseFloat(retryAfterHeader) * 1000) : 5000;
-            discordGlobalRateLimitUntil = Date.now() + delayMs + 1000;
+            discordGlobalRateLimitUntil = Date.now() + Math.min(delayMs + 1000, DISCORD_GLOBAL_BLOCK_CAP_MS);
             console.warn(`[Discord REST] ${isGlobal ? 'GLOBAL ' : ''}Rate limited (429). Blocking all sends for ${Math.ceil(delayMs/1000)}s.`);
             return { success: false, error: `Discord rate limit hit. Please wait ${Math.ceil(delayMs/1000)} seconds before trying again.` };
         }
