@@ -241,7 +241,22 @@ let lastEventTimestamp = Math.floor(Date.now() / 1000);
 let lastChainTimeoutAlertState = false;
 let backgroundEnemyTrackingState = {};
 
-let discordConfig = { globalChannelId: "", targetOnline: true, targetLanded: true, targetOutHosp: true, chainUnder90: true, chainMilestone: true, friendlyAttacked: true, apiKey: "", factionId: "", medOutSniper: true };
+let discordConfig = { 
+    globalChannelId: "", 
+    globalBotToken: "",
+    personalDiscordId: "",
+    targetOnline: false, 
+    targetLanded: true, 
+    targetOutHosp: false, 
+    chainUnder90: true, 
+    chainMilestone: true, 
+    friendlyAttacked: false, 
+    medOutSniper: true,
+    travelWarnings: true,
+    chainWarnings: true,
+    apiKey: "", 
+    factionId: "" 
+};
 let marketConfig = { globalChannelId: "", autoDefense: false, sniperTargets: [] };
 let marketMemory = { defense: {}, sniper: {} };
 let ocConfig = { globalChannelId: "", roleId: "" };
@@ -300,8 +315,16 @@ async function sendChannelMessage(token, channelId, embed, content = "", attempt
         webhookUrl = token.trim();
     }
 
+    let cleanContent = content ? String(content).trim() : "";
+    if (cleanContent.startsWith('<@') && cleanContent.endsWith('>')) {
+        const mentionId = cleanContent.replace(/[<@!>]/g, '');
+        if (!/^\d{17,20}$/.test(mentionId)) {
+            cleanContent = "";
+        }
+    }
+
     const payload = { embeds: [embed] };
-    if (content) payload.content = content;
+    if (cleanContent) payload.content = cleanContent;
 
     // A. Webhook route
     if (webhookUrl) {
@@ -468,17 +491,25 @@ function getNextApiKey() {
 
 
 async function getDiscordId(tornId) {
-    if (discordIdCache[tornId]) return discordIdCache[tornId];
+    if (!tornId) return null;
+    const keyStr = tornId.toString();
+    if (discordIdCache[keyStr]) {
+        return discordIdCache[keyStr] === "none" ? null : discordIdCache[keyStr];
+    }
     let key = getNextApiKey();
     if (!key) return null;
     try {
-        let res = await fetch(`https://api.torn.com/user/${tornId}?selections=discord&key=${key}`);
+        let res = await fetch(`https://api.torn.com/user/${keyStr}?selections=discord&key=${key}`);
         let data = await res.json();
-        if (data.discord && data.discord.userID) {
-            discordIdCache[tornId] = data.discord.userID;
-            return data.discord.userID;
+        // In Torn API, discordID / discord_id is the 17-20 digit Discord Snowflake.
+        // data.discord.userID is the Torn player ID, which must NOT be used for Discord pings!
+        const rawDiscordId = data.discord?.discordID || data.discord?.discordId || data.discord?.discord_id || "";
+        const cleanDiscordId = rawDiscordId ? String(rawDiscordId).trim() : "";
+        if (/^\d{17,20}$/.test(cleanDiscordId)) {
+            discordIdCache[keyStr] = cleanDiscordId;
+            return cleanDiscordId;
         }
-        discordIdCache[tornId] = "none"; 
+        discordIdCache[keyStr] = "none"; 
         return null;
     } catch(e) { return null; }
 }
@@ -797,39 +828,42 @@ setInterval(async () => {
                             friendlyHitTracker[uId].alertedAt = now;
                             friendlyHitTracker[uId].count = 0;
                             let dId = await getDiscordId(uId);
-                            let pingStr = (dId && dId !== "none") ? `<@${dId}>` : "";
-                            if (discordConfig.chainWarnings !== false) {
+                            let pingStr = (dId && /^\d{17,20}$/.test(dId)) ? `<@${dId}>` : (discordConfig.personalDiscordId ? `<@${discordConfig.personalDiscordId}>` : "");
+                            if (discordConfig.chainWarnings !== false && discordConfig.globalChannelId) {
                                 let embed = {
                                     title: "⚠️ CHAIN ATTACK WARNING",
                                     description: `**${friendlyMem.name}**, you have been hit 3 consecutive times in Torn! Log in and react!`,
                                     color: 16729943
                                 };
-                                if (discordConfig.globalBotToken && discordConfig.globalChannelId) {
+                                if (discordConfig.globalBotToken) {
                                     sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, embed, pingStr);
                                 }
                             }
                         }
                     }
                     
-                    if (hasBackfilledWar && discordConfig.friendlyAttacked && discordConfig.globalChannelId) {
+                    if (hasBackfilledWar && discordConfig.friendlyAttacked === true && discordConfig.globalChannelId) {
                         let attackerName = atk.attacker_name || "Unknown"; 
                         let attackerFactionName = atk.attacker_faction_name || "None"; 
                         let defenderName = atk.defender_name || uId;
 
-                        let enemyEst = (spyDatabase[attackerId] && spyDatabase[attackerId].total) ? spyDatabase[attackerId].total : (statsCache[attackerId]?.stats || manualStats[attackerId]?.stats || 0);
-                        let statStr = enemyEst > 0 ? enemyEst.toLocaleString() : "Unknown";
+                        let rawEst = (spyDatabase[attackerId] && spyDatabase[attackerId].total) ? spyDatabase[attackerId].total : (statsCache[attackerId]?.stats || manualStats[attackerId]?.stats || 0);
+                        let enemyEst = (typeof rawEst === 'number' && !isNaN(rawEst) && rawEst > 0) ? rawEst : 0;
+                        let statStr = enemyEst > 0 ? `~${enemyEst.toLocaleString()}` : "Unknown";
 
                         let dId = await getDiscordId(uId);
-                        let pingStr = (dId && dId !== "none") ? `<@${dId}>` : "";
+                        let pingStr = (dId && /^\d{17,20}$/.test(dId)) ? `<@${dId}>` : "";
 
-                        if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { title: "🛡️ Wall Watcher: Friendly Attacked", description: `**${attackerName}** [${attackerId}] from \`${attackerFactionName}\` just attacked **${defenderName}**!`,
+                        if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { 
+                            title: "🛡️ Wall Watcher: Friendly Attacked", 
+                            description: `**${attackerName}** [${attackerId}] from \`${attackerFactionName}\` just attacked **${defenderName}**!`,
                             color: 16729943,
                             fields: [{ name: "Enemy Est. Stats", value: statStr, inline: true }],
                             links: [
                                 { label: "⚔️ RETALIATE", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${attackerId}` },
                                 { label: "Enemy Profile", url: `https://www.torn.com/profiles.php?XID=${attackerId}` }
                             ]
-                        });
+                        }, pingStr);
                     }
                 }
                 
@@ -840,7 +874,7 @@ setInterval(async () => {
                     liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
 
                     if (atk.chain && BONUS_THRESHOLDS.has(atk.chain)) {
-                        if (hasBackfilledWar && discordConfig.chainMilestone && discordConfig.globalChannelId) {
+                        if (hasBackfilledWar && discordConfig.chainMilestone !== false && discordConfig.globalChannelId) {
                             if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { title: "🏆 Chain Milestone Secured", description: `Hit **#${atk.chain}** executed by \`${atk.attacker_name || uId}\` (+${atk.respect_gain || 0} respect)!`,
                                 color: 16753922
                             });
@@ -889,16 +923,16 @@ setInterval(async () => {
                     if (Date.now() - lastAlert > 15 * 60 * 1000) {
                         travelAlerts[uId] = Date.now();
                         let dId = await getDiscordId(uId);
-                        let pingStr = (dId && dId !== "none") ? `<@${dId}>` : "";
-                        if (discordConfig.travelWarnings !== false) {
+                        let pingStr = (dId && /^\d{17,20}$/.test(dId)) ? `<@${dId}>` : (discordConfig.personalDiscordId ? `<@${discordConfig.personalDiscordId}>` : "");
+                        if (discordConfig.travelWarnings !== false && discordConfig.globalChannelId) {
                             let embed = {
                                 title: "✈️ TRAVEL WARNING",
                                 description: `**${fMem.name}**, an enemy (**${enemyThreats[fCountry][0]}**) is currently flying to **${fCountry}** where you are located (or heading)!\n\nFly away or return to Torn immediately!`,
                                 color: 16729943
                             };
-                            if (discordConfig.globalBotToken && discordConfig.globalChannelId) {
-                                    sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, embed, pingStr);
-                                }
+                            if (discordConfig.globalBotToken) {
+                                sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, embed, pingStr);
+                            }
                         }
                     }
                 }
@@ -1002,7 +1036,7 @@ setInterval(async () => {
                     let newRecord = { state: m.status?.state, online: m.last_action?.status, description: m.status?.description, until: m.status?.until };
                     
                     if (oldRecord) {
-                        if (oldRecord.online !== "Online" && newRecord.online === "Online" && discordConfig.targetOnline) {
+                        if (oldRecord.online !== "Online" && newRecord.online === "Online" && discordConfig.targetOnline === true) {
                             if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { title: "🟢 Target Online", description: `**${m.name}** [${id}] just established a connection and is Online!`, color: 3069299, links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }] });
                         }
                         
@@ -1010,21 +1044,29 @@ setInterval(async () => {
                             let now = Math.floor(Date.now() / 1000);
                             let leftEarly = oldRecord.until && (oldRecord.until > now + 60);
 
-                            if (leftEarly && newRecord.online === "Online" && discordConfig.medOutSniper) {
-                                let enemyEst = (spyDatabase[id] && spyDatabase[id].total) ? spyDatabase[id].total : (statsCache[id]?.stats || manualStats[id]?.stats || 0);
+                            if (leftEarly && newRecord.online === "Online" && discordConfig.medOutSniper !== false) {
+                                let rawEst = (spyDatabase[id] && spyDatabase[id].total) ? spyDatabase[id].total : (statsCache[id]?.stats || manualStats[id]?.stats || 0);
+                                let enemyEst = (typeof rawEst === 'number' && !isNaN(rawEst) && rawEst > 0) ? rawEst : 0;
                                 let bestMatchName = "Anyone available";
                                 let bestMatchId = null;
                                 
                                 if (facData.members) {
                                     let friendliesAvailable = Object.entries(facData.members).filter(([fid, fm]) => fid !== id && (fm.last_action?.status === "Online" || fm.last_action?.status === "Idle"));
-                                    if (friendliesAvailable.length > 0 && enemyEst > 0) {
-                                        let bestDiff = Infinity;
-                                        for(let [fid, fm] of friendliesAvailable) {
-                                            let fEst = (spyDatabase[fid] && spyDatabase[fid].total) ? spyDatabase[fid].total : (statsCache[fid]?.stats || manualStats[fid]?.stats || 0);
-                                            if (fEst >= enemyEst * 0.7) {
-                                                let diff = Math.abs(fEst - enemyEst);
-                                                if (diff < bestDiff) { bestDiff = diff; bestMatchName = fm.name; bestMatchId = fid; }
+                                    if (friendliesAvailable.length > 0) {
+                                        if (enemyEst > 0) {
+                                            let bestDiff = Infinity;
+                                            for(let [fid, fm] of friendliesAvailable) {
+                                                let rawF = (spyDatabase[fid] && spyDatabase[fid].total) ? spyDatabase[fid].total : (statsCache[fid]?.stats || manualStats[fid]?.stats || 0);
+                                                let fEst = (typeof rawF === 'number' && !isNaN(rawF) && rawF > 0) ? rawF : 0;
+                                                if (fEst >= enemyEst * 0.7) {
+                                                    let diff = Math.abs(fEst - enemyEst);
+                                                    if (diff < bestDiff) { bestDiff = diff; bestMatchName = fm.name; bestMatchId = fid; }
+                                                }
                                             }
+                                        }
+                                        if (!bestMatchId && friendliesAvailable.length > 0) {
+                                            bestMatchName = friendliesAvailable[0][1].name;
+                                            bestMatchId = friendliesAvailable[0][0];
                                         }
                                     }
                                 }
@@ -1032,22 +1074,24 @@ setInterval(async () => {
                                 let pingStr = "";
                                 if (bestMatchId) {
                                     let dId = await getDiscordId(bestMatchId);
-                                    if (dId && dId !== "none") pingStr = `<@${dId}>`;
+                                    if (dId && /^\d{17,20}$/.test(dId)) pingStr = `<@${dId}>`;
                                 }
 
                                 let statStr = enemyEst > 0 ? `~${enemyEst.toLocaleString()}` : "Unknown";
-                                if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { title: "🚨 MED-OUT SNIPER ENGAGED", description: `**${m.name}** [${id}] just used meds or received a revive to escape the hospital early and is currently ONLINE!`,
+                                if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { 
+                                    title: "🚨 MED-OUT SNIPER ENGAGED", 
+                                    description: `**${m.name}** [${id}] just used meds or received a revive to escape the hospital early and is currently ONLINE!`,
                                     color: 16729943,
                                     fields: [
                                         { name: "Target Est. Stats", value: statStr, inline: true },
                                         { name: "Tactical Assignment", value: `👉 **${bestMatchName}**, you have the stats to take them down!`, inline: false }
                                     ],
                                     links: [{ label: "⚔️ ATTACK NOW", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }]
-                                });
+                                }, pingStr);
                                 
-                            } else if (discordConfig.targetOutHosp && !leftEarly) {
-                                if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { title: "🏥 Target Out of Hospital", description: `**${m.name}** [${id}] naturally finished their hospital time and is Okay!`, color: 16753922, links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }] }, pingStr);
-                            } else if (discordConfig.targetLanded && (oldRecord.state === "Traveling" || (oldRecord.description && oldRecord.description.includes("Traveling")))) {
+                            } else if (discordConfig.targetOutHosp === true && !leftEarly) {
+                                if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { title: "🏥 Target Out of Hospital", description: `**${m.name}** [${id}] naturally finished their hospital time and is Okay!`, color: 16753922, links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }] });
+                            } else if (discordConfig.targetLanded !== false && (oldRecord.state === "Traveling" || (oldRecord.description && oldRecord.description.includes("Traveling")))) {
                                 if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { title: "✈️ Target Landed", description: `**${m.name}** [${id}] just landed in Torn!`, color: 5809919, links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }] });
                             }
                         }

@@ -570,18 +570,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.getElementById('global-bottoken').value = cfg.globalBotToken || '';
         document.getElementById('global-channelid').value = cfg.globalChannelId || localStorage.getItem('warboard_channelid') || '';
-        document.getElementById('discord-userid').value = localStorage.getItem('warboard_discordid') || '';
+        document.getElementById('discord-userid').value = cfg.personalDiscordId || localStorage.getItem('warboard_discordid') || '';
 
         const flags = {
-            targetOnline:     cfg.targetOnline     !== false,
-            targetLanded:     cfg.targetLanded     !== false,
-            targetOutHosp:    cfg.targetOutHosp    !== false,
-            chainUnder90:     cfg.chainUnder90     !== false,
-            chainMilestone:   cfg.chainMilestone   !== false,
-            friendlyAttacked: cfg.friendlyAttacked !== false,
-            medOutSniper:     cfg.medOutSniper      !== false,
-            travelWarnings:   cfg.travelWarnings    !== false,
-            chainWarnings:    cfg.chainWarnings     !== false,
+            targetOnline:     cfg.targetOnline     === true,
+            targetLanded:     cfg.targetLanded     === true || cfg.targetLanded === undefined,
+            targetOutHosp:    cfg.targetOutHosp    === true,
+            chainUnder90:     cfg.chainUnder90     === true || cfg.chainUnder90 === undefined,
+            chainMilestone:   cfg.chainMilestone   === true || cfg.chainMilestone === undefined,
+            friendlyAttacked: cfg.friendlyAttacked === true,
+            medOutSniper:     cfg.medOutSniper     === true || cfg.medOutSniper === undefined,
+            travelWarnings:   cfg.travelWarnings   === true || cfg.travelWarnings === undefined,
+            chainWarnings:    cfg.chainWarnings    === true || cfg.chainWarnings === undefined,
         };
         for (const [id, val] of Object.entries(flags)) {
             const el = document.getElementById(id);
@@ -640,6 +640,7 @@ async function saveDiscordConfig() {
                 apiKey: myKey,
                 globalBotToken: botToken,
                 globalChannelId: channelId,
+                personalDiscordId: discordId,
                 targetOnline:     document.getElementById('targetOnline').checked,
                 targetLanded:     document.getElementById('targetLanded').checked,
                 targetOutHosp:    document.getElementById('targetOutHosp').checked,
