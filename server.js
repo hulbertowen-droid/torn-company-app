@@ -220,15 +220,19 @@ let isProcessingActivity = false;
 
 let activeKeyIndex = 0;
 
-let persistentHitsTaken = {};
-let persistentDefendsWon = {};
-let persistentDefends = {};
-let liveAttacks = {};
+let liveWarHits = {};
+let liveOutsideHits = {};
 let liveAssists = {};
+let liveWarDefendsWon = {};
+let liveOutsideDefendsWon = {};
+let liveWarHitsTaken = {};
+let liveOutsideHitsTaken = {};
 let activeWarId = null;
-let lastGoodWarboardPayload = null;
+let activeWarEnd = null;
+let isBackfillingWar = false;
 let hasBackfilledWar = false;
 let processedAttackIds = new Set();
+let lastGoodWarboardPayload = null;
 let friendlyHitTracker = {};
 let travelAlerts = {};
 let currentEnemyFacId = null;
@@ -662,12 +666,72 @@ setInterval(async () => {
     isProcessingActivity = false;
 }, 1500); 
 
-async function backfillWarDefends(watchKey, watchFactionId, warStart) {
+function processWarAttack(atk, myFactionId, enemyFactionId, warStart, warEnd = 0) {
+    if (!atk || !atk.code) return;
+    if (processedAttackIds.has(atk.code)) return;
+    
+    const atkTime = atk.timestamp_ended || atk.timestamp_started || 0;
+    if (warStart && atkTime < warStart) return;
+    if (warEnd && warEnd > 0 && atkTime > warEnd) return;
+    
+    processedAttackIds.add(atk.code);
+
+    const aId = atk.attacker_id ? atk.attacker_id.toString() : null;
+    const dId = atk.defender_id ? atk.defender_id.toString() : null;
+    const aFac = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
+    const dFac = atk.defender_faction ? atk.defender_faction.toString() : "0";
+    const myFac = myFactionId ? myFactionId.toString() : null;
+    const enFac = enemyFactionId ? enemyFactionId.toString() : null;
+
+    const isWin = ["Hospitalized", "Mugged", "Arrested", "Looted", "Assist", "Attacked", "Special"].includes(atk.result);
+    const isDefendWin = ["Lost", "Draw", "Escape", "Stalemate", "Timeout", "Interrupted"].includes(atk.result);
+
+    // Friendly member made an attack / assist
+    if (aId && myFac && aFac === myFac) {
+        if (atk.result === "Assist") {
+            liveAssists[aId] = (liveAssists[aId] || 0) + 1;
+        } else if (isWin) {
+            if (enFac && dFac === enFac) {
+                liveWarHits[aId] = (liveWarHits[aId] || 0) + 1;
+            } else {
+                liveOutsideHits[aId] = (liveOutsideHits[aId] || 0) + 1;
+            }
+        }
+    }
+
+    // Friendly member was defended against / attacked
+    if (dId && myFac && dFac === myFac) {
+        if (isDefendWin) {
+            // Our member won the defense (attacker lost)
+            if (enFac && aFac === enFac) {
+                liveWarDefendsWon[dId] = (liveWarDefendsWon[dId] || 0) + 1;
+            } else {
+                liveOutsideDefendsWon[dId] = (liveOutsideDefendsWon[dId] || 0) + 1;
+            }
+        } else if (isWin) {
+            // Our member was attacked and hospitalized / defeated
+            if (enFac && aFac === enFac) {
+                liveWarHitsTaken[dId] = (liveWarHitsTaken[dId] || 0) + 1;
+            } else {
+                liveOutsideHitsTaken[dId] = (liveOutsideHitsTaken[dId] || 0) + 1;
+            }
+        }
+    }
+}
+
+async function backfillWarDefends(watchKey, watchFactionId, warStart, enemyFactionId = null, warEnd = 0) {
+    if (isBackfillingWar) return;
+    isBackfillingWar = true;
+    console.log(`[WarTracker] Backfilling attacks from war start: ${warStart} (end: ${warEnd || 'ongoing'})...`);
+
     let toTimestamp = Math.floor(Date.now() / 1000);
+    if (warEnd && warEnd > 0) toTimestamp = warEnd;
+
     let keepScraping = true;
     let pageCount = 0;
+    let totalProcessed = 0;
     
-    while (keepScraping && pageCount < 50) { 
+    while (keepScraping && pageCount < 100) { 
         try {
             const res = await fetch(`https://api.torn.com/faction/${watchFactionId}?selections=attacks&to=${toTimestamp}&key=${watchKey}`);
             const data = await res.json();
@@ -676,50 +740,38 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
             let attacks = Object.values(data.attacks);
             if (attacks.length === 0) break;
             
+            attacks.sort((a, b) => (b.timestamp_ended || 0) - (a.timestamp_ended || 0));
             let oldestTimeInBatch = toTimestamp;
             let foundOldAttack = false;
 
             for (let atk of attacks) {
-                if (atk.timestamp_ended < oldestTimeInBatch) {
-                    oldestTimeInBatch = atk.timestamp_ended;
+                const atkTime = atk.timestamp_ended || atk.timestamp_started || 0;
+                if (atkTime < oldestTimeInBatch) {
+                    oldestTimeInBatch = atkTime;
                 }
                 
-                if (atk.timestamp_ended < warStart) { 
+                if (atkTime < warStart) { 
                     keepScraping = false; 
                     foundOldAttack = true;
                     continue; 
                 }
                 
-                if (!processedAttackIds.has(atk.code)) {
-                    processedAttackIds.add(atk.code);
-                    let isWin = ["Hospitalized", "Mugged", "Arrested", "Looted", "Assist", "Attacked", "Special"].includes(atk.result);
-                    if (isWin && atk.defender_faction && atk.defender_faction.toString() === watchFactionId.toString()) {
-                        let uId = atk.defender_id.toString();
-                        let attFacId = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
-                        if (!persistentDefends[uId]) persistentDefends[uId] = {};
-                        persistentDefends[uId][attFacId] = (persistentDefends[uId][attFacId] || 0) + 1;
-                    }
-                    if (isWin && atk.attacker_faction && atk.attacker_faction.toString() === watchFactionId.toString()) {
-                        let uId = atk.attacker_id.toString();
-                        let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
-                        if (!liveAttacks[uId]) liveAttacks[uId] = {};
-                        liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
-                        if (atk.result === "Assist") {
-                            liveAssists[uId] = (liveAssists[uId] || 0) + 1;
-                        }
-                    }
-                }
+                processWarAttack(atk, watchFactionId, enemyFactionId, warStart, warEnd);
+                totalProcessed++;
             }
             
-            if (!foundOldAttack) {
+            if (!foundOldAttack && oldestTimeInBatch < toTimestamp) {
                  toTimestamp = oldestTimeInBatch - 1;
                  pageCount++;
-                 await new Promise(r => setTimeout(r, 500)); 
+                 await new Promise(r => setTimeout(r, 350)); 
+            } else {
+                break;
             }
-            
         } catch (e) { break; }
     }
     hasBackfilledWar = true;
+    isBackfillingWar = false;
+    console.log(`[WarTracker] Backfill complete. Processed ${totalProcessed} attacks across ${pageCount + 1} pages.`);
 }
 
 
@@ -848,37 +900,56 @@ setInterval(async () => {
         
         if (liveData.rankedwars) {
             let ongoingWar = Object.values(liveData.rankedwars).find(w => w.war && w.war.winner === 0);
-            if (ongoingWar) {
-                if (activeWarId !== ongoingWar.war.start) {
-                    activeWarId = ongoingWar.war.start;
-                    persistentDefends = {}; liveAttacks = {}; liveAssists = {}; hasBackfilledWar = false; processedAttackIds.clear();
-                    friendlyHitTracker = {}; travelAlerts = {}; currentEnemyFacId = null; enemyMembersCache = {};
-                    backfillWarDefends(watchKey, watchFactionId, activeWarId);
+            if (ongoingWar && ongoingWar.war) {
+                let facIds = Object.keys(ongoingWar.factions || {});
+                currentEnemyFacId = facIds.find(id => id !== watchFactionId.toString()) || null;
+                let warStart = ongoingWar.war.start;
+                let warEnd = ongoingWar.war.end || 0;
+
+                if (activeWarId !== warStart) {
+                    activeWarId = warStart;
+                    activeWarEnd = warEnd;
+                    liveWarHits = {};
+                    liveOutsideHits = {};
+                    liveAssists = {};
+                    liveWarDefendsWon = {};
+                    liveOutsideDefendsWon = {};
+                    liveWarHitsTaken = {};
+                    liveOutsideHitsTaken = {};
+                    hasBackfilledWar = false;
+                    processedAttackIds.clear();
+                    friendlyHitTracker = {};
+                    travelAlerts = {};
+                    enemyMembersCache = {};
+                    backfillWarDefends(watchKey, watchFactionId, activeWarId, currentEnemyFacId, activeWarEnd);
+                } else if (!hasBackfilledWar && !isBackfillingWar) {
+                    backfillWarDefends(watchKey, watchFactionId, activeWarId, currentEnemyFacId, activeWarEnd);
                 }
-            } else { activeWarId = null; hasBackfilledWar = false; }
+            } else { 
+                activeWarId = null; 
+                activeWarEnd = null;
+                hasBackfilledWar = false; 
+            }
         }
 
         if (liveData.attacks && activeWarId) {
             let attacksToProcess = Object.entries(liveData.attacks);
-            attacksToProcess.sort((a, b) => a[1].timestamp_ended - b[1].timestamp_ended);
+            attacksToProcess.sort((a, b) => (a[1].timestamp_ended || 0) - (b[1].timestamp_ended || 0));
 
             for (let [atkId, atk] of attacksToProcess) {
-                if (atk.timestamp_ended < activeWarId) continue; 
-                if (processedAttackIds.has(atk.code)) continue;
-                processedAttackIds.add(atk.code);
+                let wasAlreadyProcessed = processedAttackIds.has(atk.code);
+                processWarAttack(atk, watchFactionId, currentEnemyFacId, activeWarId, activeWarEnd);
                 
+                if (wasAlreadyProcessed) continue;
+
                 let isWin = ["Hospitalized", "Mugged", "Arrested", "Looted", "Assist", "Attacked", "Special"].includes(atk.result);
                 if (isWin && atk.defender_faction && atk.defender_faction.toString() === watchFactionId.toString()) {
                     let uId = atk.defender_id.toString();
-                    let attFacId = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
-                    let attackerId = atk.attacker_id.toString();
-
-                    if (!persistentDefends[uId]) persistentDefends[uId] = {};
-                    persistentDefends[uId][attFacId] = (persistentDefends[uId][attFacId] || 0) + 1;
-                    
+                    let attackerId = atk.attacker_id ? atk.attacker_id.toString() : "0";
                     let isRecent = atk.timestamp_ended > (Math.floor(Date.now() / 1000) - 180);
                     let friendlyMem = liveData.members ? liveData.members[uId] : null;
-                    if (friendlyMem && friendlyMem.status.state !== "Traveling") {
+
+                    if (friendlyMem && friendlyMem.status?.state !== "Traveling") {
                         if (!friendlyHitTracker[uId]) friendlyHitTracker[uId] = { count: 0, lastHit: 0, alertedAt: 0 };
                         let now = Date.now();
                         if (now - friendlyHitTracker[uId].lastHit > 15 * 60 * 1000) friendlyHitTracker[uId].count = 0;
@@ -931,14 +1002,7 @@ setInterval(async () => {
                 }
                 
                 if (isWin && atk.attacker_faction && atk.attacker_faction.toString() === watchFactionId.toString()) {
-                    let uId = atk.attacker_id.toString();
-                    let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
-                    if (!liveAttacks[uId]) liveAttacks[uId] = {};
-                    liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
-                    if (atk.result === "Assist") {
-                        liveAssists[uId] = (liveAssists[uId] || 0) + 1;
-                    }
-
+                    let uId = atk.attacker_id ? atk.attacker_id.toString() : "0";
                     let isRecent = atk.timestamp_ended > (Math.floor(Date.now() / 1000) - 180);
                     if (atk.chain && BONUS_THRESHOLDS.has(atk.chain)) {
                         if (hasBackfilledWar && isRecent && discordConfig.chainMilestone !== false && discordConfig.globalChannelId) {
@@ -948,13 +1012,6 @@ setInterval(async () => {
                         }
                     }
                 }
-            }
-        }
-        if (activeWarId && liveData.rankedwars) {
-            let ongoingWar = Object.values(liveData.rankedwars).find(w => w.war && w.war.start === activeWarId);
-            if (ongoingWar && ongoingWar.factions) {
-                let facIds = Object.keys(ongoingWar.factions);
-                currentEnemyFacId = facIds.find(id => id !== watchFactionId.toString());
             }
         }
 
@@ -2252,46 +2309,32 @@ app.get('/api/warboard', async (req, res) => {
         let myWarMembers = activeWar && myData.ID ? (activeWar.factions[myData.ID.toString()]?.members || {}) : {};
         let enemyWarMembers = activeWar && enemyId ? (activeWar.factions[enemyId]?.members || {}) : {};
 
-        // Parse attacks array from Torn API for recent attacks breakdown
-        let parsedAttacks = {};
-        if (myData.attacks && typeof myData.attacks === 'object') {
-            for (let atk of Object.values(myData.attacks)) {
-                let isWin = ["Hospitalized", "Mugged", "Arrested", "Looted", "Assist", "Attacked", "Special"].includes(atk.result);
-                let isDefendWin = ["Lost", "Draw", "Escape", "Stalemate", "Timeout", "Interrupted"].includes(atk.result);
-                
-                let aId = atk.attacker_id ? atk.attacker_id.toString() : null;
-                let dId = atk.defender_id ? atk.defender_id.toString() : null;
-                let aFac = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
-                let dFac = atk.defender_faction ? atk.defender_faction.toString() : "0";
+        // If war is active, trigger backfill from exact start if needed, and process incoming attack logs
+        if (activeWar && activeWar.war && myData.ID) {
+            let warStart = activeWar.war.start;
+            let warEnd = activeWar.war.end || 0;
+            currentEnemyFacId = enemyId;
 
-                if (aId && myData.members && myData.members[aId] && isWin) {
-                    if (!parsedAttacks[aId]) parsedAttacks[aId] = { warAttacks: 0, outsideAttacks: 0, assists: 0, warDefendsWon: 0, outsideDefendsWon: 0, warHitsTaken: 0, outsideHitsTaken: 0 };
-                    if (atk.result === "Assist") {
-                        parsedAttacks[aId].assists++;
-                    } else if (enemyId && dFac === enemyId.toString()) {
-                        parsedAttacks[aId].warAttacks++;
-                    } else {
-                        parsedAttacks[aId].outsideAttacks++;
-                    }
-                }
+            if (activeWarId !== warStart) {
+                activeWarId = warStart;
+                activeWarEnd = warEnd;
+                liveWarHits = {};
+                liveOutsideHits = {};
+                liveAssists = {};
+                liveWarDefendsWon = {};
+                liveOutsideDefendsWon = {};
+                liveWarHitsTaken = {};
+                liveOutsideHitsTaken = {};
+                hasBackfilledWar = false;
+                processedAttackIds.clear();
+                backfillWarDefends(userKey, myData.ID, warStart, enemyId, warEnd);
+            } else if (!hasBackfilledWar && !isBackfillingWar) {
+                backfillWarDefends(userKey, myData.ID, warStart, enemyId, warEnd);
+            }
 
-                if (dId && myData.members && myData.members[dId]) {
-                    if (!parsedAttacks[dId]) parsedAttacks[dId] = { warAttacks: 0, outsideAttacks: 0, assists: 0, warDefendsWon: 0, outsideDefendsWon: 0, warHitsTaken: 0, outsideHitsTaken: 0 };
-                    if (isDefendWin) {
-                        // Attacker lost -> our member successfully defended
-                        if (enemyId && aFac === enemyId.toString()) {
-                            parsedAttacks[dId].warDefendsWon++;
-                        } else {
-                            parsedAttacks[dId].outsideDefendsWon++;
-                        }
-                    } else if (isWin) {
-                        // Attacker won -> our member was attacked / put in hosp
-                        if (enemyId && aFac === enemyId.toString()) {
-                            parsedAttacks[dId].warHitsTaken++;
-                        } else {
-                            parsedAttacks[dId].outsideHitsTaken++;
-                        }
-                    }
+            if (myData.attacks && typeof myData.attacks === 'object') {
+                for (let atk of Object.values(myData.attacks)) {
+                    processWarAttack(atk, myData.ID, enemyId, warStart, warEnd);
                 }
             }
         }
@@ -2321,40 +2364,16 @@ app.get('/api/warboard', async (req, res) => {
                 let score = warMemberData ? (warMemberData.score || 0) : 0;
                 let baseAssists = warMemberData ? (warMemberData.assists || 0) : 0;
                 
-                let liveWarAtk = 0;
-                let liveOutsideAtk = 0;
-                if (liveAttacks[id]) {
-                    for (let [facId, count] of Object.entries(liveAttacks[id])) {
-                        if (enemyId && facId === enemyId.toString()) {
-                            liveWarAtk += count;
-                        } else {
-                            liveOutsideAtk += count;
-                        }
-                    }
-                }
+                let warAttacks = Math.max(baseWarAttacks, liveWarHits[id] || 0);
+                let assists = Math.max(baseAssists, liveAssists[id] || 0);
+                let outsideAttacks = liveOutsideHits[id] || 0;
 
-                let warAttacks = Math.max(baseWarAttacks, liveWarAtk, parsedAttacks[id]?.warAttacks || 0);
-                let assists = Math.max(baseAssists, liveAssists[id] || 0, parsedAttacks[id]?.assists || 0);
-                let outsideAttacks = Math.max(liveOutsideAtk, parsedAttacks[id]?.outsideAttacks || 0);
-
-                let liveWarHitsTaken = 0;
-                let liveOutsideHitsTaken = 0;
-                if (persistentDefends[id]) {
-                    for (let [facId, count] of Object.entries(persistentDefends[id])) {
-                        if (enemyId && facId === enemyId.toString()) {
-                            liveWarHitsTaken += count;
-                        } else {
-                            liveOutsideHitsTaken += count;
-                        }
-                    }
-                }
-
-                let warHitsTaken = Math.max(liveWarHitsTaken, parsedAttacks[id]?.warHitsTaken || 0);
-                let outsideHitsTaken = Math.max(liveOutsideHitsTaken, parsedAttacks[id]?.outsideHitsTaken || 0);
+                let warHitsTaken = liveWarHitsTaken[id] || 0;
+                let outsideHitsTaken = liveOutsideHitsTaken[id] || 0;
                 let hitsTaken = warHitsTaken + outsideHitsTaken;
 
-                let warDefendsWon = parsedAttacks[id]?.warDefendsWon || 0;
-                let outsideDefendsWon = parsedAttacks[id]?.outsideDefendsWon || 0;
+                let warDefendsWon = liveWarDefendsWon[id] || 0;
+                let outsideDefendsWon = liveOutsideDefendsWon[id] || 0;
                 let defendsWon = warDefendsWon + outsideDefendsWon;
 
                 let attacks = warAttacks + outsideAttacks;
