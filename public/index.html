@@ -340,36 +340,87 @@
             </div>
         </div>
 
-        <!-- CHARTS ROW -->
-        <div class="dash-grid" style="margin-bottom:18px;">
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title">📊 Friendly Hit Performance</div>
+        <!-- FACTION COMBAT & HIT PERFORMANCE (FULL FACTION ROSTER) -->
+        <div class="card" style="margin-bottom:18px;">
+            <div class="card-header" style="flex-wrap:wrap;gap:12px;">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                    <div class="card-title" style="color:var(--text-main);font-size:0.95em;">📊 Faction Combat &amp; Hit Performance</div>
+                    <span id="chart-member-count" style="background:rgba(88,166,255,0.12);color:var(--blue);padding:2px 9px;border-radius:12px;font-size:0.72em;font-weight:700;border:1px solid rgba(88,166,255,0.3);">0 Members</span>
                 </div>
-                <div class="card-body">
-                    <div class="chart-wrap"><canvas id="warChart"></canvas></div>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <div class="filter-group">
+                        <span style="font-size:0.7em;color:var(--text-dim);font-weight:700;margin-right:2px;align-self:center;">SORT:</span>
+                        <button id="csort-total" class="btn-filter active" onclick="setChartSort('total')" title="Sort by total attacks made">🔥 TOTAL HITS</button>
+                        <button id="csort-war" class="btn-filter" onclick="setChartSort('war')" title="Sort by ranked war hits">⚔️ WAR HITS</button>
+                        <button id="csort-assists" class="btn-filter" onclick="setChartSort('assists')" title="Sort by assists made">🤝 ASSISTS</button>
+                        <button id="csort-outside" class="btn-filter" onclick="setChartSort('outside')" title="Sort by outside attacks">🎯 OUTSIDE</button>
+                        <button id="csort-defends" class="btn-filter" onclick="setChartSort('defends')" title="Sort by total defends">🛡️ DEFENDS</button>
+                        <button id="csort-name" class="btn-filter" onclick="setChartSort('name')" title="Sort alphabetically">🔤 A-Z</button>
+                    </div>
+                    <div class="filter-group" style="margin-left:4px;">
+                        <button id="cflt-all" class="btn-filter active" onclick="setChartFilter('all')" title="Show all faction members">ALL MEMBERS</button>
+                        <button id="cflt-active" class="btn-filter" onclick="setChartFilter('active')" title="Show only members with actions">ACTIVE ONLY</button>
+                    </div>
+                    <div class="filter-group" style="margin-left:4px;">
+                        <button id="cview-stacked" class="btn-filter active" onclick="setChartViewMode('stacked')" title="Stack combat categories">STACKED</button>
+                        <button id="cview-grouped" class="btn-filter" onclick="setChartViewMode('grouped')" title="Group bars side-by-side">GROUPED</button>
+                    </div>
                 </div>
             </div>
+            <div class="card-body" style="padding:16px 20px;">
+                <!-- Summary KPI Chips -->
+                <div id="chart-summary-bar" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;">
+                    <div style="background:var(--item);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:0.75em;display:flex;align-items:center;gap:6px;">
+                        <span style="color:var(--text-dim);text-transform:uppercase;font-weight:700;">⚔️ War Hits:</span>
+                        <span id="csum-war" style="color:var(--red);font-weight:900;">0</span>
+                    </div>
+                    <div style="background:var(--item);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:0.75em;display:flex;align-items:center;gap:6px;">
+                        <span style="color:var(--text-dim);text-transform:uppercase;font-weight:700;">🤝 Assists:</span>
+                        <span id="csum-assists" style="color:var(--teal);font-weight:900;">0</span>
+                    </div>
+                    <div style="background:var(--item);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:0.75em;display:flex;align-items:center;gap:6px;">
+                        <span style="color:var(--text-dim);text-transform:uppercase;font-weight:700;">🎯 Outside Hits:</span>
+                        <span id="csum-outside" style="color:var(--purple);font-weight:900;">0</span>
+                    </div>
+                    <div style="background:var(--item);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:0.75em;display:flex;align-items:center;gap:6px;">
+                        <span style="color:var(--text-dim);text-transform:uppercase;font-weight:700;">🛡️ Total Defends:</span>
+                        <span id="csum-defends" style="color:var(--gold);font-weight:900;">0</span>
+                    </div>
+                    <div style="background:var(--item);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:0.75em;display:flex;align-items:center;gap:6px;">
+                        <span style="color:var(--text-dim);text-transform:uppercase;font-weight:700;">👑 Top Combatant:</span>
+                        <span id="csum-mvp" style="color:var(--green);font-weight:900;">—</span>
+                    </div>
+                </div>
+
+                <!-- Scrollable Canvas Wrapper -->
+                <div id="war-chart-scroll-wrap" style="overflow-x:auto;padding-bottom:6px;width:100%;border-radius:8px;">
+                    <div id="war-chart-inner" style="position:relative;height:340px;min-width:100%;">
+                        <canvas id="warChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- HEATMAP + WATCHLIST -->
+        <div class="dash-grid" style="margin-bottom:18px;">
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">💤 Enemy Activity Heatmap (24H TCT)</div>
                     <span id="heatmap-status" style="font-size:0.72em;color:var(--text-dim);background:var(--item);padding:3px 8px;border-radius:6px;border:1px solid var(--border);">Waiting for Premium API...</span>
                 </div>
                 <div class="card-body">
-                    <div class="chart-wrap"><canvas id="activityChart"></canvas></div>
+                    <div class="chart-wrap" style="height:200px;"><canvas id="activityChart"></canvas></div>
                 </div>
             </div>
-        </div>
-
-        <!-- PRIORITY WATCHLIST -->
-        <div class="card" style="margin-bottom:18px;">
-            <div class="card-header">
-                <div class="card-title" style="color:var(--red);">🚨 Priority Watchlist — Online &amp; Landing Soon</div>
-                <span id="watch-count" style="background:rgba(255,71,87,0.1);color:var(--red);padding:2px 8px;border-radius:12px;font-size:0.72em;font-weight:700;border:1px solid rgba(255,71,87,0.3);">0</span>
-            </div>
-            <div class="card-body">
-                <div id="watchlist-items" class="watchlist-strip">
-                    <div class="empty-state">No priority targets online or landing within 30 minutes.</div>
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title" style="color:var(--red);">🚨 Priority Watchlist — Online &amp; Landing Soon</div>
+                    <span id="watch-count" style="background:rgba(255,71,87,0.1);color:var(--red);padding:2px 8px;border-radius:12px;font-size:0.72em;font-weight:700;border:1px solid rgba(255,71,87,0.3);">0</span>
+                </div>
+                <div class="card-body">
+                    <div id="watchlist-items" class="watchlist-strip">
+                        <div class="empty-state">No priority targets online or landing within 30 minutes.</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -568,6 +619,10 @@ let currentEnemyData = [];
 let activeFilter = 'All';
 let warChartInstance = null;
 let activityChartInstance = null;
+let chartSortBy = 'total';
+let chartFilter = 'all';
+let chartViewMode = 'stacked';
+let lastFriendlyPlayers = [];
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 function openSettings() {
@@ -742,35 +797,279 @@ async function fetchWarboard() {
 }
 
 // ─── Charts ───────────────────────────────────────────────────────────────────
+function setChartSort(sort) {
+    chartSortBy = sort;
+    ['total','war','assists','outside','defends','name'].forEach(k => {
+        const btn = document.getElementById('csort-' + k);
+        if (btn) btn.className = (k === sort) ? 'btn-filter active' : 'btn-filter';
+    });
+    if (lastFriendlyPlayers.length > 0) renderChart(lastFriendlyPlayers);
+}
+
+function setChartFilter(filter) {
+    chartFilter = filter;
+    ['all','active'].forEach(k => {
+        const btn = document.getElementById('cflt-' + k);
+        if (btn) btn.className = (k === filter) ? 'btn-filter active' : 'btn-filter';
+    });
+    if (lastFriendlyPlayers.length > 0) renderChart(lastFriendlyPlayers);
+}
+
+function setChartViewMode(mode) {
+    chartViewMode = mode;
+    ['stacked','grouped'].forEach(k => {
+        const btn = document.getElementById('cview-' + k);
+        if (btn) btn.className = (k === mode) ? 'btn-filter active' : 'btn-filter';
+    });
+    if (lastFriendlyPlayers.length > 0) renderChart(lastFriendlyPlayers);
+}
+
 function renderChart(players) {
-    const sorted = [...players].sort((a,b) => b.attacks !== a.attacks ? b.attacks - a.attacks : b.defends - a.defends || a.name.localeCompare(b.name)).slice(0, 15);
-    const labels = sorted.map(p => p.name);
-    const attData = sorted.map(p => p.attacks);
-    const defData = sorted.map(p => p.defends);
-    const ctx = document.getElementById('warChart').getContext('2d');
-    const gRed = ctx.createLinearGradient(0,0,0,300); gRed.addColorStop(0,'#ff4757'); gRed.addColorStop(1,'#ff6b81');
-    const gGold = ctx.createLinearGradient(0,0,0,300); gGold.addColorStop(0,'#ffa502'); gGold.addColorStop(1,'#ffd43b');
+    lastFriendlyPlayers = players || [];
+    if (!players || players.length === 0) return;
+
+    // Filter players
+    let filtered = [...players];
+    if (chartFilter === 'active') {
+        filtered = filtered.filter(p => (p.attacks || 0) > 0 || (p.assists || 0) > 0 || (p.defends || 0) > 0 || (p.score || 0) > 0);
+    }
+
+    // Sort players
+    filtered.sort((a, b) => {
+        if (chartSortBy === 'total') {
+            const totA = (a.attacks || 0) + (a.assists || 0);
+            const totB = (b.attacks || 0) + (b.assists || 0);
+            if (totB !== totA) return totB - totA;
+            if ((b.defends || 0) !== (a.defends || 0)) return (b.defends || 0) - (a.defends || 0);
+            return a.name.localeCompare(b.name);
+        } else if (chartSortBy === 'war') {
+            const wA = a.warAttacks || 0, wB = b.warAttacks || 0;
+            if (wB !== wA) return wB - wA;
+            return (b.attacks || 0) - (a.attacks || 0) || a.name.localeCompare(b.name);
+        } else if (chartSortBy === 'assists') {
+            const asA = a.assists || 0, asB = b.assists || 0;
+            if (asB !== asA) return asB - asA;
+            return (b.attacks || 0) - (a.attacks || 0) || a.name.localeCompare(b.name);
+        } else if (chartSortBy === 'outside') {
+            const outA = a.outsideAttacks || 0, outB = b.outsideAttacks || 0;
+            if (outB !== outA) return outB - outA;
+            return (b.attacks || 0) - (a.attacks || 0) || a.name.localeCompare(b.name);
+        } else if (chartSortBy === 'defends') {
+            const defA = a.defends || 0, defB = b.defends || 0;
+            if (defB !== defA) return defB - defA;
+            return (b.attacks || 0) - (a.attacks || 0) || a.name.localeCompare(b.name);
+        } else if (chartSortBy === 'name') {
+            return a.name.localeCompare(b.name);
+        }
+        return 0;
+    });
+
+    // Update member count badge
+    const countBadge = document.getElementById('chart-member-count');
+    if (countBadge) {
+        countBadge.innerText = `${filtered.length} of ${players.length} Members`;
+    }
+
+    // Update Summary KPI Chips
+    let totalWarHits = 0;
+    let totalAssists = 0;
+    let totalOutside = 0;
+    let totalDefends = 0;
+    let topHitter = { name: '—', total: 0 };
+
+    players.forEach(p => {
+        const war = p.warAttacks || 0;
+        const asst = p.assists || 0;
+        const out = p.outsideAttacks || 0;
+        const def = p.defends || 0;
+        const tot = war + asst + out;
+
+        totalWarHits += war;
+        totalAssists += asst;
+        totalOutside += out;
+        totalDefends += def;
+
+        if (tot > topHitter.total) {
+            topHitter = { name: p.name, total: tot };
+        }
+    });
+
+    const sumWarEl = document.getElementById('csum-war');
+    if (sumWarEl) sumWarEl.innerText = totalWarHits.toLocaleString();
+    const sumAsstEl = document.getElementById('csum-assists');
+    if (sumAsstEl) sumAsstEl.innerText = totalAssists.toLocaleString();
+    const sumOutEl = document.getElementById('csum-outside');
+    if (sumOutEl) sumOutEl.innerText = totalOutside.toLocaleString();
+    const sumDefEl = document.getElementById('csum-defends');
+    if (sumDefEl) sumDefEl.innerText = totalDefends.toLocaleString();
+    const sumMvpEl = document.getElementById('csum-mvp');
+    if (sumMvpEl) sumMvpEl.innerText = topHitter.total > 0 ? `${topHitter.name} (${topHitter.total})` : '—';
+
+    // Manage dynamic width for smooth scrolling
+    const chartInner = document.getElementById('war-chart-inner');
+    if (chartInner) {
+        if (filtered.length > 18) {
+            chartInner.style.minWidth = `${Math.max(800, filtered.length * 40)}px`;
+        } else {
+            chartInner.style.minWidth = '100%';
+        }
+    }
+
+    const labels = filtered.map(p => p.name);
+    const warHitsData = filtered.map(p => p.warAttacks || 0);
+    const assistsData = filtered.map(p => p.assists || 0);
+    const outsideAttacksData = filtered.map(p => p.outsideAttacks || 0);
+    const warDefendsData = filtered.map(p => p.warDefends || 0);
+    const outsideDefendsData = filtered.map(p => p.outsideDefends || 0);
+
+    const canvas = document.getElementById('warChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    // Gradients
+    const gRed = ctx.createLinearGradient(0, 0, 0, 320);
+    gRed.addColorStop(0, '#ff4757'); gRed.addColorStop(1, '#ff6b81');
+
+    const gTeal = ctx.createLinearGradient(0, 0, 0, 320);
+    gTeal.addColorStop(0, '#00cec9'); gTeal.addColorStop(1, '#55efc4');
+
+    const gPurple = ctx.createLinearGradient(0, 0, 0, 320);
+    gPurple.addColorStop(0, '#a29bfe'); gPurple.addColorStop(1, '#6c5ce7');
+
+    const gGold = ctx.createLinearGradient(0, 0, 0, 320);
+    gGold.addColorStop(0, '#ffa502'); gGold.addColorStop(1, '#ffd43b');
+
+    const gOrange = ctx.createLinearGradient(0, 0, 0, 320);
+    gOrange.addColorStop(0, '#e17055'); gOrange.addColorStop(1, '#fab1a0');
+
+    const isStacked = (chartViewMode === 'stacked');
+
+    const datasets = [
+        {
+            label: '⚔️ War Hits',
+            data: warHitsData,
+            backgroundColor: gRed,
+            borderRadius: isStacked ? 0 : 5,
+            stack: isStacked ? 'attacks' : undefined,
+            barPercentage: 0.8,
+            categoryPercentage: 0.75
+        },
+        {
+            label: '🤝 Assists',
+            data: assistsData,
+            backgroundColor: gTeal,
+            borderRadius: isStacked ? 0 : 5,
+            stack: isStacked ? 'attacks' : undefined,
+            barPercentage: 0.8,
+            categoryPercentage: 0.75
+        },
+        {
+            label: '🎯 Outside Attacks',
+            data: outsideAttacksData,
+            backgroundColor: gPurple,
+            borderRadius: isStacked ? (chartViewMode === 'stacked' ? 5 : 0) : 5,
+            stack: isStacked ? 'attacks' : undefined,
+            barPercentage: 0.8,
+            categoryPercentage: 0.75
+        },
+        {
+            label: '🛡️ War Defends',
+            data: warDefendsData,
+            backgroundColor: gGold,
+            borderRadius: isStacked ? 0 : 5,
+            stack: isStacked ? 'defends' : undefined,
+            barPercentage: 0.8,
+            categoryPercentage: 0.75
+        },
+        {
+            label: '🛑 Outside Defends',
+            data: outsideDefendsData,
+            backgroundColor: gOrange,
+            borderRadius: 5,
+            stack: isStacked ? 'defends' : undefined,
+            barPercentage: 0.8,
+            categoryPercentage: 0.75
+        }
+    ];
+
     if (warChartInstance) {
         warChartInstance.data.labels = labels;
-        warChartInstance.data.datasets[0].data = attData;
-        warChartInstance.data.datasets[1].data = defData;
+        warChartInstance.data.datasets = datasets;
+        warChartInstance.options.scales.x.stacked = isStacked;
+        warChartInstance.options.scales.y.stacked = isStacked;
         warChartInstance.update('none');
     } else {
         warChartInstance = new Chart(ctx, {
             type: 'bar',
-            data: { labels, datasets: [
-                { label: 'Hits Made', data: attData, backgroundColor: gRed, borderRadius: 6, barPercentage: 0.7, categoryPercentage: 0.6 },
-                { label: 'Defends', data: defData, backgroundColor: gGold, borderRadius: 6, barPercentage: 0.7, categoryPercentage: 0.6 }
-            ]},
+            data: { labels, datasets },
             options: {
-                responsive: true, maintainAspectRatio: false,
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
                 scales: {
-                    y: { beginAtZero: true, grid: { color: 'rgba(33,38,45,0.8)', drawBorder: false }, ticks: { color: '#8b949e', stepSize: 1 } },
-                    x: { grid: { display: false }, ticks: { color: '#8b949e', font: { weight: '700', size: 10 } } }
+                    x: {
+                        stacked: isStacked,
+                        grid: { display: false },
+                        ticks: {
+                            color: '#8b949e',
+                            font: { weight: '700', size: 10 },
+                            maxRotation: 45,
+                            minRotation: 30,
+                            autoSkip: false
+                        }
+                    },
+                    y: {
+                        stacked: isStacked,
+                        beginAtZero: true,
+                        grid: { color: 'rgba(33,38,45,0.8)', drawBorder: false },
+                        ticks: { color: '#8b949e', stepSize: 1 }
+                    }
                 },
                 plugins: {
-                    legend: { labels: { color: '#e6edf3', font: { weight: '700' } } },
-                    tooltip: { backgroundColor: '#0d1117', titleColor: '#ffa502', bodyColor: '#e6edf3', borderColor: '#21262d', borderWidth: 1, padding: 10, cornerRadius: 8 }
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            color: '#e6edf3',
+                            font: { weight: '700', size: 11 },
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            padding: 14,
+                            usePointStyle: true,
+                            pointStyle: 'circle'
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: '#0d1117',
+                        titleColor: '#58a6ff',
+                        bodyColor: '#e6edf3',
+                        borderColor: '#21262d',
+                        borderWidth: 1,
+                        padding: 12,
+                        cornerRadius: 8,
+                        callbacks: {
+                            afterTitle: function(context) {
+                                const idx = context[0].dataIndex;
+                                const p = filtered[idx];
+                                if (!p) return '';
+                                return `Level: ${p.level || '—'} | Status: ${p.statusDescription || p.state || 'Okay'}`;
+                            },
+                            footer: function(items) {
+                                const idx = items[0].dataIndex;
+                                const p = filtered[idx];
+                                if (!p) return '';
+                                const totAtk = (p.warAttacks || 0) + (p.assists || 0) + (p.outsideAttacks || 0);
+                                const totDef = (p.warDefends || 0) + (p.outsideDefends || 0);
+                                let lines = [
+                                    `━━━━━━━━━━━━━━━━━━━━`,
+                                    `🔥 Total Attacks: ${totAtk}`,
+                                    `🛡️ Total Defends: ${totDef}`
+                                ];
+                                if (p.score) lines.push(`🏆 War Score: ${p.score.toLocaleString()}`);
+                                return lines.join('\n');
+                            }
+                        }
+                    }
                 },
                 animation: false
             }

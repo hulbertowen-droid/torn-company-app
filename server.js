@@ -222,6 +222,7 @@ let activeKeyIndex = 0;
 
 let persistentDefends = {};
 let liveAttacks = {};
+let liveAssists = {};
 let activeWarId = null;
 let hasBackfilledWar = false;
 let processedAttackIds = new Set();
@@ -700,6 +701,9 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart) {
                         let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
                         if (!liveAttacks[uId]) liveAttacks[uId] = {};
                         liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
+                        if (atk.result === "Assist") {
+                            liveAssists[uId] = (liveAssists[uId] || 0) + 1;
+                        }
                     }
                 }
             }
@@ -844,7 +848,7 @@ setInterval(async () => {
             if (ongoingWar) {
                 if (activeWarId !== ongoingWar.war.start) {
                     activeWarId = ongoingWar.war.start;
-                    persistentDefends = {}; liveAttacks = {}; hasBackfilledWar = false; processedAttackIds.clear();
+                    persistentDefends = {}; liveAttacks = {}; liveAssists = {}; hasBackfilledWar = false; processedAttackIds.clear();
                     friendlyHitTracker = {}; travelAlerts = {}; currentEnemyFacId = null; enemyMembersCache = {};
                     backfillWarDefends(watchKey, watchFactionId, activeWarId);
                 }
@@ -928,6 +932,9 @@ setInterval(async () => {
                     let defFacId = atk.defender_faction ? atk.defender_faction.toString() : "0";
                     if (!liveAttacks[uId]) liveAttacks[uId] = {};
                     liveAttacks[uId][defFacId] = (liveAttacks[uId][defFacId] || 0) + 1;
+                    if (atk.result === "Assist") {
+                        liveAssists[uId] = (liveAssists[uId] || 0) + 1;
+                    }
 
                     let isRecent = atk.timestamp_ended > (Math.floor(Date.now() / 1000) - 180);
                     if (atk.chain && BONUS_THRESHOLDS.has(atk.chain)) {
@@ -2214,7 +2221,7 @@ app.get('/api/warboard', async (req, res) => {
         
         let activeKey = userKey;
         let [myData, enemyDataResult] = await Promise.all([
-            cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`, `my_faction_${userKey}`, 2500),
+            cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${userKey}`, `my_faction_${userKey}`, 2500),
             enemyId ? cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()||userKey}`, `enemy_faction_${enemyId}`, 2500) : Promise.resolve({ members: {} })
         ]);
         
@@ -2231,6 +2238,40 @@ app.get('/api/warboard', async (req, res) => {
         }
         let myWarMembers = activeWar && myData.ID ? (activeWar.factions[myData.ID.toString()]?.members || {}) : {};
         let enemyWarMembers = activeWar && enemyId ? (activeWar.factions[enemyId]?.members || {}) : {};
+
+        // Parse attacks array from Torn API for recent attacks breakdown
+        let parsedAttacks = {};
+        if (myData.attacks && typeof myData.attacks === 'object') {
+            for (let atk of Object.values(myData.attacks)) {
+                let isWin = ["Hospitalized", "Mugged", "Arrested", "Looted", "Assist", "Attacked", "Special"].includes(atk.result);
+                if (!isWin) continue;
+                
+                let aId = atk.attacker_id ? atk.attacker_id.toString() : null;
+                let dId = atk.defender_id ? atk.defender_id.toString() : null;
+                let aFac = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
+                let dFac = atk.defender_faction ? atk.defender_faction.toString() : "0";
+
+                if (aId && myData.members && myData.members[aId]) {
+                    if (!parsedAttacks[aId]) parsedAttacks[aId] = { warAttacks: 0, outsideAttacks: 0, assists: 0, warDefends: 0, outsideDefends: 0 };
+                    if (atk.result === "Assist") {
+                        parsedAttacks[aId].assists++;
+                    } else if (enemyId && dFac === enemyId.toString()) {
+                        parsedAttacks[aId].warAttacks++;
+                    } else {
+                        parsedAttacks[aId].outsideAttacks++;
+                    }
+                }
+
+                if (dId && myData.members && myData.members[dId]) {
+                    if (!parsedAttacks[dId]) parsedAttacks[dId] = { warAttacks: 0, outsideAttacks: 0, assists: 0, warDefends: 0, outsideDefends: 0 };
+                    if (enemyId && aFac === enemyId.toString()) {
+                        parsedAttacks[dId].warDefends++;
+                    } else {
+                        parsedAttacks[dId].outsideDefends++;
+                    }
+                }
+            }
+        }
 
         const friendlyIds = new Set(Object.keys(myData.members || {}));
         const enemyIds = new Set(Object.keys(enemyDataResult.members || {}));
@@ -2253,19 +2294,74 @@ app.get('/api/warboard', async (req, res) => {
                 if (isTraveling) { if (flightCache[id]?.landingTime) { finalLandingTime = flightCache[id].landingTime; finalUntil = finalLandingTime; } else { if (!isPremium) needsFfScouterForFlights = true; } }
                 
                 let warMemberData = isEnemy ? enemyWarMembers[id] : myWarMembers[id];
-                let baseAttacks = warMemberData ? (warMemberData.attacks || 0) : 0;
+                let baseWarAttacks = warMemberData ? (warMemberData.attacks || 0) : 0;
                 let score = warMemberData ? (warMemberData.score || 0) : 0;
+                let baseAssists = warMemberData ? (warMemberData.assists || 0) : 0;
                 
-                let liveAtk = 0;
-                if (enemyId && liveAttacks[id]?.[enemyId]) { liveAtk = liveAttacks[id][enemyId]; }
-                let attacks = Math.max(baseAttacks, liveAtk);
+                let liveWarAtk = 0;
+                let liveOutsideAtk = 0;
+                if (liveAttacks[id]) {
+                    for (let [facId, count] of Object.entries(liveAttacks[id])) {
+                        if (enemyId && facId === enemyId.toString()) {
+                            liveWarAtk += count;
+                        } else {
+                            liveOutsideAtk += count;
+                        }
+                    }
+                }
 
-                let defends = 0;
-                if (enemyId && persistentDefends[id]?.[enemyId]) { defends = persistentDefends[id][enemyId]; }
+                let warAttacks = Math.max(baseWarAttacks, liveWarAtk, parsedAttacks[id]?.warAttacks || 0);
+                let assists = Math.max(baseAssists, liveAssists[id] || 0, parsedAttacks[id]?.assists || 0);
+                let outsideAttacks = Math.max(liveOutsideAtk, parsedAttacks[id]?.outsideAttacks || 0);
+
+                let liveWarDef = 0;
+                let liveOutsideDef = 0;
+                if (persistentDefends[id]) {
+                    for (let [facId, count] of Object.entries(persistentDefends[id])) {
+                        if (enemyId && facId === enemyId.toString()) {
+                            liveWarDef += count;
+                        } else {
+                            liveOutsideDef += count;
+                        }
+                    }
+                }
+
+                let warDefends = Math.max(liveWarDef, parsedAttacks[id]?.warDefends || 0);
+                let outsideDefends = Math.max(liveOutsideDef, parsedAttacks[id]?.outsideDefends || 0);
+                let defends = warDefends + outsideDefends;
+                let attacks = warAttacks + outsideAttacks;
 
                 let timeline = activityCache[id]?.timeline || null; let timelineTime = activityCache[id]?.time || null;
 
-                return { id, name: m.name, level: m.level || 0, position: m.position || '', daysInFaction: m.days_in_faction || 0, state: m.status?.state, until: finalUntil, statusDescription: m.status?.description || "", onlineStatus: m.last_action?.status || "Offline", lastActionRelative: m.last_action?.relative || "Unknown", lastActionTimestamp: m.last_action?.timestamp || 0, landingTime: finalLandingTime, needsFfScouterForFlights, claimedBy: isEnemy ? claims[id]?.playerName || null : null, needsBackup: isEnemy ? backups[id]?.playerName || null : null, estStats: est, intelScore: isEnemy ? computeWarIntel({ id, state: m.status?.state, until: finalUntil, onlineStatus: m.last_action?.status || "Offline", estStats: typeof est === 'number' ? est : null }, statsCache) : null, isManual: !!manualStats[id], attacks, score, defends, timeline };
+                return { 
+                    id, 
+                    name: m.name, 
+                    level: m.level || 0, 
+                    position: m.position || '', 
+                    daysInFaction: m.days_in_faction || 0, 
+                    state: m.status?.state, 
+                    until: finalUntil, 
+                    statusDescription: m.status?.description || "", 
+                    onlineStatus: m.last_action?.status || "Offline", 
+                    lastActionRelative: m.last_action?.relative || "Unknown", 
+                    lastActionTimestamp: m.last_action?.timestamp || 0, 
+                    landingTime: finalLandingTime, 
+                    needsFfScouterForFlights, 
+                    claimedBy: isEnemy ? claims[id]?.playerName || null : null, 
+                    needsBackup: isEnemy ? backups[id]?.playerName || null : null, 
+                    estStats: est, 
+                    intelScore: isEnemy ? computeWarIntel({ id, state: m.status?.state, until: finalUntil, onlineStatus: m.last_action?.status || "Offline", estStats: typeof est === 'number' ? est : null }, statsCache) : null, 
+                    isManual: !!manualStats[id], 
+                    attacks, 
+                    warAttacks,
+                    outsideAttacks,
+                    assists,
+                    defends, 
+                    warDefends,
+                    outsideDefends,
+                    score, 
+                    timeline 
+                };
             });
         };
         res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId, premiumActive: isPremium });
