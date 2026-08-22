@@ -220,10 +220,13 @@ let isProcessingActivity = false;
 
 let activeKeyIndex = 0;
 
+let persistentHitsTaken = {};
+let persistentDefendsWon = {};
 let persistentDefends = {};
 let liveAttacks = {};
 let liveAssists = {};
 let activeWarId = null;
+let lastGoodWarboardPayload = null;
 let hasBackfilledWar = false;
 let processedAttackIds = new Set();
 let friendlyHitTracker = {};
@@ -1325,11 +1328,21 @@ async function cachedTornFetch(url, cacheKey, ttlMs = 2500) {
     try {
         const res = await fetch(url);
         const data = await res.json();
+        if (!data.error && data.members && Object.keys(data.members).length > 0) {
+            globalTornCache[cacheKey] = { timestamp: now, data };
+            return data;
+        }
+        if (globalTornCache[cacheKey]?.data?.members && Object.keys(globalTornCache[cacheKey].data.members).length > 0) {
+            return globalTornCache[cacheKey].data;
+        }
         if (!data.error) {
             globalTornCache[cacheKey] = { timestamp: now, data };
         }
         return data;
     } catch (e) {
+        if (globalTornCache[cacheKey]?.data?.members) {
+            return globalTornCache[cacheKey].data;
+        }
         return { members: {} };
     }
 }
@@ -2384,8 +2397,55 @@ app.get('/api/warboard', async (req, res) => {
                 };
             });
         };
-        res.json({ friendly: parseMembers(myData, false), enemy: parseMembers(enemyDataResult, true), detectedEnemyId: enemyId, premiumActive: isPremium });
-    } catch (err) { res.status(403).json({ error: err.message }); }
+        const friendlyMembers = parseMembers(myData, false);
+        const enemyMembers = parseMembers(enemyDataResult, true);
+
+        if (friendlyMembers.length === 0 && lastGoodWarboardPayload) {
+            return res.json(lastGoodWarboardPayload);
+        }
+
+        const payload = {
+            friendly: friendlyMembers,
+            enemy: enemyMembers,
+            detectedEnemyId: enemyId,
+            premiumActive: isPremium,
+            warInfo: activeWar ? {
+                active: true,
+                start: activeWar.war?.start || 0,
+                end: activeWar.war?.end || 0,
+                target: activeWar.war?.target || 0,
+                myFaction: {
+                    id: myData?.ID || null,
+                    name: myData?.name || "Friendly Faction",
+                    score: (activeWar.factions && myData.ID && activeWar.factions[myData.ID.toString()]) ? (activeWar.factions[myData.ID.toString()].score || 0) : 0,
+                    chain: (activeWar.factions && myData.ID && activeWar.factions[myData.ID.toString()]) ? (activeWar.factions[myData.ID.toString()].chain || 0) : 0
+                },
+                enemyFaction: {
+                    id: enemyId,
+                    name: enemyDataResult?.name || "Enemy Faction",
+                    score: (activeWar.factions && enemyId && activeWar.factions[enemyId.toString()]) ? (activeWar.factions[enemyId.toString()].score || 0) : 0,
+                    chain: (activeWar.factions && enemyId && activeWar.factions[enemyId.toString()]) ? (activeWar.factions[enemyId.toString()].chain || 0) : 0
+                }
+            } : {
+                active: false,
+                myFaction: {
+                    id: myData?.ID || null,
+                    name: myData?.name || "Friendly Faction"
+                }
+            }
+        };
+
+        if (friendlyMembers.length > 0) {
+            lastGoodWarboardPayload = payload;
+        }
+
+        res.json(payload);
+    } catch (err) {
+        if (lastGoodWarboardPayload) {
+            return res.json(lastGoodWarboardPayload);
+        }
+        res.status(403).json({ error: err.message });
+    }
 });
 app.post('/api/save-oc-config', (req, res) => {
     const { globalChannelId, roleId } = req.body;

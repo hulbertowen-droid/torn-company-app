@@ -620,6 +620,7 @@ let cpm = parseInt(localStorage.getItem("warboard_cpm")) || 12;
 let knownEnemies = {};
 let fetchTimer = null;
 let progressTimer = null;
+let currentFriendlyData = [];
 let currentEnemyData = [];
 let activeFilter = 'All';
 let warChartInstance = null;
@@ -768,37 +769,94 @@ async function fetchWarboard() {
     try {
         const res = await fetch(`/api/warboard`, { headers: { 'x-api-key': myKey, 'x-enemy-id': enemyFacId, 'x-ff-key': ffKey } });
         const data = await res.json();
+        
         if (data.error) {
-            document.getElementById("friendly-list").innerHTML = `<div style="color:var(--red);padding:20px;font-weight:700;text-align:center;">${data.error}</div>`;
+            console.warn("Warboard API transient notice:", data.error);
+            if (currentFriendlyData.length === 0) {
+                document.getElementById("friendly-list").innerHTML = `<div style="color:var(--red);padding:20px;font-weight:700;text-align:center;">${data.error}</div>`;
+            }
             return;
         }
+
+        if (!data.friendly || !Array.isArray(data.friendly) || (data.friendly.length === 0 && currentFriendlyData.length > 0)) {
+            console.warn("Transient empty data received from API — preserving existing board state");
+            return;
+        }
+
+        currentFriendlyData = data.friendly;
+        const enemies = data.enemy || [];
         const now = Math.floor(Date.now() / 1000);
         document.getElementById("last-updated").innerText = `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}`;
 
+        // Update War Hero Header Strip
+        const heroTitle = document.getElementById("war-hero-title");
+        const heroSub = document.getElementById("war-hero-sub");
+        const scoreBlock = document.getElementById("war-score-block");
+        const warBadge = document.getElementById("war-status-badge");
+
+        if (data.warInfo && data.warInfo.active) {
+            const war = data.warInfo;
+            if (heroTitle) heroTitle.innerText = `${war.myFaction?.name || 'Friendly'} vs ${war.enemyFaction?.name || 'Enemy'}`;
+            if (heroSub) heroSub.innerText = `Ranked War Active • Target Score: ${(war.target || 0).toLocaleString()}`;
+            if (warBadge) {
+                warBadge.className = "war-badge";
+                warBadge.innerText = "⚡ WAR ACTIVE";
+            }
+            if (scoreBlock) {
+                scoreBlock.style.display = "flex";
+                const usEl = document.getElementById("score-us");
+                const themEl = document.getElementById("score-them");
+                const barFill = document.getElementById("war-bar-fill");
+                const usScore = war.myFaction?.score || 0;
+                const themScore = war.enemyFaction?.score || 0;
+                if (usEl) usEl.innerText = usScore.toLocaleString();
+                if (themEl) themEl.innerText = themScore.toLocaleString();
+                if (barFill) {
+                    const total = usScore + themScore;
+                    const pct = total > 0 ? Math.round((usScore / total) * 100) : 50;
+                    barFill.style.width = `${pct}%`;
+                    barFill.className = pct < 45 ? "war-score-bar-fill danger" : "war-score-bar-fill";
+                }
+            }
+        } else {
+            if (heroTitle && data.warInfo?.myFaction?.name) {
+                heroTitle.innerText = data.warInfo.myFaction.name;
+                if (heroSub) heroSub.innerText = "Live Faction Warboard • Ready for Combat";
+                if (warBadge) {
+                    warBadge.className = "war-badge peace";
+                    warBadge.innerText = "🟢 STANDBY";
+                }
+            }
+            if (scoreBlock) scoreBlock.style.display = "none";
+        }
+
         // KPI counts
         const friendlyOnline = data.friendly.filter(p => p.onlineStatus === "Online").length;
-        const enemyOnline = data.enemy.filter(p => p.onlineStatus === "Online").length;
-        const enemyHosp = data.enemy.filter(p => p.state === "Hospital").length;
-        const enemyFlying = data.enemy.filter(p => checkIsFlying(p)).length;
-        const claimed = data.enemy.filter(p => p.claimedBy).length;
+        const enemyOnline = enemies.filter(p => p.onlineStatus === "Online").length;
+        const enemyHosp = enemies.filter(p => p.state === "Hospital").length;
+        const enemyFlying = enemies.filter(p => checkIsFlying(p)).length;
+        const claimed = enemies.filter(p => p.claimedBy).length;
+
         document.getElementById("kpi-friendly-online").innerText = friendlyOnline;
         document.getElementById("kpi-friendly-total").innerText = `of ${data.friendly.length} members`;
         document.getElementById("kpi-enemy-online").innerText = enemyOnline;
-        document.getElementById("kpi-enemy-total").innerText = `of ${data.enemy.length} targets`;
+        document.getElementById("kpi-enemy-total").innerText = `of ${enemies.length} targets`;
         document.getElementById("kpi-enemy-hosp").innerText = enemyHosp;
         document.getElementById("kpi-enemy-flying").innerText = enemyFlying;
         document.getElementById("kpi-claimed").innerText = claimed;
 
         document.getElementById("friendly-count").innerText = data.friendly.length;
-        document.getElementById("enemy-count").innerText = data.enemy.length;
+        document.getElementById("enemy-count").innerText = enemies.length;
 
-        processNotifications(data.enemy);
-        renderWatchlist(data.enemy);
+        if (enemies.length > 0) {
+            processNotifications(enemies);
+            renderWatchlist(enemies);
+            renderHeatmap(enemies, data.premiumActive);
+            currentEnemyData = sortPlayersList(enemies, true);
+            renderEnemyList(currentEnemyData, data.premiumActive);
+        }
         renderFriendlyList(sortPlayersList(data.friendly, false), data.premiumActive);
         renderChart(data.friendly);
-        renderHeatmap(data.enemy, data.premiumActive);
-        currentEnemyData = sortPlayersList(data.enemy, true);
-        renderEnemyList(currentEnemyData, data.premiumActive);
     } catch(e) { console.error("Warboard fetch failed:", e); }
 }
 
