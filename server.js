@@ -294,23 +294,45 @@ async function sendChannelMessage(token, channelId, embed, content = "") {
     try {
         const payload = { embeds: [embed] };
         if (content) payload.content = content;
-        
-        const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bot ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-        });
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10_000);
+
+        let res;
+        try {
+            res = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bot ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload),
+                signal: controller.signal,
+            });
+        } finally {
+            clearTimeout(timeout);
+        }
+
+        // Guard against HTML error pages (Cloudflare 502, rate-limit pages, etc.)
+        const ct = res.headers.get('content-type') || '';
+        if (!ct.includes('application/json')) {
+            const raw = await res.text().catch(() => '(unreadable body)');
+            console.error(`Discord non-JSON response [${res.status}]:`, raw.slice(0, 200));
+            return { success: false, error: `Discord returned HTTP ${res.status} (not JSON)` };
+        }
+
         const data = await res.json();
         if (!res.ok) {
             console.error("Discord API Error:", data);
-            return { success: false, error: data.message || "Discord API error" };
+            return { success: false, error: data.message || `Discord API error (${res.status})` };
         }
         return { success: true };
     } catch (err) {
-        console.error("Discord send error:", err);
+        if (err.name === 'AbortError') {
+            console.error("Discord send timeout");
+            return { success: false, error: "Discord request timed out after 10s" };
+        }
+        console.error("Discord send error:", err.message);
         return { success: false, error: err.message };
     }
 }
