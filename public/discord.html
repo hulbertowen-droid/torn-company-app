@@ -692,11 +692,19 @@ async function testAlert(type) {
     statusEl.textContent = `Sending ${type} test alert to Discord...`;
 
     try {
-        const res = await fetch('/api/test-discord-alert', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type, discordId, globalChannelId: channelId, globalBotToken: botToken })
-        });
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        let res;
+        try {
+            res = await fetch('/api/test-discord-alert', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type, discordId, globalChannelId: channelId, globalBotToken: botToken }),
+                signal: controller.signal
+            });
+        } finally {
+            clearTimeout(timeout);
+        }
         const data = await res.json();
         if (data.success) {
             btn.classList.remove('sending');
@@ -712,14 +720,14 @@ async function testAlert(type) {
         btn.classList.add('fail');
         btn.innerHTML = '❌ Failed';
         statusEl.style.color = 'var(--red)';
-        statusEl.textContent = `❌ ${e.message}`;
+        statusEl.textContent = `❌ ${e.message || 'Request failed'}`;
     } finally {
         setTimeout(() => {
             btn.disabled = false;
             btn.className = 'btn-test';
-            btn.innerHTML = type === 'travel' ? '🧪 Test' : '🧪 Test';
+            btn.innerHTML = '🧪 Test';
             statusEl.textContent = '';
-        }, 5000);
+        }, 6000);
     }
 }
 </script>

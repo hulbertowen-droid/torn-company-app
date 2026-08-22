@@ -305,7 +305,7 @@ function saveApiPool() { fs.writeFileSync('api_pool.json', JSON.stringify(apiPoo
 function saveCompanyConfig() { fs.writeFileSync('company_config.json', JSON.stringify(companyConfig)); saveToMongo(); }
 
 async function sendChannelMessage(token, channelId, embed, content = "", attempt = 1) {
-    if (!token && !channelId) return { success: false, error: "Missing Discord token or channel ID / webhook URL." };
+    if (!token && !channelId) return { success: false, error: "Missing Discord Bot Token or Channel ID / Webhook URL." };
 
     // 1. Detect if channelId or token is a Webhook URL
     let webhookUrl = null;
@@ -328,9 +328,10 @@ async function sendChannelMessage(token, channelId, embed, content = "", attempt
 
     // A. Webhook route
     if (webhookUrl) {
+        console.log(`[Discord Webhook] Sending alert to webhook: ${webhookUrl.slice(0, 45)}...`);
         try {
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 10_000);
+            const timeout = setTimeout(() => controller.abort(), 8000);
             let res;
             try {
                 res = await fetch(webhookUrl, {
@@ -345,15 +346,15 @@ async function sendChannelMessage(token, channelId, embed, content = "", attempt
 
             if (res.status === 429 && attempt <= 2) {
                 const retryAfterHeader = res.headers.get('retry-after');
-                const delayMs = retryAfterHeader ? Math.min(Math.ceil(parseFloat(retryAfterHeader) * 1000), 5000) : 2000;
-                console.warn(`[Discord Webhook] Rate limited (429). Retrying after ${delayMs}ms...`);
+                const delayMs = retryAfterHeader ? Math.min(Math.ceil(parseFloat(retryAfterHeader) * 1000), 4000) : 2000;
+                console.warn(`[Discord Webhook] Rate limited (429). Retrying in ${delayMs}ms...`);
                 await new Promise(r => setTimeout(r, delayMs));
                 return sendChannelMessage(token, channelId, embed, content, attempt + 1);
             }
 
             if (!res.ok) {
                 if (res.status === 429) {
-                    return { success: false, error: "Discord webhook is temporarily rate-limited. Please wait a few seconds before trying again." };
+                    return { success: false, error: "Discord webhook is rate-limited. Please wait a few seconds before trying again." };
                 }
                 const ct = res.headers.get('content-type') || '';
                 if (ct.includes('application/json')) {
@@ -362,9 +363,10 @@ async function sendChannelMessage(token, channelId, embed, content = "", attempt
                 }
                 return { success: false, error: `Webhook returned HTTP ${res.status}` };
             }
+            console.log(`[Discord Webhook] Alert delivered successfully.`);
             return { success: true };
         } catch (err) {
-            if (err.name === 'AbortError') return { success: false, error: "Discord webhook timed out after 10s." };
+            if (err.name === 'AbortError') return { success: false, error: "Discord webhook request timed out after 8s." };
             return { success: false, error: err.message };
         }
     }
@@ -380,30 +382,22 @@ async function sendChannelMessage(token, channelId, embed, content = "", attempt
         return { success: false, error: "Invalid Discord Channel ID (must be a numeric channel ID, e.g. 123456789012345678, or a webhook URL)." };
     }
 
-    // 3. Try sending via active discord.js client if available
-    try {
-        const client = await getDiscordClient(token);
-        if (client && client.isReady && client.isReady()) {
-            const channel = await client.channels.fetch(cleanChannelId).catch(() => null);
-            if (channel && channel.send) {
-                await channel.send({ content: content || undefined, embeds: [embed] });
-                return { success: true };
-            }
-        }
-    } catch (e) {
-        console.warn(`[Discord Bot Client] Gateway send failed, falling back to REST:`, e.message);
+    const cleanToken = token ? String(token).trim() : "";
+    if (!cleanToken) {
+        return { success: false, error: "Missing Discord Bot Token." };
     }
 
-    // 4. REST Fallback
+    // 3. Direct Discord REST API Send
+    console.log(`[Discord Bot] Sending alert '${embed.title || 'alert'}' to channel ${cleanChannelId}...`);
     try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10_000);
+        const timeout = setTimeout(() => controller.abort(), 8000);
         let res;
         try {
             res = await fetch(`https://discord.com/api/v10/channels/${cleanChannelId}/messages`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bot ${token}`,
+                    'Authorization': `Bot ${cleanToken}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(payload),
@@ -417,9 +411,9 @@ async function sendChannelMessage(token, channelId, embed, content = "", attempt
             const retryAfterHeader = res.headers.get('retry-after');
             let delayMs = 2000;
             if (retryAfterHeader) {
-                delayMs = Math.min(Math.ceil(parseFloat(retryAfterHeader) * 1000), 5000);
+                delayMs = Math.min(Math.ceil(parseFloat(retryAfterHeader) * 1000), 4000);
             }
-            console.warn(`[Discord REST] Rate limited (429). Retrying after ${delayMs}ms...`);
+            console.warn(`[Discord REST] Rate limited (429). Retrying in ${delayMs}ms...`);
             await new Promise(r => setTimeout(r, delayMs));
             return sendChannelMessage(token, channelId, embed, content, attempt + 1);
         }
@@ -427,28 +421,34 @@ async function sendChannelMessage(token, channelId, embed, content = "", attempt
         if (res.status === 429) {
             return {
                 success: false,
-                error: "Discord rate limit reached (HTTP 429). Discord is cooling down requests from this bot or IP. Please wait 10-15 seconds before testing again."
+                error: "Discord rate limit reached (HTTP 429). Please wait 10 seconds before testing again."
             };
         }
 
         const ct = res.headers.get('content-type') || '';
         if (!ct.includes('application/json')) {
             const raw = await res.text().catch(() => '');
-            console.error(`Discord non-JSON response [${res.status}]:`, raw.slice(0, 200));
+            console.error(`[Discord REST] Non-JSON response [${res.status}]:`, raw.slice(0, 200));
             return { success: false, error: `Discord returned HTTP ${res.status}` };
         }
 
         const data = await res.json();
         if (!res.ok) {
-            console.error("Discord API Error:", data);
-            return { success: false, error: data.message || `Discord API error (${res.status})` };
+            console.error(`[Discord API Error] Status ${res.status}:`, data);
+            let errMsg = data.message || `Discord API error (${res.status})`;
+            if (data.code === 50001) errMsg = "Missing Access (Make sure your bot has been invited to your Discord server and has 'Send Messages' permission in that channel).";
+            if (data.code === 10003) errMsg = "Unknown Channel (Verify your Alert Channel ID is correct).";
+            if (data.code === 0 || res.status === 401) errMsg = "Unauthorized (Invalid Bot Token - please copy a fresh Bot Token from Discord Developer Portal).";
+            return { success: false, error: errMsg };
         }
+
+        console.log(`[Discord Bot] Alert '${embed.title || 'alert'}' delivered successfully to channel ${cleanChannelId}.`);
         return { success: true };
     } catch (err) {
         if (err.name === 'AbortError') {
-            return { success: false, error: "Discord request timed out after 10s" };
+            return { success: false, error: "Discord request timed out after 8s." };
         }
-        console.error("Discord send error:", err.message);
+        console.error("[Discord REST Error]:", err.message);
         return { success: false, error: err.message };
     }
 }
@@ -1301,6 +1301,8 @@ app.post('/api/test-discord-alert', async (req, res) => {
     let chanId = globalChannelId || discordConfig.globalChannelId;
     let botToken = globalBotToken || discordConfig.globalBotToken;
     
+    console.log(`[Discord Test] Triggered test alert type='${type}' for channel='${chanId ? String(chanId).slice(0, 15) : "none"}'`);
+
     const isWebhook = (chanId && (chanId.startsWith('http') || chanId.includes('discord.com/api/webhooks'))) ||
                       (botToken && (botToken.startsWith('http') || botToken.includes('discord.com/api/webhooks')));
 
@@ -1308,7 +1310,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
         return res.json({ success: false, error: "Please provide your Faction Bot Token and Channel ID, or a Discord Webhook URL." });
     }
     
-    let pingStr = discordId ? `<@${discordId}>` : "";
+    let pingStr = (discordId && /^\d{17,20}$/.test(String(discordId).trim())) ? `<@${String(discordId).trim()}>` : "";
     let embed = {};
     
     if (type === 'travel') {
@@ -1328,6 +1330,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
     }
 
     let result = await sendChannelMessage(botToken, chanId, embed, pingStr);
+    console.log(`[Discord Test] Result:`, result);
     if (!result.success) return res.json({ success: false, error: result.error });
     
     res.json({ success: true });
