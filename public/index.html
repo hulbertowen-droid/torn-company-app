@@ -354,7 +354,8 @@
                         <button id="csort-war" class="btn-filter" onclick="setChartSort('war')" title="Sort by ranked war hits">⚔️ WAR HITS</button>
                         <button id="csort-assists" class="btn-filter" onclick="setChartSort('assists')" title="Sort by assists made">🤝 ASSISTS</button>
                         <button id="csort-outside" class="btn-filter" onclick="setChartSort('outside')" title="Sort by outside attacks">🎯 OUTSIDE</button>
-                        <button id="csort-defends" class="btn-filter" onclick="setChartSort('defends')" title="Sort by total defends">🛡️ DEFENDS</button>
+                        <button id="csort-defends" class="btn-filter" onclick="setChartSort('defends')" title="Sort by defends won (attacker lost)">🛡️ DEFENDS WON</button>
+                        <button id="csort-hits" class="btn-filter" onclick="setChartSort('hits')" title="Sort by hits taken (hospitalized)">💥 HITS TAKEN</button>
                         <button id="csort-name" class="btn-filter" onclick="setChartSort('name')" title="Sort alphabetically">🔤 A-Z</button>
                     </div>
                     <div class="filter-group" style="margin-left:4px;">
@@ -383,8 +384,12 @@
                         <span id="csum-outside" style="color:var(--purple);font-weight:900;">0</span>
                     </div>
                     <div style="background:var(--item);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:0.75em;display:flex;align-items:center;gap:6px;">
-                        <span style="color:var(--text-dim);text-transform:uppercase;font-weight:700;">🛡️ Total Defends:</span>
+                        <span style="color:var(--text-dim);text-transform:uppercase;font-weight:700;">🛡️ Defends Won:</span>
                         <span id="csum-defends" style="color:var(--gold);font-weight:900;">0</span>
+                    </div>
+                    <div style="background:var(--item);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:0.75em;display:flex;align-items:center;gap:6px;">
+                        <span style="color:var(--text-dim);text-transform:uppercase;font-weight:700;">💥 Hits Taken:</span>
+                        <span id="csum-hitstaken" style="color:var(--orange);font-weight:900;">0</span>
                     </div>
                     <div style="background:var(--item);border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:0.75em;display:flex;align-items:center;gap:6px;">
                         <span style="color:var(--text-dim);text-transform:uppercase;font-weight:700;">👑 Top Combatant:</span>
@@ -623,6 +628,7 @@ let chartSortBy = 'total';
 let chartFilter = 'all';
 let chartViewMode = 'stacked';
 let lastFriendlyPlayers = [];
+let hiddenDatasetLabels = new Set();
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 function openSettings() {
@@ -799,7 +805,7 @@ async function fetchWarboard() {
 // ─── Charts ───────────────────────────────────────────────────────────────────
 function setChartSort(sort) {
     chartSortBy = sort;
-    ['total','war','assists','outside','defends','name'].forEach(k => {
+    ['total','war','assists','outside','defends','hits','name'].forEach(k => {
         const btn = document.getElementById('csort-' + k);
         if (btn) btn.className = (k === sort) ? 'btn-filter active' : 'btn-filter';
     });
@@ -831,7 +837,7 @@ function renderChart(players) {
     // Filter players
     let filtered = [...players];
     if (chartFilter === 'active') {
-        filtered = filtered.filter(p => (p.attacks || 0) > 0 || (p.assists || 0) > 0 || (p.defends || 0) > 0 || (p.score || 0) > 0);
+        filtered = filtered.filter(p => (p.attacks || 0) > 0 || (p.assists || 0) > 0 || (p.defendsWon || 0) > 0 || (p.hitsTaken || 0) > 0 || (p.score || 0) > 0);
     }
 
     // Sort players
@@ -840,7 +846,7 @@ function renderChart(players) {
             const totA = (a.attacks || 0) + (a.assists || 0);
             const totB = (b.attacks || 0) + (b.assists || 0);
             if (totB !== totA) return totB - totA;
-            if ((b.defends || 0) !== (a.defends || 0)) return (b.defends || 0) - (a.defends || 0);
+            if ((b.defendsWon || 0) !== (a.defendsWon || 0)) return (b.defendsWon || 0) - (a.defendsWon || 0);
             return a.name.localeCompare(b.name);
         } else if (chartSortBy === 'war') {
             const wA = a.warAttacks || 0, wB = b.warAttacks || 0;
@@ -855,8 +861,12 @@ function renderChart(players) {
             if (outB !== outA) return outB - outA;
             return (b.attacks || 0) - (a.attacks || 0) || a.name.localeCompare(b.name);
         } else if (chartSortBy === 'defends') {
-            const defA = a.defends || 0, defB = b.defends || 0;
+            const defA = a.defendsWon || 0, defB = b.defendsWon || 0;
             if (defB !== defA) return defB - defA;
+            return (b.attacks || 0) - (a.attacks || 0) || a.name.localeCompare(b.name);
+        } else if (chartSortBy === 'hits') {
+            const hA = a.hitsTaken || 0, hB = b.hitsTaken || 0;
+            if (hB !== hA) return hB - hA;
             return (b.attacks || 0) - (a.attacks || 0) || a.name.localeCompare(b.name);
         } else if (chartSortBy === 'name') {
             return a.name.localeCompare(b.name);
@@ -874,20 +884,23 @@ function renderChart(players) {
     let totalWarHits = 0;
     let totalAssists = 0;
     let totalOutside = 0;
-    let totalDefends = 0;
+    let totalDefendsWon = 0;
+    let totalHitsTaken = 0;
     let topHitter = { name: '—', total: 0 };
 
     players.forEach(p => {
         const war = p.warAttacks || 0;
         const asst = p.assists || 0;
         const out = p.outsideAttacks || 0;
-        const def = p.defends || 0;
+        const defWon = p.defendsWon || 0;
+        const hits = p.hitsTaken || 0;
         const tot = war + asst + out;
 
         totalWarHits += war;
         totalAssists += asst;
         totalOutside += out;
-        totalDefends += def;
+        totalDefendsWon += defWon;
+        totalHitsTaken += hits;
 
         if (tot > topHitter.total) {
             topHitter = { name: p.name, total: tot };
@@ -901,7 +914,9 @@ function renderChart(players) {
     const sumOutEl = document.getElementById('csum-outside');
     if (sumOutEl) sumOutEl.innerText = totalOutside.toLocaleString();
     const sumDefEl = document.getElementById('csum-defends');
-    if (sumDefEl) sumDefEl.innerText = totalDefends.toLocaleString();
+    if (sumDefEl) sumDefEl.innerText = totalDefendsWon.toLocaleString();
+    const sumHitsEl = document.getElementById('csum-hitstaken');
+    if (sumHitsEl) sumHitsEl.innerText = totalHitsTaken.toLocaleString();
     const sumMvpEl = document.getElementById('csum-mvp');
     if (sumMvpEl) sumMvpEl.innerText = topHitter.total > 0 ? `${topHitter.name} (${topHitter.total})` : '—';
 
@@ -919,8 +934,8 @@ function renderChart(players) {
     const warHitsData = filtered.map(p => p.warAttacks || 0);
     const assistsData = filtered.map(p => p.assists || 0);
     const outsideAttacksData = filtered.map(p => p.outsideAttacks || 0);
-    const warDefendsData = filtered.map(p => p.warDefends || 0);
-    const outsideDefendsData = filtered.map(p => p.outsideDefends || 0);
+    const defendsWonData = filtered.map(p => p.defendsWon || 0);
+    const hitsTakenData = filtered.map(p => p.hitsTaken || 0);
 
     const canvas = document.getElementById('warChart');
     if (!canvas) return;
@@ -952,7 +967,8 @@ function renderChart(players) {
             borderRadius: isStacked ? 0 : 5,
             stack: isStacked ? 'attacks' : undefined,
             barPercentage: 0.8,
-            categoryPercentage: 0.75
+            categoryPercentage: 0.75,
+            hidden: hiddenDatasetLabels.has('⚔️ War Hits')
         },
         {
             label: '🤝 Assists',
@@ -961,34 +977,38 @@ function renderChart(players) {
             borderRadius: isStacked ? 0 : 5,
             stack: isStacked ? 'attacks' : undefined,
             barPercentage: 0.8,
-            categoryPercentage: 0.75
+            categoryPercentage: 0.75,
+            hidden: hiddenDatasetLabels.has('🤝 Assists')
         },
         {
-            label: '🎯 Outside Attacks',
+            label: '🎯 Outside Hits',
             data: outsideAttacksData,
             backgroundColor: gPurple,
             borderRadius: isStacked ? (chartViewMode === 'stacked' ? 5 : 0) : 5,
             stack: isStacked ? 'attacks' : undefined,
             barPercentage: 0.8,
-            categoryPercentage: 0.75
+            categoryPercentage: 0.75,
+            hidden: hiddenDatasetLabels.has('🎯 Outside Hits')
         },
         {
-            label: '🛡️ War Defends',
-            data: warDefendsData,
+            label: '🛡️ Defends Won',
+            data: defendsWonData,
             backgroundColor: gGold,
             borderRadius: isStacked ? 0 : 5,
             stack: isStacked ? 'defends' : undefined,
             barPercentage: 0.8,
-            categoryPercentage: 0.75
+            categoryPercentage: 0.75,
+            hidden: hiddenDatasetLabels.has('🛡️ Defends Won')
         },
         {
-            label: '🛑 Outside Defends',
-            data: outsideDefendsData,
+            label: '💥 Hits Taken',
+            data: hitsTakenData,
             backgroundColor: gOrange,
             borderRadius: 5,
             stack: isStacked ? 'defends' : undefined,
             barPercentage: 0.8,
-            categoryPercentage: 0.75
+            categoryPercentage: 0.75,
+            hidden: hiddenDatasetLabels.has('💥 Hits Taken')
         }
     ];
 
@@ -1029,6 +1049,20 @@ function renderChart(players) {
                     legend: {
                         display: true,
                         position: 'top',
+                        onClick: function(e, legendItem, legend) {
+                            const index = legendItem.datasetIndex;
+                            const ci = legend.chart;
+                            const dsLabel = legendItem.text;
+                            if (ci.isDatasetVisible(index)) {
+                                ci.hide(index);
+                                legendItem.hidden = true;
+                                hiddenDatasetLabels.add(dsLabel);
+                            } else {
+                                ci.show(index);
+                                legendItem.hidden = false;
+                                hiddenDatasetLabels.delete(dsLabel);
+                            }
+                        },
                         labels: {
                             color: '#e6edf3',
                             font: { weight: '700', size: 11 },
@@ -1059,11 +1093,11 @@ function renderChart(players) {
                                 const p = filtered[idx];
                                 if (!p) return '';
                                 const totAtk = (p.warAttacks || 0) + (p.assists || 0) + (p.outsideAttacks || 0);
-                                const totDef = (p.warDefends || 0) + (p.outsideDefends || 0);
                                 let lines = [
                                     `━━━━━━━━━━━━━━━━━━━━`,
-                                    `🔥 Total Attacks: ${totAtk}`,
-                                    `🛡️ Total Defends: ${totDef}`
+                                    `🔥 Total Attacks Made: ${totAtk}`,
+                                    `🛡️ Defends Won (Enemy Lost): ${p.defendsWon || 0}`,
+                                    `💥 Hits Taken (Hospitalized): ${p.hitsTaken || 0}`
                                 ];
                                 if (p.score) lines.push(`🏆 War Score: ${p.score.toLocaleString()}`);
                                 return lines.join('\n');

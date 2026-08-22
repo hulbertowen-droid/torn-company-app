@@ -2244,15 +2244,15 @@ app.get('/api/warboard', async (req, res) => {
         if (myData.attacks && typeof myData.attacks === 'object') {
             for (let atk of Object.values(myData.attacks)) {
                 let isWin = ["Hospitalized", "Mugged", "Arrested", "Looted", "Assist", "Attacked", "Special"].includes(atk.result);
-                if (!isWin) continue;
+                let isDefendWin = ["Lost", "Draw", "Escape", "Stalemate", "Timeout", "Interrupted"].includes(atk.result);
                 
                 let aId = atk.attacker_id ? atk.attacker_id.toString() : null;
                 let dId = atk.defender_id ? atk.defender_id.toString() : null;
                 let aFac = atk.attacker_faction ? atk.attacker_faction.toString() : "0";
                 let dFac = atk.defender_faction ? atk.defender_faction.toString() : "0";
 
-                if (aId && myData.members && myData.members[aId]) {
-                    if (!parsedAttacks[aId]) parsedAttacks[aId] = { warAttacks: 0, outsideAttacks: 0, assists: 0, warDefends: 0, outsideDefends: 0 };
+                if (aId && myData.members && myData.members[aId] && isWin) {
+                    if (!parsedAttacks[aId]) parsedAttacks[aId] = { warAttacks: 0, outsideAttacks: 0, assists: 0, warDefendsWon: 0, outsideDefendsWon: 0, warHitsTaken: 0, outsideHitsTaken: 0 };
                     if (atk.result === "Assist") {
                         parsedAttacks[aId].assists++;
                     } else if (enemyId && dFac === enemyId.toString()) {
@@ -2263,11 +2263,21 @@ app.get('/api/warboard', async (req, res) => {
                 }
 
                 if (dId && myData.members && myData.members[dId]) {
-                    if (!parsedAttacks[dId]) parsedAttacks[dId] = { warAttacks: 0, outsideAttacks: 0, assists: 0, warDefends: 0, outsideDefends: 0 };
-                    if (enemyId && aFac === enemyId.toString()) {
-                        parsedAttacks[dId].warDefends++;
-                    } else {
-                        parsedAttacks[dId].outsideDefends++;
+                    if (!parsedAttacks[dId]) parsedAttacks[dId] = { warAttacks: 0, outsideAttacks: 0, assists: 0, warDefendsWon: 0, outsideDefendsWon: 0, warHitsTaken: 0, outsideHitsTaken: 0 };
+                    if (isDefendWin) {
+                        // Attacker lost -> our member successfully defended
+                        if (enemyId && aFac === enemyId.toString()) {
+                            parsedAttacks[dId].warDefendsWon++;
+                        } else {
+                            parsedAttacks[dId].outsideDefendsWon++;
+                        }
+                    } else if (isWin) {
+                        // Attacker won -> our member was attacked / put in hosp
+                        if (enemyId && aFac === enemyId.toString()) {
+                            parsedAttacks[dId].warHitsTaken++;
+                        } else {
+                            parsedAttacks[dId].outsideHitsTaken++;
+                        }
                     }
                 }
             }
@@ -2314,22 +2324,28 @@ app.get('/api/warboard', async (req, res) => {
                 let assists = Math.max(baseAssists, liveAssists[id] || 0, parsedAttacks[id]?.assists || 0);
                 let outsideAttacks = Math.max(liveOutsideAtk, parsedAttacks[id]?.outsideAttacks || 0);
 
-                let liveWarDef = 0;
-                let liveOutsideDef = 0;
+                let liveWarHitsTaken = 0;
+                let liveOutsideHitsTaken = 0;
                 if (persistentDefends[id]) {
                     for (let [facId, count] of Object.entries(persistentDefends[id])) {
                         if (enemyId && facId === enemyId.toString()) {
-                            liveWarDef += count;
+                            liveWarHitsTaken += count;
                         } else {
-                            liveOutsideDef += count;
+                            liveOutsideHitsTaken += count;
                         }
                     }
                 }
 
-                let warDefends = Math.max(liveWarDef, parsedAttacks[id]?.warDefends || 0);
-                let outsideDefends = Math.max(liveOutsideDef, parsedAttacks[id]?.outsideDefends || 0);
-                let defends = warDefends + outsideDefends;
+                let warHitsTaken = Math.max(liveWarHitsTaken, parsedAttacks[id]?.warHitsTaken || 0);
+                let outsideHitsTaken = Math.max(liveOutsideHitsTaken, parsedAttacks[id]?.outsideHitsTaken || 0);
+                let hitsTaken = warHitsTaken + outsideHitsTaken;
+
+                let warDefendsWon = parsedAttacks[id]?.warDefendsWon || 0;
+                let outsideDefendsWon = parsedAttacks[id]?.outsideDefendsWon || 0;
+                let defendsWon = warDefendsWon + outsideDefendsWon;
+
                 let attacks = warAttacks + outsideAttacks;
+                let defends = defendsWon;
 
                 let timeline = activityCache[id]?.timeline || null; let timelineTime = activityCache[id]?.time || null;
 
@@ -2357,8 +2373,12 @@ app.get('/api/warboard', async (req, res) => {
                     outsideAttacks,
                     assists,
                     defends, 
-                    warDefends,
-                    outsideDefends,
+                    defendsWon,
+                    warDefendsWon,
+                    outsideDefendsWon,
+                    hitsTaken,
+                    warHitsTaken,
+                    outsideHitsTaken,
                     score, 
                     timeline 
                 };
