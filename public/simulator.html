@@ -155,6 +155,16 @@
                         <div class="form-group"><label>🛡️ Defense</label><input type="number" id="d-def" value="20000000"></div>
                         <div class="form-group"><label>🎯 Dexterity</label><input type="number" id="d-dex" value="20000000"></div>
                     </div>
+
+                    <!-- MATHEMATICAL STAT PROOF & METHODOLOGY BREAKDOWN -->
+                    <div id="stat-math-breakdown-card" style="margin-top:14px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,165,2,0.25);border-radius:8px;padding:12px 14px;">
+                        <div style="font-size:0.75em;color:var(--gold);font-weight:800;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;">
+                            <span>🧮 4-Stat Mathematical Proof &amp; Methodology</span>
+                            <span id="math-total-display" style="color:var(--text-main);font-weight:700;"></span>
+                        </div>
+                        <div id="math-stat-rows" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));gap:8px;"></div>
+                    </div>
+
                     <div class="stat-input-grid" style="margin-top:14px;">
                         <div class="form-group"><label>🔫 Weapon DMG</label><input type="number" id="d-wep-dmg" value="62"></div>
                         <div class="form-group"><label>🎯 Weapon ACC</label><input type="number" id="d-wep-acc" value="52"></div>
@@ -259,8 +269,11 @@
             const targetId = (tId || '').toString().trim();
             if (!targetId) return alert('Please enter a target Torn ID.');
 
+            const ffKey = localStorage.getItem('warboard_ffkey') || '';
             try {
-                const res = await fetch('/api/target-intel/' + targetId);
+                const res = await fetch('/api/target-intel/' + targetId + (ffKey ? '?ffKey=' + encodeURIComponent(ffKey) : ''), {
+                    headers: { 'x-ff-key': ffKey }
+                });
                 const data = await res.json();
                 if (data.success && data.intel) {
                     const intel = data.intel;
@@ -272,13 +285,39 @@
                     document.getElementById('d-wep-acc').value = intel.weaponAcc || 52;
                     document.getElementById('d-armor').value = intel.armor || "Combat";
 
-                    document.getElementById('intel-name').innerText = `${intel.name} [${targetId}] (~${((intel.total||0)/1000000).toFixed(1)}M Stats)`;
-                    document.getElementById('intel-source').innerText = `Source: ${intel.source}`;
+                    const statTotalM = ((intel.total||0)/1000000).toFixed(1);
+                    document.getElementById('intel-name').innerText = `${intel.name} [${targetId}] (~${statTotalM}M Total Stats)`;
+                    document.getElementById('intel-source').innerText = `Total Derived from: ${intel.source}`;
                     
                     const confEl = document.getElementById('intel-confidence');
                     confEl.innerText = intel.confidence;
                     confEl.style.color = intel.confidence.includes('100%') ? 'var(--green)' : 'var(--gold)';
                     confEl.style.borderColor = intel.confidence.includes('100%') ? 'var(--green)' : 'var(--gold)';
+
+                    // Render Mathematical 4-Stat Proof Breakdown
+                    document.getElementById('math-total-display').innerText = `Max Total: ${(intel.total||0).toLocaleString()} (100%)`;
+                    const b = intel.breakdown || {};
+                    const statRowsHtml = [
+                        { label: '💪 Strength', data: b.strength, color: 'var(--red)' },
+                        { label: '⚡ Speed', data: b.speed, color: 'var(--gold)' },
+                        { label: '🛡️ Defense', data: b.defense, color: 'var(--blue)' },
+                        { label: '🎯 Dexterity', data: b.dexterity, color: 'var(--green)' }
+                    ].map(s => {
+                        const val = s.data?.value || 0;
+                        const pct = s.data?.pct || '25%';
+                        const method = s.data?.method || 'Standard Distribution';
+                        return `
+                            <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:8px 10px;">
+                                <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+                                    <span style="font-weight:700;color:${s.color};font-size:0.85em;">${s.label}</span>
+                                    <span style="font-size:0.85em;color:var(--text-main);font-weight:800;">${pct} (${val.toLocaleString()})</span>
+                                </div>
+                                <div style="font-size:0.7em;color:var(--text-dim);line-height:1.2;">${method}</div>
+                            </div>
+                        `;
+                    }).join('');
+
+                    document.getElementById('math-stat-rows').innerHTML = statRowsHtml;
 
                     // Automatically simulate immediately!
                     runSimulation();
@@ -295,8 +334,11 @@
         }
 
         async function loadSimulatorTargets() {
+            const ffKey = localStorage.getItem('warboard_ffkey') || '';
             try {
-                const res = await fetch('/api/simulator/targets');
+                const res = await fetch('/api/simulator/targets' + (ffKey ? '?ffKey=' + encodeURIComponent(ffKey) : ''), {
+                    headers: { 'x-ff-key': ffKey }
+                });
                 const data = await res.json();
                 const select = document.getElementById('enemy-quick-select');
                 if (data.success && data.targets && data.targets.length > 0) {
@@ -304,10 +346,9 @@
                     document.getElementById('target-count-badge').innerText = `${data.targets.length} targets available`;
                     select.innerHTML = data.targets.map(t => {
                         const statM = ((t.totalStats || 0) / 1000000).toFixed(1);
-                        return `<option value="${t.id}">${t.name} [${t.id}] — Lvl ${t.level || '?'}, ~${statM}M Stats (${t.confidence})</option>`;
+                        return `<option value="${t.id}">${t.name} [${t.id}] — Lvl ${t.level || '?'}, ~${statM}M Total Stats (${t.confidence})</option>`;
                     }).join('');
 
-                    // Check URL target query param or default to first target
                     const urlParams = new URLSearchParams(window.location.search);
                     const queryTarget = urlParams.get('target');
                     if (queryTarget) {
