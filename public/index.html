@@ -1354,6 +1354,7 @@ function renderEnemyList(players, premium) {
                     <a class="profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name}</a>
                     <span class="status-pill ${pillClass}"><span class="status-dot"></span>${displayStatus}</span>
                     <button class="btn-action inspect" onclick="inspectTarget('${p.id}','${p.name.replace(/'/g,"\\'")}')">🔍 Inspect</button>
+                    <a href="/simulator.html?target=${p.id}" class="btn-action" style="background:rgba(88,166,255,0.12);color:var(--blue);border-color:rgba(88,166,255,0.35);text-decoration:none;" title="Simulate 1v1 Combat Odds">🧠 Sim</a>
                 </div>
                 <div class="action-sub">➔ ${p.lastActionRelative} ${etaHtml}</div>
                 <div style="margin-top:3px;">${claimDisplay}${sosDisplay}</div>

@@ -119,14 +119,36 @@
 
             <!-- DEFENDER -->
             <div class="card">
-                <div class="card-header" style="border-bottom:1px solid rgba(255,71,87,0.2);display:flex;justify-content:space-between;align-items:center;padding:14px 20px;">
+                <div class="card-header" style="border-bottom:1px solid rgba(255,71,87,0.2);display:flex;justify-content:space-between;align-items:center;padding:14px 20px;flex-wrap:wrap;gap:10px;">
                     <div class="card-title" style="color:var(--red);font-weight:800;text-transform:uppercase;">🎯 Defender (Target)</div>
-                    <div style="display:flex;gap:6px;">
-                        <input type="text" id="target-id-input" placeholder="Torn ID" style="width:90px;padding:3px 8px;font-size:0.75em;background:var(--item);border:1px solid var(--border);color:white;border-radius:4px;font-family:inherit;">
-                        <button onclick="fetchTargetSpy()" style="background:rgba(255,71,87,0.1);border:1px solid var(--red);color:var(--red);padding:4px 8px;border-radius:6px;font-size:0.72em;font-weight:700;cursor:pointer;font-family:inherit;">Spy Lookup</button>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <input type="text" id="target-id-input" placeholder="Torn ID" style="width:90px;padding:5px 8px;font-size:0.8em;background:var(--item);border:1px solid var(--border);color:white;border-radius:6px;font-family:inherit;">
+                        <button onclick="loadTargetIntel(document.getElementById('target-id-input').value)" style="background:var(--red);color:white;border:none;padding:5px 12px;border-radius:6px;font-size:0.75em;font-weight:800;cursor:pointer;font-family:inherit;">⚡ Auto-Estimate</button>
                     </div>
                 </div>
                 <div class="card-body" style="padding:18px 22px;">
+                    <!-- QUICK-SELECT ENEMY FROM ACTIVE WAR -->
+                    <div class="form-group" style="margin-bottom:14px;">
+                        <label style="color:var(--gold);display:flex;justify-content:space-between;">
+                            <span>🎯 Quick-Select War Opponent (0 Typing Required)</span>
+                            <span id="target-count-badge" style="color:var(--text-dim);font-weight:normal;"></span>
+                        </label>
+                        <select id="enemy-quick-select" onchange="onSelectTarget(this.value)" style="border-color:var(--gold);background:rgba(255,165,2,0.05);font-weight:700;">
+                            <option value="">Loading opposing faction members...</option>
+                        </select>
+                    </div>
+
+                    <!-- MATHEMATICAL STAT REVERSE-ENGINEERING BANNER -->
+                    <div id="target-intel-banner" style="background:rgba(255,71,87,0.06);border:1px solid rgba(255,71,87,0.25);border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+                        <div>
+                            <div id="intel-name" style="font-weight:800;color:var(--text-main);font-size:0.95em;">Select a Target</div>
+                            <div id="intel-source" style="font-size:0.75em;color:var(--text-dim);">Combat logs &amp; progression curve modeling</div>
+                        </div>
+                        <div id="intel-confidence" style="background:rgba(255,71,87,0.15);color:var(--red);padding:3px 8px;border-radius:4px;font-weight:800;font-size:0.72em;text-transform:uppercase;">
+                            Auto-Estimated
+                        </div>
+                    </div>
+
                     <div class="stat-input-grid">
                         <div class="form-group"><label>💪 Strength</label><input type="number" id="d-str" value="20000000"></div>
                         <div class="form-group"><label>⚡ Speed</label><input type="number" id="d-spd" value="20000000"></div>
@@ -184,6 +206,8 @@
     </main>
 
     <script>
+        let cachedTargetsList = [];
+
         async function runSimulation() {
             const payload = {
                 attackerStr: document.getElementById('a-str').value,
@@ -212,7 +236,7 @@
                     body: JSON.stringify(payload)
                 });
                 const data = await res.json();
-                if (!data.success) return alert('Simulation error: ' + (data.error || 'Unknown'));
+                if (!data.success) return console.error('Simulation error: ' + (data.error || 'Unknown'));
 
                 document.getElementById('sim-results').style.display = 'block';
                 const winEl = document.getElementById('res-win-rate');
@@ -226,38 +250,84 @@
 
                 const adviceList = document.getElementById('res-advice-list');
                 adviceList.innerHTML = (data.tacticalAdvice || []).map(adv => `<div class="advice-item">${adv}</div>`).join('');
-                document.getElementById('sim-results').scrollIntoView({ behavior: 'smooth' });
             } catch (e) {
-                alert('Simulation request failed: ' + e.message);
+                console.error('Simulation request failed: ' + e.message);
             }
         }
 
-        async function fetchTargetSpy() {
-            const tId = document.getElementById('target-id-input').value.trim();
-            if (!tId) return alert('Please enter a target ID.');
+        async function loadTargetIntel(tId) {
+            const targetId = (tId || '').toString().trim();
+            if (!targetId) return alert('Please enter a target Torn ID.');
+
             try {
-                const res = await fetch('/api/spy/' + tId);
+                const res = await fetch('/api/target-intel/' + targetId);
                 const data = await res.json();
-                if (data.data && data.data.total) {
-                    const str = data.data.strength || Math.round(data.data.total / 4);
-                    const spd = data.data.speed || Math.round(data.data.total / 4);
-                    const def = data.data.defense || Math.round(data.data.total / 4);
-                    const dex = data.data.dexterity || Math.round(data.data.total / 4);
-                    document.getElementById('d-str').value = str;
-                    document.getElementById('d-spd').value = spd;
-                    document.getElementById('d-def').value = def;
-                    document.getElementById('d-dex').value = dex;
-                    alert('Loaded spy stats for ' + (data.data.name || tId) + ' (Total: ' + data.data.total.toLocaleString() + ')');
-                } else {
-                    alert('No exact spy report found for [' + tId + ']. You can input estimated stats manually.');
+                if (data.success && data.intel) {
+                    const intel = data.intel;
+                    document.getElementById('d-str').value = intel.strength;
+                    document.getElementById('d-spd').value = intel.speed;
+                    document.getElementById('d-def').value = intel.defense;
+                    document.getElementById('d-dex').value = intel.dexterity;
+                    document.getElementById('d-wep-dmg').value = intel.weaponDmg || 62;
+                    document.getElementById('d-wep-acc').value = intel.weaponAcc || 52;
+                    document.getElementById('d-armor').value = intel.armor || "Combat";
+
+                    document.getElementById('intel-name').innerText = `${intel.name} [${targetId}] (~${((intel.total||0)/1000000).toFixed(1)}M Stats)`;
+                    document.getElementById('intel-source').innerText = `Source: ${intel.source}`;
+                    
+                    const confEl = document.getElementById('intel-confidence');
+                    confEl.innerText = intel.confidence;
+                    confEl.style.color = intel.confidence.includes('100%') ? 'var(--green)' : 'var(--gold)';
+                    confEl.style.borderColor = intel.confidence.includes('100%') ? 'var(--green)' : 'var(--gold)';
+
+                    // Automatically simulate immediately!
+                    runSimulation();
                 }
             } catch (e) {
-                alert('Spy lookup error: ' + e.message);
+                alert('Failed to estimate target stats: ' + e.message);
+            }
+        }
+
+        function onSelectTarget(tId) {
+            if (!tId) return;
+            document.getElementById('target-id-input').value = tId;
+            loadTargetIntel(tId);
+        }
+
+        async function loadSimulatorTargets() {
+            try {
+                const res = await fetch('/api/simulator/targets');
+                const data = await res.json();
+                const select = document.getElementById('enemy-quick-select');
+                if (data.success && data.targets && data.targets.length > 0) {
+                    cachedTargetsList = data.targets;
+                    document.getElementById('target-count-badge').innerText = `${data.targets.length} targets available`;
+                    select.innerHTML = data.targets.map(t => {
+                        const statM = ((t.totalStats || 0) / 1000000).toFixed(1);
+                        return `<option value="${t.id}">${t.name} [${t.id}] — Lvl ${t.level || '?'}, ~${statM}M Stats (${t.confidence})</option>`;
+                    }).join('');
+
+                    // Check URL target query param or default to first target
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const queryTarget = urlParams.get('target');
+                    if (queryTarget) {
+                        select.value = queryTarget;
+                        document.getElementById('target-id-input').value = queryTarget;
+                        loadTargetIntel(queryTarget);
+                    } else {
+                        select.value = data.targets[0].id;
+                        document.getElementById('target-id-input').value = data.targets[0].id;
+                        loadTargetIntel(data.targets[0].id);
+                    }
+                } else {
+                    select.innerHTML = '<option value="">No war enemies active. Enter ID above to auto-estimate.</option>';
+                }
+            } catch (e) {
+                console.error(e);
             }
         }
 
         async function loadMyProfileStats(silent = false) {
-            // First check local storage cache for instantaneous fill
             try {
                 const localStats = localStorage.getItem('my_battle_stats');
                 if (localStats) {
@@ -289,16 +359,13 @@
                     if (!silent) {
                         alert('Loaded battle stats for ' + (d.name || 'Agent') + '! Total: ' + (d.total || 0).toLocaleString());
                     }
-                } else if (!silent) {
-                    alert(d.error || 'Failed to fetch user battle stats.');
                 }
-            } catch (e) {
-                if (!silent) alert('Network error loading battle stats: ' + e.message);
-            }
+            } catch (e) {}
         }
 
         window.addEventListener('DOMContentLoaded', () => {
             loadMyProfileStats(true);
+            loadSimulatorTargets();
         });
     </script>
 </body>

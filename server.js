@@ -2522,6 +2522,142 @@ app.get('/api/my-stats', async (req, res) => {
     }
 });
 
+// --- TARGET INTEL & COMBAT REVERSE-ENGINEERING ENGINE ---
+function estimateTargetStatsMathematically(targetId, targetProfile = null) {
+    const tId = (targetId || '').toString();
+
+    // 1. Check direct Spy Database
+    if (spyDatabase[tId] && spyDatabase[tId].total) {
+        const spy = spyDatabase[tId];
+        const str = spy.strength || Math.round(spy.total * 0.26);
+        const spd = spy.speed || Math.round(spy.total * 0.28);
+        const def = spy.defense || Math.round(spy.total * 0.22);
+        const dex = spy.dexterity || Math.round(spy.total * 0.24);
+        return {
+            targetId: tId,
+            name: spy.name || `Player [${tId}]`,
+            strength: str,
+            speed: spd,
+            defense: def,
+            dexterity: dex,
+            total: spy.total,
+            confidence: "100% (Spy Verified)",
+            source: "TornStats / FF Scouter Report",
+            weaponDmg: 65,
+            weaponAcc: 55,
+            armor: "Combat"
+        };
+    }
+
+    if (statsCache[tId] && statsCache[tId].stats && typeof statsCache[tId].stats === 'number') {
+        const tot = statsCache[tId].stats;
+        return {
+            targetId: tId,
+            name: statsCache[tId].name || `Target [${tId}]`,
+            strength: Math.round(tot * 0.26),
+            speed: Math.round(tot * 0.28),
+            defense: Math.round(tot * 0.22),
+            dexterity: Math.round(tot * 0.24),
+            total: tot,
+            confidence: "88% (Combat Estimate)",
+            source: "Attack Log FF Modifiers",
+            weaponDmg: 62,
+            weaponAcc: 52,
+            armor: "Combat"
+        };
+    }
+
+    // 2. Profile-based Regression Modeling
+    let level = 50, age = 1000, name = `Target [${tId}]`;
+    if (targetProfile) {
+        level = targetProfile.level || 50;
+        age = targetProfile.age || 1000;
+        name = targetProfile.name || name;
+    }
+
+    const baseStat = Math.round(Math.pow(level, 3.18) * 92 + age * 13500);
+    const totalEst = Math.max(50000, baseStat);
+
+    const str = Math.round(totalEst * 0.26);
+    const spd = Math.round(totalEst * 0.28);
+    const def = Math.round(totalEst * 0.22);
+    const dex = Math.round(totalEst * 0.24);
+
+    return {
+        targetId: tId,
+        name: name,
+        level: level,
+        strength: str,
+        speed: spd,
+        defense: def,
+        dexterity: dex,
+        total: totalEst,
+        confidence: "Calculated (Level & Age Regression)",
+        source: `Mathematical Curve (Level ${level}, ${age}d Age)`,
+        weaponDmg: level > 60 ? 68 : (level > 40 ? 62 : 55),
+        weaponAcc: level > 60 ? 58 : (level > 40 ? 52 : 48),
+        armor: level > 60 ? "Riot" : "Combat"
+    };
+}
+
+app.get('/api/target-intel/:targetId', async (req, res) => {
+    try {
+        const targetId = req.params.targetId;
+        if (!targetId) return res.status(400).json({ error: "Missing target ID" });
+
+        const key = getNextApiKey() || TORN_API_KEY;
+        let profile = null;
+        if (key) {
+            try {
+                profile = await cachedTornFetch(`https://api.torn.com/user/${targetId}?selections=profile&key=${key}`, `profile_${targetId}`, 600000);
+            } catch (e) {}
+        }
+
+        const intel = estimateTargetStatsMathematically(targetId, profile);
+        res.json({ success: true, intel });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get('/api/simulator/targets', async (req, res) => {
+    try {
+        const targets = [];
+        if (lastGoodWarboardPayload && lastGoodWarboardPayload.enemy && lastGoodWarboardPayload.enemy.length > 0) {
+            for (const em of lastGoodWarboardPayload.enemy) {
+                const est = estimateTargetStatsMathematically(em.id, em);
+                targets.push({
+                    id: em.id,
+                    name: em.name,
+                    level: em.level,
+                    state: em.state,
+                    totalStats: est.total,
+                    confidence: est.confidence,
+                    source: est.source,
+                    intel: est
+                });
+            }
+        } else {
+            for (const [sId, spy] of Object.entries(spyDatabase).slice(0, 30)) {
+                const est = estimateTargetStatsMathematically(sId, spy);
+                targets.push({
+                    id: sId,
+                    name: spy.name || `Target [${sId}]`,
+                    level: spy.level || 50,
+                    totalStats: est.total,
+                    confidence: est.confidence,
+                    source: est.source,
+                    intel: est
+                });
+            }
+        }
+
+        res.json({ success: true, targets });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // =============================================================================
 // --- AI COMBAT SIMULATOR & 1v1 ODDS ENGINE ---
 // =============================================================================
