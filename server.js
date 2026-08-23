@@ -2843,6 +2843,7 @@ app.post('/api/simulate-combat', (req, res) => {
             const dHitChance = Math.min(0.95, Math.max(0.05, 0.5 * (1 + (dSpd - aDex) / (dSpd + aDex)) * (dWepAcc / 50)));
 
             let aLife = 2500, dLife = 2500;
+            const aMaxLife = 2500, dMaxLife = 2500;
             let turn = 0;
             const maxTurns = 25;
 
@@ -2853,7 +2854,7 @@ app.post('/api/simulate-combat', (req, res) => {
                     totalAttackerHits++;
                     const isCrit = Math.random() < 0.15;
                     const variance = 0.85 + Math.random() * 0.3;
-                    const dmg = Math.max(1, Math.round(70 * Math.pow(aStr / dDef, 0.4) * (aWepDmg / 50) * variance * dArmorMit * (isCrit ? 1.5 : 1.0)));
+                    const dmg = Math.max(10, Math.round(220 * Math.pow(aStr / dDef, 0.42) * (aWepDmg / 50) * variance * dArmorMit * (isCrit ? 1.6 : 1.0)));
                     dLife -= dmg;
                     totalAttackerDmg += dmg;
                 }
@@ -2864,15 +2865,32 @@ app.post('/api/simulate-combat', (req, res) => {
                     totalDefenderHits++;
                     const isCrit = Math.random() < 0.15;
                     const variance = 0.85 + Math.random() * 0.3;
-                    const dmg = Math.max(1, Math.round(70 * Math.pow(dStr / aDef, 0.4) * (dWepDmg / 50) * variance * aArmorMit * (isCrit ? 1.5 : 1.0)));
+                    const dmg = Math.max(10, Math.round(220 * Math.pow(dStr / aDef, 0.42) * (dWepDmg / 50) * variance * aArmorMit * (isCrit ? 1.6 : 1.0)));
                     aLife -= dmg;
                     totalDefenderDmg += dmg;
                 }
             }
 
-            if (dLife <= 0 && aLife > 0) { wins++; totalTurnsToWin += turn; }
-            else if (aLife <= 0) { losses++; totalTurnsToLose += turn; }
-            else { draws++; }
+            if (dLife <= 0 && aLife > 0) { 
+                wins++; 
+                totalTurnsToWin += turn; 
+            } else if (aLife <= 0 && dLife > 0) { 
+                losses++; 
+                totalTurnsToLose += turn; 
+            } else {
+                // Stalemate at 25 turns: fighter with higher remaining HP percentage takes the win
+                const aPct = aLife / aMaxLife;
+                const dPct = dLife / dMaxLife;
+                if (aPct > dPct) {
+                    wins++;
+                    totalTurnsToWin += turn;
+                } else if (dPct > aPct) {
+                    losses++;
+                    totalTurnsToLose += turn;
+                } else {
+                    draws++;
+                }
+            }
         }
 
         const winRate = parseFloat(((wins / simCount) * 100).toFixed(1));
