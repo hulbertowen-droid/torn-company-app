@@ -2522,41 +2522,92 @@ app.get('/api/my-stats', async (req, res) => {
     }
 });
 
+function parseStatValue(val) {
+    if (!val && val !== 0) return 0;
+    if (typeof val === 'number') return Math.max(0, Math.round(val));
+    if (typeof val === 'string') {
+        const cleaned = val.trim().toLowerCase().replace(/,/g, '');
+        if (cleaned.includes('requires') || cleaned.includes('scanning')) return 0;
+        if (cleaned.endsWith('b')) return Math.round(parseFloat(cleaned) * 1e9);
+        if (cleaned.endsWith('m')) return Math.round(parseFloat(cleaned) * 1e6);
+        if (cleaned.endsWith('k')) return Math.round(parseFloat(cleaned) * 1e3);
+        const num = parseFloat(cleaned);
+        return isNaN(num) ? 0 : Math.round(num);
+    }
+    return 0;
+}
+
 // --- TARGET INTEL & COMBAT REVERSE-ENGINEERING ENGINE ---
 async function estimateTargetStatsMathematically(targetId, targetProfile = null, clientFfKey = null) {
     const tId = (targetId || '').toString().trim();
     if (!tId) return null;
 
-    // STEP 1: RESOLVE MAXIMUM TOTAL BATTLE STATS FROM FF SCOUTER / SPY DB
+    // STEP 1: RESOLVE MAXIMUM TOTAL BATTLE STATS FROM FF SCOUTER / SPY DB / WARBOARD
     let totalStats = 0;
     let totalSource = "Estimated";
     let isExactSpy = false;
     let exactSpyStats = null;
 
-    if (spyDatabase[tId] && (spyDatabase[tId].total || spyDatabase[tId].strength)) {
-        const s = spyDatabase[tId];
-        totalStats = s.total || ((s.strength || 0) + (s.speed || 0) + (s.defense || 0) + (s.dexterity || 0));
-        totalSource = "TornStats / Spy Report";
-        if (s.strength && s.speed && s.defense && s.dexterity) {
-            isExactSpy = true;
-            exactSpyStats = { strength: s.strength, speed: s.speed, defense: s.defense, dexterity: s.dexterity };
+    // 1. Check user manual override
+    if (manualStats[tId] && manualStats[tId].stats !== undefined) {
+        const parsedManual = parseStatValue(manualStats[tId].stats);
+        if (parsedManual > 0) {
+            totalStats = parsedManual;
+            totalSource = "Manual Override";
         }
     }
 
-    if (!totalStats && statsCache[tId] && statsCache[tId].stats) {
-        totalStats = statsCache[tId].stats;
-        totalSource = "FF Scouter Maximum Total";
+    // 2. Check spy database (TornStats / exact spy)
+    if (!totalStats && spyDatabase[tId]) {
+        const s = spyDatabase[tId];
+        const spyTot = parseStatValue(s.total) || (parseStatValue(s.strength) + parseStatValue(s.speed) + parseStatValue(s.defense) + parseStatValue(s.dexterity));
+        if (spyTot > 0) {
+            totalStats = spyTot;
+            totalSource = "TornStats / Spy Report";
+            if (s.strength && s.speed && s.defense && s.dexterity) {
+                isExactSpy = true;
+                exactSpyStats = { 
+                    strength: parseStatValue(s.strength), 
+                    speed: parseStatValue(s.speed), 
+                    defense: parseStatValue(s.defense), 
+                    dexterity: parseStatValue(s.dexterity) 
+                };
+            }
+        }
     }
 
-    const ffKeyToUse = clientFfKey || (global.marketConfig && global.marketConfig.ffKey) || (discordConfig && discordConfig.ffKey);
+    // 3. Check targetProfile estStats (from Live Warboard)
+    if (!totalStats && targetProfile && targetProfile.estStats) {
+        const fromProfile = parseStatValue(targetProfile.estStats);
+        if (fromProfile > 0) {
+            totalStats = fromProfile;
+            totalSource = "FF Scouter (Warboard Verified)";
+        }
+    }
+
+    // 4. Check statsCache (FF Scouter in-memory cache)
+    if (!totalStats && statsCache[tId]) {
+        const cachedVal = parseStatValue(statsCache[tId].stats || statsCache[tId].bs_estimate || statsCache[tId].bs_max || statsCache[tId].bs_total);
+        if (cachedVal > 0) {
+            totalStats = cachedVal;
+            totalSource = "FF Scouter Maximum Total";
+        }
+    }
+
+    // 5. Live FF Scouter API query
+    const ffKeyToUse = clientFfKey || (global.marketConfig && global.marketConfig.ffKey) || (discordConfig && discordConfig.ffKey) || (global.marketConfig && global.marketConfig.ffscouterKey);
     if (!totalStats && ffKeyToUse && ffKeyToUse !== "null" && ffKeyToUse.length > 5) {
         try {
             const ffRes = await fetch(`https://ffscouter.com/api/v1/get-stats?key=${ffKeyToUse}&targets=${tId}`);
             const ffData = await ffRes.json();
-            if (Array.isArray(ffData) && ffData.length > 0 && ffData[0].bs_total) {
-                totalStats = ffData[0].bs_total;
-                statsCache[tId] = { stats: totalStats, fair_fight: ffData[0].fair_fight, time: Date.now() };
-                totalSource = "FF Scouter Maximum Total (Live)";
+            if (Array.isArray(ffData) && ffData.length > 0) {
+                const p = ffData[0];
+                const foundStat = parseStatValue(p.bs_estimate || p.bs_max || p.bs_total || p.stats || p.estimate || p.bs_min);
+                if (foundStat > 0) {
+                    totalStats = foundStat;
+                    statsCache[tId] = { stats: totalStats, bs_estimate: p.bs_estimate, fair_fight: p.fair_fight, time: Date.now() };
+                    totalSource = "FF Scouter Maximum Total (Live API)";
+                }
             }
         } catch (e) {}
     }

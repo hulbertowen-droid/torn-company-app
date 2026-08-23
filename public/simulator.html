@@ -149,6 +149,25 @@
                         </div>
                     </div>
 
+                    <!-- DYNAMIC TARGET TOTAL BATTLE STATS (FROM FF SCOUTER) -->
+                    <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;background:rgba(255,165,2,0.06);border:1px solid rgba(255,165,2,0.25);padding:10px 14px;border-radius:8px;">
+                        <div style="flex:1;">
+                            <label style="color:var(--gold);font-size:0.75em;font-weight:800;text-transform:uppercase;display:flex;justify-content:space-between;">
+                                <span>🎯 Max Total Battle Stats</span>
+                                <span id="total-source-badge" style="color:var(--text-dim);font-size:0.9em;font-weight:normal;"></span>
+                            </label>
+                            <input type="number" id="d-total-stats" value="50000000" oninput="onTargetTotalChange(this.value)" style="font-size:1.15em;font-weight:800;color:var(--gold);background:transparent;border:none;border-bottom:2px solid var(--gold);width:100%;padding:4px 0;outline:none;font-family:inherit;">
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="font-size:0.68em;color:var(--text-dim);text-transform:uppercase;font-weight:700;">Quick Adjust</div>
+                            <div style="display:flex;gap:4px;margin-top:4px;">
+                                <button onclick="adjustTargetTotal(0.8)" style="background:var(--item);border:1px solid var(--border);color:var(--text-main);padding:3px 7px;border-radius:4px;font-size:0.72em;cursor:pointer;font-family:inherit;">-20%</button>
+                                <button onclick="adjustTargetTotal(1.2)" style="background:var(--item);border:1px solid var(--border);color:var(--text-main);padding:3px 7px;border-radius:4px;font-size:0.72em;cursor:pointer;font-family:inherit;">+20%</button>
+                                <button onclick="adjustTargetTotal(1.5)" style="background:var(--item);border:1px solid var(--border);color:var(--text-main);padding:3px 7px;border-radius:4px;font-size:0.72em;cursor:pointer;font-family:inherit;">+50%</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="stat-input-grid">
                         <div class="form-group"><label>💪 Strength</label><input type="number" id="d-str" value="20000000"></div>
                         <div class="form-group"><label>⚡ Speed</label><input type="number" id="d-spd" value="20000000"></div>
@@ -217,6 +236,31 @@
 
     <script>
         let cachedTargetsList = [];
+        let currentTargetWeights = { wStr: 0.28, wSpd: 0.31, wDef: 0.22, wDex: 0.19 };
+
+        function onTargetTotalChange(val) {
+            const total = Number(val) || 0;
+            if (total <= 0) return;
+            const str = Math.round(total * currentTargetWeights.wStr);
+            const spd = Math.round(total * currentTargetWeights.wSpd);
+            const def = Math.round(total * currentTargetWeights.wDef);
+            const dex = total - (str + spd + def);
+
+            document.getElementById('d-str').value = str;
+            document.getElementById('d-spd').value = spd;
+            document.getElementById('d-def').value = def;
+            document.getElementById('d-dex').value = dex;
+
+            document.getElementById('math-total-display').innerText = `Max Total: ${total.toLocaleString()} (100%)`;
+            runSimulation();
+        }
+
+        function adjustTargetTotal(mult) {
+            const el = document.getElementById('d-total-stats');
+            const newTot = Math.round((Number(el.value) || 50000000) * mult);
+            el.value = newTot;
+            onTargetTotalChange(newTot);
+        }
 
         async function runSimulation() {
             const payload = {
@@ -277,6 +321,10 @@
                 const data = await res.json();
                 if (data.success && data.intel) {
                     const intel = data.intel;
+                    const tot = intel.total || 50000000;
+                    document.getElementById('d-total-stats').value = tot;
+                    document.getElementById('total-source-badge').innerText = intel.source;
+
                     document.getElementById('d-str').value = intel.strength;
                     document.getElementById('d-spd').value = intel.speed;
                     document.getElementById('d-def').value = intel.defense;
@@ -285,9 +333,16 @@
                     document.getElementById('d-wep-acc').value = intel.weaponAcc || 52;
                     document.getElementById('d-armor').value = intel.armor || "Combat";
 
-                    const statTotalM = ((intel.total||0)/1000000).toFixed(1);
+                    currentTargetWeights = {
+                        wStr: intel.strength / tot,
+                        wSpd: intel.speed / tot,
+                        wDef: intel.defense / tot,
+                        wDex: intel.dexterity / tot
+                    };
+
+                    const statTotalM = ((tot)/1000000).toFixed(1);
                     document.getElementById('intel-name').innerText = `${intel.name} [${targetId}] (~${statTotalM}M Total Stats)`;
-                    document.getElementById('intel-source').innerText = `Total Derived from: ${intel.source}`;
+                    document.getElementById('intel-source').innerText = `Source: ${intel.source}`;
                     
                     const confEl = document.getElementById('intel-confidence');
                     confEl.innerText = intel.confidence;
@@ -295,7 +350,7 @@
                     confEl.style.borderColor = intel.confidence.includes('100%') ? 'var(--green)' : 'var(--gold)';
 
                     // Render Mathematical 4-Stat Proof Breakdown
-                    document.getElementById('math-total-display').innerText = `Max Total: ${(intel.total||0).toLocaleString()} (100%)`;
+                    document.getElementById('math-total-display').innerText = `Max Total: ${tot.toLocaleString()} (100%)`;
                     const b = intel.breakdown || {};
                     const statRowsHtml = [
                         { label: '💪 Strength', data: b.strength, color: 'var(--red)' },
