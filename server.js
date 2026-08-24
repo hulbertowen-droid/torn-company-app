@@ -3109,21 +3109,45 @@ async function getPlayerFlightFromFFScouter(targetId, ffKey) {
     return null;
 }
 
-// Resolve flight duration using FF Scouter's middle estimate
-function resolveFlightDuration(m, id, now, ffFlightMap = {}) {
+// Resolve flight duration using FF Scouter's middle estimate with flight duration fallback
+function resolveFlightDuration(m, id, now, ffFlightMap = {}, country = "") {
+    // 1. FF Scouter flight estimate (uses the number in the middle)
     const ffFlight = ffFlightMap[id] || flightCache[id];
     if (ffFlight && ffFlight.midpoint && ffFlight.midpoint > now) {
         const diffMins = Math.ceil((ffFlight.midpoint - now) / 60);
         return { landingStr: formatHumanDuration(diffMins), until: ffFlight.midpoint };
     }
 
+    // 2. Torn direct until timestamp
     const until = m.status?.until || 0;
     if (until > now) {
         const diffMins = Math.ceil((until - now) / 60);
         return { landingStr: formatHumanDuration(diffMins), until };
     }
 
-    return { landingStr: "Flight in progress", until: 0 };
+    // 3. Mathematical estimation using country flight time + last action if FF Scouter has no record
+    const flightData = COUNTRY_FLIGHT_MINS[country] || { standard: 60, airstrip: 40 };
+    const airstripSec = Math.round(flightData.airstrip * 60);
+    const standardSec = Math.round(flightData.standard * 60);
+
+    const lastAction = m.last_action?.timestamp || 0;
+    let estimatedEpoch = 0;
+
+    if (lastAction > 0 && lastAction <= now) {
+        const elapsed = now - lastAction;
+        if (elapsed < airstripSec) {
+            estimatedEpoch = now + (airstripSec - elapsed);
+        } else if (elapsed < standardSec) {
+            estimatedEpoch = now + (standardSec - elapsed);
+        }
+    }
+
+    if (estimatedEpoch === 0 || estimatedEpoch <= now) {
+        estimatedEpoch = now + Math.round(airstripSec * 0.45);
+    }
+
+    const diffMins = Math.max(1, Math.ceil((estimatedEpoch - now) / 60));
+    return { landingStr: formatHumanDuration(diffMins), until: estimatedEpoch };
 }
 
 // Robust member travel classifier for a specific country
@@ -3147,7 +3171,7 @@ function categorizeTravelers(membersObj, country, now, ffFlightMap = {}) {
         // Must match the country query
         if (!fullStatus.includes(cLower)) continue;
 
-        const { landingStr, until } = resolveFlightDuration(m, id, now, ffFlightMap);
+        const { landingStr, until } = resolveFlightDuration(m, id, now, ffFlightMap, country);
 
         const isTraveling = state === "Traveling" || fullStatus.includes("travel") || fullStatus.includes("plane") || fullStatus.includes("flight") || fullStatus.includes("flying");
         const isAbroad = (state === "Abroad" || desc.startsWith("in ") || desc.startsWith("at ") || details.startsWith("in ")) && !isTraveling;
@@ -3200,6 +3224,7 @@ function categorizeTravelers(membersObj, country, now, ffFlightMap = {}) {
         total: inCountry.length + flyingTo.length + flyingBack.length
     };
 }
+
 
 // Build comprehensive travel status embed (Both Friendly & Enemy Factions)
 async function buildCountryStatusEmbed(country, apiKey) {

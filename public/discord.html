@@ -400,6 +400,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         setConnectionStatus(!!(cfg.globalBotToken && cfg.globalChannelId));
         updateActiveCount();
         updateInviteLink();
+
+        // Auto-sync FF Scouter key and enemy faction ID from localStorage to server
+        const localFfKey = localStorage.getItem('warboard_ffkey') || '';
+        const localEnemyId = localStorage.getItem('warboard_enemyId') || '';
+        const localApiKey = localStorage.getItem('warboard_apikey') || '';
+        if (localFfKey || localEnemyId || localApiKey) {
+            fetch('/api/save-discord-config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    apiKey: localApiKey,
+                    ffKey: localFfKey,
+                    enemyFacId: localEnemyId
+                })
+            }).catch(() => {});
+        }
     } catch (e) { setConnectionStatus(false); }
 });
 
@@ -434,6 +450,9 @@ async function saveDiscordConfig() {
     const botToken = document.getElementById('global-bottoken').value.trim();
     const channelId = document.getElementById('global-channelid').value.trim();
     const discordId = document.getElementById('discord-userid').value.trim();
+    const ffKey = localStorage.getItem('warboard_ffkey') || '';
+    const enemyFacId = localStorage.getItem('warboard_enemyId') || '';
+
     localStorage.setItem('warboard_bottoken', botToken);
     localStorage.setItem('warboard_channelid', channelId);
     localStorage.setItem('warboard_discordid', discordId);
@@ -442,7 +461,12 @@ async function saveDiscordConfig() {
         const res = await fetch('/api/save-discord-config', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                apiKey: myKey, globalBotToken: botToken, globalChannelId: channelId, personalDiscordId: discordId,
+                apiKey: myKey,
+                ffKey: ffKey,
+                enemyFacId: enemyFacId,
+                globalBotToken: botToken,
+                globalChannelId: channelId,
+                personalDiscordId: discordId,
                 targetOnline: document.getElementById('targetOnline').checked,
                 targetLanded: document.getElementById('targetLanded').checked,
                 targetOutHosp: document.getElementById('targetOutHosp').checked,
@@ -463,6 +487,7 @@ async function saveDiscordConfig() {
     } catch (e) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ ' + (e.message || 'Network error'); }
     finally { btn.disabled = false; setTimeout(() => { statusEl.textContent = ''; }, 5000); }
 }
+
 
 async function testAlert(type) {
     const btn = document.getElementById('btn-test-' + type);
