@@ -3113,32 +3113,43 @@ function getGlobalFFKey() {
 async function getPlayerFlightFromFFScouter(targetId, ffKey) {
     if (!ffKey || !targetId) return null;
     const now = Math.floor(Date.now() / 1000);
-    if (flightCache[targetId] && (Date.now() - flightCache[targetId].time) < 20000) {
+    if (flightCache[targetId] && (Date.now() - flightCache[targetId].time) < 15000 && Number(flightCache[targetId].midpoint) > 0) {
         return flightCache[targetId];
     }
     try {
         const res = await fetch(`https://ffscouter.com/api/v1/player-flights?key=${ffKey}&target=${targetId}`, {
-            signal: AbortSignal.timeout(4000)
+            signal: AbortSignal.timeout(6000),
+            headers: { 'Accept': 'application/json' }
         });
-        const data = await res.json();
-        if (data) {
-            const cur = data.current || data.flight || data;
-            const earliest = Number(cur.earliest_arrival_time || cur.earliest_arrival || cur.arrival_earliest || cur.min_arrival_time || cur.arrival_min || cur.arrival_early || cur.earliest || 0);
-            const latest = Number(cur.latest_arrival_time || cur.latest_arrival || cur.arrival_latest || cur.max_arrival_time || cur.arrival_max || cur.arrival_late || cur.latest || cur.arrival_time || 0);
+        const raw = await res.json();
+        if (raw) {
+            const cur = raw.current || raw.flight || raw.data || (Array.isArray(raw) ? raw[0] : raw[targetId]) || raw;
+            if (cur && typeof cur === 'object') {
+                const earliest = Number(cur.earliest_arrival_time || cur.earliest_arrival || cur.arrival_earliest || cur.min_arrival_time || cur.arrival_min || cur.arrival_early || cur.arrival_start || cur.earliest || 0);
+                const latest = Number(cur.latest_arrival_time || cur.latest_arrival || cur.arrival_latest || cur.max_arrival_time || cur.arrival_max || cur.arrival_late || cur.arrival_end || cur.latest || cur.arrival_time || cur.landing_time || cur.arrival || 0);
 
-            let midpoint = 0;
-            if (earliest > 0 && latest > 0) {
-                midpoint = Math.round((earliest + latest) / 2);
-            } else if (latest > 0) {
-                midpoint = latest;
-            } else if (earliest > 0) {
-                midpoint = earliest;
-            }
+                let midpoint = 0;
+                if (earliest > 0 && latest > 0) {
+                    midpoint = Math.round((earliest + latest) / 2);
+                } else if (latest > 0) {
+                    midpoint = latest;
+                } else if (earliest > 0) {
+                    midpoint = earliest;
+                }
 
-            if (midpoint > 0) {
-                const entry = { earliest, latest, midpoint, time: Date.now() };
-                flightCache[targetId] = entry;
-                return entry;
+                if (midpoint > 0) {
+                    const entry = {
+                        earliest,
+                        latest,
+                        midpoint,
+                        landingTime: midpoint || latest,
+                        destination: cur.destination || cur.to || "",
+                        origin: cur.origin || cur.from || "",
+                        time: Date.now()
+                    };
+                    flightCache[targetId] = entry;
+                    return entry;
+                }
             }
         }
     } catch(e) {
@@ -3147,17 +3158,18 @@ async function getPlayerFlightFromFFScouter(targetId, ffKey) {
     return null;
 }
 
-// Resolve flight duration using FF Scouter API midpoint or authentic FF Scouter midpoint formula
-function resolveFlightDuration(m, id, now, ffFlightMap = {}, country = "") {
-    // 1. Live FF Scouter API response (the midpoint between earliest and latest arrival)
+// Resolve flight duration using ONLY FF Scouter API (or Torn API) - No custom guessing math
+function resolveFlightDuration(m, id, now, ffFlightMap = {}) {
+    // 1. Live FF Scouter API response (the exact midpoint between earliest and latest arrival)
     const ffFlight = ffFlightMap[id] || flightCache[id];
-    if (ffFlight && Number(ffFlight.midpoint) > 0) {
-        const midpoint = Number(ffFlight.midpoint);
-        if (midpoint > now) {
-            const diffMins = Math.max(1, Math.ceil((midpoint - now) / 60));
-            return { landingStr: formatHumanDuration(diffMins), until: midpoint };
+    const arrivalTarget = Number(ffFlight?.midpoint || ffFlight?.landingTime || 0);
+
+    if (arrivalTarget > 0) {
+        if (arrivalTarget > now) {
+            const diffMins = Math.max(1, Math.ceil((arrivalTarget - now) / 60));
+            return { landingStr: formatHumanDuration(diffMins), until: arrivalTarget };
         } else {
-            return { landingStr: "Landing now!", until: midpoint };
+            return { landingStr: "Landing now!", until: arrivalTarget };
         }
     }
 
@@ -3172,28 +3184,10 @@ function resolveFlightDuration(m, id, now, ffFlightMap = {}, country = "") {
         }
     }
 
-    // 3. Authentic FF Scouter Midpoint Estimation (matches FF Scouter's flight timing model)
-    const cData = (country && COUNTRY_FLIGHT_DATA[country]) ? COUNTRY_FLIGHT_DATA[country] : COUNTRY_FLIGHT_DATA["South Africa"];
-    const midpointSec = Number(cData.midpointSec || 15150);
-    const standardSec = Number(cData.standardSec || 17820);
-    const lastAction = Number(m.last_action?.timestamp || 0);
-    let estimatedMidpointArrival = 0;
-
-    if (lastAction > 0 && lastAction <= now) {
-        const elapsed = now - lastAction;
-        if (elapsed < standardSec) {
-            estimatedMidpointArrival = lastAction + midpointSec;
-        }
-    }
-
-    if (estimatedMidpointArrival === 0 || estimatedMidpointArrival <= now) {
-        // Assume player is on average halfway through their flight
-        estimatedMidpointArrival = now + Math.round(midpointSec * 0.45);
-    }
-
-    const diffMins = Math.max(1, Math.ceil((estimatedMidpointArrival - now) / 60));
-    return { landingStr: formatHumanDuration(diffMins), until: estimatedMidpointArrival };
+    // 3. No estimates available from FF Scouter or Torn API — no guessing math
+    return { landingStr: "Flight in progress", until: 0 };
 }
+
 
 
 
