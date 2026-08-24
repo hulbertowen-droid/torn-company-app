@@ -3126,6 +3126,8 @@ function formatHumanDuration(totalMins) {
 }
 
 // Helper to get active FF Scouter API key
+let lastFFScouterError = null;
+
 function getGlobalFFKey() {
     const key = (discordConfig && discordConfig.ffKey) || 
                 (global.marketConfig && (global.marketConfig.ffscouterKey || global.marketConfig.ffKey)) || 
@@ -3159,9 +3161,12 @@ async function getPlayerFlightFromFFScouter(targetId, ffKey) {
 
         if (raw) {
             if (raw.error) {
+                lastFFScouterError = raw.error;
                 console.warn(`[FF Scouter API Error] Target ${targetId}:`, raw.error);
                 return null;
             }
+            lastFFScouterError = null;
+
             const cur = raw.current || raw.flight || raw.data || (Array.isArray(raw) ? raw[0] : (raw.flights ? raw.flights[0] : raw[targetId])) || raw;
             if (cur && typeof cur === 'object') {
                 // Check relative seconds (e.g. time_left, time_remaining, seconds_left)
@@ -3509,6 +3514,8 @@ async function buildCountryStatusEmbed(country, apiKey) {
 
         if (!ffKey) {
             desc += `\n⚠️ *FF Scouter key is not configured on the server. Connect your FF Scouter key in Dashboard Settings for live flight ETAs.*`;
+        } else if (lastFFScouterError) {
+            desc += `\n⚠️ **FF Scouter Key Error**: ${lastFFScouterError}. *(Make sure to use your key from ffscouter.com, not your Torn API key).*`;
         }
 
         return {
