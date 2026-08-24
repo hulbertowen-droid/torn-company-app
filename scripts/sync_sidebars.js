@@ -3,7 +3,6 @@ const path = require('path');
 
 const makeNavItems = (active) => `        <div class="nav-items">
             <a href="/" class="nav-link ${active==='warboard'?'active':''}">📡 <span class="nav-text">Live Warboard</span></a>
-            <a href="/hitman.html" class="nav-link ${active==='hitman'?'active':''}">🎯 <span class="nav-text">Hitman &amp; Whale Radar</span></a>
             <a href="/chain.html" class="nav-link ${active==='chain'?'active':''}">🔗 <span class="nav-text">Chain Watcher</span></a>
             <a href="/payout.html" class="nav-link ${active==='payout'?'active':''}">💰 <span class="nav-text">Payouts</span></a>
             <a href="/dashboard.html" class="nav-link ${active==='dashboard'?'active':''}">🛡️ <span class="nav-text">Dashboard</span></a>
@@ -25,7 +24,6 @@ const makeNavItems = (active) => `        <div class="nav-items">
 
 const filesMap = {
     'index.html': 'warboard',
-    'hitman.html': 'hitman',
     'chain.html': 'chain',
     'payout.html': 'payout',
     'dashboard.html': 'dashboard',
