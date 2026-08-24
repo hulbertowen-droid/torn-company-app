@@ -208,15 +208,17 @@
 
     /* MOBILE */
     @media (max-width: 960px) {
-        body { flex-direction: column; }
-        .sidebar { width: 100% !important; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
-        .nav-items { flex-direction: row; flex-wrap: wrap; padding: 8px; justify-content: center; display: none; }
-        .nav-items.mobile-open { display: flex; }
-        .main-content { height: auto; overflow-y: unset; }
-        .kpi-row { grid-template-columns: repeat(2, 1fr); }
-        .dash-grid, .dash-grid-wide { grid-template-columns: 1fr; }
-        .war-hero { flex-direction: column; }
-        .war-score-block { flex-wrap: wrap; }
+        .war-hero { flex-direction: column !important; padding: 16px !important; gap: 14px !important; }
+        .war-score-block { flex-wrap: wrap !important; justify-content: center !important; gap: 12px !important; width: 100% !important; }
+        .war-lead-badge { font-size: 0.75em !important; text-align: center !important; }
+        .wb-row-header { display: none !important; }
+        .wb-row { display: flex !important; flex-direction: column !important; align-items: stretch !important; gap: 8px !important; padding: 12px 14px !important; }
+        .wb-row > div:first-child { width: 100% !important; }
+        .intel-wrap { display: flex !important; flex-direction: row !important; align-items: center !important; justify-content: space-between !important; background: rgba(255,255,255,0.02) !important; padding: 6px 10px !important; border-radius: 6px !important; width: 100% !important; }
+        .card-actions { width: 100% !important; justify-content: flex-start !important; gap: 6px !important; margin-top: 4px !important; }
+        .btn-action, .btn-attack { flex: 1 1 auto !important; justify-content: center !important; text-align: center !important; min-height: 38px !important; font-size: 0.82em !important; }
+        #chart-summary-bar { flex-wrap: wrap !important; gap: 6px !important; }
+        #chart-summary-bar > div { flex: 1 1 calc(50% - 6px) !important; padding: 6px 8px !important; font-size: 0.72em !important; justify-content: space-between !important; }
     }
 </style>
 </head>
