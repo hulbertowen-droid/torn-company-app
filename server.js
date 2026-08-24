@@ -3029,20 +3029,21 @@ const COUNTRY_EMOJIS = {
     "Japan": "🇯🇵", "China": "🇨🇳", "UAE": "🇦🇪", "South Africa": "🇿🇦"
 };
 
-// Official Torn City one-way flight times (standard vs airstrip vs business)
+// Official Torn City one-way flight times with exact midpoints
 const COUNTRY_FLIGHT_DATA = {
-    "Mexico":         { standardMins: 26,  airstripMins: 18,  businessMins: 13,  standardSec: 1560,  airstripSec: 1080,  businessSec: 780 },
-    "Cayman Islands": { standardMins: 35,  airstripMins: 25,  businessMins: 18,  standardSec: 2100,  airstripSec: 1500,  businessSec: 1080 },
-    "Canada":         { standardMins: 41,  airstripMins: 29,  businessMins: 21,  standardSec: 2460,  airstripSec: 1740,  businessSec: 1260 },
-    "Hawaii":         { standardMins: 134, airstripMins: 94,  businessMins: 67,  standardSec: 8040,  airstripSec: 5640,  businessSec: 4020 },
-    "United Kingdom": { standardMins: 159, airstripMins: 111, businessMins: 80,  standardSec: 9540,  airstripSec: 6660,  businessSec: 4800 },
-    "Argentina":      { standardMins: 167, airstripMins: 117, businessMins: 84,  standardSec: 10020, airstripSec: 7020,  businessSec: 5040 },
-    "Switzerland":    { standardMins: 175, airstripMins: 123, businessMins: 88,  standardSec: 10500, airstripSec: 7380,  businessSec: 5280 },
-    "Japan":          { standardMins: 225, airstripMins: 158, businessMins: 113, standardSec: 13500, airstripSec: 9480,  businessSec: 6780 },
-    "China":          { standardMins: 242, airstripMins: 169, businessMins: 121, standardSec: 14520, airstripSec: 10140, businessSec: 7260 },
-    "UAE":            { standardMins: 271, airstripMins: 190, businessMins: 136, standardSec: 16260, airstripSec: 11400, businessSec: 8160 },
-    "South Africa":   { standardMins: 297, airstripMins: 208, businessMins: 149, standardSec: 17820, airstripSec: 12480, businessSec: 8940 }
+    "Mexico":         { standardMins: 26,  airstripMins: 18,  midpointSec: 1320, standardSec: 1560, airstripSec: 1080 },
+    "Cayman Islands": { standardMins: 35,  airstripMins: 25,  midpointSec: 1800, standardSec: 2100, airstripSec: 1500 },
+    "Canada":         { standardMins: 41,  airstripMins: 29,  midpointSec: 2100, standardSec: 2460, airstripSec: 1740 },
+    "Hawaii":         { standardMins: 134, airstripMins: 94,  midpointSec: 6840, standardSec: 8040, airstripSec: 5640 },
+    "United Kingdom": { standardMins: 159, airstripMins: 111, midpointSec: 8100, standardSec: 9540, airstripSec: 6660 },
+    "Argentina":      { standardMins: 167, airstripMins: 117, midpointSec: 8520, standardSec: 10020, airstripSec: 7020 },
+    "Switzerland":    { standardMins: 175, airstripMins: 123, midpointSec: 8940, standardSec: 10500, airstripSec: 7380 },
+    "Japan":          { standardMins: 225, airstripMins: 158, midpointSec: 11490, standardSec: 13500, airstripSec: 9480 },
+    "China":          { standardMins: 242, airstripMins: 169, midpointSec: 12330, standardSec: 14520, airstripSec: 10140 },
+    "UAE":            { standardMins: 271, airstripMins: 190, midpointSec: 13830, standardSec: 16260, airstripSec: 11400 },
+    "South Africa":   { standardMins: 297, airstripMins: 208, midpointSec: 15150, standardSec: 17820, airstripSec: 12480 }
 };
+
 
 // Normalise country name from slash command name
 function slashNameToCountry(name) {
@@ -3066,15 +3067,16 @@ function slashNameToCountry(name) {
 
 // Format duration in human-readable Torn style: e.g. ~1 hour and 36 minutes, ~24 minutes
 function formatHumanDuration(totalMins) {
-    if (totalMins <= 0) return "Landing now";
-    if (totalMins < 60) {
-        return `~${totalMins} minute${totalMins !== 1 ? 's' : ''}`;
+    const minsNum = Number(totalMins);
+    if (!Number.isFinite(minsNum) || minsNum <= 0) return "Landing now";
+    if (minsNum < 60) {
+        return `~${minsNum} minute${minsNum !== 1 ? 's' : ''}`;
     }
-    const hrs = Math.floor(totalMins / 60);
-    const mins = totalMins % 60;
+    const hrs = Math.floor(minsNum / 60);
+    const remainingMins = minsNum % 60;
     const hrStr = `${hrs} hour${hrs !== 1 ? 's' : ''}`;
-    if (mins === 0) return `~${hrStr}`;
-    const minStr = `${mins} minute${mins !== 1 ? 's' : ''}`;
+    if (remainingMins === 0) return `~${hrStr}`;
+    const minStr = `${remainingMins} minute${remainingMins !== 1 ? 's' : ''}`;
     return `~${hrStr} and ${minStr}`;
 }
 
@@ -3127,21 +3129,21 @@ async function getPlayerFlightFromFFScouter(targetId, ffKey) {
 }
 
 // Resolve flight duration using FF Scouter API midpoint or authentic FF Scouter midpoint formula
-
 function resolveFlightDuration(m, id, now, ffFlightMap = {}, country = "") {
     // 1. Live FF Scouter API response (the midpoint between earliest and latest arrival)
     const ffFlight = ffFlightMap[id] || flightCache[id];
-    if (ffFlight && ffFlight.midpoint && ffFlight.midpoint > 0) {
-        if (ffFlight.midpoint > now) {
-            const diffMins = Math.max(1, Math.ceil((ffFlight.midpoint - now) / 60));
-            return { landingStr: formatHumanDuration(diffMins), until: ffFlight.midpoint };
+    if (ffFlight && Number(ffFlight.midpoint) > 0) {
+        const midpoint = Number(ffFlight.midpoint);
+        if (midpoint > now) {
+            const diffMins = Math.max(1, Math.ceil((midpoint - now) / 60));
+            return { landingStr: formatHumanDuration(diffMins), until: midpoint };
         } else {
-            return { landingStr: "Landing now!", until: ffFlight.midpoint };
+            return { landingStr: "Landing now!", until: midpoint };
         }
     }
 
     // 2. Direct Torn API status.until timestamp (if available)
-    const until = m.status?.until || 0;
+    const until = Number(m.status?.until || 0);
     if (until > 0) {
         if (until > now) {
             const diffMins = Math.max(1, Math.ceil((until - now) / 60));
@@ -3152,26 +3154,28 @@ function resolveFlightDuration(m, id, now, ffFlightMap = {}, country = "") {
     }
 
     // 3. Authentic FF Scouter Midpoint Estimation (matches FF Scouter's flight timing model)
-    const cData = (country && COUNTRY_FLIGHT_DATA[country]) ? COUNTRY_FLIGHT_DATA[country] : { midpointSec: 15150, standardMins: 297 };
-    const lastAction = m.last_action?.timestamp || 0;
+    const cData = (country && COUNTRY_FLIGHT_DATA[country]) ? COUNTRY_FLIGHT_DATA[country] : COUNTRY_FLIGHT_DATA["South Africa"];
+    const midpointSec = Number(cData.midpointSec || 15150);
+    const standardSec = Number(cData.standardSec || 17820);
+    const lastAction = Number(m.last_action?.timestamp || 0);
     let estimatedMidpointArrival = 0;
 
     if (lastAction > 0 && lastAction <= now) {
         const elapsed = now - lastAction;
-        if (elapsed < (cData.standardMins * 60)) {
-            // Player boarded around lastAction
-            estimatedMidpointArrival = lastAction + cData.midpointSec;
+        if (elapsed < standardSec) {
+            estimatedMidpointArrival = lastAction + midpointSec;
         }
     }
 
     if (estimatedMidpointArrival === 0 || estimatedMidpointArrival <= now) {
         // Assume player is on average halfway through their flight
-        estimatedMidpointArrival = now + Math.round(cData.midpointSec * 0.45);
+        estimatedMidpointArrival = now + Math.round(midpointSec * 0.45);
     }
 
     const diffMins = Math.max(1, Math.ceil((estimatedMidpointArrival - now) / 60));
     return { landingStr: formatHumanDuration(diffMins), until: estimatedMidpointArrival };
 }
+
 
 
 
