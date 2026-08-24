@@ -2797,6 +2797,32 @@ app.get('/api/company-config', (req, res) => {
     res.json({ success: true, globalChannelId: companyConfig.globalChannelId, threshold: companyConfig.threshold });
 });
 
+// Debug endpoint: test FF Scouter API live and see exact raw response
+app.get('/api/debug-ffscouter', async (req, res) => {
+    const targetId = req.query.target || req.query.id;
+    const ffKey = req.query.key || getGlobalFFKey();
+    if (!ffKey) return res.json({ error: "No FF Scouter key configured. Add it in Settings.", savedKey: discordConfig.ffKey || "(none)" });
+    if (!targetId) return res.json({ error: "Add ?target=PLAYER_ID to the URL", ffKeyPresent: !!ffKey, ffKeyPreview: ffKey.substring(0, 4) + "****" });
+
+    const url = `https://ffscouter.com/api/v1/player-flights?key=${encodeURIComponent(ffKey)}&target=${encodeURIComponent(targetId)}`;
+    try {
+        const r = await fetch(url, { signal: AbortSignal.timeout(8000), headers: { 'Accept': 'application/json' } });
+        const text = await r.text();
+        let parsed;
+        try { parsed = JSON.parse(text); } catch(e) { parsed = null; }
+        res.json({
+            url: url.replace(encodeURIComponent(ffKey), "FF_KEY_HIDDEN"),
+            httpStatus: r.status,
+            rawText: text.substring(0, 2000),
+            parsed,
+            ffKeyPreview: ffKey.substring(0, 4) + "****",
+            ffKeyLength: ffKey.length
+        });
+    } catch(e) {
+        res.json({ error: e.message, url: url.replace(encodeURIComponent(ffKey), "FF_KEY_HIDDEN") });
+    }
+});
+
 app.get('/api/ocs', async (req, res) => {
     try {
         const userKey = (req.headers['x-api-key'] || req.query.apiKey) && (req.headers['x-api-key'] || req.query.apiKey) !== "null" ? (req.headers['x-api-key'] || req.query.apiKey) : TORN_API_KEY;
