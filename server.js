@@ -3064,69 +3064,70 @@ function slashNameToCountry(name) {
     return map[clean] || map[name.toLowerCase()] || null;
 }
 
-// Format landing time with countdown and local clock time
-function formatLandingETA(landingEpoch, now) {
-    if (!landingEpoch || landingEpoch <= now) {
-        return `**Landing now!** (<t:${now}:t>)`;
+// Format duration in human-readable Torn style: e.g. ~1 hour and 36 minutes, ~24 minutes
+function formatHumanDuration(totalMins) {
+    if (totalMins <= 0) return "Landing now";
+    if (totalMins < 60) {
+        return `~${totalMins} minute${totalMins !== 1 ? 's' : ''}`;
     }
-
-    const diffSec = landingEpoch - now;
-    const diffMins = Math.ceil(diffSec / 60);
-
-    let timeStr = "";
-    if (diffMins <= 1) {
-        timeStr = "**Landing now!**";
-    } else if (diffMins < 60) {
-        timeStr = `in **${diffMins}m**`;
-    } else {
-        const hrs = Math.floor(diffMins / 60);
-        const mins = diffMins % 60;
-        timeStr = mins > 0 ? `in **${hrs}h ${mins}m**` : `in **${hrs}h**`;
-    }
-
-    return `${timeStr} (<t:${landingEpoch}:R> • <t:${landingEpoch}:t>)`;
+    const hrs = Math.floor(totalMins / 60);
+    const mins = totalMins % 60;
+    const hrStr = `${hrs} hour${hrs !== 1 ? 's' : ''}`;
+    if (mins === 0) return `~${hrStr}`;
+    const minStr = `${mins} minute${mins !== 1 ? 's' : ''}`;
+    return `~${hrStr} and ${minStr}`;
 }
 
-// Calculate exact landing epoch timestamp for any player
-function estimateLandingETA(m, id, country, now) {
-    const until = m.status?.until || 0;
-
-    // 1. If explicit status.until from Torn API is in the future
-    if (until > now) {
-        return { landingStr: formatLandingETA(until, now), until };
+// Fetch flight data directly from FF Scouter API and calculate midpoint arrival
+async function getPlayerFlightFromFFScouter(targetId, ffKey) {
+    if (!ffKey || !targetId) return null;
+    const now = Date.now();
+    if (flightCache[targetId] && (now - flightCache[targetId].time) < 30000) {
+        return flightCache[targetId];
     }
-
-    // 2. If recorded in flightCache (from FF Scouter or background scraping)
-    if (id && flightCache[id]?.landingTime && flightCache[id].landingTime > now) {
-        return { landingStr: formatLandingETA(flightCache[id].landingTime, now), until: flightCache[id].landingTime };
-    }
-
-    // 3. Mathematical estimation using standard flight duration & last action
-    const flightData = COUNTRY_FLIGHT_MINS[country] || { standard: 60, airstrip: 40 };
-    const airstripSec = Math.round(flightData.airstrip * 60);
-    const standardSec = Math.round(flightData.standard * 60);
-
-    const lastAction = m.last_action?.timestamp || 0;
-    let estimatedEpoch = 0;
-
-    if (lastAction > 0 && lastAction <= now) {
-        const elapsed = now - lastAction;
-        if (elapsed < airstripSec) {
-            estimatedEpoch = now + (airstripSec - elapsed);
-        } else if (elapsed < standardSec) {
-            estimatedEpoch = now + (standardSec - elapsed);
+    try {
+        const res = await fetch(`https://ffscouter.com/api/v1/player-flights?key=${ffKey}&target=${targetId}`, {
+            signal: AbortSignal.timeout(4000)
+        });
+        const data = await res.json();
+        if (data && data.current) {
+            const earliest = Number(data.current.earliest_arrival_time || data.current.arrival_early || data.current.arrival_min || data.current.departure_time || 0);
+            const latest = Number(data.current.latest_arrival_time || data.current.arrival_late || data.current.arrival_max || data.current.arrival_time || 0);
+            let midpoint = 0;
+            if (earliest > 0 && latest > 0) {
+                midpoint = Math.round((earliest + latest) / 2);
+            } else {
+                midpoint = latest || earliest || 0;
+            }
+            if (midpoint > 0) {
+                const entry = { earliest, latest, midpoint, time: now };
+                flightCache[targetId] = entry;
+                return entry;
+            }
         }
+    } catch(e) {}
+    return null;
+}
+
+// Resolve flight duration using FF Scouter's middle estimate
+function resolveFlightDuration(m, id, now, ffFlightMap = {}) {
+    const ffFlight = ffFlightMap[id] || flightCache[id];
+    if (ffFlight && ffFlight.midpoint && ffFlight.midpoint > now) {
+        const diffMins = Math.ceil((ffFlight.midpoint - now) / 60);
+        return { landingStr: formatHumanDuration(diffMins), until: ffFlight.midpoint };
     }
 
-    if (estimatedEpoch === 0 || estimatedEpoch <= now) {
-        estimatedEpoch = now + Math.round(airstripSec * 0.45);
+    const until = m.status?.until || 0;
+    if (until > now) {
+        const diffMins = Math.ceil((until - now) / 60);
+        return { landingStr: formatHumanDuration(diffMins), until };
     }
 
-    return { landingStr: formatLandingETA(estimatedEpoch, now), until: estimatedEpoch };
+    return { landingStr: "Flight in progress", until: 0 };
 }
 
 // Robust member travel classifier for a specific country
-function categorizeTravelers(membersObj, country, now) {
+function categorizeTravelers(membersObj, country, now, ffFlightMap = {}) {
     const cLower = country.toLowerCase();
     const inCountry = [];
     const flyingTo = [];
@@ -3146,7 +3147,7 @@ function categorizeTravelers(membersObj, country, now) {
         // Must match the country query
         if (!fullStatus.includes(cLower)) continue;
 
-        const { landingStr, until } = estimateLandingETA(m, id, country, now);
+        const { landingStr, until } = resolveFlightDuration(m, id, now, ffFlightMap);
 
         const isTraveling = state === "Traveling" || fullStatus.includes("travel") || fullStatus.includes("plane") || fullStatus.includes("flight") || fullStatus.includes("flying");
         const isAbroad = (state === "Abroad" || desc.startsWith("in ") || desc.startsWith("at ") || details.startsWith("in ")) && !isTraveling;
@@ -3200,7 +3201,6 @@ function categorizeTravelers(membersObj, country, now) {
     };
 }
 
-
 // Build comprehensive travel status embed (Both Friendly & Enemy Factions)
 async function buildCountryStatusEmbed(country, apiKey) {
     const emoji = COUNTRY_EMOJIS[country] || "✈️";
@@ -3216,6 +3216,8 @@ async function buildCountryStatusEmbed(country, apiKey) {
     }
 
     try {
+        const ffKey = discordConfig.ffKey || (global.marketConfig && global.marketConfig.ffscouterKey) || "";
+
         // 1. Fetch Friendly Faction
         const facRes = await fetch(`https://api.torn.com/faction/${factionId}?selections=basic,rankedwars&key=${apiKey}`, {
             signal: AbortSignal.timeout(8000)
@@ -3224,12 +3226,11 @@ async function buildCountryStatusEmbed(country, apiKey) {
         if (facData.error) throw new Error(facData.error.error || "Torn API error");
 
         const friendlyName = facData.name || "Our Faction";
-        const friendlyTravel = categorizeTravelers(facData.members, country, now);
 
         // 2. Determine Enemy Faction ID
         let enemyId = currentEnemyFacId || discordConfig.enemyFacId || autoDetectEnemyFaction(facData);
         let enemyName = "Enemy Faction";
-        let enemyTravel = { inCountry: [], flyingTo: [], flyingBack: [], total: 0 };
+        let enemyData = null;
 
         if (enemyId && enemyId.toString() !== factionId.toString()) {
             try {
@@ -3237,18 +3238,51 @@ async function buildCountryStatusEmbed(country, apiKey) {
                 const enemyRes = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${rotKey}`, {
                     signal: AbortSignal.timeout(6000)
                 });
-                const enemyData = await enemyRes.json();
+                enemyData = await enemyRes.json();
                 if (enemyData.members) {
                     enemyName = enemyData.name || `Enemy [${enemyId}]`;
                     enemyMembersCache = enemyData.members;
-                    enemyTravel = categorizeTravelers(enemyData.members, country, now);
                 }
             } catch(e) {
                 if (enemyMembersCache && Object.keys(enemyMembersCache).length > 0) {
-                    enemyTravel = categorizeTravelers(enemyMembersCache, country, now);
+                    enemyData = { members: enemyMembersCache, name: enemyName };
                 }
             }
         }
+
+        // 3. Collect traveling members for FF Scouter lookup
+        const travelingIds = [];
+        const cLower = country.toLowerCase();
+
+        for (const [id, m] of Object.entries(facData.members || {})) {
+            const full = `${m.status?.state || ''} ${m.status?.description || ''} ${m.status?.details || ''}`.toLowerCase();
+            if (full.includes(cLower) && (m.status?.state === 'Traveling' || full.includes('travel') || full.includes('plane') || full.includes('flight') || full.includes('returning'))) {
+                travelingIds.push(id);
+            }
+        }
+        if (enemyData?.members) {
+            for (const [id, m] of Object.entries(enemyData.members)) {
+                const full = `${m.status?.state || ''} ${m.status?.description || ''} ${m.status?.details || ''}`.toLowerCase();
+                if (full.includes(cLower) && (m.status?.state === 'Traveling' || full.includes('travel') || full.includes('plane') || full.includes('flight') || full.includes('returning'))) {
+                    travelingIds.push(id);
+                }
+            }
+        }
+
+        // 4. Fetch FF Scouter estimates in parallel
+        const ffFlightMap = {};
+        if (ffKey && travelingIds.length > 0) {
+            await Promise.all(
+                travelingIds.slice(0, 20).map(async (id) => {
+                    const fl = await getPlayerFlightFromFFScouter(id, ffKey);
+                    if (fl) ffFlightMap[id] = fl;
+                })
+            );
+        }
+
+        const friendlyTravel = categorizeTravelers(facData.members, country, now, ffFlightMap);
+        const enemyTravel = enemyData?.members ? categorizeTravelers(enemyData.members, country, now, ffFlightMap) : { inCountry: [], flyingTo: [], flyingBack: [], total: 0 };
+
 
         const fields = [];
 
