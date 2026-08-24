@@ -3037,21 +3037,116 @@ const COUNTRY_FLIGHT_MINS = {
 };
 
 // Normalise country name from slash command name
+// Normalise country name from slash command name
 function slashNameToCountry(name) {
+    if (!name) return null;
+    const clean = name.toLowerCase().replace(/[^a-z0-9]/g, '');
     const map = {
-        "south-africa": "South Africa", "south_africa": "South Africa", "southafrica": "South Africa",
-        "south africa": "South Africa",
-        "mexico": "Mexico", "cayman-islands": "Cayman Islands", "cayman_islands": "Cayman Islands",
-        "caymanislands": "Cayman Islands", "cayman": "Cayman Islands",
-        "canada": "Canada", "hawaii": "Hawaii", "united-kingdom": "United Kingdom",
-        "uk": "United Kingdom", "united_kingdom": "United Kingdom", "unitedkingdom": "United Kingdom",
-        "argentina": "Argentina", "switzerland": "Switzerland", "japan": "Japan",
-        "china": "China", "uae": "UAE",
+        "southafrica": "South Africa", "sa": "South Africa",
+        "mexico": "Mexico", "mex": "Mexico",
+        "caymanislands": "Cayman Islands", "cayman": "Cayman Islands", "ci": "Cayman Islands",
+        "canada": "Canada", "can": "Canada",
+        "hawaii": "Hawaii", "hi": "Hawaii",
+        "unitedkingdom": "United Kingdom", "uk": "United Kingdom", "britain": "United Kingdom", "england": "United Kingdom",
+        "argentina": "Argentina", "arg": "Argentina",
+        "switzerland": "Switzerland", "swiss": "Switzerland", "ch": "Switzerland",
+        "japan": "Japan", "jp": "Japan",
+        "china": "China", "cn": "China",
+        "uae": "UAE", "dubai": "UAE", "emirates": "UAE"
     };
-    return map[name.toLowerCase()] || null;
+    return map[clean] || map[name.toLowerCase()] || null;
 }
 
-// Build the faction travel status for a given country
+// Robust member travel classifier for a specific country
+function categorizeTravelers(membersObj, country, now) {
+    const cLower = country.toLowerCase();
+    const inCountry = [];
+    const flyingTo = [];
+    const flyingBack = [];
+
+    if (!membersObj || typeof membersObj !== 'object') {
+        return { inCountry, flyingTo, flyingBack, total: 0 };
+    }
+
+    for (const [id, m] of Object.entries(membersObj)) {
+        if (!m || !m.name) continue;
+        const state = (m.status?.state || "").trim();
+        const desc = (m.status?.description || "").toLowerCase();
+        const details = (m.status?.details || "").toLowerCase();
+        const fullStatus = `${state.toLowerCase()} ${desc} ${details}`;
+        const until = m.status?.until || 0;
+
+        // Must match the country query
+        if (!fullStatus.includes(cLower)) continue;
+
+        // Calculate landing time ETA
+        const landingMins = until > now ? Math.ceil((until - now) / 60) : null;
+        let landingStr = "";
+        if (landingMins !== null) {
+            if (landingMins <= 1) landingStr = "**Landing now!**";
+            else if (landingMins < 60) landingStr = `Landing in **${landingMins}m**`;
+            else {
+                const hrs = Math.floor(landingMins / 60);
+                const mins = landingMins % 60;
+                landingStr = `Landing in **${hrs}h ${mins}m**`;
+            }
+        } else if (state === "Traveling" || fullStatus.includes("travel") || fullStatus.includes("plane") || fullStatus.includes("flight")) {
+            landingStr = "Landing soon";
+        }
+
+        const isTraveling = state === "Traveling" || fullStatus.includes("travel") || fullStatus.includes("plane") || fullStatus.includes("flight") || fullStatus.includes("flying");
+        const isAbroad = (state === "Abroad" || desc.startsWith("in ") || desc.startsWith("at ") || details.startsWith("in ")) && !isTraveling;
+
+        // 1. In Country (at destination, not flying)
+        if (isAbroad) {
+            const onlineStr = m.last_action?.status === "Online" ? " 🟢" : (m.last_action?.status === "Idle" ? " 🟡" : " ⚫");
+            inCountry.push({ name: m.name, id, onlineStr, status: m.last_action?.status || "Offline" });
+            continue;
+        }
+
+        // 2. Flying Back FROM Country
+        const isHeadingHome = fullStatus.includes("from " + cLower) ||
+                              fullStatus.includes("returning from") ||
+                              fullStatus.includes("back from " + cLower) ||
+                              fullStatus.includes("leaving " + cLower) ||
+                              ((fullStatus.includes("returning") || fullStatus.includes("torn") || fullStatus.includes("home") || fullStatus.includes("back")) && fullStatus.includes(cLower));
+
+        if (isTraveling && isHeadingHome) {
+            flyingBack.push({ name: m.name, id, landingStr, until });
+            continue;
+        }
+
+        // 3. Flying TO Country
+        const isHeadingTo = fullStatus.includes("to " + cLower) ||
+                            fullStatus.includes("heading to " + cLower) ||
+                            fullStatus.includes("flying to " + cLower) ||
+                            fullStatus.includes("traveling to " + cLower) ||
+                            (isTraveling && !isHeadingHome);
+
+        if (isTraveling && isHeadingTo) {
+            flyingTo.push({ name: m.name, id, landingStr, until });
+            continue;
+        }
+
+        // 4. General Abroad Fallback
+        if (state === "Abroad") {
+            const onlineStr = m.last_action?.status === "Online" ? " 🟢" : (m.last_action?.status === "Idle" ? " 🟡" : " ⚫");
+            inCountry.push({ name: m.name, id, onlineStr, status: m.last_action?.status || "Offline" });
+        }
+    }
+
+    flyingTo.sort((a, b) => (a.until || 9999999) - (b.until || 9999999));
+    flyingBack.sort((a, b) => (a.until || 9999999) - (b.until || 9999999));
+
+    return {
+        inCountry,
+        flyingTo,
+        flyingBack,
+        total: inCountry.length + flyingTo.length + flyingBack.length
+    };
+}
+
+// Build comprehensive travel status embed (Both Friendly & Enemy Factions)
 async function buildCountryStatusEmbed(country, apiKey) {
     const emoji = COUNTRY_EMOJIS[country] || "✈️";
     const now = Math.floor(Date.now() / 1000);
@@ -3059,97 +3154,129 @@ async function buildCountryStatusEmbed(country, apiKey) {
     let factionId = adminFactionId || discordConfig.factionId;
     if (!factionId || !apiKey) {
         return {
-            title: `${emoji} ${country} — Travel Lookup`,
+            title: `${emoji} ${country} — Travel Intel`,
             description: "⚠️ Bot not configured: missing API key or faction ID. Visit the Discord Alerts page to set up.",
             color: 16729943
         };
     }
 
     try {
-        const res = await fetch(`https://api.torn.com/faction/${factionId}?selections=basic&key=${apiKey}`, {
-            signal: AbortSignal.timeout(7000)
+        // 1. Fetch Friendly Faction
+        const facRes = await fetch(`https://api.torn.com/faction/${factionId}?selections=basic,rankedwars&key=${apiKey}`, {
+            signal: AbortSignal.timeout(8000)
         });
-        const data = await res.json();
-        if (data.error) throw new Error(data.error.error || "Torn API error");
+        const facData = await facRes.json();
+        if (facData.error) throw new Error(facData.error.error || "Torn API error");
 
-        const members = Object.entries(data.members || {});
+        const friendlyName = facData.name || "Our Faction";
+        const friendlyTravel = categorizeTravelers(facData.members, country, now);
 
-        // Classify members
-        const inCountry = [];       // Already there
-        const flyingTo = [];        // On their way there
-        const flyingBack = [];      // Heading back from there
-        const unknown = [];
+        // 2. Determine Enemy Faction ID
+        let enemyId = currentEnemyFacId || discordConfig.enemyFacId || autoDetectEnemyFaction(facData);
+        let enemyName = "Enemy Faction";
+        let enemyTravel = { inCountry: [], flyingTo: [], flyingBack: [], total: 0 };
 
-        for (const [id, m] of members) {
-            const state = m.status?.state || "";
-            const desc = m.status?.description || "";
-            const until = m.status?.until || 0;
-
-            const isInCountry = state === "Abroad" && desc.toLowerCase().includes(country.toLowerCase());
-            const isFlyingTo = state === "Traveling" && desc.toLowerCase().includes(country.toLowerCase()) && desc.toLowerCase().includes("traveling to");
-            const isFlyingBack = state === "Traveling" && desc.toLowerCase().includes(country.toLowerCase()) && (desc.toLowerCase().includes("returning") || desc.toLowerCase().includes("traveling home") || desc.toLowerCase().includes("flying back"));
-
-            const landingMins = until > now ? Math.ceil((until - now) / 60) : null;
-            const landingStr = landingMins !== null ? (landingMins <= 1 ? "**Landing now!**" : `Landing in **${landingMins}m**`) : "";
-
-            if (isFlyingTo) {
-                flyingTo.push({ name: m.name, id, landingStr, until });
-            } else if (isFlyingBack) {
-                flyingBack.push({ name: m.name, id, landingStr, until });
-            } else if (isInCountry) {
-                const onlineStr = m.last_action?.status === "Online" ? " 🟢" : (m.last_action?.status === "Idle" ? " 🟡" : " ⚫");
-                inCountry.push({ name: m.name, id, onlineStr });
+        if (enemyId && enemyId.toString() !== factionId.toString()) {
+            try {
+                let rotKey = getNextApiKey() || apiKey;
+                const enemyRes = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${rotKey}`, {
+                    signal: AbortSignal.timeout(6000)
+                });
+                const enemyData = await enemyRes.json();
+                if (enemyData.members) {
+                    enemyName = enemyData.name || `Enemy [${enemyId}]`;
+                    enemyMembersCache = enemyData.members;
+                    enemyTravel = categorizeTravelers(enemyData.members, country, now);
+                }
+            } catch(e) {
+                if (enemyMembersCache && Object.keys(enemyMembersCache).length > 0) {
+                    enemyTravel = categorizeTravelers(enemyMembersCache, country, now);
+                }
             }
         }
 
-        // Sort by landing time
-        flyingTo.sort((a, b) => (a.until || 9999999) - (b.until || 9999999));
-        flyingBack.sort((a, b) => (a.until || 9999999) - (b.until || 9999999));
-
         const fields = [];
-        if (inCountry.length > 0) {
+
+        // ── 1. FRIENDLY SECTION ──
+        if (friendlyTravel.inCountry.length > 0) {
             fields.push({
-                name: `📍 Currently in ${country} (${inCountry.length})`,
-                value: inCountry.slice(0, 10).map(m =>
+                name: `🛡️ ${friendlyName} — In ${country} (${friendlyTravel.inCountry.length})`,
+                value: friendlyTravel.inCountry.slice(0, 15).map(m =>
                     `[${m.name}](https://www.torn.com/profiles.php?XID=${m.id})${m.onlineStr}`
-                ).join("\n") || "None",
+                ).join("\n"),
                 inline: false
             });
         }
-        if (flyingTo.length > 0) {
+        if (friendlyTravel.flyingTo.length > 0) {
             fields.push({
-                name: `✈️ Flying TO ${country} (${flyingTo.length})`,
-                value: flyingTo.slice(0, 10).map(m =>
+                name: `✈️ ${friendlyName} — Flying TO ${country} (${friendlyTravel.flyingTo.length})`,
+                value: friendlyTravel.flyingTo.slice(0, 15).map(m =>
                     `[${m.name}](https://www.torn.com/profiles.php?XID=${m.id}) — ${m.landingStr || "ETA unknown"}`
-                ).join("\n") || "None",
+                ).join("\n"),
                 inline: false
             });
         }
-        if (flyingBack.length > 0) {
+        if (friendlyTravel.flyingBack.length > 0) {
             fields.push({
-                name: `🔄 Flying BACK from ${country} (${flyingBack.length})`,
-                value: flyingBack.slice(0, 10).map(m =>
+                name: `🔄 ${friendlyName} — Flying BACK from ${country} (${friendlyTravel.flyingBack.length})`,
+                value: friendlyTravel.flyingBack.slice(0, 15).map(m =>
                     `[${m.name}](https://www.torn.com/profiles.php?XID=${m.id}) — ${m.landingStr || "ETA unknown"}`
-                ).join("\n") || "None",
+                ).join("\n"),
                 inline: false
             });
         }
 
-        const total = inCountry.length + flyingTo.length + flyingBack.length;
+        // ── 2. ENEMY SECTION (with 1-click Attack Links) ──
+        if (enemyTravel.inCountry.length > 0) {
+            fields.push({
+                name: `🎯 ${enemyName} — In ${country} (${enemyTravel.inCountry.length})`,
+                value: enemyTravel.inCountry.slice(0, 15).map(m =>
+                    `**${m.name}** [${m.id}]${m.onlineStr} • [⚔️ Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${m.id}) • [Profile](https://www.torn.com/profiles.php?XID=${m.id})`
+                ).join("\n"),
+                inline: false
+            });
+        }
+        if (enemyTravel.flyingTo.length > 0) {
+            fields.push({
+                name: `✈️ ${enemyName} — Flying TO ${country} (${enemyTravel.flyingTo.length})`,
+                value: enemyTravel.flyingTo.slice(0, 15).map(m =>
+                    `**${m.name}** [${m.id}] — ${m.landingStr || "ETA unknown"} • [⚔️ Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${m.id})`
+                ).join("\n"),
+                inline: false
+            });
+        }
+        if (enemyTravel.flyingBack.length > 0) {
+            fields.push({
+                name: `🔄 ${enemyName} — Flying BACK from ${country} (${enemyTravel.flyingBack.length})`,
+                value: enemyTravel.flyingBack.slice(0, 15).map(m =>
+                    `**${m.name}** [${m.id}] — ${m.landingStr || "ETA unknown"} • [⚔️ Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${m.id})`
+                ).join("\n"),
+                inline: false
+            });
+        }
+
+        const grandTotal = friendlyTravel.total + enemyTravel.total;
+        let desc = "";
+        if (grandTotal === 0) {
+            desc = `No friendly members or enemy targets are currently in or traveling to/from **${country}**.`;
+        } else {
+            const summaryParts = [];
+            if (friendlyTravel.total > 0) summaryParts.push(`**${friendlyTravel.total}** friendly member${friendlyTravel.total !== 1 ? 's' : ''}`);
+            if (enemyTravel.total > 0) summaryParts.push(`**${enemyTravel.total}** enemy target${enemyTravel.total !== 1 ? 's' : ''}`);
+            desc = summaryParts.join(' and ') + ` detected for **${country}**.`;
+        }
 
         return {
-            title: `${emoji} ${country} — Faction Travel Status`,
-            description: total === 0
-                ? `No faction members are currently in or flying to **${country}**.`
-                : `**${total}** member${total !== 1 ? "s" : ""} associated with ${country} right now.`,
-            color: 5793266,
+            title: `${emoji} ${country} — Live Travel Intel`,
+            description: desc,
+            color: enemyTravel.total > 0 ? 16729943 : 5793266, // Red if enemies present, green otherwise
             fields,
-            footer: { text: `Updated ${new Date().toUTCString()} | Torn Faction Tools` }
+            footer: { text: `Torn Travel Intel • ${new Date().toUTCString()}` }
         };
     } catch (e) {
         return {
-            title: `${emoji} ${country} — Travel Lookup`,
-            description: `⚠️ Could not fetch faction data: ${e.message}`,
+            title: `${emoji} ${country} — Travel Intel`,
+            description: `⚠️ Could not fetch travel data: ${e.message}`,
             color: 16729943
         };
     }
@@ -3159,13 +3286,44 @@ async function buildCountryStatusEmbed(country, apiKey) {
 async function registerSlashCommands(token, guildId = null) {
     const rest = new REST({ version: '10' }).setToken(token);
 
-    const commands = TORN_COUNTRIES.map(country => {
-        const cmdName = country.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-        return new SlashCommandBuilder()
-            .setName(cmdName)
-            .setDescription(`Show who from your faction is in or flying to ${country}`)
-            .toJSON();
-    });
+    const commands = [
+        // 1. Universal /travel command with choices
+        new SlashCommandBuilder()
+            .setName('travel')
+            .setDescription('Look up friendly and enemy travel status for any destination')
+            .addStringOption(opt =>
+                opt.setName('country')
+                   .setDescription('Select country')
+                   .setRequired(true)
+                   .addChoices(
+                       { name: '🇲🇽 Mexico', value: 'Mexico' },
+                       { name: '🏝️ Cayman Islands', value: 'Cayman Islands' },
+                       { name: '🇨🇦 Canada', value: 'Canada' },
+                       { name: '🌺 Hawaii', value: 'Hawaii' },
+                       { name: '🇬🇧 United Kingdom', value: 'United Kingdom' },
+                       { name: '🇦🇷 Argentina', value: 'Argentina' },
+                       { name: '🇨🇭 Switzerland', value: 'Switzerland' },
+                       { name: '🇯🇵 Japan', value: 'Japan' },
+                       { name: '🇨🇳 China', value: 'China' },
+                       { name: '🇦🇪 UAE', value: 'UAE' },
+                       { name: '🇿🇦 South Africa', value: 'South Africa' }
+                   )
+            )
+            .toJSON(),
+
+        // 2. Direct country slash commands (e.g. /south-africa, /mexico, etc.)
+        ...TORN_COUNTRIES.map(country => {
+            const cmdName = country.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+            return new SlashCommandBuilder()
+                .setName(cmdName)
+                .setDescription(`Check friendly & enemy travel status for ${country}`)
+                .toJSON();
+        }),
+
+        // 3. Short aliases
+        new SlashCommandBuilder().setName('sa').setDescription('Check travel status for South Africa').toJSON(),
+        new SlashCommandBuilder().setName('uk').setDescription('Check travel status for United Kingdom').toJSON(),
+    ];
 
     try {
         const botRes = await fetch(`https://discord.com/api/v10/users/@me`, {
@@ -3173,7 +3331,7 @@ async function registerSlashCommands(token, guildId = null) {
         });
         const botData = await botRes.json();
         const applicationId = botData.id;
-        if (!applicationId) throw new Error("Could not get bot application ID");
+        if (!applicationId) throw new Error("Could not get bot application ID. Check your bot token.");
 
         if (guildId) {
             await rest.put(Routes.applicationGuildCommands(applicationId, guildId), { body: commands });
@@ -3214,7 +3372,11 @@ async function startSlashCommandBot(token) {
         slashCommandBot.on(Events.InteractionCreate, async (interaction) => {
             if (!interaction.isChatInputCommand()) return;
 
-            const country = slashNameToCountry(interaction.commandName);
+            let country = slashNameToCountry(interaction.commandName);
+            if (!country && interaction.commandName === 'travel') {
+                const countryOpt = interaction.options.getString('country');
+                if (countryOpt) country = slashNameToCountry(countryOpt) || countryOpt;
+            }
             if (!country) return;
 
             // Defer immediately so we have time to fetch data
@@ -3226,7 +3388,13 @@ async function startSlashCommandBot(token) {
             try {
                 await interaction.editReply({ embeds: [embed] });
             } catch (e) {
-                console.error("[Slash Bot] Failed to reply to interaction:", e.message);
+                // Fallback: If bot lacks Embed Links, deliver as clean Markdown text
+                try {
+                    const fallbackText = formatEmbedAsMarkdown(embed);
+                    await interaction.editReply({ content: fallbackText });
+                } catch(err2) {
+                    console.error("[Slash Bot] Failed to reply to interaction:", err2.message);
+                }
             }
         });
 
@@ -3248,6 +3416,7 @@ setTimeout(() => {
         startSlashCommandBot(discordConfig.globalBotToken.trim()).catch(() => {});
     }
 }, 5000);
+
 
 // API endpoint: register slash commands
 app.post('/api/discord/register-slash-commands', async (req, res) => {
