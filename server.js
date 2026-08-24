@@ -693,11 +693,30 @@ setInterval(async () => {
     try {
         const res = await fetch(`https://ffscouter.com/api/v1/player-flights?key=${ffKeyToUse}&target=${targetId}`);
         const data = await res.json();
-        if (data.current && data.current.latest_arrival_time) { flightCache[targetId] = { landingTime: data.current.latest_arrival_time, time: Date.now() }; } 
-        else { flightCache[targetId] = { landingTime: null, time: Date.now() }; }
+        if (data && data.current) {
+            const cur = data.current;
+            const earliest = Number(cur.earliest_arrival_time || cur.arrival_early || cur.arrival_min || 0);
+            const latest = Number(cur.latest_arrival_time || cur.arrival_late || cur.arrival_max || 0);
+            let midpoint = 0;
+            if (earliest > 0 && latest > 0) midpoint = Math.round((earliest + latest) / 2);
+            else if (latest > 0) midpoint = latest;
+            else if (earliest > 0) midpoint = earliest;
+            flightCache[targetId] = {
+                midpoint,
+                landingTime: midpoint || latest,
+                earliest,
+                latest,
+                destination: cur.destination || "",
+                origin: cur.origin || "",
+                time: Date.now()
+            };
+        } else {
+            flightCache[targetId] = { landingTime: null, midpoint: null, time: Date.now() };
+        }
     } catch (err) {}
     isProcessingFlights = false;
 }, 1000); 
+ 
 
 setInterval(async () => {
     if (activityQueue.size === 0 || isProcessingActivity) return;
@@ -3219,21 +3238,34 @@ function categorizeTravelers(membersObj, country, now, ffFlightMap = {}) {
             continue;
         }
 
-        if (isTraveling) {
-            // 2. Flying TO Country (Heading towards destination)
-            const isTo = (desc.includes("to " + cLower) && !desc.includes("to torn")) ||
-                         (desc.includes("traveling to") && (desc.includes(cLower) || details.includes(cLower)) && !desc.includes("torn")) ||
-                         (desc.includes("flying to") && (desc.includes(cLower) || details.includes(cLower))) ||
-                         (desc.includes("heading to") && (desc.includes(cLower) || details.includes(cLower)));
+        const ffFlight = ffFlightMap[id] || flightCache[id];
+        const ffDest = (ffFlight?.destination || "").toLowerCase();
+        const ffOrig = (ffFlight?.origin || "").toLowerCase();
 
-            // 3. Flying BACK from Country (Heading back to Torn)
-            const isBack = desc.includes("from " + cLower) ||
-                           desc.includes("returning to torn") ||
-                           desc.includes("in a plane from " + cLower) ||
-                           desc.includes("returning from " + cLower) ||
-                           desc.includes("back from " + cLower) ||
-                           desc.includes("leaving " + cLower) ||
-                           (desc.includes("returning") && (desc.includes(cLower) || details.includes(cLower)));
+        if (isTraveling) {
+            // Check FF Scouter direct flight data first if available
+            let isTo = false;
+            let isBack = false;
+
+            if (ffDest.includes(cLower)) {
+                isTo = true;
+            } else if (ffOrig.includes(cLower) || (ffDest === "torn" && (desc.includes(cLower) || details.includes(cLower)))) {
+                isBack = true;
+            } else {
+                // Parse Torn status descriptions
+                isTo = (desc.includes("to " + cLower) && !desc.includes("to torn")) ||
+                       (desc.includes("traveling to") && (desc.includes(cLower) || details.includes(cLower)) && !desc.includes("torn")) ||
+                       (desc.includes("flying to") && (desc.includes(cLower) || details.includes(cLower))) ||
+                       (desc.includes("heading to") && (desc.includes(cLower) || details.includes(cLower)));
+
+                isBack = desc.includes("from " + cLower) ||
+                         desc.includes("returning to torn") ||
+                         desc.includes("in a plane from " + cLower) ||
+                         desc.includes("returning from " + cLower) ||
+                         desc.includes("back from " + cLower) ||
+                         desc.includes("leaving " + cLower) ||
+                         (desc.includes("returning") && (desc.includes(cLower) || details.includes(cLower)));
+            }
 
             if (isTo && !isBack) {
                 flyingTo.push({ name: m.name, id, landingStr, until });
@@ -3250,6 +3282,7 @@ function categorizeTravelers(membersObj, country, now, ffFlightMap = {}) {
                 continue;
             }
         }
+
     }
 
     flyingTo.sort((a, b) => (a.until || 9999999) - (b.until || 9999999));
