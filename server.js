@@ -1178,10 +1178,24 @@ setInterval(async () => {
                     let newRecord = { state: m.status?.state, online: m.last_action?.status, description: m.status?.description, until: m.status?.until };
                     
                     if (oldRecord) {
+                        // ── 1. TARGET ONLINE TRACKER ──
                         if (oldRecord.online !== "Online" && newRecord.online === "Online" && discordConfig.targetOnline === true) {
                             if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { title: "🟢 Target Online", description: `**${m.name}** [${id}] just established a connection and is Online!`, color: 3069299, links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }] });
                         }
+
+                        // ── 2. LANDING TRACKER (FIXED: must be independent, not nested under Hospital) ──
+                        const wasTravel = oldRecord.state === "Traveling" || (oldRecord.description && oldRecord.description.toLowerCase().includes("traveling"));
+                        const notTravelNow = newRecord.state !== "Traveling";
+                        if (wasTravel && notTravelNow && discordConfig.targetLanded !== false) {
+                            if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { 
+                                title: "✈️ Target Landed", 
+                                description: `**${m.name}** [${id}] just landed back in Torn and is now attackable!`, 
+                                color: 5809919, 
+                                links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }] 
+                            });
+                        }
                         
+                        // ── 3. HOSPITAL ALERTS (Natural Release + Med-Out Sniper) ──
                         if (oldRecord.state === "Hospital" && newRecord.state === "Okay") {
                             let now = Math.floor(Date.now() / 1000);
                             let leftEarly = oldRecord.until && (oldRecord.until > now + 60);
@@ -1232,14 +1246,18 @@ setInterval(async () => {
                                 }, pingStr);
                                 
                             } else if (discordConfig.targetOutHosp === true && !leftEarly) {
-                                if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { title: "🏥 Target Out of Hospital", description: `**${m.name}** [${id}] naturally finished their hospital time and is Okay!`, color: 16753922, links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }] });
-                            } else if (discordConfig.targetLanded !== false && (oldRecord.state === "Traveling" || (oldRecord.description && oldRecord.description.includes("Traveling")))) {
-                                if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { title: "✈️ Target Landed", description: `**${m.name}** [${id}] just landed in Torn!`, color: 5809919, links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }] });
+                                if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { 
+                                    title: "🏥 Target Out of Hospital", 
+                                    description: `**${m.name}** [${id}] naturally finished their hospital time and is now Okay!`, 
+                                    color: 16753922, 
+                                    links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }] 
+                                });
                             }
                         }
                     }
                     backgroundEnemyTrackingState[id] = newRecord;
                 });
+
             }
         }
     } catch (err) {}
@@ -1422,9 +1440,9 @@ function autoDetectEnemyFaction(data) {
 
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
+
 app.get('/api/get-discord-config', (req, res) => { res.json(discordConfig); });
 
-// FIXED: Scraped the old apiKeyPool reference out of here as well
 app.post('/api/save-discord-config', async (req, res) => { 
     discordConfig = { ...discordConfig, ...req.body }; 
     if (discordConfig.apiKey) {
@@ -1441,6 +1459,12 @@ app.post('/api/save-discord-config', async (req, res) => {
         } catch(e) {}
     }
     saveDiscordConfig(); 
+
+    // Auto-start slash command bot whenever a new bot token is saved
+    if (discordConfig.globalBotToken && discordConfig.globalBotToken.trim().length > 20) {
+        startSlashCommandBot(discordConfig.globalBotToken.trim()).catch(() => {});
+    }
+
     res.json({ success: true }); 
 });
 
@@ -2935,10 +2959,277 @@ app.get('/api/travel-profits', async (req, res) => {
 });
 
 
-// --- MULTI-TENANT DISCORD BOTS & USERS ---
-const { Client, GatewayIntentBits } = require('discord.js');
+// --- MULTI-TENANT DISCORD BOTS & SLASH COMMANDS ---
+const { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, InteractionType } = require('discord.js');
 let activeDiscordBots = {}; 
 let botLoginPromises = {};
+
+// =====================================================
+// TRAVEL LOOKUP: /country Discord Slash Commands
+// =====================================================
+const TORN_COUNTRIES = [
+    "Mexico", "Cayman Islands", "Canada", "Hawaii",
+    "United Kingdom", "Argentina", "Switzerland",
+    "Japan", "China", "UAE", "South Africa"
+];
+
+const COUNTRY_EMOJIS = {
+    "Mexico": "🇲🇽", "Cayman Islands": "🏝️", "Canada": "🇨🇦", "Hawaii": "🌺",
+    "United Kingdom": "🇬🇧", "Argentina": "🇦🇷", "Switzerland": "🇨🇭",
+    "Japan": "🇯🇵", "China": "🇨🇳", "UAE": "🇦🇪", "South Africa": "🇿🇦"
+};
+
+// Country flight times in minutes (Torn standard from London timezone)
+const COUNTRY_FLIGHT_MINS = {
+    "Mexico": 15, "Cayman Islands": 15, "Canada": 15, "Hawaii": 20,
+    "United Kingdom": 20, "Argentina": 20, "Switzerland": 20,
+    "Japan": 40, "China": 40, "UAE": 30, "South Africa": 30
+};
+
+// Normalise country name from slash command name
+function slashNameToCountry(name) {
+    const map = {
+        "south-africa": "South Africa", "south_africa": "South Africa", "southafrica": "South Africa",
+        "south africa": "South Africa",
+        "mexico": "Mexico", "cayman-islands": "Cayman Islands", "cayman_islands": "Cayman Islands",
+        "caymanislands": "Cayman Islands", "cayman": "Cayman Islands",
+        "canada": "Canada", "hawaii": "Hawaii", "united-kingdom": "United Kingdom",
+        "uk": "United Kingdom", "united_kingdom": "United Kingdom", "unitedkingdom": "United Kingdom",
+        "argentina": "Argentina", "switzerland": "Switzerland", "japan": "Japan",
+        "china": "China", "uae": "UAE",
+    };
+    return map[name.toLowerCase()] || null;
+}
+
+// Build the faction travel status for a given country
+async function buildCountryStatusEmbed(country, apiKey) {
+    const emoji = COUNTRY_EMOJIS[country] || "✈️";
+    const now = Math.floor(Date.now() / 1000);
+
+    let factionId = adminFactionId || discordConfig.factionId;
+    if (!factionId || !apiKey) {
+        return {
+            title: `${emoji} ${country} — Travel Lookup`,
+            description: "⚠️ Bot not configured: missing API key or faction ID. Visit the Discord Alerts page to set up.",
+            color: 16729943
+        };
+    }
+
+    try {
+        const res = await fetch(`https://api.torn.com/faction/${factionId}?selections=basic&key=${apiKey}`, {
+            signal: AbortSignal.timeout(7000)
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.error || "Torn API error");
+
+        const members = Object.entries(data.members || {});
+
+        // Classify members
+        const inCountry = [];       // Already there
+        const flyingTo = [];        // On their way there
+        const flyingBack = [];      // Heading back from there
+        const unknown = [];
+
+        for (const [id, m] of members) {
+            const state = m.status?.state || "";
+            const desc = m.status?.description || "";
+            const until = m.status?.until || 0;
+
+            const isInCountry = state === "Abroad" && desc.toLowerCase().includes(country.toLowerCase());
+            const isFlyingTo = state === "Traveling" && desc.toLowerCase().includes(country.toLowerCase()) && desc.toLowerCase().includes("traveling to");
+            const isFlyingBack = state === "Traveling" && desc.toLowerCase().includes(country.toLowerCase()) && (desc.toLowerCase().includes("returning") || desc.toLowerCase().includes("traveling home") || desc.toLowerCase().includes("flying back"));
+
+            const landingMins = until > now ? Math.ceil((until - now) / 60) : null;
+            const landingStr = landingMins !== null ? (landingMins <= 1 ? "**Landing now!**" : `Landing in **${landingMins}m**`) : "";
+
+            if (isFlyingTo) {
+                flyingTo.push({ name: m.name, id, landingStr, until });
+            } else if (isFlyingBack) {
+                flyingBack.push({ name: m.name, id, landingStr, until });
+            } else if (isInCountry) {
+                const onlineStr = m.last_action?.status === "Online" ? " 🟢" : (m.last_action?.status === "Idle" ? " 🟡" : " ⚫");
+                inCountry.push({ name: m.name, id, onlineStr });
+            }
+        }
+
+        // Sort by landing time
+        flyingTo.sort((a, b) => (a.until || 9999999) - (b.until || 9999999));
+        flyingBack.sort((a, b) => (a.until || 9999999) - (b.until || 9999999));
+
+        const fields = [];
+        if (inCountry.length > 0) {
+            fields.push({
+                name: `📍 Currently in ${country} (${inCountry.length})`,
+                value: inCountry.slice(0, 10).map(m =>
+                    `[${m.name}](https://www.torn.com/profiles.php?XID=${m.id})${m.onlineStr}`
+                ).join("\n") || "None",
+                inline: false
+            });
+        }
+        if (flyingTo.length > 0) {
+            fields.push({
+                name: `✈️ Flying TO ${country} (${flyingTo.length})`,
+                value: flyingTo.slice(0, 10).map(m =>
+                    `[${m.name}](https://www.torn.com/profiles.php?XID=${m.id}) — ${m.landingStr || "ETA unknown"}`
+                ).join("\n") || "None",
+                inline: false
+            });
+        }
+        if (flyingBack.length > 0) {
+            fields.push({
+                name: `🔄 Flying BACK from ${country} (${flyingBack.length})`,
+                value: flyingBack.slice(0, 10).map(m =>
+                    `[${m.name}](https://www.torn.com/profiles.php?XID=${m.id}) — ${m.landingStr || "ETA unknown"}`
+                ).join("\n") || "None",
+                inline: false
+            });
+        }
+
+        const total = inCountry.length + flyingTo.length + flyingBack.length;
+
+        return {
+            title: `${emoji} ${country} — Faction Travel Status`,
+            description: total === 0
+                ? `No faction members are currently in or flying to **${country}**.`
+                : `**${total}** member${total !== 1 ? "s" : ""} associated with ${country} right now.`,
+            color: 5793266,
+            fields,
+            footer: { text: `Updated ${new Date().toUTCString()} | Torn Faction Tools` }
+        };
+    } catch (e) {
+        return {
+            title: `${emoji} ${country} — Travel Lookup`,
+            description: `⚠️ Could not fetch faction data: ${e.message}`,
+            color: 16729943
+        };
+    }
+}
+
+// Register slash commands with Discord
+async function registerSlashCommands(token, guildId = null) {
+    const rest = new REST({ version: '10' }).setToken(token);
+
+    const commands = TORN_COUNTRIES.map(country => {
+        const cmdName = country.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+        return new SlashCommandBuilder()
+            .setName(cmdName)
+            .setDescription(`Show who from your faction is in or flying to ${country}`)
+            .toJSON();
+    });
+
+    try {
+        const botRes = await fetch(`https://discord.com/api/v10/users/@me`, {
+            headers: { Authorization: `Bot ${token}` }
+        });
+        const botData = await botRes.json();
+        const applicationId = botData.id;
+        if (!applicationId) throw new Error("Could not get bot application ID");
+
+        if (guildId) {
+            await rest.put(Routes.applicationGuildCommands(applicationId, guildId), { body: commands });
+            console.log(`[Slash Commands] Registered ${commands.length} guild commands for guild ${guildId}`);
+        } else {
+            await rest.put(Routes.applicationCommands(applicationId), { body: commands });
+            console.log(`[Slash Commands] Registered ${commands.length} global commands`);
+        }
+        return { success: true, count: commands.length };
+    } catch (e) {
+        console.error("[Slash Commands] Registration failed:", e.message);
+        return { success: false, error: e.message };
+    }
+}
+
+// Start the Discord gateway bot for slash command interactions
+let slashCommandBot = null;
+let slashBotStarted = false;
+
+async function startSlashCommandBot(token) {
+    if (slashBotStarted && slashCommandBot?.isReady?.()) return;
+    slashBotStarted = false;
+
+    try {
+        if (slashCommandBot) {
+            try { slashCommandBot.destroy(); } catch(e) {}
+        }
+
+        slashCommandBot = new Client({
+            intents: [GatewayIntentBits.Guilds]
+        });
+
+        slashCommandBot.once(Events.ClientReady, async (c) => {
+            console.log(`[Slash Bot] Ready as ${c.user.tag}`);
+            slashBotStarted = true;
+        });
+
+        slashCommandBot.on(Events.InteractionCreate, async (interaction) => {
+            if (!interaction.isChatInputCommand()) return;
+
+            const country = slashNameToCountry(interaction.commandName);
+            if (!country) return;
+
+            // Defer immediately so we have time to fetch data
+            try { await interaction.deferReply(); } catch (e) { return; }
+
+            const apiKey = getNextApiKey() || discordConfig.apiKey;
+            const embed = await buildCountryStatusEmbed(country, apiKey);
+
+            try {
+                await interaction.editReply({ embeds: [embed] });
+            } catch (e) {
+                console.error("[Slash Bot] Failed to reply to interaction:", e.message);
+            }
+        });
+
+        slashCommandBot.on('error', (e) => {
+            console.error("[Slash Bot] Client error:", e.message);
+            slashBotStarted = false;
+        });
+
+        await slashCommandBot.login(token);
+    } catch (e) {
+        console.error("[Slash Bot] Failed to start:", e.message);
+        slashBotStarted = false;
+    }
+}
+
+// Auto-start slash bot if we have a token
+setTimeout(() => {
+    if (discordConfig.globalBotToken && discordConfig.globalBotToken.trim().length > 20) {
+        startSlashCommandBot(discordConfig.globalBotToken.trim()).catch(() => {});
+    }
+}, 5000);
+
+// API endpoint: register slash commands
+app.post('/api/discord/register-slash-commands', async (req, res) => {
+    try {
+        const token = req.body.token || discordConfig.globalBotToken;
+        const guildId = req.body.guildId || null;
+        if (!token) return res.status(400).json({ error: "Missing bot token" });
+        const result = await registerSlashCommands(token.trim(), guildId);
+        if (result.success) {
+            // Also (re)start the slash command bot
+            startSlashCommandBot(token.trim()).catch(() => {});
+        }
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// API endpoint: live country travel lookup (used by web UI too)
+app.get('/api/discord/travel-lookup/:country', async (req, res) => {
+    try {
+        const country = TORN_COUNTRIES.find(c =>
+            c.toLowerCase() === decodeURIComponent(req.params.country).toLowerCase()
+        );
+        if (!country) return res.status(404).json({ error: "Unknown country" });
+        const apiKey = getNextApiKey() || discordConfig.apiKey;
+        const embed = await buildCountryStatusEmbed(country, apiKey);
+        res.json({ success: true, country, embed });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 
 async function getDiscordClient(token) {
     if (!token || typeof token !== 'string' || token.trim().startsWith('http')) return null;
@@ -2967,7 +3258,6 @@ async function getDiscordClient(token) {
     return botLoginPromises[cleanToken];
 }
 
-// Gateway login removed — all Discord sends go via direct REST API, not gateway.
 
 
 

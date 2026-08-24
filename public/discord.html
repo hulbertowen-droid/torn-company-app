@@ -4,296 +4,81 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Discord Alerts | Owen's Faction Tools</title>
-    <meta name="description" content="Configure and test 24/7 Discord alert automations for your Torn faction — travel warnings, chain attacks, hospital releases, and more.">
+    <meta name="description" content="Configure and test 24/7 Discord alert automations for your Torn faction.">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/global.css">
     <style>
-        /* ── Page-specific tokens ── */
-        :root {
-            --discord: #5865F2;
-            --discord-hover: #4752c4;
-        }
-
-        /* ── Connection Hero ── */
+        :root { --discord: #5865F2; --discord-hover: #4752c4; }
         .connection-hero {
             background: linear-gradient(135deg, #0d1117 0%, #0d1123 60%, #0d1117 100%);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            padding: 28px 32px;
-            margin-bottom: 20px;
-            position: relative;
-            overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 24px;
+            border: 1px solid var(--border); border-radius: 14px; padding: 28px 32px;
+            margin-bottom: 20px; position: relative; overflow: hidden;
+            display: flex; align-items: center; justify-content: space-between; gap: 24px;
         }
         .connection-hero::before {
-            content: '';
-            position: absolute;
-            top: -60%;
-            right: -5%;
-            width: 350px;
-            height: 350px;
-            background: radial-gradient(circle, rgba(88,101,242,0.1) 0%, transparent 70%);
-            pointer-events: none;
+            content: ''; position: absolute; top: -60%; right: -5%; width: 350px; height: 350px;
+            background: radial-gradient(circle, rgba(88,101,242,0.1) 0%, transparent 70%); pointer-events: none;
         }
-        .connection-hero-left h2 {
-            margin: 0 0 6px;
-            font-size: 1.5em;
-            font-weight: 900;
-            background: linear-gradient(135deg, #5865F2, var(--blue));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .connection-hero-left p {
-            margin: 0;
-            color: var(--text-dim);
-            font-size: 0.9em;
-        }
-        .connection-status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 0.85em;
-            font-weight: 700;
-            border: 1px solid;
-            white-space: nowrap;
-            transition: 0.3s;
-        }
-        .connection-status-badge.connected {
-            background: rgba(46,213,115,0.1);
-            border-color: var(--green);
-            color: var(--green);
-        }
-        .connection-status-badge.disconnected {
-            background: rgba(255,71,87,0.1);
-            border-color: var(--red);
-            color: var(--red);
-        }
-        .connection-status-badge .dot {
-            width: 8px; height: 8px;
-            border-radius: 50%;
-            background: currentColor;
-            animation: pulse-dot 2s infinite;
-        }
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
-
-        /* ── Config Card ── */
-        .config-card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            overflow: hidden;
-            margin-bottom: 20px;
-        }
-        .config-card-header {
-            padding: 16px 22px;
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .config-card-title {
-            font-size: 0.85em;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            color: var(--gold);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin: 0;
-        }
+        .connection-hero-left h2 { margin: 0 0 6px; font-size: 1.5em; font-weight: 900; background: linear-gradient(135deg, #5865F2, var(--blue)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .connection-hero-left p { margin: 0; color: var(--text-dim); font-size: 0.9em; }
+        .connection-status-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 20px; font-size: 0.85em; font-weight: 700; border: 1px solid; white-space: nowrap; transition: 0.3s; }
+        .connection-status-badge.connected { background: rgba(46,213,115,0.1); border-color: var(--green); color: var(--green); }
+        .connection-status-badge.disconnected { background: rgba(255,71,87,0.1); border-color: var(--red); color: var(--red); }
+        .connection-status-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: pulse-dot 2s infinite; }
+        @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .config-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
+        .config-card-header { padding: 16px 22px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .config-card-title { font-size: 0.85em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--gold); display: flex; align-items: center; gap: 8px; margin: 0; }
         .config-card-body { padding: 22px; }
-
-        /* ── Input fields ── */
         .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
         .field-row.single { grid-template-columns: 1fr; }
         .field-group { display: flex; flex-direction: column; gap: 6px; }
-        .field-label {
-            font-size: 0.78em;
-            color: var(--text-dim);
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .field-input {
-            padding: 11px 14px;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-            background: var(--bg);
-            color: var(--text-main);
-            font-size: 0.95em;
-            font-family: 'Inter', system-ui, sans-serif;
-            width: 100%;
-            transition: border-color 0.2s;
-        }
+        .field-label { font-size: 0.78em; color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+        .field-input { padding: 11px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text-main); font-size: 0.95em; font-family: 'Inter', system-ui, sans-serif; width: 100%; transition: border-color 0.2s; }
         .field-input:focus { outline: none; border-color: var(--discord); box-shadow: 0 0 0 3px rgba(88,101,242,0.15); }
         .field-input.token { letter-spacing: 0.05em; }
         .field-hint { font-size: 0.75em; color: var(--text-dim); margin-top: 2px; }
-
-        /* ── Setup guide ── */
-        .setup-guide {
-            background: rgba(88,101,242,0.05);
-            border: 1px solid rgba(88,101,242,0.25);
-            border-radius: 10px;
-            margin-bottom: 20px;
-            overflow: hidden;
-        }
-        .setup-guide-header {
-            padding: 14px 18px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            color: #7289da;
-            font-weight: 700;
-            font-size: 0.9em;
-            user-select: none;
-        }
+        .setup-guide { background: rgba(88,101,242,0.05); border: 1px solid rgba(88,101,242,0.25); border-radius: 10px; margin-bottom: 20px; overflow: hidden; }
+        .setup-guide-header { padding: 14px 18px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; color: #7289da; font-weight: 700; font-size: 0.9em; user-select: none; }
         .setup-guide-header:hover { background: rgba(88,101,242,0.08); }
         .setup-guide-header .chevron { transition: transform 0.25s; }
         .setup-guide-header.open .chevron { transform: rotate(180deg); }
-        .setup-guide-body {
-            padding: 0 18px;
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.3s ease, padding 0.3s;
-        }
+        .setup-guide-body { padding: 0 18px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s; }
         .setup-guide-body.open { max-height: 600px; padding: 0 18px 16px; }
         .setup-guide-body ol { margin: 8px 0; padding-left: 20px; color: var(--text-dim); font-size: 0.88em; line-height: 1.7; }
         .setup-guide-body ol li { margin-bottom: 6px; }
         .setup-guide-body a { color: #7289da; }
-
-        /* ── Alert Triggers ── */
-        .trigger-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        .trigger-item {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            padding: 14px 18px;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            transition: border-color 0.2s, background 0.2s;
-        }
+        .trigger-grid { display: flex; flex-direction: column; gap: 10px; }
+        .trigger-item { display: flex; align-items: center; gap: 16px; padding: 14px 18px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; transition: border-color 0.2s, background 0.2s; }
         .trigger-item:hover { border-color: #30363d; }
         .trigger-item.enabled { border-color: rgba(46,213,115,0.2); background: rgba(46,213,115,0.02); }
         .trigger-icon { font-size: 1.3em; flex-shrink: 0; width: 32px; text-align: center; }
         .trigger-info { flex: 1; min-width: 0; }
-        .trigger-name {
-            font-weight: 700;
-            font-size: 0.92em;
-            color: var(--text-main);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
+        .trigger-name { font-weight: 700; font-size: 0.92em; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
         .trigger-desc { font-size: 0.8em; color: var(--text-dim); margin-top: 2px; }
-        .trigger-badge {
-            font-size: 0.68em;
-            font-weight: 700;
-            padding: 2px 7px;
-            border-radius: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
+        .trigger-badge { font-size: 0.68em; font-weight: 700; padding: 2px 7px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
         .trigger-badge.premium { background: rgba(255,165,2,0.12); color: var(--gold); border: 1px solid rgba(255,165,2,0.3); }
         .trigger-badge.war { background: rgba(255,71,87,0.12); color: var(--red); border: 1px solid rgba(255,71,87,0.3); }
         .trigger-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-
-        /* ── Test button ── */
-        .btn-test {
-            font-size: 0.75em;
-            font-weight: 700;
-            padding: 5px 12px;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            background: var(--item);
-            color: var(--text-dim);
-            cursor: pointer;
-            transition: 0.2s;
-            font-family: 'Inter', system-ui, sans-serif;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            white-space: nowrap;
-        }
+        .btn-test { font-size: 0.75em; font-weight: 700; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--item); color: var(--text-dim); cursor: pointer; transition: 0.2s; font-family: 'Inter', system-ui, sans-serif; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
         .btn-test:hover { border-color: var(--discord); color: #7289da; background: rgba(88,101,242,0.1); }
         .btn-test:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-test.sending { border-color: var(--gold); color: var(--gold); }
         .btn-test.success { border-color: var(--green); color: var(--green); }
         .btn-test.fail { border-color: var(--red); color: var(--red); }
-
-        /* ── Save Row ── */
-        .save-row {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            padding-top: 16px;
-            border-top: 1px solid var(--border);
-            margin-top: 4px;
-        }
-        .btn-discord-save {
-            background: var(--discord);
-            color: #fff;
-            border: none;
-            padding: 11px 28px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 700;
-            font-size: 0.95em;
-            font-family: 'Inter', system-ui, sans-serif;
-            transition: 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            white-space: nowrap;
-        }
+        .save-row { display: flex; align-items: center; gap: 16px; padding-top: 16px; border-top: 1px solid var(--border); margin-top: 4px; }
+        .btn-discord-save { background: var(--discord); color: #fff; border: none; padding: 11px 28px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 0.95em; font-family: 'Inter', system-ui, sans-serif; transition: 0.2s; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
         .btn-discord-save:hover { background: var(--discord-hover); box-shadow: 0 0 14px rgba(88,101,242,0.4); }
         .btn-discord-save:disabled { opacity: 0.6; cursor: not-allowed; }
-        #status-msg {
-            font-size: 0.88em;
-            font-weight: 600;
-            flex: 1;
-            transition: 0.3s;
-        }
-
-        /* ── Switch ── */
+        #status-msg { font-size: 0.88em; font-weight: 600; flex: 1; transition: 0.3s; }
         .switch { position: relative; display: inline-block; width: 46px; height: 24px; flex-shrink: 0; }
         .switch input { opacity: 0; width: 0; height: 0; }
         .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--border); transition: .3s; border-radius: 34px; }
         .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; transition: .3s; border-radius: 50%; }
         input:checked + .slider { background: var(--green); }
         input:checked + .slider:before { transform: translateX(22px); }
-
-        /* ── Section divider ── */
-        .section-label {
-            font-size: 0.72em;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: var(--text-dim);
-            padding: 0 0 8px;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 12px;
-            margin-top: 4px;
-        }
-
-        @media(max-width: 700px) {
-            .field-row { grid-template-columns: 1fr; }
-            .connection-hero { flex-direction: column; align-items: flex-start; }
-        }
+        .section-label { font-size: 0.72em; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); padding: 0 0 8px; border-bottom: 1px solid var(--border); margin-bottom: 12px; margin-top: 4px; }
+        @media(max-width: 700px) { .field-row { grid-template-columns: 1fr; } .connection-hero { flex-direction: column; align-items: flex-start; } }
     </style>
 </head>
 <body>
@@ -327,7 +112,6 @@
     </nav>
 
     <main class="main-content">
-        <!-- Header -->
         <div class="page-header">
             <div class="page-title">📢 <span>Discord</span> Alert Deck</div>
             <div id="connection-indicator" class="connection-status-badge disconnected">
@@ -335,7 +119,6 @@
             </div>
         </div>
 
-        <!-- Connection Hero -->
         <div class="connection-hero">
             <div class="connection-hero-left">
                 <h2>📡 Faction Bot Uplink</h2>
@@ -347,7 +130,6 @@
             </div>
         </div>
 
-        <!-- Bot Setup Guide -->
         <div class="setup-guide">
             <div class="setup-guide-header" id="guide-toggle" onclick="toggleGuide()">
                 <span>📖 How to create &amp; invite a Faction Discord Bot</span>
@@ -358,7 +140,7 @@
                     <li>Go to the <a href="https://discord.com/developers/applications" target="_blank">Discord Developer Portal</a> and click <b>New Application</b>. Give it a name like "Faction Alerts".</li>
                     <li>Click <b>Bot</b> in the left menu → click <b>Reset Token</b> and copy your Bot Token. Paste it into the <b>Faction Bot Token</b> field below.</li>
                     <li>Scroll down to <b>Privileged Gateway Intents</b>. Enable <b>Presence Intent</b>, <b>Server Members Intent</b>, and <b>Message Content Intent</b>. Save Changes.</li>
-                    <li>Click <b>OAuth2 → URL Generator</b>. Under Scopes, check <b>bot</b>. Under Bot Permissions, check <b>Send Messages</b> and <b>Mention Everyone</b>.</li>
+                    <li>Click <b>OAuth2 → URL Generator</b>. Under Scopes, check <b>bot</b> and <b>applications.commands</b>. Under Bot Permissions, check <b>Send Messages</b> and <b>Mention Everyone</b>.</li>
                     <li>Copy the generated URL at the bottom and open it in a new tab to invite the bot to your Discord server.</li>
                     <li>In Discord, enable <b>Developer Mode</b> (User Settings → Advanced). Right-click the alert channel → <b>Copy Channel ID</b>. Paste it below.</li>
                     <li>Optionally right-click your own Discord profile → <b>Copy User ID</b> to enable personal pings on chain attack warnings.</li>
@@ -366,7 +148,6 @@
             </div>
         </div>
 
-        <!-- Bot Credentials -->
         <div class="config-card">
             <div class="config-card-header">
                 <p class="config-card-title">🔑 Bot Credentials</p>
@@ -394,17 +175,14 @@
             </div>
         </div>
 
-        <!-- Alert Triggers -->
         <div class="config-card">
             <div class="config-card-header">
                 <p class="config-card-title">⚡ Alert Triggers</p>
                 <span style="font-size:0.78em;color:var(--text-dim);">Toggle alerts on/off. Changes are saved with the button below.</span>
             </div>
             <div class="config-card-body">
-
                 <div class="section-label">🎯 Enemy Tracking</div>
-                <div class="trigger-grid" id="trigger-grid-enemy">
-
+                <div class="trigger-grid">
                     <div class="trigger-item" id="ti-targetOnline">
                         <span class="trigger-icon">🟢</span>
                         <div class="trigger-info">
@@ -415,18 +193,16 @@
                             <label class="switch"><input type="checkbox" id="targetOnline" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
-
                     <div class="trigger-item" id="ti-targetLanded">
                         <span class="trigger-icon">✈️</span>
                         <div class="trigger-info">
                             <div class="trigger-name">Landing Tracker <span class="trigger-badge war">WAR</span></div>
-                            <div class="trigger-desc">Pings when an enemy target lands from a flight back into Torn.</div>
+                            <div class="trigger-desc">Pings the instant an enemy target lands from a flight back into Torn.</div>
                         </div>
                         <div class="trigger-actions">
                             <label class="switch"><input type="checkbox" id="targetLanded" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
-
                     <div class="trigger-item" id="ti-targetOutHosp">
                         <span class="trigger-icon">🏥</span>
                         <div class="trigger-info">
@@ -437,7 +213,6 @@
                             <label class="switch"><input type="checkbox" id="targetOutHosp" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
-
                     <div class="trigger-item" id="ti-travelWarnings">
                         <span class="trigger-icon">⚠️</span>
                         <div class="trigger-info">
@@ -449,7 +224,6 @@
                             <label class="switch"><input type="checkbox" id="travelWarnings" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
-
                     <div class="trigger-item" id="ti-medOutSniper">
                         <span class="trigger-icon">💊</span>
                         <div class="trigger-info">
@@ -460,12 +234,10 @@
                             <label class="switch"><input type="checkbox" id="medOutSniper" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
-
                 </div>
 
                 <div class="section-label" style="margin-top:20px;">🔗 Chain Alerts</div>
-                <div class="trigger-grid" id="trigger-grid-chain">
-
+                <div class="trigger-grid">
                     <div class="trigger-item" id="ti-chainWarnings">
                         <span class="trigger-icon">🛡️</span>
                         <div class="trigger-info">
@@ -477,7 +249,6 @@
                             <label class="switch"><input type="checkbox" id="chainWarnings" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
-
                     <div class="trigger-item" id="ti-chainUnder90">
                         <span class="trigger-icon">⏱️</span>
                         <div class="trigger-info">
@@ -488,7 +259,6 @@
                             <label class="switch"><input type="checkbox" id="chainUnder90" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
-
                     <div class="trigger-item" id="ti-chainMilestone">
                         <span class="trigger-icon">🏆</span>
                         <div class="trigger-info">
@@ -499,11 +269,10 @@
                             <label class="switch"><input type="checkbox" id="chainMilestone" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
-
                 </div>
 
                 <div class="section-label" style="margin-top:20px;">🛡️ Faction Defense</div>
-                <div class="trigger-grid" id="trigger-grid-defense">
+                <div class="trigger-grid">
                     <div class="trigger-item" id="ti-friendlyAttacked">
                         <span class="trigger-icon">🚨</span>
                         <div class="trigger-info">
@@ -516,7 +285,6 @@
                     </div>
                 </div>
 
-                <!-- Save Row -->
                 <div class="save-row">
                     <button class="btn-discord-save" onclick="saveDiscordConfig()" id="save-btn">
                         💾 Save &amp; Commit to Server
@@ -525,10 +293,52 @@
                 </div>
             </div>
         </div>
+
+        <!-- Travel Slash Commands Card -->
+        <div class="config-card">
+            <div class="config-card-header">
+                <p class="config-card-title">🌍 Travel Slash Commands</p>
+                <span style="font-size:0.78em;color:var(--text-dim);">Type /south-africa (or any country) in Discord to see your faction's travel status.</span>
+            </div>
+            <div class="config-card-body">
+                <p style="color:var(--text-dim);font-size:0.88em;margin:0 0 14px;">
+                    After saving your Bot Token above, click <b>Register Commands</b> to install slash commands in your Discord server. Then type <code style="background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:4px;">/south-africa</code>, <code style="background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:4px;">/japan</code>, <code style="background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:4px;">/uae</code>, etc. in any channel.
+                </p>
+                <div class="field-row single" style="margin-bottom:14px;">
+                    <div class="field-group">
+                        <label class="field-label" for="guild-id-input">Guild ID <span style="font-weight:400;color:var(--text-dim);text-transform:none;">(optional — for instant registration; leave blank for global ~1hr)</span></label>
+                        <input class="field-input" type="text" id="guild-id-input" placeholder="Right-click your server icon → Copy Server ID (requires Dev Mode)">
+                        <span class="field-hint">Guild commands appear instantly. Global commands can take up to 1 hour to propagate in Discord.</span>
+                    </div>
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px;align-items:center;">
+                    <button class="btn-discord-save" id="btn-register-slash" onclick="registerSlashCommands()" style="background:#2ed573;">
+                        ✅ Register Slash Commands
+                    </button>
+                    <span id="slash-status" style="font-size:0.88em;font-weight:600;"></span>
+                </div>
+
+                <div class="section-label">📍 Live Country Lookup</div>
+                <p style="color:var(--text-dim);font-size:0.83em;margin:0 0 12px;">Check any Torn destination right now — who's there, flying to, or flying back.</p>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+                    <button class="btn-test" onclick="lookupCountry('Mexico')">🇲🇽 Mexico</button>
+                    <button class="btn-test" onclick="lookupCountry('Cayman Islands')">🏝️ Cayman</button>
+                    <button class="btn-test" onclick="lookupCountry('Canada')">🇨🇦 Canada</button>
+                    <button class="btn-test" onclick="lookupCountry('Hawaii')">🌺 Hawaii</button>
+                    <button class="btn-test" onclick="lookupCountry('United Kingdom')">🇬🇧 UK</button>
+                    <button class="btn-test" onclick="lookupCountry('Argentina')">🇦🇷 Argentina</button>
+                    <button class="btn-test" onclick="lookupCountry('Switzerland')">🇨🇭 Switzerland</button>
+                    <button class="btn-test" onclick="lookupCountry('Japan')">🇯🇵 Japan</button>
+                    <button class="btn-test" onclick="lookupCountry('China')">🇨🇳 China</button>
+                    <button class="btn-test" onclick="lookupCountry('UAE')">🇦🇪 UAE</button>
+                    <button class="btn-test" onclick="lookupCountry('South Africa')">🇿🇦 South Africa</button>
+                </div>
+                <div id="country-result-panel" style="display:none;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:10px;padding:18px;margin-top:6px;"></div>
+            </div>
+        </div>
     </main>
 
 <script>
-// ── Sidebar ──────────────────────────────────────────────────────────────────
 function toggleSidebar() {
     if (window.innerWidth <= 768) {
         const nav = document.querySelector('.nav-items');
@@ -543,16 +353,10 @@ function toggleTheme() {
     document.body.classList.toggle('light-mode');
     localStorage.setItem('theme', document.body.classList.contains('light-mode') ? 'light' : 'dark');
 }
-
-// ── Guide toggle ──────────────────────────────────────────────────────────────
 function toggleGuide() {
-    const header = document.getElementById('guide-toggle');
-    const body = document.getElementById('guide-body');
-    header.classList.toggle('open');
-    body.classList.toggle('open');
+    document.getElementById('guide-toggle').classList.toggle('open');
+    document.getElementById('guide-body').classList.toggle('open');
 }
-
-// ── Toggle highlight ─────────────────────────────────────────────────────────
 function onToggle(checkbox) {
     const item = checkbox.closest('.trigger-item');
     if (item) item.classList.toggle('enabled', checkbox.checked);
@@ -564,176 +368,160 @@ function updateActiveCount() {
     document.getElementById('active-alerts-count').textContent = active;
 }
 
-// ── Load config ──────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
     const sidebar = document.getElementById('app-sidebar');
     if (localStorage.getItem('sidebar_collapsed') === 'true') sidebar.classList.add('collapsed');
     if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-mode');
-
     try {
         const res = await fetch('/api/get-discord-config');
         const cfg = await res.json();
-
         document.getElementById('global-bottoken').value = cfg.globalBotToken || '';
         document.getElementById('global-channelid').value = cfg.globalChannelId || localStorage.getItem('warboard_channelid') || '';
         document.getElementById('discord-userid').value = cfg.personalDiscordId || localStorage.getItem('warboard_discordid') || '';
-
         const flags = {
-            targetOnline:     cfg.targetOnline     === true,
-            targetLanded:     cfg.targetLanded     === true || cfg.targetLanded === undefined,
-            targetOutHosp:    cfg.targetOutHosp    === true,
-            chainUnder90:     cfg.chainUnder90     === true || cfg.chainUnder90 === undefined,
-            chainMilestone:   cfg.chainMilestone   === true || cfg.chainMilestone === undefined,
+            targetOnline: cfg.targetOnline === true,
+            targetLanded: cfg.targetLanded === true || cfg.targetLanded === undefined,
+            targetOutHosp: cfg.targetOutHosp === true,
+            chainUnder90: cfg.chainUnder90 === true || cfg.chainUnder90 === undefined,
+            chainMilestone: cfg.chainMilestone === true || cfg.chainMilestone === undefined,
             friendlyAttacked: cfg.friendlyAttacked === true,
-            medOutSniper:     cfg.medOutSniper     === true || cfg.medOutSniper === undefined,
-            travelWarnings:   cfg.travelWarnings   === true || cfg.travelWarnings === undefined,
-            chainWarnings:    cfg.chainWarnings    === true || cfg.chainWarnings === undefined,
+            medOutSniper: cfg.medOutSniper === true || cfg.medOutSniper === undefined,
+            travelWarnings: cfg.travelWarnings === true || cfg.travelWarnings === undefined,
+            chainWarnings: cfg.chainWarnings === true || cfg.chainWarnings === undefined,
         };
         for (const [id, val] of Object.entries(flags)) {
             const el = document.getElementById(id);
-            if (el) {
-                el.checked = val;
-                const item = el.closest('.trigger-item');
-                if (item) item.classList.toggle('enabled', val);
-            }
+            if (el) { el.checked = val; const item = el.closest('.trigger-item'); if (item) item.classList.toggle('enabled', val); }
         }
-
-        // Connection status
-        const isConnected = !!(cfg.globalBotToken && cfg.globalChannelId);
-        setConnectionStatus(isConnected);
+        setConnectionStatus(!!(cfg.globalBotToken && cfg.globalChannelId));
         updateActiveCount();
-
-    } catch (e) {
-        setConnectionStatus(false);
-    }
+    } catch (e) { setConnectionStatus(false); }
 });
 
 function setConnectionStatus(connected) {
     const badge = document.getElementById('connection-indicator');
     badge.className = 'connection-status-badge ' + (connected ? 'connected' : 'disconnected');
-    badge.innerHTML = `<span class="dot"></span> ${connected ? 'Bot Connected' : 'Not Connected'}`;
+    badge.innerHTML = '<span class="dot"></span> ' + (connected ? 'Bot Connected' : 'Not Connected');
 }
 
-// ── Save ─────────────────────────────────────────────────────────────────────
 async function saveDiscordConfig() {
     const statusEl = document.getElementById('status-msg');
     const btn = document.getElementById('save-btn');
     const myKey = localStorage.getItem('warboard_apikey') || '';
-
-    if (!myKey) {
-        statusEl.style.color = 'var(--red)';
-        statusEl.textContent = '❌ Missing API Key — go to Settings first.';
-        return;
-    }
-
+    if (!myKey) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ Missing API Key — go to Settings first.'; return; }
     const botToken = document.getElementById('global-bottoken').value.trim();
     const channelId = document.getElementById('global-channelid').value.trim();
     const discordId = document.getElementById('discord-userid').value.trim();
-
     localStorage.setItem('warboard_bottoken', botToken);
     localStorage.setItem('warboard_channelid', channelId);
     localStorage.setItem('warboard_discordid', discordId);
-
-    statusEl.style.color = 'var(--blue)';
-    statusEl.textContent = '⚡ Transmitting to server...';
-    btn.disabled = true;
-
+    statusEl.style.color = 'var(--blue)'; statusEl.textContent = '⚡ Transmitting to server...'; btn.disabled = true;
     try {
         const res = await fetch('/api/save-discord-config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                apiKey: myKey,
-                globalBotToken: botToken,
-                globalChannelId: channelId,
-                personalDiscordId: discordId,
-                targetOnline:     document.getElementById('targetOnline').checked,
-                targetLanded:     document.getElementById('targetLanded').checked,
-                targetOutHosp:    document.getElementById('targetOutHosp').checked,
-                chainUnder90:     document.getElementById('chainUnder90').checked,
-                chainMilestone:   document.getElementById('chainMilestone').checked,
+                apiKey: myKey, globalBotToken: botToken, globalChannelId: channelId, personalDiscordId: discordId,
+                targetOnline: document.getElementById('targetOnline').checked,
+                targetLanded: document.getElementById('targetLanded').checked,
+                targetOutHosp: document.getElementById('targetOutHosp').checked,
+                chainUnder90: document.getElementById('chainUnder90').checked,
+                chainMilestone: document.getElementById('chainMilestone').checked,
                 friendlyAttacked: document.getElementById('friendlyAttacked').checked,
-                medOutSniper:     document.getElementById('medOutSniper').checked,
-                travelWarnings:   document.getElementById('travelWarnings').checked,
-                chainWarnings:    document.getElementById('chainWarnings').checked,
+                medOutSniper: document.getElementById('medOutSniper').checked,
+                travelWarnings: document.getElementById('travelWarnings').checked,
+                chainWarnings: document.getElementById('chainWarnings').checked,
             })
         });
         const data = await res.json();
         if (data.success !== false) {
-            statusEl.style.color = 'var(--green)';
-            statusEl.textContent = '✅ Settings saved to server!';
+            statusEl.style.color = 'var(--green)'; statusEl.textContent = '✅ Settings saved to server!';
             setConnectionStatus(!!(botToken && channelId));
-        } else {
-            throw new Error(data.error || 'Server rejected the config');
-        }
-    } catch (e) {
-        statusEl.style.color = 'var(--red)';
-        statusEl.textContent = `❌ ${e.message || 'Network error'}`;
-    } finally {
-        btn.disabled = false;
-        setTimeout(() => { statusEl.textContent = ''; }, 5000);
-    }
+        } else { throw new Error(data.error || 'Server rejected the config'); }
+    } catch (e) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ ' + (e.message || 'Network error'); }
+    finally { btn.disabled = false; setTimeout(() => { statusEl.textContent = ''; }, 5000); }
 }
 
-// ── Test Alert ────────────────────────────────────────────────────────────────
 async function testAlert(type) {
-    const btnId = `btn-test-${type}`;
-    const btn = document.getElementById(btnId);
+    const btn = document.getElementById('btn-test-' + type);
     const statusEl = document.getElementById('status-msg');
-
     const botToken = document.getElementById('global-bottoken').value.trim();
     const channelId = document.getElementById('global-channelid').value.trim();
     const discordId = document.getElementById('discord-userid').value.trim();
-
-    if (!botToken || !channelId) {
-        statusEl.style.color = 'var(--red)';
-        statusEl.textContent = '❌ Enter your Bot Token and Channel ID first, then save.';
-        return;
-    }
-
-    btn.disabled = true;
-    btn.classList.add('sending');
-    btn.textContent = '⏳ Sending...';
-    statusEl.style.color = 'var(--gold)';
-    statusEl.textContent = `Sending ${type} test alert to Discord...`;
-
+    if (!botToken || !channelId) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ Enter your Bot Token and Channel ID first, then save.'; return; }
+    btn.disabled = true; btn.classList.add('sending'); btn.textContent = '⏳ Sending...';
+    statusEl.style.color = 'var(--gold)'; statusEl.textContent = 'Sending ' + type + ' test alert to Discord...';
     try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
         let res;
         try {
             res = await fetch('/api/test-discord-alert', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ type, discordId, globalChannelId: channelId, globalBotToken: botToken }),
                 signal: controller.signal
             });
-        } finally {
-            clearTimeout(timeout);
-        }
+        } finally { clearTimeout(timeout); }
         const data = await res.json();
         if (data.success) {
-            btn.classList.remove('sending');
-            btn.classList.add('success');
-            btn.innerHTML = '✅ Sent!';
-            statusEl.style.color = 'var(--green)';
-            statusEl.textContent = `✅ Test ${type} alert delivered — check your Discord channel!`;
-        } else {
-            throw new Error(data.error || 'Discord API rejected the request');
-        }
+            btn.classList.remove('sending'); btn.classList.add('success'); btn.innerHTML = '✅ Sent!';
+            statusEl.style.color = 'var(--green)'; statusEl.textContent = '✅ Test ' + type + ' alert delivered — check your Discord channel!';
+        } else { throw new Error(data.error || 'Discord API rejected the request'); }
     } catch (e) {
-        btn.classList.remove('sending');
-        btn.classList.add('fail');
-        btn.innerHTML = '❌ Failed';
-        statusEl.style.color = 'var(--red)';
-        statusEl.textContent = `❌ ${e.message || 'Request failed'}`;
+        btn.classList.remove('sending'); btn.classList.add('fail'); btn.innerHTML = '❌ Failed';
+        statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ ' + (e.message || 'Request failed');
     } finally {
-        setTimeout(() => {
-            btn.disabled = false;
-            btn.className = 'btn-test';
-            btn.innerHTML = '🧪 Test';
-            statusEl.textContent = '';
-        }, 6000);
+        setTimeout(() => { btn.disabled = false; btn.className = 'btn-test'; btn.innerHTML = '🧪 Test'; statusEl.textContent = ''; }, 6000);
+    }
+}
+
+async function registerSlashCommands() {
+    const btn = document.getElementById('btn-register-slash');
+    const statusEl = document.getElementById('slash-status');
+    const botToken = document.getElementById('global-bottoken').value.trim();
+    const guildId = document.getElementById('guild-id-input').value.trim();
+    if (!botToken) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ Save your Bot Token first.'; return; }
+    btn.disabled = true;
+    statusEl.style.color = 'var(--gold)'; statusEl.textContent = '⏳ Registering slash commands with Discord...';
+    try {
+        const res = await fetch('/api/discord/register-slash-commands', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: botToken, guildId: guildId || null })
+        });
+        const data = await res.json();
+        if (data.success) {
+            statusEl.style.color = 'var(--green)';
+            statusEl.textContent = '✅ ' + data.count + ' slash commands registered! ' + (guildId ? 'Available immediately in your server.' : 'May take up to 1 hour globally.');
+        } else { throw new Error(data.error || 'Registration failed'); }
+    } catch (e) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ ' + e.message; }
+    finally { btn.disabled = false; setTimeout(() => { statusEl.textContent = ''; }, 10000); }
+}
+
+async function lookupCountry(country) {
+    const panel = document.getElementById('country-result-panel');
+    panel.style.display = 'block';
+    panel.innerHTML = '<div style="color:var(--text-dim);font-size:0.9em;">⏳ Loading ' + country + ' travel data...</div>';
+    try {
+        const res = await fetch('/api/discord/travel-lookup/' + encodeURIComponent(country));
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || 'Lookup failed');
+        const embed = data.embed;
+        let html = '<div style="font-weight:700;font-size:1.05em;margin-bottom:8px;">' + (embed.title || '') + '</div>';
+        html += '<div style="color:var(--text-dim);font-size:0.88em;margin-bottom:12px;">' + (embed.description || '') + '</div>';
+        if (embed.fields && embed.fields.length > 0) {
+            embed.fields.forEach(f => {
+                html += '<div style="margin-bottom:10px;">';
+                html += '<div style="font-weight:600;font-size:0.8em;color:var(--gold);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">' + f.name + '</div>';
+                const formatted = f.value
+                    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--blue);">$1</a>')
+                    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\n/g, '<br>');
+                html += '<div style="font-size:0.88em;line-height:1.6;">' + formatted + '</div></div>';
+            });
+        }
+        if (embed.footer) html += '<div style="font-size:0.73em;color:var(--text-dim);margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">' + embed.footer.text + '</div>';
+        panel.innerHTML = html;
+    } catch (e) {
+        panel.innerHTML = '<div style="color:var(--red);font-size:0.88em;">❌ ' + (e.message || 'Failed to load data') + '</div>';
     }
 }
 </script>
