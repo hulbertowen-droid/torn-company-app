@@ -3162,8 +3162,26 @@ async function getPlayerFlightFromFFScouter(targetId, ffKey) {
                 console.warn(`[FF Scouter API Error] Target ${targetId}:`, raw.error);
                 return null;
             }
-            const cur = raw.current || raw.flight || raw.data || (Array.isArray(raw) ? raw[0] : raw[targetId]) || raw;
+            const cur = raw.current || raw.flight || raw.data || (Array.isArray(raw) ? raw[0] : (raw.flights ? raw.flights[0] : raw[targetId])) || raw;
             if (cur && typeof cur === 'object') {
+                // Check relative seconds (e.g. time_left, time_remaining, seconds_left)
+                const timeLeft = Number(cur.time_left || cur.time_remaining || cur.seconds_left || cur.timeLeft || raw.time_left || 0);
+                if (timeLeft > 0 && timeLeft < 86400 * 2) {
+                    const landingTime = now + timeLeft;
+                    const entry = {
+                        earliest: landingTime,
+                        latest: landingTime,
+                        midpoint: landingTime,
+                        landingTime,
+                        destination: cur.destination || cur.to || "",
+                        origin: cur.origin || cur.from || "",
+                        time: Date.now()
+                    };
+                    flightCache[targetId] = entry;
+                    return entry;
+                }
+
+                // Check absolute timestamps
                 const earliest = Number(cur.earliest_arrival_time || cur.earliest_arrival || cur.arrival_earliest || cur.min_arrival_time || cur.arrival_min || cur.arrival_early || cur.arrival_start || cur.earliest || 0);
                 const latest = Number(cur.latest_arrival_time || cur.latest_arrival || cur.arrival_latest || cur.max_arrival_time || cur.arrival_max || cur.arrival_late || cur.arrival_end || cur.latest || cur.arrival_time || cur.landing_time || cur.arrival || 0);
 
@@ -3196,6 +3214,7 @@ async function getPlayerFlightFromFFScouter(targetId, ffKey) {
     }
     return null;
 }
+
 
 
 // Resolve flight duration using ONLY FF Scouter API (or Torn API) - No custom guessing math
@@ -3486,6 +3505,10 @@ async function buildCountryStatusEmbed(country, apiKey) {
             if (friendlyTravel.total > 0) summaryParts.push(`**${friendlyTravel.total}** friendly member${friendlyTravel.total !== 1 ? 's' : ''}`);
             if (enemyTravel.total > 0) summaryParts.push(`**${enemyTravel.total}** enemy target${enemyTravel.total !== 1 ? 's' : ''}`);
             desc = summaryParts.join(' and ') + ` detected for **${country}**.`;
+        }
+
+        if (!ffKey) {
+            desc += `\n⚠️ *FF Scouter key is not configured on the server. Connect your FF Scouter key in Dashboard Settings for live flight ETAs.*`;
         }
 
         return {
