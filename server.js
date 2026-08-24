@@ -3078,11 +3078,21 @@ function formatHumanDuration(totalMins) {
     return `~${hrStr} and ${minStr}`;
 }
 
+// Helper to get active FF Scouter API key
+function getGlobalFFKey() {
+    return (discordConfig && discordConfig.ffKey) || 
+           (global.marketConfig && global.marketConfig.ffscouterKey) || 
+           (marketConfig && marketConfig.ffscouterKey) ||
+           process.env.FF_SCOUTER_KEY || 
+           process.env.FF_KEY || 
+           "";
+}
+
 // Fetch flight data directly from FF Scouter API and calculate midpoint arrival
-async function getPlayerFlightFromFFScouter(targetId, ffKey, country = "") {
+async function getPlayerFlightFromFFScouter(targetId, ffKey) {
     if (!ffKey || !targetId) return null;
     const now = Math.floor(Date.now() / 1000);
-    if (flightCache[targetId] && (Date.now() - flightCache[targetId].time) < 25000) {
+    if (flightCache[targetId] && (Date.now() - flightCache[targetId].time) < 20000) {
         return flightCache[targetId];
     }
     try {
@@ -3094,76 +3104,56 @@ async function getPlayerFlightFromFFScouter(targetId, ffKey, country = "") {
             const cur = data.current || data.flight || data;
             const earliest = Number(cur.earliest_arrival_time || cur.earliest_arrival || cur.arrival_earliest || cur.min_arrival_time || cur.arrival_min || cur.arrival_early || cur.earliest || 0);
             const latest = Number(cur.latest_arrival_time || cur.latest_arrival || cur.arrival_latest || cur.max_arrival_time || cur.arrival_max || cur.arrival_late || cur.latest || cur.arrival_time || 0);
-            const departure = Number(cur.departure_time || cur.departure || cur.depart_time || cur.departed || 0);
 
             let midpoint = 0;
             if (earliest > 0 && latest > 0) {
                 midpoint = Math.round((earliest + latest) / 2);
-            } else if (latest > 0 && departure > 0) {
-                const duration = latest - departure;
-                const estEarliest = departure + Math.round(duration * 0.7);
-                midpoint = Math.round((estEarliest + latest) / 2);
             } else if (latest > 0) {
                 midpoint = latest;
             } else if (earliest > 0) {
                 midpoint = earliest;
-            } else if (departure > 0 && country && COUNTRY_FLIGHT_DATA[country]) {
-                const cData = COUNTRY_FLIGHT_DATA[country];
-                const estEarliest = departure + cData.airstripSec;
-                const estLatest = departure + cData.standardSec;
-                midpoint = Math.round((estEarliest + estLatest) / 2);
             }
 
             if (midpoint > 0) {
-                const entry = { earliest, latest, midpoint, departure, time: Date.now() };
+                const entry = { earliest, latest, midpoint, time: Date.now() };
                 flightCache[targetId] = entry;
                 return entry;
             }
         }
-    } catch(e) {}
+    } catch(e) {
+        console.error(`[FF Scouter] Error fetching flights for ${targetId}:`, e.message);
+    }
     return null;
 }
 
-// Resolve flight duration using FF Scouter's middle estimate with authentic flight duration fallback
-function resolveFlightDuration(m, id, now, ffFlightMap = {}, country = "") {
-    // 1. FF Scouter flight estimate (uses the number in the middle)
+// Resolve flight duration using pure FF Scouter middle estimate (or Torn API when available)
+function resolveFlightDuration(m, id, now, ffFlightMap = {}) {
+    // 1. FF Scouter flight estimate (uses the number in the middle of FF Scouter's window)
     const ffFlight = ffFlightMap[id] || flightCache[id];
-    if (ffFlight && ffFlight.midpoint && ffFlight.midpoint > now) {
-        const diffMins = Math.max(1, Math.ceil((ffFlight.midpoint - now) / 60));
-        return { landingStr: formatHumanDuration(diffMins), until: ffFlight.midpoint };
-    }
-
-    // 2. Torn direct until timestamp
-    const until = m.status?.until || 0;
-    if (until > now) {
-        const diffMins = Math.max(1, Math.ceil((until - now) / 60));
-        return { landingStr: formatHumanDuration(diffMins), until };
-    }
-
-    // 3. Mathematical estimation using country flight time + last action if FF Scouter has no record
-    const cData = (country && COUNTRY_FLIGHT_DATA[country]) ? COUNTRY_FLIGHT_DATA[country] : { airstripSec: 7380, standardSec: 10500 };
-    const lastAction = m.last_action?.timestamp || 0;
-    let estimatedEpoch = 0;
-
-    if (lastAction > 0 && lastAction <= now) {
-        const elapsed = now - lastAction;
-        if (elapsed < cData.airstripSec) {
-            const estMidpointArrival = lastAction + Math.round((cData.airstripSec + cData.standardSec) / 2);
-            if (estMidpointArrival > now) {
-                estimatedEpoch = estMidpointArrival;
-            }
-        } else if (elapsed < cData.standardSec) {
-            estimatedEpoch = lastAction + cData.standardSec;
+    if (ffFlight && ffFlight.midpoint) {
+        if (ffFlight.midpoint > now) {
+            const diffMins = Math.max(1, Math.ceil((ffFlight.midpoint - now) / 60));
+            return { landingStr: formatHumanDuration(diffMins), until: ffFlight.midpoint };
+        } else {
+            return { landingStr: "Landing now!", until: ffFlight.midpoint };
         }
     }
 
-    if (estimatedEpoch === 0 || estimatedEpoch <= now) {
-        estimatedEpoch = now + Math.round(cData.airstripSec * 0.5);
+    // 2. Direct Torn API status.until timestamp (for friendly members)
+    const until = m.status?.until || 0;
+    if (until > 0) {
+        if (until > now) {
+            const diffMins = Math.max(1, Math.ceil((until - now) / 60));
+            return { landingStr: formatHumanDuration(diffMins), until };
+        } else {
+            return { landingStr: "Landing now!", until };
+        }
     }
 
-    const diffMins = Math.max(1, Math.ceil((estimatedEpoch - now) / 60));
-    return { landingStr: formatHumanDuration(diffMins), until: estimatedEpoch };
+    // 3. If neither FF Scouter nor Torn provides arrival time, display unknown
+    return { landingStr: "ETA unknown", until: 0 };
 }
+
 
 
 // Robust member travel classifier for a specific country
@@ -3257,7 +3247,7 @@ async function buildCountryStatusEmbed(country, apiKey) {
     }
 
     try {
-        const ffKey = discordConfig.ffKey || (global.marketConfig && global.marketConfig.ffscouterKey) || "";
+        const ffKey = getGlobalFFKey();
 
         // 1. Fetch Friendly Faction
         const facRes = await fetch(`https://api.torn.com/faction/${factionId}?selections=basic,rankedwars&key=${apiKey}`, {
@@ -3314,12 +3304,13 @@ async function buildCountryStatusEmbed(country, apiKey) {
         const ffFlightMap = {};
         if (ffKey && travelingIds.length > 0) {
             await Promise.all(
-                travelingIds.slice(0, 20).map(async (id) => {
-                    const fl = await getPlayerFlightFromFFScouter(id, ffKey, country);
+                travelingIds.slice(0, 25).map(async (id) => {
+                    const fl = await getPlayerFlightFromFFScouter(id, ffKey);
                     if (fl) ffFlightMap[id] = fl;
                 })
             );
         }
+
 
 
         const friendlyTravel = categorizeTravelers(facData.members, country, now, ffFlightMap);
