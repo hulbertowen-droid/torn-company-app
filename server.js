@@ -1030,7 +1030,7 @@ setInterval(async () => {
                             friendlyHitTracker[uId].alertedAt = now;
                             friendlyHitTracker[uId].count = 0;
                             let dId = await getDiscordId(uId);
-                            let pingStr = (dId && /^\d{17,20}$/.test(dId)) ? `<@${dId}>` : (discordConfig.personalDiscordId ? `<@${discordConfig.personalDiscordId}>` : "");
+                            let pingStr = (dId && /^\d{17,20}$/.test(dId)) ? `<@${dId}>` : "";
                             if (discordConfig.chainWarnings !== false && discordConfig.globalChannelId) {
                                 let embed = {
                                     title: "⚠️ CHAIN ATTACK WARNING",
@@ -1133,7 +1133,7 @@ setInterval(async () => {
                     if (Date.now() - lastAlert > 30 * 60 * 1000) { // 30 min per friendly per country
                         travelAlerts[alertKey] = Date.now();
                         let dId = await getDiscordId(uId);
-                        let pingStr = (dId && /^\d{17,20}$/.test(dId)) ? `<@${dId}>` : (discordConfig.personalDiscordId ? `<@${discordConfig.personalDiscordId}>` : "");
+                        let pingStr = (dId && /^\d{17,20}$/.test(dId)) ? `<@${dId}>` : "";
                         if (discordConfig.travelWarnings !== false && discordConfig.globalChannelId) {
                             let embed = {
                                 title: "✈️ TRAVEL WARNING",
@@ -1207,6 +1207,83 @@ setInterval(async () => {
     } catch (err) {}
 }, 45000); 
 
+// Intelligent Tactical Matcher: picks the best fighter who is Online/Idle IN TORN with matching battle stats
+function findBestTacticalFighter(membersObj, enemyTarget, enemyId) {
+    if (!membersObj || typeof membersObj !== 'object') return { name: 'Anyone available', id: null, enemyEst: 0 };
+
+    const rawEnemyEst = (spyDatabase[enemyId]?.total) || (statsCache[enemyId]?.stats) || (manualStats[enemyId]?.stats) || 0;
+    const enemyEst = (typeof rawEnemyEst === 'number' && Number.isFinite(rawEnemyEst) && rawEnemyEst > 0) ? rawEnemyEst : 0;
+    const enemyLevel = Number(enemyTarget?.level || 1);
+
+    // 1. Filter eligible friendly fighters (Must be in Torn, ready to fight, and Online/Idle)
+    const candidates = [];
+    for (const [id, m] of Object.entries(membersObj)) {
+        if (id === String(enemyId) || !m || !m.name) continue;
+
+        const state = (m.status?.state || '').trim();
+        const desc = (m.status?.description || '').toLowerCase();
+        const details = (m.status?.details || '').toLowerCase();
+        const onlineStatus = (m.last_action?.status || 'Offline');
+
+        // MUST be Online or Idle
+        if (onlineStatus !== 'Online' && onlineStatus !== 'Idle') continue;
+
+        // MUST NOT be traveling, abroad, in hospital, in jail, fallen, federal
+        if (state === 'Hospital' || state === 'Jail' || state === 'Traveling' || state === 'Abroad' || state === 'Federal' || state === 'Fallen') continue;
+        if (desc.includes('travel') || desc.includes('flying') || desc.includes('flight') || desc.includes('plane') || desc.includes('returning') || desc.includes('hospital') || desc.includes('jail') || desc.includes('abroad')) continue;
+        if (details.includes('travel') || details.includes('flying') || details.includes('flight') || details.includes('plane') || details.includes('returning')) continue;
+
+        const rawF = (spyDatabase[id]?.total) || (statsCache[id]?.stats) || (manualStats[id]?.stats) || 0;
+        const fEst = (typeof rawF === 'number' && Number.isFinite(rawF) && rawF > 0) ? rawF : 0;
+        const fLevel = Number(m.level || 1);
+
+        // Power score for ranking
+        const powerScore = fEst > 0 ? fEst : (fLevel * 100000);
+
+        candidates.push({
+            id,
+            name: m.name,
+            level: fLevel,
+            stats: fEst,
+            powerScore,
+            isOnline: onlineStatus === 'Online'
+        });
+    }
+
+    if (candidates.length === 0) {
+        return { name: 'Anyone available', id: null, enemyEst };
+    }
+
+    // 2. Select the optimal fighter
+    if (enemyEst > 0) {
+        // Find friendlies with stats >= 0.85 * enemyEst (can win)
+        const capable = candidates.filter(c => c.powerScore >= enemyEst * 0.85);
+        if (capable.length > 0) {
+            // Sort by:
+            // 1. Online preferred over Idle
+            // 2. Best Fair Fight multiplier (~1.2x to 2.5x enemy stats)
+            capable.sort((a, b) => {
+                if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
+                const ratioA = a.powerScore / enemyEst;
+                const ratioB = b.powerScore / enemyEst;
+                const distA = Math.abs(ratioA - 1.6);
+                const distB = Math.abs(ratioB - 1.6);
+                return distA - distB;
+            });
+            return { name: capable[0].name, id: capable[0].id, enemyEst };
+        }
+    }
+
+    // If enemy stats unknown OR no capable friendly found:
+    // Pick the best available online fighter in Torn (ranked by battle stats / level)
+    candidates.sort((a, b) => {
+        if (a.isOnline !== b.isOnline) return a.isOnline ? -1 : 1;
+        return b.powerScore - a.powerScore;
+    });
+
+    return { name: candidates[0].name, id: candidates[0].id, enemyEst };
+}
+
 // Background Task 3: Sniper & Target Status Watcher
 setInterval(async () => {
     if (global.isTurboMining) return;
@@ -1269,31 +1346,7 @@ setInterval(async () => {
                             let leftEarly = oldRecord.until && (oldRecord.until > now + 60);
 
                             if (leftEarly && newRecord.online === "Online" && discordConfig.medOutSniper !== false) {
-                                let rawEst = (spyDatabase[id] && spyDatabase[id].total) ? spyDatabase[id].total : (statsCache[id]?.stats || manualStats[id]?.stats || 0);
-                                let enemyEst = (typeof rawEst === 'number' && !isNaN(rawEst) && rawEst > 0) ? rawEst : 0;
-                                let bestMatchName = "Anyone available";
-                                let bestMatchId = null;
-                                
-                                if (facData.members) {
-                                    let friendliesAvailable = Object.entries(facData.members).filter(([fid, fm]) => fid !== id && (fm.last_action?.status === "Online" || fm.last_action?.status === "Idle"));
-                                    if (friendliesAvailable.length > 0) {
-                                        if (enemyEst > 0) {
-                                            let bestDiff = Infinity;
-                                            for(let [fid, fm] of friendliesAvailable) {
-                                                let rawF = (spyDatabase[fid] && spyDatabase[fid].total) ? spyDatabase[fid].total : (statsCache[fid]?.stats || manualStats[fid]?.stats || 0);
-                                                let fEst = (typeof rawF === 'number' && !isNaN(rawF) && rawF > 0) ? rawF : 0;
-                                                if (fEst >= enemyEst * 0.7) {
-                                                    let diff = Math.abs(fEst - enemyEst);
-                                                    if (diff < bestDiff) { bestDiff = diff; bestMatchName = fm.name; bestMatchId = fid; }
-                                                }
-                                            }
-                                        }
-                                        if (!bestMatchId && friendliesAvailable.length > 0) {
-                                            bestMatchName = friendliesAvailable[0][1].name;
-                                            bestMatchId = friendliesAvailable[0][0];
-                                        }
-                                    }
-                                }
+                                const { name: bestMatchName, id: bestMatchId, enemyEst } = findBestTacticalFighter(facData.members, m, id);
 
                                 let pingStr = "";
                                 if (bestMatchId) {
