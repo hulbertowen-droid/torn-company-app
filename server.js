@@ -3203,44 +3203,52 @@ function categorizeTravelers(membersObj, country, now, ffFlightMap = {}) {
 
         const { landingStr, until } = resolveFlightDuration(m, id, now, ffFlightMap, country);
 
-        const isTraveling = state === "Traveling" || fullStatus.includes("travel") || fullStatus.includes("plane") || fullStatus.includes("flight") || fullStatus.includes("flying");
-        const isAbroad = (state === "Abroad" || desc.startsWith("in ") || desc.startsWith("at ") || details.startsWith("in ")) && !isTraveling;
+        const isTraveling = state === "Traveling" || 
+                            desc.includes("travel") || 
+                            desc.includes("plane") || 
+                            desc.includes("flight") || 
+                            desc.includes("flying") || 
+                            desc.includes("returning");
+
+        const isAbroad = (state === "Abroad" || desc.startsWith("in ") || desc.startsWith("at ")) && !isTraveling;
 
         // 1. In Country (at destination, not flying)
-        if (isAbroad) {
+        if (isAbroad && (desc.includes(cLower) || details.includes(cLower))) {
             const onlineStr = m.last_action?.status === "Online" ? " 🟢" : (m.last_action?.status === "Idle" ? " 🟡" : " ⚫");
             inCountry.push({ name: m.name, id, onlineStr, status: m.last_action?.status || "Offline" });
             continue;
         }
 
-        // 2. Flying Back FROM Country
-        const isHeadingHome = fullStatus.includes("from " + cLower) ||
-                              fullStatus.includes("returning from") ||
-                              fullStatus.includes("back from " + cLower) ||
-                              fullStatus.includes("leaving " + cLower) ||
-                              ((fullStatus.includes("returning") || fullStatus.includes("torn") || fullStatus.includes("home") || fullStatus.includes("back")) && fullStatus.includes(cLower));
+        if (isTraveling) {
+            // 2. Flying TO Country (Heading towards destination)
+            const isTo = (desc.includes("to " + cLower) && !desc.includes("to torn")) ||
+                         (desc.includes("traveling to") && (desc.includes(cLower) || details.includes(cLower)) && !desc.includes("torn")) ||
+                         (desc.includes("flying to") && (desc.includes(cLower) || details.includes(cLower))) ||
+                         (desc.includes("heading to") && (desc.includes(cLower) || details.includes(cLower)));
 
-        if (isTraveling && isHeadingHome) {
-            flyingBack.push({ name: m.name, id, landingStr, until });
-            continue;
-        }
+            // 3. Flying BACK from Country (Heading back to Torn)
+            const isBack = desc.includes("from " + cLower) ||
+                           desc.includes("returning to torn") ||
+                           desc.includes("in a plane from " + cLower) ||
+                           desc.includes("returning from " + cLower) ||
+                           desc.includes("back from " + cLower) ||
+                           desc.includes("leaving " + cLower) ||
+                           (desc.includes("returning") && (desc.includes(cLower) || details.includes(cLower)));
 
-        // 3. Flying TO Country
-        const isHeadingTo = fullStatus.includes("to " + cLower) ||
-                            fullStatus.includes("heading to " + cLower) ||
-                            fullStatus.includes("flying to " + cLower) ||
-                            fullStatus.includes("traveling to " + cLower) ||
-                            (isTraveling && !isHeadingHome);
-
-        if (isTraveling && isHeadingTo) {
-            flyingTo.push({ name: m.name, id, landingStr, until });
-            continue;
-        }
-
-        // 4. General Abroad Fallback
-        if (state === "Abroad") {
-            const onlineStr = m.last_action?.status === "Online" ? " 🟢" : (m.last_action?.status === "Idle" ? " 🟡" : " ⚫");
-            inCountry.push({ name: m.name, id, onlineStr, status: m.last_action?.status || "Offline" });
+            if (isTo && !isBack) {
+                flyingTo.push({ name: m.name, id, landingStr, until });
+                continue;
+            } else if (isBack) {
+                flyingBack.push({ name: m.name, id, landingStr, until });
+                continue;
+            } else if (desc.includes(cLower) || details.includes(cLower)) {
+                if (desc.includes("to ") && !desc.includes("torn")) {
+                    flyingTo.push({ name: m.name, id, landingStr, until });
+                } else {
+                    flyingBack.push({ name: m.name, id, landingStr, until });
+                }
+                continue;
+            }
         }
     }
 
@@ -3254,6 +3262,7 @@ function categorizeTravelers(membersObj, country, now, ffFlightMap = {}) {
         total: inCountry.length + flyingTo.length + flyingBack.length
     };
 }
+
 
 
 // Build comprehensive travel status embed (Both Friendly & Enemy Factions)
