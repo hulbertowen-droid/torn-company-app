@@ -69,15 +69,12 @@ async function initRecruitPlatform(app, server) {
             keysLoaded++;
         }
         console.log(`[KeyPool] Reloaded ${keysLoaded} keys from ${factions.length} factions + env`);
+        console.log('[Recruit] Platform background scanning workers PAUSED to conserve Torn API budget.');
 
-        if (keysLoaded > 0) {
-            startRefreshWorker().catch(e => console.error('[RefreshWorker] Error:', e));
-            startSeederWorker().catch(e => console.error('[SeederWorker] Error:', e));
-        } else {
-            console.warn('[Recruit] No API keys in pool yet — register a faction to start scanning.');
-            startRefreshWorker().catch(e => console.error('[RefreshWorker] Error:', e));
-            startSeederWorker().catch(e => console.error('[SeederWorker] Error:', e));
-        }
+        // Background workers paused:
+        // startRefreshWorker().catch(e => console.error('[RefreshWorker] Error:', e));
+        // startSeederWorker().catch(e => console.error('[SeederWorker] Error:', e));
+
         console.log('[Recruit] Platform successfully mounted at /recruit');
     }
 

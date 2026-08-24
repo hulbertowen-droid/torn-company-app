@@ -3941,10 +3941,10 @@ app.post('/api/turbo/stop', (req, res) => {
 
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server listening on port ${PORT}`);
-    startFrontierPipeline();
+    // startFrontierPipeline(); // PAUSED: Conserve Torn API budget
     startKeepAlive();
     
-    // Boot up the integrated recruitment platform
+    // Boot up the integrated recruitment platform (UI and APIs available, background scanning workers paused)
     const { initRecruitPlatform } = require('./recruit/index');
     initRecruitPlatform(app, server).catch(e => console.error("[Recruit Init Error]", e));
 });
