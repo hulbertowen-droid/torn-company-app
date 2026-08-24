@@ -359,6 +359,26 @@ async function processDiscordQueue() {
 let discordGlobalRateLimitUntil = 0;
 const DISCORD_GLOBAL_BLOCK_CAP_MS = 30000; // max 30s self-block; Discord enforces the rest server-side
 
+function formatEmbedAsMarkdown(embed, ping = "") {
+    if (!embed) return ping || "";
+    let lines = [];
+    if (ping && ping.trim()) lines.push(ping.trim());
+    if (embed.title) lines.push(`**${embed.title}**`);
+    if (embed.description) lines.push(embed.description);
+    if (embed.fields && Array.isArray(embed.fields)) {
+        for (const f of embed.fields) {
+            if (f.name && f.value) {
+                lines.push(`> **${f.name}**: ${f.value}`);
+            }
+        }
+    }
+    if (embed.links && Array.isArray(embed.links)) {
+        const linkStr = embed.links.map(l => `[${l.label}](${l.url})`).join(' • ');
+        if (linkStr) lines.push(linkStr);
+    }
+    return lines.join('\n');
+}
+
 async function executeDiscordSend(token, channelId, embed, content = "") {
     if (!token && !channelId) return { success: false, error: "Missing Discord Bot Token or Channel ID / Webhook URL." };
 
@@ -387,7 +407,6 @@ async function executeDiscordSend(token, channelId, embed, content = "") {
     if (!webhookUrl && tokenStr && /^\d{15,22}$/.test(tokenStr) && (!channelStr || channelStr.length > 40)) {
         return { success: false, error: "It looks like the Channel ID and Bot Token may be swapped. The Bot Token is a long string with dots (from Discord Developer Portal), and the Channel ID is numbers only." };
     }
-
 
     let cleanContent = content ? String(content).trim() : "";
     if (cleanContent.startsWith('<@') && cleanContent.endsWith('>')) {
@@ -498,8 +517,37 @@ async function executeDiscordSend(token, channelId, embed, content = "") {
         const data = await res.json();
         if (!res.ok) {
             console.error(`[Discord API Error] Status ${res.status}:`, data);
+
+            // Auto-fallback: if Discord rejects due to missing 'Embed Links' (50013),
+            // immediately retry as clean Markdown formatted text so the alert is NEVER dropped!
+            if (res.status === 403 && (data.code === 50013 || (data.message && data.message.includes('Missing Permissions'))) && embed) {
+                console.warn(`[Discord REST] Missing 'Embed Links' permission (50013). Retrying as formatted Markdown text...`);
+                const fallbackText = formatEmbedAsMarkdown(embed, cleanContent);
+                try {
+                    const fallbackRes = await fetch(`https://discord.com/api/v10/channels/${cleanChannelId}/messages`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bot ${cleanToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ content: fallbackText }),
+                        signal: AbortSignal.timeout(8000)
+                    });
+                    if (fallbackRes.ok) {
+                        console.log(`[Discord Bot] '${embed.title || 'alert'}' delivered as fallback Markdown text.`);
+                        return { 
+                            success: true, 
+                            warning: "Delivered as plain text. To enable rich color cards, give your bot the 'Embed Links' permission in Discord server settings." 
+                        };
+                    }
+                } catch(fbErr) {
+                    console.error(`[Discord Bot] Fallback exception:`, fbErr.message);
+                }
+            }
+
             let errMsg = data.message || `Discord API error (${res.status})`;
             if (data.code === 50001) errMsg = "Missing Access — make sure your bot is invited to the server and has 'Send Messages' permission in that channel.";
+            if (data.code === 50013) errMsg = "Missing Permissions — Please ensure your bot role has 'Embed Links' and 'Send Messages' enabled in your Discord server.";
             if (data.code === 10003) errMsg = "Unknown Channel — verify your Alert Channel ID is correct.";
             if (res.status === 401) errMsg = "Unauthorized — your Bot Token is invalid. Please reset it in the Discord Developer Portal.";
             return { success: false, error: errMsg };
@@ -515,6 +563,7 @@ async function executeDiscordSend(token, channelId, embed, content = "") {
         return { success: false, error: err.message };
     }
 }
+
 
 if (ADMIN_API_KEY) {
     fetch(`https://api.torn.com/user/?selections=profile&key=${ADMIN_API_KEY}`)
@@ -1508,8 +1557,9 @@ app.post('/api/test-discord-alert', async (req, res) => {
     console.log(`[Discord Test] Result:`, result);
     if (!result.success) return res.json({ success: false, error: result.error });
     
-    res.json({ success: true });
+    res.json({ success: true, warning: result.warning || null });
 });
+
 
 app.post('/api/discord-ping', async (req, res) => {
     return res.json({ success: false, error: "Deprecated endpoint. Use test-discord-alert." });

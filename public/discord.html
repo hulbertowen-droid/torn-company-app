@@ -140,23 +140,27 @@
                     <li>Go to the <a href="https://discord.com/developers/applications" target="_blank">Discord Developer Portal</a> and click <b>New Application</b>. Give it a name like "Faction Alerts".</li>
                     <li>Click <b>Bot</b> in the left menu → click <b>Reset Token</b> and copy your Bot Token. Paste it into the <b>Faction Bot Token</b> field below.</li>
                     <li>Scroll down to <b>Privileged Gateway Intents</b>. Enable <b>Presence Intent</b>, <b>Server Members Intent</b>, and <b>Message Content Intent</b>. Save Changes.</li>
-                    <li>Click <b>OAuth2 → URL Generator</b>. Under Scopes, check <b>bot</b> and <b>applications.commands</b>. Under Bot Permissions, check <b>Send Messages</b> and <b>Mention Everyone</b>.</li>
+                    <li>Click <b>OAuth2 → URL Generator</b>. Under Scopes, check <b>bot</b> and <b>applications.commands</b>. Under Bot Permissions, check <b>Send Messages</b>, <b>Embed Links</b> <i>(Required for alert cards!)</i>, and <b>Mention Everyone</b>.</li>
                     <li>Copy the generated URL at the bottom and open it in a new tab to invite the bot to your Discord server.</li>
                     <li>In Discord, enable <b>Developer Mode</b> (User Settings → Advanced). Right-click the alert channel → <b>Copy Channel ID</b>. Paste it below.</li>
                     <li>Optionally right-click your own Discord profile → <b>Copy User ID</b> to enable personal pings on chain attack warnings.</li>
                 </ol>
+                <div style="margin-top:10px;padding:10px 14px;background:rgba(255,165,2,0.1);border-left:3px solid var(--gold);border-radius:6px;font-size:0.85em;color:var(--text-main);line-height:1.5;">
+                    <b>⚠️ Missing Permissions Error?</b> If your bot role lacks the <b>Embed Links</b> permission in your Discord server/channel, Discord hides rich cards and will block alert embeds. In your Discord server, go to <b>Server Settings → Roles → your Bot's Role</b> and enable <b>Embed Links</b>, <b>Send Messages</b>, and <b>Mention @everyone</b> (or grant Administrator).
+                </div>
             </div>
         </div>
 
         <div class="config-card">
             <div class="config-card-header">
                 <p class="config-card-title">🔑 Bot Credentials</p>
+                <a id="bot-invite-link" href="#" target="_blank" style="display:none;font-size:0.78em;font-weight:700;color:var(--discord);text-decoration:none;background:rgba(88,101,242,0.1);border:1px solid rgba(88,101,242,0.3);padding:4px 10px;border-radius:6px;">🔗 Re-Invite Bot with Full Permissions</a>
             </div>
             <div class="config-card-body">
                 <div class="field-row">
                     <div class="field-group">
                         <label class="field-label" for="global-bottoken">Faction Bot Token</label>
-                        <input class="field-input token" type="password" id="global-bottoken" placeholder="Bot token from Discord Developer Portal" autocomplete="off">
+                        <input class="field-input token" type="password" id="global-bottoken" placeholder="Bot token from Discord Developer Portal" autocomplete="off" oninput="updateInviteLink()">
                         <span class="field-hint">Stored securely on the server — never logged or exposed in URLs.</span>
                     </div>
                     <div class="field-group">
@@ -395,8 +399,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         setConnectionStatus(!!(cfg.globalBotToken && cfg.globalChannelId));
         updateActiveCount();
+        updateInviteLink();
     } catch (e) { setConnectionStatus(false); }
 });
+
+function updateInviteLink() {
+    const token = document.getElementById('global-bottoken')?.value.trim() || '';
+    const linkEl = document.getElementById('bot-invite-link');
+    if (!linkEl) return;
+    if (token && token.includes('.')) {
+        try {
+            const rawAppId = atob(token.split('.')[0]);
+            if (/^\d{17,20}$/.test(rawAppId)) {
+                linkEl.href = `https://discord.com/oauth2/authorize?client_id=${rawAppId}&scope=bot%20applications.commands&permissions=2147994624`;
+                linkEl.style.display = 'inline-flex';
+                return;
+            }
+        } catch(e) {}
+    }
+    linkEl.style.display = 'none';
+}
 
 function setConnectionStatus(connected) {
     const badge = document.getElementById('connection-indicator');
@@ -436,6 +458,7 @@ async function saveDiscordConfig() {
         if (data.success !== false) {
             statusEl.style.color = 'var(--green)'; statusEl.textContent = '✅ Settings saved to server!';
             setConnectionStatus(!!(botToken && channelId));
+            updateInviteLink();
         } else { throw new Error(data.error || 'Server rejected the config'); }
     } catch (e) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ ' + (e.message || 'Network error'); }
     finally { btn.disabled = false; setTimeout(() => { statusEl.textContent = ''; }, 5000); }
@@ -464,15 +487,22 @@ async function testAlert(type) {
         const data = await res.json();
         if (data.success) {
             btn.classList.remove('sending'); btn.classList.add('success'); btn.innerHTML = '✅ Sent!';
-            statusEl.style.color = 'var(--green)'; statusEl.textContent = '✅ Test ' + type + ' alert delivered — check your Discord channel!';
+            if (data.warning) {
+                statusEl.style.color = 'var(--gold)';
+                statusEl.textContent = '⚠️ Delivered as plain text! Enable "Embed Links" in Discord for rich cards.';
+            } else {
+                statusEl.style.color = 'var(--green)';
+                statusEl.textContent = '✅ Test ' + type + ' alert delivered — check your Discord channel!';
+            }
         } else { throw new Error(data.error || 'Discord API rejected the request'); }
     } catch (e) {
         btn.classList.remove('sending'); btn.classList.add('fail'); btn.innerHTML = '❌ Failed';
         statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ ' + (e.message || 'Request failed');
     } finally {
-        setTimeout(() => { btn.disabled = false; btn.className = 'btn-test'; btn.innerHTML = '🧪 Test'; statusEl.textContent = ''; }, 6000);
+        setTimeout(() => { btn.disabled = false; btn.className = 'btn-test'; btn.innerHTML = '🧪 Test'; statusEl.textContent = ''; }, 7000);
     }
 }
+
 
 async function registerSlashCommands() {
     const btn = document.getElementById('btn-register-slash');
