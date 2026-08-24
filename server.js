@@ -3101,12 +3101,14 @@ function formatHumanDuration(totalMins) {
 
 // Helper to get active FF Scouter API key
 function getGlobalFFKey() {
-    return (discordConfig && discordConfig.ffKey) || 
-           (global.marketConfig && global.marketConfig.ffscouterKey) || 
-           (marketConfig && marketConfig.ffscouterKey) ||
-           process.env.FF_SCOUTER_KEY || 
-           process.env.FF_KEY || 
-           "";
+    const key = (discordConfig && discordConfig.ffKey) || 
+                (global.marketConfig && (global.marketConfig.ffscouterKey || global.marketConfig.ffKey)) || 
+                (marketConfig && (marketConfig.ffscouterKey || marketConfig.ffKey)) ||
+                process.env.FF_SCOUTER_KEY || 
+                process.env.FF_KEY || 
+                process.env.FFSCOUTER_KEY ||
+                "";
+    return key ? key.trim() : "";
 }
 
 // Fetch flight data directly from FF Scouter API and calculate midpoint arrival
@@ -3117,12 +3119,23 @@ async function getPlayerFlightFromFFScouter(targetId, ffKey) {
         return flightCache[targetId];
     }
     try {
-        const res = await fetch(`https://ffscouter.com/api/v1/player-flights?key=${ffKey}&target=${targetId}`, {
-            signal: AbortSignal.timeout(6000),
+        const url = `https://ffscouter.com/api/v1/player-flights?key=${encodeURIComponent(ffKey)}&target=${encodeURIComponent(targetId)}`;
+        const res = await fetch(url, {
+            signal: AbortSignal.timeout(7000),
             headers: { 'Accept': 'application/json' }
         });
-        const raw = await res.json();
+        const raw = await res.json().catch(err => {
+            console.error(`[FF Scouter Parse Error] ${targetId}:`, err.message);
+            return null;
+        });
+
+        console.log(`[FF Scouter] Target ${targetId} -> HTTP ${res.status}:`, JSON.stringify(raw));
+
         if (raw) {
+            if (raw.error) {
+                console.warn(`[FF Scouter API Error] Target ${targetId}:`, raw.error);
+                return null;
+            }
             const cur = raw.current || raw.flight || raw.data || (Array.isArray(raw) ? raw[0] : raw[targetId]) || raw;
             if (cur && typeof cur === 'object') {
                 const earliest = Number(cur.earliest_arrival_time || cur.earliest_arrival || cur.arrival_earliest || cur.min_arrival_time || cur.arrival_min || cur.arrival_early || cur.arrival_start || cur.earliest || 0);
@@ -3153,10 +3166,11 @@ async function getPlayerFlightFromFFScouter(targetId, ffKey) {
             }
         }
     } catch(e) {
-        console.error(`[FF Scouter] Error fetching flights for ${targetId}:`, e.message);
+        console.error(`[FF Scouter Fetch Error] Target ${targetId}:`, e.message);
     }
     return null;
 }
+
 
 // Resolve flight duration using ONLY FF Scouter API (or Torn API) - No custom guessing math
 function resolveFlightDuration(m, id, now, ffFlightMap = {}) {
