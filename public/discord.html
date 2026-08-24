@@ -544,10 +544,21 @@ async function lookupCountry(country) {
                 const formatted = f.value
                     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--blue);">$1</a>')
                     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                    .replace(/<t:(\d+):R>/g, (m, ts) => {
+                        const diff = Math.round((parseInt(ts) - Date.now() / 1000) / 60);
+                        return diff <= 0 ? 'landing now' : `in ${diff}m`;
+                    })
+                    .replace(/<t:(\d+):[tT]>/g, (m, ts) => {
+                        return new Date(parseInt(ts) * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+                    })
+                    .replace(/<t:(\d+):[dDfF]>/g, (m, ts) => {
+                        return new Date(parseInt(ts) * 1000).toLocaleDateString();
+                    })
                     .replace(/\n/g, '<br>');
                 html += '<div style="font-size:0.88em;line-height:1.6;">' + formatted + '</div></div>';
             });
         }
+
         if (embed.footer) html += '<div style="font-size:0.73em;color:var(--text-dim);margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">' + embed.footer.text + '</div>';
         panel.innerHTML = html;
     } catch (e) {

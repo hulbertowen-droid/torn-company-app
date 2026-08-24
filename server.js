@@ -3029,14 +3029,21 @@ const COUNTRY_EMOJIS = {
     "Japan": "🇯🇵", "China": "🇨🇳", "UAE": "🇦🇪", "South Africa": "🇿🇦"
 };
 
-// Country flight times in minutes (Torn standard from London timezone)
+// Country flight times in minutes (standard vs airstrip)
 const COUNTRY_FLIGHT_MINS = {
-    "Mexico": 15, "Cayman Islands": 15, "Canada": 15, "Hawaii": 20,
-    "United Kingdom": 20, "Argentina": 20, "Switzerland": 20,
-    "Japan": 40, "China": 40, "UAE": 30, "South Africa": 30
+    "Mexico": { standard: 18, airstrip: 12 },
+    "Cayman Islands": { standard: 25, airstrip: 17 },
+    "Canada": { standard: 29, airstrip: 20 },
+    "Hawaii": { standard: 94, airstrip: 64 },
+    "United Kingdom": { standard: 111, airstrip: 75 },
+    "Argentina": { standard: 117, airstrip: 80 },
+    "Switzerland": { standard: 123, airstrip: 84 },
+    "Japan": { standard: 158, airstrip: 107 },
+    "China": { standard: 169, airstrip: 115 },
+    "UAE": { standard: 191, airstrip: 130 },
+    "South Africa": { standard: 209, airstrip: 142 }
 };
 
-// Normalise country name from slash command name
 // Normalise country name from slash command name
 function slashNameToCountry(name) {
     if (!name) return null;
@@ -3057,6 +3064,67 @@ function slashNameToCountry(name) {
     return map[clean] || map[name.toLowerCase()] || null;
 }
 
+// Format landing time with countdown and local clock time
+function formatLandingETA(landingEpoch, now) {
+    if (!landingEpoch || landingEpoch <= now) {
+        return `**Landing now!** (<t:${now}:t>)`;
+    }
+
+    const diffSec = landingEpoch - now;
+    const diffMins = Math.ceil(diffSec / 60);
+
+    let timeStr = "";
+    if (diffMins <= 1) {
+        timeStr = "**Landing now!**";
+    } else if (diffMins < 60) {
+        timeStr = `in **${diffMins}m**`;
+    } else {
+        const hrs = Math.floor(diffMins / 60);
+        const mins = diffMins % 60;
+        timeStr = mins > 0 ? `in **${hrs}h ${mins}m**` : `in **${hrs}h**`;
+    }
+
+    return `${timeStr} (<t:${landingEpoch}:R> • <t:${landingEpoch}:t>)`;
+}
+
+// Calculate exact landing epoch timestamp for any player
+function estimateLandingETA(m, id, country, now) {
+    const until = m.status?.until || 0;
+
+    // 1. If explicit status.until from Torn API is in the future
+    if (until > now) {
+        return { landingStr: formatLandingETA(until, now), until };
+    }
+
+    // 2. If recorded in flightCache (from FF Scouter or background scraping)
+    if (id && flightCache[id]?.landingTime && flightCache[id].landingTime > now) {
+        return { landingStr: formatLandingETA(flightCache[id].landingTime, now), until: flightCache[id].landingTime };
+    }
+
+    // 3. Mathematical estimation using standard flight duration & last action
+    const flightData = COUNTRY_FLIGHT_MINS[country] || { standard: 60, airstrip: 40 };
+    const airstripSec = Math.round(flightData.airstrip * 60);
+    const standardSec = Math.round(flightData.standard * 60);
+
+    const lastAction = m.last_action?.timestamp || 0;
+    let estimatedEpoch = 0;
+
+    if (lastAction > 0 && lastAction <= now) {
+        const elapsed = now - lastAction;
+        if (elapsed < airstripSec) {
+            estimatedEpoch = now + (airstripSec - elapsed);
+        } else if (elapsed < standardSec) {
+            estimatedEpoch = now + (standardSec - elapsed);
+        }
+    }
+
+    if (estimatedEpoch === 0 || estimatedEpoch <= now) {
+        estimatedEpoch = now + Math.round(airstripSec * 0.45);
+    }
+
+    return { landingStr: formatLandingETA(estimatedEpoch, now), until: estimatedEpoch };
+}
+
 // Robust member travel classifier for a specific country
 function categorizeTravelers(membersObj, country, now) {
     const cLower = country.toLowerCase();
@@ -3074,25 +3142,11 @@ function categorizeTravelers(membersObj, country, now) {
         const desc = (m.status?.description || "").toLowerCase();
         const details = (m.status?.details || "").toLowerCase();
         const fullStatus = `${state.toLowerCase()} ${desc} ${details}`;
-        const until = m.status?.until || 0;
 
         // Must match the country query
         if (!fullStatus.includes(cLower)) continue;
 
-        // Calculate landing time ETA
-        const landingMins = until > now ? Math.ceil((until - now) / 60) : null;
-        let landingStr = "";
-        if (landingMins !== null) {
-            if (landingMins <= 1) landingStr = "**Landing now!**";
-            else if (landingMins < 60) landingStr = `Landing in **${landingMins}m**`;
-            else {
-                const hrs = Math.floor(landingMins / 60);
-                const mins = landingMins % 60;
-                landingStr = `Landing in **${hrs}h ${mins}m**`;
-            }
-        } else if (state === "Traveling" || fullStatus.includes("travel") || fullStatus.includes("plane") || fullStatus.includes("flight")) {
-            landingStr = "Landing soon";
-        }
+        const { landingStr, until } = estimateLandingETA(m, id, country, now);
 
         const isTraveling = state === "Traveling" || fullStatus.includes("travel") || fullStatus.includes("plane") || fullStatus.includes("flight") || fullStatus.includes("flying");
         const isAbroad = (state === "Abroad" || desc.startsWith("in ") || desc.startsWith("at ") || details.startsWith("in ")) && !isTraveling;
@@ -3145,6 +3199,7 @@ function categorizeTravelers(membersObj, country, now) {
         total: inCountry.length + flyingTo.length + flyingBack.length
     };
 }
+
 
 // Build comprehensive travel status embed (Both Friendly & Enemy Factions)
 async function buildCountryStatusEmbed(country, apiKey) {
