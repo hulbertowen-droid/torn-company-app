@@ -3169,6 +3169,87 @@ function getGlobalFFKey() {
     return key ? key.trim() : "";
 }
 
+function estimateStatsFromLevel(level) {
+    if (!level || isNaN(level)) return 10000;
+    level = Number(level);
+    if (level <= 10) return Math.round(level * 3000);
+    if (level <= 20) return Math.round(30000 + (level - 10) * 15000);
+    if (level <= 35) return Math.round(180000 + (level - 20) * 80000);
+    if (level <= 50) return Math.round(1380000 + (level - 35) * 400000);
+    if (level <= 70) return Math.round(7380000 + (level - 50) * 2500000);
+    if (level <= 85) return Math.round(57380000 + (level - 70) * 15000000);
+    if (level <= 100) return Math.round(282380000 + (level - 85) * 50000000);
+    return 1500000000;
+}
+
+async function fetchBulkFFScouterStats(playerIds, ffKey) {
+    if (!ffKey || !playerIds || playerIds.length === 0) return {};
+    const results = {};
+    const chunks = [];
+    const chunkSize = 40;
+    for (let i = 0; i < playerIds.length; i += chunkSize) {
+        chunks.push(playerIds.slice(i, i + chunkSize));
+    }
+
+    for (const chunk of chunks) {
+        try {
+            const batchStr = chunk.join(',');
+            const res = await fetch(`https://ffscouter.com/api/v1/get-stats?key=${encodeURIComponent(ffKey)}&targets=${batchStr}`, {
+                signal: AbortSignal.timeout(6000),
+                headers: { 'Accept': 'application/json' }
+            });
+            const data = await res.json().catch(() => null);
+            if (!data) continue;
+
+            if (Array.isArray(data)) {
+                data.forEach(p => {
+                    const id = (p.player_id || p.id || '').toString();
+                    const statVal = Number(p.bs_estimate || p.total || p.stats || p.estimate || 0);
+                    if (id && statVal > 0) {
+                        results[id] = statVal;
+                        statsCache[id] = { stats: statVal, time: Date.now() };
+                        if (!spyDatabase[id]) {
+                            spyDatabase[id] = {
+                                total: statVal,
+                                strength: p.strength || 0,
+                                defense: p.defense || 0,
+                                speed: p.speed || 0,
+                                dexterity: p.dexterity || 0,
+                                timestamp: Date.now()
+                            };
+                        }
+                    }
+                });
+            } else if (typeof data === 'object') {
+                const entries = Array.isArray(data.data) ? data.data : Object.entries(data);
+                for (const item of entries) {
+                    if (Array.isArray(item)) {
+                        const [id, p] = item;
+                        const statVal = Number(p?.bs_estimate || p?.total || p?.stats || p || 0);
+                        if (statVal > 0) {
+                            const sId = id.toString();
+                            results[sId] = statVal;
+                            statsCache[sId] = { stats: statVal, time: Date.now() };
+                            if (!spyDatabase[sId]) spyDatabase[sId] = { total: statVal, timestamp: Date.now() };
+                        }
+                    } else if (item && item.player_id) {
+                        const id = item.player_id.toString();
+                        const statVal = Number(item.bs_estimate || item.total || item.stats || 0);
+                        if (statVal > 0) {
+                            results[id] = statVal;
+                            statsCache[id] = { stats: statVal, time: Date.now() };
+                            if (!spyDatabase[id]) spyDatabase[id] = { total: statVal, timestamp: Date.now() };
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("[FF Scouter Stats] Batch error:", e.message);
+        }
+    }
+    return results;
+}
+
 // Fetch flight data directly from FF Scouter API and calculate midpoint arrival
 async function getPlayerFlightFromFFScouter(targetId, ffKey) {
     if (!ffKey || !targetId) return null;
@@ -3734,6 +3815,19 @@ async function buildTargetsEmbed(apiKey) {
 
         const members = Object.entries(data.members || {}).map(([id, m]) => ({ id, ...m }));
 
+        for (const m of members) {
+            if (m.name) playerNameCache[m.id.toString()] = m.name;
+        }
+
+        // Bulk sync stats from FF Scouter if key is present
+        const ffKey = getGlobalFFKey() || discordConfig.ffKey;
+        if (ffKey && members.length > 0) {
+            const unscouted = members.map(m => m.id).filter(id => !spyDatabase[id]?.total && !statsCache[id]?.stats);
+            if (unscouted.length > 0) {
+                await fetchBulkFFScouterStats(unscouted, ffKey);
+            }
+        }
+
         const available = members.filter(m => {
             const state = m.status?.state || '';
             const desc = (m.status?.description || '').toLowerCase();
@@ -3764,9 +3858,12 @@ async function buildTargetsEmbed(apiKey) {
         const lines = top10.map((m, idx) => {
             const onlineDot = m.last_action?.status === 'Online' ? '🟢' : (m.last_action?.status === 'Idle' ? '🟡' : '⚪');
             const spyTotal = spyDatabase[m.id]?.total || statsCache[m.id]?.stats || manualStats[m.id]?.stats;
-            const statsStr = spyTotal ? `**${formatStatNumber(spyTotal)}** stats` : `Lvl **${m.level}**`;
+            const statsStr = spyTotal 
+                ? `**${formatStatNumber(spyTotal)}** stats` 
+                : `~**${formatStatNumber(estimateStatsFromLevel(m.level))}** *(Est)*`;
             const claimTag = claims[m.id] ? ` *(🎯 Claimed: ${claims[m.id].playerName})*` : '';
-            return `${idx + 1}. ${onlineDot} [**${m.name}** [${m.id}]](https://www.torn.com/loader.php?sid=attack&user2ID=${m.id}) — ${statsStr} • [⚔️ Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${m.id})${claimTag}`;
+            const name = getPlayerName(m.id, m.name);
+            return `${idx + 1}. ${onlineDot} [**${name}**](https://www.torn.com/loader.php?sid=attack&user2ID=${m.id}) — ${statsStr} • [⚔️ Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${m.id})${claimTag}`;
         });
 
         return {
@@ -3774,7 +3871,7 @@ async function buildTargetsEmbed(apiKey) {
             description: lines.join("\n"),
             color: 0xff4757,
             fields: [
-                { name: "💡 Quick Tip", value: "Click [⚔️ Attack] to open the battle screen. Use `/claim <id>` to lock a target.", inline: false }
+                { name: "💡 Quick Tip", value: "Click [⚔️ Attack] to open the battle screen. Use `/claim <target>` to lock a target.", inline: false }
             ],
             footer: { text: `Live Enemy Targets • ${new Date().toUTCString()}` }
         };
@@ -3784,23 +3881,33 @@ async function buildTargetsEmbed(apiKey) {
 }
 
 async function buildSpyEmbed(targetQuery, apiKey) {
-    if (!targetQuery) return { title: "🕵️ Spy Report", description: "Please provide a Torn Player ID.", color: 0xff4757 };
+    if (!targetQuery) return { title: "🕵️ Spy Report", description: "Please provide a Torn Player ID or Name.", color: 0xff4757 };
     const targetId = targetQuery.toString().trim().replace(/[^0-9]/g, "");
-    let spy = spyDatabase[targetId];
-    let playerName = `Target #${targetId}`;
+    const ffKey = getGlobalFFKey() || discordConfig.ffKey;
+    
+    // Fetch stats from FF Scouter if not in local cache
+    if (targetId && (!spyDatabase[targetId] || !spyDatabase[targetId].total) && ffKey) {
+        await fetchBulkFFScouterStats([targetId], ffKey);
+    }
 
-    if (!spy && apiKey && targetId) {
+    let spy = spyDatabase[targetId] || (statsCache[targetId]?.stats ? { total: statsCache[targetId].stats } : null);
+    let playerName = getPlayerName(targetId, `Target #${targetId}`);
+
+    if (apiKey && targetId && (!playerName || playerName.startsWith("Target #") || playerName.startsWith("Player #"))) {
         try {
             const userRes = await fetch(`https://api.torn.com/user/${targetId}?selections=profile&key=${apiKey}`, { signal: AbortSignal.timeout(6000) });
             const userData = await userRes.json();
-            if (userData.name) playerName = userData.name;
+            if (userData.name) {
+                playerName = userData.name;
+                playerNameCache[targetId] = userData.name;
+            }
         } catch(e) {}
     }
 
     if (!spy) {
         return {
-            title: `🕵️ Spy Report: ${playerName} [${targetId || targetQuery}]`,
-            description: `⚠️ No spy records found in the database for **${playerName}**.\n\n` +
+            title: `🕵️ Spy Report: ${playerName}`,
+            description: `⚠️ No spy records found in FF Scouter or database for **${playerName}**.\n\n` +
                          `• You can enter a manual spy on the [Live Warboard](https://spider-verse.net) by clicking **Inspect** on this player.\n` +
                          `• [⚔️ Attack ${playerName}](https://www.torn.com/loader.php?sid=attack&user2ID=${targetId}) • [👤 View Profile](https://www.torn.com/profiles.php?XID=${targetId})`,
             color: 0xffa502,
@@ -3808,19 +3915,24 @@ async function buildSpyEmbed(targetQuery, apiKey) {
         };
     }
 
-    const spiedTime = spy.timestamp ? `<t:${Math.floor(spy.timestamp / 1000)}:R>` : "Recently";
+    const spiedTime = spy.timestamp ? `<t:${Math.floor(spy.timestamp / 1000)}:R>` : "Verified";
+    const strVal = spy.strength ? Number(spy.strength).toLocaleString() : "Unknown";
+    const defVal = spy.defense ? Number(spy.defense).toLocaleString() : "Unknown";
+    const spdVal = spy.speed ? Number(spy.speed).toLocaleString() : "Unknown";
+    const dexVal = spy.dexterity ? Number(spy.dexterity).toLocaleString() : "Unknown";
+
     return {
-        title: `🕵️ Battle Stats Spy: ${playerName} [${targetId}]`,
-        description: `**Total Battle Stats**: **${(spy.total || 0).toLocaleString()}**\n**Spied**: ${spiedTime}`,
+        title: `🕵️ Battle Stats Spy: ${playerName}`,
+        description: `**Total Battle Stats**: **${formatStatNumber(spy.total || 0)}** (${(spy.total || 0).toLocaleString()})\n**Spied / Verified**: ${spiedTime}`,
         color: 0x58a6ff,
         fields: [
-            { name: "💪 Strength", value: (spy.strength || 0).toLocaleString(), inline: true },
-            { name: "🛡️ Defense", value: (spy.defense || 0).toLocaleString(), inline: true },
-            { name: "⚡ Speed", value: (spy.speed || 0).toLocaleString(), inline: true },
-            { name: "🤸 Dexterity", value: (spy.dexterity || 0).toLocaleString(), inline: true },
+            { name: "💪 Strength", value: strVal, inline: true },
+            { name: "🛡️ Defense", value: defVal, inline: true },
+            { name: "⚡ Speed", value: spdVal, inline: true },
+            { name: "🤸 Dexterity", value: dexVal, inline: true },
             { name: "⚔️ Actions", value: `[⚔️ Launch Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${targetId}) • [👤 Profile](https://www.torn.com/profiles.php?XID=${targetId})`, inline: false }
         ],
-        footer: { text: "Torn Warfare Suite Spy DB" }
+        footer: { text: "Torn Warfare Suite • FF Scouter & Spy DB" }
     };
 }
 
@@ -4296,9 +4408,25 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
             if (m.name) playerNameCache[id.toString()] = m.name;
         }
 
+        const ffKey = getGlobalFFKey() || discordConfig.ffKey;
+        const memberIds = Object.keys(facData.members || {});
+        
+        // If we have an FF Scouter key, fetch all unscouted members in bulk right now!
+        if (ffKey && memberIds.length > 0) {
+            const unscouted = memberIds.filter(id => !spyDatabase[id]?.total && !statsCache[id]?.stats);
+            if (unscouted.length > 0) {
+                await fetchBulkFFScouterStats(unscouted, ffKey);
+            }
+        }
+
         const members = Object.entries(facData.members || {}).map(([id, m]) => {
-            const spyTotal = spyDatabase[id]?.total || statsCache[id]?.stats || manualStats[id]?.stats || null;
-            const numericStat = typeof spyTotal === 'number' ? spyTotal : 0;
+            const rawStat = spyDatabase[id]?.total || statsCache[id]?.stats || manualStats[id]?.stats || null;
+            let numericStat = typeof rawStat === 'number' ? rawStat : (rawStat ? Number(rawStat) : 0);
+            let isEstimated = false;
+            if (!numericStat || isNaN(numericStat) || numericStat <= 0) {
+                numericStat = estimateStatsFromLevel(m.level);
+                isEstimated = true;
+            }
             return {
                 id,
                 name: m.name || `Player #${id}`,
@@ -4308,26 +4436,25 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
                 status: m.last_action?.status || 'Offline',
                 state: m.status?.state || 'Okay',
                 stats: numericStat,
-                statsFormatted: numericStat > 0 ? formatStatNumber(numericStat) : (spyTotal ? String(spyTotal) : "🔒 Unscouted")
+                isEstimated,
+                statsFormatted: `${formatStatNumber(numericStat)}${isEstimated ? ' *(Est)*' : ''}`
             };
         });
 
         members.sort((a, b) => b.stats - a.stats || b.level - a.level);
 
         let totalStatsSum = 0;
-        let scoutedCount = 0;
+        let verifiedCount = 0;
         members.forEach(m => {
-            if (m.stats > 0) {
-                totalStatsSum += m.stats;
-                scoutedCount++;
-            }
+            totalStatsSum += m.stats;
+            if (!m.isEstimated) verifiedCount++;
         });
-        const avgStat = scoutedCount > 0 ? totalStatsSum / scoutedCount : 0;
+        const avgStat = members.length > 0 ? totalStatsSum / members.length : 0;
 
         const lines = members.map((m, idx) => {
             const onlineDot = m.status === 'Online' ? '🟢' : (m.status === 'Idle' ? '🟡' : '⚪');
             const hospTag = m.state === 'Hospital' ? ' 🏥' : (m.state === 'Traveling' || m.state === 'Abroad' ? ' ✈️' : '');
-            const statsBadge = m.stats > 0 ? `**${m.statsFormatted}** stats` : `*${m.statsFormatted}*`;
+            const statsBadge = `**${m.statsFormatted}** stats`;
             const actionLink = isEnemy
                 ? `[⚔️ Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${m.id})`
                 : `[👤 Profile](https://www.torn.com/profiles.php?XID=${m.id})`;
@@ -4366,14 +4493,19 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
             });
         }
 
+        const intelNote = ffKey 
+            ? `🛡️ **Intel Source**: FF Scouter & Spy DB (**${verifiedCount} / ${members.length}** verified)`
+            : `⚠️ **Notice**: FF Scouter key not connected — using level baseline estimates. Connect FF Scouter in Dashboard Settings for live accuracy.`;
+
         return {
             title: `📊 ${facData.name || 'Faction'} — Battle Stats Roster (${members.length} Members)`,
             description: `**Faction Respect**: **${(facData.respect || 0).toLocaleString()}** • **Rank**: **${facData.rank?.name || 'Unranked'}**\n` +
-                         `**Total Scouted Stats**: **${formatStatNumber(totalStatsSum)}** (${scoutedCount}/${members.length} scouted)\n` +
-                         `**Average Stats**: **${formatStatNumber(avgStat)}** per scouted member\n`,
+                         `**Total Team Stats**: **${formatStatNumber(totalStatsSum)}**\n` +
+                         `**Average Stats**: **${formatStatNumber(avgStat)}** / member\n` +
+                         `${intelNote}\n`,
             color: isEnemy ? 0xff4757 : 0x2ed573,
             fields,
-            footer: { text: `Torn Battle Stats Intel • ${new Date().toUTCString()}` }
+            footer: { text: `Torn Battle Stats Intel • FF Scouter & Spy DB • ${new Date().toUTCString()}` }
         };
     } catch(e) {
         return { title: "📊 Faction Battle Stats", description: `⚠️ Error: ${e.message}`, color: 0xff4757 };
