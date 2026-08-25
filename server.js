@@ -3109,6 +3109,52 @@ app.get('/api/war-bounties', async (req, res) => {
             }
         }
 
+        // Also track PLACED bounties (separate from claimed)
+        const placedHistory = loadWarBountiesHistory();
+        if (!placedHistory.placed) placedHistory.placed = {};
+
+        for (const [eId, ev] of events) {
+            const text = ev.event || '';
+            const ts = ev.timestamp || 0;
+            if (ts >= warStart && (!warEnd || ts <= warEnd)) {
+                // Match "placed a $X,XXX bounty on <Player>" events
+                const isPlaced = /placed a?\s*\$[0-9,]+\s+bounty/i.test(text) ||
+                                 /you placed a?\s*bounty/i.test(text) ||
+                                 (text.toLowerCase().includes('bounty') && text.toLowerCase().includes('placed'));
+                if (isPlaced) {
+                    const amountMatch = text.match(/\$([0-9,]+)\s+bounty/i);
+                    const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, '')) : 0;
+                    const playerLinks = [...text.matchAll(/profiles\.php\?XID=(\d+)[^>]*>([^<]+)<\/a>/g)];
+                    let targetName = 'Unknown';
+                    let targetId = null;
+                    if (playerLinks.length > 0) {
+                        targetId = playerLinks[playerLinks.length - 1][1];
+                        targetName = playerLinks[playerLinks.length - 1][2];
+                    }
+                    const key = `placed_${ts}_${targetId}_${amount}`;
+                    placedHistory.placed[key] = { key, eventId: eId, timestamp: ts, targetName, targetId, amount, rawText: text };
+                }
+            }
+        }
+
+        saveWarBountiesHistory(placedHistory);
+
+        // Count placed bounties in war period from stored history
+        const placedInWar = Object.values(placedHistory.placed || {}).filter(e =>
+            e.timestamp >= warStart && (!warEnd || e.timestamp <= warEnd)
+        );
+        placedInWar.sort((a, b) => b.timestamp - a.timestamp);
+
+        // Build placed-on leaderboard (who you placed bounties on most)
+        const placedOnMap = {};
+        placedInWar.forEach(e => {
+            const k = e.targetName || `Target #${e.targetId}`;
+            if (!placedOnMap[k]) placedOnMap[k] = { name: e.targetName, id: e.targetId, count: 0, totalSpent: 0 };
+            placedOnMap[k].count++;
+            placedOnMap[k].totalSpent += e.amount || 0;
+        });
+        const placedOnLeaderboard = Object.values(placedOnMap).sort((a, b) => b.count - a.count || b.totalSpent - a.totalSpent);
+
         saveWarBountiesHistory(bountyHistory);
 
         // Filter all accumulated events for the current war
@@ -3157,6 +3203,9 @@ app.get('/api/war-bounties', async (req, res) => {
             warActive: !!activeWar && (!activeWar.war?.winner || activeWar.war?.winner === 0),
             totalBountiesClaimed: warEvents.length,
             totalCashSpent,
+            bountiesPlacedInWar: placedInWar.length,
+            placedOnLeaderboard,
+            recentPlaced: placedInWar.slice(0, 10),
             activeBountiesCount: activeBounties.length,
             activeBounties,
             topTargets,

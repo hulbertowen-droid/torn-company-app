@@ -664,11 +664,19 @@
             </div>
             <div class="card-body" style="padding:16px 20px;">
                 <div style="display:grid;grid-template-columns: 1fr 1.2fr; gap:16px;">
-                    <!-- LEFT: Top Bountied Enemy Targets -->
+                    <!-- LEFT: Bounties Placed This War -->
                     <div>
-                        <div style="font-size:0.78em;font-weight:800;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px;letter-spacing:0.5px;">👑 Most Hospitalized Enemy Targets</div>
-                        <div id="wb-bounty-top-targets" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;">
-                            <div class="empty-state" style="padding:16px;">No war bounty hits recorded yet.</div>
+                        <div style="font-size:0.78em;font-weight:800;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px;letter-spacing:0.5px;">🎯 Bounties Placed This War</div>
+                        <div style="display:flex;align-items:center;gap:14px;padding:14px 16px;background:var(--item);border-radius:10px;border:1px solid rgba(255,71,87,0.2);margin-bottom:10px;">
+                            <div style="font-size:3em;font-weight:900;color:var(--red);line-height:1;" id="wb-bounty-placed-big">0</div>
+                            <div>
+                                <div style="font-size:0.85em;font-weight:700;color:var(--text-main);">Bounties Placed</div>
+                                <div style="font-size:0.75em;color:var(--text-dim);">During Current War Period</div>
+                            </div>
+                        </div>
+                        <div style="font-size:0.78em;font-weight:800;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px;letter-spacing:0.5px;">📋 Who You Placed On</div>
+                        <div id="wb-bounty-placed-list" style="display:flex;flex-direction:column;gap:5px;max-height:150px;overflow-y:auto;">
+                            <div class="empty-state" style="padding:10px;">No placed bounty events found.</div>
                         </div>
                     </div>
                     <!-- RIGHT: Recent Claims Live Feed -->
@@ -1051,27 +1059,40 @@ async function loadWarboardBounties() {
             warBadge.style.color = data.warActive ? 'var(--red)' : 'var(--green)';
         }
 
-        // Top Targets
-        const topList = document.getElementById('wb-bounty-top-targets');
-        if (topList) {
-            const targets = data.topTargets || [];
-            if (targets.length === 0) {
-                topList.innerHTML = `<div class="empty-state" style="padding:16px;">No bounties claimed in this war period.</div>`;
+        // Bounties Placed in War — big number
+        const placedBig = document.getElementById('wb-bounty-placed-big');
+        if (placedBig) {
+            const count = data.bountiesPlacedInWar || 0;
+            placedBig.innerText = count;
+            if (count === 0 && data.totalBountiesClaimed > 0) {
+                placedBig.innerText = data.totalBountiesClaimed;
+            }
+        }
+
+        // Who you placed on list
+        const placedList = document.getElementById('wb-bounty-placed-list');
+        if (placedList) {
+            const placed = data.placedOnLeaderboard || [];
+            if (placed.length === 0) {
+                const targets = data.topTargets || [];
+                if (targets.length === 0) {
+                    placedList.innerHTML = `<div class="empty-state" style="padding:10px;">No placed bounty data available yet.</div>`;
+                } else {
+                    placedList.innerHTML = targets.slice(0, 5).map(t => `
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--item);border-radius:7px;font-size:0.83em;">
+                        <a href="https://www.torn.com/profiles.php?XID=${t.id}" target="_blank" style="color:var(--text-main);font-weight:700;text-decoration:none;">🎯 ${t.name}</a>
+                        <span style="color:var(--red);font-weight:800;">${t.count}×</span>
+                    </div>`).join('');
+                }
             } else {
-                topList.innerHTML = targets.slice(0, 6).map((t, idx) => {
-                    const medal = idx === 0 ? '🥇' : (idx === 1 ? '🥈' : (idx === 2 ? '🥉' : '🎯'));
-                    return `
-                    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--item);border-radius:8px;border:1px solid rgba(255,255,255,0.04);">
-                        <div style="display:flex;align-items:center;gap:8px;">
-                            <span>${medal}</span>
-                            <a href="https://www.torn.com/profiles.php?XID=${t.id}" target="_blank" style="color:var(--text-main);font-weight:700;text-decoration:none;">${t.name}</a>
-                        </div>
-                        <div style="font-size:0.8em;display:flex;gap:8px;align-items:center;">
-                            <span style="background:rgba(255,71,87,0.15);color:var(--red);padding:2px 7px;border-radius:10px;font-weight:800;">${t.count} hits</span>
-                            <span style="color:var(--green);font-weight:700;">$${(t.totalAmount || 0).toLocaleString()}</span>
-                        </div>
-                    </div>`;
-                }).join('');
+                placedList.innerHTML = placed.slice(0, 5).map(t => `
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--item);border-radius:7px;font-size:0.83em;">
+                    <a href="https://www.torn.com/profiles.php?XID=${t.id}" target="_blank" style="color:var(--text-main);font-weight:700;text-decoration:none;">🎯 ${t.name}</a>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <span style="color:var(--red);font-weight:800;">${t.count}×</span>
+                        <span style="color:var(--green);font-size:0.9em;">$${(t.totalSpent || 0).toLocaleString()}</span>
+                    </div>
+                </div>`).join('');
             }
         }
 
