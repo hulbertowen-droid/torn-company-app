@@ -243,6 +243,21 @@ let lastEnemyScrape = 0;
 
 const BONUS_THRESHOLDS = new Set([10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000]);
 
+const playerNameCache = {};
+function getPlayerName(id, fallback = null) {
+    if (!id) return fallback || "Unknown";
+    const sId = id.toString();
+    if (playerNameCache[sId]) return playerNameCache[sId];
+    if (spyDatabase[sId]?.name) {
+        playerNameCache[sId] = spyDatabase[sId].name;
+        return playerNameCache[sId];
+    }
+    if (statsCache[sId]?.name) {
+        playerNameCache[sId] = statsCache[sId].name;
+        return playerNameCache[sId];
+    }
+    return fallback || `Player #${sId}`;
+}
 
 let dynamicFactionId = null; 
 let lastEventTimestamp = Math.floor(Date.now() / 1000);
@@ -746,6 +761,9 @@ function processWarAttack(atk, myFactionId, enemyFactionId, warStart, warEnd = 0
     if (warEnd && warEnd > 0 && atkTime > warEnd) return;
     
     processedAttackIds.add(atkKey);
+
+    if (atk.attacker_id && atk.attacker_name) playerNameCache[atk.attacker_id.toString()] = atk.attacker_name;
+    if (atk.defender_id && atk.defender_name) playerNameCache[atk.defender_id.toString()] = atk.defender_name;
 
     const aId = atk.attacker_id ? atk.attacker_id.toString() : null;
     const dId = atk.defender_id ? atk.defender_id.toString() : null;
@@ -4137,12 +4155,12 @@ async function buildStocksEmbed(country, apiKey) {
 async function buildBazaarEmbed(itemQuery, apiKey) {
     if (!itemQuery || !apiKey) return { title: "🛒 Bazaar Price Check", description: "Please enter an item name.", color: 0xff4757 };
     try {
-        const res = await fetch(`https://api.torn.com/torn/?selections=items&key=${apiKey}`, { signal: AbortSignal.timeout(7000) });
-        const data = await res.json();
-        if (data.error) throw new Error(data.error.error || "Torn API error");
+        const itemsRes = await fetch(`https://api.torn.com/torn/?selections=items&key=${apiKey}`, { signal: AbortSignal.timeout(7000) });
+        const itemsData = await itemsRes.json();
+        if (itemsData.error) throw new Error(itemsData.error.error || "Torn API error");
 
         const q = itemQuery.toLowerCase().trim();
-        const items = Object.entries(data.items || {}).map(([id, i]) => ({ id, ...i }));
+        const items = Object.entries(itemsData.items || {}).map(([id, i]) => ({ id, ...i }));
         
         let match = items.find(i => i.id.toString() === q || i.name.toLowerCase() === q);
         if (!match) match = items.find(i => i.name.toLowerCase().includes(q));
@@ -4155,22 +4173,170 @@ async function buildBazaarEmbed(itemQuery, apiKey) {
             };
         }
 
+        // Fetch live lowest market listings for this specific item
+        let lowestBazaars = [];
+        let lowestItemMarket = [];
+        try {
+            const marketRes = await fetch(`https://api.torn.com/market/${match.id}?selections=bazaar,itemmarket&key=${apiKey}`, { signal: AbortSignal.timeout(7000) });
+            const marketData = await marketRes.json();
+            if (marketData && !marketData.error) {
+                if (Array.isArray(marketData.bazaar)) lowestBazaars = marketData.bazaar;
+                if (Array.isArray(marketData.itemmarket)) lowestItemMarket = marketData.itemmarket;
+            }
+        } catch(e) {}
+
+        const marketVal = match.market_value ? `$${Number(match.market_value).toLocaleString()}` : 'N/A';
+        const bestBazaar = lowestBazaars.length > 0 ? `$${Number(lowestBazaars[0].cost).toLocaleString()}` : null;
+        const bestMarket = lowestItemMarket.length > 0 ? `$${Number(lowestItemMarket[0].cost).toLocaleString()}` : null;
+
+        let bazaarLines = "No live bazaar listings currently available.";
+        if (lowestBazaars.length > 0) {
+            bazaarLines = lowestBazaars.slice(0, 4).map((b, idx) => {
+                const sellerName = getPlayerName(b.player_id, `Player #${b.player_id}`);
+                return `**#${idx + 1}** • **$${Number(b.cost).toLocaleString()}** (Qty: **${(b.quantity || 1).toLocaleString()}**) • [🛒 ${sellerName}'s Bazaar](https://www.torn.com/bazaar.php?userId=${b.player_id})`;
+            }).join("\n");
+        }
+
+        let itemMarketLines = "";
+        if (lowestItemMarket.length > 0) {
+            itemMarketLines = lowestItemMarket.slice(0, 3).map((im, idx) => {
+                return `**#${idx + 1}** • **$${Number(im.cost).toLocaleString()}** (Qty: **${(im.quantity || 1).toLocaleString()}**)`;
+            }).join("\n");
+        }
+
+        const fields = [
+            { name: `📦 Lowest Live Bazaars (Cheapest: ${bestBazaar || marketVal})`, value: bazaarLines, inline: false }
+        ];
+
+        if (itemMarketLines) {
+            fields.push({ name: `🏪 Lowest Item Market (Cheapest: ${bestMarket || marketVal})`, value: itemMarketLines, inline: false });
+        }
+
+        fields.push({
+            name: "🔗 Quick Links",
+            value: `[🛒 Item Market](https://www.torn.com/imarket.php#/p=shop&type=${match.id}) • [📦 Bazaar Search](https://www.torn.com/bazaar.php)`,
+            inline: false
+        });
+
         return {
             title: `🛒 ${match.name} [Item #${match.id}]`,
-            description: `**Type**: ${match.type} • **Circulation**: ${(match.circulation || 0).toLocaleString()}\n\n` +
-                         `💰 **Market Value**: **$${(match.market_value || 0).toLocaleString()}**\n` +
-                         `🏷️ **Buy Price**: **$${(match.buy_price || 0).toLocaleString()}**\n` +
-                         `💵 **Sell Price**: **$${(match.sell_price || 0).toLocaleString()}**\n\n` +
-                         `*${match.description || ''}*`,
+            description: `**Category**: ${match.type} • **Circulation**: ${(match.circulation || 0).toLocaleString()}\n\n` +
+                         `💰 **Average Market Value**: **${marketVal}**\n` +
+                         (bestBazaar ? `🏷️ **Cheapest Bazaar**: **${bestBazaar}**\n` : '') +
+                         (bestMarket ? `🏪 **Cheapest Item Market**: **${bestMarket}**\n` : '') +
+                         `\n*${match.description || ''}*`,
             thumbnail: { url: match.image },
-            color: 0xffa502,
-            fields: [
-                { name: "🔗 Quick Links", value: `[🛒 Item Market](https://www.torn.com/imarket.php#/p=shop&type=${match.id}) • [📦 Bazaar Search](https://www.torn.com/bazaar.php)`, inline: false }
-            ],
-            footer: { text: "Torn Market Intelligence" }
+            color: 0x00cec9,
+            fields,
+            footer: { text: `Live Torn Market Intelligence • ${new Date().toUTCString()}` }
         };
     } catch(e) {
         return { title: "🛒 Bazaar Price Check", description: `⚠️ Error: ${e.message}`, color: 0xff4757 };
+    }
+}
+
+async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
+    if (!apiKey) return { title: "📊 Faction Battle Stats", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
+    try {
+        let isEnemy = (factionChoice !== 'friendly' && factionChoice !== 'our');
+
+        const ourRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+        const ourData = await ourRes.json();
+        if (ourData.error) throw new Error(ourData.error.error || "Torn API error");
+
+        let facId = null;
+        if (isEnemy) {
+            let detectedEnemy = currentEnemyFacId || discordConfig.enemyFacId || autoDetectEnemyFaction(ourData);
+            if (!detectedEnemy && ourData.rankedwars) {
+                let activeWar = Object.values(ourData.rankedwars).find(w => w.war && (w.war.winner === 0 || !w.war.end || w.war.end === 0));
+                if (activeWar && activeWar.factions) {
+                    const fids = Object.keys(activeWar.factions);
+                    detectedEnemy = fids.find(id => id !== ourData.ID?.toString());
+                }
+            }
+            if (!detectedEnemy) {
+                return {
+                    title: "🎯 Enemy Battle Stats Roster",
+                    description: "⚠️ No enemy faction currently detected or configured. Set Enemy Faction ID in Settings or enter a Ranked War.",
+                    color: 0xffa502
+                };
+            }
+            facId = detectedEnemy;
+        } else {
+            facId = ourData.ID;
+        }
+
+        let facData = ourData;
+        if (isEnemy) {
+            const enemyRes = await fetch(`https://api.torn.com/faction/${facId}?selections=basic&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+            facData = await enemyRes.json();
+            if (facData.error) throw new Error(facData.error.error || "Torn API error fetching enemy faction");
+        }
+
+        for (const [id, m] of Object.entries(facData.members || {})) {
+            if (m.name) playerNameCache[id.toString()] = m.name;
+        }
+
+        const members = Object.entries(facData.members || {}).map(([id, m]) => {
+            const spyTotal = spyDatabase[id]?.total || statsCache[id]?.stats || manualStats[id]?.stats || null;
+            const numericStat = typeof spyTotal === 'number' ? spyTotal : 0;
+            return {
+                id,
+                name: m.name || `Player #${id}`,
+                level: m.level || 0,
+                position: m.position || '',
+                daysInFaction: m.days_in_faction || 0,
+                status: m.last_action?.status || 'Offline',
+                state: m.status?.state || 'Okay',
+                stats: numericStat,
+                statsFormatted: numericStat > 0 ? formatStatNumber(numericStat) : (spyTotal ? String(spyTotal) : "🔒 Unscouted")
+            };
+        });
+
+        members.sort((a, b) => b.stats - a.stats || b.level - a.level);
+
+        let totalStatsSum = 0;
+        let scoutedCount = 0;
+        members.forEach(m => {
+            if (m.stats > 0) {
+                totalStatsSum += m.stats;
+                scoutedCount++;
+            }
+        });
+        const avgStat = scoutedCount > 0 ? totalStatsSum / scoutedCount : 0;
+
+        const lines = members.map((m, idx) => {
+            const onlineDot = m.status === 'Online' ? '🟢' : (m.status === 'Idle' ? '🟡' : '⚪');
+            const hospTag = m.state === 'Hospital' ? ' 🏥' : (m.state === 'Traveling' || m.state === 'Abroad' ? ' ✈️' : '');
+            const statsBadge = m.stats > 0 ? `**${m.statsFormatted}** stats` : `*${m.statsFormatted}*`;
+            const actionLink = isEnemy
+                ? `[⚔️ Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${m.id})`
+                : `[👤 Profile](https://www.torn.com/profiles.php?XID=${m.id})`;
+            return `\`${(idx + 1).toString().padStart(2, '0')}.\` ${onlineDot} [**${m.name}**](https://www.torn.com/profiles.php?XID=${m.id}) (Lvl ${m.level}) — ${statsBadge}${hospTag} • ${actionLink}`;
+        });
+
+        const fields = [];
+        const chunkSize = 20;
+        for (let i = 0; i < lines.length; i += chunkSize) {
+            const chunk = lines.slice(i, i + chunkSize);
+            fields.push({
+                name: i === 0 ? `📋 Roster Members (Sorted by Stats)` : `📋 Members (Continued ${i + 1}-${Math.min(i + chunkSize, lines.length)})`,
+                value: chunk.join('\n') || "No members",
+                inline: false
+            });
+        }
+
+        return {
+            title: `📊 ${facData.name || 'Faction'} — Battle Stats Roster (${members.length} Members)`,
+            description: `**Faction Respect**: **${(facData.respect || 0).toLocaleString()}** • **Rank**: **${facData.rank?.name || 'Unranked'}**\n` +
+                         `**Total Scouted Stats**: **${formatStatNumber(totalStatsSum)}** (${scoutedCount}/${members.length} scouted)\n` +
+                         `**Average Stats**: **${formatStatNumber(avgStat)}** per scouted member\n`,
+            color: isEnemy ? 0xff4757 : 0x2ed573,
+            fields,
+            footer: { text: `Torn Battle Stats Intel • ${new Date().toUTCString()}` }
+        };
+    } catch(e) {
+        return { title: "📊 Faction Battle Stats", description: `⚠️ Error: ${e.message}`, color: 0xff4757 };
     }
 }
 
@@ -4444,6 +4610,15 @@ async function registerSlashCommands(token, guildId = null) {
         new SlashCommandBuilder().setName('payout').setDescription('Check war hits and payout balance based on faction CPM')
             .addStringOption(opt => opt.setName('member').setDescription('Member name or ID (optional)')).toJSON(),
         new SlashCommandBuilder().setName('mvp').setDescription('Leaderboard of top total war hitters and MVPs').toJSON(),
+
+        // 7. Team & Enemy Battle Stats Roster
+        new SlashCommandBuilder().setName('stats').setDescription('Full battle stats roster for enemy faction or friendly faction')
+            .addStringOption(opt => opt.setName('faction').setDescription('Select faction to inspect')
+                .addChoices(
+                    { name: '🎯 Enemy Faction', value: 'enemy' },
+                    { name: '🛡️ Our Faction', value: 'friendly' }
+                )
+            ).toJSON(),
     ];
 
     try {
@@ -4494,7 +4669,7 @@ async function startSlashCommandBot(token) {
             if (!interaction.isChatInputCommand()) return;
 
             const cmd = interaction.commandName.toLowerCase();
-            const apiKey = getNextApiKey() || discordConfig.apiKey;
+            const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
 
             // Direct actions (Claim / Unclaim / SOS)
             if (cmd === 'claim') {
@@ -4580,6 +4755,9 @@ async function startSlashCommandBot(token) {
                     embed = await buildPayoutEmbed(member, apiKey);
                 } else if (cmd === 'top' || cmd === 'mvp') {
                     embed = await buildTopHittersEmbed(apiKey);
+                } else if (cmd === 'stats' || cmd === 'enemystats' || cmd === 'ourstats') {
+                    const factionChoice = interaction.options.getString('faction') || (cmd === 'ourstats' ? 'friendly' : 'enemy');
+                    embed = await buildFactionStatsRosterEmbed(factionChoice, apiKey);
                 } else {
                     // Travel lookup fallback (e.g. /travel, /south-africa, /mexico, /sa, /uk, etc.)
                     let country = slashNameToCountry(cmd);
