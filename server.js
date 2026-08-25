@@ -3565,6 +3565,25 @@ async function buildCountryStatusEmbed(country, apiKey) {
 }
 
 // ─── Slash Command Embed Builders ─────────────────────────────────────────────
+function sanitizeEmbed(embed) {
+    if (!embed) return embed;
+    const sanitized = { ...embed };
+    if (sanitized.title && sanitized.title.length > 250) {
+        sanitized.title = sanitized.title.slice(0, 247) + "...";
+    }
+    if (sanitized.description && sanitized.description.length > 4000) {
+        sanitized.description = sanitized.description.slice(0, 3990) + "...";
+    }
+    if (Array.isArray(sanitized.fields)) {
+        sanitized.fields = sanitized.fields.slice(0, 25).map(f => ({
+            name: String(f.name || 'Field').slice(0, 250),
+            value: String(f.value || '-').slice(0, 1020),
+            inline: !!f.inline
+        }));
+    }
+    return sanitized;
+}
+
 function formatStatNumber(num) {
     if (!num || isNaN(num)) return "Unknown";
     num = Number(num);
@@ -4316,12 +4335,33 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
         });
 
         const fields = [];
-        const chunkSize = 20;
-        for (let i = 0; i < lines.length; i += chunkSize) {
-            const chunk = lines.slice(i, i + chunkSize);
+        let currentFieldLines = [];
+        let currentFieldLen = 0;
+        let partNumber = 1;
+
+        for (let idx = 0; idx < lines.length; idx++) {
+            const line = lines[idx];
+            // Discord max field value is 1024 characters; keep under 950 for safety
+            if (currentFieldLen + line.length + 1 > 950 || currentFieldLines.length >= 10) {
+                if (currentFieldLines.length > 0) {
+                    fields.push({
+                        name: fields.length === 0 ? `📋 Team Roster (Sorted by Stats)` : `📋 Team Roster (Part ${partNumber})`,
+                        value: currentFieldLines.join('\n'),
+                        inline: false
+                    });
+                    partNumber++;
+                    currentFieldLines = [];
+                    currentFieldLen = 0;
+                }
+            }
+            currentFieldLines.push(line);
+            currentFieldLen += line.length + 1;
+        }
+
+        if (currentFieldLines.length > 0) {
             fields.push({
-                name: i === 0 ? `📋 Roster Members (Sorted by Stats)` : `📋 Members (Continued ${i + 1}-${Math.min(i + chunkSize, lines.length)})`,
-                value: chunk.join('\n') || "No members",
+                name: fields.length === 0 ? `📋 Team Roster (Sorted by Stats)` : `📋 Team Roster (Part ${partNumber})`,
+                value: currentFieldLines.join('\n'),
                 inline: false
             });
         }
@@ -4774,14 +4814,17 @@ async function startSlashCommandBot(token) {
                     return await interaction.editReply({ content: "⚠️ Command not recognized." });
                 }
 
-                await interaction.editReply({ embeds: [embed] });
+                const safeEmbed = sanitizeEmbed(embed);
+                await interaction.editReply({ embeds: [safeEmbed] });
             } catch (e) {
                 try {
                     if (embed) {
                         const fallbackText = formatEmbedAsMarkdown(embed);
-                        await interaction.editReply({ content: fallbackText });
+                        const safeText = fallbackText.length > 1950 ? (fallbackText.slice(0, 1940) + "\n*...[truncated]*") : fallbackText;
+                        await interaction.editReply({ content: safeText });
                     } else {
-                        await interaction.editReply({ content: `⚠️ Error executing command: ${e.message}` });
+                        const errText = `⚠️ Error executing command: ${e.message}`.slice(0, 1950);
+                        await interaction.editReply({ content: errText });
                     }
                 } catch(err2) {
                     console.error("[Slash Bot] Failed to reply:", err2.message);
