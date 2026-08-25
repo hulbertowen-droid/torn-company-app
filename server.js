@@ -2991,6 +2991,18 @@ Keep your advice specific to the data provided. Be concise, punchy, and use emoj
     }
 });
 
+app.get('/api/weav3r-price/:itemId', async (req, res) => {
+    const { itemId } = req.params;
+    if (!itemId) return res.status(400).json({ error: "Item ID is required" });
+    try {
+        const data = await fetchWeav3rMarketplace(itemId);
+        if (!data) return res.status(404).json({ error: "Could not fetch marketplace data from Weav3r.dev" });
+        res.json({ success: true, data });
+    } catch(err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/travel-profits', async (req, res) => {
     const apiKey = req.headers['x-api-key'] || req.query.apiKey;
     if (!apiKey) return res.status(400).json({ error: "API Key required" });
@@ -4283,6 +4295,22 @@ async function buildStocksEmbed(country, apiKey) {
     }
 }
 
+async function fetchWeav3rMarketplace(itemId) {
+    if (!itemId) return null;
+    try {
+        const res = await fetch(`https://weav3r.dev/api/marketplace/${itemId}`, {
+            signal: AbortSignal.timeout(6000),
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+        });
+        if (res.status === 200) {
+            return await res.json();
+        }
+    } catch(e) {
+        console.warn(`[Weav3r.dev] Error fetching marketplace for #${itemId}:`, e.message);
+    }
+    return null;
+}
+
 async function buildBazaarEmbed(itemQuery, apiKey) {
     if (!itemQuery || !apiKey) return { title: "🛒 Bazaar Price Check", description: "Please enter an item name.", color: 0xff4757 };
     try {
@@ -4304,62 +4332,76 @@ async function buildBazaarEmbed(itemQuery, apiKey) {
             };
         }
 
-        // Fetch live lowest market listings for this specific item
+        // Fetch live lowest market listings & bazaar average directly from weav3r.dev!
+        const weav3rData = await fetchWeav3rMarketplace(match.id);
+
+        // Fallback to Torn API if weav3r is unreachable
         let lowestBazaars = [];
         let lowestItemMarket = [];
-        try {
-            const marketRes = await fetch(`https://api.torn.com/market/${match.id}?selections=bazaar,itemmarket&key=${apiKey}`, { signal: AbortSignal.timeout(7000) });
-            const marketData = await marketRes.json();
-            if (marketData && !marketData.error) {
-                if (Array.isArray(marketData.bazaar)) lowestBazaars = marketData.bazaar;
-                if (Array.isArray(marketData.itemmarket)) lowestItemMarket = marketData.itemmarket;
-            }
-        } catch(e) {}
+        if (!weav3rData) {
+            try {
+                const marketRes = await fetch(`https://api.torn.com/market/${match.id}?selections=bazaar,itemmarket&key=${apiKey}`, { signal: AbortSignal.timeout(6000) });
+                const marketData = await marketRes.json();
+                if (marketData && !marketData.error) {
+                    if (Array.isArray(marketData.bazaar)) lowestBazaars = marketData.bazaar;
+                    if (Array.isArray(marketData.itemmarket)) lowestItemMarket = marketData.itemmarket;
+                }
+            } catch(e) {}
+        }
 
-        const marketVal = match.market_value ? `$${Number(match.market_value).toLocaleString()}` : 'N/A';
-        const bestBazaar = lowestBazaars.length > 0 ? `$${Number(lowestBazaars[0].cost).toLocaleString()}` : null;
-        const bestMarket = lowestItemMarket.length > 0 ? `$${Number(lowestItemMarket[0].cost).toLocaleString()}` : null;
+        const marketPrice = weav3rData?.market_price || match.market_value || 0;
+        const bazaarAvg = weav3rData?.bazaar_average || 0;
+        const listings = weav3rData?.listings || [];
 
-        let bazaarLines = "No live bazaar listings currently available.";
-        if (lowestBazaars.length > 0) {
+        const marketValStr = marketPrice > 0 ? `$${Number(marketPrice).toLocaleString()}` : 'N/A';
+        const bazaarAvgStr = bazaarAvg > 0 ? `$${Number(bazaarAvg).toLocaleString()}` : null;
+        
+        let cheapestBazaar = null;
+        let bazaarLines = "No live bazaar listings currently recorded.";
+
+        if (listings.length > 0) {
+            cheapestBazaar = `$${Number(listings[0].price).toLocaleString()}`;
+            bazaarLines = listings.slice(0, 5).map((l, idx) => {
+                const sellerName = l.player_name || getPlayerName(l.player_id, `Player #${l.player_id}`);
+                const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `**#${idx + 1}**`;
+                return `${medal} **$${Number(l.price).toLocaleString()}** (Qty: **${(l.quantity || 1).toLocaleString()}**) • [🛒 ${sellerName}'s Bazaar](https://www.torn.com/bazaar.php?userId=${l.player_id})`;
+            }).join("\n");
+        } else if (lowestBazaars.length > 0) {
+            cheapestBazaar = `$${Number(lowestBazaars[0].cost).toLocaleString()}`;
             bazaarLines = lowestBazaars.slice(0, 4).map((b, idx) => {
                 const sellerName = getPlayerName(b.player_id, `Player #${b.player_id}`);
                 return `**#${idx + 1}** • **$${Number(b.cost).toLocaleString()}** (Qty: **${(b.quantity || 1).toLocaleString()}**) • [🛒 ${sellerName}'s Bazaar](https://www.torn.com/bazaar.php?userId=${b.player_id})`;
             }).join("\n");
         }
 
-        let itemMarketLines = "";
-        if (lowestItemMarket.length > 0) {
-            itemMarketLines = lowestItemMarket.slice(0, 3).map((im, idx) => {
-                return `**#${idx + 1}** • **$${Number(im.cost).toLocaleString()}** (Qty: **${(im.quantity || 1).toLocaleString()}**)`;
-            }).join("\n");
-        }
-
         const fields = [
-            { name: `📦 Lowest Live Bazaars (Cheapest: ${bestBazaar || marketVal})`, value: bazaarLines, inline: false }
+            { name: `📦 Cheapest Live Bazaars (Best: ${cheapestBazaar || marketValStr})`, value: bazaarLines, inline: false }
         ];
 
-        if (itemMarketLines) {
-            fields.push({ name: `🏪 Lowest Item Market (Cheapest: ${bestMarket || marketVal})`, value: itemMarketLines, inline: false });
+        if (lowestItemMarket.length > 0) {
+            const itemMarketLines = lowestItemMarket.slice(0, 3).map((im, idx) => {
+                return `**#${idx + 1}** • **$${Number(im.cost).toLocaleString()}** (Qty: **${(im.quantity || 1).toLocaleString()}**)`;
+            }).join("\n");
+            fields.push({ name: `🏪 Lowest Item Market`, value: itemMarketLines, inline: false });
         }
 
         fields.push({
             name: "🔗 Quick Links",
-            value: `[🛒 Item Market](https://www.torn.com/imarket.php#/p=shop&type=${match.id}) • [📦 Bazaar Search](https://www.torn.com/bazaar.php)`,
+            value: `[🛒 Item Market](https://www.torn.com/imarket.php#/p=shop&type=${match.id}) • [📦 Bazaar Search](https://www.torn.com/bazaar.php) • [🌐 View on Weav3r.dev](https://weav3r.dev/marketplace/${match.id})`,
             inline: false
         });
 
         return {
             title: `🛒 ${match.name} [Item #${match.id}]`,
             description: `**Category**: ${match.type} • **Circulation**: ${(match.circulation || 0).toLocaleString()}\n\n` +
-                         `💰 **Average Market Value**: **${marketVal}**\n` +
-                         (bestBazaar ? `🏷️ **Cheapest Bazaar**: **${bestBazaar}**\n` : '') +
-                         (bestMarket ? `🏪 **Cheapest Item Market**: **${bestMarket}**\n` : '') +
-                         `\n*${match.description || ''}*`,
+                         `💰 **Market Value**: **${marketValStr}**` +
+                         (bazaarAvgStr ? ` • 📊 **Bazaar Average**: **${bazaarAvgStr}**` : '') +
+                         (cheapestBazaar ? `\n🏷️ **Cheapest Current Price**: **${cheapestBazaar}**` : '') +
+                         (match.description ? `\n\n*${match.description}*` : ''),
             thumbnail: { url: match.image },
             color: 0x00cec9,
             fields,
-            footer: { text: `Live Torn Market Intelligence • ${new Date().toUTCString()}` }
+            footer: { text: `Live Market Intelligence • Powered by Weav3r.dev & Torn • ${new Date().toUTCString()}` }
         };
     } catch(e) {
         return { title: "🛒 Bazaar Price Check", description: `⚠️ Error: ${e.message}`, color: 0xff4757 };
