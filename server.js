@@ -3227,23 +3227,46 @@ app.get('/api/war-bounties', async (req, res) => {
             if (v2Data && Array.isArray(v2Data.bounties)) activeBounties = v2Data.bounties;
         } catch(e) {}
 
-        // Final placed count: use max of what we found in logs vs claim events
-        // (if log didn't return placed events, fall back to claims count as proxy)
-        const finalPlacedCount = placedInWar.length > 0
-            ? placedInWar.length
-            : warEvents.length; // fallback: each claim = 1 placed bounty
+        // --- ACCURATE PLACED COUNT ---
+        // "Bounties placed this war" = bounties already claimed/paid out + bounties still active (not yet claimed)
+        // This is the only fully accurate approach since Torn logs don't expose placement events reliably.
+        const claimedCount = warEvents.length;          // Already hospitalized via your bounty
+        const activeCount = activeBounties.length;      // Still live, waiting to be claimed
+        const finalPlacedCount = claimedCount + activeCount;
+
+        // Merge active bounties into placed-on list (with "(Active)" tag)
+        activeBounties.forEach(b => {
+            const targetName = b.name || b.target || `Player #${b.target_id || b.id}`;
+            const targetId = (b.target_id || b.id || '').toString();
+            const amount = b.reward || b.bounty || 0;
+            const k = targetName;
+            if (!placedOnMap[k]) placedOnMap[k] = { name: targetName, id: targetId, count: 0, totalSpent: 0, hasActive: true };
+            placedOnMap[k].count++;
+            placedOnMap[k].totalSpent += amount;
+            placedOnMap[k].hasActive = true;
+        });
+        // Also build from claims if placedOnMap is still empty (log parsing found nothing)
+        if (Object.keys(placedOnMap).length === 0) {
+            warEvents.forEach(e => {
+                const k = e.targetName || `Target #${e.targetId}`;
+                if (!placedOnMap[k]) placedOnMap[k] = { name: e.targetName, id: e.targetId, count: 0, totalSpent: 0 };
+                placedOnMap[k].count++;
+                placedOnMap[k].totalSpent += e.amount || 0;
+            });
+        }
+        const finalPlacedOnLeaderboard = Object.values(placedOnMap).sort((a, b) => b.count - a.count || b.totalSpent - a.totalSpent);
 
         res.json({
             success: true,
             warStart,
             warEnd,
             warActive: !!activeWar && (!activeWar.war?.winner || activeWar.war?.winner === 0),
-            totalBountiesClaimed: warEvents.length,
+            totalBountiesClaimed: claimedCount,
             totalCashSpent,
             bountiesPlacedInWar: finalPlacedCount,
-            placedOnLeaderboard,
+            activeBountiesCount: activeCount,
+            placedOnLeaderboard: finalPlacedOnLeaderboard,
             recentPlaced: placedInWar.slice(0, 10),
-            activeBountiesCount: activeBounties.length,
             activeBounties,
             topTargets,
             recentClaims: warEvents.slice(0, 30),

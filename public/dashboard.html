@@ -265,7 +265,8 @@
                 </div>
                 <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;font-size:0.82em;">
                     <div>💰 <span style="color:var(--text-dim);">Spent in War:</span> <strong id="bounty-total-spent" style="color:var(--green);font-size:1.05em;">$0</strong></div>
-                    <div>🎯 <span style="color:var(--text-dim);">Bounties Claimed:</span> <strong id="bounty-total-claimed" style="color:var(--red);font-size:1.05em;">0 Enemies</strong></div>
+                    <div>✅ <span style="color:var(--text-dim);">Claimed (Hosp'd):</span> <strong id="bounty-total-claimed" style="color:var(--red);font-size:1.05em;">0</strong></div>
+                    <div>⏳ <span style="color:var(--text-dim);">Still Active:</span> <strong id="bounty-active-count" style="color:var(--gold);font-size:1.05em;">0</strong></div>
                     <div>📊 <span style="color:var(--text-dim);">Lifetime Placed:</span> <strong id="bounty-lifetime-placed" style="color:var(--teal);">0</strong></div>
                 </div>
             </div>
@@ -474,7 +475,9 @@ async function loadWarBounties() {
         const warBadge = document.getElementById('bounty-war-badge');
 
         if (spentEl) spentEl.innerText = `$${(data.totalCashSpent || 0).toLocaleString()}`;
-        if (claimedEl) claimedEl.innerText = `${data.totalBountiesClaimed || 0} Enemies`;
+        if (claimedEl) claimedEl.innerText = `${data.totalBountiesClaimed || 0}`;
+        const activeEl = document.getElementById('bounty-active-count');
+        if (activeEl) activeEl.innerText = `${data.activeBountiesCount || 0}`;
         if (lifeEl) lifeEl.innerText = (data.lifetimePlaced || 0).toLocaleString();
 
         if (warBadge) {
