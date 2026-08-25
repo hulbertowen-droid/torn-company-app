@@ -3507,36 +3507,782 @@ async function buildCountryStatusEmbed(country, apiKey) {
     }
 }
 
-// Register slash commands with Discord
+// ─── Slash Command Embed Builders ─────────────────────────────────────────────
+function formatStatNumber(num) {
+    if (!num || isNaN(num)) return "Unknown";
+    num = Number(num);
+    if (num >= 1e9) return (num / 1e9).toFixed(2) + "B";
+    if (num >= 1e6) return (num / 1e6).toFixed(2) + "M";
+    if (num >= 1e3) return (num / 1e3).toFixed(1) + "k";
+    return num.toLocaleString();
+}
+
+async function buildWarStatusEmbed(apiKey) {
+    if (!apiKey) return { title: "⚔️ Ranked War Status", description: "⚠️ No Torn API Key configured on server.", color: 0xff4757 };
+    try {
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+        const facData = await facRes.json();
+        if (facData.error) throw new Error(facData.error.error || "Torn API error");
+
+        const rankedWars = facData.rankedwars || {};
+        const warId = Object.keys(rankedWars)[0];
+        if (!warId) {
+            return {
+                title: "🕊️ Ranked War Status",
+                description: `**${facData.name || 'Your faction'}** is not currently in an active Ranked War.`,
+                color: 0x2ed573,
+                footer: { text: "Torn Warfare Suite" }
+            };
+        }
+
+        const war = rankedWars[warId];
+        const fids = Object.keys(war.factions || {});
+        const fid1 = fids[0];
+        const fid2 = fids[1];
+
+        const ourFid = (fid1.toString() === facData.ID?.toString()) ? fid1 : fid2;
+        const enemyFid = (ourFid === fid1) ? fid2 : fid1;
+        const ourInfo = war.factions?.[ourFid] || {};
+        const enemyInfo = war.factions?.[enemyFid] || {};
+
+        const ourScore = ourInfo.score || 0;
+        const enemyScore = enemyInfo.score || 0;
+        const targetScore = war.target || 0;
+        const lead = ourScore - enemyScore;
+        const isLeading = lead >= 0;
+
+        const totalScore = ourScore + enemyScore;
+        const ourPct = totalScore > 0 ? (ourScore / totalScore) : 0.5;
+        const filled = Math.max(0, Math.min(15, Math.round(ourPct * 15)));
+        const bar = "🟩".repeat(filled) + "🟥".repeat(15 - filled);
+
+        const startTime = war.war?.start ? `<t:${war.war.start}:R>` : "In Progress";
+        const enemyName = enemyInfo.name || `Faction #${enemyFid}`;
+        const ourName = ourInfo.name || facData.name || "Our Faction";
+
+        const hitterCounts = {};
+        if (facData.attacks) {
+            for (const atkId in facData.attacks) {
+                const atk = facData.attacks[atkId];
+                if (atk.attacker_faction == ourFid && atk.result && !atk.result.includes("Lost") && !atk.result.includes("Stalemate")) {
+                    const name = atk.attacker_name || `Player #${atk.attacker_id}`;
+                    if (!hitterCounts[name]) hitterCounts[name] = { hits: 0, respect: 0 };
+                    hitterCounts[name].hits++;
+                    hitterCounts[name].respect += Number(atk.respect_gain || 0);
+                }
+            }
+        }
+        const topHitters = Object.entries(hitterCounts)
+            .sort((a, b) => b[1].respect - a[1].respect)
+            .slice(0, 3)
+            .map(([name, data], idx) => `${idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'} **${name}**: ${data.hits} hits (${data.respect.toFixed(1)} respect)`)
+            .join("\n") || "No attack records yet";
+
+        return {
+            title: `⚔️ Ranked War: ${ourName} vs ${enemyName}`,
+            description: `**Started**: ${startTime} • **Target**: **${targetScore.toLocaleString()}** pts\n\n` +
+                         `**${ourName}**: **${ourScore.toLocaleString()}** pts\n` +
+                         `**${enemyName}**: **${enemyScore.toLocaleString()}** pts\n` +
+                         `**Lead**: **${lead >= 0 ? '+' : ''}${lead.toLocaleString()}** pts (${isLeading ? '🟢 WINNING' : '🔴 TRAILING'})\n\n` +
+                         `${bar} (${(ourPct * 100).toFixed(1)}%)\n`,
+            color: isLeading ? 0x2ed573 : 0xff4757,
+            fields: [
+                { name: "🏆 Top War Hitters", value: topHitters, inline: false },
+                { name: "🔗 Quick Links", value: `[📡 Open Live Warboard](https://spider-verse.net) • [⚔️ Attack Screen](https://www.torn.com/factions.php?step=your#/tab=war)`, inline: false }
+            ],
+            footer: { text: `Torn Live Warboard • ${new Date().toUTCString()}` }
+        };
+    } catch (e) {
+        return { title: "⚔️ Ranked War Status", description: `⚠️ Could not fetch war data: ${e.message}`, color: 0xff4757 };
+    }
+}
+
+async function buildTargetsEmbed(apiKey) {
+    const enemyId = discordConfig.enemyFacId;
+    if (!apiKey || !enemyId) {
+        return {
+            title: "🎯 Priority Enemy Targets",
+            description: "⚠️ Enemy Faction ID is not configured. Set Enemy Faction ID in Dashboard Settings.",
+            color: 0xff4757
+        };
+    }
+    try {
+        const res = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.error || "Torn API error");
+
+        const members = Object.entries(data.members || {}).map(([id, m]) => ({ id, ...m }));
+
+        const available = members.filter(m => {
+            const state = m.status?.state || '';
+            const desc = (m.status?.description || '').toLowerCase();
+            const isHosp = state === 'Hospital' || desc.includes('hospital');
+            const isJail = state === 'Jail' || desc.includes('jail');
+            const isAbroad = state === 'Abroad' || desc.includes('abroad') || desc.includes('in ');
+            if (isHosp || isJail || isAbroad) return false;
+            return true;
+        });
+
+        available.sort((a, b) => {
+            const scoreA = a.last_action?.status === 'Online' ? 3 : (a.last_action?.status === 'Idle' ? 2 : 1);
+            const scoreB = b.last_action?.status === 'Online' ? 3 : (b.last_action?.status === 'Idle' ? 2 : 1);
+            if (scoreB !== scoreA) return scoreB - scoreA;
+            return (b.level || 0) - (a.level || 0);
+        });
+
+        const top10 = available.slice(0, 10);
+        if (top10.length === 0) {
+            return {
+                title: `🎯 ${data.name || 'Enemy'} Targets`,
+                description: `No enemy targets are currently attackable in Torn (all in hospital, traveling, or offline).`,
+                color: 0xffa502,
+                footer: { text: "Torn Warfare Suite" }
+            };
+        }
+
+        const lines = top10.map((m, idx) => {
+            const onlineDot = m.last_action?.status === 'Online' ? '🟢' : (m.last_action?.status === 'Idle' ? '🟡' : '⚪');
+            const spyTotal = spyDatabase[m.id]?.total || statsCache[m.id]?.stats || manualStats[m.id]?.stats;
+            const statsStr = spyTotal ? `**${formatStatNumber(spyTotal)}** stats` : `Lvl **${m.level}**`;
+            const claimTag = claims[m.id] ? ` *(🎯 Claimed: ${claims[m.id].playerName})*` : '';
+            return `${idx + 1}. ${onlineDot} [**${m.name}** [${m.id}]](https://www.torn.com/loader.php?sid=attack&user2ID=${m.id}) — ${statsStr} • [⚔️ Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${m.id})${claimTag}`;
+        });
+
+        return {
+            title: `🎯 ${data.name || 'Enemy'} — Priority Attack Targets (${available.length} Okay)`,
+            description: lines.join("\n"),
+            color: 0xff4757,
+            fields: [
+                { name: "💡 Quick Tip", value: "Click [⚔️ Attack] to open the battle screen. Use `/claim <id>` to lock a target.", inline: false }
+            ],
+            footer: { text: `Live Enemy Targets • ${new Date().toUTCString()}` }
+        };
+    } catch (e) {
+        return { title: "🎯 Priority Enemy Targets", description: `⚠️ Could not fetch enemy roster: ${e.message}`, color: 0xff4757 };
+    }
+}
+
+async function buildSpyEmbed(targetQuery, apiKey) {
+    if (!targetQuery) return { title: "🕵️ Spy Report", description: "Please provide a Torn Player ID.", color: 0xff4757 };
+    const targetId = targetQuery.toString().trim().replace(/[^0-9]/g, "");
+    let spy = spyDatabase[targetId];
+    let playerName = `Target #${targetId}`;
+
+    if (!spy && apiKey && targetId) {
+        try {
+            const userRes = await fetch(`https://api.torn.com/user/${targetId}?selections=profile&key=${apiKey}`, { signal: AbortSignal.timeout(6000) });
+            const userData = await userRes.json();
+            if (userData.name) playerName = userData.name;
+        } catch(e) {}
+    }
+
+    if (!spy) {
+        return {
+            title: `🕵️ Spy Report: ${playerName} [${targetId || targetQuery}]`,
+            description: `⚠️ No spy records found in the database for **${playerName}**.\n\n` +
+                         `• You can enter a manual spy on the [Live Warboard](https://spider-verse.net) by clicking **Inspect** on this player.\n` +
+                         `• [⚔️ Attack ${playerName}](https://www.torn.com/loader.php?sid=attack&user2ID=${targetId}) • [👤 View Profile](https://www.torn.com/profiles.php?XID=${targetId})`,
+            color: 0xffa502,
+            footer: { text: "Torn Spy Intelligence" }
+        };
+    }
+
+    const spiedTime = spy.timestamp ? `<t:${Math.floor(spy.timestamp / 1000)}:R>` : "Recently";
+    return {
+        title: `🕵️ Battle Stats Spy: ${playerName} [${targetId}]`,
+        description: `**Total Battle Stats**: **${(spy.total || 0).toLocaleString()}**\n**Spied**: ${spiedTime}`,
+        color: 0x58a6ff,
+        fields: [
+            { name: "💪 Strength", value: (spy.strength || 0).toLocaleString(), inline: true },
+            { name: "🛡️ Defense", value: (spy.defense || 0).toLocaleString(), inline: true },
+            { name: "⚡ Speed", value: (spy.speed || 0).toLocaleString(), inline: true },
+            { name: "🤸 Dexterity", value: (spy.dexterity || 0).toLocaleString(), inline: true },
+            { name: "⚔️ Actions", value: `[⚔️ Launch Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${targetId}) • [👤 Profile](https://www.torn.com/profiles.php?XID=${targetId})`, inline: false }
+        ],
+        footer: { text: "Torn Warfare Suite Spy DB" }
+    };
+}
+
+async function buildChainStatusEmbed(apiKey) {
+    if (!apiKey) return { title: "🔗 Chain Status", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
+    try {
+        const res = await fetch(`https://api.torn.com/faction/?selections=chain,basic&key=${apiKey}`, { signal: AbortSignal.timeout(7000) });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.error || "Torn API error");
+
+        const chain = data.chain || {};
+        const current = chain.current || 0;
+        const max = chain.max || 10;
+        const timeout = chain.timeout || 0;
+        const modifier = Number(chain.modifier || 1.0).toFixed(2);
+        const cooldown = chain.cooldown || 0;
+
+        if (cooldown > 0) {
+            return {
+                title: `🔗 Chain on Cooldown: ${data.name || 'Faction'}`,
+                description: `The faction chain is currently on cooldown for **${Math.ceil(cooldown / 60)} minutes**.`,
+                color: 0xffa502,
+                footer: { text: "Torn Chain Intelligence" }
+            };
+        }
+
+        if (current === 0) {
+            return {
+                title: `🔗 Chain Inactive: ${data.name || 'Faction'}`,
+                description: `No active chain running right now. Ready to start next chain!`,
+                color: 0x8b949e,
+                footer: { text: "Torn Chain Intelligence" }
+            };
+        }
+
+        const pct = Math.min(1, current / max);
+        const filled = Math.round(pct * 10);
+        const bar = "🟩".repeat(filled) + "⬛".repeat(10 - filled);
+
+        const mins = Math.floor(timeout / 60);
+        const secs = timeout % 60;
+        const timeStr = `${mins}m ${secs.toString().padStart(2, '0')}s`;
+        const isPanic = timeout > 0 && timeout <= 90;
+
+        return {
+            title: `🔗 Chain Status: ${current} / ${max} Hits ${isPanic ? '🚨 DANGER!' : ''}`,
+            description: `${isPanic ? '⚠️ **CHAIN IN DANGER OF DROPPING! HIT NOW!**\n\n' : ''}` +
+                         `**Current Count**: **${current.toLocaleString()}** / ${max.toLocaleString()} hits\n` +
+                         `**Timer Remaining**: **${timeStr}**\n` +
+                         `**Respect Bonus**: **${modifier}x**\n\n` +
+                         `${bar} (${Math.round(pct * 100)}%)\n`,
+            color: isPanic ? 0xff4757 : 0x2ed573,
+            fields: [
+                { name: "⚔️ Attack Links", value: `[🎯 Targets Screen](https://www.torn.com/factions.php?step=your#/tab=war) • [📡 Live Warboard](https://spider-verse.net)`, inline: false }
+            ],
+            footer: { text: `Chain Watcher • ${new Date().toUTCString()}` }
+        };
+    } catch (e) {
+        return { title: "🔗 Chain Status", description: `⚠️ Could not fetch chain data: ${e.message}`, color: 0xff4757 };
+    }
+}
+
+async function buildChainWatchEmbed(apiKey) {
+    if (!apiKey) return { title: "🔗 Chain Watchers", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
+    try {
+        const res = await fetch(`https://api.torn.com/faction/?selections=basic,chain&key=${apiKey}`, { signal: AbortSignal.timeout(7000) });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.error || "Torn API error");
+
+        const members = Object.entries(data.members || {}).map(([id, m]) => ({ id, ...m }));
+        const onlineInTorn = members.filter(m => {
+            const state = m.status?.state || '';
+            const desc = (m.status?.description || '').toLowerCase();
+            const inTorn = state === 'Okay' || desc.includes('in torn');
+            const isHosp = state === 'Hospital' || desc.includes('hospital');
+            const isJail = state === 'Jail' || desc.includes('jail');
+            const isAbroad = state === 'Abroad' || desc.includes('abroad') || desc.includes('in ');
+            const isOnline = m.last_action?.status === 'Online' || m.last_action?.status === 'Idle';
+            return inTorn && !isHosp && !isJail && !isAbroad && isOnline;
+        });
+
+        const list = onlineInTorn.map(m => {
+            const dot = m.last_action?.status === 'Online' ? '🟢' : '🟡';
+            return `${dot} **${m.name}** [${m.id}] (Lvl ${m.level}) • [Profile](https://www.torn.com/profiles.php?XID=${m.id})`;
+        }).join("\n") || "No online members in Torn right now!";
+
+        const timeout = data.chain?.timeout || 0;
+        const current = data.chain?.current || 0;
+
+        return {
+            title: `🔗 Chain Watchers — Online & Ready in Torn (${onlineInTorn.length})`,
+            description: `**Chain Count**: ${current} hits • **Time Left**: ${Math.floor(timeout/60)}m ${timeout%60}s\n\n` + list,
+            color: 0x58a6ff,
+            footer: { text: "Chain Watcher Engine" }
+        };
+    } catch(e) {
+        return { title: "🔗 Chain Watchers", description: `⚠️ Error: ${e.message}`, color: 0xff4757 };
+    }
+}
+
+async function buildProfileEmbed(playerQuery, apiKey) {
+    if (!playerQuery || !apiKey) return { title: "👤 Player Profile", description: "Please provide a Player ID.", color: 0xff4757 };
+    const id = playerQuery.toString().trim().replace(/[^0-9]/g, "");
+    try {
+        const res = await fetch(`https://api.torn.com/user/${id}?selections=profile,crimes,discord&key=${apiKey}`, { signal: AbortSignal.timeout(7000) });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.error || "Player not found");
+
+        const status = data.status?.description || data.status?.state || "Unknown";
+        const factionStr = data.faction?.faction_name ? `[${data.faction.faction_name}](https://www.torn.com/factions.php?step=profile&ID=${data.faction.faction_id}) (${data.faction.position || 'Member'})` : "None (Factionless)";
+        const reviveStr = data.revivable === 1 ? "🟢 Enabled" : "🔴 Disabled";
+        const lastAction = data.last_action?.relative || "Unknown";
+        const awards = data.awards || 0;
+        const rank = data.rank || "Unknown";
+
+        return {
+            title: `👤 ${data.name} [${data.player_id}]`,
+            description: `**Level**: **${data.level}** • **Rank**: **${rank}** • **Age**: **${(data.age || 0).toLocaleString()} days**\n` +
+                         `**Status**: **${status}**\n` +
+                         `**Last Active**: **${data.last_action?.status || 'Offline'}** (${lastAction})\n` +
+                         `**Faction**: ${factionStr}\n` +
+                         `**Revives**: ${reviveStr} • **Awards**: ${awards}\n`,
+            color: data.status?.state === 'Hospital' ? 0xff4757 : (data.status?.state === 'Traveling' ? 0x58a6ff : 0x2ed573),
+            fields: [
+                { name: "🔗 Profile Links", value: `[👤 Torn Profile](https://www.torn.com/profiles.php?XID=${data.player_id}) • [⚔️ Attack Player](https://www.torn.com/loader.php?sid=attack&user2ID=${data.player_id}) • [🎯 Place Bounty](https://www.torn.com/bounties.php?p=add&XID=${data.player_id}&amount=150000)`, inline: false }
+            ],
+            footer: { text: "Torn Player Intelligence" }
+        };
+    } catch(e) {
+        return { title: "👤 Player Profile", description: `⚠️ Could not fetch profile: ${e.message}`, color: 0xff4757 };
+    }
+}
+
+async function buildHospitalEmbed(apiKey) {
+    if (!apiKey) return { title: "🏥 Hospital Roster", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
+    try {
+        const res = await fetch(`https://api.torn.com/faction/?selections=basic&key=${apiKey}`, { signal: AbortSignal.timeout(7000) });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.error || "Torn API error");
+
+        const now = Math.floor(Date.now() / 1000);
+        const members = Object.entries(data.members || {}).map(([id, m]) => ({ id, ...m }));
+        const inHosp = members.filter(m => m.status?.state === 'Hospital');
+
+        if (inHosp.length === 0) {
+            return {
+                title: `🏥 ${data.name || 'Faction'} Hospital Roster (0 Hospitalized)`,
+                description: `🎉 All friendly members are out of hospital and ready for action!`,
+                color: 0x2ed573,
+                footer: { text: "Torn Medical Intelligence" }
+            };
+        }
+
+        inHosp.sort((a, b) => (a.status?.until || 0) - (b.status?.until || 0));
+
+        const lines = inHosp.map((m, idx) => {
+            const minsLeft = Math.max(0, Math.ceil(((m.status?.until || 0) - now) / 60));
+            const desc = m.status?.description || "Hospitalized";
+            return `${idx + 1}. [**${m.name}** [${m.id}]](https://www.torn.com/profiles.php?XID=${m.id}) — ⏳ **${minsLeft}m left**\n   └ *${desc}*`;
+        });
+
+        return {
+            title: `🏥 ${data.name || 'Faction'} Hospital Roster (${inHosp.length} in Hospital)`,
+            description: lines.join("\n"),
+            color: 0xff4757,
+            footer: { text: `Hospital Tracker • ${new Date().toUTCString()}` }
+        };
+    } catch(e) {
+        return { title: "🏥 Hospital Roster", description: `⚠️ Error: ${e.message}`, color: 0xff4757 };
+    }
+}
+
+async function buildOnlineRosterEmbed(apiKey) {
+    if (!apiKey) return { title: "👥 Faction Roster", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
+    try {
+        const res = await fetch(`https://api.torn.com/faction/?selections=basic&key=${apiKey}`, { signal: AbortSignal.timeout(7000) });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.error || "Torn API error");
+
+        const members = Object.entries(data.members || {}).map(([id, m]) => ({ id, ...m }));
+        const total = members.length;
+
+        let online = 0, idle = 0, offline = 0, hosp = 0, traveling = 0, okayInTorn = 0;
+        members.forEach(m => {
+            const state = m.status?.state || '';
+            const action = m.last_action?.status || 'Offline';
+            if (state === 'Hospital') hosp++;
+            else if (state === 'Traveling' || state === 'Abroad') traveling++;
+            else okayInTorn++;
+
+            if (action === 'Online') online++;
+            else if (action === 'Idle') idle++;
+            else offline++;
+        });
+
+        return {
+            title: `👥 ${data.name || 'Faction'} — Live Readiness Status (${total} Members)`,
+            description: `**Respect**: **${(data.respect || 0).toLocaleString()}** • **Rank**: **${data.rank?.name || 'Unranked'}**\n\n` +
+                         `🟢 **Online**: **${online}** (${Math.round(online/total*100)}%)\n` +
+                         `🟡 **Idle**: **${idle}**\n` +
+                         `⚪ **Offline**: **${offline}**\n\n` +
+                         `🛡️ **Okay in Torn**: **${okayInTorn}** fighters ready\n` +
+                         `🏥 **Hospital**: **${hosp}** members\n` +
+                         `✈️ **Traveling / Abroad**: **${traveling}** members\n`,
+            color: 0x58a6ff,
+            footer: { text: "Faction Roster Analytics" }
+        };
+    } catch(e) {
+        return { title: "👥 Faction Roster", description: `⚠️ Error: ${e.message}`, color: 0xff4757 };
+    }
+}
+
+async function buildOCStatusEmbed(apiKey) {
+    if (!apiKey) return { title: "💼 Organized Crimes", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
+    try {
+        const res = await fetch(`https://api.torn.com/faction/?selections=crimes&key=${apiKey}`, { signal: AbortSignal.timeout(7000) });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.error || "Torn API error");
+
+        const crimes = Object.entries(data.crimes || {}).map(([id, c]) => ({ id, ...c }));
+        const now = Math.floor(Date.now() / 1000);
+
+        const ready = [];
+        const inPlanning = [];
+
+        crimes.forEach(c => {
+            if (c.initiated === 1) return;
+            if (c.ready === 1 || (c.time_ready && c.time_ready <= now)) {
+                ready.push(c);
+            } else if (c.time_ready && c.time_ready > now) {
+                inPlanning.push(c);
+            }
+        });
+
+        const readyList = ready.slice(0, 5).map(c => `🟢 **${c.crime_name}** — **Ready to Initiate!** (${c.participants?.length || 0} members)`).join("\n") || "No crimes currently ready to launch.";
+        const planList = inPlanning.slice(0, 5).map(c => {
+            const hours = Math.ceil((c.time_ready - now) / 3600);
+            return `⏳ **${c.crime_name}** — Ready in **${hours}h** (<t:${c.time_ready}:R>)`;
+        }).join("\n") || "No crimes in planning.";
+
+        return {
+            title: `💼 Organized Crimes Status (${ready.length} Ready, ${inPlanning.length} Planning)`,
+            description: `**🟢 Ready To Launch (${ready.length})**\n${readyList}\n\n` +
+                         `**⏳ In Planning (${inPlanning.length})**\n${planList}\n`,
+            color: ready.length > 0 ? 0x2ed573 : 0x58a6ff,
+            fields: [
+                { name: "💼 OC Manager", value: `[Open Web OC Manager](https://spider-verse.net/oc.html)`, inline: false }
+            ],
+            footer: { text: "Organized Crime Intelligence" }
+        };
+    } catch(e) {
+        return { title: "💼 Organized Crimes", description: `⚠️ Error: ${e.message}`, color: 0xff4757 };
+    }
+}
+
+async function buildMyOCEmbed(playerQuery, apiKey, callerUsername) {
+    if (!apiKey) return { title: "💼 My OC Status", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
+    try {
+        const res = await fetch(`https://api.torn.com/faction/?selections=crimes,basic&key=${apiKey}`, { signal: AbortSignal.timeout(7000) });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.error || "Torn API error");
+
+        const targetSearch = (playerQuery || callerUsername || '').toLowerCase().trim();
+        const crimes = Object.entries(data.crimes || {}).map(([id, c]) => ({ id, ...c }));
+        const now = Math.floor(Date.now() / 1000);
+
+        let matchedCrime = null;
+        for (const c of crimes) {
+            if (c.initiated === 1) continue;
+            for (const p of (c.participants || [])) {
+                const pId = (p.player_id || Object.keys(p)[0] || '').toString();
+                const pObj = p[pId] || p;
+                const pName = (pObj.name || '').toLowerCase();
+                if (pId === targetSearch || (pName && pName.includes(targetSearch))) {
+                    matchedCrime = { crime: c, participant: pObj, playerId: pId };
+                    break;
+                }
+            }
+            if (matchedCrime) break;
+        }
+
+        if (!matchedCrime) {
+            return {
+                title: "💼 My Organized Crime",
+                description: `Could not find an active OC assignment matching **${playerQuery || callerUsername}**.\n\nMake sure your name matches your Torn character name or use \`/myoc player:<Your Torn ID>\`.`,
+                color: 0xffa502,
+                footer: { text: "Organized Crime Intelligence" }
+            };
+        }
+
+        const c = matchedCrime.crime;
+        const isReady = c.ready === 1 || (c.time_ready && c.time_ready <= now);
+        const timeStr = isReady ? "🟢 **READY TO INITIATE!**" : `⏳ Ready in **${Math.ceil((c.time_ready - now)/3600)} hours** (<t:${c.time_ready}:R>)`;
+        
+        const teammates = (c.participants || []).map(p => {
+            const pId = (p.player_id || Object.keys(p)[0] || '').toString();
+            const pObj = p[pId] || p;
+            return `• **${pObj.name || `Player #${pId}`}** [${pId}]`;
+        }).join("\n");
+
+        return {
+            title: `💼 OC Assignment: ${c.crime_name}`,
+            description: `**Status**: ${timeStr}\n\n**👥 Team Members**:\n${teammates}`,
+            color: isReady ? 0x2ed573 : 0x58a6ff,
+            footer: { text: "Organized Crime Intelligence" }
+        };
+    } catch(e) {
+        return { title: "💼 My OC Status", description: `⚠️ Error: ${e.message}`, color: 0xff4757 };
+    }
+}
+
+async function buildStocksEmbed(country, apiKey) {
+    try {
+        const yataCountryMap = {
+            "Mexico": "mex", "Cayman Islands": "cay", "Canada": "can", "Hawaii": "haw",
+            "United Kingdom": "uni", "Argentina": "arg", "Switzerland": "swi", "Japan": "jap",
+            "China": "chi", "UAE": "uae", "South Africa": "sou"
+        };
+        const yCode = yataCountryMap[country] || "mex";
+        const yataRes = await fetch(`https://yata.yt/api/v1/travel/export/`, { signal: AbortSignal.timeout(6000) });
+        const yataData = await yataRes.json();
+        
+        const countryStocks = yataData.stocks?.[yCode]?.stocks || [];
+        if (countryStocks.length === 0) {
+            return {
+                title: `✈️ Overseas Stock: ${country}`,
+                description: `No live stock data found for **${country}** right now.`,
+                color: 0x58a6ff
+            };
+        }
+
+        const lines = countryStocks.slice(0, 10).map(s => {
+            const stockIcon = s.quantity > 500 ? '🟢' : (s.quantity > 50 ? '🟡' : '🔴');
+            return `${stockIcon} **${s.name}**: **${(s.quantity || 0).toLocaleString()} in stock** (Cost: $${(s.cost || 0).toLocaleString()})`;
+        });
+
+        return {
+            title: `✈️ Live Overseas Stock: ${country}`,
+            description: lines.join("\n"),
+            color: 0x00cec9,
+            fields: [
+                { name: "🧮 Travel Calculator", value: `[Open Travel Calculator](https://spider-verse.net/travel.html)`, inline: false }
+            ],
+            footer: { text: `Live Foreign Stock • Powered by YATA • ${new Date().toUTCString()}` }
+        };
+    } catch(e) {
+        return { title: `✈️ Overseas Stock: ${country}`, description: `⚠️ Error fetching stocks: ${e.message}`, color: 0xff4757 };
+    }
+}
+
+async function buildBazaarEmbed(itemQuery, apiKey) {
+    if (!itemQuery || !apiKey) return { title: "🛒 Bazaar Price Check", description: "Please enter an item name.", color: 0xff4757 };
+    try {
+        const res = await fetch(`https://api.torn.com/torn/?selections=items&key=${apiKey}`, { signal: AbortSignal.timeout(7000) });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.error || "Torn API error");
+
+        const q = itemQuery.toLowerCase().trim();
+        const items = Object.entries(data.items || {}).map(([id, i]) => ({ id, ...i }));
+        
+        let match = items.find(i => i.id.toString() === q || i.name.toLowerCase() === q);
+        if (!match) match = items.find(i => i.name.toLowerCase().includes(q));
+
+        if (!match) {
+            return {
+                title: "🛒 Bazaar Price Check",
+                description: `No item found matching **"${itemQuery}"**.`,
+                color: 0xffa502
+            };
+        }
+
+        return {
+            title: `🛒 ${match.name} [Item #${match.id}]`,
+            description: `**Type**: ${match.type} • **Circulation**: ${(match.circulation || 0).toLocaleString()}\n\n` +
+                         `💰 **Market Value**: **$${(match.market_value || 0).toLocaleString()}**\n` +
+                         `🏷️ **Buy Price**: **$${(match.buy_price || 0).toLocaleString()}**\n` +
+                         `💵 **Sell Price**: **$${(match.sell_price || 0).toLocaleString()}**\n\n` +
+                         `*${match.description || ''}*`,
+            thumbnail: { url: match.image },
+            color: 0xffa502,
+            fields: [
+                { name: "🔗 Quick Links", value: `[🛒 Item Market](https://www.torn.com/imarket.php#/p=shop&type=${match.id}) • [📦 Bazaar Search](https://www.torn.com/bazaar.php)`, inline: false }
+            ],
+            footer: { text: "Torn Market Intelligence" }
+        };
+    } catch(e) {
+        return { title: "🛒 Bazaar Price Check", description: `⚠️ Error: ${e.message}`, color: 0xff4757 };
+    }
+}
+
+async function buildPayoutEmbed(memberQuery, apiKey) {
+    if (!apiKey) return { title: "💰 War Payout Calculator", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
+    try {
+        const cpm = Number(discordConfig.cpm) || 150000;
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,attacks&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+        const data = await facRes.json();
+        if (data.error) throw new Error(data.error.error || "Torn API error");
+
+        const q = (memberQuery || '').toLowerCase().trim();
+        const hitterCounts = {};
+
+        if (data.attacks) {
+            for (const atkId in data.attacks) {
+                const atk = data.attacks[atkId];
+                if (atk.attacker_faction == data.ID && atk.result && !atk.result.includes("Lost") && !atk.result.includes("Stalemate")) {
+                    const id = atk.attacker_id;
+                    const name = atk.attacker_name || `Player #${id}`;
+                    if (!hitterCounts[id]) hitterCounts[id] = { name, id, hits: 0, respect: 0 };
+                    hitterCounts[id].hits++;
+                    hitterCounts[id].respect += Number(atk.respect_gain || 0);
+                }
+            }
+        }
+
+        if (q) {
+            const matched = Object.values(hitterCounts).find(m => m.id.toString() === q || m.name.toLowerCase().includes(q));
+            if (!matched) {
+                return {
+                    title: `💰 Payout Check: ${memberQuery}`,
+                    description: `No recorded war hits found for **${memberQuery}** in the recent attack log.\n\n**Current CPM Rate**: $${cpm.toLocaleString()} per hit.`,
+                    color: 0xffa502
+                };
+            }
+            const totalEarned = matched.hits * cpm;
+            return {
+                title: `💰 War Payout: ${matched.name} [${matched.id}]`,
+                description: `**Recorded Hits**: **${matched.hits.toLocaleString()}** hits\n` +
+                             `**Respect Generated**: **${matched.respect.toFixed(1)}** respect\n` +
+                             `**Rate**: **$${cpm.toLocaleString()}** / hit\n\n` +
+                             `💵 **Total Owed**: **$${totalEarned.toLocaleString()}**`,
+                color: 0x2ed573,
+                footer: { text: "Faction Payout System" }
+            };
+        }
+
+        const top5 = Object.values(hitterCounts).sort((a, b) => b.hits - a.hits).slice(0, 5);
+        const lines = top5.map((m, idx) => {
+            const owed = m.hits * cpm;
+            return `${idx + 1}. **${m.name}**: **${m.hits} hits** ➔ **$${owed.toLocaleString()}**`;
+        }).join("\n") || "No attack records found.";
+
+        return {
+            title: `💰 Faction War Payouts (Rate: $${cpm.toLocaleString()} / hit)`,
+            description: `**🏆 Top Earners**:\n${lines}\n\nUse \`/payout member:<name or ID>\` to check a specific member.`,
+            color: 0x2ed573,
+            fields: [
+                { name: "💰 Payout Dashboard", value: `[Open Web Payout Manager](https://spider-verse.net/payout.html)`, inline: false }
+            ],
+            footer: { text: "Faction Payout System" }
+        };
+    } catch(e) {
+        return { title: "💰 War Payout Calculator", description: `⚠️ Error: ${e.message}`, color: 0xff4757 };
+    }
+}
+
+async function buildTopHittersEmbed(apiKey) {
+    if (!apiKey) return { title: "🏆 War Leaderboard", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
+    try {
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,attacks&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+        const data = await facRes.json();
+        if (data.error) throw new Error(data.error.error || "Torn API error");
+
+        const hitterCounts = {};
+        if (data.attacks) {
+            for (const atkId in data.attacks) {
+                const atk = data.attacks[atkId];
+                if (atk.attacker_faction == data.ID && atk.result && !atk.result.includes("Lost") && !atk.result.includes("Stalemate")) {
+                    const id = atk.attacker_id;
+                    const name = atk.attacker_name || `Player #${id}`;
+                    if (!hitterCounts[id]) hitterCounts[id] = { name, id, hits: 0, respect: 0, fairFightSum: 0 };
+                    hitterCounts[id].hits++;
+                    hitterCounts[id].respect += Number(atk.respect_gain || 0);
+                    hitterCounts[id].fairFightSum += Number(atk.modifiers?.fair_fight || 1.0);
+                }
+            }
+        }
+
+        const top = Object.values(hitterCounts).sort((a, b) => b.respect - a.respect).slice(0, 8);
+        if (top.length === 0) {
+            return {
+                title: "🏆 War Leaderboard",
+                description: "No attack records found in recent logs.",
+                color: 0x8b949e
+            };
+        }
+
+        const lines = top.map((m, idx) => {
+            const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `**#${idx + 1}**`;
+            const avgFF = (m.fairFightSum / m.hits).toFixed(2);
+            return `${medal} [**${m.name}** [${m.id}]](https://www.torn.com/profiles.php?XID=${m.id})\n   └ **${m.hits} hits** • **${m.respect.toFixed(1)} respect** (Avg FF: ${avgFF}x)`;
+        }).join("\n\n");
+
+        return {
+            title: `🏆 ${data.name || 'Faction'} — War Leaderboard & MVPs`,
+            description: lines,
+            color: 0xffa502,
+            footer: { text: "Faction Warfare Leaderboard" }
+        };
+    } catch(e) {
+        return { title: "🏆 War Leaderboard", description: `⚠️ Error: ${e.message}`, color: 0xff4757 };
+    }
+}
+
+// ─── Register Slash Commands with Discord ─────────────────────────────────────
 async function registerSlashCommands(token, guildId = null) {
     const rest = new REST({ version: '10' }).setToken(token);
 
     const commands = [
-        // 1. Universal /travel command with choices
-        new SlashCommandBuilder()
-            .setName('travel')
-            .setDescription('Look up friendly and enemy travel status for any destination')
-            .addStringOption(opt =>
-                opt.setName('country')
-                   .setDescription('Select country')
-                   .setRequired(true)
-                   .addChoices(
-                       { name: '🇲🇽 Mexico', value: 'Mexico' },
-                       { name: '🏝️ Cayman Islands', value: 'Cayman Islands' },
-                       { name: '🇨🇦 Canada', value: 'Canada' },
-                       { name: '🌺 Hawaii', value: 'Hawaii' },
-                       { name: '🇬🇧 United Kingdom', value: 'United Kingdom' },
-                       { name: '🇦🇷 Argentina', value: 'Argentina' },
-                       { name: '🇨🇭 Switzerland', value: 'Switzerland' },
-                       { name: '🇯🇵 Japan', value: 'Japan' },
-                       { name: '🇨🇳 China', value: 'China' },
-                       { name: '🇦🇪 UAE', value: 'UAE' },
-                       { name: '🇿🇦 South Africa', value: 'South Africa' }
-                   )
-            )
-            .toJSON(),
+        // 1. War & Combat Intelligence
+        new SlashCommandBuilder().setName('war').setDescription('Show live ranked war status, scores, lead, and top hitters').toJSON(),
+        new SlashCommandBuilder().setName('warboard').setDescription('Show live ranked war status, scores, lead, and top hitters').toJSON(),
+        new SlashCommandBuilder().setName('targets').setDescription('List priority enemy targets attackable in Torn right now').toJSON(),
+        new SlashCommandBuilder().setName('snipers').setDescription('List priority enemy targets attackable in Torn right now').toJSON(),
+        new SlashCommandBuilder().setName('spy').setDescription('Look up battle stats & spy records for a player')
+            .addStringOption(opt => opt.setName('target').setDescription('Torn Player ID or Name').setRequired(true)).toJSON(),
+        new SlashCommandBuilder().setName('claim').setDescription('Claim an enemy target in the live warboard')
+            .addStringOption(opt => opt.setName('target').setDescription('Torn Player ID').setRequired(true)).toJSON(),
+        new SlashCommandBuilder().setName('unclaim').setDescription('Release your claim on an enemy target')
+            .addStringOption(opt => opt.setName('target').setDescription('Torn Player ID').setRequired(true)).toJSON(),
+        new SlashCommandBuilder().setName('sos').setDescription('Request urgent backup on a tough target')
+            .addStringOption(opt => opt.setName('target').setDescription('Torn Player ID').setRequired(true))
+            .addStringOption(opt => opt.setName('note').setDescription('Reason / notes (optional)')).toJSON(),
 
-        // 2. Direct country slash commands (e.g. /south-africa, /mexico, etc.)
+        // 2. Chain Management
+        new SlashCommandBuilder().setName('chain').setDescription('Check live faction chain status, timer, and multiplier').toJSON(),
+        new SlashCommandBuilder().setName('chainwatch').setDescription('List online faction members in Torn ready to hit/save chain').toJSON(),
+
+        // 3. Faction & Member Commands
+        new SlashCommandBuilder().setName('profile').setDescription('View comprehensive player profile, status, and stats')
+            .addStringOption(opt => opt.setName('player').setDescription('Torn Player ID or Name').setRequired(true)).toJSON(),
+        new SlashCommandBuilder().setName('hosp').setDescription('List all friendly faction members currently in hospital').toJSON(),
+        new SlashCommandBuilder().setName('hospital').setDescription('List all friendly faction members currently in hospital').toJSON(),
+        new SlashCommandBuilder().setName('online').setDescription('Live faction readiness breakdown (Online, Traveling, Hospitalized)').toJSON(),
+        new SlashCommandBuilder().setName('roster').setDescription('Live faction readiness breakdown (Online, Traveling, Hospitalized)').toJSON(),
+
+        // 4. Organized Crimes (OC)
+        new SlashCommandBuilder().setName('oc').setDescription('Summary of faction Organized Crimes status, ready OCs, and countdowns').toJSON(),
+        new SlashCommandBuilder().setName('myoc').setDescription('Check your assigned Organized Crime and time remaining')
+            .addStringOption(opt => opt.setName('player').setDescription('Torn Player ID or Name (optional)')).toJSON(),
+
+        // 5. Travel & Economy
+        new SlashCommandBuilder().setName('travel').setDescription('Look up friendly and enemy travel status for any destination')
+            .addStringOption(opt => opt.setName('country').setDescription('Select country').setRequired(true)
+                .addChoices(
+                    { name: '🇲🇽 Mexico', value: 'Mexico' },
+                    { name: '🏝️ Cayman Islands', value: 'Cayman Islands' },
+                    { name: '🇨🇦 Canada', value: 'Canada' },
+                    { name: '🌺 Hawaii', value: 'Hawaii' },
+                    { name: '🇬🇧 United Kingdom', value: 'United Kingdom' },
+                    { name: '🇦🇷 Argentina', value: 'Argentina' },
+                    { name: '🇨🇭 Switzerland', value: 'Switzerland' },
+                    { name: '🇯🇵 Japan', value: 'Japan' },
+                    { name: '🇨🇳 China', value: 'China' },
+                    { name: '🇦🇪 UAE', value: 'UAE' },
+                    { name: '🇿🇦 South Africa', value: 'South Africa' }
+                )
+            ).toJSON(),
+        new SlashCommandBuilder().setName('stocks').setDescription('Check live overseas item stock (Plushies & Flowers)')
+            .addStringOption(opt => opt.setName('country').setDescription('Select country').setRequired(true)
+                .addChoices(
+                    { name: '🇲🇽 Mexico', value: 'Mexico' },
+                    { name: '🏝️ Cayman Islands', value: 'Cayman Islands' },
+                    { name: '🇨🇦 Canada', value: 'Canada' },
+                    { name: '🌺 Hawaii', value: 'Hawaii' },
+                    { name: '🇬🇧 United Kingdom', value: 'United Kingdom' },
+                    { name: '🇦🇷 Argentina', value: 'Argentina' },
+                    { name: '🇨🇭 Switzerland', value: 'Switzerland' },
+                    { name: '🇯🇵 Japan', value: 'Japan' },
+                    { name: '🇨🇳 China', value: 'China' },
+                    { name: '🇦🇪 UAE', value: 'UAE' },
+                    { name: '🇿🇦 South Africa', value: 'South Africa' }
+                )
+            ).toJSON(),
+        new SlashCommandBuilder().setName('bazaar').setDescription('Check lowest Torn market price & bazaar stats for an item')
+            .addStringOption(opt => opt.setName('item').setDescription('Item name or ID').setRequired(true)).toJSON(),
+
+        // 6. War Payouts & Leaderboard
+        new SlashCommandBuilder().setName('payout').setDescription('Check war hits and payout balance based on faction CPM')
+            .addStringOption(opt => opt.setName('member').setDescription('Member name or ID (optional)')).toJSON(),
+        new SlashCommandBuilder().setName('top').setDescription('Leaderboard of top war hitters and respect earners').toJSON(),
+        new SlashCommandBuilder().setName('mvp').setDescription('Leaderboard of top war hitters and respect earners').toJSON(),
+
+        // Direct Country Aliases (e.g. /south-africa, /mexico, /sa, /uk)
         ...TORN_COUNTRIES.map(country => {
             const cmdName = country.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
             return new SlashCommandBuilder()
@@ -3544,8 +4290,6 @@ async function registerSlashCommands(token, guildId = null) {
                 .setDescription(`Check friendly & enemy travel status for ${country}`)
                 .toJSON();
         }),
-
-        // 3. Short aliases
         new SlashCommandBuilder().setName('sa').setDescription('Check travel status for South Africa').toJSON(),
         new SlashCommandBuilder().setName('uk').setDescription('Check travel status for United Kingdom').toJSON(),
     ];
@@ -3597,28 +4341,120 @@ async function startSlashCommandBot(token) {
         slashCommandBot.on(Events.InteractionCreate, async (interaction) => {
             if (!interaction.isChatInputCommand()) return;
 
-            let country = slashNameToCountry(interaction.commandName);
-            if (!country && interaction.commandName === 'travel') {
-                const countryOpt = interaction.options.getString('country');
-                if (countryOpt) country = slashNameToCountry(countryOpt) || countryOpt;
-            }
-            if (!country) return;
+            const cmd = interaction.commandName.toLowerCase();
+            const apiKey = getNextApiKey() || discordConfig.apiKey;
 
-            // Defer immediately so we have time to fetch data
+            // Direct actions (Claim / Unclaim / SOS)
+            if (cmd === 'claim') {
+                const targetId = (interaction.options.getString('target') || '').trim().replace(/[^0-9]/g, "");
+                if (!targetId) return interaction.reply({ content: "⚠️ Please provide a numeric Torn Player ID.", ephemeral: true });
+                claims[targetId] = { playerName: interaction.user.username, time: Date.now() };
+                const attackLink = `https://www.torn.com/loader.php?sid=attack&user2ID=${targetId}`;
+                return interaction.reply({
+                    embeds: [{
+                        title: `🎯 Target Claimed: [${targetId}]`,
+                        description: `**<@${interaction.user.id}>** has claimed **Target [${targetId}]**.\n\n[⚔️ Launch Attack](${attackLink}) • [👤 Profile](https://www.torn.com/profiles.php?XID=${targetId})`,
+                        color: 0x2ed573
+                    }]
+                });
+            }
+
+            if (cmd === 'unclaim') {
+                const targetId = (interaction.options.getString('target') || '').trim().replace(/[^0-9]/g, "");
+                if (!targetId) return interaction.reply({ content: "⚠️ Please provide a numeric Torn Player ID.", ephemeral: true });
+                delete claims[targetId];
+                return interaction.reply({
+                    embeds: [{
+                        title: `🔓 Claim Released: [${targetId}]`,
+                        description: `Target **[${targetId}]** is now unclaimed and available for anyone.`,
+                        color: 0x8b949e
+                    }]
+                });
+            }
+
+            if (cmd === 'sos') {
+                const targetId = (interaction.options.getString('target') || '').trim().replace(/[^0-9]/g, "");
+                const note = interaction.options.getString('note') || 'Backup needed immediately!';
+                if (!targetId) return interaction.reply({ content: "⚠️ Please provide a numeric Torn Player ID.", ephemeral: true });
+                backups[targetId] = { playerName: interaction.user.username, time: Date.now() };
+                const attackLink = `https://www.torn.com/loader.php?sid=attack&user2ID=${targetId}`;
+                return interaction.reply({
+                    content: `🚨 **EMERGENCY BACKUP REQUESTED!**`,
+                    embeds: [{
+                        title: `🚨 SOS BACKUP: Target [${targetId}]`,
+                        description: `**Requested by**: <@${interaction.user.id}>\n**Note**: ${note}\n\n[⚔️ CLICK HERE TO ATTACK](${attackLink}) • [👤 View Profile](https://www.torn.com/profiles.php?XID=${targetId})`,
+                        color: 0xff4757
+                    }]
+                });
+            }
+
+            // Defer reply for commands that make API calls
             try { await interaction.deferReply(); } catch (e) { return; }
 
-            const apiKey = getNextApiKey() || discordConfig.apiKey;
-            const embed = await buildCountryStatusEmbed(country, apiKey);
+            let embed = null;
 
             try {
+                if (cmd === 'war' || cmd === 'warboard') {
+                    embed = await buildWarStatusEmbed(apiKey);
+                } else if (cmd === 'targets' || cmd === 'snipers') {
+                    embed = await buildTargetsEmbed(apiKey);
+                } else if (cmd === 'spy') {
+                    const target = interaction.options.getString('target');
+                    embed = await buildSpyEmbed(target, apiKey);
+                } else if (cmd === 'chain') {
+                    embed = await buildChainStatusEmbed(apiKey);
+                } else if (cmd === 'chainwatch') {
+                    embed = await buildChainWatchEmbed(apiKey);
+                } else if (cmd === 'profile') {
+                    const player = interaction.options.getString('player');
+                    embed = await buildProfileEmbed(player, apiKey);
+                } else if (cmd === 'hosp' || cmd === 'hospital') {
+                    embed = await buildHospitalEmbed(apiKey);
+                } else if (cmd === 'online' || cmd === 'roster') {
+                    embed = await buildOnlineRosterEmbed(apiKey);
+                } else if (cmd === 'oc') {
+                    embed = await buildOCStatusEmbed(apiKey);
+                } else if (cmd === 'myoc') {
+                    const player = interaction.options.getString('player');
+                    embed = await buildMyOCEmbed(player, apiKey, interaction.user.username);
+                } else if (cmd === 'stocks') {
+                    const country = interaction.options.getString('country');
+                    embed = await buildStocksEmbed(country, apiKey);
+                } else if (cmd === 'bazaar') {
+                    const item = interaction.options.getString('item');
+                    embed = await buildBazaarEmbed(item, apiKey);
+                } else if (cmd === 'payout') {
+                    const member = interaction.options.getString('member');
+                    embed = await buildPayoutEmbed(member, apiKey);
+                } else if (cmd === 'top' || cmd === 'mvp') {
+                    embed = await buildTopHittersEmbed(apiKey);
+                } else {
+                    // Travel lookup fallback (e.g. /travel, /south-africa, /mexico, /sa, /uk, etc.)
+                    let country = slashNameToCountry(cmd);
+                    if (!country && cmd === 'travel') {
+                        const countryOpt = interaction.options.getString('country');
+                        if (countryOpt) country = slashNameToCountry(countryOpt) || countryOpt;
+                    }
+                    if (country) {
+                        embed = await buildCountryStatusEmbed(country, apiKey);
+                    }
+                }
+
+                if (!embed) {
+                    return await interaction.editReply({ content: "⚠️ Command not recognized." });
+                }
+
                 await interaction.editReply({ embeds: [embed] });
             } catch (e) {
-                // Fallback: If bot lacks Embed Links, deliver as clean Markdown text
                 try {
-                    const fallbackText = formatEmbedAsMarkdown(embed);
-                    await interaction.editReply({ content: fallbackText });
+                    if (embed) {
+                        const fallbackText = formatEmbedAsMarkdown(embed);
+                        await interaction.editReply({ content: fallbackText });
+                    } else {
+                        await interaction.editReply({ content: `⚠️ Error executing command: ${e.message}` });
+                    }
                 } catch(err2) {
-                    console.error("[Slash Bot] Failed to reply to interaction:", err2.message);
+                    console.error("[Slash Bot] Failed to reply:", err2.message);
                 }
             }
         });

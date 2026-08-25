@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -297,19 +297,55 @@
             </div>
         </div>
 
-        <!-- Travel Slash Commands Card -->
+        <!-- Faction Discord Slash Commands Card -->
         <div class="config-card">
             <div class="config-card-header">
-                <p class="config-card-title">🌍 Travel Slash Commands</p>
-                <span style="font-size:0.78em;color:var(--text-dim);">Type /south-africa (or any country) in Discord to see your faction's travel status.</span>
+                <p class="config-card-title">🤖 Faction Slash Commands</p>
+                <span style="font-size:0.78em;color:var(--text-dim);">Equip your Discord server with instant war, intelligence, and economy commands.</span>
             </div>
             <div class="config-card-body">
                 <p style="color:var(--text-dim);font-size:0.88em;margin:0 0 14px;">
-                    After saving your Bot Token above, click <b>Register Commands</b> to install slash commands in your Discord server. Then type <code style="background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:4px;">/south-africa</code>, <code style="background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:4px;">/japan</code>, <code style="background:rgba(255,255,255,0.05);padding:2px 6px;border-radius:4px;">/uae</code>, etc. in any channel.
+                    After saving your Bot Token above, click <b>Register Slash Commands</b> to activate these commands in your Discord server.
                 </p>
+
+                <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));gap:12px;margin-bottom:18px;">
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:12px;">
+                        <div style="font-weight:800;color:var(--red);font-size:0.85em;margin-bottom:6px;">⚔️ WAR &amp; COMBAT</div>
+                        <div style="font-size:0.8em;color:var(--text-dim);line-height:1.6;">
+                            <code>/war</code> — Live war score, lead &amp; target<br>
+                            <code>/targets</code> — Priority enemy fighters attackable now<br>
+                            <code>/spy &lt;id&gt;</code> — Look up battle stats &amp; spies<br>
+                            <code>/claim &lt;id&gt;</code> — Lock a target for yourself<br>
+                            <code>/unclaim &lt;id&gt;</code> — Release a claimed target<br>
+                            <code>/sos &lt;id&gt;</code> — Request urgent backup
+                        </div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:12px;">
+                        <div style="font-weight:800;color:var(--blue);font-size:0.85em;margin-bottom:6px;">🔗 CHAIN &amp; ROSTER</div>
+                        <div style="font-size:0.8em;color:var(--text-dim);line-height:1.6;">
+                            <code>/chain</code> — Live hit counter, timer &amp; multiplier<br>
+                            <code>/chainwatch</code> — Online fighters ready in Torn<br>
+                            <code>/profile &lt;id&gt;</code> — Player card &amp; revives status<br>
+                            <code>/hosp</code> — Hospitalized faction members<br>
+                            <code>/online</code> — Live faction readiness breakdown
+                        </div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:12px;">
+                        <div style="font-weight:800;color:var(--gold);font-size:0.85em;margin-bottom:6px;">💼 OC &amp; PAYOUTS</div>
+                        <div style="font-size:0.8em;color:var(--text-dim);line-height:1.6;">
+                            <code>/oc</code> — Ready &amp; in-planning OCs summary<br>
+                            <code>/myoc</code> — Your assigned OC team &amp; timer<br>
+                            <code>/payout [member]</code> — War hits &amp; owed earnings<br>
+                            <code>/top</code> — War leaderboard &amp; MVP hitters<br>
+                            <code>/stocks &lt;country&gt;</code> — Foreign plushie/flower stock<br>
+                            <code>/bazaar &lt;item&gt;</code> — Item market price check
+                        </div>
+                    </div>
+                </div>
+
                 <div class="field-row single" style="margin-bottom:14px;">
                     <div class="field-group">
-                        <label class="field-label" for="guild-id-input">Guild ID <span style="font-weight:400;color:var(--text-dim);text-transform:none;">(optional — for instant registration; leave blank for global ~1hr)</span></label>
+                        <label class="field-label" for="guild-id-input">Guild ID <span style="font-weight:400;color:var(--text-dim);text-transform:none;">(optional — for instant server-specific registration; leave blank for global)</span></label>
                         <input class="field-input" type="text" id="guild-id-input" placeholder="Right-click your server icon → Copy Server ID (requires Dev Mode)">
                         <span class="field-hint">Guild commands appear instantly. Global commands can take up to 1 hour to propagate in Discord.</span>
                     </div>
