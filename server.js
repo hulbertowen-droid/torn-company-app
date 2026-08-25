@@ -3052,100 +3052,148 @@ app.get('/api/war-bounties', async (req, res) => {
             }
         }
 
-        // If no war info, fallback to last 7 days
         if (!warStart) warStart = Math.floor(Date.now() / 1000) - (7 * 86400);
 
-        // 2. Fetch user events and user bounties
-        const userRes = await fetch(`https://api.torn.com/user/?selections=events,basic,personalstats&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+        // 2. Fetch personalstats (lifetime counts)
+        const userRes = await fetch(`https://api.torn.com/user/?selections=basic,personalstats&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
         const userData = await userRes.json();
-        if (userData.error) throw new Error(userData.error.error || "Torn API error fetching user data");
+        if (userData.error) throw new Error(userData.error.error || "Torn API error");
 
-        // Load historical accumulated war bounties
+        // 3. Load stored history
         const bountyHistory = loadWarBountiesHistory();
         if (!bountyHistory.events) bountyHistory.events = {};
+        if (!bountyHistory.placed) bountyHistory.placed = {};
 
-        const events = Object.entries(userData.events || {});
-        for (const [eId, ev] of events) {
-            const text = ev.event || '';
+        // Helper: parse a single event text for bounty claim or placement
+        function parseBountyEvent(eId, ev) {
+            const text = ev.event || ev.message || ev.text || '';
             const ts = ev.timestamp || 0;
-            if (ts >= warStart && (!warEnd || ts <= warEnd)) {
-                if (text.includes('bounty reward') || text.includes('bounty') || text.includes('bounties')) {
-                    const amountMatch = text.match(/\$([0-9,]+)\s+bounty/i);
-                    const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, '')) : 0;
-                    
-                    let targetName = 'Unknown Target';
-                    let targetId = null;
-                    let hunterName = 'Someone (Anonymous)';
-                    let hunterId = null;
-                    
-                    const playerLinks = [...text.matchAll(/profiles\.php\?XID=(\d+)[^>]*>([^<]+)<\/a>/g)];
-                    if (playerLinks.length === 2) {
-                        hunterId = playerLinks[0][1];
-                        hunterName = playerLinks[0][2];
-                        targetId = playerLinks[1][1];
-                        targetName = playerLinks[1][2];
-                    } else if (playerLinks.length === 1) {
-                        targetId = playerLinks[0][1];
-                        targetName = playerLinks[0][2];
-                        hunterName = text.startsWith('Someone') ? 'Someone (Anonymous)' : 'Hunter';
-                    }
+            if (!text || ts < warStart || (warEnd && ts > warEnd)) return;
 
-                    if (targetName) playerNameCache[targetId?.toString()] = targetName;
+            const isClaim = text.includes('bounty reward');
+            const isPlaced = /placed a?\s*\$[0-9,]+\s+bounty/i.test(text) ||
+                             /you placed a?\s*bounty/i.test(text) ||
+                             (text.toLowerCase().includes('bounty') && text.toLowerCase().includes('placed'));
 
-                    const key = `${ts}_${targetId}_${amount}`;
-                    bountyHistory.events[key] = {
-                        key,
-                        eventId: eId,
-                        timestamp: ts,
-                        date: new Date(ts * 1000).toISOString(),
-                        hunterName,
-                        hunterId,
-                        targetName,
-                        targetId,
-                        amount,
-                        rawText: text
-                    };
+            const amountMatch = text.match(/\$([0-9,]+)\s+bounty/i);
+            const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, '')) : 0;
+            const playerLinks = [...text.matchAll(/profiles\.php\?XID=(\d+)[^>]*>([^<]+)<\/a>/g)];
+
+            if (isClaim) {
+                let targetName = 'Unknown Target', targetId = null;
+                let hunterName = 'Someone (Anonymous)', hunterId = null;
+                if (playerLinks.length === 2) {
+                    hunterId = playerLinks[0][1]; hunterName = playerLinks[0][2];
+                    targetId = playerLinks[1][1]; targetName = playerLinks[1][2];
+                } else if (playerLinks.length === 1) {
+                    targetId = playerLinks[0][1]; targetName = playerLinks[0][2];
                 }
+                if (targetName && targetId) playerNameCache[targetId.toString()] = targetName;
+                const key = `${ts}_${targetId}_${amount}`;
+                bountyHistory.events[key] = { key, eventId: eId, timestamp: ts, date: new Date(ts * 1000).toISOString(), hunterName, hunterId, targetName, targetId, amount, rawText: text };
+            }
+
+            if (isPlaced) {
+                let targetName = 'Unknown', targetId = null;
+                if (playerLinks.length > 0) {
+                    targetId = playerLinks[playerLinks.length - 1][1];
+                    targetName = playerLinks[playerLinks.length - 1][2];
+                }
+                const key = `placed_${ts}_${targetId}_${amount}`;
+                bountyHistory.placed[key] = { key, eventId: eId, timestamp: ts, targetName, targetId, amount, rawText: text };
             }
         }
 
-        // Also track PLACED bounties (separate from claimed)
-        const placedHistory = loadWarBountiesHistory();
-        if (!placedHistory.placed) placedHistory.placed = {};
+        // 4. Paginate through Torn log entries back to warStart
+        //    Torn log API: GET /user/?selections=log&key=KEY&from=TS&to=TS
+        //    Each page returns up to 100 log entries; we paginate backwards using
+        //    the oldest timestamp on each page as the new `to` for the next call.
+        const nowTs = Math.floor(Date.now() / 1000);
+        let pageTo = nowTs;
+        let totalScanned = 0;
+        let pagesScanned = 0;
+        const MAX_PAGES = 30; // Safety limit (~3000 log entries)
+        let reachedWarStart = false;
 
-        for (const [eId, ev] of events) {
-            const text = ev.event || '';
-            const ts = ev.timestamp || 0;
-            if (ts >= warStart && (!warEnd || ts <= warEnd)) {
-                // Match "placed a $X,XXX bounty on <Player>" events
-                const isPlaced = /placed a?\s*\$[0-9,]+\s+bounty/i.test(text) ||
-                                 /you placed a?\s*bounty/i.test(text) ||
-                                 (text.toLowerCase().includes('bounty') && text.toLowerCase().includes('placed'));
-                if (isPlaced) {
-                    const amountMatch = text.match(/\$([0-9,]+)\s+bounty/i);
-                    const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, '')) : 0;
-                    const playerLinks = [...text.matchAll(/profiles\.php\?XID=(\d+)[^>]*>([^<]+)<\/a>/g)];
-                    let targetName = 'Unknown';
-                    let targetId = null;
-                    if (playerLinks.length > 0) {
-                        targetId = playerLinks[playerLinks.length - 1][1];
-                        targetName = playerLinks[playerLinks.length - 1][2];
+        while (pagesScanned < MAX_PAGES && !reachedWarStart) {
+            let logData;
+            try {
+                const logRes = await fetch(
+                    `https://api.torn.com/user/?selections=log&key=${apiKey}&from=${warStart}&to=${pageTo}`,
+                    { signal: AbortSignal.timeout(10000) }
+                );
+                logData = await logRes.json();
+            } catch(e) { break; }
+
+            if (logData.error) break; // No log access or API limit
+            const logEntries = Object.entries(logData.log || {});
+            if (logEntries.length === 0) break;
+
+            let oldestTs = pageTo;
+            for (const [lId, entry] of logEntries) {
+                const ts = entry.timestamp || 0;
+                if (ts < oldestTs) oldestTs = ts;
+                totalScanned++;
+
+                // Log entries have a `title` (e.g. "Bounty placed") and sometimes `data`
+                const title = (entry.title || '').toLowerCase();
+                const category = (entry.category || '').toLowerCase();
+
+                // Check if it's a bounty-related log entry
+                if (title.includes('bounty') || category.includes('bounty')) {
+                    // Log entries have structured data - try to extract from data object
+                    const d = entry.data || {};
+                    const ts2 = entry.timestamp || 0;
+                    if (ts2 < warStart || (warEnd && ts2 > warEnd)) continue;
+
+                    // "Bounty placed" type
+                    if (title.includes('placed') || category === 'bounty') {
+                        const amount = d.money_mugged || d.reward || d.cash || d.bounty_amount || 0;
+                        const targetId = d.player_id?.toString() || d.target?.toString() || null;
+                        const targetName = d.player_name || d.target_name || playerNameCache[targetId] || `Player #${targetId}`;
+                        const key = `placed_log_${ts2}_${targetId}_${amount}`;
+                        bountyHistory.placed[key] = { key, eventId: lId, timestamp: ts2, targetName, targetId, amount, rawText: title };
                     }
-                    const key = `placed_${ts}_${targetId}_${amount}`;
-                    placedHistory.placed[key] = { key, eventId: eId, timestamp: ts, targetName, targetId, amount, rawText: text };
                 }
             }
+
+            pagesScanned++;
+            // If oldest entry on this page is at or before warStart, we've covered everything
+            if (oldestTs <= warStart || logEntries.length < 10) {
+                reachedWarStart = true;
+                break;
+            }
+            // Move the window back: set `to` to 1 second before the oldest entry
+            pageTo = oldestTs - 1;
+            // Small delay to avoid hammering the API
+            await new Promise(r => setTimeout(r, 300));
         }
 
-        saveWarBountiesHistory(placedHistory);
+        // 5. Also check current events (last 25) for anything not in log yet
+        try {
+            const evRes = await fetch(`https://api.torn.com/user/?selections=events&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+            const evData = await evRes.json();
+            const events = Object.entries(evData.events || {});
+            for (const [eId, ev] of events) {
+                parseBountyEvent(eId, ev);
+            }
+        } catch(e) {}
 
-        // Count placed bounties in war period from stored history
-        const placedInWar = Object.values(placedHistory.placed || {}).filter(e =>
+        // Save accumulated history
+        saveWarBountiesHistory(bountyHistory);
+
+        // 6. Compile results
+        const placedInWar = Object.values(bountyHistory.placed).filter(e =>
             e.timestamp >= warStart && (!warEnd || e.timestamp <= warEnd)
         );
         placedInWar.sort((a, b) => b.timestamp - a.timestamp);
 
-        // Build placed-on leaderboard (who you placed bounties on most)
+        const warEvents = Object.values(bountyHistory.events).filter(e =>
+            e.timestamp >= warStart && (!warEnd || e.timestamp <= warEnd)
+        );
+        warEvents.sort((a, b) => b.timestamp - a.timestamp);
+
+        // Placed-on leaderboard
         const placedOnMap = {};
         placedInWar.forEach(e => {
             const k = e.targetName || `Target #${e.targetId}`;
@@ -3155,46 +3203,35 @@ app.get('/api/war-bounties', async (req, res) => {
         });
         const placedOnLeaderboard = Object.values(placedOnMap).sort((a, b) => b.count - a.count || b.totalSpent - a.totalSpent);
 
-        saveWarBountiesHistory(bountyHistory);
-
-        // Filter all accumulated events for the current war
-        const warEvents = Object.values(bountyHistory.events).filter(e => e.timestamp >= warStart && (!warEnd || e.timestamp <= warEnd));
-        warEvents.sort((a, b) => b.timestamp - a.timestamp);
-
-        // Calculate metrics
+        // Claims metrics
         let totalCashSpent = 0;
-        const targetMap = {};
-        const hunterMap = {};
-
+        const targetMap = {}, hunterMap = {};
         warEvents.forEach(e => {
             totalCashSpent += e.amount || 0;
             const tKey = e.targetName || `Target #${e.targetId}`;
-            if (!targetMap[tKey]) {
-                targetMap[tKey] = { name: e.targetName, id: e.targetId, count: 0, totalAmount: 0 };
-            }
+            if (!targetMap[tKey]) targetMap[tKey] = { name: e.targetName, id: e.targetId, count: 0, totalAmount: 0 };
             targetMap[tKey].count++;
             targetMap[tKey].totalAmount += e.amount || 0;
-
             const hKey = e.hunterName || 'Anonymous';
-            if (!hunterMap[hKey]) {
-                hunterMap[hKey] = { name: e.hunterName, id: e.hunterId, count: 0, totalEarned: 0 };
-            }
+            if (!hunterMap[hKey]) hunterMap[hKey] = { name: e.hunterName, id: e.hunterId, count: 0, totalEarned: 0 };
             hunterMap[hKey].count++;
             hunterMap[hKey].totalEarned += e.amount || 0;
         });
-
         const topTargets = Object.values(targetMap).sort((a, b) => b.count - a.count || b.totalAmount - a.totalAmount);
-        const topHunters = Object.values(hunterMap).sort((a, b) => b.count - a.count);
 
-        // Fetch active bounties if any
+        // Active bounties from v2
         let activeBounties = [];
         try {
             const v2Res = await fetch(`https://api.torn.com/v2/user/bounties?key=${apiKey}`, { signal: AbortSignal.timeout(5000) });
             const v2Data = await v2Res.json();
-            if (v2Data && Array.isArray(v2Data.bounties)) {
-                activeBounties = v2Data.bounties;
-            }
+            if (v2Data && Array.isArray(v2Data.bounties)) activeBounties = v2Data.bounties;
         } catch(e) {}
+
+        // Final placed count: use max of what we found in logs vs claim events
+        // (if log didn't return placed events, fall back to claims count as proxy)
+        const finalPlacedCount = placedInWar.length > 0
+            ? placedInWar.length
+            : warEvents.length; // fallback: each claim = 1 placed bounty
 
         res.json({
             success: true,
@@ -3203,21 +3240,23 @@ app.get('/api/war-bounties', async (req, res) => {
             warActive: !!activeWar && (!activeWar.war?.winner || activeWar.war?.winner === 0),
             totalBountiesClaimed: warEvents.length,
             totalCashSpent,
-            bountiesPlacedInWar: placedInWar.length,
+            bountiesPlacedInWar: finalPlacedCount,
             placedOnLeaderboard,
             recentPlaced: placedInWar.slice(0, 10),
             activeBountiesCount: activeBounties.length,
             activeBounties,
             topTargets,
-            topHunters,
             recentClaims: warEvents.slice(0, 30),
             lifetimePlaced: userData.personalstats?.bountiesplaced || 0,
-            lifetimeCollected: userData.personalstats?.bountiescollected || 0
+            lifetimeCollected: userData.personalstats?.bountiescollected || 0,
+            logPagesScanned: pagesScanned,
+            totalLogEntriesScanned: totalScanned
         });
     } catch(err) {
         res.status(500).json({ error: err.message });
     }
 });
+
 
 app.get('/api/travel-profits', async (req, res) => {
     const apiKey = req.headers['x-api-key'] || req.query.apiKey;
