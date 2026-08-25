@@ -3003,6 +3003,173 @@ app.get('/api/weav3r-price/:itemId', async (req, res) => {
     }
 });
 
+// ─── War Bounty Tracker ────────────────────────────────────────────────────────
+const WAR_BOUNTIES_FILE = path.join(__dirname, 'data', 'war_bounties.json');
+
+function loadWarBountiesHistory() {
+    try {
+        if (!fs.existsSync(path.dirname(WAR_BOUNTIES_FILE))) {
+            fs.mkdirSync(path.dirname(WAR_BOUNTIES_FILE), { recursive: true });
+        }
+        if (fs.existsSync(WAR_BOUNTIES_FILE)) {
+            return JSON.parse(fs.readFileSync(WAR_BOUNTIES_FILE, 'utf8'));
+        }
+    } catch(e) {}
+    return { events: {} };
+}
+
+function saveWarBountiesHistory(data) {
+    try {
+        if (!fs.existsSync(path.dirname(WAR_BOUNTIES_FILE))) {
+            fs.mkdirSync(path.dirname(WAR_BOUNTIES_FILE), { recursive: true });
+        }
+        fs.writeFileSync(WAR_BOUNTIES_FILE, JSON.stringify(data, null, 2), 'utf8');
+    } catch(e) {}
+}
+
+app.get('/api/war-bounties', async (req, res) => {
+    const apiKey = req.headers['x-api-key'] || req.query.apiKey || discordConfig.apiKey || TORN_API_KEY;
+    if (!apiKey) return res.status(400).json({ error: "API Key required" });
+
+    try {
+        // 1. Fetch current ranked war details
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+        const facData = await facRes.json();
+        
+        let warStart = 0;
+        let warEnd = 0;
+        let activeWar = null;
+
+        if (facData.rankedwars) {
+            activeWar = Object.values(facData.rankedwars).find(w => w.war && (w.war.winner === 0 || !w.war.end || w.war.end === 0));
+            if (!activeWar) {
+                const sorted = Object.values(facData.rankedwars).filter(w => w.war && w.war.start).sort((a, b) => (b.war.start || 0) - (a.war.start || 0));
+                activeWar = sorted[0];
+            }
+            if (activeWar && activeWar.war) {
+                warStart = activeWar.war.start || 0;
+                warEnd = activeWar.war.end || 0;
+            }
+        }
+
+        // If no war info, fallback to last 7 days
+        if (!warStart) warStart = Math.floor(Date.now() / 1000) - (7 * 86400);
+
+        // 2. Fetch user events and user bounties
+        const userRes = await fetch(`https://api.torn.com/user/?selections=events,basic,personalstats&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+        const userData = await userRes.json();
+        if (userData.error) throw new Error(userData.error.error || "Torn API error fetching user data");
+
+        // Load historical accumulated war bounties
+        const bountyHistory = loadWarBountiesHistory();
+        if (!bountyHistory.events) bountyHistory.events = {};
+
+        const events = Object.entries(userData.events || {});
+        for (const [eId, ev] of events) {
+            const text = ev.event || '';
+            const ts = ev.timestamp || 0;
+            if (ts >= warStart && (!warEnd || ts <= warEnd)) {
+                if (text.includes('bounty reward') || text.includes('bounty') || text.includes('bounties')) {
+                    const amountMatch = text.match(/\$([0-9,]+)\s+bounty/i);
+                    const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, '')) : 0;
+                    
+                    let targetName = 'Unknown Target';
+                    let targetId = null;
+                    let hunterName = 'Someone (Anonymous)';
+                    let hunterId = null;
+                    
+                    const playerLinks = [...text.matchAll(/profiles\.php\?XID=(\d+)[^>]*>([^<]+)<\/a>/g)];
+                    if (playerLinks.length === 2) {
+                        hunterId = playerLinks[0][1];
+                        hunterName = playerLinks[0][2];
+                        targetId = playerLinks[1][1];
+                        targetName = playerLinks[1][2];
+                    } else if (playerLinks.length === 1) {
+                        targetId = playerLinks[0][1];
+                        targetName = playerLinks[0][2];
+                        hunterName = text.startsWith('Someone') ? 'Someone (Anonymous)' : 'Hunter';
+                    }
+
+                    if (targetName) playerNameCache[targetId?.toString()] = targetName;
+
+                    const key = `${ts}_${targetId}_${amount}`;
+                    bountyHistory.events[key] = {
+                        key,
+                        eventId: eId,
+                        timestamp: ts,
+                        date: new Date(ts * 1000).toISOString(),
+                        hunterName,
+                        hunterId,
+                        targetName,
+                        targetId,
+                        amount,
+                        rawText: text
+                    };
+                }
+            }
+        }
+
+        saveWarBountiesHistory(bountyHistory);
+
+        // Filter all accumulated events for the current war
+        const warEvents = Object.values(bountyHistory.events).filter(e => e.timestamp >= warStart && (!warEnd || e.timestamp <= warEnd));
+        warEvents.sort((a, b) => b.timestamp - a.timestamp);
+
+        // Calculate metrics
+        let totalCashSpent = 0;
+        const targetMap = {};
+        const hunterMap = {};
+
+        warEvents.forEach(e => {
+            totalCashSpent += e.amount || 0;
+            const tKey = e.targetName || `Target #${e.targetId}`;
+            if (!targetMap[tKey]) {
+                targetMap[tKey] = { name: e.targetName, id: e.targetId, count: 0, totalAmount: 0 };
+            }
+            targetMap[tKey].count++;
+            targetMap[tKey].totalAmount += e.amount || 0;
+
+            const hKey = e.hunterName || 'Anonymous';
+            if (!hunterMap[hKey]) {
+                hunterMap[hKey] = { name: e.hunterName, id: e.hunterId, count: 0, totalEarned: 0 };
+            }
+            hunterMap[hKey].count++;
+            hunterMap[hKey].totalEarned += e.amount || 0;
+        });
+
+        const topTargets = Object.values(targetMap).sort((a, b) => b.count - a.count || b.totalAmount - a.totalAmount);
+        const topHunters = Object.values(hunterMap).sort((a, b) => b.count - a.count);
+
+        // Fetch active bounties if any
+        let activeBounties = [];
+        try {
+            const v2Res = await fetch(`https://api.torn.com/v2/user/bounties?key=${apiKey}`, { signal: AbortSignal.timeout(5000) });
+            const v2Data = await v2Res.json();
+            if (v2Data && Array.isArray(v2Data.bounties)) {
+                activeBounties = v2Data.bounties;
+            }
+        } catch(e) {}
+
+        res.json({
+            success: true,
+            warStart,
+            warEnd,
+            warActive: !!activeWar && (!activeWar.war?.winner || activeWar.war?.winner === 0),
+            totalBountiesClaimed: warEvents.length,
+            totalCashSpent,
+            activeBountiesCount: activeBounties.length,
+            activeBounties,
+            topTargets,
+            topHunters,
+            recentClaims: warEvents.slice(0, 30),
+            lifetimePlaced: userData.personalstats?.bountiesplaced || 0,
+            lifetimeCollected: userData.personalstats?.bountiescollected || 0
+        });
+    } catch(err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/travel-profits', async (req, res) => {
     const apiKey = req.headers['x-api-key'] || req.query.apiKey;
     if (!apiKey) return res.status(400).json({ error: "API Key required" });
@@ -4552,6 +4719,142 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
     }
 }
 
+async function buildWarBountiesEmbed(apiKey) {
+    if (!apiKey) return { title: "🎯 War Bounty Tracker", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
+    try {
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+        const facData = await facRes.json();
+        
+        let warStart = 0;
+        let warEnd = 0;
+        let activeWar = null;
+
+        if (facData.rankedwars) {
+            activeWar = Object.values(facData.rankedwars).find(w => w.war && (w.war.winner === 0 || !w.war.end || w.war.end === 0));
+            if (!activeWar) {
+                const sorted = Object.values(facData.rankedwars).filter(w => w.war && w.war.start).sort((a, b) => (b.war.start || 0) - (a.war.start || 0));
+                activeWar = sorted[0];
+            }
+            if (activeWar && activeWar.war) {
+                warStart = activeWar.war.start || 0;
+                warEnd = activeWar.war.end || 0;
+            }
+        }
+
+        if (!warStart) warStart = Math.floor(Date.now() / 1000) - (7 * 86400);
+
+        const userRes = await fetch(`https://api.torn.com/user/?selections=events,basic,personalstats&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+        const userData = await userRes.json();
+        if (userData.error) throw new Error(userData.error.error || "Torn API error");
+
+        const bountyHistory = loadWarBountiesHistory();
+        if (!bountyHistory.events) bountyHistory.events = {};
+
+        const events = Object.entries(userData.events || {});
+        for (const [eId, ev] of events) {
+            const text = ev.event || '';
+            const ts = ev.timestamp || 0;
+            if (ts >= warStart && (!warEnd || ts <= warEnd)) {
+                if (text.includes('bounty reward') || text.includes('bounty') || text.includes('bounties')) {
+                    const amountMatch = text.match(/\$([0-9,]+)\s+bounty/i);
+                    const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, '')) : 0;
+                    
+                    let targetName = 'Unknown Target';
+                    let targetId = null;
+                    let hunterName = 'Someone (Anonymous)';
+                    let hunterId = null;
+                    
+                    const playerLinks = [...text.matchAll(/profiles\.php\?XID=(\d+)[^>]*>([^<]+)<\/a>/g)];
+                    if (playerLinks.length === 2) {
+                        hunterId = playerLinks[0][1];
+                        hunterName = playerLinks[0][2];
+                        targetId = playerLinks[1][1];
+                        targetName = playerLinks[1][2];
+                    } else if (playerLinks.length === 1) {
+                        targetId = playerLinks[0][1];
+                        targetName = playerLinks[0][2];
+                        hunterName = text.startsWith('Someone') ? 'Someone (Anonymous)' : 'Hunter';
+                    }
+
+                    if (targetName) playerNameCache[targetId?.toString()] = targetName;
+
+                    const key = `${ts}_${targetId}_${amount}`;
+                    bountyHistory.events[key] = {
+                        key,
+                        eventId: eId,
+                        timestamp: ts,
+                        date: new Date(ts * 1000).toISOString(),
+                        hunterName,
+                        hunterId,
+                        targetName,
+                        targetId,
+                        amount,
+                        rawText: text
+                    };
+                }
+            }
+        }
+        saveWarBountiesHistory(bountyHistory);
+
+        const warEvents = Object.values(bountyHistory.events).filter(e => e.timestamp >= warStart && (!warEnd || e.timestamp <= warEnd));
+        warEvents.sort((a, b) => b.timestamp - a.timestamp);
+
+        let totalCashSpent = 0;
+        const targetMap = {};
+        warEvents.forEach(e => {
+            totalCashSpent += e.amount || 0;
+            const tKey = e.targetName || `Target #${e.targetId}`;
+            if (!targetMap[tKey]) {
+                targetMap[tKey] = { name: e.targetName, id: e.targetId, count: 0, totalAmount: 0 };
+            }
+            targetMap[tKey].count++;
+            targetMap[tKey].totalAmount += e.amount || 0;
+        });
+
+        const topTargets = Object.values(targetMap).sort((a, b) => b.count - a.count || b.totalAmount - a.totalAmount);
+
+        const fields = [];
+        if (topTargets.length > 0) {
+            const topLines = topTargets.slice(0, 8).map((t, idx) => {
+                const medal = idx === 0 ? '🥇' : (idx === 1 ? '🥈' : (idx === 2 ? '🥉' : '🎯'));
+                return `${medal} **[${t.name}](https://www.torn.com/profiles.php?XID=${t.id})** — **${t.count}** bounties (**$${t.totalAmount.toLocaleString()}**)`;
+            }).join('\n');
+            fields.push({ name: "👑 Most Hospitalized Enemy Targets", value: topLines, inline: false });
+        }
+
+        if (warEvents.length > 0) {
+            const recentLines = warEvents.slice(0, 6).map(e => {
+                const timeStr = `<t:${e.timestamp}:R>`;
+                const hunterStr = e.hunterId ? `[${e.hunterName}](https://www.torn.com/profiles.php?XID=${e.hunterId})` : e.hunterName;
+                return `• **[${e.targetName}](https://www.torn.com/profiles.php?XID=${e.targetId})** hospitalized by ${hunterStr} — **$${(e.amount || 0).toLocaleString()}** (${timeStr})`;
+            }).join('\n');
+            fields.push({ name: "⚡ Recent Bounty Claims", value: recentLines, inline: false });
+        }
+
+        fields.push({
+            name: "📊 Lifetime Placement Stats",
+            value: `🎯 **${(userData.personalstats?.bountiesplaced || 0).toLocaleString()}** total bounties placed over lifetime`,
+            inline: false
+        });
+
+        const warStatusStr = (activeWar && (!activeWar.war?.winner || activeWar.war?.winner === 0))
+            ? `⚡ **Ranked War Active** (Started <t:${warStart}:R>)`
+            : `🟢 **War Period Tracked** (Started <t:${warStart}:D>)`;
+
+        return {
+            title: "🎯 War Bounty Tracker — Placed & Hospitalized",
+            description: `${warStatusStr}\n\n` +
+                         `💰 **Total Cash Spent on Bounties**: **$${totalCashSpent.toLocaleString()}**\n` +
+                         `🎯 **Total Bounties Claimed in War**: **${warEvents.length} Enemies Hospitalized**\n`,
+            color: 0xff4757,
+            fields,
+            footer: { text: `Torn Bounty Tracker • Spider-Verse War Suite • ${new Date().toUTCString()}` }
+        };
+    } catch(e) {
+        return { title: "🎯 War Bounty Tracker", description: `⚠️ Error: ${e.message}`, color: 0xff4757 };
+    }
+}
+
 async function buildPayoutEmbed(memberQuery, apiKey) {
     if (!apiKey) return { title: "💰 War Payout Calculator", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
     try {
@@ -4831,6 +5134,9 @@ async function registerSlashCommands(token, guildId = null) {
                     { name: '🛡️ Our Faction', value: 'friendly' }
                 )
             ).toJSON(),
+
+        // 8. War Bounty Tracker
+        new SlashCommandBuilder().setName('bounties').setDescription('Track bounties placed in the current war, total spent & claimed hits').toJSON(),
     ];
 
     try {
@@ -4970,6 +5276,8 @@ async function startSlashCommandBot(token) {
                 } else if (cmd === 'stats' || cmd === 'enemystats' || cmd === 'ourstats') {
                     const factionChoice = interaction.options.getString('faction') || (cmd === 'ourstats' ? 'friendly' : 'enemy');
                     embed = await buildFactionStatsRosterEmbed(factionChoice, apiKey);
+                } else if (cmd === 'bounties' || cmd === 'bounty') {
+                    embed = await buildWarBountiesEmbed(apiKey);
                 } else {
                     // Travel lookup fallback (e.g. /travel, /south-africa, /mexico, /sa, /uk, etc.)
                     let country = slashNameToCountry(cmd);

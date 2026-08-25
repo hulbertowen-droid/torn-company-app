@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -256,6 +256,39 @@
             </div>
         </div>
 
+        <!-- WAR BOUNTY TRACKER FULL WIDTH -->
+        <div class="card span-full" id="war-bounty-card" style="margin-bottom:18px;">
+            <div class="card-header" style="flex-wrap:wrap;gap:10px;">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <div class="card-title" style="color:var(--red);">🎯 War Bounty Tracker</div>
+                    <span id="bounty-war-badge" style="background:rgba(255,71,87,0.12);color:var(--red);padding:2px 8px;border-radius:12px;font-size:0.72em;font-weight:700;border:1px solid rgba(255,71,87,0.3);">War Period</span>
+                </div>
+                <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;font-size:0.82em;">
+                    <div>💰 <span style="color:var(--text-dim);">Spent in War:</span> <strong id="bounty-total-spent" style="color:var(--green);font-size:1.05em;">$0</strong></div>
+                    <div>🎯 <span style="color:var(--text-dim);">Bounties Claimed:</span> <strong id="bounty-total-claimed" style="color:var(--red);font-size:1.05em;">0 Enemies</strong></div>
+                    <div>📊 <span style="color:var(--text-dim);">Lifetime Placed:</span> <strong id="bounty-lifetime-placed" style="color:var(--teal);">0</strong></div>
+                </div>
+            </div>
+            <div class="card-body" style="padding:16px 20px;">
+                <div style="display:grid;grid-template-columns: 1fr 1.2fr; gap:16px;">
+                    <!-- LEFT: Top Bountied Enemy Targets -->
+                    <div>
+                        <div style="font-size:0.78em;font-weight:800;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px;letter-spacing:0.5px;">👑 Most Hospitalized Enemy Targets</div>
+                        <div id="bounty-top-targets" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;">
+                            <div class="empty-state" style="padding:16px;">No war bounty hits recorded yet.</div>
+                        </div>
+                    </div>
+                    <!-- RIGHT: Recent Claims Live Feed -->
+                    <div>
+                        <div style="font-size:0.78em;font-weight:800;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px;letter-spacing:0.5px;">⚡ Recent Bounty Hospitalizations</div>
+                        <div id="bounty-recent-claims" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;">
+                            <div class="empty-state" style="padding:16px;">Listening for bounty events...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- WAR ANALYST FULL WIDTH -->
         <div class="card span-full" style="margin-bottom:18px;">
             <div class="card-header">
@@ -414,9 +447,81 @@ async function loadAll() {
 
         dashData = { dash, wars };
         renderAll(dash, wars);
+        loadWarBounties();
         document.getElementById('last-updated').innerText = 'Updated ' + new Date().toLocaleTimeString();
     } catch(e) {
         document.getElementById('analyst-output').innerHTML = `<span style="color:var(--red)">Connection failed. Check server is running.</span>`;
+    }
+}
+
+async function loadWarBounties() {
+    try {
+        const res = await fetch('/api/war-bounties', { headers: { 'x-api-key': myKey } });
+        const data = await res.json();
+        if (!data.success) return;
+
+        const spentEl = document.getElementById('bounty-total-spent');
+        const claimedEl = document.getElementById('bounty-total-claimed');
+        const lifeEl = document.getElementById('bounty-lifetime-placed');
+        const warBadge = document.getElementById('bounty-war-badge');
+
+        if (spentEl) spentEl.innerText = `$${(data.totalCashSpent || 0).toLocaleString()}`;
+        if (claimedEl) claimedEl.innerText = `${data.totalBountiesClaimed || 0} Enemies`;
+        if (lifeEl) lifeEl.innerText = (data.lifetimePlaced || 0).toLocaleString();
+
+        if (warBadge) {
+            warBadge.innerText = data.warActive ? '⚡ Active Ranked War' : '🟢 War Timeframe';
+            warBadge.style.color = data.warActive ? 'var(--red)' : 'var(--green)';
+        }
+
+        // Top Targets
+        const topList = document.getElementById('bounty-top-targets');
+        if (topList) {
+            const targets = data.topTargets || [];
+            if (targets.length === 0) {
+                topList.innerHTML = `<div class="empty-state" style="padding:16px;">No bounties claimed in this war period.</div>`;
+            } else {
+                topList.innerHTML = targets.slice(0, 6).map((t, idx) => {
+                    const medal = idx === 0 ? '🥇' : (idx === 1 ? '🥈' : (idx === 2 ? '🥉' : '🎯'));
+                    return `
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--item);border-radius:8px;border:1px solid rgba(255,255,255,0.04);">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <span>${medal}</span>
+                            <a href="https://www.torn.com/profiles.php?XID=${t.id}" target="_blank" style="color:var(--text-main);font-weight:700;text-decoration:none;">${t.name}</a>
+                        </div>
+                        <div style="font-size:0.8em;display:flex;gap:8px;align-items:center;">
+                            <span style="background:rgba(255,71,87,0.15);color:var(--red);padding:2px 7px;border-radius:10px;font-weight:800;">${t.count} hits</span>
+                            <span style="color:var(--green);font-weight:700;">$${(t.totalAmount || 0).toLocaleString()}</span>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+        }
+
+        // Recent Claims
+        const claimsList = document.getElementById('bounty-recent-claims');
+        if (claimsList) {
+            const claims = data.recentClaims || [];
+            if (claims.length === 0) {
+                claimsList.innerHTML = `<div class="empty-state" style="padding:16px;">No bounty claims found in recent logs.</div>`;
+            } else {
+                claimsList.innerHTML = claims.slice(0, 6).map(c => {
+                    const timeStr = new Date(c.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    return `
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--item);border-radius:8px;border:1px solid rgba(255,255,255,0.04);font-size:0.84em;">
+                        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px;">
+                            <strong style="color:var(--red);">🎯 ${c.targetName}</strong> <span style="color:var(--text-dim);">by ${c.hunterName}</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+                            <span style="color:var(--green);font-weight:800;">+$${(c.amount || 0).toLocaleString()}</span>
+                            <span style="color:var(--text-dim);font-size:0.8em;">${timeStr}</span>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+        }
+    } catch(e) {
+        console.error("Failed to load war bounties:", e);
     }
 }
 
