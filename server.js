@@ -3559,7 +3559,7 @@ function formatStatNumber(num) {
 async function buildWarStatusEmbed(apiKey) {
     if (!apiKey) return { title: "⚔️ Ranked War Status", description: "⚠️ No Torn API Key configured on server.", color: 0xff4757 };
     try {
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
         const facData = await facRes.json();
         if (facData.error) throw new Error(facData.error.error || "Torn API error");
 
@@ -3605,30 +3605,58 @@ async function buildWarStatusEmbed(apiKey) {
         const enemyName = enemyInfo.name || `Faction #${enemyFid}`;
         const ourName = ourInfo.name || facData.name || "Our Faction";
 
-        // Calculate accurate member totals from official ranked war data
-        let totalFriendlyHits = 0;
-        let totalFriendlyAssists = 0;
-        const friendlyMembers = Object.entries(ourInfo.members || {}).map(([id, m]) => {
-            const attacks = Number(m.attacks || 0);
-            const score = Number(m.score || 0);
-            const assists = Number(m.assists || 0);
-            totalFriendlyHits += attacks;
-            totalFriendlyAssists += assists;
-            return { id, name: m.name || `Player #${id}`, attacks, score, assists };
-        }).filter(m => m.attacks > 0 || m.score > 0);
+        // Aggregate member hit totals
+        let friendlyMembers = [];
 
-        let totalEnemyHits = 0;
-        Object.values(enemyInfo.members || {}).forEach(m => {
-            totalEnemyHits += Number(m.attacks || 0);
-        });
+        // 1. If ourInfo.members exists (archived war)
+        if (ourInfo.members && Object.keys(ourInfo.members).length > 0) {
+            friendlyMembers = Object.entries(ourInfo.members).map(([id, m]) => ({
+                id,
+                name: m.name || `Player #${id}`,
+                attacks: Number(m.attacks || 0),
+                score: Number(m.score || 0),
+                assists: Number(m.assists || 0)
+            })).filter(m => m.attacks > 0 || m.score > 0);
+        }
 
-        friendlyMembers.sort((a, b) => b.score - a.score || b.attacks - a.attacks);
+        // 2. If liveWarHits has data, map with facData.members
+        if (friendlyMembers.length === 0 && Object.keys(liveWarHits).length > 0) {
+            friendlyMembers = Object.entries(liveWarHits).map(([id, hits]) => ({
+                id,
+                name: facData.members?.[id]?.name || `Player #${id}`,
+                attacks: Number(hits || 0),
+                score: 0,
+                assists: Number(liveAssists[id] || 0)
+            })).filter(m => m.attacks > 0 || m.assists > 0);
+        }
+
+        // 3. Fallback to facData.attacks
+        if (friendlyMembers.length === 0 && facData.attacks) {
+            const hitterCounts = {};
+            for (const atkId in facData.attacks) {
+                const atk = facData.attacks[atkId];
+                if (atk.attacker_faction == ourFid && atk.result && !atk.result.includes("Lost") && !atk.result.includes("Stalemate")) {
+                    const id = (atk.attacker_id || "").toString();
+                    const name = atk.attacker_name || `Player #${id}`;
+                    if (!hitterCounts[id]) hitterCounts[id] = { id, name, attacks: 0, score: 0, assists: 0 };
+                    if (atk.result === "Assist") hitterCounts[id].assists++;
+                    else hitterCounts[id].attacks++;
+                    hitterCounts[id].score += Number(atk.respect_gain || 0);
+                }
+            }
+            friendlyMembers = Object.values(hitterCounts);
+        }
+
+        let totalFriendlyHits = friendlyMembers.reduce((sum, m) => sum + m.attacks, 0);
+
+        friendlyMembers.sort((a, b) => b.attacks - a.attacks || b.score - a.score);
 
         const topHitters = friendlyMembers
             .slice(0, 3)
             .map((m, idx) => {
                 const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉';
-                return `${medal} **${m.name}**: **${m.attacks} hits** (${m.score.toFixed(1)} pts${m.assists > 0 ? ` • ${m.assists} assists` : ''})`;
+                const assistStr = m.assists > 0 ? ` • ${m.assists} assists` : '';
+                return `${medal} **${m.name}**: **${m.attacks.toLocaleString()} hits**${assistStr}`;
             })
             .join("\n") || "No attack records yet";
 
@@ -3637,13 +3665,13 @@ async function buildWarStatusEmbed(apiKey) {
         return {
             title: `⚔️ Ranked War: ${ourName} vs ${enemyName}`,
             description: `**Started**: ${startTime} ${targetProgressStr}\n\n` +
-                         `**${ourName}**: **${ourScore.toLocaleString()}** pts (${totalFriendlyHits.toLocaleString()} hits across ${friendlyMembers.length} fighters)\n` +
-                         `**${enemyName}**: **${enemyScore.toLocaleString()}** pts (${totalEnemyHits.toLocaleString()} hits)\n` +
+                         `**${ourName}**: **${ourScore.toLocaleString()}** pts (${totalFriendlyHits > 0 ? `${totalFriendlyHits.toLocaleString()} recorded hits across ${friendlyMembers.length} fighters` : `${ourScore.toLocaleString()} pts`})\n` +
+                         `**${enemyName}**: **${enemyScore.toLocaleString()}** pts\n` +
                          `**Lead**: **${lead >= 0 ? '+' : ''}${lead.toLocaleString()}** pts (${isLeading ? '🟢 WINNING' : '🔴 TRAILING'})\n\n` +
                          `${bar} (${(ourPct * 100).toFixed(1)}%)\n`,
             color: isLeading ? 0x2ed573 : 0xff4757,
             fields: [
-                { name: `🏆 Top War Hitters (${totalFriendlyHits.toLocaleString()} Total Hits)`, value: topHitters, inline: false },
+                { name: `🏆 Top War Hitters`, value: topHitters, inline: false },
                 { name: "🔗 Quick Links", value: `[📡 Open Live Warboard](https://spider-verse.net) • [⚔️ Attack Screen](https://www.torn.com/factions.php?step=your#/tab=war)`, inline: false }
             ],
             footer: { text: `Official Torn Ranked War Stats • ${new Date().toUTCString()}` }
@@ -4173,13 +4201,20 @@ async function buildPayoutEmbed(memberQuery, apiKey) {
                 hits: Number(m.attacks || 0),
                 score: Number(m.score || 0)
             })).filter(m => m.hits > 0 || m.score > 0);
+        } else if (Object.keys(liveWarHits).length > 0) {
+            memberHitsMap = Object.entries(liveWarHits).map(([id, hits]) => ({
+                id,
+                name: data.members?.[id]?.name || `Player #${id}`,
+                hits: Number(hits || 0),
+                score: 0
+            })).filter(m => m.hits > 0);
         } else {
             const hitterCounts = {};
             if (data.attacks) {
                 for (const atkId in data.attacks) {
                     const atk = data.attacks[atkId];
                     if (atk.attacker_faction == data.ID && atk.result && !atk.result.includes("Lost") && !atk.result.includes("Stalemate")) {
-                        const id = atk.attacker_id;
+                        const id = (atk.attacker_id || "").toString();
                         const name = atk.attacker_name || `Player #${id}`;
                         if (!hitterCounts[id]) hitterCounts[id] = { name, id, hits: 0, score: 0 };
                         hitterCounts[id].hits++;
@@ -4240,7 +4275,7 @@ async function buildPayoutEmbed(memberQuery, apiKey) {
 }
 
 async function buildTopHittersEmbed(apiKey) {
-    if (!apiKey) return { title: "🏆 War Leaderboard", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
+    if (!apiKey) return { title: "🏆 War MVP Leaderboard", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
     try {
         const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
         const data = await facRes.json();
@@ -4255,78 +4290,81 @@ async function buildTopHittersEmbed(apiKey) {
 
         const ourFid = data.ID?.toString();
         const ourInfo = activeWar ? (activeWar.factions?.[ourFid] || Object.values(activeWar.factions || {})[0]) : null;
+        const ourScore = ourInfo?.score || 0;
 
+        let memberList = [];
+
+        // 1. Check if ourInfo.members exists (archived war report)
         if (ourInfo && ourInfo.members && Object.keys(ourInfo.members).length > 0) {
-            const memberList = Object.entries(ourInfo.members).map(([id, m]) => ({
+            memberList = Object.entries(ourInfo.members).map(([id, m]) => ({
                 id,
                 name: m.name || `Player #${id}`,
                 attacks: Number(m.attacks || 0),
                 score: Number(m.score || 0),
                 assists: Number(m.assists || 0)
             })).filter(m => m.attacks > 0 || m.score > 0);
-
-            memberList.sort((a, b) => b.score - a.score || b.attacks - a.attacks);
-
-            let totalHits = 0;
-            let totalScore = 0;
-            memberList.forEach(m => {
-                totalHits += m.attacks;
-                totalScore += m.score;
-            });
-
-            const top = memberList.slice(0, 10);
-            const lines = top.map((m, idx) => {
-                const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `**#${idx + 1}**`;
-                const avgPts = m.attacks > 0 ? (m.score / m.attacks).toFixed(1) : '0';
-                return `${medal} [**${m.name}** [${m.id}]](https://www.torn.com/profiles.php?XID=${m.id})\n   └ **${m.attacks} hits** • **${m.score.toFixed(1)} pts** (Avg: ${avgPts} pts/hit${m.assists > 0 ? ` • ${m.assists} assists` : ''})`;
-            }).join("\n\n");
-
-            return {
-                title: `🏆 ${data.name || 'Faction'} — Ranked War Leaderboard`,
-                description: `**Total Faction Hits**: **${totalHits.toLocaleString()}** hits\n` +
-                             `**Total War Score**: **${totalScore.toLocaleString()}** pts\n` +
-                             `**Active Fighters**: **${memberList.length}** members\n\n` +
-                             lines,
-                color: 0xffa502,
-                footer: { text: "Official Ranked War Stats" }
-            };
         }
 
-        const hitterCounts = {};
-        if (data.attacks) {
+        // 2. Otherwise use liveWarHits (the full aggregated war attack history)
+        if (memberList.length === 0 && Object.keys(liveWarHits).length > 0) {
+            memberList = Object.entries(liveWarHits).map(([id, hits]) => {
+                const name = data.members?.[id]?.name || `Player #${id}`;
+                const assists = Number(liveAssists[id] || 0);
+                return {
+                    id,
+                    name,
+                    attacks: Number(hits || 0),
+                    score: 0,
+                    assists
+                };
+            }).filter(m => m.attacks > 0 || m.assists > 0);
+        }
+
+        // 3. Fallback to data.attacks if neither has data
+        if (memberList.length === 0 && data.attacks) {
+            const hitterCounts = {};
             for (const atkId in data.attacks) {
                 const atk = data.attacks[atkId];
                 if (atk.attacker_faction == data.ID && atk.result && !atk.result.includes("Lost") && !atk.result.includes("Stalemate")) {
-                    const id = atk.attacker_id;
+                    const id = (atk.attacker_id || "").toString();
                     const name = atk.attacker_name || `Player #${id}`;
-                    if (!hitterCounts[id]) hitterCounts[id] = { name, id, hits: 0, respect: 0, fairFightSum: 0 };
-                    hitterCounts[id].hits++;
-                    hitterCounts[id].respect += Number(atk.respect_gain || 0);
-                    hitterCounts[id].fairFightSum += Number(atk.modifiers?.fair_fight || 1.0);
+                    if (!hitterCounts[id]) hitterCounts[id] = { id, name, attacks: 0, score: 0, assists: 0 };
+                    if (atk.result === "Assist") hitterCounts[id].assists++;
+                    else hitterCounts[id].attacks++;
+                    hitterCounts[id].score += Number(atk.respect_gain || 0);
                 }
             }
+            memberList = Object.values(hitterCounts);
         }
 
-        const top = Object.values(hitterCounts).sort((a, b) => b.respect - a.respect).slice(0, 8);
-        if (top.length === 0) {
+        memberList.sort((a, b) => b.attacks - a.attacks || b.score - a.score);
+
+        let totalHits = 0;
+        memberList.forEach(m => totalHits += m.attacks);
+
+        if (memberList.length === 0) {
             return {
-                title: "🏆 War Leaderboard",
-                description: "No attack records found in recent logs.",
+                title: `🏆 ${data.name || 'Faction'} — War MVP Leaderboard`,
+                description: "No war attack records found yet.",
                 color: 0x8b949e
             };
         }
 
-        const lines = top.map((m, idx) => {
+        const top10 = memberList.slice(0, 10);
+        const lines = top10.map((m, idx) => {
             const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `**#${idx + 1}**`;
-            const avgFF = (m.fairFightSum / m.hits).toFixed(2);
-            return `${medal} [**${m.name}** [${m.id}]](https://www.torn.com/profiles.php?XID=${m.id})\n   └ **${m.hits} hits** • **${m.respect.toFixed(1)} respect** (Avg FF: ${avgFF}x)`;
+            const assistStr = m.assists > 0 ? ` • ${m.assists} assists` : '';
+            const scoreStr = m.score > 0 ? ` • ${m.score.toFixed(1)} pts` : '';
+            return `${medal} [**${m.name}** [${m.id}]](https://www.torn.com/profiles.php?XID=${m.id})\n   └ **${m.attacks.toLocaleString()} total war hits**${scoreStr}${assistStr}`;
         }).join("\n\n");
 
         return {
-            title: `🏆 ${data.name || 'Faction'} — Recent Attacks Leaderboard`,
-            description: lines,
+            title: `🏆 ${data.name || 'Faction'} — Top Total War Hitters & MVPs`,
+            description: `**Total War Hits**: **${totalHits.toLocaleString()}** hits across **${memberList.length}** fighters\n` +
+                         (ourScore > 0 ? `**Faction War Score**: **${ourScore.toLocaleString()}** pts\n\n` : '\n') +
+                         lines,
             color: 0xffa502,
-            footer: { text: "Faction Attacks Log" }
+            footer: { text: "Faction War MVP Analytics" }
         };
     } catch(e) {
         return { title: "🏆 War Leaderboard", description: `⚠️ Error: ${e.message}`, color: 0xff4757 };
@@ -4339,10 +4377,8 @@ async function registerSlashCommands(token, guildId = null) {
 
     const commands = [
         // 1. War & Combat Intelligence
-        new SlashCommandBuilder().setName('war').setDescription('Show live ranked war status, scores, lead, and top hitters').toJSON(),
-        new SlashCommandBuilder().setName('warboard').setDescription('Show live ranked war status, scores, lead, and top hitters').toJSON(),
+        new SlashCommandBuilder().setName('war').setDescription('Show live ranked war status, scores, lead, and top war hitters').toJSON(),
         new SlashCommandBuilder().setName('targets').setDescription('List priority enemy targets attackable in Torn right now').toJSON(),
-        new SlashCommandBuilder().setName('snipers').setDescription('List priority enemy targets attackable in Torn right now').toJSON(),
         new SlashCommandBuilder().setName('spy').setDescription('Look up battle stats & spy records for a player')
             .addStringOption(opt => opt.setName('target').setDescription('Torn Player ID or Name').setRequired(true)).toJSON(),
         new SlashCommandBuilder().setName('claim').setDescription('Claim an enemy target in the live warboard')
@@ -4360,9 +4396,7 @@ async function registerSlashCommands(token, guildId = null) {
         // 3. Faction & Member Commands
         new SlashCommandBuilder().setName('profile').setDescription('View comprehensive player profile, status, and stats')
             .addStringOption(opt => opt.setName('player').setDescription('Torn Player ID or Name').setRequired(true)).toJSON(),
-        new SlashCommandBuilder().setName('hosp').setDescription('List all friendly faction members currently in hospital').toJSON(),
         new SlashCommandBuilder().setName('hospital').setDescription('List all friendly faction members currently in hospital').toJSON(),
-        new SlashCommandBuilder().setName('online').setDescription('Live faction readiness breakdown (Online, Traveling, Hospitalized)').toJSON(),
         new SlashCommandBuilder().setName('roster').setDescription('Live faction readiness breakdown (Online, Traveling, Hospitalized)').toJSON(),
 
         // 4. Organized Crimes (OC)
@@ -4409,19 +4443,7 @@ async function registerSlashCommands(token, guildId = null) {
         // 6. War Payouts & Leaderboard
         new SlashCommandBuilder().setName('payout').setDescription('Check war hits and payout balance based on faction CPM')
             .addStringOption(opt => opt.setName('member').setDescription('Member name or ID (optional)')).toJSON(),
-        new SlashCommandBuilder().setName('top').setDescription('Leaderboard of top war hitters and respect earners').toJSON(),
-        new SlashCommandBuilder().setName('mvp').setDescription('Leaderboard of top war hitters and respect earners').toJSON(),
-
-        // Direct Country Aliases (e.g. /south-africa, /mexico, /sa, /uk)
-        ...TORN_COUNTRIES.map(country => {
-            const cmdName = country.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-            return new SlashCommandBuilder()
-                .setName(cmdName)
-                .setDescription(`Check friendly & enemy travel status for ${country}`)
-                .toJSON();
-        }),
-        new SlashCommandBuilder().setName('sa').setDescription('Check travel status for South Africa').toJSON(),
-        new SlashCommandBuilder().setName('uk').setDescription('Check travel status for United Kingdom').toJSON(),
+        new SlashCommandBuilder().setName('mvp').setDescription('Leaderboard of top total war hitters and MVPs').toJSON(),
     ];
 
     try {
