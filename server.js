@@ -3520,13 +3520,20 @@ function formatStatNumber(num) {
 async function buildWarStatusEmbed(apiKey) {
     if (!apiKey) return { title: "⚔️ Ranked War Status", description: "⚠️ No Torn API Key configured on server.", color: 0xff4757 };
     try {
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
         const facData = await facRes.json();
         if (facData.error) throw new Error(facData.error.error || "Torn API error");
 
         const rankedWars = facData.rankedwars || {};
-        const warId = Object.keys(rankedWars)[0];
-        if (!warId) {
+        // Find ongoing war first (winner === 0 or no end time)
+        let activeWar = Object.values(rankedWars).find(w => w.war && (w.war.winner === 0 || !w.war.end || w.war.end === 0));
+        if (!activeWar) {
+            // If none active, pick the most recent war by start time
+            const sortedWars = Object.values(rankedWars).filter(w => w.war && w.war.start).sort((a, b) => (b.war.start || 0) - (a.war.start || 0));
+            activeWar = sortedWars[0];
+        }
+
+        if (!activeWar || !activeWar.factions) {
             return {
                 title: "🕊️ Ranked War Status",
                 description: `**${facData.name || 'Your faction'}** is not currently in an active Ranked War.`,
@@ -3535,19 +3542,18 @@ async function buildWarStatusEmbed(apiKey) {
             };
         }
 
-        const war = rankedWars[warId];
-        const fids = Object.keys(war.factions || {});
+        const fids = Object.keys(activeWar.factions || {});
         const fid1 = fids[0];
         const fid2 = fids[1];
 
         const ourFid = (fid1.toString() === facData.ID?.toString()) ? fid1 : fid2;
         const enemyFid = (ourFid === fid1) ? fid2 : fid1;
-        const ourInfo = war.factions?.[ourFid] || {};
-        const enemyInfo = war.factions?.[enemyFid] || {};
+        const ourInfo = activeWar.factions?.[ourFid] || {};
+        const enemyInfo = activeWar.factions?.[enemyFid] || {};
 
         const ourScore = ourInfo.score || 0;
         const enemyScore = enemyInfo.score || 0;
-        const targetScore = war.target || 0;
+        const targetScore = activeWar.war?.target || 0;
         const lead = ourScore - enemyScore;
         const isLeading = lead >= 0;
 
@@ -3556,41 +3562,52 @@ async function buildWarStatusEmbed(apiKey) {
         const filled = Math.max(0, Math.min(15, Math.round(ourPct * 15)));
         const bar = "🟩".repeat(filled) + "🟥".repeat(15 - filled);
 
-        const startTime = war.war?.start ? `<t:${war.war.start}:R>` : "In Progress";
+        const startTime = activeWar.war?.start ? `<t:${activeWar.war.start}:R>` : "In Progress";
         const enemyName = enemyInfo.name || `Faction #${enemyFid}`;
         const ourName = ourInfo.name || facData.name || "Our Faction";
 
-        const hitterCounts = {};
-        if (facData.attacks) {
-            for (const atkId in facData.attacks) {
-                const atk = facData.attacks[atkId];
-                if (atk.attacker_faction == ourFid && atk.result && !atk.result.includes("Lost") && !atk.result.includes("Stalemate")) {
-                    const name = atk.attacker_name || `Player #${atk.attacker_id}`;
-                    if (!hitterCounts[name]) hitterCounts[name] = { hits: 0, respect: 0 };
-                    hitterCounts[name].hits++;
-                    hitterCounts[name].respect += Number(atk.respect_gain || 0);
-                }
-            }
-        }
-        const topHitters = Object.entries(hitterCounts)
-            .sort((a, b) => b[1].respect - a[1].respect)
+        // Calculate accurate member totals from official ranked war data
+        let totalFriendlyHits = 0;
+        let totalFriendlyAssists = 0;
+        const friendlyMembers = Object.entries(ourInfo.members || {}).map(([id, m]) => {
+            const attacks = Number(m.attacks || 0);
+            const score = Number(m.score || 0);
+            const assists = Number(m.assists || 0);
+            totalFriendlyHits += attacks;
+            totalFriendlyAssists += assists;
+            return { id, name: m.name || `Player #${id}`, attacks, score, assists };
+        }).filter(m => m.attacks > 0 || m.score > 0);
+
+        let totalEnemyHits = 0;
+        Object.values(enemyInfo.members || {}).forEach(m => {
+            totalEnemyHits += Number(m.attacks || 0);
+        });
+
+        friendlyMembers.sort((a, b) => b.score - a.score || b.attacks - a.attacks);
+
+        const topHitters = friendlyMembers
             .slice(0, 3)
-            .map(([name, data], idx) => `${idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'} **${name}**: ${data.hits} hits (${data.respect.toFixed(1)} respect)`)
+            .map((m, idx) => {
+                const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉';
+                return `${medal} **${m.name}**: **${m.attacks} hits** (${m.score.toFixed(1)} pts${m.assists > 0 ? ` • ${m.assists} assists` : ''})`;
+            })
             .join("\n") || "No attack records yet";
+
+        const targetProgressStr = targetScore > 0 ? `• **Target**: **${targetScore.toLocaleString()}** pts (${((ourScore / targetScore) * 100).toFixed(1)}%)` : '';
 
         return {
             title: `⚔️ Ranked War: ${ourName} vs ${enemyName}`,
-            description: `**Started**: ${startTime} • **Target**: **${targetScore.toLocaleString()}** pts\n\n` +
-                         `**${ourName}**: **${ourScore.toLocaleString()}** pts\n` +
-                         `**${enemyName}**: **${enemyScore.toLocaleString()}** pts\n` +
+            description: `**Started**: ${startTime} ${targetProgressStr}\n\n` +
+                         `**${ourName}**: **${ourScore.toLocaleString()}** pts (${totalFriendlyHits.toLocaleString()} hits across ${friendlyMembers.length} fighters)\n` +
+                         `**${enemyName}**: **${enemyScore.toLocaleString()}** pts (${totalEnemyHits.toLocaleString()} hits)\n` +
                          `**Lead**: **${lead >= 0 ? '+' : ''}${lead.toLocaleString()}** pts (${isLeading ? '🟢 WINNING' : '🔴 TRAILING'})\n\n` +
                          `${bar} (${(ourPct * 100).toFixed(1)}%)\n`,
             color: isLeading ? 0x2ed573 : 0xff4757,
             fields: [
-                { name: "🏆 Top War Hitters", value: topHitters, inline: false },
+                { name: `🏆 Top War Hitters (${totalFriendlyHits.toLocaleString()} Total Hits)`, value: topHitters, inline: false },
                 { name: "🔗 Quick Links", value: `[📡 Open Live Warboard](https://spider-verse.net) • [⚔️ Attack Screen](https://www.torn.com/factions.php?step=your#/tab=war)`, inline: false }
             ],
-            footer: { text: `Torn Live Warboard • ${new Date().toUTCString()}` }
+            footer: { text: `Official Torn Ranked War Stats • ${new Date().toUTCString()}` }
         };
     } catch (e) {
         return { title: "⚔️ Ranked War Status", description: `⚠️ Could not fetch war data: ${e.message}`, color: 0xff4757 };
@@ -4094,56 +4111,84 @@ async function buildPayoutEmbed(memberQuery, apiKey) {
     if (!apiKey) return { title: "💰 War Payout Calculator", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
     try {
         const cpm = Number(discordConfig.cpm) || 150000;
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,attacks&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
         const data = await facRes.json();
         if (data.error) throw new Error(data.error.error || "Torn API error");
 
         const q = (memberQuery || '').toLowerCase().trim();
-        const hitterCounts = {};
-
-        if (data.attacks) {
-            for (const atkId in data.attacks) {
-                const atk = data.attacks[atkId];
-                if (atk.attacker_faction == data.ID && atk.result && !atk.result.includes("Lost") && !atk.result.includes("Stalemate")) {
-                    const id = atk.attacker_id;
-                    const name = atk.attacker_name || `Player #${id}`;
-                    if (!hitterCounts[id]) hitterCounts[id] = { name, id, hits: 0, respect: 0 };
-                    hitterCounts[id].hits++;
-                    hitterCounts[id].respect += Number(atk.respect_gain || 0);
-                }
-            }
+        const rankedWars = data.rankedwars || {};
+        let activeWar = Object.values(rankedWars).find(w => w.war && (w.war.winner === 0 || !w.war.end || w.war.end === 0));
+        if (!activeWar) {
+            const sortedWars = Object.values(rankedWars).filter(w => w.war && w.war.start).sort((a, b) => (b.war.start || 0) - (a.war.start || 0));
+            activeWar = sortedWars[0];
         }
 
+        const ourFid = data.ID?.toString();
+        const ourInfo = activeWar ? (activeWar.factions?.[ourFid] || Object.values(activeWar.factions || {})[0]) : null;
+        let memberHitsMap = [];
+
+        if (ourInfo && ourInfo.members && Object.keys(ourInfo.members).length > 0) {
+            memberHitsMap = Object.entries(ourInfo.members).map(([id, m]) => ({
+                id,
+                name: m.name || `Player #${id}`,
+                hits: Number(m.attacks || 0),
+                score: Number(m.score || 0)
+            })).filter(m => m.hits > 0 || m.score > 0);
+        } else {
+            const hitterCounts = {};
+            if (data.attacks) {
+                for (const atkId in data.attacks) {
+                    const atk = data.attacks[atkId];
+                    if (atk.attacker_faction == data.ID && atk.result && !atk.result.includes("Lost") && !atk.result.includes("Stalemate")) {
+                        const id = atk.attacker_id;
+                        const name = atk.attacker_name || `Player #${id}`;
+                        if (!hitterCounts[id]) hitterCounts[id] = { name, id, hits: 0, score: 0 };
+                        hitterCounts[id].hits++;
+                        hitterCounts[id].score += Number(atk.respect_gain || 0);
+                    }
+                }
+            }
+            memberHitsMap = Object.values(hitterCounts);
+        }
+
+        memberHitsMap.sort((a, b) => b.hits - a.hits || b.score - a.score);
+
         if (q) {
-            const matched = Object.values(hitterCounts).find(m => m.id.toString() === q || m.name.toLowerCase().includes(q));
+            const matched = memberHitsMap.find(m => m.id.toString() === q || m.name.toLowerCase().includes(q));
             if (!matched) {
                 return {
                     title: `💰 Payout Check: ${memberQuery}`,
-                    description: `No recorded war hits found for **${memberQuery}** in the recent attack log.\n\n**Current CPM Rate**: $${cpm.toLocaleString()} per hit.`,
+                    description: `No recorded war hits found for **${memberQuery}** in this war.\n\n**Current CPM Rate**: $${cpm.toLocaleString()} per hit.`,
                     color: 0xffa502
                 };
             }
             const totalEarned = matched.hits * cpm;
             return {
                 title: `💰 War Payout: ${matched.name} [${matched.id}]`,
-                description: `**Recorded Hits**: **${matched.hits.toLocaleString()}** hits\n` +
-                             `**Respect Generated**: **${matched.respect.toFixed(1)}** respect\n` +
+                description: `**Total War Hits**: **${matched.hits.toLocaleString()}** hits\n` +
+                             `**Score Generated**: **${matched.score.toFixed(1)}** pts\n` +
                              `**Rate**: **$${cpm.toLocaleString()}** / hit\n\n` +
-                             `💵 **Total Owed**: **$${totalEarned.toLocaleString()}**`,
+                             `💵 **Total Payout**: **$${totalEarned.toLocaleString()}**`,
                 color: 0x2ed573,
                 footer: { text: "Faction Payout System" }
             };
         }
 
-        const top5 = Object.values(hitterCounts).sort((a, b) => b.hits - a.hits).slice(0, 5);
+        const top5 = memberHitsMap.slice(0, 5);
+        let totalFactionHits = 0;
+        memberHitsMap.forEach(m => totalFactionHits += m.hits);
+        const totalFactionPayout = totalFactionHits * cpm;
+
         const lines = top5.map((m, idx) => {
             const owed = m.hits * cpm;
             return `${idx + 1}. **${m.name}**: **${m.hits} hits** ➔ **$${owed.toLocaleString()}**`;
-        }).join("\n") || "No attack records found.";
+        }).join("\n") || "No war hit records found.";
 
         return {
             title: `💰 Faction War Payouts (Rate: $${cpm.toLocaleString()} / hit)`,
-            description: `**🏆 Top Earners**:\n${lines}\n\nUse \`/payout member:<name or ID>\` to check a specific member.`,
+            description: `**Total War Hits**: **${totalFactionHits.toLocaleString()}** hits across **${memberHitsMap.length}** fighters\n` +
+                         `**Total Faction Pot**: **$${totalFactionPayout.toLocaleString()}**\n\n` +
+                         `**🏆 Top Earners**:\n${lines}\n\nUse \`/payout member:<name or ID>\` to check a specific member.`,
             color: 0x2ed573,
             fields: [
                 { name: "💰 Payout Dashboard", value: `[Open Web Payout Manager](https://spider-verse.net/payout.html)`, inline: false }
@@ -4158,9 +4203,55 @@ async function buildPayoutEmbed(memberQuery, apiKey) {
 async function buildTopHittersEmbed(apiKey) {
     if (!apiKey) return { title: "🏆 War Leaderboard", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
     try {
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,attacks&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
         const data = await facRes.json();
         if (data.error) throw new Error(data.error.error || "Torn API error");
+
+        const rankedWars = data.rankedwars || {};
+        let activeWar = Object.values(rankedWars).find(w => w.war && (w.war.winner === 0 || !w.war.end || w.war.end === 0));
+        if (!activeWar) {
+            const sortedWars = Object.values(rankedWars).filter(w => w.war && w.war.start).sort((a, b) => (b.war.start || 0) - (a.war.start || 0));
+            activeWar = sortedWars[0];
+        }
+
+        const ourFid = data.ID?.toString();
+        const ourInfo = activeWar ? (activeWar.factions?.[ourFid] || Object.values(activeWar.factions || {})[0]) : null;
+
+        if (ourInfo && ourInfo.members && Object.keys(ourInfo.members).length > 0) {
+            const memberList = Object.entries(ourInfo.members).map(([id, m]) => ({
+                id,
+                name: m.name || `Player #${id}`,
+                attacks: Number(m.attacks || 0),
+                score: Number(m.score || 0),
+                assists: Number(m.assists || 0)
+            })).filter(m => m.attacks > 0 || m.score > 0);
+
+            memberList.sort((a, b) => b.score - a.score || b.attacks - a.attacks);
+
+            let totalHits = 0;
+            let totalScore = 0;
+            memberList.forEach(m => {
+                totalHits += m.attacks;
+                totalScore += m.score;
+            });
+
+            const top = memberList.slice(0, 10);
+            const lines = top.map((m, idx) => {
+                const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `**#${idx + 1}**`;
+                const avgPts = m.attacks > 0 ? (m.score / m.attacks).toFixed(1) : '0';
+                return `${medal} [**${m.name}** [${m.id}]](https://www.torn.com/profiles.php?XID=${m.id})\n   └ **${m.attacks} hits** • **${m.score.toFixed(1)} pts** (Avg: ${avgPts} pts/hit${m.assists > 0 ? ` • ${m.assists} assists` : ''})`;
+            }).join("\n\n");
+
+            return {
+                title: `🏆 ${data.name || 'Faction'} — Ranked War Leaderboard`,
+                description: `**Total Faction Hits**: **${totalHits.toLocaleString()}** hits\n` +
+                             `**Total War Score**: **${totalScore.toLocaleString()}** pts\n` +
+                             `**Active Fighters**: **${memberList.length}** members\n\n` +
+                             lines,
+                color: 0xffa502,
+                footer: { text: "Official Ranked War Stats" }
+            };
+        }
 
         const hitterCounts = {};
         if (data.attacks) {
@@ -4193,10 +4284,10 @@ async function buildTopHittersEmbed(apiKey) {
         }).join("\n\n");
 
         return {
-            title: `🏆 ${data.name || 'Faction'} — War Leaderboard & MVPs`,
+            title: `🏆 ${data.name || 'Faction'} — Recent Attacks Leaderboard`,
             description: lines,
             color: 0xffa502,
-            footer: { text: "Faction Warfare Leaderboard" }
+            footer: { text: "Faction Attacks Log" }
         };
     } catch(e) {
         return { title: "🏆 War Leaderboard", description: `⚠️ Error: ${e.message}`, color: 0xff4757 };
