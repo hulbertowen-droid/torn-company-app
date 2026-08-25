@@ -220,6 +220,143 @@
         #chart-summary-bar { flex-wrap: wrap !important; gap: 6px !important; }
         #chart-summary-bar > div { flex: 1 1 calc(50% - 6px) !important; padding: 6px 8px !important; font-size: 0.72em !important; justify-content: space-between !important; }
     }
+
+    /* ─── MINI-HUD COMPACT OVERLAY MODE ─── */
+    body.hud-mode {
+        background: #060810 !important;
+        overflow: auto !important;
+    }
+    body.hud-mode .sidebar {
+        display: none !important;
+    }
+    body.hud-mode .main-content {
+        padding: 0 !important;
+        height: 100vh !important;
+        max-width: 100% !important;
+        background: #060810 !important;
+    }
+    body.hud-mode .main-content > *:not(#mini-hud-container):not(#toast-container):not(#inspect-modal):not(#settings-modal):not(#refresh-bar-container) {
+        display: none !important;
+    }
+    #mini-hud-container {
+        display: none;
+        width: 100%;
+        max-width: 500px;
+        margin: 0 auto;
+        padding: 16px;
+        min-height: 100vh;
+        flex-direction: column;
+        gap: 12px;
+        font-family: 'Inter', system-ui, sans-serif;
+        box-sizing: border-box;
+    }
+    body.hud-mode #mini-hud-container {
+        display: flex;
+    }
+
+    .hud-card {
+        background: #0d1117;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px 16px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    .hud-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+    }
+    .hud-title {
+        font-size: 0.92em;
+        font-weight: 800;
+        color: var(--text-main);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .hud-score-grid {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 12px;
+        align-items: center;
+        text-align: center;
+        margin-top: 10px;
+    }
+    .hud-score-box {
+        background: #161b22;
+        border-radius: 8px;
+        padding: 8px;
+        border: 1px solid rgba(255,255,255,0.05);
+    }
+    .hud-score-num {
+        font-size: 1.35em;
+        font-weight: 900;
+        line-height: 1.1;
+    }
+    .hud-score-sub {
+        font-size: 0.7em;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        font-weight: 700;
+        margin-top: 2px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .hud-target-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 8px 12px;
+        background: #161b22;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.04);
+        margin-bottom: 6px;
+        transition: 0.15s;
+    }
+    .hud-target-row:hover {
+        background: #1c2230;
+        border-color: rgba(88,166,255,0.3);
+    }
+    .hud-target-row:last-child {
+        margin-bottom: 0;
+    }
+    .hud-btn-attack {
+        background: var(--red);
+        color: white;
+        text-decoration: none;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-weight: 800;
+        font-size: 0.76em;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: 0.15s;
+        box-shadow: 0 2px 8px rgba(255,71,87,0.35);
+        white-space: nowrap;
+    }
+    .hud-btn-attack:hover {
+        background: #ff6b81;
+        transform: scale(1.03);
+    }
+    .hud-btn-exit {
+        background: #21262d;
+        border: 1px solid var(--border);
+        color: var(--text-dim);
+        padding: 5px 10px;
+        border-radius: 6px;
+        font-size: 0.75em;
+        font-weight: 700;
+        cursor: pointer;
+        transition: 0.15s;
+    }
+    .hud-btn-exit:hover {
+        color: white;
+        background: #30363d;
+    }
 </style>
 </head>
 <body>
@@ -256,6 +393,86 @@
     <main class="main-content">
         <div id="refresh-bar-container"><div id="refresh-bar"></div></div>
 
+        <!-- MINI-HUD COMPACT OVERLAY CONTAINER -->
+        <div id="mini-hud-container">
+            <!-- HUD TOP BAR -->
+            <div class="hud-card" style="border-top: 3px solid var(--red);">
+                <div class="hud-header">
+                    <div class="hud-title">
+                        <div class="live-dot"></div>
+                        <span id="hud-matchup-title">Spider-Verse vs Enemy</span>
+                    </div>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <button class="hud-btn-exit" onclick="fetchWarboard()" title="Refresh HUD">⟳</button>
+                        <button class="hud-btn-exit" onclick="toggleHudMode()" style="color:var(--gold);border-color:rgba(255,165,2,0.4);" title="Exit HUD to Full Board (HotKey: H)">✕ Full View</button>
+                    </div>
+                </div>
+                
+                <!-- Score Breakdown -->
+                <div class="hud-score-grid">
+                    <div class="hud-score-box">
+                        <div class="hud-score-num" id="hud-score-us" style="color:var(--green);">0</div>
+                        <div class="hud-score-sub" id="hud-name-us">Friendly</div>
+                    </div>
+                    <div style="font-weight:900;color:var(--text-dim);font-size:0.85em;">
+                        <div id="hud-lead-tag" style="background:rgba(46,213,115,0.15);color:var(--green);padding:3px 8px;border-radius:12px;font-size:0.75em;font-weight:800;border:1px solid rgba(46,213,115,0.3);">+0 Lead</div>
+                    </div>
+                    <div class="hud-score-box">
+                        <div class="hud-score-num" id="hud-score-them" style="color:var(--red);">0</div>
+                        <div class="hud-score-sub" id="hud-name-them">Enemy</div>
+                    </div>
+                </div>
+
+                <!-- Progress to Target -->
+                <div style="margin-top:10px;">
+                    <div style="display:flex;justify-content:space-between;font-size:0.72em;color:var(--text-dim);margin-bottom:4px;">
+                        <span>Target: <strong id="hud-target-num" style="color:var(--text-main);">0</strong></span>
+                        <span id="hud-target-pct" style="color:var(--teal);font-weight:700;">0%</span>
+                    </div>
+                    <div style="height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;">
+                        <div id="hud-target-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--green),var(--teal));transition:width 0.4s ease;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CHAIN TICKER -->
+            <div class="hud-card" id="hud-chain-card" style="padding:10px 14px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(90deg,#0d1117,#141922);">
+                <div style="display:flex;align-items:center;gap:8px;font-size:0.82em;font-weight:700;">
+                    <span>🔗 Chain:</span>
+                    <span id="hud-chain-count" style="color:var(--gold);font-weight:900;">0 / 250</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;font-size:0.82em;font-weight:800;">
+                    <span style="color:var(--text-dim);font-size:0.85em;">⏱️</span>
+                    <span id="hud-chain-timer" style="color:var(--text-main);font-family:monospace;font-size:1.05em;">--:--</span>
+                </div>
+            </div>
+
+            <!-- TOP ATTACKABLE TARGETS -->
+            <div class="hud-card" style="flex:1;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                    <div style="font-size:0.8em;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--red);display:flex;align-items:center;gap:6px;">
+                        <span>🎯 Priority Attack Targets</span>
+                        <span id="hud-target-count" style="background:rgba(255,71,87,0.15);color:var(--red);padding:1px 6px;border-radius:10px;font-size:0.8em;">0</span>
+                    </div>
+                    <span style="font-size:0.7em;color:var(--text-dim);">Live Attackable Enemies</span>
+                </div>
+                <div id="hud-targets-list">
+                    <div class="empty-state">Scanning for attackable enemies...</div>
+                </div>
+            </div>
+
+            <!-- RECENT COMBAT LOG / RADAR -->
+            <div class="hud-card" style="padding:10px 14px;">
+                <div style="font-size:0.75em;font-weight:800;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px;display:flex;justify-content:space-between;">
+                    <span>🏥 Friendly Hospital &amp; Rescue</span>
+                    <span id="hud-radar-status" style="color:var(--teal);">Active</span>
+                </div>
+                <div id="hud-radar-list" style="font-size:0.78em;">
+                    <div style="color:var(--text-dim);font-style:italic;">No allies in hospital.</div>
+                </div>
+            </div>
+        </div>
+
         <!-- PAGE HEADER -->
         <div class="page-header">
             <div class="page-title">
@@ -263,6 +480,7 @@
                 Live Warboard
             </div>
             <div style="display:flex;gap:10px;align-items:center;">
+                <button id="btn-hud-toggle" onclick="toggleHudMode()" style="background:rgba(88,166,255,0.12);border:1px solid rgba(88,166,255,0.3);color:var(--blue);padding:7px 14px;border-radius:8px;font-size:0.8em;cursor:pointer;font-weight:700;display:flex;align-items:center;gap:6px;transition:0.2s;font-family:inherit;" title="Toggle Mini HUD Overlay (HotKey: H)">⚡ Mini HUD</button>
                 <span id="last-updated" style="font-size:0.78em;color:var(--text-dim);"></span>
                 <button onclick="fetchWarboard()" style="background:var(--item);border:1px solid var(--border);color:var(--text-dim);padding:7px 14px;border-radius:8px;font-size:0.8em;cursor:pointer;font-weight:600;transition:0.2s;font-family:inherit;" onmouseover="this.style.borderColor='var(--blue)';this.style.color='var(--blue)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">⟳ Refresh</button>
                 <button onclick="openSettings()" style="background:var(--item);border:1px solid var(--border);color:var(--text-dim);padding:7px 14px;border-radius:8px;font-size:0.8em;cursor:pointer;font-weight:600;transition:0.2s;font-family:inherit;" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">⚙ Settings</button>
@@ -582,7 +800,27 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     if (localStorage.getItem('sidebar_collapsed') === 'true') document.getElementById('app-sidebar').classList.add('collapsed');
     if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-mode');
+    
+    // Auto-restore or URL HUD mode
+    if (localStorage.getItem('warboard_hud_mode') === 'true' || new URLSearchParams(window.location.search).get('hud') === '1' || new URLSearchParams(window.location.search).get('hud') === 'true') {
+        document.body.classList.add('hud-mode');
+        const toggleBtn = document.getElementById('btn-hud-toggle');
+        if (toggleBtn) {
+            toggleBtn.innerText = '🖥️ Full View';
+            toggleBtn.style.background = 'rgba(255,165,2,0.15)';
+            toggleBtn.style.borderColor = 'rgba(255,165,2,0.4)';
+            toggleBtn.style.color = 'var(--gold)';
+        }
+    }
 });
+
+window.addEventListener('keydown', (e) => {
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+    if (e.key === 'h' || e.key === 'H') {
+        toggleHudMode();
+    }
+});
+
 function toggleSidebar() {
     if (window.innerWidth <= 960) {
         document.querySelector('.nav-items').classList.toggle('mobile-open');
@@ -595,6 +833,152 @@ function toggleSidebar() {
 function toggleTheme() {
     document.body.classList.toggle('light-mode');
     localStorage.setItem('theme', document.body.classList.contains('light-mode') ? 'light' : 'dark');
+}
+
+function toggleHudMode() {
+    const isHud = document.body.classList.toggle('hud-mode');
+    localStorage.setItem('warboard_hud_mode', isHud ? 'true' : 'false');
+    const toggleBtn = document.getElementById('btn-hud-toggle');
+    if (toggleBtn) {
+        toggleBtn.innerText = isHud ? '🖥️ Full View' : '⚡ Mini HUD';
+        toggleBtn.style.background = isHud ? 'rgba(255,165,2,0.15)' : 'rgba(88,166,255,0.12)';
+        toggleBtn.style.borderColor = isHud ? 'rgba(255,165,2,0.4)' : 'rgba(88,166,255,0.3)';
+        toggleBtn.style.color = isHud ? 'var(--gold)' : 'var(--blue)';
+    }
+    if (isHud && currentFriendlyData.length > 0) {
+        renderMiniHud({ friendly: currentFriendlyData, enemy: currentEnemyData, warInfo: window.lastWarInfo, chain: window.lastChainInfo });
+    }
+}
+
+function renderMiniHud(data) {
+    if (!data) return;
+    window.lastWarInfo = data.warInfo || window.lastWarInfo;
+    window.lastChainInfo = data.chain || window.lastChainInfo;
+    const war = data.warInfo || {};
+    const myFac = war.myFaction || {};
+    const enemyFac = war.enemyFaction || {};
+
+    const matchupEl = document.getElementById("hud-matchup-title");
+    if (matchupEl) matchupEl.innerText = `${myFac.name || 'Spider-Verse'} vs ${enemyFac.name || 'Enemy'}`;
+
+    const usScore = Number(myFac.score || 0);
+    const themScore = Number(enemyFac.score || 0);
+    const target = Number(war.target || 0);
+
+    const usScoreEl = document.getElementById("hud-score-us");
+    const themScoreEl = document.getElementById("hud-score-them");
+    const nameUsEl = document.getElementById("hud-name-us");
+    const nameThemEl = document.getElementById("hud-name-them");
+    const leadTag = document.getElementById("hud-lead-tag");
+
+    if (usScoreEl) usScoreEl.innerText = usScore.toLocaleString();
+    if (themScoreEl) themScoreEl.innerText = themScore.toLocaleString();
+    if (nameUsEl) nameUsEl.innerText = myFac.name || "Spider-Verse";
+    if (nameThemEl) nameThemEl.innerText = enemyFac.name || "Enemy";
+
+    if (leadTag) {
+        const lead = usScore - themScore;
+        if (lead >= 0) {
+            leadTag.innerText = `+${lead.toLocaleString()} Lead`;
+            leadTag.style.background = "rgba(46,213,115,0.15)";
+            leadTag.style.color = "var(--green)";
+            leadTag.style.borderColor = "rgba(46,213,115,0.3)";
+        } else {
+            leadTag.innerText = `${lead.toLocaleString()} Behind`;
+            leadTag.style.background = "rgba(255,71,87,0.15)";
+            leadTag.style.color = "var(--red)";
+            leadTag.style.borderColor = "rgba(255,71,87,0.3)";
+        }
+    }
+
+    const targetEl = document.getElementById("hud-target-num");
+    const targetPctEl = document.getElementById("hud-target-pct");
+    const targetBar = document.getElementById("hud-target-bar");
+
+    if (targetEl) targetEl.innerText = target > 0 ? target.toLocaleString() : "15,000";
+    if (target > 0) {
+        const maxScore = Math.max(usScore, themScore);
+        const pct = Math.min(100, Math.round((maxScore / target) * 100));
+        if (targetPctEl) targetPctEl.innerText = `${pct}%`;
+        if (targetBar) targetBar.style.width = `${pct}%`;
+    }
+
+    // Chain status
+    const chainEl = document.getElementById("hud-chain-count");
+    const timerEl = document.getElementById("hud-chain-timer");
+    if (data.chain) {
+        if (chainEl) chainEl.innerText = `${data.chain.current || 0} / ${data.chain.max || 250}`;
+        if (timerEl && data.chain.timeout) {
+            const mins = Math.floor(data.chain.timeout / 60);
+            const secs = data.chain.timeout % 60;
+            timerEl.innerText = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            timerEl.style.color = data.chain.timeout <= 60 ? "var(--red)" : "var(--text-main)";
+        }
+    }
+
+    // Top Attackable Targets
+    const enemies = data.enemy || [];
+    const available = enemies.filter(e => e.state === "Okay");
+    available.sort((a, b) => {
+        const scoreA = a.onlineStatus === 'Online' ? 3 : (a.onlineStatus === 'Idle' ? 2 : 1);
+        const scoreB = b.onlineStatus === 'Online' ? 3 : (b.onlineStatus === 'Idle' ? 2 : 1);
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        return (b.level || 0) - (a.level || 0);
+    });
+
+    const targetsList = document.getElementById("hud-targets-list");
+    const targetCountEl = document.getElementById("hud-target-count");
+    if (targetCountEl) targetCountEl.innerText = available.length;
+
+    if (targetsList) {
+        const top5 = available.slice(0, 5);
+        if (top5.length === 0) {
+            targetsList.innerHTML = `<div class="empty-state" style="padding:14px;font-size:0.8em;">No attackable targets right now (all in hospital or traveling).</div>`;
+        } else {
+            targetsList.innerHTML = top5.map((t, idx) => {
+                const onlineDot = t.onlineStatus === 'Online' ? '🟢' : (t.onlineStatus === 'Idle' ? '🟡' : '⚪');
+                const statStr = t.estStats ? (typeof t.estStats === 'number' ? formatStatNumber(t.estStats) : t.estStats) : `Lvl ${t.level}`;
+                return `
+                <div class="hud-target-row">
+                    <div style="min-width:0;flex:1;">
+                        <div style="display:flex;align-items:center;gap:6px;font-size:0.85em;font-weight:700;">
+                            <span>${onlineDot}</span>
+                            <a href="https://www.torn.com/profiles.php?XID=${t.id}" target="_blank" style="color:var(--text-main);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${t.name}</a>
+                            <span style="font-size:0.8em;color:var(--text-dim);font-weight:500;">(Lvl ${t.level})</span>
+                        </div>
+                        <div style="font-size:0.74em;color:var(--teal);margin-top:2px;font-weight:600;">
+                            💪 ${statStr}
+                        </div>
+                    </div>
+                    <a href="https://www.torn.com/loader.php?sid=attack&user2ID=${t.id}" target="_blank" class="hud-btn-attack">
+                        ⚔️ ATTACK
+                    </a>
+                </div>`;
+            }).join('');
+        }
+    }
+
+    // Friendly Rescue / Hosp Radar
+    const friendly = data.friendly || [];
+    const hospFriendly = friendly.filter(f => f.state === "Hospital");
+    const radarList = document.getElementById("hud-radar-list");
+    if (radarList) {
+        if (hospFriendly.length === 0) {
+            radarList.innerHTML = `<div style="color:var(--green);font-weight:600;">✅ All friendly members are okay!</div>`;
+        } else {
+            radarList.innerHTML = hospFriendly.slice(0, 3).map(f => {
+                const untilSec = f.until ? Math.max(0, f.until - Math.floor(Date.now() / 1000)) : 0;
+                const min = Math.floor(untilSec / 60);
+                const sec = untilSec % 60;
+                const timeStr = untilSec > 0 ? `${min}m ${sec}s` : "Out soon";
+                return `
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                    <span style="color:var(--red);font-weight:600;">🏥 ${f.name}</span>
+                    <span style="color:var(--text-dim);font-family:monospace;">${timeStr}</span>
+                </div>`;
+            }).join('');
+        }
+    }
 }
 
 // ─── Audio ────────────────────────────────────────────────────────────────────
@@ -873,6 +1257,7 @@ async function fetchWarboard() {
         }
         renderFriendlyList(sortPlayersList(data.friendly, false), data.premiumActive);
         renderChart(data.friendly);
+        renderMiniHud(data);
 
         // Update Chart Sync Bar
         const syncBanner = document.getElementById("chart-sync-banner");
