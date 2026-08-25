@@ -233,6 +233,7 @@ let isBackfillingWar = false;
 let hasBackfilledWar = false;
 let processedAttackIds = new Set();
 let lastGoodWarboardPayload = null;
+let warSyncStatus = { isSyncing: false, percent: 100, totalHitsLoaded: 0, page: 0, message: "Ready" };
 let friendlyHitTracker = {};
 let travelAlerts = {};
 let currentEnemyFacId = null;
@@ -253,6 +254,7 @@ let discordConfig = {
     globalChannelId: "", 
     globalBotToken: "",
     personalDiscordId: "",
+    guildId: "",
     targetOnline: false, 
     targetLanded: true, 
     targetOutHosp: false, 
@@ -735,14 +737,15 @@ setInterval(async () => {
 }, 1500); 
 
 function processWarAttack(atk, myFactionId, enemyFactionId, warStart, warEnd = 0) {
-    if (!atk || !atk.code) return;
-    if (processedAttackIds.has(atk.code)) return;
+    if (!atk || (!atk.code && !atk.timestamp_ended)) return;
+    const atkKey = atk.code || `${atk.attacker_id}_${atk.defender_id}_${atk.timestamp_ended}`;
+    if (processedAttackIds.has(atkKey)) return;
     
     const atkTime = atk.timestamp_ended || atk.timestamp_started || 0;
     if (warStart && atkTime < warStart) return;
     if (warEnd && warEnd > 0 && atkTime > warEnd) return;
     
-    processedAttackIds.add(atk.code);
+    processedAttackIds.add(atkKey);
 
     const aId = atk.attacker_id ? atk.attacker_id.toString() : null;
     const dId = atk.defender_id ? atk.defender_id.toString() : null;
@@ -759,7 +762,8 @@ function processWarAttack(atk, myFactionId, enemyFactionId, warStart, warEnd = 0
         if (atk.result === "Assist") {
             liveAssists[aId] = (liveAssists[aId] || 0) + 1;
         } else if (isWin) {
-            if (enFac && dFac === enFac) {
+            const isEnemyHit = (enFac && dFac === enFac) || (atk.modifiers && atk.modifiers.war) || (atk.ranked_war === 1) || (atk.modifiers && atk.modifiers.fair_fight && dFac !== myFac);
+            if (isEnemyHit || (!enFac && dFac !== myFac && dFac !== "0")) {
                 liveWarHits[aId] = (liveWarHits[aId] || 0) + 1;
             } else {
                 liveOutsideHits[aId] = (liveOutsideHits[aId] || 0) + 1;
@@ -770,15 +774,15 @@ function processWarAttack(atk, myFactionId, enemyFactionId, warStart, warEnd = 0
     // Friendly member was defended against / attacked
     if (dId && myFac && dFac === myFac) {
         if (isDefendWin) {
-            // Our member won the defense (attacker lost)
-            if (enFac && aFac === enFac) {
+            const isEnemyDefend = (enFac && aFac === enFac) || (atk.modifiers && atk.modifiers.war);
+            if (isEnemyDefend || (!enFac && aFac !== myFac && aFac !== "0")) {
                 liveWarDefendsWon[dId] = (liveWarDefendsWon[dId] || 0) + 1;
             } else {
                 liveOutsideDefendsWon[dId] = (liveOutsideDefendsWon[dId] || 0) + 1;
             }
         } else if (isWin) {
-            // Our member was attacked and hospitalized / defeated
-            if (enFac && aFac === enFac) {
+            const isEnemyAttack = (enFac && aFac === enFac) || (atk.modifiers && atk.modifiers.war);
+            if (isEnemyAttack || (!enFac && aFac !== myFac && aFac !== "0")) {
                 liveWarHitsTaken[dId] = (liveWarHitsTaken[dId] || 0) + 1;
             } else {
                 liveOutsideHitsTaken[dId] = (liveOutsideHitsTaken[dId] || 0) + 1;
@@ -795,20 +799,34 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart, enemyFacti
     let toTimestamp = Math.floor(Date.now() / 1000);
     if (warEnd && warEnd > 0) toTimestamp = warEnd;
 
+    const totalTimeSpan = Math.max(1, toTimestamp - warStart);
+
     let keepScraping = true;
     let pageCount = 0;
     let totalProcessed = 0;
-    
-    while (keepScraping && pageCount < 100) { 
+
+    warSyncStatus = {
+        isSyncing: true,
+        percent: 5,
+        page: 1,
+        totalHitsLoaded: totalProcessed,
+        message: "Starting attack history scan..."
+    };
+
+    while (keepScraping && pageCount < 150) { 
         try {
-            const res = await fetch(`https://api.torn.com/faction/${watchFactionId}?selections=attacks&to=${toTimestamp}&key=${watchKey}`);
+            // Note: Torn API /faction/?selections=attacks MUST NOT include faction ID in path when using user's key
+            const res = await fetch(`https://api.torn.com/faction/?selections=attacks&to=${toTimestamp}&key=${watchKey}`);
             const data = await res.json();
-            if (data.error || !data.attacks) break;
+            if (data.error || !data.attacks) {
+                console.error("[WarTracker] Backfill error:", data.error?.error || "No attacks returned");
+                break;
+            }
             
             let attacks = Object.values(data.attacks);
             if (attacks.length === 0) break;
             
-            attacks.sort((a, b) => (b.timestamp_ended || 0) - (a.timestamp_ended || 0));
+            attacks.sort((a, b) => (b.timestamp_ended || b.timestamp_started || 0) - (a.timestamp_ended || a.timestamp_started || 0));
             let oldestTimeInBatch = toTimestamp;
             let foundOldAttack = false;
 
@@ -828,17 +846,37 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart, enemyFacti
                 totalProcessed++;
             }
             
+            const timeCovered = Math.max(0, (warEnd && warEnd > 0 ? warEnd : Math.floor(Date.now()/1000)) - oldestTimeInBatch);
+            const currentPct = Math.min(99, Math.max(10, Math.round((timeCovered / totalTimeSpan) * 100)));
+            warSyncStatus = {
+                isSyncing: true,
+                percent: currentPct,
+                page: pageCount + 1,
+                totalHitsLoaded: totalProcessed,
+                message: `Syncing attack history: ${currentPct}% (${totalProcessed} attacks processed)`
+            };
+
             if (!foundOldAttack && oldestTimeInBatch < toTimestamp) {
                  toTimestamp = oldestTimeInBatch - 1;
                  pageCount++;
-                 await new Promise(r => setTimeout(r, 350)); 
+                 await new Promise(r => setTimeout(r, 250)); 
             } else {
                 break;
             }
-        } catch (e) { break; }
+        } catch (e) { 
+            console.error("[WarTracker] Backfill exception:", e.message);
+            break; 
+        }
     }
     hasBackfilledWar = true;
     isBackfillingWar = false;
+    warSyncStatus = {
+        isSyncing: false,
+        percent: 100,
+        page: pageCount + 1,
+        totalHitsLoaded: totalProcessed,
+        message: `War attack history fully loaded (${totalProcessed} attacks processed)`
+    };
     console.log(`[WarTracker] Backfill complete. Processed ${totalProcessed} attacks across ${pageCount + 1} pages.`);
 }
 
@@ -963,7 +1001,7 @@ setInterval(async () => {
     if (!watchKey || !watchFactionId) return;
 
     try {
-        const liveRes = await fetch(`https://api.torn.com/faction/${watchFactionId}?selections=attacks,basic,rankedwars&key=${watchKey}`);
+        const liveRes = await fetch(`https://api.torn.com/faction/?selections=attacks,basic,rankedwars&key=${watchKey}`);
         const liveData = await liveRes.json();
         
         if (liveData.rankedwars) {
@@ -2574,6 +2612,7 @@ app.get('/api/warboard', async (req, res) => {
             enemy: enemyMembers,
             detectedEnemyId: enemyId,
             premiumActive: isPremium,
+            syncStatus: warSyncStatus,
             warInfo: activeWar ? {
                 active: true,
                 start: activeWar.war?.start || 0,

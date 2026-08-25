@@ -417,6 +417,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('global-bottoken').value = cfg.globalBotToken || '';
         document.getElementById('global-channelid').value = cfg.globalChannelId || localStorage.getItem('warboard_channelid') || '';
         document.getElementById('discord-userid').value = cfg.personalDiscordId || localStorage.getItem('warboard_discordid') || '';
+        if (document.getElementById('guild-id-input')) {
+            document.getElementById('guild-id-input').value = cfg.guildId || localStorage.getItem('warboard_guildid') || '';
+        }
         const flags = {
             targetOnline: cfg.targetOnline === true,
             targetLanded: cfg.targetLanded === true || cfg.targetLanded === undefined,
@@ -485,12 +488,14 @@ async function saveDiscordConfig() {
     const botToken = document.getElementById('global-bottoken').value.trim();
     const channelId = document.getElementById('global-channelid').value.trim();
     const discordId = document.getElementById('discord-userid').value.trim();
+    const guildId = document.getElementById('guild-id-input')?.value.trim() || '';
     const ffKey = localStorage.getItem('warboard_ffkey') || '';
     const enemyFacId = localStorage.getItem('warboard_enemyId') || '';
 
     localStorage.setItem('warboard_bottoken', botToken);
     localStorage.setItem('warboard_channelid', channelId);
     localStorage.setItem('warboard_discordid', discordId);
+    localStorage.setItem('warboard_guildid', guildId);
     statusEl.style.color = 'var(--blue)'; statusEl.textContent = '⚡ Transmitting to server...'; btn.disabled = true;
     try {
         const res = await fetch('/api/save-discord-config', {
@@ -502,6 +507,7 @@ async function saveDiscordConfig() {
                 globalBotToken: botToken,
                 globalChannelId: channelId,
                 personalDiscordId: discordId,
+                guildId: guildId,
                 targetOnline: document.getElementById('targetOnline').checked,
                 targetLanded: document.getElementById('targetLanded').checked,
                 targetOutHosp: document.getElementById('targetOutHosp').checked,
@@ -569,6 +575,14 @@ async function registerSlashCommands() {
     const statusEl = document.getElementById('slash-status');
     const botToken = document.getElementById('global-bottoken').value.trim();
     const guildId = document.getElementById('guild-id-input').value.trim();
+    if (guildId) {
+        localStorage.setItem('warboard_guildid', guildId);
+        fetch('/api/save-discord-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ guildId })
+        }).catch(() => {});
+    }
     if (!botToken) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ Save your Bot Token first.'; return; }
     btn.disabled = true;
     statusEl.style.color = 'var(--gold)'; statusEl.textContent = '⏳ Registering slash commands with Discord...';
