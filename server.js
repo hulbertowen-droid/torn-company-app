@@ -4494,58 +4494,56 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
         const avgStat = members.length > 0 ? totalStatsSum / members.length : 0;
 
         const lines = members.map((m, idx) => {
-            const onlineDot = m.status === 'Online' ? '🟢' : (m.status === 'Idle' ? '🟡' : '⚪');
-            const hospTag = m.state === 'Hospital' ? ' 🏥' : (m.state === 'Traveling' || m.state === 'Abroad' ? ' ✈️' : '');
-            const statsBadge = `**${m.statsFormatted}** stats`;
-            const actionLink = isEnemy
-                ? `[⚔️ Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${m.id})`
-                : `[👤 Profile](https://www.torn.com/profiles.php?XID=${m.id})`;
-            return `\`${(idx + 1).toString().padStart(2, '0')}.\` ${onlineDot} [**${m.name}**](https://www.torn.com/profiles.php?XID=${m.id}) (Lvl ${m.level}) — ${statsBadge}${hospTag} • ${actionLink}`;
+            let numBadge = `\`${(idx + 1).toString().padStart(2, '0')}.\``;
+            if (idx === 0) numBadge = '🥇';
+            else if (idx === 1) numBadge = '🥈';
+            else if (idx === 2) numBadge = '🥉';
+
+            const statusDot = m.status === 'Online' ? '🟢 ' : (m.status === 'Idle' ? '🟡 ' : '');
+            const stateBadge = m.state === 'Hospital' ? ' 🏥' : (m.state === 'Traveling' || m.state === 'Abroad' ? ' ✈️' : '');
+            
+            if (isEnemy) {
+                return `${numBadge} ${statusDot}[**${m.name}**](https://www.torn.com/profiles.php?XID=${m.id}) (Lvl ${m.level}) ➔ **${m.statsFormatted}**${stateBadge} • [⚔️ Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${m.id})`;
+            } else {
+                return `${numBadge} ${statusDot}[**${m.name}**](https://www.torn.com/profiles.php?XID=${m.id}) (Lvl ${m.level}) ➔ **${m.statsFormatted}**${stateBadge}`;
+            }
         });
 
         const fields = [];
-        let currentFieldLines = [];
-        let currentFieldLen = 0;
-        let partNumber = 1;
+        const chunkSize = 11;
+        for (let i = 0; i < lines.length; i += chunkSize) {
+            const chunk = lines.slice(i, i + chunkSize);
+            const start = i + 1;
+            const end = Math.min(i + chunkSize, lines.length);
 
-        for (let idx = 0; idx < lines.length; idx++) {
-            const line = lines[idx];
-            // Discord max field value is 1024 characters; keep under 950 for safety
-            if (currentFieldLen + line.length + 1 > 950 || currentFieldLines.length >= 10) {
-                if (currentFieldLines.length > 0) {
-                    fields.push({
-                        name: fields.length === 0 ? `📋 Team Roster (Sorted by Stats)` : `📋 Team Roster (Part ${partNumber})`,
-                        value: currentFieldLines.join('\n'),
-                        inline: false
-                    });
-                    partNumber++;
-                    currentFieldLines = [];
-                    currentFieldLen = 0;
-                }
+            let sectionTitle = `⚔️ Main Battle Line (#${start} - #${end})`;
+            if (i === 0) {
+                sectionTitle = `👑 Heavyweights & Top Hitters (#1 - #${end})`;
+            } else if (i + chunkSize >= lines.length) {
+                sectionTitle = `🛡️ Support & Reserves (#${start} - #${end})`;
             }
-            currentFieldLines.push(line);
-            currentFieldLen += line.length + 1;
-        }
 
-        if (currentFieldLines.length > 0) {
             fields.push({
-                name: fields.length === 0 ? `📋 Team Roster (Sorted by Stats)` : `📋 Team Roster (Part ${partNumber})`,
-                value: currentFieldLines.join('\n'),
+                name: sectionTitle,
+                value: chunk.join('\n'),
                 inline: false
             });
         }
 
+        const respectStr = Number(facData.respect || 0).toLocaleString();
+        const rankStr = facData.rank?.name || 'Unranked';
         const intelNote = ffKey 
-            ? `🛡️ **Intel Source**: FF Scouter & Spy DB (**${verifiedCount} / ${members.length}** verified)`
+            ? `🛡️ **Intel**: FF Scouter & Spy DB (**${verifiedCount} / ${members.length}** verified)`
             : `⚠️ **Notice**: FF Scouter key not connected — using level baseline estimates. Connect FF Scouter in Dashboard Settings for live accuracy.`;
 
         return {
-            title: `📊 ${facData.name || 'Faction'} — Battle Stats Roster (${members.length} Members)`,
-            description: `**Faction Respect**: **${(facData.respect || 0).toLocaleString()}** • **Rank**: **${facData.rank?.name || 'Unranked'}**\n` +
-                         `**Total Team Stats**: **${formatStatNumber(totalStatsSum)}**\n` +
-                         `**Average Stats**: **${formatStatNumber(avgStat)}** / member\n` +
+            title: isEnemy 
+                ? `🎯 ${facData.name || 'Enemy'} — Battle Stats Intel (${members.length} Members)`
+                : `🛡️ ${facData.name || 'Faction'} — Battle Stats Roster (${members.length} Members)`,
+            description: `🏛️ **Rank & Respect**: **${rankStr}** • **${respectStr}** respect\n` +
+                         `💪 **Total Team Stats**: **${formatStatNumber(totalStatsSum)}**  •  📊 **Avg / Member**: **${formatStatNumber(avgStat)}**\n` +
                          `${intelNote}\n`,
-            color: isEnemy ? 0xff4757 : 0x2ed573,
+            color: isEnemy ? 0xff4757 : 0x00cec9,
             fields,
             footer: { text: `Torn Battle Stats Intel • FF Scouter & Spy DB • ${new Date().toUTCString()}` }
         };
