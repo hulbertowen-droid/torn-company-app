@@ -5263,6 +5263,112 @@ async function buildInactiveMembersEmbed(apiKey) {
     }
 }
 
+async function buildDonatorStatusEmbed(playerQuery, apiKey) {
+    if (!apiKey) return { title: "⭐️ Donator Status", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
+    try {
+        let url = `https://api.torn.com/user/?selections=profile,bars&key=${apiKey}`;
+        let isSelf = true;
+
+        if (playerQuery && String(playerQuery).trim()) {
+            let clean = String(playerQuery).trim();
+            const idMatch = clean.match(/\d{3,10}/);
+            let targetId = idMatch ? idMatch[0] : null;
+
+            if (!targetId) {
+                const lower = clean.toLowerCase();
+                for (const [id, name] of Object.entries(playerNameCache)) {
+                    if (name && (name.toLowerCase() === lower || name.toLowerCase().includes(lower))) {
+                        targetId = id;
+                        break;
+                    }
+                }
+            }
+
+            if (targetId) {
+                url = `https://api.torn.com/user/${targetId}?selections=profile,bars&key=${apiKey}`;
+                isSelf = false;
+            }
+        }
+
+        const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.error || "Player not found");
+
+        const name = data.name || "Unknown";
+        const id = data.player_id || "—";
+        const isDonator = data.donator === 1 || data.donator === true || Boolean(data.donator);
+        const daysLeft = data.donatordays || data.donator_days || null;
+        const level = data.level || "—";
+        const age = data.age || 0;
+        const statusDesc = data.status?.description || data.status?.state || (data.last_action?.status || "Offline");
+
+        const energyMax = isDonator ? 150 : 100;
+        const energyCurrent = data.energy?.current !== undefined ? `${data.energy.current}/${energyMax}` : `${energyMax} max`;
+
+        const title = `⭐️ Donator Status: ${name} [${id}]`;
+        const color = isDonator ? 0x2ed573 : 0xff4757;
+
+        let statusText = isDonator
+            ? `🟢 **ACTIVE DONATOR / SUBSCRIBER**`
+            : `🔴 **NON-DONATOR (Free Account)**`;
+
+        let desc = `**Player**: **[${name}](https://www.torn.com/profiles.php?XID=${id})** [${id}]\n` +
+                   `**Status**: ${statusText}\n`;
+
+        if (daysLeft !== null && daysLeft !== undefined && daysLeft > 0) {
+            desc += `⏳ **Days Remaining**: **${daysLeft} days**\n`;
+        } else if (isDonator) {
+            desc += `⏳ **Status Type**: **Active Monthly Subscriber or Donator**\n`;
+        } else {
+            desc += `⚠️ **Status**: No active Donator Pack or Subscription\n`;
+        }
+
+        desc += `📊 **Level**: **${level}** • **Age**: **${age.toLocaleString()} days**\n` +
+                `🕒 **Activity**: ${statusDesc}`;
+
+        const fields = [
+            {
+                name: "⚡ Energy Capacity",
+                value: `**${energyCurrent}**\n${isDonator ? '✨ +50 Bonus Cap' : '⚠️ Base 100 Cap'}`,
+                inline: true
+            },
+            {
+                name: "⏱️ Energy Regeneration",
+                value: isDonator ? "**5 Energy / 10 mins**\n(30 Energy / hr)" : "**5 Energy / 15 mins**\n(20 Energy / hr)",
+                inline: true
+            },
+            {
+                name: "📈 Daily Energy Potential",
+                value: isDonator ? "**720 Energy / day**\n(+50% natural gain)" : "**480 Energy / day**\n(Standard gain)",
+                inline: true
+            },
+            {
+                name: isDonator ? "🎁 Active Benefits" : "❌ Missing Benefits",
+                value: isDonator
+                    ? "• **150 Max Energy** (+50 bonus bar)\n• **50% Faster Energy Regen** (10m vs 15m)\n• **+240 extra natural energy every single day**\n• Advanced Torn Search filters"
+                    : "• Missing **+50 Max Energy**\n• Missing **240 extra energy every day**\n• Slower 15-minute regeneration\n• Use a **Donator Pack** from Bazaar/Item Market to activate!",
+                inline: false
+            }
+        ];
+
+        return {
+            title,
+            description: desc,
+            color,
+            fields,
+            links: [
+                { label: "👤 View Profile", url: `https://www.torn.com/profiles.php?XID=${id}` },
+                { label: "📦 Buy Donator Pack", url: `https://www.torn.com/imarket.php#/p=shop&step=shop&type=&searchname=Donator+Pack` },
+                { label: "💳 Official Subscription", url: `https://www.torn.com/donator.php` }
+            ],
+            footer: { text: `Torn Donator Intelligence • ${isSelf ? "Your Account" : "Player Lookup"}` },
+            timestamp: new Date().toISOString()
+        };
+    } catch(e) {
+        return { title: "⭐️ Donator Status", description: `⚠️ Error: ${e.message}`, color: 0xff4757 };
+    }
+}
+
 async function buildPayoutEmbed(memberQuery, apiKey) {
     if (!apiKey) return { title: "💰 War Payout Calculator", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
     try {
@@ -5548,6 +5654,10 @@ async function registerSlashCommands(token, guildId = null) {
 
         // 9. Inactivity Tracker
         new SlashCommandBuilder().setName('inactive').setDescription('List faction members who have been inactive for 1+ days').toJSON(),
+
+        // 10. Donator Status
+        new SlashCommandBuilder().setName('donator').setDescription('Check Donator / Subscriber status, days left, and energy perks')
+            .addStringOption(opt => opt.setName('player').setDescription('Player name, ID, or leave blank for yourself').setRequired(false)).toJSON(),
     ];
 
     try {
@@ -5592,6 +5702,23 @@ async function startSlashCommandBot(token) {
         slashCommandBot.once(Events.ClientReady, async (c) => {
             console.log(`[Slash Bot] Ready as ${c.user.tag}`);
             slashBotStarted = true;
+
+            // Automatically register slash commands to all guilds the bot is in for instant propagation
+            try {
+                const guilds = Array.from(c.guilds.cache.keys());
+                if (discordConfig.guildId && !guilds.includes(discordConfig.guildId)) {
+                    guilds.push(discordConfig.guildId);
+                }
+                console.log(`[Slash Bot] Auto-registering slash commands across ${guilds.length} server(s)...`);
+                for (const gId of guilds) {
+                    await registerSlashCommands(token, gId).catch(e => console.warn(`[Slash Bot] Guild ${gId} registration error:`, e.message));
+                }
+                // Also update global registration as fallback
+                await registerSlashCommands(token, null).catch(() => {});
+                console.log(`[Slash Bot] Slash commands auto-registered successfully!`);
+            } catch(e) {
+                console.warn("[Slash Bot] Startup registration error:", e.message);
+            }
         });
 
         slashCommandBot.on(Events.InteractionCreate, async (interaction) => {
@@ -5691,6 +5818,9 @@ async function startSlashCommandBot(token) {
                     embed = await buildWarBountiesEmbed(apiKey);
                 } else if (cmd === 'inactive' || cmd === 'inactivity') {
                     embed = await buildInactiveMembersEmbed(apiKey);
+                } else if (cmd === 'donator' || cmd === 'subscriber' || cmd === 'sub') {
+                    const player = interaction.options.getString('player');
+                    embed = await buildDonatorStatusEmbed(player, apiKey);
                 } else {
                     // Travel lookup fallback (e.g. /travel, /south-africa, /mexico, /sa, /uk, etc.)
                     let country = slashNameToCountry(cmd);
