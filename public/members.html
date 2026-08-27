@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -28,7 +28,7 @@
         .page-header .sub { color: var(--text-dim); font-size: 0.85em; }
 
         /* Summary Cards Row */
-        .summary-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-bottom: 22px; }
+        .summary-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-bottom: 22px; }
         .sum-card { background: var(--card); border: 1px solid #2f3542; border-radius: 10px; padding: 14px 12px; text-align: center; cursor: pointer; transition: 0.2s; }
         .sum-card:hover, .sum-card.active { border-color: var(--teal); background: rgba(0,206,201,0.05); }
         .sum-card.active .sc-val { color: var(--teal); }
@@ -232,6 +232,7 @@
         <div class="sum-card" id="sc-Jail" onclick="setFilter('Jail')"><div class="sc-val c-purple" id="sc-v-Jail">—</div><div class="sc-lbl">⛓️ Jailed</div></div>
         <div class="sum-card" id="sc-Traveling" onclick="setFilter('Traveling')"><div class="sc-val c-blue" id="sc-v-Traveling">—</div><div class="sc-lbl">✈️ Traveling</div></div>
         <div class="sum-card" id="sc-Offline" onclick="setFilter('Offline')"><div class="sc-val c-dim" id="sc-v-Offline">—</div><div class="sc-lbl">⚫ Offline</div></div>
+        <div class="sum-card" id="sc-Inactive" onclick="setFilter('Inactive')"><div class="sc-val c-gold" id="sc-v-Inactive">—</div><div class="sc-lbl">💤 Inactive (1d+)</div></div>
     </div>
 
     <!-- Controls -->
@@ -239,12 +240,13 @@
         <span class="sort-label">Sort by:</span>
         <select class="sort-select" id="sort-select" onchange="renderMembers()">
             <option value="status">Status</option>
+            <option value="inactivity">Longest Inactive</option>
             <option value="level">Level</option>
             <option value="name">Name</option>
             <option value="days">Days in Faction</option>
             <option value="attacks">War Attacks</option>
             <option value="score">War Score</option>
-            <option value="lastAction">Last Active</option>
+            <option value="lastAction">Most Recently Active</option>
         </select>
         <input class="search-box" type="text" id="search-box" placeholder="🔍 Search member..." oninput="renderMembers()">
         <div class="view-toggle">
@@ -371,7 +373,8 @@ async function loadMembers() {
         hasWar = allMembers.some(m => m.attacks > 0 || m.score > 0);
 
         // Build counts
-        const counts = {All: allMembers.length, Online:0, Idle:0, Hospital:0, Jail:0, Traveling:0, Offline:0};
+        const counts = {All: allMembers.length, Online:0, Idle:0, Hospital:0, Jail:0, Traveling:0, Offline:0, Inactive:0};
+        const nowSec = Math.floor(Date.now() / 1000);
         allMembers.forEach(m => {
             const s = getState(m);
             if (s === 'online') counts.Online++;
@@ -380,6 +383,10 @@ async function loadMembers() {
             else if (s === 'jail') counts.Jail++;
             else if (s === 'traveling') counts.Traveling++;
             else counts.Offline++;
+
+            if ((nowSec - (m.lastActionTimestamp || 0)) >= 86400) {
+                counts.Inactive++;
+            }
         });
         Object.keys(counts).forEach(k => {
             const el = document.getElementById('sc-v-' + k);
@@ -388,7 +395,7 @@ async function loadMembers() {
 
         // Faction name
         const fline = document.getElementById('faction-line');
-        fline.textContent = `${allMembers.length} members · ${counts.Online} online · ${counts.Hospital} in hospital`;
+        fline.textContent = `${allMembers.length} members · ${counts.Online} online · ${counts.Hospital} in hospital · ${counts.Inactive} inactive (1d+)`;
 
         document.getElementById('summary-row').style.display = 'grid';
         document.getElementById('controls-row').style.display = 'flex';
@@ -431,6 +438,10 @@ function renderMembers() {
             if (activeFilter === 'Jail'     && s !== 'jail') return false;
             if (activeFilter === 'Traveling'&& s !== 'traveling') return false;
             if (activeFilter === 'Offline'  && s !== 'offline') return false;
+            if (activeFilter === 'Inactive') {
+                const now = Math.floor(Date.now() / 1000);
+                if ((now - (m.lastActionTimestamp || 0)) < 86400) return false;
+            }
         }
         if (search && !(m.name || '').toLowerCase().includes(search)) return false;
         return true;
@@ -438,6 +449,7 @@ function renderMembers() {
 
     filtered.sort((a,b) => {
         if (sortKey === 'status') return stateOrder(getState(a)) - stateOrder(getState(b));
+        if (sortKey === 'inactivity') return (a.lastActionTimestamp||0) - (b.lastActionTimestamp||0);
         if (sortKey === 'level') return (b.level||0) - (a.level||0);
         if (sortKey === 'name') return (a.name||'').localeCompare(b.name||'');
         if (sortKey === 'days') return (b.daysInFaction||0) - (a.daysInFaction||0);
@@ -527,12 +539,16 @@ function renderCard(m) {
         </div>`;
     }
 
+    const nowSec = Math.floor(Date.now()/1000);
+    const isInactive1d = (m.lastActionTimestamp && (nowSec - m.lastActionTimestamp) >= 86400);
+
     return `<div class="mc st-${state}">
         <div class="mc-top">
             <div class="mc-identity">
                 <div class="mc-name-row">
                     <div class="mc-name"><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank">${m.name || '?'}</a></div>
                     ${m.level ? `<span class="lvl-badge">Lv ${m.level}</span>` : ''}
+                    ${isInactive1d ? `<span style="font-size:0.62em;background:rgba(255,165,2,0.15);color:var(--gold);padding:1px 6px;border-radius:4px;border:1px solid rgba(255,165,2,0.3);font-weight:700;white-space:nowrap;">💤 1d+ Inactive</span>` : ''}
                 </div>
                 <div class="mc-pos">${m.position || 'Member'}</div>
             </div>
@@ -586,6 +602,7 @@ function renderTable(members) {
         const statStr = typeof m.estStats === 'number' ? m.estStats.toLocaleString() : (m.estStats || '—');
         const last = formatLastAction(m.lastActionTimestamp) || m.lastActionRelative || '—';
         const eff = m.attacks > 0 ? (m.score/m.attacks).toFixed(1) : '—';
+        const isInactive1d = (m.lastActionTimestamp && (Math.floor(Date.now()/1000) - m.lastActionTimestamp) >= 86400);
 
         return `<tr>
             <td><a class="tlink" href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank">${m.name}</a></td>
@@ -597,7 +614,7 @@ function renderTable(members) {
             <td style="color:var(--blue);font-weight:700">${m.attacks_made}</td>
             <td style="color:var(--green);font-weight:700">+${m.respect_earned.toLocaleString()}</td>
             <td style="color:var(--gold);font-weight:700">${m.chain_contributions}</td>
-            <td style="color:var(--text-dim)">${last}</td>
+            <td style="color:${isInactive1d ? 'var(--gold)' : 'var(--text-dim)'};font-weight:${isInactive1d ? '700' : 'normal'}">${last}${isInactive1d ? ' <span style="font-size:0.75em;background:rgba(255,165,2,0.15);color:var(--gold);padding:1px 5px;border-radius:4px;border:1px solid rgba(255,165,2,0.3);font-weight:700;">💤 1d+</span>' : ''}</td>
             <td style="color:var(--text-dim)">${m.daysInFaction||0}d</td>
         </tr>`;
     }).join('');

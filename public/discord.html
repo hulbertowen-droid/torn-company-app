@@ -168,11 +168,16 @@
                         <span class="field-hint">Right-click the channel in Discord → Copy Channel ID (requires Dev Mode).</span>
                     </div>
                 </div>
-                <div class="field-row single">
+                <div class="field-row">
                     <div class="field-group">
                         <label class="field-label" for="discord-userid">Your Personal Discord User ID <span style="font-weight:400;text-transform:none;color:var(--text-dim);font-size:0.9em;">(optional — for personal pings)</span></label>
                         <input class="field-input" type="text" id="discord-userid" placeholder="e.g. 987654321098765432" autocomplete="off">
                         <span class="field-hint">If set, chain attack warnings will @mention you directly in Discord.</span>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="inactivity-roleid">Inactivity Alert Role ID <span style="font-weight:400;text-transform:none;color:var(--text-dim);font-size:0.9em;">(List Role to Ping)</span></label>
+                        <input class="field-input" type="text" id="inactivity-roleid" placeholder="e.g. 123456789012345678 or @here" autocomplete="off">
+                        <span class="field-hint">Right-click role in Discord Settings → Roles → Copy Role ID. Bot pings this role when a member is inactive for 1+ day.</span>
                     </div>
                 </div>
             </div>
@@ -288,6 +293,21 @@
                     </div>
                 </div>
 
+                <div class="section-label" style="margin-top:20px;">👥 Member Monitoring</div>
+                <div class="trigger-grid">
+                    <div class="trigger-item" id="ti-inactivityTracker">
+                        <span class="trigger-icon">💤</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name">Player Inactivity Tracker (1+ Day) <span class="trigger-badge war" style="background:rgba(255,165,2,0.12);color:var(--gold);border-color:rgba(255,165,2,0.3);">FACTION</span></div>
+                            <div class="trigger-desc">Pings the alert channel and @mentions your configured list role whenever any faction member is inactive for 1 day (24 hours). Tracks last seen time in real-time.</div>
+                        </div>
+                        <div class="trigger-actions">
+                            <button class="btn-test" id="btn-test-inactivity" onclick="testAlert('inactivity')">🧪 Test</button>
+                            <label class="switch"><input type="checkbox" id="inactivityTracker" onchange="onToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="save-row">
                     <button class="btn-discord-save" onclick="saveDiscordConfig()" id="save-btn">
                         💾 Save &amp; Commit to Server
@@ -328,14 +348,16 @@
                             <code>/chainwatch</code> — Online fighters ready in Torn<br>
                             <code>/profile &lt;player&gt;</code> — Player card &amp; revives status<br>
                             <code>/hospital</code> — Hospitalized faction members<br>
-                            <code>/roster</code> — Live faction readiness breakdown
+                            <code>/roster</code> — Live faction readiness breakdown<br>
+                            <code>/inactive</code> — List members inactive 1+ days
                         </div>
                     </div>
                     <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:12px;">
-                        <div style="font-weight:800;color:var(--gold);font-size:0.85em;margin-bottom:6px;">💼 OC &amp; PAYOUTS</div>
+                        <div style="font-weight:800;color:var(--gold);font-size:0.85em;margin-bottom:6px;">💼 OC, BOUNTIES &amp; PAYOUTS</div>
                         <div style="font-size:0.8em;color:var(--text-dim);line-height:1.6;">
                             <code>/oc</code> — Ready &amp; in-planning OCs summary<br>
                             <code>/myoc [player]</code> — Your assigned OC team &amp; timer<br>
+                            <code>/bounties</code> — War bounties placed &amp; claimed<br>
                             <code>/payout [member]</code> — War hits &amp; owed earnings<br>
                             <code>/mvp</code> — Top total war hitters &amp; MVPs<br>
                             <code>/travel &lt;country&gt;</code> — Foreign destination intel<br>
@@ -404,7 +426,7 @@ function onToggle(checkbox) {
     updateActiveCount();
 }
 function updateActiveCount() {
-    const toggles = ['targetOnline','targetLanded','targetOutHosp','travelWarnings','medOutSniper','chainWarnings','chainUnder90','chainMilestone','friendlyAttacked'];
+    const toggles = ['targetOnline','targetLanded','targetOutHosp','travelWarnings','medOutSniper','chainWarnings','chainUnder90','chainMilestone','friendlyAttacked','inactivityTracker'];
     const active = toggles.filter(id => document.getElementById(id)?.checked).length;
     document.getElementById('active-alerts-count').textContent = active;
 }
@@ -419,6 +441,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('global-bottoken').value = cfg.globalBotToken || '';
         document.getElementById('global-channelid').value = cfg.globalChannelId || localStorage.getItem('warboard_channelid') || '';
         document.getElementById('discord-userid').value = cfg.personalDiscordId || localStorage.getItem('warboard_discordid') || '';
+        if (document.getElementById('inactivity-roleid')) {
+            document.getElementById('inactivity-roleid').value = cfg.inactivityRoleId || localStorage.getItem('warboard_inactivity_roleid') || '';
+        }
         if (document.getElementById('guild-id-input')) {
             document.getElementById('guild-id-input').value = cfg.guildId || localStorage.getItem('warboard_guildid') || '';
         }
@@ -432,6 +457,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             medOutSniper: cfg.medOutSniper === true || cfg.medOutSniper === undefined,
             travelWarnings: cfg.travelWarnings === true || cfg.travelWarnings === undefined,
             chainWarnings: cfg.chainWarnings === true || cfg.chainWarnings === undefined,
+            inactivityTracker: cfg.inactivityTracker !== false,
         };
         for (const [id, val] of Object.entries(flags)) {
             const el = document.getElementById(id);
@@ -490,6 +516,7 @@ async function saveDiscordConfig() {
     const botToken = document.getElementById('global-bottoken').value.trim();
     const channelId = document.getElementById('global-channelid').value.trim();
     const discordId = document.getElementById('discord-userid').value.trim();
+    const inactivityRoleId = document.getElementById('inactivity-roleid')?.value.trim() || '';
     const guildId = document.getElementById('guild-id-input')?.value.trim() || '';
     const ffKey = localStorage.getItem('warboard_ffkey') || '';
     const enemyFacId = localStorage.getItem('warboard_enemyId') || '';
@@ -497,6 +524,7 @@ async function saveDiscordConfig() {
     localStorage.setItem('warboard_bottoken', botToken);
     localStorage.setItem('warboard_channelid', channelId);
     localStorage.setItem('warboard_discordid', discordId);
+    localStorage.setItem('warboard_inactivity_roleid', inactivityRoleId);
     localStorage.setItem('warboard_guildid', guildId);
     statusEl.style.color = 'var(--blue)'; statusEl.textContent = '⚡ Transmitting to server...'; btn.disabled = true;
     try {
@@ -509,6 +537,7 @@ async function saveDiscordConfig() {
                 globalBotToken: botToken,
                 globalChannelId: channelId,
                 personalDiscordId: discordId,
+                inactivityRoleId: inactivityRoleId,
                 guildId: guildId,
                 targetOnline: document.getElementById('targetOnline').checked,
                 targetLanded: document.getElementById('targetLanded').checked,
@@ -519,6 +548,7 @@ async function saveDiscordConfig() {
                 medOutSniper: document.getElementById('medOutSniper').checked,
                 travelWarnings: document.getElementById('travelWarnings').checked,
                 chainWarnings: document.getElementById('chainWarnings').checked,
+                inactivityTracker: document.getElementById('inactivityTracker')?.checked ?? true,
             })
         });
         const data = await res.json();
@@ -538,6 +568,7 @@ async function testAlert(type) {
     const botToken = document.getElementById('global-bottoken').value.trim();
     const channelId = document.getElementById('global-channelid').value.trim();
     const discordId = document.getElementById('discord-userid').value.trim();
+    const inactivityRoleId = document.getElementById('inactivity-roleid')?.value.trim() || '';
     if (!botToken || !channelId) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ Enter your Bot Token and Channel ID first, then save.'; return; }
     btn.disabled = true; btn.classList.add('sending'); btn.textContent = '⏳ Sending...';
     statusEl.style.color = 'var(--gold)'; statusEl.textContent = 'Sending ' + type + ' test alert to Discord...';
@@ -548,7 +579,7 @@ async function testAlert(type) {
         try {
             res = await fetch('/api/test-discord-alert', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type, discordId, globalChannelId: channelId, globalBotToken: botToken }),
+                body: JSON.stringify({ type, discordId, inactivityRoleId, globalChannelId: channelId, globalBotToken: botToken }),
                 signal: controller.signal
             });
         } finally { clearTimeout(timeout); }

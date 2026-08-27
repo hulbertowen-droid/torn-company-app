@@ -279,6 +279,9 @@ let discordConfig = {
     medOutSniper: true,
     travelWarnings: true,
     chainWarnings: true,
+    inactivityTracker: true,
+    inactivityRoleId: "",
+    inactivityDays: 1,
     apiKey: "", 
     factionId: "" 
 };
@@ -427,14 +430,17 @@ async function executeDiscordSend(token, channelId, embed, content = "") {
 
     let cleanContent = content ? String(content).trim() : "";
     if (cleanContent.startsWith('<@') && cleanContent.endsWith('>')) {
-        const mentionId = cleanContent.replace(/[<@!>]/g, '');
-        if (!/^\d{17,20}$/.test(mentionId)) {
+        const mentionId = cleanContent.replace(/[<@!&>]/g, '');
+        if (!/^\d{15,22}$/.test(mentionId)) {
             cleanContent = "";
         }
     }
 
     const payload = { embeds: [embed] };
-    if (cleanContent) payload.content = cleanContent;
+    if (cleanContent) {
+        payload.content = cleanContent;
+        payload.allowed_mentions = { parse: ['roles', 'users', 'everyone'] };
+    }
 
     // A. Webhook route
     if (webhookUrl) {
@@ -1340,6 +1346,130 @@ function findBestTacticalFighter(membersObj, enemyTarget, enemyId) {
     return { name: candidates[0].name, id: candidates[0].id, enemyEst };
 }
 
+// ─── Player Inactivity Tracker & Discord Alerts ──────────────────────────────
+const INACTIVITY_ALERTS_FILE = path.join(__dirname, 'data', 'inactivity_alerts.json');
+
+function loadInactivityAlerts() {
+    try {
+        if (!fs.existsSync(path.dirname(INACTIVITY_ALERTS_FILE))) {
+            fs.mkdirSync(path.dirname(INACTIVITY_ALERTS_FILE), { recursive: true });
+        }
+        if (fs.existsSync(INACTIVITY_ALERTS_FILE)) {
+            return JSON.parse(fs.readFileSync(INACTIVITY_ALERTS_FILE, 'utf8'));
+        }
+    } catch (e) {}
+    return { alerts: {}, initialized: false };
+}
+
+function saveInactivityAlerts(data) {
+    try {
+        if (!fs.existsSync(path.dirname(INACTIVITY_ALERTS_FILE))) {
+            fs.mkdirSync(path.dirname(INACTIVITY_ALERTS_FILE), { recursive: true });
+        }
+        fs.writeFileSync(INACTIVITY_ALERTS_FILE, JSON.stringify(data, null, 2), 'utf8');
+    } catch (e) {}
+}
+
+let inactivityAlertsMemory = loadInactivityAlerts();
+
+async function checkFactionMembersInactivity(members) {
+    if (!members || typeof members !== 'object') return;
+    if (discordConfig.inactivityTracker === false) return;
+    if (!discordConfig.globalBotToken || !discordConfig.globalChannelId) return;
+
+    const thresholdDays = Math.max(1, Number(discordConfig.inactivityDays) || 1);
+    const thresholdSec = thresholdDays * 86400;
+    const now = Math.floor(Date.now() / 1000);
+
+    // Initial startup check: seed players who have already been inactive for > 2 days
+    // so we don't spam the channel with historical inactive players on fresh boot.
+    if (!inactivityAlertsMemory.initialized) {
+        for (const [id, m] of Object.entries(members)) {
+            const lastTs = m.last_action?.timestamp || 0;
+            if (lastTs && (now - lastTs) > 2 * 86400) {
+                inactivityAlertsMemory.alerts[id] = {
+                    lastActionTs: lastTs,
+                    alertedAt: now,
+                    seeded: true
+                };
+            }
+        }
+        inactivityAlertsMemory.initialized = true;
+        saveInactivityAlerts(inactivityAlertsMemory);
+    }
+
+    let roleMention = "";
+    if (discordConfig.inactivityRoleId && String(discordConfig.inactivityRoleId).trim()) {
+        const rawRole = String(discordConfig.inactivityRoleId).trim();
+        const numOnly = rawRole.replace(/\D/g, '');
+        if (numOnly.length >= 15 && numOnly.length <= 22) {
+            roleMention = `<@&${numOnly}>`;
+        } else if (rawRole.startsWith('<@&') && rawRole.endsWith('>')) {
+            roleMention = rawRole;
+        } else if (rawRole === "@here" || rawRole === "@everyone") {
+            roleMention = rawRole;
+        }
+    }
+
+    for (const [id, m] of Object.entries(members)) {
+        const lastTs = m.last_action?.timestamp || 0;
+        if (!lastTs) continue;
+
+        const inactiveSec = now - lastTs;
+
+        // If player is active (less than threshold), clear prior alert so future inactivity can alert
+        if (inactiveSec < thresholdSec) {
+            if (inactivityAlertsMemory.alerts[id]) {
+                delete inactivityAlertsMemory.alerts[id];
+                saveInactivityAlerts(inactivityAlertsMemory);
+            }
+            continue;
+        }
+
+        // Check if already alerted for this specific last_action timestamp
+        const priorAlert = inactivityAlertsMemory.alerts[id];
+        if (priorAlert && priorAlert.lastActionTs === lastTs) {
+            continue; // Already alerted for this inactivity streak
+        }
+
+        const inactiveHours = Math.floor(inactiveSec / 3600);
+        const inactiveDaysCount = Math.floor(inactiveSec / 86400);
+        const daysText = inactiveDaysCount <= 1 ? '1 day' : `${inactiveDaysCount} days`;
+        const timeDisplay = `${daysText} (${inactiveHours} hours)`;
+        const relText = m.last_action?.relative || `${inactiveHours} hours ago`;
+        const memberStatus = m.status?.description || m.status?.state || m.last_action?.status || 'Offline';
+
+        const embed = {
+            title: "💤 PLAYER INACTIVITY ALERT",
+            description: `**[${m.name}](https://www.torn.com/profiles.php?XID=${id})** [${id}] has been inactive for **${timeDisplay}**!`,
+            color: 16744272, // Warm Gold/Orange #ffa502
+            fields: [
+                { name: "⏱️ Inactive Duration", value: `**${timeDisplay}**`, inline: true },
+                { name: "🕒 Last Action", value: `${relText}`, inline: true },
+                { name: "📊 Current Status", value: `${memberStatus}`, inline: true },
+                { name: "🎖️ Faction Position", value: `${m.position || 'Member'} (Lvl ${m.level || '—'})`, inline: true }
+            ],
+            links: [
+                { label: "👤 View Profile", url: `https://www.torn.com/profiles.php?XID=${id}` },
+                { label: "💬 Send Message", url: `https://www.torn.com/messages.php#/p=compose&XID=${id}` }
+            ],
+            footer: { text: "Owen's Faction Tools • Inactivity Watcher" },
+            timestamp: new Date().toISOString()
+        };
+
+        console.log(`[Inactivity Tracker] 💤 Sending alert for ${m.name} [${id}] (${timeDisplay} inactive) with mention: ${roleMention || 'none'}`);
+        sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, embed, roleMention);
+
+        inactivityAlertsMemory.alerts[id] = {
+            lastActionTs: lastTs,
+            alertedAt: now,
+            name: m.name,
+            inactiveHours
+        };
+        saveInactivityAlerts(inactivityAlertsMemory);
+    }
+}
+
 // Background Task 3: Sniper & Target Status Watcher
 setInterval(async () => {
     if (global.isTurboMining) return;
@@ -1351,6 +1481,11 @@ setInterval(async () => {
         const facRes = await fetch(`https://api.torn.com/faction/${watchFactionId}?selections=basic,chain,rankedwars&key=${watchKey}`);
         const facData = await facRes.json();
         if (facData.error) return;
+
+        // Check Friendly Member Inactivity Tracker
+        if (facData.members && discordConfig.inactivityTracker !== false && discordConfig.globalChannelId) {
+            checkFactionMembersInactivity(facData.members);
+        }
 
         if (facData.chain && facData.chain.current >= 10) {
             let secondsLeft = facData.chain.timeout;
@@ -1677,6 +1812,38 @@ app.post('/api/test-discord-alert', async (req, res) => {
             description: `**[Your Name]**, you have been hit 3 consecutive times in Torn! Log in and react!`,
             color: 16729943
         };
+    } else if (type === 'inactivity') {
+        let rolePingStr = "";
+        const roleInput = req.body.inactivityRoleId || discordConfig.inactivityRoleId;
+        if (roleInput && String(roleInput).trim()) {
+            const rawRole = String(roleInput).trim();
+            const numOnly = rawRole.replace(/\D/g, '');
+            if (numOnly.length >= 15 && numOnly.length <= 22) {
+                rolePingStr = `<@&${numOnly}>`;
+            } else if (rawRole.startsWith('<@&') && rawRole.endsWith('>')) {
+                rolePingStr = rawRole;
+            } else if (rawRole === "@here" || rawRole === "@everyone") {
+                rolePingStr = rawRole;
+            }
+        }
+        embed = {
+            title: "💤 PLAYER INACTIVITY ALERT (TEST)",
+            description: `**[Test Member]** [1234567] has been inactive for **1 day (24 hours)**!\n\nThis is a test notification verifying your Inactivity Tracker settings and role ping in Discord.`,
+            color: 16744272, // Warm Gold/Orange #ffa502
+            fields: [
+                { name: "⏱️ Inactive Duration", value: "**1 day (24 hours)**", inline: true },
+                { name: "🕒 Last Action", value: "Yesterday (24h ago)", inline: true },
+                { name: "📊 Current Status", value: "Offline", inline: true },
+                { name: "🎯 Role Mentioned", value: rolePingStr ? `Pinging ${rolePingStr}` : "None configured", inline: true }
+            ],
+            links: [
+                { label: "👤 View Profile", url: "https://www.torn.com/profiles.php?XID=1234567" },
+                { label: "💬 Send Message", url: "https://www.torn.com/messages.php#/p=compose&XID=1234567" }
+            ],
+            footer: { text: "Owen's Faction Tools • Inactivity Watcher Test" },
+            timestamp: new Date().toISOString()
+        };
+        pingStr = rolePingStr;
     } else {
         return res.json({ success: false, error: "Unknown test type." });
     }
@@ -1686,6 +1853,67 @@ app.post('/api/test-discord-alert', async (req, res) => {
     if (!result.success) return res.json({ success: false, error: result.error });
     
     res.json({ success: true, warning: result.warning || null });
+});
+
+app.get('/api/inactivity-tracker', async (req, res) => {
+    const userKey = (req.headers['x-api-key'] || req.query.apiKey) || discordConfig.apiKey || TORN_API_KEY;
+    if (!userKey) return res.status(400).json({ error: "API Key required" });
+
+    try {
+        let watchFactionId = adminFactionId || discordConfig.factionId;
+        const url = watchFactionId
+            ? `https://api.torn.com/faction/${watchFactionId}?selections=basic&key=${userKey}`
+            : `https://api.torn.com/faction/?selections=basic&key=${userKey}`;
+        const facRes = await fetch(url);
+        const facData = await facRes.json();
+        if (facData.error) return res.status(400).json({ error: facData.error.error });
+
+        const members = facData.members || {};
+        const now = Math.floor(Date.now() / 1000);
+        const thresholdDays = Math.max(1, Number(discordConfig.inactivityDays) || 1);
+        const thresholdSec = thresholdDays * 86400;
+
+        const inactiveList = [];
+        let totalMembers = 0;
+
+        for (const [id, m] of Object.entries(members)) {
+            totalMembers++;
+            const lastTs = m.last_action?.timestamp || 0;
+            const diff = now - lastTs;
+            const isInactive = diff >= thresholdSec;
+            const hours = Math.floor(diff / 3600);
+            const days = (diff / 86400).toFixed(1);
+
+            if (isInactive) {
+                inactiveList.push({
+                    id,
+                    name: m.name,
+                    level: m.level,
+                    position: m.position,
+                    status: m.status?.description || m.status?.state || m.last_action?.status || 'Offline',
+                    lastActionTimestamp: lastTs,
+                    relative: m.last_action?.relative || `${hours}h ago`,
+                    inactiveHours: hours,
+                    inactiveDays: parseFloat(days),
+                    alerted: !!(inactivityAlertsMemory.alerts[id] && inactivityAlertsMemory.alerts[id].lastActionTs === lastTs)
+                });
+            }
+        }
+
+        inactiveList.sort((a, b) => b.inactiveHours - a.inactiveHours);
+
+        res.json({
+            success: true,
+            enabled: discordConfig.inactivityTracker !== false,
+            roleId: discordConfig.inactivityRoleId || "",
+            thresholdDays,
+            totalMembers,
+            inactiveCount: inactiveList.length,
+            inactiveMembers: inactiveList
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 
@@ -4966,6 +5194,75 @@ async function buildWarBountiesEmbed(apiKey) {
     }
 }
 
+async function buildInactiveMembersEmbed(apiKey) {
+    if (!apiKey) return { title: "💤 Faction Inactivity Tracker", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
+    try {
+        let watchFactionId = adminFactionId || discordConfig.factionId;
+        const url = watchFactionId
+            ? `https://api.torn.com/faction/${watchFactionId}?selections=basic&key=${apiKey}`
+            : `https://api.torn.com/faction/?selections=basic&key=${apiKey}`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.error || "Torn API error");
+
+        const members = data.members || {};
+        const now = Math.floor(Date.now() / 1000);
+        const thresholdDays = Math.max(1, Number(discordConfig.inactivityDays) || 1);
+        const thresholdSec = thresholdDays * 86400;
+
+        const list = [];
+        for (const [id, m] of Object.entries(members)) {
+            const lastTs = m.last_action?.timestamp || 0;
+            const diff = now - lastTs;
+            if (diff >= thresholdSec) {
+                const hours = Math.floor(diff / 3600);
+                const days = Math.floor(diff / 86400);
+                list.push({
+                    id,
+                    name: m.name,
+                    level: m.level,
+                    hours,
+                    days,
+                    relative: m.last_action?.relative || `${hours}h ago`,
+                    status: m.status?.description || m.status?.state || m.last_action?.status || 'Offline'
+                });
+            }
+        }
+
+        list.sort((a, b) => b.hours - a.hours);
+
+        if (list.length === 0) {
+            return {
+                title: "💤 Faction Inactivity Tracker",
+                description: `✅ **All faction members are active!**\n\nNo members have been inactive for ${thresholdDays}+ day${thresholdDays > 1 ? 's' : ''}.`,
+                color: 0x2ed573,
+                footer: { text: "Owen's Faction Tools • Inactivity Watcher" }
+            };
+        }
+
+        const count = list.length;
+        const topList = list.slice(0, 15);
+        const lines = topList.map(m => {
+            const dur = m.days >= 1 ? `${m.days}d (${m.hours}h)` : `${m.hours}h`;
+            return `• **[${m.name}](https://www.torn.com/profiles.php?XID=${m.id})** [${m.id}] (Lvl ${m.level || '—'}) — **${dur}** inactive • *${m.status}*`;
+        });
+
+        if (list.length > 15) {
+            lines.push(`*...and ${list.length - 15} more members*`);
+        }
+
+        return {
+            title: `💤 Inactive Members (${count} members ≥${thresholdDays}d)`,
+            description: `The following faction members have been inactive for at least **${thresholdDays} day${thresholdDays > 1 ? 's' : ''}**:\n\n${lines.join('\n')}`,
+            color: 0xffa502,
+            footer: { text: `Total Members: ${Object.keys(members).length} • Inactive: ${count}` },
+            timestamp: new Date().toISOString()
+        };
+    } catch(e) {
+        return { title: "💤 Faction Inactivity Tracker", description: `⚠️ Error: ${e.message}`, color: 0xff4757 };
+    }
+}
+
 async function buildPayoutEmbed(memberQuery, apiKey) {
     if (!apiKey) return { title: "💰 War Payout Calculator", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
     try {
@@ -5248,6 +5545,9 @@ async function registerSlashCommands(token, guildId = null) {
 
         // 8. War Bounty Tracker
         new SlashCommandBuilder().setName('bounties').setDescription('Track bounties placed in the current war, total spent & claimed hits').toJSON(),
+
+        // 9. Inactivity Tracker
+        new SlashCommandBuilder().setName('inactive').setDescription('List faction members who have been inactive for 1+ days').toJSON(),
     ];
 
     try {
@@ -5389,6 +5689,8 @@ async function startSlashCommandBot(token) {
                     embed = await buildFactionStatsRosterEmbed(factionChoice, apiKey);
                 } else if (cmd === 'bounties' || cmd === 'bounty') {
                     embed = await buildWarBountiesEmbed(apiKey);
+                } else if (cmd === 'inactive' || cmd === 'inactivity') {
+                    embed = await buildInactiveMembersEmbed(apiKey);
                 } else {
                     // Travel lookup fallback (e.g. /travel, /south-africa, /mexico, /sa, /uk, etc.)
                     let country = slashNameToCountry(cmd);

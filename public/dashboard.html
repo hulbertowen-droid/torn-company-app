@@ -728,10 +728,15 @@ function renderMembers(d) {
         const stateMap = { 'Online': 'online', 'Idle': 'idle', 'Offline': 'offline', 'Hospital': 'hospital', 'Traveling': 'traveling' };
         const pillClass = stateMap[s] || 'offline';
         const lastTs = m.last_action?.timestamp ? timeSince(m.last_action.timestamp) : '—';
+        const now = Math.floor(Date.now() / 1000);
+        const isInactive1d = m.last_action?.timestamp && (now - m.last_action.timestamp) >= 86400;
         return `<div class="member-row">
             <div><a class="m-name" href="https://www.torn.com/profiles.php?XID=${id}" target="_blank">${m.name}</a><div style="font-size:0.72em;color:var(--text-dim);">[${id}]</div></div>
-            <div><span class="status-pill ${pillClass}"><span class="status-dot"></span>${s}</span></div>
-            <div style="font-size:0.82em;color:var(--text-dim);">${lastTs}</div>
+            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
+                <span class="status-pill ${pillClass}"><span class="status-dot"></span>${s}</span>
+                ${isInactive1d ? '<span style="font-size:0.7em;background:rgba(255,165,2,0.15);color:var(--gold);padding:2px 6px;border-radius:4px;border:1px solid rgba(255,165,2,0.3);font-weight:700;">💤 1d+ Inactive</span>' : ''}
+            </div>
+            <div style="font-size:0.82em;color:${isInactive1d ? 'var(--gold)' : 'var(--text-dim)'};font-weight:${isInactive1d ? '700' : 'normal'};">${lastTs}</div>
         </div>`;
     }).join('');
 }
