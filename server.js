@@ -1732,7 +1732,10 @@ async function verifySubscription(userKey) {
         const data = await res.json();
         
         if (data.error) {
-            if ([5, 8, 9].includes(data.error.code) && subCache[userKey]) { return subCache[userKey].playerId; }
+            if ([5, 8, 9, 14, 16].includes(data.error.code)) { 
+                if (subCache[userKey]) return subCache[userKey].playerId;
+                return "cached_user"; 
+            }
             if (data.error.code === 2) throw new Error("Invalid API Key.");
             throw new Error(`Torn API Throttled: Retrying link...`);
         }
