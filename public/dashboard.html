@@ -733,7 +733,7 @@ async function runWarFlightAudit(force = false) {
     if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color:var(--teal);">⚡ Auditing attack records &amp; FF Scouter flight logs for selected war...</td></tr>`;
 
     try {
-        const url = `/api/war-flight-audit?warId=${encodeURIComponent(warId || '')}&apiKey=${encodeURIComponent(myKey)}&ffKey=${encodeURIComponent(ffKey)}`;
+        const url = `/api/war-flight-audit?warId=${encodeURIComponent(warId || '')}&apiKey=${encodeURIComponent(myKey)}&ffKey=${encodeURIComponent(ffKey)}${force ? '&force=true' : ''}`;
         const res = await fetch(url);
         const data = await res.json();
 
@@ -754,20 +754,16 @@ async function runWarFlightAudit(force = false) {
         const ffBadge = document.getElementById('sentinel-ff-badge');
         if (ffBadge) {
             const isSameKey = ffKey && myKey && ffKey.trim() === myKey.trim();
-            if (isSameKey) {
+            if (data.ffScouter?.premium) {
+                ffBadge.innerHTML = `<span style="color:var(--green); font-weight:700;">✨ FF Scouter Premium: Active</span> (${data.kpis.totalAirHours}h in flight matched across ${data.members.length} members)`;
+            } else if (data.kpis.totalAirHours > 0) {
+                ffBadge.innerHTML = `<span style="color:var(--teal); font-weight:700;">🛡️ Combat &amp; Flight Sentinel: Active</span> <span style="color:var(--text-dim);">(${data.kpis.totalAirHours}h verified flight time across ${data.members.length} members)</span>`;
+            } else if (isSameKey) {
                 ffBadge.innerHTML = `<span style="color:var(--gold); font-weight:700;">⚠️ Scouter Key is set to Torn API Key</span> <span style="color:var(--text-dim);">(Requires separate key from <a href="https://ffscouter.com" target="_blank" style="color:var(--teal);text-decoration:underline;">ffscouter.com</a>)</span>`;
-            } else if (data.ffScouter?.premium) {
-                if (data.kpis.totalAirHours > 0) {
-                    ffBadge.innerHTML = `<span style="color:var(--green); font-weight:700;">✨ FF Scouter Premium: Active</span> (${data.kpis.totalAirHours}h in flight matched)`;
-                } else if (!data.war.isOngoing && !data.war.isRecent) {
-                    ffBadge.innerHTML = `<span style="color:var(--teal); font-weight:700;">✨ FF Scouter Premium: Active</span> <span style="color:var(--text-dim);">(Past war ended prior to Scouter's 10-flight archive; Live Sentinel is recording new flights)</span>`;
-                } else {
-                    ffBadge.innerHTML = `<span style="color:var(--green); font-weight:700;">✨ FF Scouter Premium: Active</span>`;
-                }
             } else if (data.ffScouter?.enabled) {
                 ffBadge.innerHTML = `<span style="color:var(--gold); font-weight:700;">⚠️ FF Scouter: Free / Non-Premium</span> <span style="color:var(--text-dim);">(Torn defense logs active; flight history requires Scouter Premium)</span>`;
             } else {
-                ffBadge.innerHTML = `<span style="color:var(--gold); font-weight:700;">⚠️ No FF Scouter Key</span> <span style="color:var(--text-dim);">(Connect key below to track flight airtime)</span>`;
+                ffBadge.innerHTML = `<span style="color:var(--teal); font-weight:700;">🛡️ Defense &amp; Combat Sentinel: Active</span> <span style="color:var(--text-dim);">(${data.members.length} members monitored)</span>`;
             }
         }
 

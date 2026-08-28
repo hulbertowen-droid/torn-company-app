@@ -75,6 +75,10 @@ async function loadConfigFromMongo() {
                 warFlightArchive = { ...(warFlightArchive || {}), ...(saved.warFlightArchive || {}) };
                 console.log(`[Mongo] Restored ${Object.keys(warFlightArchive).length} flight archive records from MongoDB Atlas.`);
             }
+            if (saved.warAuditArchive) {
+                warAuditArchive = { ...(warAuditArchive || {}), ...(saved.warAuditArchive || {}) };
+                console.log(`[Mongo] Restored ${Object.keys(warAuditArchive).length} war audit archives from MongoDB Atlas.`);
+            }
             console.log('[Mongo] Restored master configurations from MongoDB Atlas.');
             
             if (discordConfig.apiKey) {
@@ -328,6 +332,7 @@ function saveToMongo() {
                     apiPoolConfig,
                     inactivityAlerts: inactivityAlertsMemory,
                     warFlightArchive,
+                    warAuditArchive,
                     updatedAt: new Date()
                 }
             },
@@ -1389,6 +1394,7 @@ let inactivityAlertsMemory = loadInactivityAlerts();
 // Persistent Real-Time War Flight Archive
 const WAR_FLIGHT_ARCHIVE_FILE = path.join(__dirname, 'data', 'war_flight_archive.json');
 let warFlightArchive = {};
+let warAuditArchive = {};
 function loadWarFlightArchive() {
     try {
         if (!fs.existsSync(path.dirname(WAR_FLIGHT_ARCHIVE_FILE))) {
@@ -2096,19 +2102,22 @@ app.get('/api/war-flight-audit', async (req, res) => {
             }
         }
 
-        // Check cache
+        // Check cache (fast return if already audited)
         const cacheKey = `${targetWarId}_${ffKey ? ffKey.substring(0, 6) : 'none'}`;
-        if (warAuditCache[cacheKey] && (Date.now() - warAuditCache[cacheKey].timestamp) < (isOngoing ? 60000 : 3600000)) {
+        if (!isOngoing && !req.query.force && warAuditArchive[targetWarId]) {
+            return res.json(warAuditArchive[targetWarId]);
+        }
+        if (warAuditCache[cacheKey] && !req.query.force && (Date.now() - warAuditCache[cacheKey].timestamp) < (isOngoing ? 30000 : 3600000)) {
             return res.json(warAuditCache[cacheKey].data);
         }
 
-        // 3. Fetch member attacks / scores (try rankedwarreport first)
+        // 3. Initialize memberStats with ALL current members
         const memberStats = {};
         for (const [mId, mInfo] of Object.entries(members)) {
             memberStats[mId] = {
                 id: mId,
                 name: mInfo.name,
-                level: mInfo.level,
+                level: mInfo.level || '—',
                 hitsMade: 0,
                 respectEarned: 0,
                 timesFarmed: 0,
@@ -2118,50 +2127,99 @@ app.get('/api/war-flight-audit', async (req, res) => {
                 flightSec: 0,
                 flightTrips: 0,
                 overseasHits: 0,
+                overseasTimestamps: [],
                 flightDestinations: []
             };
         }
 
+        // Add any member from rankedwarreport who isn't currently in the faction
         try {
             const repRes = await fetch(`https://api.torn.com/torn/${targetWarId}?selections=rankedwarreport&key=${userKey}`, { signal: AbortSignal.timeout(6000) });
             const repData = await repRes.json();
             if (repData.rankedwarreport?.factions?.[myId]?.members) {
                 const repMembers = repData.rankedwarreport.factions[myId].members;
                 for (const [mId, rM] of Object.entries(repMembers)) {
-                    if (memberStats[mId]) {
-                        memberStats[mId].hitsMade = Number(rM.attacks || 0);
-                        memberStats[mId].respectEarned = Number(rM.score || 0);
+                    if (!memberStats[mId]) {
+                        memberStats[mId] = {
+                            id: mId,
+                            name: rM.name || `Member #${mId}`,
+                            level: rM.level || '—',
+                            hitsMade: 0,
+                            respectEarned: 0,
+                            timesFarmed: 0,
+                            totalDefends: 0,
+                            defendedSuccessfully: 0,
+                            respectLeaked: 0,
+                            flightSec: 0,
+                            flightTrips: 0,
+                            overseasHits: 0,
+                            overseasTimestamps: [],
+                            flightDestinations: []
+                        };
                     }
+                    memberStats[mId].hitsMade = Number(rM.attacks || 0);
+                    memberStats[mId].respectEarned = Number(rM.score || 0);
                 }
             }
         } catch (repErr) {
-            console.warn("[War Audit] rankedwarreport failed, falling back to attack logs:", repErr.message);
+            console.warn("[War Audit] rankedwarreport warning:", repErr.message);
         }
 
-        // 4. Fetch attack logs for defense & farming audit
-        try {
-            const atkRes = await fetch(`https://api.torn.com/faction/?selections=attacks&from=${warStart}&to=${warEnd}&key=${userKey}`, { signal: AbortSignal.timeout(8000) });
-            const atkData = await atkRes.json();
-            if (atkData.attacks && typeof atkData.attacks === 'object') {
-                for (const atk of Object.values(atkData.attacks)) {
+        // 4. Paginate through ALL war attacks from warStart to warEnd
+        let fromTs = warStart;
+        let attacksScanned = 0;
+        const MAX_ATK_PAGES = 40; // up to 4,000 attacks
+        let pages = 0;
+
+        while (fromTs < warEnd && pages < MAX_ATK_PAGES) {
+            try {
+                const atkRes = await fetch(
+                    `https://api.torn.com/faction/?selections=attacks&from=${fromTs}&to=${warEnd}&key=${userKey}`,
+                    { signal: AbortSignal.timeout(8000) }
+                );
+                const atkData = await atkRes.json();
+                const atks = Object.values(atkData.attacks || {});
+                if (!atks.length) break;
+                pages++;
+                attacksScanned += atks.length;
+
+                let maxTs = fromTs;
+                for (const atk of atks) {
                     const ts = atk.timestamp_ended || atk.timestamp_started || 0;
+                    if (ts > maxTs) maxTs = ts;
                     if (ts < warStart || ts > warEnd) continue;
 
-                    // Check for overseas modifier in combat
-                    if (atk.modifiers && (atk.modifiers.overseas == 1 || atk.modifiers.overseas === true)) {
-                        const defId = atk.defender_id?.toString();
-                        const atkId = atk.attacker_id?.toString();
-                        if (memberStats[defId]) memberStats[defId].overseasHits++;
-                        if (memberStats[atkId]) memberStats[atkId].overseasHits++;
+                    const defId = atk.defender_id?.toString();
+                    const atkId = atk.attacker_id?.toString();
+
+                    // Track overseas combat presence
+                    const isOverseas = atk.modifiers && (atk.modifiers.overseas == 1 || atk.modifiers.overseas === true);
+                    if (isOverseas) {
+                        if (atk.attacker_faction == myId && atkId) {
+                            if (!memberStats[atkId]) {
+                                memberStats[atkId] = { id: atkId, name: atk.attacker_name || `Member #${atkId}`, level: '—', hitsMade: 0, respectEarned: 0, timesFarmed: 0, totalDefends: 0, defendedSuccessfully: 0, respectLeaked: 0, flightSec: 0, flightTrips: 0, overseasHits: 0, overseasTimestamps: [], flightDestinations: [] };
+                            }
+                            memberStats[atkId].overseasHits++;
+                            memberStats[atkId].overseasTimestamps.push(ts);
+                        }
+                        if (atk.defender_faction == myId && defId) {
+                            if (!memberStats[defId]) {
+                                memberStats[defId] = { id: defId, name: atk.defender_name || `Member #${defId}`, level: '—', hitsMade: 0, respectEarned: 0, timesFarmed: 0, totalDefends: 0, defendedSuccessfully: 0, respectLeaked: 0, flightSec: 0, flightTrips: 0, overseasHits: 0, overseasTimestamps: [], flightDestinations: [] };
+                            }
+                            memberStats[defId].overseasHits++;
+                            memberStats[defId].overseasTimestamps.push(ts);
+                        }
                     }
 
                     // Defense check: Enemy attacked our member
                     if (atk.attacker_faction == enemyId && atk.defender_faction == myId) {
-                        const defId = atk.defender_id?.toString();
-                        if (memberStats[defId]) {
+                        if (defId) {
+                            if (!memberStats[defId]) {
+                                memberStats[defId] = { id: defId, name: atk.defender_name || `Member #${defId}`, level: '—', hitsMade: 0, respectEarned: 0, timesFarmed: 0, totalDefends: 0, defendedSuccessfully: 0, respectLeaked: 0, flightSec: 0, flightTrips: 0, overseasHits: 0, overseasTimestamps: [], flightDestinations: [] };
+                            }
                             memberStats[defId].totalDefends++;
                             const result = atk.result || "";
-                            if (result.includes("Hospital") || result === "Hospitalized") {
+                            if (result.includes("Hospital") || result === "Hospitalized" || result === "Mugged" || result === "Attacked") {
                                 memberStats[defId].timesFarmed++;
                                 memberStats[defId].respectLeaked += Number(atk.respect_gain || 0);
                             } else if (result.includes("Lost") || result.includes("Stalemate")) {
@@ -2172,8 +2230,7 @@ app.get('/api/war-flight-audit', async (req, res) => {
 
                     // Fallback for hitsMade if rankedwarreport was not available
                     if (atk.attacker_faction == myId && atk.defender_faction == enemyId) {
-                        const atkId = atk.attacker_id?.toString();
-                        if (memberStats[atkId] && memberStats[atkId].hitsMade === 0) {
+                        if (atkId && memberStats[atkId] && memberStats[atkId].hitsMade === 0) {
                             if (!atk.result?.includes("Lost") && !atk.result?.includes("Stalemate")) {
                                 memberStats[atkId].hitsMade++;
                                 memberStats[atkId].respectEarned += Number(atk.respect_gain || 0);
@@ -2181,12 +2238,18 @@ app.get('/api/war-flight-audit', async (req, res) => {
                         }
                     }
                 }
+
+                if (maxTs <= fromTs) fromTs = fromTs + 1;
+                else fromTs = maxTs + 1;
+                if (fromTs >= warEnd) break;
+                await new Promise(r => setTimeout(r, 120));
+            } catch (err) {
+                console.warn("[War Audit] Attacks fetch error:", err.message);
+                break;
             }
-        } catch (atkErr) {
-            console.warn("[War Audit] Attacks fetch warning:", atkErr.message);
         }
 
-        // 5a. Match flights from our persistent background sentinel archive
+        // 5a. Match flights from persistent background sentinel archive
         for (const mId of Object.keys(memberStats)) {
             const archiveList = warFlightArchive[mId] || [];
             for (const session of archiveList) {
@@ -2204,16 +2267,15 @@ app.get('/api/war-flight-audit', async (req, res) => {
             }
         }
 
-        // 5b. Query FF Scouter for historical flights if key is present
+        // 5b. Match flights from FF Scouter if valid key provided
         let ffScouterEnabled = false;
         let ffScouterPremium = false;
         let ffError = null;
 
-        if (ffKey && String(ffKey).trim().length > 5 && ffKey !== "null" && ffKey !== "undefined") {
+        const isSameAsTornKey = ffKey && userKey && ffKey.trim() === userKey.trim();
+        if (ffKey && String(ffKey).trim().length > 5 && ffKey !== "null" && ffKey !== "undefined" && !isSameAsTornKey) {
             ffScouterEnabled = true;
             const memberIds = Object.keys(memberStats);
-            console.log(`[War Audit] Querying FF Scouter for ${memberIds.length} members with key ${ffKey.substring(0, 4)}...`);
-
             const CHUNK_SIZE = 5;
             for (let i = 0; i < memberIds.length; i += CHUNK_SIZE) {
                 const chunk = memberIds.slice(i, i + CHUNK_SIZE);
@@ -2221,20 +2283,13 @@ app.get('/api/war-flight-audit', async (req, res) => {
                     if (ffError) return;
                     try {
                         const ffUrl = `https://ffscouter.com/api/v1/player-flights?key=${encodeURIComponent(ffKey)}&target=${encodeURIComponent(mId)}`;
-                        const fRes = await fetch(ffUrl, {
-                            signal: AbortSignal.timeout(5000),
-                            headers: { 'Accept': 'application/json' }
-                        });
+                        const fRes = await fetch(ffUrl, { signal: AbortSignal.timeout(5000), headers: { 'Accept': 'application/json' } });
                         const fData = await fRes.json();
                         if (fData.error) {
-                            if (fData.code === 19) {
-                                ffError = "Active premium subscription required to use this endpoint";
-                            } else {
-                                ffError = fData.error;
-                            }
+                            if (fData.code === 19) ffError = "Active premium subscription required to use this endpoint";
+                            else ffError = fData.error;
                             return;
                         }
-
                         ffScouterPremium = true;
                         const allFlights = (fData.recent_flights || []).concat(fData.current ? [fData.current] : []);
                         for (const fl of allFlights) {
@@ -2248,31 +2303,45 @@ app.get('/api/war-flight-audit', async (req, res) => {
                                 if (oEnd > oStart) {
                                     memberStats[mId].flightSec += (oEnd - oStart);
                                     memberStats[mId].flightTrips++;
-                                    if (fl.status_description) {
-                                        memberStats[mId].flightDestinations.push(fl.status_description);
-                                    }
+                                    if (fl.status_description) memberStats[mId].flightDestinations.push(fl.status_description);
                                 }
                             }
                         }
-                    } catch (e) {
-                        // ignore individual player flight fetch error
-                    }
+                    } catch (e) {}
                 }));
-
                 if (ffError) break;
-                if (i + CHUNK_SIZE < memberIds.length) {
-                    await new Promise(r => setTimeout(r, 120));
-                }
+                if (i + CHUNK_SIZE < memberIds.length) await new Promise(r => setTimeout(r, 120));
             }
         }
 
-        // 5c. Fallback for past wars outside FF Scouter's 10-flight window:
-        // If a member has confirmed overseas combat operations during the war, credit their flight presence
+        // 5c. Accurate Trip Clustering from Complete Overseas Attack Timestamps
         for (const m of Object.values(memberStats)) {
-            if (m.flightSec === 0 && m.overseasHits > 0) {
-                m.flightTrips = Math.max(1, Math.ceil(m.overseasHits / 2));
-                m.flightSec = m.flightTrips * 7200; // ~2 hours per overseas trip
-                m.flightDestinations.push("Overseas Combat Operations");
+            if (m.overseasTimestamps && m.overseasTimestamps.length > 0) {
+                m.overseasTimestamps.sort((a, b) => a - b);
+                let trips = 0;
+                let flightSec = 0;
+                let tripStart = m.overseasTimestamps[0];
+                let lastTs = m.overseasTimestamps[0];
+
+                for (let i = 1; i < m.overseasTimestamps.length; i++) {
+                    const cur = m.overseasTimestamps[i];
+                    if (cur - lastTs > 4 * 3600) {
+                        const tripDuration = (lastTs - tripStart) + (3 * 3600); // 3h round-trip travel buffer
+                        flightSec += Math.min(tripDuration, 9 * 3600);
+                        trips++;
+                        tripStart = cur;
+                    }
+                    lastTs = cur;
+                }
+                const tripDuration = (lastTs - tripStart) + (3 * 3600);
+                flightSec += Math.min(tripDuration, 9 * 3600);
+                trips++;
+
+                if (flightSec > m.flightSec) {
+                    m.flightSec = Math.min(flightSec, warDuration);
+                    m.flightTrips = Math.max(m.flightTrips, trips);
+                    m.flightDestinations.push("Overseas Operations");
+                }
             }
         }
 
@@ -2286,9 +2355,9 @@ app.get('/api/war-flight-audit', async (req, res) => {
             const flightPct = Math.min(100, Math.round((m.flightSec / warDuration) * 100));
             const netScore = parseFloat((m.respectEarned - m.respectLeaked).toFixed(1));
 
-            // Grading algorithm
+            // Grading algorithm based on actual war performance
             let grade = 'B';
-            let gradeLabel = 'Active Defender';
+            let gradeLabel = 'Active Combatant';
             let gradeColor = '#00cec9';
 
             if (m.timesFarmed === 0) {
@@ -2296,36 +2365,36 @@ app.get('/api/war-flight-audit', async (req, res) => {
                     grade = 'S';
                     gradeLabel = 'Ghost Aviator';
                     gradeColor = '#2ed573';
-                } else {
+                } else if (m.hitsMade > 0 || flightPct > 0) {
                     grade = 'A';
                     gradeLabel = 'Safe Pilot';
                     gradeColor = '#2ed573';
+                } else {
+                    grade = '—';
+                    gradeLabel = 'Non-Participant';
+                    gradeColor = '#747d8c';
                 }
-            } else if (m.timesFarmed <= 1) {
+            } else if (m.timesFarmed <= 4 && netScore >= 0) {
                 grade = 'A';
-                gradeLabel = 'Safe / Low Farm';
+                gradeLabel = 'Net-Positive';
                 gradeColor = '#2ed573';
-            } else if (m.timesFarmed <= 3 && netScore >= 0) {
+            } else if (m.timesFarmed <= 10) {
                 grade = 'B';
-                gradeLabel = 'Tactical Turtle';
+                gradeLabel = 'Combat Defender';
                 gradeColor = '#ffa502';
-            } else if (m.timesFarmed <= 6) {
+            } else if (m.timesFarmed <= 20) {
                 grade = 'C';
-                gradeLabel = 'Exposed';
+                gradeLabel = 'Exposed Target';
                 gradeColor = '#ff7f50';
-            } else if (m.timesFarmed <= 9) {
-                grade = 'D';
-                gradeLabel = 'Frequent Target';
-                gradeColor = '#ff4757';
             } else {
                 grade = 'F';
-                gradeLabel = 'Sitting Duck / Farmed';
+                gradeLabel = 'War Farmed';
                 gradeColor = '#ff4757';
             }
 
             if (m.hitsMade === 0 && m.timesFarmed === 0 && m.flightSec === 0) {
                 grade = '—';
-                gradeLabel = 'Inactive in War';
+                gradeLabel = 'Sat Out';
                 gradeColor = '#747d8c';
             }
 
@@ -2401,6 +2470,11 @@ app.get('/api/war-flight-audit', async (req, res) => {
             timestamp: Date.now(),
             data: responsePayload
         };
+
+        if (!isOngoing) {
+            warAuditArchive[targetWarId] = responsePayload;
+            saveToMongo();
+        }
 
         res.json(responsePayload);
     } catch (e) {
