@@ -169,6 +169,8 @@
             --bg: #f0f2f5; --card: #ffffff; --item: #f6f8fa; --border: #d0d7de;
             --text-main: #24292f; --text-dim: #57606a;
         }
+        .filter-chip { background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--text-dim); padding: 5px 12px; border-radius: 6px; font-size: 0.78em; font-weight: 700; cursor: pointer; transition: 0.2s; }
+        .filter-chip:hover, .filter-chip.active { background: rgba(0,206,201,0.15); border-color: var(--teal); color: var(--teal); }
     </style>
 </head>
 <body>
@@ -294,6 +296,106 @@
                             <div class="empty-state" style="padding:16px;">Listening for bounty events...</div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- WAR FLIGHT & FARM SENTINEL (PAST WARS AIRTIME & DEFENSE AUDIT) -->
+        <div class="card span-full" id="war-sentinel-card" style="margin-bottom:18px; border: 1px solid rgba(0,206,201,0.25);">
+            <div class="card-header" style="flex-wrap:wrap; gap:12px;">
+                <div>
+                    <div class="card-title" style="color:var(--teal); display:flex; align-items:center; gap:8px;">
+                        <span>✈️ War Flight &amp; Farm Sentinel</span>
+                        <span style="font-size:0.68em; background:rgba(0,206,201,0.12); color:var(--teal); border:1px solid rgba(0,206,201,0.3); padding:2px 8px; border-radius:12px; font-weight:700;">FF Scouter &amp; Attack Audit</span>
+                    </div>
+                    <div style="font-size:0.78em; color:var(--text-dim); margin-top:2px;">Scan past or active wars to see which members consistently flew and who sat in Torn City and got farmed.</div>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="font-size:0.75em; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Select War:</span>
+                        <select id="sentinel-war-select" class="sort-select" onchange="runWarFlightAudit()" style="min-width:220px; background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 10px; border-radius:6px; font-size:0.82em;">
+                            <option value="">Loading wars...</option>
+                        </select>
+                    </div>
+                    <button class="refresh-btn" onclick="runWarFlightAudit(true)" id="btn-refresh-audit" style="padding:6px 12px; font-size:0.8em;">↻ Re-Scan</button>
+                </div>
+            </div>
+
+            <!-- War Info & Scouter Status Ribbon -->
+            <div id="sentinel-status-ribbon" style="background:rgba(0,0,0,0.2); padding:10px 18px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; font-size:0.82em;">
+                <div id="sentinel-war-summary" style="color:var(--text-main); font-weight:600;">
+                    Select a war to analyze flight uptime and defensive performance.
+                </div>
+                <div id="sentinel-ff-badge" style="font-size:0.78em; color:var(--text-dim);">
+                    ⚡ Scouter Status: Checking...
+                </div>
+            </div>
+
+            <div class="card-body" style="padding:16px 18px;">
+                <!-- 4 KPI CARDS -->
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; margin-bottom:16px;">
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
+                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">✈️ Faction Airtime</div>
+                        <div style="font-size:1.6em; font-weight:900; color:var(--teal); margin-top:2px;" id="kpi-audit-airtime">—</div>
+                        <div style="font-size:0.72em; color:var(--text-dim);" id="kpi-audit-airtime-sub">Total in flight</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
+                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">🛡️ Ghost Aviators</div>
+                        <div style="font-size:1.6em; font-weight:900; color:var(--green); margin-top:2px;" id="kpi-audit-ghosts">—</div>
+                        <div style="font-size:0.72em; color:var(--text-dim);">0 times farmed</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
+                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">⚠️ Total Times Farmed</div>
+                        <div style="font-size:1.6em; font-weight:900; color:var(--red); margin-top:2px;" id="kpi-audit-farmed">—</div>
+                        <div style="font-size:0.72em; color:var(--text-dim);">Hospitalizations taken</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
+                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">💸 Respect Leaked</div>
+                        <div style="font-size:1.6em; font-weight:900; color:var(--gold); margin-top:2px;" id="kpi-audit-leaked">—</div>
+                        <div style="font-size:0.72em; color:var(--text-dim);">Conceded to enemy</div>
+                    </div>
+                </div>
+
+                <!-- Controls & Filter Tabs -->
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;" id="sentinel-filter-tabs">
+                        <button class="filter-chip active" onclick="setSentinelFilter('all', this)">All Members (<span id="cnt-audit-all">0</span>)</button>
+                        <button class="filter-chip" onclick="setSentinelFilter('ghost', this)">👻 Ghost Aviators (<span id="cnt-audit-ghost">0</span>)</button>
+                        <button class="filter-chip" onclick="setSentinelFilter('flyers', this)">✈️ Active Flyers (<span id="cnt-audit-flyers">0</span>)</button>
+                        <button class="filter-chip" onclick="setSentinelFilter('farmed', this)">🚨 Most Farmed (<span id="cnt-audit-farmed">0</span>)</button>
+                    </div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <input type="text" id="sentinel-search" placeholder="🔍 Search member..." oninput="renderSentinelTable()" style="background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 12px; border-radius:6px; font-size:0.82em; width:160px;">
+                        <select id="sentinel-sort" onchange="renderSentinelTable()" style="background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 10px; border-radius:6px; font-size:0.82em;">
+                            <option value="leastFarmed">Safest (Least Farmed)</option>
+                            <option value="mostFarmed">Most Farmed</option>
+                            <option value="mostAir">Highest Airtime</option>
+                            <option value="hitsMade">Most War Hits</option>
+                            <option value="netScore">Highest Net Respect</option>
+                            <option value="name">Name</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Table Container -->
+                <div class="scrollable" style="max-height:420px; overflow-x:auto; border:1px solid var(--border); border-radius:8px;">
+                    <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.82em;" id="sentinel-table">
+                        <thead style="background:rgba(255,255,255,0.03); position:sticky; top:0; z-index:2;">
+                            <tr style="border-bottom:1px solid var(--border); color:var(--text-dim); font-size:0.9em; text-transform:uppercase; letter-spacing:0.5px;">
+                                <th style="padding:10px 14px;">Member</th>
+                                <th style="padding:10px 10px;">Grade</th>
+                                <th style="padding:10px 10px;">War Airtime</th>
+                                <th style="padding:10px 10px;">Trips</th>
+                                <th style="padding:10px 10px;">Times Farmed</th>
+                                <th style="padding:10px 10px;">Respect Leaked</th>
+                                <th style="padding:10px 10px;">Hits Made</th>
+                                <th style="padding:10px 14px;">Net Impact</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sentinel-tbody">
+                            <tr><td colspan="8" style="text-align:center; padding:24px; color:var(--text-dim);">Loading war flight &amp; defense records...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -457,6 +559,7 @@ async function loadAll() {
         dashData = { dash, wars };
         renderAll(dash, wars);
         loadWarBounties();
+        initSentinel();
         document.getElementById('last-updated').innerText = 'Updated ' + new Date().toLocaleTimeString();
     } catch(e) {
         document.getElementById('analyst-output').innerHTML = `<span style="color:var(--red)">Connection failed. Check server is running.</span>`;
@@ -550,6 +653,174 @@ async function loadWarBounties() {
     } catch(e) {
         console.error("Failed to load war bounties:", e);
     }
+}
+
+let sentinelData = null;
+let activeSentinelFilter = 'all';
+let sentinelInitialized = false;
+
+async function initSentinel() {
+    if (sentinelInitialized) return;
+    const select = document.getElementById('sentinel-war-select');
+    if (!select) return;
+    try {
+        const res = await fetch('/api/war-list', { headers: { 'x-api-key': myKey } });
+        const data = await res.json();
+        if (data.wars && data.wars.length > 0) {
+            select.innerHTML = data.wars.map(w => {
+                const dateStr = w.start ? new Date(w.start * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+                const tag = w.isOngoing ? '💥 ACTIVE' : (w.winner === Number(localStorage.getItem('warboard_factionid') || 0) ? '🏆 WON' : '⚔️ COMPLETED');
+                return `<option value="${w.id}">[${tag}] vs ${w.enemy} (${dateStr})</option>`;
+            }).join('');
+            sentinelInitialized = true;
+            runWarFlightAudit();
+        } else {
+            select.innerHTML = `<option value="">No recorded ranked wars found</option>`;
+        }
+    } catch(e) {
+        select.innerHTML = `<option value="">Failed to load wars</option>`;
+    }
+}
+
+async function runWarFlightAudit(force = false) {
+    const select = document.getElementById('sentinel-war-select');
+    const tbody = document.getElementById('sentinel-tbody');
+    const warId = select?.value;
+    const ffKey = localStorage.getItem('warboard_ffkey') || '';
+
+    if (!myKey) {
+        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--red);">API Key required. Go to Settings first.</td></tr>`;
+        return;
+    }
+
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color:var(--teal);">⚡ Auditing attack records &amp; FF Scouter flight logs for selected war...</td></tr>`;
+
+    try {
+        const url = `/api/war-flight-audit?warId=${encodeURIComponent(warId || '')}&apiKey=${encodeURIComponent(myKey)}&ffKey=${encodeURIComponent(ffKey)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data.success) {
+            if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--red);">⚠️ ${data.error || 'Audit failed'}</td></tr>`;
+            return;
+        }
+
+        sentinelData = data;
+
+        // Render Ribbon
+        const warSummary = document.getElementById('sentinel-war-summary');
+        if (warSummary) {
+            const outcome = data.war.isOngoing ? '<span style="color:var(--gold); font-weight:700;">💥 Ongoing War</span>' : (data.war.ourScore > data.war.theirScore ? '<span style="color:var(--green); font-weight:700;">🏆 Victory</span>' : '<span style="color:var(--red); font-weight:700;">Defeat</span>');
+            warSummary.innerHTML = `<strong>vs ${data.war.enemyName}</strong> • ${outcome} • Score: <strong>${data.war.ourScore.toLocaleString()}</strong> to ${data.war.theirScore.toLocaleString()} • Duration: <strong>${data.war.durationHours}h</strong>`;
+        }
+
+        const ffBadge = document.getElementById('sentinel-ff-badge');
+        if (ffBadge) {
+            if (data.ffScouter?.premium) {
+                ffBadge.innerHTML = `<span style="color:var(--green); font-weight:700;">✨ FF Scouter Premium: Active</span> (Matched ${data.kpis.totalAirHours}h in flight)`;
+            } else if (data.ffScouter?.enabled) {
+                ffBadge.innerHTML = `<span style="color:var(--gold); font-weight:700;">⚠️ FF Scouter: Non-Premium</span> (Torn Attack Logs active; airtime requires Premium)`;
+            } else {
+                ffBadge.innerHTML = `<span style="color:var(--text-dim);">🛡️ Torn Defense Audit Active • Connect FF Scouter key in Settings for airtime</span>`;
+            }
+        }
+
+        // Render KPIs
+        document.getElementById('kpi-audit-airtime').textContent = `${data.kpis.totalAirHours}h`;
+        document.getElementById('kpi-audit-ghosts').textContent = `${data.kpis.ghostCount}`;
+        document.getElementById('kpi-audit-farmed').textContent = `${data.kpis.totalFarmedHits}`;
+        document.getElementById('kpi-audit-leaked').textContent = `-${data.kpis.totalRespectLeaked} pts`;
+
+        // Filter counts
+        const all = data.members || [];
+        const ghosts = all.filter(m => m.timesFarmed === 0 && (m.flightPct > 0 || m.hitsMade > 0));
+        const flyers = all.filter(m => m.airHours > 0 || m.flightTrips > 0);
+        const farmed = all.filter(m => m.timesFarmed > 0);
+
+        document.getElementById('cnt-audit-all').textContent = all.length;
+        document.getElementById('cnt-audit-ghost').textContent = ghosts.length;
+        document.getElementById('cnt-audit-flyers').textContent = flyers.length;
+        document.getElementById('cnt-audit-farmed').textContent = farmed.length;
+
+        renderSentinelTable();
+    } catch(e) {
+        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--red);">⚠️ Request error: ${e.message}</td></tr>`;
+    }
+}
+
+function setSentinelFilter(filter, btn) {
+    activeSentinelFilter = filter;
+    document.querySelectorAll('#sentinel-filter-tabs .filter-chip').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderSentinelTable();
+}
+
+function renderSentinelTable() {
+    const tbody = document.getElementById('sentinel-tbody');
+    if (!tbody || !sentinelData) return;
+
+    const query = (document.getElementById('sentinel-search')?.value || '').toLowerCase().trim();
+    const sortKey = document.getElementById('sentinel-sort')?.value || 'leastFarmed';
+
+    let list = (sentinelData.members || []).filter(m => {
+        if (activeSentinelFilter === 'ghost' && (m.timesFarmed > 0 || (m.hitsMade === 0 && m.flightPct === 0))) return false;
+        if (activeSentinelFilter === 'flyers' && m.airHours === 0 && m.flightTrips === 0) return false;
+        if (activeSentinelFilter === 'farmed' && m.timesFarmed === 0) return false;
+        if (query && !m.name.toLowerCase().includes(query) && !m.id.includes(query)) return false;
+        return true;
+    });
+
+    list.sort((a, b) => {
+        if (sortKey === 'leastFarmed') {
+            if (a.timesFarmed !== b.timesFarmed) return a.timesFarmed - b.timesFarmed;
+            return b.flightPct - a.flightPct;
+        }
+        if (sortKey === 'mostFarmed') return b.timesFarmed - a.timesFarmed;
+        if (sortKey === 'mostAir') return b.flightSec - a.flightSec;
+        if (sortKey === 'hitsMade') return b.hitsMade - a.hitsMade;
+        if (sortKey === 'netScore') return b.netScore - a.netScore;
+        if (sortKey === 'name') return a.name.localeCompare(b.name);
+        return 0;
+    });
+
+    if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color:var(--text-dim);">No members match this filter.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = list.map(m => {
+        const farmedBadge = m.timesFarmed === 0
+            ? `<span style="color:var(--green); font-weight:700;">🛡️ 0 (Untouchable)</span>`
+            : `<span style="color:var(--red); font-weight:700; background:rgba(255,71,87,0.12); padding:2px 6px; border-radius:4px;">⚠️ ${m.timesFarmed}x farmed</span>`;
+
+        const netStr = m.netScore > 0 ? `+${m.netScore}` : `${m.netScore}`;
+        const netColor = m.netScore > 0 ? 'var(--green)' : (m.netScore < 0 ? 'var(--red)' : 'var(--text-dim)');
+
+        return `<tr style="border-bottom:1px solid rgba(255,255,255,0.03); transition:0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+            <td style="padding:10px 14px;">
+                <div style="font-weight:700;"><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-main); text-decoration:none;">${m.name}</a></div>
+                <div style="font-size:0.75em; color:var(--text-dim);">[${m.id}] • Lv ${m.level || '—'}</div>
+            </td>
+            <td style="padding:10px 10px;">
+                <span style="background:${m.gradeColor}20; color:${m.gradeColor}; border:1px solid ${m.gradeColor}40; padding:2px 8px; border-radius:6px; font-weight:800; font-size:0.85em;">
+                    ${m.grade}
+                </span>
+                <div style="font-size:0.72em; color:var(--text-dim); margin-top:2px;">${m.gradeLabel}</div>
+            </td>
+            <td style="padding:10px 10px;">
+                <div style="font-weight:700; color:${m.airHours > 0 ? 'var(--teal)' : 'var(--text-dim)'};">${m.airtimeFormatted}</div>
+                <div style="width:70px; background:rgba(255,255,255,0.05); height:4px; border-radius:2px; margin-top:4px; overflow:hidden;">
+                    <div style="width:${m.flightPct}%; background:var(--teal); height:100%;"></div>
+                </div>
+                <div style="font-size:0.7em; color:var(--text-dim);">${m.flightPct}% of war</div>
+            </td>
+            <td style="padding:10px 10px; font-weight:700; color:var(--text-main);">${m.flightTrips || 0}</td>
+            <td style="padding:10px 10px;">${farmedBadge}</td>
+            <td style="padding:10px 10px; font-weight:700; color:${m.respectLeaked > 0 ? 'var(--red)' : 'var(--text-dim)'};">-${m.respectLeaked} pts</td>
+            <td style="padding:10px 10px; font-weight:700; color:var(--blue);">${m.hitsMade}</td>
+            <td style="padding:10px 14px; font-weight:800; color:${netColor};">${netStr} pts</td>
+        </tr>`;
+    }).join('');
 }
 
 function renderAll(d, wars) {

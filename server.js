@@ -1922,28 +1922,381 @@ app.post('/api/discord-ping', async (req, res) => {
 });
 
 
+const warAuditCache = {};
+
 app.get('/api/war-list', async (req, res) => {
-    const userKey = (req.headers['x-api-key'] || req.query.apiKey);
+    const userKey = (req.headers['x-api-key'] || req.query.apiKey) || discordConfig.apiKey || TORN_API_KEY;
     try {
-        await verifySubscription(userKey);
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`);
+        if (!userKey) return res.status(400).json({ error: "Missing API key" });
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`, { signal: AbortSignal.timeout(8000) });
         const facData = await facRes.json();
         if (facData.error) return res.status(400).json({ error: facData.error.error });
 
         let wars = [];
         if (facData.rankedwars) {
             for (let [warId, warInfo] of Object.entries(facData.rankedwars)) {
-                if (warInfo.war && warInfo.war.winner === 0) continue; 
                 let enemyName = "Unknown Faction";
-                for (let [fId, fInfo] of Object.entries(warInfo.factions)) {
-                    if (fId !== facData.ID.toString()) enemyName = fInfo.name;
+                let enemyId = null;
+                let ourScore = 0;
+                let theirScore = 0;
+                for (let [fId, fInfo] of Object.entries(warInfo.factions || {})) {
+                    if (fId !== facData.ID.toString()) {
+                        enemyName = fInfo.name;
+                        enemyId = fId;
+                        theirScore = fInfo.score || 0;
+                    } else {
+                        ourScore = fInfo.score || 0;
+                    }
                 }
-                wars.push({ id: warId, enemy: enemyName, start: warInfo.war.start, end: warInfo.war.end });
+                const isOngoing = !warInfo.war?.winner || warInfo.war?.winner === 0;
+                wars.push({
+                    id: warId,
+                    enemy: enemyName,
+                    enemyId,
+                    ourScore,
+                    theirScore,
+                    isOngoing,
+                    winner: warInfo.war?.winner || 0,
+                    start: warInfo.war?.start,
+                    end: warInfo.war?.end || Math.floor(Date.now() / 1000)
+                });
             }
         }
         wars.sort((a, b) => b.start - a.start);
         res.json({ success: true, wars });
-    } catch (err) { res.status(403).json({ error: err.message }); }
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/war-flight-audit', async (req, res) => {
+    const userKey = (req.headers['x-api-key'] || req.query.apiKey) || discordConfig.apiKey || TORN_API_KEY;
+    const ffKey = (req.headers['x-ff-key'] || req.query.ffKey) || getGlobalFFKey() || discordConfig.ffKey;
+    const reqWarId = req.query.warId;
+
+    if (!userKey) return res.status(400).json({ error: "Missing Torn API Key" });
+
+    try {
+        // 1. Fetch faction info & ranked wars
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`, { signal: AbortSignal.timeout(8000) });
+        const facData = await facRes.json();
+        if (facData.error) return res.status(400).json({ error: facData.error.error });
+
+        const myId = facData.ID.toString();
+        const myFactionName = facData.name || "Our Faction";
+        const members = facData.members || {};
+        const rankedWars = facData.rankedwars || {};
+
+        if (!rankedWars || Object.keys(rankedWars).length === 0) {
+            return res.status(400).json({ error: "No ranked wars found in faction records." });
+        }
+
+        // 2. Resolve selected war
+        let targetWarId = reqWarId;
+        let selectedWarInfo = null;
+
+        if (targetWarId && rankedWars[targetWarId]) {
+            selectedWarInfo = rankedWars[targetWarId];
+        } else {
+            const sorted = Object.entries(rankedWars).sort((a, b) => (b[1].war?.start || 0) - (a[1].war?.start || 0));
+            targetWarId = sorted[0][0];
+            selectedWarInfo = sorted[0][1];
+        }
+
+        if (!selectedWarInfo || !selectedWarInfo.war) {
+            return res.status(400).json({ error: "Selected war data not found." });
+        }
+
+        const now = Math.floor(Date.now() / 1000);
+        const warStart = selectedWarInfo.war.start || 0;
+        const isOngoing = !selectedWarInfo.war.winner || selectedWarInfo.war.winner === 0;
+        const warEnd = isOngoing ? now : (selectedWarInfo.war.end || now);
+        const warDuration = Math.max(1, warEnd - warStart);
+
+        let enemyId = null;
+        let enemyName = "Enemy Faction";
+        let ourScore = 0;
+        let theirScore = 0;
+
+        for (const [fId, fInfo] of Object.entries(selectedWarInfo.factions || {})) {
+            if (fId !== myId) {
+                enemyId = fId;
+                enemyName = fInfo.name || "Enemy Faction";
+                theirScore = fInfo.score || 0;
+            } else {
+                ourScore = fInfo.score || 0;
+            }
+        }
+
+        // Check cache
+        const cacheKey = `${targetWarId}_${ffKey ? ffKey.substring(0, 6) : 'none'}`;
+        if (warAuditCache[cacheKey] && (Date.now() - warAuditCache[cacheKey].timestamp) < (isOngoing ? 60000 : 3600000)) {
+            return res.json(warAuditCache[cacheKey].data);
+        }
+
+        // 3. Fetch member attacks / scores (try rankedwarreport first)
+        const memberStats = {};
+        for (const [mId, mInfo] of Object.entries(members)) {
+            memberStats[mId] = {
+                id: mId,
+                name: mInfo.name,
+                level: mInfo.level,
+                hitsMade: 0,
+                respectEarned: 0,
+                timesFarmed: 0,
+                totalDefends: 0,
+                defendedSuccessfully: 0,
+                respectLeaked: 0,
+                flightSec: 0,
+                flightTrips: 0,
+                flightDestinations: []
+            };
+        }
+
+        try {
+            const repRes = await fetch(`https://api.torn.com/torn/${targetWarId}?selections=rankedwarreport&key=${userKey}`, { signal: AbortSignal.timeout(6000) });
+            const repData = await repRes.json();
+            if (repData.rankedwarreport?.factions?.[myId]?.members) {
+                const repMembers = repData.rankedwarreport.factions[myId].members;
+                for (const [mId, rM] of Object.entries(repMembers)) {
+                    if (memberStats[mId]) {
+                        memberStats[mId].hitsMade = Number(rM.attacks || 0);
+                        memberStats[mId].respectEarned = Number(rM.score || 0);
+                    }
+                }
+            }
+        } catch (repErr) {
+            console.warn("[War Audit] rankedwarreport failed, falling back to attack logs:", repErr.message);
+        }
+
+        // 4. Fetch attack logs for defense & farming audit
+        try {
+            const atkRes = await fetch(`https://api.torn.com/faction/?selections=attacks&from=${warStart}&to=${warEnd}&key=${userKey}`, { signal: AbortSignal.timeout(8000) });
+            const atkData = await atkRes.json();
+            if (atkData.attacks && typeof atkData.attacks === 'object') {
+                for (const atk of Object.values(atkData.attacks)) {
+                    const ts = atk.timestamp_ended || atk.timestamp_started || 0;
+                    if (ts < warStart || ts > warEnd) continue;
+
+                    // Defense check: Enemy attacked our member
+                    if (atk.attacker_faction == enemyId && atk.defender_faction == myId) {
+                        const defId = atk.defender_id?.toString();
+                        if (memberStats[defId]) {
+                            memberStats[defId].totalDefends++;
+                            const result = atk.result || "";
+                            if (result.includes("Hospital") || result === "Hospitalized") {
+                                memberStats[defId].timesFarmed++;
+                                memberStats[defId].respectLeaked += Number(atk.respect_gain || 0);
+                            } else if (result.includes("Lost") || result.includes("Stalemate")) {
+                                memberStats[defId].defendedSuccessfully++;
+                            }
+                        }
+                    }
+
+                    // Fallback for hitsMade if rankedwarreport was not available
+                    if (atk.attacker_faction == myId && atk.defender_faction == enemyId) {
+                        const atkId = atk.attacker_id?.toString();
+                        if (memberStats[atkId] && memberStats[atkId].hitsMade === 0) {
+                            if (!atk.result?.includes("Lost") && !atk.result?.includes("Stalemate")) {
+                                memberStats[atkId].hitsMade++;
+                                memberStats[atkId].respectEarned += Number(atk.respect_gain || 0);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (atkErr) {
+            console.warn("[War Audit] Attacks fetch warning:", atkErr.message);
+        }
+
+        // 5. Query FF Scouter for historical flights if key is present
+        let ffScouterEnabled = false;
+        let ffScouterPremium = false;
+        let ffError = null;
+
+        if (ffKey && String(ffKey).trim().length > 10) {
+            ffScouterEnabled = true;
+            const memberIds = Object.keys(memberStats);
+
+            const CHUNK_SIZE = 5;
+            for (let i = 0; i < memberIds.length; i += CHUNK_SIZE) {
+                const chunk = memberIds.slice(i, i + CHUNK_SIZE);
+                await Promise.all(chunk.map(async (mId) => {
+                    if (ffError) return;
+                    try {
+                        const ffUrl = `https://ffscouter.com/api/v1/player-flights?key=${encodeURIComponent(ffKey)}&target=${encodeURIComponent(mId)}`;
+                        const fRes = await fetch(ffUrl, {
+                            signal: AbortSignal.timeout(5000),
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        const fData = await fRes.json();
+                        if (fData.error) {
+                            if (fData.code === 19) {
+                                ffError = "Active premium subscription required to use this endpoint";
+                            } else {
+                                ffError = fData.error;
+                            }
+                            return;
+                        }
+
+                        ffScouterPremium = true;
+                        const allFlights = (fData.recent_flights || []).concat(fData.current ? [fData.current] : []);
+                        for (const fl of allFlights) {
+                            const takeoff = fl.takeoff_time;
+                            const landing = fl.approx_landing_time || fl.latest_arrival_time || (takeoff ? takeoff + 3600 : null);
+                            if (takeoff && landing) {
+                                const oStart = Math.max(warStart, takeoff);
+                                const oEnd = Math.min(warEnd, landing);
+                                if (oEnd > oStart) {
+                                    memberStats[mId].flightSec += (oEnd - oStart);
+                                    memberStats[mId].flightTrips++;
+                                    if (fl.status_description) {
+                                        memberStats[mId].flightDestinations.push(fl.status_description);
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        // ignore individual player flight fetch error
+                    }
+                }));
+
+                if (ffError) break;
+                if (i + CHUNK_SIZE < memberIds.length) {
+                    await new Promise(r => setTimeout(r, 120));
+                }
+            }
+        }
+
+        // 6. Grade and finalize member list
+        const processedMembers = Object.values(memberStats).map(m => {
+            const airHours = (m.flightSec / 3600).toFixed(1);
+            const airMins = Math.round(m.flightSec / 60);
+            const hoursPart = Math.floor(airMins / 60);
+            const minsPart = airMins % 60;
+            const airtimeFormatted = hoursPart > 0 ? `${hoursPart}h ${minsPart}m` : `${minsPart}m`;
+            const flightPct = Math.min(100, Math.round((m.flightSec / warDuration) * 100));
+            const netScore = parseFloat((m.respectEarned - m.respectLeaked).toFixed(1));
+
+            // Grading algorithm
+            let grade = 'B';
+            let gradeLabel = 'Active Defender';
+            let gradeColor = '#00cec9';
+
+            if (m.timesFarmed === 0) {
+                if (flightPct >= 20 || m.hitsMade >= 5) {
+                    grade = 'S';
+                    gradeLabel = 'Ghost Aviator';
+                    gradeColor = '#2ed573';
+                } else {
+                    grade = 'A';
+                    gradeLabel = 'Safe Pilot';
+                    gradeColor = '#2ed573';
+                }
+            } else if (m.timesFarmed <= 1) {
+                grade = 'A';
+                gradeLabel = 'Safe / Low Farm';
+                gradeColor = '#2ed573';
+            } else if (m.timesFarmed <= 3 && netScore >= 0) {
+                grade = 'B';
+                gradeLabel = 'Tactical Turtle';
+                gradeColor = '#ffa502';
+            } else if (m.timesFarmed <= 6) {
+                grade = 'C';
+                gradeLabel = 'Exposed';
+                gradeColor = '#ff7f50';
+            } else if (m.timesFarmed <= 9) {
+                grade = 'D';
+                gradeLabel = 'Frequent Target';
+                gradeColor = '#ff4757';
+            } else {
+                grade = 'F';
+                gradeLabel = 'Sitting Duck / Farmed';
+                gradeColor = '#ff4757';
+            }
+
+            if (m.hitsMade === 0 && m.timesFarmed === 0 && m.flightSec === 0) {
+                grade = '—';
+                gradeLabel = 'Inactive in War';
+                gradeColor = '#747d8c';
+            }
+
+            return {
+                ...m,
+                airHours: parseFloat(airHours),
+                airtimeFormatted,
+                flightPct,
+                netScore,
+                respectLeaked: parseFloat(m.respectLeaked.toFixed(1)),
+                respectEarned: parseFloat(m.respectEarned.toFixed(1)),
+                grade,
+                gradeLabel,
+                gradeColor
+            };
+        });
+
+        // Sort: Least farmed first, then highest airtime, then highest hits made
+        processedMembers.sort((a, b) => {
+            if (a.timesFarmed !== b.timesFarmed) return a.timesFarmed - b.timesFarmed;
+            if (b.flightPct !== a.flightPct) return b.flightPct - a.flightPct;
+            return b.hitsMade - a.hitsMade;
+        });
+
+        // 7. KPIs
+        let totalAirtimeSec = 0;
+        let ghostCount = 0;
+        let totalFarmedHits = 0;
+        let totalRespectLeaked = 0;
+        let totalHitsMade = 0;
+
+        for (const m of processedMembers) {
+            totalAirtimeSec += m.flightSec;
+            if (m.timesFarmed === 0 && (m.hitsMade > 0 || m.flightSec > 0)) ghostCount++;
+            totalFarmedHits += m.timesFarmed;
+            totalRespectLeaked += m.respectLeaked;
+            totalHitsMade += m.hitsMade;
+        }
+
+        const totalAirHours = (totalAirtimeSec / 3600).toFixed(1);
+        const durationHours = (warDuration / 3600).toFixed(1);
+
+        const responsePayload = {
+            success: true,
+            war: {
+                id: targetWarId,
+                enemyName,
+                enemyId,
+                ourScore,
+                theirScore,
+                start: warStart,
+                end: warEnd,
+                durationHours: parseFloat(durationHours),
+                isOngoing,
+                winner: selectedWarInfo.war.winner || 0
+            },
+            kpis: {
+                totalAirHours: parseFloat(totalAirHours),
+                ghostCount,
+                totalFarmedHits,
+                totalRespectLeaked: parseFloat(totalRespectLeaked.toFixed(1)),
+                totalHitsMade
+            },
+            ffScouter: {
+                enabled: ffScouterEnabled,
+                premium: ffScouterPremium,
+                error: ffError
+            },
+            members: processedMembers
+        };
+
+        warAuditCache[cacheKey] = {
+            timestamp: Date.now(),
+            data: responsePayload
+        };
+
+        res.json(responsePayload);
+    } catch (e) {
+        console.error("[War Flight Audit Error]:", e);
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.get('/api/dashboard-data', async (req, res) => {
@@ -5369,6 +5722,61 @@ async function buildDonatorStatusEmbed(playerQuery, apiKey) {
     }
 }
 
+async function buildWarFlightsEmbed(apiKey, ffKey) {
+    if (!apiKey) return { title: "✈️ War Flight & Farm Sentinel", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
+    try {
+        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+        const facData = await facRes.json();
+        if (facData.error) throw new Error(facData.error.error || "Torn API error");
+
+        const rankedWars = facData.rankedwars || {};
+        const sorted = Object.entries(rankedWars).sort((a, b) => (b[1].war?.start || 0) - (a[1].war?.start || 0));
+        if (sorted.length === 0) return { title: "✈️ War Flight & Farm Sentinel", description: "No ranked wars found in faction records.", color: 0x8b949e };
+
+        const [warId, warInfo] = sorted[0];
+        const myId = facData.ID.toString();
+        let enemyName = "Enemy Faction";
+        for (const [fId, fInfo] of Object.entries(warInfo.factions || {})) {
+            if (fId !== myId) enemyName = fInfo.name;
+        }
+
+        const cacheKey = `${warId}_${ffKey ? ffKey.substring(0, 6) : 'none'}`;
+        let auditData = warAuditCache[cacheKey]?.data;
+
+        if (!auditData) {
+            const auditRes = await fetch(`http://127.0.0.1:${PORT || 3000}/api/war-flight-audit?apiKey=${apiKey}&ffKey=${ffKey || ''}&warId=${warId}`).catch(() => null);
+            if (auditRes) auditData = await auditRes.json().catch(() => null);
+        }
+
+        if (!auditData || !auditData.members) {
+            return {
+                title: `✈️ War Flight Sentinel — vs ${enemyName}`,
+                description: `Analyzing war flights & attack logs... Run again in a few seconds or check the Web Dashboard.`,
+                color: 0x00cec9
+            };
+        }
+
+        const topSafe = auditData.members.filter(m => m.timesFarmed === 0 && (m.flightPct > 0 || m.hitsMade > 0)).slice(0, 5);
+        const mostFarmed = auditData.members.filter(m => m.timesFarmed > 0).sort((a, b) => b.timesFarmed - a.timesFarmed).slice(0, 5);
+
+        const safeLines = topSafe.map(m => `• **${m.name}** [${m.id}]: **${m.airtimeFormatted}** in air (${m.flightPct}%) • **0** times farmed • ${m.hitsMade} hits`).join('\n') || "None recorded";
+        const farmedLines = mostFarmed.map(m => `• **${m.name}** [${m.id}]: ⚠️ **${m.timesFarmed}x farmed** • -${m.respectLeaked} pts conceded • ${m.airtimeFormatted} air`).join('\n') || "No members were farmed!";
+
+        return {
+            title: `✈️ War Flight & Farm Sentinel — vs ${enemyName}`,
+            description: `**War Duration**: **${auditData.war.durationHours}h** • **Total Faction Airtime**: **${auditData.kpis.totalAirHours}h**\n` +
+                         `🛡️ **Ghost Aviators**: **${auditData.kpis.ghostCount}** members • ⚠️ **Total Farmed Hits Conceded**: **${auditData.kpis.totalFarmedHits}** (-${auditData.kpis.totalRespectLeaked} pts)\n\n` +
+                         `🏆 **Safest Pilots (0 Farmed)**:\n${safeLines}\n\n` +
+                         `🚨 **Most Farmed Members**:\n${farmedLines}`,
+            color: auditData.kpis.totalFarmedHits > 20 ? 0xff4757 : 0x2ed573,
+            footer: { text: "Owen's Faction Tools • FF Scouter & Torn Attack Audit" },
+            timestamp: new Date().toISOString()
+        };
+    } catch (e) {
+        return { title: "✈️ War Flight & Farm Sentinel", description: `⚠️ Error: ${e.message}`, color: 0xff4757 };
+    }
+}
+
 async function buildPayoutEmbed(memberQuery, apiKey) {
     if (!apiKey) return { title: "💰 War Payout Calculator", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
     try {
@@ -5658,6 +6066,9 @@ async function registerSlashCommands(token, guildId = null) {
         // 10. Donator Status
         new SlashCommandBuilder().setName('donator').setDescription('Check Donator / Subscriber status, days left, and energy perks')
             .addStringOption(opt => opt.setName('player').setDescription('Player name, ID, or leave blank for yourself').setRequired(false)).toJSON(),
+
+        // 11. War Flight & Farm Sentinel
+        new SlashCommandBuilder().setName('warflights').setDescription('Audit past or current war: see who flew, stayed safe, or got farmed').toJSON(),
     ];
 
     try {
@@ -5821,6 +6232,9 @@ async function startSlashCommandBot(token) {
                 } else if (cmd === 'donator' || cmd === 'subscriber' || cmd === 'sub') {
                     const player = interaction.options.getString('player');
                     embed = await buildDonatorStatusEmbed(player, apiKey);
+                } else if (cmd === 'warflights' || cmd === 'warflight' || cmd === 'flights') {
+                    const ffKey = getGlobalFFKey() || discordConfig.ffKey;
+                    embed = await buildWarFlightsEmbed(apiKey, ffKey);
                 } else {
                     // Travel lookup fallback (e.g. /travel, /south-africa, /mexico, /sa, /uk, etc.)
                     let country = slashNameToCountry(cmd);
