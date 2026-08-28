@@ -79,6 +79,10 @@ async function loadConfigFromMongo() {
                 warAuditArchive = { ...(warAuditArchive || {}), ...(saved.warAuditArchive || {}) };
                 console.log(`[Mongo] Restored ${Object.keys(warAuditArchive).length} war audit archives from MongoDB Atlas.`);
             }
+            if (saved.lastWarboardPayload && (!lastGoodWarboardPayload || !lastGoodWarboardPayload.friendly || lastGoodWarboardPayload.friendly.length === 0)) {
+                lastGoodWarboardPayload = saved.lastWarboardPayload;
+                console.log(`[Mongo] Restored lastGoodWarboardPayload (${lastGoodWarboardPayload.friendly?.length || 0} members) from MongoDB Atlas.`);
+            }
             console.log('[Mongo] Restored master configurations from MongoDB Atlas.');
             
             if (discordConfig.apiKey) {
@@ -340,6 +344,7 @@ function saveToMongo() {
                     inactivityAlerts: inactivityAlertsMemory,
                     warFlightArchive,
                     warAuditArchive,
+                    lastWarboardPayload: lastGoodWarboardPayload,
                     updatedAt: new Date()
                 }
             },
@@ -639,7 +644,7 @@ function getNextApiKey() {
     
     activeKeys = [...new Set(activeKeys.filter(k => k && typeof k === 'string' && k.trim() !== ""))];
     
-    let validKeys = activeKeys.filter(k => (globalApiUsage[k] || 0) < 90);
+    let validKeys = activeKeys.filter(k => (globalApiUsage[k] || 0) < 30);
     if (validKeys.length === 0) return null; // All keys are throttled for the remainder of this minute
     
     let key = validKeys[activeKeyIndex % validKeys.length];
