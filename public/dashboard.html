@@ -575,19 +575,7 @@ function fmtDuration(s) {
 let dashData = null;
 
 async function loadAll() {
-    if (!myKey) {
-        try {
-            const cfgRes = await fetch('/api/master-config');
-            const cfg = await cfgRes.json();
-            if (cfg.apiKey) {
-                myKey = cfg.apiKey;
-                localStorage.setItem("warboard_apikey", myKey);
-                if (cfg.ffKey && !localStorage.getItem("warboard_ffkey")) {
-                    localStorage.setItem("warboard_ffkey", cfg.ffKey);
-                }
-            }
-        } catch(e) {}
-    }
+    myKey = localStorage.getItem("warboard_apikey") || "";
     if (!myKey) {
         document.getElementById('analyst-output').innerHTML = '<span style="color:var(--red)">⚠️ No API key set. Open Settings (⚙️) to add your Torn API key.</span>';
         document.getElementById('analyst-output').classList.remove('loading');

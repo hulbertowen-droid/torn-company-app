@@ -59,6 +59,8 @@ async function loadConfigFromMongo() {
         if (saved) {
             if (saved.discordConfig) {
                 discordConfig = { ...discordConfig, ...saved.discordConfig };
+                delete discordConfig.apiKey;
+                delete discordConfig.myName;
                 global.isNotificationsKilled = !!discordConfig.notificationsKilled;
             }
             if (saved.companyConfig) companyConfig = { ...companyConfig, ...saved.companyConfig };
@@ -2103,8 +2105,8 @@ app.get('/api/discord/killswitch-status', (req, res) => {
 });
 
 app.get('/api/inactivity-tracker', async (req, res) => {
-    const userKey = (req.headers['x-api-key'] || req.query.apiKey) || discordConfig.apiKey || TORN_API_KEY;
-    if (!userKey) return res.status(400).json({ error: "API Key required" });
+    const userKey = req.headers['x-api-key'] || req.query.apiKey;
+    if (!userKey || userKey === "null" || userKey.trim() === "") return res.status(401).json({ error: "API Key required" });
 
     try {
         const userInfo = await getUserFactionInfo(userKey);
@@ -2201,9 +2203,9 @@ app.post('/api/discord-ping', async (req, res) => {
 const warAuditCache = {};
 
 app.get('/api/war-list', async (req, res) => {
-    const userKey = (req.headers['x-api-key'] || req.query.apiKey) || discordConfig.apiKey || TORN_API_KEY;
+    const userKey = req.headers['x-api-key'] || req.query.apiKey;
     try {
-        if (!userKey) return res.status(400).json({ error: "Missing API key" });
+        if (!userKey || userKey === "null" || userKey.trim() === "") return res.status(401).json({ error: "Missing API key" });
         const userInfo = await getUserFactionInfo(userKey);
         let targetFacId = (req.query.factionId || req.headers['x-faction-id'])
             || userInfo?.facId
@@ -2253,11 +2255,11 @@ app.get('/api/war-list', async (req, res) => {
 });
 
 app.get('/api/war-flight-audit', async (req, res) => {
-    const userKey = (req.headers['x-api-key'] || req.query.apiKey) || discordConfig.apiKey || TORN_API_KEY;
+    const userKey = req.headers['x-api-key'] || req.query.apiKey;
     const ffKey = (req.headers['x-ff-key'] || req.query.ffKey) || getGlobalFFKey() || discordConfig.ffKey;
     const reqWarId = req.query.warId;
 
-    if (!userKey) return res.status(400).json({ error: "Missing Torn API Key" });
+    if (!userKey || userKey === "null" || userKey.trim() === "") return res.status(401).json({ error: "Missing Torn API Key" });
 
     try {
         // 1. Fetch faction info & ranked wars
@@ -3577,7 +3579,10 @@ app.post('/api/save-spy', async (req, res) => {
 app.get('/api/warboard', async (req, res) => {
     if (global.isTurboMining) return res.json({ error: "Turbo Mining Mode is active. Live Warboard is paused." });
     try {
-        const userKey = (req.headers['x-api-key'] || req.query.apiKey) && (req.headers['x-api-key'] || req.query.apiKey) !== "null" ? (req.headers['x-api-key'] || req.query.apiKey) : TORN_API_KEY;
+        const userKey = req.headers['x-api-key'] || req.query.apiKey;
+        if (!userKey || userKey === "null" || userKey.trim() === "") {
+            return res.status(401).json({ error: "Please enter your Torn API Key in Settings (⚙) to view your faction warboard." });
+        }
         const ffKey = (req.headers['x-ff-key'] || req.query.ffKey) && (req.headers['x-ff-key'] || req.query.ffKey) !== "null" && (req.headers['x-ff-key'] || req.query.ffKey) !== "" ? (req.headers['x-ff-key'] || req.query.ffKey) : null;
         await verifySubscription(userKey);
 
@@ -3900,8 +3905,8 @@ let myUserStatsMemoryCache = {};
 
 app.get('/api/my-stats', async (req, res) => {
     try {
-        const key = req.headers['x-api-key'] || req.query.apiKey || discordConfig.apiKey || TORN_API_KEY;
-        if (!key) return res.status(400).json({ error: "Missing API key" });
+        const key = req.headers['x-api-key'] || req.query.apiKey;
+        if (!key || key === "null" || key.trim() === "") return res.status(401).json({ error: "Missing API key" });
 
         const cacheKey = key.slice(-8);
         const cached = myUserStatsMemoryCache[cacheKey];
@@ -3953,31 +3958,18 @@ function parseStatValue(val) {
 
 app.get('/api/master-config', (req, res) => {
     res.json({
-        discordConfig,
-        companyConfig,
-        ocConfig,
-        marketConfig,
-        apiKey: discordConfig.apiKey || companyConfig.apiKey || TORN_API_KEY || "",
         globalBotToken: discordConfig.globalBotToken || "",
         globalChannelId: discordConfig.globalChannelId || "",
-        myName: discordConfig.myName || "Agent",
-        enemyFacId: discordConfig.enemyFacId || "",
-        ffKey: discordConfig.ffKey || "",
-        tsKey: discordConfig.tsKey || "",
         cpm: discordConfig.cpm || 12
     });
 });
 
 app.post('/api/master-config', (req, res) => {
-    const { apiKey, discordWebhook, companyWebhook, ocWebhook, myName, globalToggles, ffKey, tsKey, enemyId } = req.body;
+    const { discordWebhook, globalToggles, enemyId } = req.body;
     
     // Save to discord config
     if (discordWebhook !== undefined) discordConfig.globalChannelId = discordWebhook;
-    if (apiKey !== undefined && apiKey !== '') discordConfig.apiKey = apiKey;
-    if (myName !== undefined) discordConfig.myName = myName;
     if (enemyId !== undefined) discordConfig.enemyFacId = enemyId;
-    if (ffKey !== undefined) discordConfig.ffKey = ffKey;
-    if (tsKey !== undefined) discordConfig.tsKey = tsKey;
     
     if (globalToggles) {
         discordConfig.chainUnder90 = globalToggles.chain;
@@ -3992,15 +3984,6 @@ app.post('/api/master-config', (req, res) => {
     
     saveDiscordConfig();
     
-    if (apiKey !== undefined && apiKey !== '') {
-        companyConfig.apiKey = apiKey;
-        saveCompanyConfig();
-        try {
-            const { addKey } = require('./recruit/lib/apiKeyPool');
-            addKey(apiKey, discordConfig.factionId || 0, null);
-        } catch(e) {}
-    }
-    
     res.json({ success: true });
 });
 
@@ -4011,18 +3994,8 @@ app.post('/api/sync-configs', (req, res) => {
     if (oc) { ocConfig = { ...ocConfig, ...oc }; saveOcConfig(); }
     if (market) { marketConfig = { ...marketConfig, ...market }; saveMarketConfig(); }
     
-    // Handle flat payload from localStorage master_faction_config
-    if (apiKey) {
-        discordConfig.apiKey = apiKey;
-        companyConfig.apiKey = apiKey;
-        try {
-            const { addKey } = require('./recruit/lib/apiKeyPool');
-            addKey(apiKey, discordConfig.factionId || 0, null);
-        } catch(e) {}
-    }
     if (globalBotToken) discordConfig.globalBotToken = globalBotToken;
     if (globalChannelId) discordConfig.globalChannelId = globalChannelId;
-    if (myName) discordConfig.myName = myName;
     if (enemyFacId) discordConfig.enemyFacId = enemyFacId;
     if (ffKey) discordConfig.ffKey = ffKey;
     if (tsKey) discordConfig.tsKey = tsKey;
@@ -4064,8 +4037,8 @@ app.get('/api/debug-ffscouter', async (req, res) => {
 
 app.get('/api/ocs', async (req, res) => {
     try {
-        const userKey = (req.headers['x-api-key'] || req.query.apiKey) && (req.headers['x-api-key'] || req.query.apiKey) !== "null" ? (req.headers['x-api-key'] || req.query.apiKey) : TORN_API_KEY;
-        if (!userKey) return res.status(400).json({ error: "No API key provided. Please add your API key in Settings." });
+        const userKey = req.headers['x-api-key'] || req.query.apiKey;
+        if (!userKey || userKey === "null" || userKey.trim() === "") return res.status(401).json({ error: "No API key provided. Please add your API key in Settings." });
 
         // 1. Fetch user profile to get their faction ID (v2 API requires explicit ID)
         const userRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`);
@@ -4237,8 +4210,8 @@ function saveWarBountiesHistory(data) {
 }
 
 app.get('/api/war-bounties', async (req, res) => {
-    const apiKey = req.headers['x-api-key'] || req.query.apiKey || discordConfig.apiKey || TORN_API_KEY;
-    if (!apiKey) return res.status(400).json({ error: "API Key required" });
+    const apiKey = req.headers['x-api-key'] || req.query.apiKey;
+    if (!apiKey || apiKey === "null" || apiKey.trim() === "") return res.status(401).json({ error: "API Key required" });
 
     try {
         // 1. Fetch current ranked war details

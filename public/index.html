@@ -1208,9 +1208,6 @@ async function saveSettings() {
     localStorage.setItem("warboard_bottoken", globalBotToken);
     localStorage.setItem("warboard_channelid", globalChannelId);
     localStorage.setItem("warboard_cpm", cpm);
-    try {
-        await fetch('/api/master-config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ apiKey: myKey, myName }) });
-    } catch(e) {}
     if (globalBotToken) {
         fetch('/api/save-discord-config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ globalBotToken, globalChannelId }) }).catch(()=>{});
         fetch('/api/save-market-config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ globalChannelId }) }).catch(()=>{});
@@ -1218,7 +1215,6 @@ async function saveSettings() {
     knownEnemies = {};
     closeSettings();
     startPolling();
-    localStorage.setItem('master_faction_config', JSON.stringify({ globalBotToken, globalChannelId, apiKey: myKey, ffKey, tsKey, enemyFacId, myName, cpm }));
 }
 
 // ─── Refresh Bar ──────────────────────────────────────────────────────────────
@@ -2220,26 +2216,10 @@ async function saveManualSpy(targetId) {
 
 // ─── Config sync & Bootstrap ──────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', async () => {
-    let sync = localStorage.getItem('master_faction_config');
-    if (sync) {
-        fetch('/api/sync-configs', { method:'POST', headers:{'Content-Type':'application/json'}, body: sync }).catch(()=>{});
-    }
-
     try {
         const res = await fetch('/api/master-config');
         const data = await res.json();
-        let updated = false;
 
-        if (data.apiKey && !localStorage.getItem('warboard_apikey')) {
-            localStorage.setItem('warboard_apikey', data.apiKey);
-            myKey = data.apiKey;
-            updated = true;
-        }
-        if (data.discordConfig?.apiKey && !localStorage.getItem('warboard_apikey')) {
-            localStorage.setItem('warboard_apikey', data.discordConfig.apiKey);
-            myKey = data.discordConfig.apiKey;
-            updated = true;
-        }
         if (data.globalBotToken && !localStorage.getItem('warboard_bottoken')) {
             localStorage.setItem('warboard_bottoken', data.globalBotToken);
             globalBotToken = data.globalBotToken;
@@ -2247,10 +2227,6 @@ window.addEventListener('DOMContentLoaded', async () => {
         if (data.globalChannelId && !localStorage.getItem('warboard_channelid')) {
             localStorage.setItem('warboard_channelid', data.globalChannelId);
             globalChannelId = data.globalChannelId;
-        }
-        if (data.myName && data.myName !== 'Agent' && !localStorage.getItem('warboard_myname')) {
-            localStorage.setItem('warboard_myname', data.myName);
-            myName = data.myName;
         }
 
         if (myKey) {
