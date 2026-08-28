@@ -2102,12 +2102,13 @@ app.get('/api/war-flight-audit', async (req, res) => {
             }
         }
 
-        // Check cache (fast return if already audited)
+        // Check cache (fast return if already audited with latest logic version)
+        const AUDIT_VERSION = 4;
         const cacheKey = `${targetWarId}_${ffKey ? ffKey.substring(0, 6) : 'none'}`;
-        if (!isOngoing && !req.query.force && warAuditArchive[targetWarId]) {
+        if (!isOngoing && !req.query.force && warAuditArchive[targetWarId] && warAuditArchive[targetWarId].v === AUDIT_VERSION) {
             return res.json(warAuditArchive[targetWarId]);
         }
-        if (warAuditCache[cacheKey] && !req.query.force && (Date.now() - warAuditCache[cacheKey].timestamp) < (isOngoing ? 30000 : 3600000)) {
+        if (warAuditCache[cacheKey] && !req.query.force && warAuditCache[cacheKey].v === AUDIT_VERSION && (Date.now() - warAuditCache[cacheKey].timestamp) < (isOngoing ? 30000 : 3600000)) {
             return res.json(warAuditCache[cacheKey].data);
         }
 
@@ -2219,9 +2220,8 @@ app.get('/api/war-flight-audit', async (req, res) => {
 
                     // Defense check: Enemy ranked war attack on our member (includes stealthed enemy hits)
                     const isEnemyWarAttack = (atk.ranked_war == 1 || atk.ranked_war === true) && atk.defender_faction == myId;
-                    const isDirectEnemyAttack = atk.attacker_faction == enemyId && atk.defender_faction == myId;
 
-                    if (isEnemyWarAttack || isDirectEnemyAttack) {
+                    if (isEnemyWarAttack) {
                         if (defId) {
                             if (!memberStats[defId]) {
                                 memberStats[defId] = { id: defId, name: atk.defender_name || `Member #${defId}`, level: '—', hitsMade: 0, respectEarned: 0, timesHit: 0, timesBeaten: 0, timesDefended: 0, timesFarmed: 0, totalDefends: 0, defendedSuccessfully: 0, respectLeaked: 0, flightSec: 0, flightTrips: 0, overseasHits: 0, overseasTimestamps: [], flightDestinations: [] };
@@ -2464,7 +2464,7 @@ app.get('/api/war-flight-audit', async (req, res) => {
 
         for (const m of processedMembers) {
             totalAirtimeSec += m.flightSec;
-            if (m.timesHit <= 4 && (m.hitsMade > 0 || m.flightSec > 0)) ghostCount++;
+            if (m.timesHit <= 10 && (m.airHours >= 15 || m.grade === 'S')) ghostCount++;
             totalFarmedHits += m.timesHit;
             totalRespectLeaked += m.respectLeaked;
             totalHitsMade += m.hitsMade;
@@ -2478,6 +2478,7 @@ app.get('/api/war-flight-audit', async (req, res) => {
 
         const responsePayload = {
             success: true,
+            v: AUDIT_VERSION,
             war: {
                 id: targetWarId,
                 enemyName,
