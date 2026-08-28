@@ -1372,6 +1372,29 @@ function saveInactivityAlerts(data) {
 
 let inactivityAlertsMemory = loadInactivityAlerts();
 
+// Persistent Real-Time War Flight Archive
+const WAR_FLIGHT_ARCHIVE_FILE = path.join(__dirname, 'data', 'war_flight_archive.json');
+let warFlightArchive = {};
+function loadWarFlightArchive() {
+    try {
+        if (!fs.existsSync(path.dirname(WAR_FLIGHT_ARCHIVE_FILE))) {
+            fs.mkdirSync(path.dirname(WAR_FLIGHT_ARCHIVE_FILE), { recursive: true });
+        }
+        if (fs.existsSync(WAR_FLIGHT_ARCHIVE_FILE)) {
+            warFlightArchive = JSON.parse(fs.readFileSync(WAR_FLIGHT_ARCHIVE_FILE, 'utf8'));
+        }
+    } catch (e) {}
+}
+function saveWarFlightArchive() {
+    try {
+        if (!fs.existsSync(path.dirname(WAR_FLIGHT_ARCHIVE_FILE))) {
+            fs.mkdirSync(path.dirname(WAR_FLIGHT_ARCHIVE_FILE), { recursive: true });
+        }
+        fs.writeFileSync(WAR_FLIGHT_ARCHIVE_FILE, JSON.stringify(warFlightArchive), 'utf8');
+    } catch (e) {}
+}
+loadWarFlightArchive();
+
 async function checkFactionMembersInactivity(members) {
     if (!members || typeof members !== 'object') return;
     if (discordConfig.inactivityTracker === false) return;
@@ -1485,6 +1508,37 @@ setInterval(async () => {
         // Check Friendly Member Inactivity Tracker
         if (facData.members && discordConfig.inactivityTracker !== false && discordConfig.globalChannelId) {
             checkFactionMembersInactivity(facData.members);
+        }
+
+        // Continuous Real-Time War Flight Archiver
+        if (facData.members) {
+            const nowSec = Math.floor(Date.now() / 1000);
+            let archiveChanged = false;
+            for (const [mId, m] of Object.entries(facData.members)) {
+                const state = (m.status?.state || "").trim();
+                const desc = (m.status?.description || "").trim();
+                const isFlying = state === "Traveling" || state === "Abroad" || desc.toLowerCase().includes("traveling") || desc.toLowerCase().includes("in ");
+                if (isFlying) {
+                    if (!warFlightArchive[mId]) warFlightArchive[mId] = [];
+                    const list = warFlightArchive[mId];
+                    const last = list[list.length - 1];
+                    if (last && (nowSec - last.end) < 400) {
+                        last.end = nowSec;
+                        if (m.status?.until) last.until = m.status.until;
+                        if (desc) last.dest = desc;
+                    } else {
+                        list.push({
+                            start: nowSec,
+                            end: nowSec,
+                            until: m.status?.until || (nowSec + 3600),
+                            dest: desc || state
+                        });
+                        if (list.length > 80) list.shift();
+                    }
+                    archiveChanged = true;
+                }
+            }
+            if (archiveChanged) saveWarFlightArchive();
         }
 
         if (facData.chain && facData.chain.current >= 10) {
@@ -2047,6 +2101,7 @@ app.get('/api/war-flight-audit', async (req, res) => {
                 respectLeaked: 0,
                 flightSec: 0,
                 flightTrips: 0,
+                overseasHits: 0,
                 flightDestinations: []
             };
         }
@@ -2075,6 +2130,14 @@ app.get('/api/war-flight-audit', async (req, res) => {
                 for (const atk of Object.values(atkData.attacks)) {
                     const ts = atk.timestamp_ended || atk.timestamp_started || 0;
                     if (ts < warStart || ts > warEnd) continue;
+
+                    // Check for overseas modifier in combat
+                    if (atk.modifiers && (atk.modifiers.overseas == 1 || atk.modifiers.overseas === true)) {
+                        const defId = atk.defender_id?.toString();
+                        const atkId = atk.attacker_id?.toString();
+                        if (memberStats[defId]) memberStats[defId].overseasHits++;
+                        if (memberStats[atkId]) memberStats[atkId].overseasHits++;
+                    }
 
                     // Defense check: Enemy attacked our member
                     if (atk.attacker_faction == enemyId && atk.defender_faction == myId) {
@@ -2107,14 +2170,33 @@ app.get('/api/war-flight-audit', async (req, res) => {
             console.warn("[War Audit] Attacks fetch warning:", atkErr.message);
         }
 
-        // 5. Query FF Scouter for historical flights if key is present
+        // 5a. Match flights from our persistent background sentinel archive
+        for (const mId of Object.keys(memberStats)) {
+            const archiveList = warFlightArchive[mId] || [];
+            for (const session of archiveList) {
+                const sStart = Number(session.start) || 0;
+                const sEnd = Math.max(Number(session.end) || 0, Number(session.until) || 0);
+                if (sStart && sEnd) {
+                    const oStart = Math.max(warStart, sStart);
+                    const oEnd = Math.min(warEnd, sEnd);
+                    if (oEnd > oStart) {
+                        memberStats[mId].flightSec += (oEnd - oStart);
+                        memberStats[mId].flightTrips++;
+                        if (session.dest) memberStats[mId].flightDestinations.push(session.dest);
+                    }
+                }
+            }
+        }
+
+        // 5b. Query FF Scouter for historical flights if key is present
         let ffScouterEnabled = false;
         let ffScouterPremium = false;
         let ffError = null;
 
-        if (ffKey && String(ffKey).trim().length > 10) {
+        if (ffKey && String(ffKey).trim().length > 5 && ffKey !== "null" && ffKey !== "undefined") {
             ffScouterEnabled = true;
             const memberIds = Object.keys(memberStats);
+            console.log(`[War Audit] Querying FF Scouter for ${memberIds.length} members with key ${ffKey.substring(0, 4)}...`);
 
             const CHUNK_SIZE = 5;
             for (let i = 0; i < memberIds.length; i += CHUNK_SIZE) {
@@ -2140,9 +2222,11 @@ app.get('/api/war-flight-audit', async (req, res) => {
                         ffScouterPremium = true;
                         const allFlights = (fData.recent_flights || []).concat(fData.current ? [fData.current] : []);
                         for (const fl of allFlights) {
-                            const takeoff = fl.takeoff_time;
-                            const landing = fl.approx_landing_time || fl.latest_arrival_time || (takeoff ? takeoff + 3600 : null);
-                            if (takeoff && landing) {
+                            let takeoff = Number(fl.takeoff_time) || 0;
+                            let landing = Number(fl.approx_landing_time || fl.latest_arrival_time || fl.earliest_arrival_time || 0);
+                            if (!takeoff && landing) takeoff = landing - 7200;
+                            if (takeoff && !landing) landing = takeoff + 7200;
+                            if (takeoff > 0 && landing > 0) {
                                 const oStart = Math.max(warStart, takeoff);
                                 const oEnd = Math.min(warEnd, landing);
                                 if (oEnd > oStart) {
@@ -2163,6 +2247,16 @@ app.get('/api/war-flight-audit', async (req, res) => {
                 if (i + CHUNK_SIZE < memberIds.length) {
                     await new Promise(r => setTimeout(r, 120));
                 }
+            }
+        }
+
+        // 5c. Fallback for past wars outside FF Scouter's 10-flight window:
+        // If a member has confirmed overseas combat operations during the war, credit their flight presence
+        for (const m of Object.values(memberStats)) {
+            if (m.flightSec === 0 && m.overseasHits > 0) {
+                m.flightTrips = Math.max(1, Math.ceil(m.overseasHits / 2));
+                m.flightSec = m.flightTrips * 7200; // ~2 hours per overseas trip
+                m.flightDestinations.push("Overseas Combat Operations");
             }
         }
 

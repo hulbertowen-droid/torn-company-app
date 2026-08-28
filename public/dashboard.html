@@ -326,8 +326,13 @@
                 <div id="sentinel-war-summary" style="color:var(--text-main); font-weight:600;">
                     Select a war to analyze flight uptime and defensive performance.
                 </div>
-                <div id="sentinel-ff-badge" style="font-size:0.78em; color:var(--text-dim);">
-                    ⚡ Scouter Status: Checking...
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <div id="sentinel-ff-badge" style="font-size:0.78em; color:var(--text-dim);">
+                        ⚡ Scouter Status: Checking...
+                    </div>
+                    <button class="filter-chip" onclick="openFFKeyModal()" style="background:rgba(0,206,201,0.12); border-color:var(--teal); color:var(--teal); padding:3px 10px; font-size:0.75em; cursor:pointer;">
+                        🔑 Configure FF Key
+                    </button>
                 </div>
             </div>
 
@@ -490,6 +495,28 @@
         </div>
 
     </main>
+
+    <!-- FF Scouter Key Setup Modal -->
+    <div id="ffkey-modal" class="global-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:100000; justify-content:center; align-items:center; backdrop-filter:blur(4px);">
+        <div style="background:var(--card, #11141d); border:1px solid var(--border, #2f3542); padding:24px; border-radius:12px; width:460px; max-width:92vw; color:white; position:relative;">
+            <button style="position:absolute; right:15px; top:15px; color:var(--text-dim); font-size:1.5em; cursor:pointer; border:none; background:none;" onclick="closeFFKeyModal()">&times;</button>
+            <h3 style="margin-top:0; color:var(--teal); display:flex; align-items:center; gap:8px;">✈️ FF Scouter Premium Key</h3>
+            <p style="font-size:0.84em; color:var(--text-dim); line-height:1.5;">
+                Enter your 16-character FF Scouter API key. An active <b>Premium</b> subscription unlocks live and historical flight tracking, arrival ETAs, and war airtime analytics.
+            </p>
+            <div style="margin:16px 0;">
+                <label style="display:block; font-size:0.78em; text-transform:uppercase; font-weight:700; color:var(--text-dim); margin-bottom:6px;">FF Scouter API Key</label>
+                <input type="text" id="modal-ff-key-input" placeholder="e.g. abc123def456ghi7" style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:white; font-size:0.95em; font-family:monospace;">
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px;">
+                <a href="https://ffscouter.com/premium" target="_blank" style="font-size:0.8em; color:var(--blue); text-decoration:none;">Get FF Scouter Premium &rarr;</a>
+                <div style="display:flex; gap:8px;">
+                    <button class="refresh-btn" onclick="closeFFKeyModal()" style="background:transparent; border-color:var(--border);">Cancel</button>
+                    <button class="btn-discord-save" onclick="saveFFKeyFromModal()" style="background:var(--teal); color:#000; font-weight:800; padding:8px 18px; border:none; border-radius:6px; cursor:pointer;">Save &amp; Scan</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
 <script>
 const myKey = localStorage.getItem("warboard_apikey") || "";
@@ -717,11 +744,17 @@ async function runWarFlightAudit(force = false) {
         const ffBadge = document.getElementById('sentinel-ff-badge');
         if (ffBadge) {
             if (data.ffScouter?.premium) {
-                ffBadge.innerHTML = `<span style="color:var(--green); font-weight:700;">✨ FF Scouter Premium: Active</span> (Matched ${data.kpis.totalAirHours}h in flight)`;
+                if (data.kpis.totalAirHours > 0) {
+                    ffBadge.innerHTML = `<span style="color:var(--green); font-weight:700;">✨ FF Scouter Premium: Active</span> (${data.kpis.totalAirHours}h in flight matched)`;
+                } else if (!data.war.isOngoing && !data.war.isRecent) {
+                    ffBadge.innerHTML = `<span style="color:var(--teal); font-weight:700;">✨ FF Scouter Premium: Active</span> <span style="color:var(--text-dim);">(Past war ended prior to Scouter's 10-flight archive; Live Sentinel is recording new flights)</span>`;
+                } else {
+                    ffBadge.innerHTML = `<span style="color:var(--green); font-weight:700;">✨ FF Scouter Premium: Active</span>`;
+                }
             } else if (data.ffScouter?.enabled) {
-                ffBadge.innerHTML = `<span style="color:var(--gold); font-weight:700;">⚠️ FF Scouter: Non-Premium</span> (Torn Attack Logs active; airtime requires Premium)`;
+                ffBadge.innerHTML = `<span style="color:var(--gold); font-weight:700;">⚠️ FF Scouter: Free / Non-Premium</span> <span style="color:var(--text-dim);">(Torn defense logs active; flight history requires Scouter Premium)</span>`;
             } else {
-                ffBadge.innerHTML = `<span style="color:var(--text-dim);">🛡️ Torn Defense Audit Active • Connect FF Scouter key in Settings for airtime</span>`;
+                ffBadge.innerHTML = `<span style="color:var(--gold); font-weight:700;">⚠️ No FF Scouter Key</span> <span style="color:var(--text-dim);">(Connect key below to track flight airtime)</span>`;
             }
         }
 
@@ -822,6 +855,69 @@ function renderSentinelTable() {
         </tr>`;
     }).join('');
 }
+
+function openFFKeyModal() {
+    const modal = document.getElementById('ffkey-modal');
+    if (modal) {
+        modal.style.display = 'flex';
+        const cur = localStorage.getItem('warboard_ffkey') || '';
+        document.getElementById('modal-ff-key-input').value = cur;
+        document.getElementById('modal-ff-key-input').focus();
+    }
+}
+
+function closeFFKeyModal() {
+    const modal = document.getElementById('ffkey-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function saveFFKeyFromModal() {
+    const input = document.getElementById('modal-ff-key-input');
+    const val = (input?.value || '').trim();
+    localStorage.setItem('warboard_ffkey', val);
+
+    try {
+        let master = {};
+        try { master = JSON.parse(localStorage.getItem('master_faction_config') || '{}'); } catch(e) {}
+        master.ffKey = val;
+        localStorage.setItem('master_faction_config', JSON.stringify(master));
+
+        await fetch('/api/save-discord-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ffKey: val })
+        });
+        await fetch('/api/sync-configs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ discord: { ffKey: val } })
+        });
+    } catch(e) {}
+
+    closeFFKeyModal();
+    runWarFlightAudit(true);
+}
+
+window.openSettings = function() {
+    if (typeof openGlobalSettings === 'function') {
+        openGlobalSettings();
+    } else {
+        openFFKeyModal();
+    }
+};
+
+window.addEventListener('DOMContentLoaded', () => {
+    const factionSync = localStorage.getItem('master_faction_config');
+    if (factionSync) {
+        try {
+            fetch('/api/sync-configs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ discord: JSON.parse(factionSync) })
+            }).catch(() => {});
+        } catch(e) {}
+    }
+});
 
 function renderAll(d, wars) {
     renderFactionHero(d);
