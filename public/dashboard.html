@@ -780,6 +780,8 @@ async function runWarFlightAudit(force = false) {
         // Render KPIs with bulletproof fallbacks for older cached records
         const hitsMade = data.kpis.totalHitsMade || 0;
         const farmedHits = data.kpis.totalFarmedHits || 0;
+        const warHitsTaken = data.kpis.totalWarHitsTaken !== undefined ? data.kpis.totalWarHitsTaken : farmedHits;
+        const outHitsTaken = data.kpis.totalOutsideHitsTaken !== undefined ? data.kpis.totalOutsideHitsTaken : 0;
         const totalActions = data.kpis.totalWarActions || (hitsMade + farmedHits);
         const earned = data.kpis.totalRespectEarned !== undefined ? data.kpis.totalRespectEarned : (data.war.ourScore || 0);
         const leaked = data.kpis.totalRespectLeaked !== undefined ? data.kpis.totalRespectLeaked : (data.war.theirScore || 0);
@@ -790,10 +792,10 @@ async function runWarFlightAudit(force = false) {
         document.getElementById('kpi-audit-hits').textContent = `${hitsMade}`;
         document.getElementById('kpi-audit-earned').textContent = `+${earned} pts earned`;
         document.getElementById('kpi-audit-farmed').textContent = `${farmedHits}`;
-        document.getElementById('kpi-audit-leaked').textContent = `-${leaked} pts conceded`;
+        document.getElementById('kpi-audit-leaked').textContent = outHitsTaken > 0 ? `${warHitsTaken} war • ${outHitsTaken} out (-${leaked} pts)` : `-${leaked} pts conceded`;
         document.getElementById('kpi-audit-ghosts').textContent = `${data.kpis.ghostCount || 0}`;
         document.getElementById('kpi-audit-net').textContent = `${netScore > 0 ? '+' : ''}${netScore} pts`;
-        document.getElementById('kpi-audit-actions').textContent = `${totalActions} war actions (${hitsMade} + ${farmedHits})`;
+        document.getElementById('kpi-audit-actions').textContent = `${totalActions} combat events (${hitsMade} made + ${farmedHits} defended)`;
 
         // Filter counts
         const all = data.members || [];
@@ -929,9 +931,14 @@ function renderSentinelTable() {
 
     tbody.innerHTML = list.map(m => {
         const timesHit = m.timesHit || m.timesFarmed || 0;
+        const warHits = m.warHitsTaken !== undefined ? m.warHitsTaken : timesHit;
+        const outHits = m.outsideHitsTaken !== undefined ? m.outsideHitsTaken : 0;
+        const breakdown = (warHits > 0 && outHits > 0) 
+            ? ` (${warHits} war • ${outHits} out)` 
+            : (outHits > 0 ? ` (${outHits} outside)` : (m.timesDefended > 0 ? ` (${m.timesDefended} def)` : ''));
         const farmedBadge = timesHit === 0
             ? `<span style="color:var(--green); font-weight:700;">🛡️ 0 (Untouchable)</span>`
-            : `<span style="color:var(--red); font-weight:700; background:rgba(255,71,87,0.12); padding:2px 6px; border-radius:4px;">⚠️ ${timesHit}x hit${m.timesDefended > 0 ? ` <span style="font-size:0.85em; opacity:0.85;">(${m.timesDefended} def)</span>` : ''}</span>`;
+            : `<span style="color:var(--red); font-weight:700; background:rgba(255,71,87,0.12); padding:2px 6px; border-radius:4px;">⚠️ ${timesHit}x hit<span style="font-size:0.82em; opacity:0.85;">${breakdown}</span></span>`;
 
         const netStr = m.netScore > 0 ? `+${m.netScore}` : `${m.netScore}`;
         const netColor = m.netScore > 0 ? 'var(--green)' : (m.netScore < 0 ? 'var(--red)' : 'var(--text-dim)');

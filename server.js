@@ -2103,7 +2103,7 @@ app.get('/api/war-flight-audit', async (req, res) => {
         }
 
         // Check cache (fast return if already audited with latest logic version)
-        const AUDIT_VERSION = 4;
+        const AUDIT_VERSION = 5;
         const cacheKey = `${targetWarId}_${ffKey ? ffKey.substring(0, 6) : 'none'}`;
         if (!isOngoing && !req.query.force && warAuditArchive[targetWarId] && warAuditArchive[targetWarId].v === AUDIT_VERSION) {
             return res.json(warAuditArchive[targetWarId]);
@@ -2122,6 +2122,8 @@ app.get('/api/war-flight-audit', async (req, res) => {
                 hitsMade: 0,
                 respectEarned: 0,
                 timesHit: 0,
+                warHitsTaken: 0,
+                outsideHitsTaken: 0,
                 timesBeaten: 0,
                 timesDefended: 0,
                 timesFarmed: 0,
@@ -2218,27 +2220,33 @@ app.get('/api/war-flight-audit', async (req, res) => {
                         }
                     }
 
-                    // Defense check: Enemy ranked war attack on our member (includes stealthed enemy hits)
-                    const isEnemyWarAttack = (atk.ranked_war == 1 || atk.ranked_war === true) && atk.defender_faction == myId;
+                    // Defense check: Capture ALL attacks on our members during the war window (ranked war + outside/bounties)
+                    if (atk.defender_faction == myId && defId) {
+                        if (!memberStats[defId]) {
+                            memberStats[defId] = { id: defId, name: atk.defender_name || `Member #${defId}`, level: '—', hitsMade: 0, respectEarned: 0, timesHit: 0, warHitsTaken: 0, outsideHitsTaken: 0, timesBeaten: 0, timesDefended: 0, timesFarmed: 0, totalDefends: 0, defendedSuccessfully: 0, respectLeaked: 0, flightSec: 0, flightTrips: 0, overseasHits: 0, overseasTimestamps: [], flightDestinations: [] };
+                        }
+                        memberStats[defId].timesHit++;
+                        memberStats[defId].totalDefends++;
 
-                    if (isEnemyWarAttack) {
-                        if (defId) {
-                            if (!memberStats[defId]) {
-                                memberStats[defId] = { id: defId, name: atk.defender_name || `Member #${defId}`, level: '—', hitsMade: 0, respectEarned: 0, timesHit: 0, timesBeaten: 0, timesDefended: 0, timesFarmed: 0, totalDefends: 0, defendedSuccessfully: 0, respectLeaked: 0, flightSec: 0, flightTrips: 0, overseasHits: 0, overseasTimestamps: [], flightDestinations: [] };
-                            }
-                            memberStats[defId].timesHit++;
-                            memberStats[defId].totalDefends++;
-                            const result = atk.result || "";
-                            if (result === "Lost" || result === "Stalemate") {
-                                memberStats[defId].timesDefended++;
-                                memberStats[defId].defendedSuccessfully++;
-                            } else {
-                                memberStats[defId].timesBeaten++;
+                        const isEnemyWarAttack = (atk.ranked_war == 1 || atk.ranked_war === true);
+                        if (isEnemyWarAttack) {
+                            memberStats[defId].warHitsTaken = (memberStats[defId].warHitsTaken || 0) + 1;
+                        } else {
+                            memberStats[defId].outsideHitsTaken = (memberStats[defId].outsideHitsTaken || 0) + 1;
+                        }
+
+                        const result = atk.result || "";
+                        if (result === "Lost" || result === "Stalemate") {
+                            memberStats[defId].timesDefended++;
+                            memberStats[defId].defendedSuccessfully++;
+                        } else {
+                            memberStats[defId].timesBeaten++;
+                            if (isEnemyWarAttack) {
                                 memberStats[defId].respectLeaked += Number(atk.respect_gain || 0);
                             }
-                            // Farmed = total number of war hits taken
-                            memberStats[defId].timesFarmed = memberStats[defId].timesHit;
                         }
+                        // Total times farmed/hit in logs
+                        memberStats[defId].timesFarmed = memberStats[defId].timesHit;
                     }
 
                     // Fallback for hitsMade if rankedwarreport was not available
@@ -2458,6 +2466,8 @@ app.get('/api/war-flight-audit', async (req, res) => {
         let totalAirtimeSec = 0;
         let ghostCount = 0;
         let totalFarmedHits = 0;
+        let totalWarHitsTaken = 0;
+        let totalOutsideHitsTaken = 0;
         let totalRespectLeaked = 0;
         let totalHitsMade = 0;
         let totalRespectEarned = 0;
@@ -2466,6 +2476,8 @@ app.get('/api/war-flight-audit', async (req, res) => {
             totalAirtimeSec += m.flightSec;
             if (m.timesHit <= 10 && (m.airHours >= 15 || m.grade === 'S')) ghostCount++;
             totalFarmedHits += m.timesHit;
+            totalWarHitsTaken += (m.warHitsTaken || 0);
+            totalOutsideHitsTaken += (m.outsideHitsTaken || 0);
             totalRespectLeaked += m.respectLeaked;
             totalHitsMade += m.hitsMade;
             totalRespectEarned += m.respectEarned;
@@ -2495,6 +2507,8 @@ app.get('/api/war-flight-audit', async (req, res) => {
                 totalAirHours: parseFloat(totalAirHours),
                 ghostCount,
                 totalFarmedHits,
+                totalWarHitsTaken,
+                totalOutsideHitsTaken,
                 totalRespectLeaked: parseFloat(totalRespectLeaked.toFixed(1)),
                 totalHitsMade,
                 totalRespectEarned: parseFloat(totalRespectEarned.toFixed(1)),
