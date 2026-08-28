@@ -339,27 +339,32 @@
             </div>
 
             <div class="card-body" style="padding:16px 18px;">
-                <!-- 4 KPI CARDS -->
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:12px; margin-bottom:16px;">
+                <!-- 5 HIGH IMPACT KPI CARDS -->
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; margin-bottom:16px;">
                     <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
                         <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">✈️ Faction Airtime</div>
-                        <div style="font-size:1.6em; font-weight:900; color:var(--teal); margin-top:2px;" id="kpi-audit-airtime">—</div>
-                        <div style="font-size:0.72em; color:var(--text-dim);" id="kpi-audit-airtime-sub">Total in flight</div>
+                        <div style="font-size:1.55em; font-weight:900; color:var(--teal); margin-top:2px;" id="kpi-audit-airtime">—</div>
+                        <div style="font-size:0.72em; color:var(--text-dim);" id="kpi-audit-airtime-sub">Total verified flight</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
+                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">⚔️ Hits Made (Us)</div>
+                        <div style="font-size:1.55em; font-weight:900; color:var(--blue); margin-top:2px;" id="kpi-audit-hits">—</div>
+                        <div style="font-size:0.72em; color:var(--green);" id="kpi-audit-earned">+0 pts earned</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
+                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">🚨 Hits Taken (Enemy)</div>
+                        <div style="font-size:1.55em; font-weight:900; color:var(--red); margin-top:2px;" id="kpi-audit-farmed">—</div>
+                        <div style="font-size:0.72em; color:var(--gold);" id="kpi-audit-leaked">-0 pts conceded</div>
                     </div>
                     <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
                         <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">🛡️ Ghost Aviators</div>
-                        <div style="font-size:1.6em; font-weight:900; color:var(--green); margin-top:2px;" id="kpi-audit-ghosts">—</div>
-                        <div style="font-size:0.72em; color:var(--text-dim);">0 times farmed</div>
+                        <div style="font-size:1.55em; font-weight:900; color:var(--green); margin-top:2px;" id="kpi-audit-ghosts">—</div>
+                        <div style="font-size:0.72em; color:var(--text-dim);">&le; 4 hits taken</div>
                     </div>
                     <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
-                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">🚨 Enemy Hits Taken</div>
-                        <div style="font-size:1.6em; font-weight:900; color:var(--red); margin-top:2px;" id="kpi-audit-farmed">—</div>
-                        <div style="font-size:0.72em; color:var(--text-dim);">Total attacks received</div>
-                    </div>
-                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
-                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">💸 Respect Leaked</div>
-                        <div style="font-size:1.6em; font-weight:900; color:var(--gold); margin-top:2px;" id="kpi-audit-leaked">—</div>
-                        <div style="font-size:0.72em; color:var(--text-dim);">Conceded to enemy</div>
+                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">⚖️ Net War Score</div>
+                        <div style="font-size:1.55em; font-weight:900; color:var(--green); margin-top:2px;" id="kpi-audit-net">—</div>
+                        <div style="font-size:0.72em; color:var(--text-dim);" id="kpi-audit-actions">1,680 war actions</div>
                     </div>
                 </div>
 
@@ -367,19 +372,23 @@
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
                     <div style="display:flex; gap:6px; flex-wrap:wrap;" id="sentinel-filter-tabs">
                         <button class="filter-chip active" onclick="setSentinelFilter('all', this)">All Members (<span id="cnt-audit-all">0</span>)</button>
+                        <button class="filter-chip" onclick="setSentinelFilter('air', this)">✈️ Top Airtime (<span id="cnt-audit-air">0</span>)</button>
                         <button class="filter-chip" onclick="setSentinelFilter('ghost', this)">👻 Ghost Aviators (<span id="cnt-audit-ghost">0</span>)</button>
-                        <button class="filter-chip" onclick="setSentinelFilter('flyers', this)">✈️ Active Flyers (<span id="cnt-audit-flyers">0</span>)</button>
+                        <button class="filter-chip" onclick="setSentinelFilter('pos', this)">⚔️ Positive Net (<span id="cnt-audit-pos">0</span>)</button>
                         <button class="filter-chip" onclick="setSentinelFilter('farmed', this)">🚨 Most Hit (<span id="cnt-audit-farmed">0</span>)</button>
+                        <button class="filter-chip" onclick="setSentinelFilter('zero', this)">💤 0 Hits Made (<span id="cnt-audit-zero">0</span>)</button>
                     </div>
                     <div style="display:flex; gap:8px; align-items:center;">
                         <input type="text" id="sentinel-search" aria-label="Search member" placeholder="🔍 Search member..." oninput="renderSentinelTable()" style="background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 12px; border-radius:6px; font-size:0.82em; width:160px;">
                         <select id="sentinel-sort" aria-label="Sort members" onchange="renderSentinelTable()" style="background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 10px; border-radius:6px; font-size:0.82em;">
-                            <option value="leastFarmed">Safest (Least Times Hit)</option>
-                            <option value="mostFarmed">Most Times Hit</option>
-                            <option value="mostAir">Highest Airtime</option>
-                            <option value="hitsMade">Most War Hits</option>
-                            <option value="netScore">Highest Net Respect</option>
-                            <option value="name">Name</option>
+                            <option value="mostAir">✈️ Highest Airtime</option>
+                            <option value="netScore">⚖️ Highest Net Impact (+Score)</option>
+                            <option value="hitsMade">⚔️ Most War Hits Made</option>
+                            <option value="leastFarmed">🛡️ Safest (Least Times Hit)</option>
+                            <option value="mostFarmed">🚨 Most Times Hit (Farmed)</option>
+                            <option value="trips">🛫 Most Flight Trips</option>
+                            <option value="grade">🏅 Best Grade (S &rarr; A &rarr; B)</option>
+                            <option value="name">🔤 Member Name</option>
                         </select>
                     </div>
                 </div>
@@ -388,15 +397,15 @@
                 <div class="scrollable" style="max-height:420px; overflow-x:auto; border:1px solid var(--border); border-radius:8px;">
                     <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.82em;" id="sentinel-table">
                         <thead style="background:var(--card, #0d1117); position:sticky; top:0; z-index:2; border-bottom:1px solid var(--border);">
-                            <tr style="border-bottom:1px solid var(--border); color:var(--text-dim); font-size:0.9em; text-transform:uppercase; letter-spacing:0.5px;">
-                                <th style="padding:10px 14px;">Member</th>
-                                <th style="padding:10px 10px;">Grade</th>
-                                <th style="padding:10px 10px;">War Airtime</th>
-                                <th style="padding:10px 10px;">Trips</th>
-                                <th style="padding:10px 10px;">Times Hit</th>
-                                <th style="padding:10px 10px;">Respect Leaked</th>
-                                <th style="padding:10px 10px;">Hits Made</th>
-                                <th style="padding:10px 14px;">Net Impact</th>
+                            <tr style="border-bottom:1px solid var(--border); color:var(--text-dim); font-size:0.9em; text-transform:uppercase; letter-spacing:0.5px; user-select:none;">
+                                <th style="padding:10px 14px; cursor:pointer;" onclick="toggleSort('name')" title="Sort by Name">Member <span id="th-sort-name"></span></th>
+                                <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('grade')" title="Sort by Grade">Grade <span id="th-sort-grade"></span></th>
+                                <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('mostAir')" title="Sort by Airtime">War Airtime <span id="th-sort-mostAir">▼</span></th>
+                                <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('trips')" title="Sort by Trips">Trips <span id="th-sort-trips"></span></th>
+                                <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('mostFarmed')" title="Sort by Times Hit">Times Hit <span id="th-sort-mostFarmed"></span></th>
+                                <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('leaked')" title="Sort by Respect Leaked">Respect Leaked <span id="th-sort-leaked"></span></th>
+                                <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('hitsMade')" title="Sort by Hits Made">Hits Made <span id="th-sort-hitsMade"></span></th>
+                                <th style="padding:10px 14px; cursor:pointer;" onclick="toggleSort('netScore')" title="Sort by Net Impact">Net Impact <span id="th-sort-netScore"></span></th>
                             </tr>
                         </thead>
                         <tbody id="sentinel-tbody">
@@ -769,25 +778,65 @@ async function runWarFlightAudit(force = false) {
 
         // Render KPIs
         document.getElementById('kpi-audit-airtime').textContent = `${data.kpis.totalAirHours}h`;
-        document.getElementById('kpi-audit-ghosts').textContent = `${data.kpis.ghostCount}`;
+        document.getElementById('kpi-audit-airtime-sub').textContent = `${data.members.length} members tracked`;
+        document.getElementById('kpi-audit-hits').textContent = `${data.kpis.totalHitsMade}`;
+        document.getElementById('kpi-audit-earned').textContent = `+${data.kpis.totalRespectEarned} pts earned`;
         document.getElementById('kpi-audit-farmed').textContent = `${data.kpis.totalFarmedHits}`;
-        document.getElementById('kpi-audit-leaked').textContent = `-${data.kpis.totalRespectLeaked} pts`;
+        document.getElementById('kpi-audit-leaked').textContent = `-${data.kpis.totalRespectLeaked} pts conceded`;
+        document.getElementById('kpi-audit-ghosts').textContent = `${data.kpis.ghostCount}`;
+        document.getElementById('kpi-audit-net').textContent = `${data.kpis.netWarScore > 0 ? '+' : ''}${data.kpis.netWarScore} pts`;
+        document.getElementById('kpi-audit-actions').textContent = `${data.kpis.totalWarActions} war actions (${data.kpis.totalHitsMade} + ${data.kpis.totalFarmedHits})`;
 
         // Filter counts
         const all = data.members || [];
-        const ghosts = all.filter(m => m.timesFarmed === 0 && (m.flightPct > 0 || m.hitsMade > 0));
-        const flyers = all.filter(m => m.airHours > 0 || m.flightTrips > 0);
-        const farmed = all.filter(m => m.timesFarmed > 0);
+        const airCount = all.filter(m => m.airHours > 0 || m.flightTrips > 0).length;
+        const ghostCount = all.filter(m => m.timesHit <= 4 && (m.flightPct > 0 || m.hitsMade > 0)).length;
+        const posCount = all.filter(m => m.netScore > 0).length;
+        const farmedCount = all.filter(m => m.timesHit > 0).length;
+        const zeroCount = all.filter(m => m.hitsMade === 0).length;
 
         document.getElementById('cnt-audit-all').textContent = all.length;
-        document.getElementById('cnt-audit-ghost').textContent = ghosts.length;
-        document.getElementById('cnt-audit-flyers').textContent = flyers.length;
-        document.getElementById('cnt-audit-farmed').textContent = farmed.length;
+        document.getElementById('cnt-audit-air').textContent = airCount;
+        document.getElementById('cnt-audit-ghost').textContent = ghostCount;
+        document.getElementById('cnt-audit-pos').textContent = posCount;
+        document.getElementById('cnt-audit-farmed').textContent = farmedCount;
+        document.getElementById('cnt-audit-zero').textContent = zeroCount;
 
         renderSentinelTable();
     } catch(e) {
         if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--red);">⚠️ Request error: ${e.message}</td></tr>`;
     }
+}
+
+let sentinelSortKey = 'mostAir';
+let sentinelSortAsc = false;
+
+function toggleSort(colKey) {
+    if (sentinelSortKey === colKey) {
+        sentinelSortAsc = !sentinelSortAsc;
+    } else {
+        sentinelSortKey = colKey;
+        sentinelSortAsc = (colKey === 'name' || colKey === 'leastFarmed');
+    }
+    const sel = document.getElementById('sentinel-sort');
+    if (sel) sel.value = sentinelSortKey;
+    updateSortHeaderIndicators();
+    renderSentinelTable();
+}
+
+function updateSortHeaderIndicators() {
+    const headers = ['name', 'grade', 'mostAir', 'trips', 'mostFarmed', 'leaked', 'hitsMade', 'netScore'];
+    headers.forEach(h => {
+        const span = document.getElementById(`th-sort-${h}`);
+        if (span) {
+            if (sentinelSortKey === h) {
+                span.textContent = sentinelSortAsc ? ' ▲' : ' ▼';
+                span.style.color = 'var(--teal)';
+            } else {
+                span.textContent = '';
+            }
+        }
+    });
 }
 
 function setSentinelFilter(filter, btn) {
@@ -802,27 +851,64 @@ function renderSentinelTable() {
     if (!tbody || !sentinelData) return;
 
     const query = (document.getElementById('sentinel-search')?.value || '').toLowerCase().trim();
-    const sortKey = document.getElementById('sentinel-sort')?.value || 'leastFarmed';
+    const sortSelect = document.getElementById('sentinel-sort')?.value;
+    if (sortSelect && sortSelect !== sentinelSortKey) {
+        sentinelSortKey = sortSelect;
+        sentinelSortAsc = (sortSelect === 'name' || sortSelect === 'leastFarmed');
+        updateSortHeaderIndicators();
+    }
 
     let list = (sentinelData.members || []).filter(m => {
-        if (activeSentinelFilter === 'ghost' && (m.timesFarmed > 0 || (m.hitsMade === 0 && m.flightPct === 0))) return false;
-        if (activeSentinelFilter === 'flyers' && m.airHours === 0 && m.flightTrips === 0) return false;
-        if (activeSentinelFilter === 'farmed' && m.timesFarmed === 0) return false;
+        const timesHit = m.timesHit || m.timesFarmed || 0;
+        if (activeSentinelFilter === 'air' && (m.airHours <= 0 && m.flightTrips <= 0)) return false;
+        if (activeSentinelFilter === 'ghost' && (timesHit > 4 || (m.hitsMade === 0 && m.flightPct === 0))) return false;
+        if (activeSentinelFilter === 'pos' && m.netScore <= 0) return false;
+        if (activeSentinelFilter === 'farmed' && timesHit === 0) return false;
+        if (activeSentinelFilter === 'zero' && m.hitsMade > 0) return false;
         if (query && !m.name.toLowerCase().includes(query) && !m.id.includes(query)) return false;
         return true;
     });
 
+    const gradeOrder = { 'S': 5, 'A': 4, 'B': 3, 'C': 2, 'D': 1, 'F': 0, '—': -1 };
+
     list.sort((a, b) => {
-        if (sortKey === 'leastFarmed') {
-            if (a.timesFarmed !== b.timesFarmed) return a.timesFarmed - b.timesFarmed;
-            return b.flightPct - a.flightPct;
+        const aHit = a.timesHit || a.timesFarmed || 0;
+        const bHit = b.timesHit || b.timesFarmed || 0;
+        let diff = 0;
+
+        switch (sentinelSortKey) {
+            case 'mostAir':
+                diff = (b.flightSec || 0) - (a.flightSec || 0);
+                break;
+            case 'leastFarmed':
+                diff = aHit - bHit;
+                if (diff === 0) diff = (b.flightSec || 0) - (a.flightSec || 0);
+                break;
+            case 'mostFarmed':
+                diff = bHit - aHit;
+                break;
+            case 'hitsMade':
+                diff = (b.hitsMade || 0) - (a.hitsMade || 0);
+                break;
+            case 'netScore':
+                diff = (b.netScore || 0) - (a.netScore || 0);
+                break;
+            case 'leaked':
+                diff = (b.respectLeaked || 0) - (a.respectLeaked || 0);
+                break;
+            case 'trips':
+                diff = (b.flightTrips || 0) - (a.flightTrips || 0);
+                break;
+            case 'grade':
+                diff = (gradeOrder[b.grade] || 0) - (gradeOrder[a.grade] || 0);
+                break;
+            case 'name':
+                return sentinelSortAsc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+            default:
+                diff = (b.flightSec || 0) - (a.flightSec || 0);
         }
-        if (sortKey === 'mostFarmed') return b.timesFarmed - a.timesFarmed;
-        if (sortKey === 'mostAir') return b.flightSec - a.flightSec;
-        if (sortKey === 'hitsMade') return b.hitsMade - a.hitsMade;
-        if (sortKey === 'netScore') return b.netScore - a.netScore;
-        if (sortKey === 'name') return a.name.localeCompare(b.name);
-        return 0;
+
+        return sentinelSortAsc ? -diff : diff;
     });
 
     if (list.length === 0) {

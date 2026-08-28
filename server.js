@@ -2374,47 +2374,63 @@ app.get('/api/war-flight-audit', async (req, res) => {
             const flightPct = Math.min(100, Math.round((m.flightSec / warDuration) * 100));
             const netScore = parseFloat((m.respectEarned - m.respectLeaked).toFixed(1));
 
-            // Grading algorithm based on actual war performance & hits taken
+            // Grading algorithm based on actual war performance, net respect impact, and survival
             let grade = 'B';
             let gradeLabel = 'Active Combatant';
             let gradeColor = '#00cec9';
-
-            if (m.timesHit === 0) {
-                if (flightPct >= 15 || m.hitsMade >= 5) {
-                    grade = 'S';
-                    gradeLabel = 'Ghost Aviator';
-                    gradeColor = '#2ed573';
-                } else if (m.hitsMade > 0 || flightPct > 0) {
-                    grade = 'A';
-                    gradeLabel = 'Safe Pilot';
-                    gradeColor = '#2ed573';
-                } else {
-                    grade = '—';
-                    gradeLabel = 'Non-Participant';
-                    gradeColor = '#747d8c';
-                }
-            } else if (m.timesHit <= 5 && netScore >= 0) {
-                grade = 'A';
-                gradeLabel = 'Net-Positive';
-                gradeColor = '#2ed573';
-            } else if (m.timesHit <= 15) {
-                grade = 'B';
-                gradeLabel = 'Combat Defender';
-                gradeColor = '#ffa502';
-            } else if (m.timesHit <= 30) {
-                grade = 'C';
-                gradeLabel = 'Frequent Target';
-                gradeColor = '#ff7f50';
-            } else {
-                grade = 'F';
-                gradeLabel = 'Heavily Farmed';
-                gradeColor = '#ff4757';
-            }
 
             if (m.hitsMade === 0 && m.timesHit === 0 && m.flightSec === 0) {
                 grade = '—';
                 gradeLabel = 'Sat Out';
                 gradeColor = '#747d8c';
+            } else if (netScore > 0) {
+                // USER RULE: Any positive net impact is AT LEAST Grade B!
+                if (m.timesHit <= 4 && (flightPct >= 15 || m.hitsMade >= 15)) {
+                    grade = 'S';
+                    gradeLabel = 'Ghost MVP';
+                    gradeColor = '#2ed573';
+                } else if (netScore >= 200 || m.hitsMade >= 50) {
+                    grade = 'A';
+                    gradeLabel = 'War Carry';
+                    gradeColor = '#2ed573';
+                } else if (netScore >= 50 || m.timesHit <= 10) {
+                    grade = 'A';
+                    gradeLabel = 'Net-Positive';
+                    gradeColor = '#2ed573';
+                } else {
+                    grade = 'B';
+                    gradeLabel = 'Positive Asset';
+                    gradeColor = '#00cec9';
+                }
+            } else {
+                // Negative or zero net impact
+                if (m.timesHit === 0) {
+                    if (flightPct > 0) {
+                        grade = 'A';
+                        gradeLabel = 'Safe Pilot';
+                        gradeColor = '#2ed573';
+                    } else {
+                        grade = '—';
+                        gradeLabel = 'Non-Combatant';
+                        gradeColor = '#747d8c';
+                    }
+                } else if (m.timesHit <= 5 && netScore >= -30) {
+                    grade = 'B';
+                    gradeLabel = 'Light Target';
+                    gradeColor = '#ffa502';
+                } else if (m.timesHit <= 15) {
+                    grade = 'C';
+                    gradeLabel = 'Combat Defender';
+                    gradeColor = '#ff7f50';
+                } else if (m.timesHit <= 30 && m.hitsMade > 0) {
+                    grade = 'D';
+                    gradeLabel = 'Frequent Target';
+                    gradeColor = '#ff6348';
+                } else {
+                    grade = 'F';
+                    gradeLabel = 'Heavily Farmed';
+                    gradeColor = '#ff4757';
+                }
             }
 
             return {
@@ -2444,6 +2460,7 @@ app.get('/api/war-flight-audit', async (req, res) => {
         let totalFarmedHits = 0;
         let totalRespectLeaked = 0;
         let totalHitsMade = 0;
+        let totalRespectEarned = 0;
 
         for (const m of processedMembers) {
             totalAirtimeSec += m.flightSec;
@@ -2451,10 +2468,13 @@ app.get('/api/war-flight-audit', async (req, res) => {
             totalFarmedHits += m.timesHit;
             totalRespectLeaked += m.respectLeaked;
             totalHitsMade += m.hitsMade;
+            totalRespectEarned += m.respectEarned;
         }
 
-        const totalAirHours = (totalAirtimeSec / 3600).toFixed(1);
-        const durationHours = (warDuration / 3600).toFixed(1);
+        const totalAirHours = parseFloat((totalAirtimeSec / 3600).toFixed(1));
+        const durationHours = parseFloat((warDuration / 3600).toFixed(1));
+        const netWarScore = parseFloat((totalRespectEarned - totalRespectLeaked).toFixed(1));
+        const totalWarActions = totalHitsMade + totalFarmedHits;
 
         const responsePayload = {
             success: true,
@@ -2475,7 +2495,10 @@ app.get('/api/war-flight-audit', async (req, res) => {
                 ghostCount,
                 totalFarmedHits,
                 totalRespectLeaked: parseFloat(totalRespectLeaked.toFixed(1)),
-                totalHitsMade
+                totalHitsMade,
+                totalRespectEarned: parseFloat(totalRespectEarned.toFixed(1)),
+                netWarScore,
+                totalWarActions
             },
             ffScouter: {
                 enabled: ffScouterEnabled,
