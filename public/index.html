@@ -753,6 +753,10 @@
                     <input type="password" id="ts-key" placeholder="Optional — unlocks global spy database">
                 </div>
                 <div>
+                    <label>My Faction ID (Optional)</label>
+                    <input type="text" id="my-faction-id" placeholder="Auto-detected from API key (leave blank)">
+                </div>
+                <div>
                     <label>Enemy Faction ID</label>
                     <input type="text" id="enemy-id" placeholder="Optional (auto-detected during war)">
                 </div>
@@ -1155,6 +1159,9 @@ function openSettings() {
     document.getElementById("api-key").value = myKey;
     document.getElementById("ff-key").value = ffKey;
     document.getElementById("ts-key").value = tsKey;
+    if (document.getElementById("my-faction-id")) {
+        document.getElementById("my-faction-id").value = localStorage.getItem("warboard_myFactionId") || "";
+    }
     document.getElementById("enemy-id").value = enemyFacId;
     document.getElementById("my-name").value = myName;
     document.getElementById("discord-bottoken").value = globalBotToken;
@@ -1185,6 +1192,7 @@ async function saveSettings() {
     myKey = document.getElementById("api-key").value.trim();
     ffKey = document.getElementById("ff-key").value.trim();
     tsKey = document.getElementById("ts-key").value.trim();
+    const myFacIdInput = document.getElementById("my-faction-id")?.value.trim() || "";
     enemyFacId = document.getElementById("enemy-id").value.trim();
     myName = document.getElementById("my-name").value.trim() || "Agent";
     globalBotToken = document.getElementById("discord-bottoken").value.trim();
@@ -1194,6 +1202,7 @@ async function saveSettings() {
     localStorage.setItem("warboard_apikey", myKey);
     localStorage.setItem("warboard_ffkey", ffKey);
     localStorage.setItem("warboard_tskey", tsKey);
+    localStorage.setItem("warboard_myFactionId", myFacIdInput);
     localStorage.setItem("warboard_enemyId", enemyFacId);
     localStorage.setItem("warboard_myname", myName);
     localStorage.setItem("warboard_bottoken", globalBotToken);
@@ -1286,7 +1295,10 @@ function getStatusPillClass(p) {
 async function fetchWarboard() {
     if (!myKey) return;
     try {
-        const res = await fetch(`/api/warboard`, { headers: { 'x-api-key': myKey, 'x-enemy-id': enemyFacId, 'x-ff-key': ffKey } });
+        const reqHeaders = { 'x-api-key': myKey, 'x-enemy-id': enemyFacId, 'x-ff-key': ffKey };
+        const myFacOverride = localStorage.getItem("warboard_myFactionId") || "";
+        if (myFacOverride) reqHeaders['x-faction-id'] = myFacOverride;
+        const res = await fetch(`/api/warboard`, { headers: reqHeaders });
         const data = await res.json();
         
         if (data.error) {

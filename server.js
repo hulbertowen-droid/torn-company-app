@@ -255,10 +255,15 @@ let isBackfillingWar = false;
 let hasBackfilledWar = false;
 let processedAttackIds = new Set();
 let lastGoodWarboardPayload = null;
+let lastGoodWarboardByFaction = {};
 const WARBOARD_BACKUP_FILE = path.join(__dirname, 'data', 'last_warboard.json');
 try {
     if (fs.existsSync(WARBOARD_BACKUP_FILE)) {
         lastGoodWarboardPayload = JSON.parse(fs.readFileSync(WARBOARD_BACKUP_FILE, 'utf8'));
+        if (lastGoodWarboardPayload?.warInfo?.myFaction?.id) {
+            lastGoodWarboardByFaction[lastGoodWarboardPayload.warInfo.myFaction.id.toString()] = lastGoodWarboardPayload;
+        }
+        lastGoodWarboardByFaction["52355"] = lastGoodWarboardPayload;
         console.log('[Warboard] Loaded persistent warboard cache from disk');
     }
 } catch(e) {}
@@ -1791,6 +1796,8 @@ setInterval(async () => {
     } catch(e) {}
 }, 60000);
 
+const userFactionCache = {};
+
 async function verifySubscription(userKey) {
     if (!userKey) throw new Error("No API Key provided.");
     const now = Date.now();
@@ -1817,28 +1824,47 @@ async function verifySubscription(userKey) {
         }
 
         const playerId = data.player_id?.toString();
-        const facId = data.faction?.faction_id?.toString();
+        const rawFacId = data.faction?.faction_id;
+        const facId = (rawFacId && rawFacId !== 0) ? rawFacId.toString() : null;
+        const facName = data.faction?.faction_name || null;
 
         if (data.name && playerId) {
             userTracking[playerId] = { name: data.name, lastActive: now };
             saveTracking();
         }
 
-        // Track the user's faction if admin faction matches, otherwise just allow any valid key
-        if (facId && facId !== "0") {
-            if (adminFactionId && facId === adminFactionId) {
-                if (!apiPoolConfig.keys.includes(userKey)) {
-                    apiPoolConfig.keys.push(userKey);
-                    saveApiPool();
-                }
-            }
-        }
+        const userObj = {
+            playerId,
+            playerName: data.name,
+            facId,
+            facName,
+            isFactionless: !facId,
+            expires: now + 300000
+        };
 
-        subCache[userKey] = { playerId, expires: now + 300000 };
+        subCache[userKey] = userObj;
+        userFactionCache[userKey] = userObj;
         return playerId;
     } catch (err) {
         if (subCache[userKey]) return subCache[userKey].playerId;
         throw err;
+    }
+}
+
+async function getUserFactionInfo(userKey) {
+    if (!userKey) return null;
+    const now = Date.now();
+    if (userFactionCache[userKey] && userFactionCache[userKey].expires > now) {
+        return userFactionCache[userKey];
+    }
+    if (subCache[userKey] && subCache[userKey].expires > now && subCache[userKey].facId !== undefined) {
+        return subCache[userKey];
+    }
+    try {
+        await verifySubscription(userKey);
+        return subCache[userKey] || userFactionCache[userKey] || null;
+    } catch(e) {
+        return subCache[userKey] || userFactionCache[userKey] || null;
     }
 }
 
@@ -2052,10 +2078,21 @@ app.get('/api/inactivity-tracker', async (req, res) => {
     if (!userKey) return res.status(400).json({ error: "API Key required" });
 
     try {
-        let watchFactionId = discordConfig.factionId || dynamicFactionId || "52355";
-        const url = `https://api.torn.com/faction/${watchFactionId}?selections=basic&key=${userKey}`;
+        const userInfo = await getUserFactionInfo(userKey);
+        let watchFactionId = (req.query.factionId || req.headers['x-faction-id'])
+            || userInfo?.facId
+            || discordConfig.factionId
+            || dynamicFactionId
+            || "52355";
+        let url = `https://api.torn.com/faction/${watchFactionId}?selections=basic&key=${userKey}`;
         let facData = await cachedTornFetch(url, `faction_inact_${watchFactionId}`, 10000);
         let members = facData?.members;
+
+        // If targeted fetch hit error 6 (e.g. user in different faction), try /faction/
+        if (!members || facData?.error?.code === 6) {
+            facData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`, `faction_inact_personal_${userKey}`, 10000);
+            if (facData?.members) members = facData.members;
+        }
 
         // If throttled or errored, fall back to cached friendly members
         if ((!members || Object.keys(members).length === 0) && lastGoodWarboardPayload?.friendly?.length > 0) {
@@ -2138,8 +2175,17 @@ app.get('/api/war-list', async (req, res) => {
     const userKey = (req.headers['x-api-key'] || req.query.apiKey) || discordConfig.apiKey || TORN_API_KEY;
     try {
         if (!userKey) return res.status(400).json({ error: "Missing API key" });
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`, { signal: AbortSignal.timeout(8000) });
-        const facData = await facRes.json();
+        const userInfo = await getUserFactionInfo(userKey);
+        let targetFacId = (req.query.factionId || req.headers['x-faction-id'])
+            || userInfo?.facId
+            || discordConfig.factionId
+            || "52355";
+        let facRes = await fetch(`https://api.torn.com/faction/${targetFacId}?selections=basic,rankedwars&key=${userKey}`, { signal: AbortSignal.timeout(8000) });
+        let facData = await facRes.json();
+        if (facData.error && facData.error.code === 6) {
+            facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`, { signal: AbortSignal.timeout(8000) });
+            facData = await facRes.json();
+        }
         if (facData.error) return res.status(400).json({ error: facData.error.error });
 
         let wars = [];
@@ -2186,8 +2232,17 @@ app.get('/api/war-flight-audit', async (req, res) => {
 
     try {
         // 1. Fetch faction info & ranked wars
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`, { signal: AbortSignal.timeout(8000) });
-        const facData = await facRes.json();
+        const userInfo = await getUserFactionInfo(userKey);
+        let targetFacId = (req.query.factionId || req.headers['x-faction-id'])
+            || userInfo?.facId
+            || discordConfig.factionId
+            || "52355";
+        let facRes = await fetch(`https://api.torn.com/faction/${targetFacId}?selections=basic,rankedwars&key=${userKey}`, { signal: AbortSignal.timeout(8000) });
+        let facData = await facRes.json();
+        if (facData.error && facData.error.code === 6) {
+            facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`, { signal: AbortSignal.timeout(8000) });
+            facData = await facRes.json();
+        }
         if (facData.error) return res.status(400).json({ error: facData.error.error });
 
         const myId = facData.ID.toString();
@@ -2681,8 +2736,17 @@ app.get('/api/dashboard-data', async (req, res) => {
         await verifySubscription(userKey);
         const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
 
-        const basicResp = await fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`);
-        const basicData = await basicResp.json();
+        const userInfo = await getUserFactionInfo(userKey);
+        let targetFacId = (req.query.factionId || req.headers['x-faction-id'])
+            || userInfo?.facId
+            || discordConfig.factionId
+            || "52355";
+        let basicResp = await fetch(`https://api.torn.com/faction/${targetFacId}?selections=basic&key=${userKey}`);
+        let basicData = await basicResp.json();
+        if (basicData.error && basicData.error.code === 6) {
+            basicResp = await fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`);
+            basicData = await basicResp.json();
+        }
         if (basicData.error) return res.status(400).json({ error: basicData.error.error });
 
         if (basicData.members) {
@@ -3278,12 +3342,22 @@ app.get('/api/past-war', async (req, res) => {
         }
 
         if (!correctFacId) {
-            correctFacId = userData.faction?.faction_id?.toString();
-            enemyFacId = Object.keys(reportData.rankedwarreport.factions).find(id => id !== correctFacId);
+            correctFacId = userData.faction?.faction_id ? userData.faction.faction_id.toString() : null;
+            if (correctFacId && reportData.rankedwarreport.factions[correctFacId]) {
+                enemyFacId = Object.keys(reportData.rankedwarreport.factions).find(id => id !== correctFacId);
+            }
         }
 
-        const myFactionWarData = reportData.rankedwarreport?.factions[correctFacId];
-        if (!myFactionWarData) return res.status(400).json({ error: "Your faction was not part of this Ranked War Report." });
+        let myFactionWarData = correctFacId ? reportData.rankedwarreport?.factions[correctFacId] : null;
+        if (!myFactionWarData) {
+            const facKeys = Object.keys(reportData.rankedwarreport?.factions || {});
+            if (facKeys.length >= 2) {
+                correctFacId = facKeys[0];
+                enemyFacId = facKeys[1];
+                myFactionWarData = reportData.rankedwarreport.factions[correctFacId];
+            }
+        }
+        if (!myFactionWarData) return res.status(400).json({ error: "War Report factions data unavailable." });
 
         let totalCacheValue = 0; let cachesWon = [];
         if (myFactionWarData?.rewards?.items) {
@@ -3448,20 +3522,51 @@ app.get('/api/warboard', async (req, res) => {
         let enemyId = (req.headers['x-enemy-id'] || req.query.enemyFaction) || null;
         
         let activeKey = userKey;
-        let targetMyFacId = dynamicFactionId || discordConfig.factionId || "52355";
+        const userInfo = await getUserFactionInfo(userKey);
+
+        // Dynamic caller faction resolution:
+        // Priority 1: Explicitly requested faction ID in headers ('x-faction-id') or query ('myFactionId')
+        // Priority 2: The caller's own faction in Torn (detected directly from their API key profile)
+        // Priority 3: Configured faction ID from settings (discordConfig.factionId)
+        // Priority 4: Default fallback ("52355")
+        let targetMyFacId = (req.headers['x-faction-id'] || req.query.myFactionId)
+            || userInfo?.facId
+            || discordConfig.factionId
+            || dynamicFactionId
+            || "52355";
+
         let [myData, enemyDataResult] = await Promise.all([
             cachedTornFetch(`https://api.torn.com/faction/${targetMyFacId}?selections=basic,rankedwars,attacks&key=${userKey}`, `my_faction_${targetMyFacId}_${userKey}`, 2500),
             enemyId ? cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()||userKey}`, `enemy_faction_${enemyId}`, 2500) : Promise.resolve({ members: {} })
         ]);
         
-        // If targeted fetch hit error 6, fallback to user's default /faction/
+        // If targeted fetch hit error 6 (e.g. key doesn't have permission to query that ID directly or user is in a different faction),
+        // try querying user's personal /faction/ endpoint
         if (myData && myData.error && myData.error.code === 6) {
             myData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${userKey}`, `my_faction_${userKey}`, 2500);
+            if (myData?.ID) targetMyFacId = myData.ID.toString();
         }
 
-        // Resilience: If myData hit rate limit or transient error, serve last known good payload
-        if ((!myData || myData.error || !myData.members || Object.keys(myData.members).length === 0) && lastGoodWarboardPayload) {
-            return res.json(lastGoodWarboardPayload);
+        // If targeted fetch still returned error 6 (user is completely factionless), fall back to Spider-Verse 52355
+        if (myData && myData.error && myData.error.code === 6) {
+            targetMyFacId = discordConfig.factionId || "52355";
+            myData = await cachedTornFetch(`https://api.torn.com/faction/${targetMyFacId}?selections=basic,rankedwars,attacks&key=${userKey}`, `my_faction_${targetMyFacId}_${userKey}`, 2500);
+        }
+
+        // Cache valid responses per faction ID
+        if (myData && myData.members && Object.keys(myData.members).length > 0 && myData.ID) {
+            const fId = myData.ID.toString();
+            lastGoodWarboardByFaction[fId] = myData;
+            dynamicFactionId = fId;
+        }
+
+        // Resilience: If myData hit rate limit or transient error, serve last known good payload for THIS faction
+        if ((!myData || myData.error || !myData.members || Object.keys(myData.members).length === 0)) {
+            if (lastGoodWarboardByFaction[targetMyFacId]) {
+                myData = lastGoodWarboardByFaction[targetMyFacId];
+            } else if (lastGoodWarboardPayload && (!userInfo?.facId || String(targetMyFacId) === "52355")) {
+                return res.json(lastGoodWarboardPayload);
+            }
         }
 
         if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
@@ -3685,14 +3790,21 @@ app.get('/api/warboard', async (req, res) => {
         };
 
         if (friendlyMembers.length > 0) {
-            lastGoodWarboardPayload = payload;
-            try {
-                fs.writeFileSync(WARBOARD_BACKUP_FILE, JSON.stringify(payload));
-            } catch(e) {}
+            const facId = payload?.warInfo?.myFaction?.id?.toString() || targetMyFacId?.toString();
+            if (facId) lastGoodWarboardByFaction[facId] = payload;
+            if (!lastGoodWarboardPayload || String(facId) === "52355") {
+                lastGoodWarboardPayload = payload;
+                try {
+                    fs.writeFileSync(WARBOARD_BACKUP_FILE, JSON.stringify(payload));
+                } catch(e) {}
+            }
         }
 
         res.json(payload);
     } catch (err) {
+        if (targetMyFacId && lastGoodWarboardByFaction[targetMyFacId]) {
+            return res.json(lastGoodWarboardByFaction[targetMyFacId]);
+        }
         if (lastGoodWarboardPayload) {
             return res.json(lastGoodWarboardPayload);
         }
