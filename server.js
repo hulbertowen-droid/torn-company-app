@@ -242,6 +242,33 @@ let isProcessingActivity = false;
 
 let activeKeyIndex = 0;
 
+const factionWarState = {};
+
+function getFactionWarState(facId) {
+    const sId = String(facId || '52355');
+    if (!factionWarState[sId]) {
+        factionWarState[sId] = {
+            activeWarId: null,
+            activeWarEnd: 0,
+            hasBackfilledWar: false,
+            isBackfillingWar: false,
+            processedAttackIds: new Set(),
+            liveWarHits: {},
+            liveOutsideHits: {},
+            liveAssists: {},
+            liveWarDefendsWon: {},
+            liveOutsideDefendsWon: {},
+            liveWarHitsTaken: {},
+            liveOutsideHitsTaken: {},
+            syncStatus: { isSyncing: false, percent: 100, totalHitsLoaded: 0, page: 0, message: "Ready" },
+            claims: {},
+            backups: {},
+            manualStats: {}
+        };
+    }
+    return factionWarState[sId];
+}
+
 let liveWarHits = {};
 let liveOutsideHits = {};
 let liveAssists = {};
@@ -804,14 +831,15 @@ setInterval(async () => {
 
 function processWarAttack(atk, myFactionId, enemyFactionId, warStart, warEnd = 0) {
     if (!atk || (!atk.code && !atk.timestamp_ended)) return;
+    const fState = getFactionWarState(myFactionId);
     const atkKey = atk.code || `${atk.attacker_id}_${atk.defender_id}_${atk.timestamp_ended}`;
-    if (processedAttackIds.has(atkKey)) return;
+    if (fState.processedAttackIds.has(atkKey)) return;
     
     const atkTime = atk.timestamp_ended || atk.timestamp_started || 0;
     if (warStart && atkTime < warStart) return;
     if (warEnd && warEnd > 0 && atkTime > warEnd) return;
     
-    processedAttackIds.add(atkKey);
+    fState.processedAttackIds.add(atkKey);
 
     if (atk.attacker_id && atk.attacker_name) playerNameCache[atk.attacker_id.toString()] = atk.attacker_name;
     if (atk.defender_id && atk.defender_name) playerNameCache[atk.defender_id.toString()] = atk.defender_name;
@@ -829,13 +857,13 @@ function processWarAttack(atk, myFactionId, enemyFactionId, warStart, warEnd = 0
     // Friendly member made an attack / assist
     if (aId && myFac && aFac === myFac) {
         if (atk.result === "Assist") {
-            liveAssists[aId] = (liveAssists[aId] || 0) + 1;
+            fState.liveAssists[aId] = (fState.liveAssists[aId] || 0) + 1;
         } else if (isWin) {
             const isEnemyHit = (enFac && dFac === enFac) || (atk.modifiers && atk.modifiers.war) || (atk.ranked_war === 1) || (atk.modifiers && atk.modifiers.fair_fight && dFac !== myFac);
             if (isEnemyHit || (!enFac && dFac !== myFac && dFac !== "0")) {
-                liveWarHits[aId] = (liveWarHits[aId] || 0) + 1;
+                fState.liveWarHits[aId] = (fState.liveWarHits[aId] || 0) + 1;
             } else {
-                liveOutsideHits[aId] = (liveOutsideHits[aId] || 0) + 1;
+                fState.liveOutsideHits[aId] = (fState.liveOutsideHits[aId] || 0) + 1;
             }
         }
     }
@@ -845,25 +873,26 @@ function processWarAttack(atk, myFactionId, enemyFactionId, warStart, warEnd = 0
         if (isDefendWin) {
             const isEnemyDefend = (enFac && aFac === enFac) || (atk.modifiers && atk.modifiers.war);
             if (isEnemyDefend || (!enFac && aFac !== myFac && aFac !== "0")) {
-                liveWarDefendsWon[dId] = (liveWarDefendsWon[dId] || 0) + 1;
+                fState.liveWarDefendsWon[dId] = (fState.liveWarDefendsWon[dId] || 0) + 1;
             } else {
-                liveOutsideDefendsWon[dId] = (liveOutsideDefendsWon[dId] || 0) + 1;
+                fState.liveOutsideDefendsWon[dId] = (fState.liveOutsideDefendsWon[dId] || 0) + 1;
             }
         } else if (isWin) {
             const isEnemyAttack = (enFac && aFac === enFac) || (atk.modifiers && atk.modifiers.war);
             if (isEnemyAttack || (!enFac && aFac !== myFac && aFac !== "0")) {
-                liveWarHitsTaken[dId] = (liveWarHitsTaken[dId] || 0) + 1;
+                fState.liveWarHitsTaken[dId] = (fState.liveWarHitsTaken[dId] || 0) + 1;
             } else {
-                liveOutsideHitsTaken[dId] = (liveOutsideHitsTaken[dId] || 0) + 1;
+                fState.liveOutsideHitsTaken[dId] = (fState.liveOutsideHitsTaken[dId] || 0) + 1;
             }
         }
     }
 }
 
 async function backfillWarDefends(watchKey, watchFactionId, warStart, enemyFactionId = null, warEnd = 0) {
-    if (isBackfillingWar) return;
-    isBackfillingWar = true;
-    console.log(`[WarTracker] Backfilling attacks from war start: ${warStart} (end: ${warEnd || 'ongoing'})...`);
+    const fState = getFactionWarState(watchFactionId);
+    if (fState.isBackfillingWar) return;
+    fState.isBackfillingWar = true;
+    console.log(`[WarTracker:${watchFactionId}] Backfilling attacks from war start: ${warStart} (end: ${warEnd || 'ongoing'})...`);
 
     let toTimestamp = Math.floor(Date.now() / 1000);
     if (warEnd && warEnd > 0) toTimestamp = warEnd;
@@ -874,7 +903,7 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart, enemyFacti
     let pageCount = 0;
     let totalProcessed = 0;
 
-    warSyncStatus = {
+    fState.syncStatus = {
         isSyncing: true,
         percent: 5,
         page: 1,
@@ -888,7 +917,7 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart, enemyFacti
             const res = await fetch(`https://api.torn.com/faction/?selections=attacks&to=${toTimestamp}&key=${watchKey}`);
             const data = await res.json();
             if (data.error || !data.attacks) {
-                console.error("[WarTracker] Backfill error:", data.error?.error || "No attacks returned");
+                console.error(`[WarTracker:${watchFactionId}] Backfill error:`, data.error?.error || "No attacks returned");
                 break;
             }
             
@@ -917,7 +946,7 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart, enemyFacti
             
             const timeCovered = Math.max(0, (warEnd && warEnd > 0 ? warEnd : Math.floor(Date.now()/1000)) - oldestTimeInBatch);
             const currentPct = Math.min(99, Math.max(10, Math.round((timeCovered / totalTimeSpan) * 100)));
-            warSyncStatus = {
+            fState.syncStatus = {
                 isSyncing: true,
                 percent: currentPct,
                 page: pageCount + 1,
@@ -933,20 +962,20 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart, enemyFacti
                 break;
             }
         } catch (e) { 
-            console.error("[WarTracker] Backfill exception:", e.message);
+            console.error(`[WarTracker:${watchFactionId}] Backfill exception:`, e.message);
             break; 
         }
     }
-    hasBackfilledWar = true;
-    isBackfillingWar = false;
-    warSyncStatus = {
+    fState.hasBackfilledWar = true;
+    fState.isBackfillingWar = false;
+    fState.syncStatus = {
         isSyncing: false,
         percent: 100,
         page: pageCount + 1,
         totalHitsLoaded: totalProcessed,
         message: `War attack history fully loaded (${totalProcessed} attacks processed)`
     };
-    console.log(`[WarTracker] Backfill complete. Processed ${totalProcessed} attacks across ${pageCount + 1} pages.`);
+    console.log(`[WarTracker:${watchFactionId}] Backfill complete. Processed ${totalProcessed} attacks across ${pageCount + 1} pages.`);
 }
 
 
@@ -3437,12 +3466,46 @@ app.get('/api/past-war', async (req, res) => {
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
-app.get('/api/claims', (req, res) => { res.json({ success: true, claims, backups, manualStats }); });
-app.post('/api/claim', (req, res) => { const { enemyId, playerName } = req.body; claims[enemyId] = { playerName, time: Date.now() }; res.json({ success: true }); });
-app.post('/api/unclaim', (req, res) => { const { enemyId, playerName } = req.body; if (claims[enemyId]?.playerName === playerName) delete claims[enemyId]; res.json({ success: true }); });
-app.post('/api/backup', (req, res) => { const { enemyId, playerName } = req.body; backups[enemyId] = { playerName, time: Date.now() }; res.json({ success: true }); });
-app.post('/api/unbackup', (req, res) => { const { enemyId } = req.body; delete backups[enemyId]; res.json({ success: true }); });
-app.post('/api/update-stats', (req, res) => { const { enemyId, stats } = req.body; manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() }; res.json({ success: true }); });
+app.get('/api/claims', (req, res) => {
+    const facId = req.query.factionId || req.headers['x-faction-id'] || '52355';
+    const state = getFactionWarState(facId);
+    res.json({ success: true, claims: state.claims, backups: state.backups, manualStats: state.manualStats });
+});
+app.post('/api/claim', (req, res) => {
+    const { enemyId, playerName, factionId } = req.body;
+    const facId = factionId || req.headers['x-faction-id'] || '52355';
+    const state = getFactionWarState(facId);
+    state.claims[enemyId] = { playerName, time: Date.now() };
+    res.json({ success: true });
+});
+app.post('/api/unclaim', (req, res) => {
+    const { enemyId, playerName, factionId } = req.body;
+    const facId = factionId || req.headers['x-faction-id'] || '52355';
+    const state = getFactionWarState(facId);
+    if (state.claims[enemyId]?.playerName === playerName) delete state.claims[enemyId];
+    res.json({ success: true });
+});
+app.post('/api/backup', (req, res) => {
+    const { enemyId, playerName, factionId } = req.body;
+    const facId = factionId || req.headers['x-faction-id'] || '52355';
+    const state = getFactionWarState(facId);
+    state.backups[enemyId] = { playerName, time: Date.now() };
+    res.json({ success: true });
+});
+app.post('/api/unbackup', (req, res) => {
+    const { enemyId, factionId } = req.body;
+    const facId = factionId || req.headers['x-faction-id'] || '52355';
+    const state = getFactionWarState(facId);
+    delete state.backups[enemyId];
+    res.json({ success: true });
+});
+app.post('/api/update-stats', (req, res) => {
+    const { enemyId, stats, factionId } = req.body;
+    const facId = factionId || req.headers['x-faction-id'] || '52355';
+    const state = getFactionWarState(facId);
+    state.manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() };
+    res.json({ success: true });
+});
 
 app.get('/api/inspect', async (req, res) => {
     const apiKey = req.headers['x-api-key'] || req.query.apiKey;
@@ -3519,62 +3582,64 @@ app.get('/api/warboard', async (req, res) => {
         await verifySubscription(userKey);
 
         const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
-        let enemyId = (req.headers['x-enemy-id'] || req.query.enemyFaction) || null;
-        
-        let activeKey = userKey;
+        const requestedFacId = req.headers['x-faction-id'] || req.query.myFactionId;
         const userInfo = await getUserFactionInfo(userKey);
+        let myData = null;
+        let targetMyFacId = null;
 
-        // Dynamic caller faction resolution:
-        // Priority 1: Explicitly requested faction ID in headers ('x-faction-id') or query ('myFactionId')
-        // Priority 2: The caller's own faction in Torn (detected directly from their API key profile)
-        // Priority 3: Configured faction ID from settings (discordConfig.factionId)
-        // Priority 4: Default fallback ("52355")
-        let targetMyFacId = (req.headers['x-faction-id'] || req.query.myFactionId)
-            || userInfo?.facId
-            || discordConfig.factionId
-            || dynamicFactionId
-            || "52355";
-
-        let [myData, enemyDataResult] = await Promise.all([
-            cachedTornFetch(`https://api.torn.com/faction/${targetMyFacId}?selections=basic,rankedwars,attacks&key=${userKey}`, `my_faction_${targetMyFacId}_${userKey}`, 2500),
-            enemyId ? cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()||userKey}`, `enemy_faction_${enemyId}`, 2500) : Promise.resolve({ members: {} })
-        ]);
-        
-        // If targeted fetch hit error 6 (e.g. key doesn't have permission to query that ID directly or user is in a different faction),
-        // try querying user's personal /faction/ endpoint
-        if (myData && myData.error && myData.error.code === 6) {
-            myData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${userKey}`, `my_faction_${userKey}`, 2500);
-            if (myData?.ID) targetMyFacId = myData.ID.toString();
-        }
-
-        // If targeted fetch still returned error 6 (user is completely factionless), fall back to Spider-Verse 52355
-        if (myData && myData.error && myData.error.code === 6) {
-            targetMyFacId = discordConfig.factionId || "52355";
+        // Step 1: If user explicitly requested a faction ID (via header or query), fetch that
+        if (requestedFacId) {
+            targetMyFacId = requestedFacId.toString();
             myData = await cachedTornFetch(`https://api.torn.com/faction/${targetMyFacId}?selections=basic,rankedwars,attacks&key=${userKey}`, `my_faction_${targetMyFacId}_${userKey}`, 2500);
-        }
-
-        // Cache valid responses per faction ID
-        if (myData && myData.members && Object.keys(myData.members).length > 0 && myData.ID) {
-            const fId = myData.ID.toString();
-            lastGoodWarboardByFaction[fId] = myData;
-            dynamicFactionId = fId;
-        }
-
-        // Resilience: If myData hit rate limit or transient error, serve last known good payload for THIS faction
-        if ((!myData || myData.error || !myData.members || Object.keys(myData.members).length === 0)) {
-            if (lastGoodWarboardByFaction[targetMyFacId]) {
-                myData = lastGoodWarboardByFaction[targetMyFacId];
-            } else if (lastGoodWarboardPayload && (!userInfo?.facId || String(targetMyFacId) === "52355")) {
-                return res.json(lastGoodWarboardPayload);
+            if (myData && myData.error && (myData.error.code === 6 || myData.error.code === 7)) {
+                myData = await cachedTornFetch(`https://api.torn.com/faction/${targetMyFacId}?selections=basic,rankedwars&key=${userKey}`, `my_faction_basic_${targetMyFacId}_${userKey}`, 2500);
             }
         }
 
-        if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
-        if (enemyId && Object.keys(enemyDataResult.members || {}).length === 0) { 
-            enemyDataResult = await cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()||userKey}`, `enemy_faction_${enemyId}`, 2500); 
+        // Step 2: If no explicit faction requested or fetch failed, query user's personal /faction/ endpoint.
+        // Torn API will ALWAYS return the faction that this specific user belongs to!
+        if (!myData || myData.error) {
+            myData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${userKey}`, `my_faction_personal_${userKey}`, 2500);
+            if (myData && myData.ID) {
+                targetMyFacId = myData.ID.toString();
+            }
         }
 
-        if (myData && myData.ID) dynamicFactionId = myData.ID.toString();
+        // Step 3: If personal /faction/ returned error 6 (caller is factionless),
+        // fallback to server default faction (Spider-Verse 52355)
+        if (!myData || (myData.error && myData.error.code === 6)) {
+            targetMyFacId = discordConfig.factionId || "52355";
+            myData = await cachedTornFetch(`https://api.torn.com/faction/${targetMyFacId}?selections=basic,rankedwars,attacks&key=${userKey}`, `my_faction_${targetMyFacId}_${userKey}`, 2500);
+            if (myData && myData.error && (myData.error.code === 6 || myData.error.code === 7)) {
+                myData = await cachedTornFetch(`https://api.torn.com/faction/${targetMyFacId}?selections=basic,rankedwars&key=${userKey}`, `my_faction_basic_${targetMyFacId}_${userKey}`, 2500);
+            }
+        }
+
+        const myFacId = myData?.ID ? myData.ID.toString() : (targetMyFacId || "52355");
+        const fState = getFactionWarState(myFacId);
+
+        // Resilience: If myData hit rate limit or transient error, serve last known good payload for THIS faction ONLY
+        if (!myData || myData.error || !myData.members || Object.keys(myData.members).length === 0) {
+            if (lastGoodWarboardByFaction[myFacId]) {
+                return res.json(lastGoodWarboardByFaction[myFacId]);
+            } else if (lastGoodWarboardPayload && String(myFacId) === "52355") {
+                return res.json(lastGoodWarboardPayload);
+            } else {
+                return res.status(500).json({ error: "Unable to retrieve faction data. Please verify your API key has faction access." });
+            }
+        }
+
+        // Cache valid responses for THIS faction ID
+        if (myData && myData.members && Object.keys(myData.members).length > 0 && myData.ID) {
+            lastGoodWarboardByFaction[myFacId] = myData;
+        }
+
+        let enemyId = (req.headers['x-enemy-id'] || req.query.enemyFaction) || null;
+        if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
+        let enemyDataResult = { members: {} };
+        if (enemyId) { 
+            enemyDataResult = await cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()||userKey}`, `enemy_faction_${enemyId}`, 2500); 
+        }
 
         let activeWar = null;
         if (myData.rankedwars) {
@@ -3594,18 +3659,17 @@ app.get('/api/warboard', async (req, res) => {
             if (sortedWars.length > 0) {
                 const rw = sortedWars[0];
                 const rwFactions = Object.keys(rw.factions || {});
-                const myIdStr = myData.ID ? myData.ID.toString() : '52355';
-                const enemyIdFromWar = rwFactions.find(f => f !== myIdStr) || '51322';
+                const enemyIdFromWar = rwFactions.find(f => f !== myFacId) || (rwFactions[0] !== myFacId ? rwFactions[0] : rwFactions[1]);
 
-                const ourScore = rw.factions[myIdStr]?.score || 0;
-                const theirScore = rw.factions[enemyIdFromWar]?.score || 0;
+                const ourScore = rw.factions[myFacId]?.score || 0;
+                const theirScore = (enemyIdFromWar && rw.factions[enemyIdFromWar]) ? (rw.factions[enemyIdFromWar].score || 0) : 0;
                 const winner = rw.war?.winner || 0;
-                const isWon = winner === Number(myIdStr) || ourScore > theirScore;
-                recentWarMembers = rw.factions[myIdStr]?.members || {};
+                const isWon = winner === Number(myFacId) || ourScore > theirScore;
+                recentWarMembers = rw.factions[myFacId]?.members || {};
 
                 recentWarInfo = {
                     id: rw.id,
-                    enemyName: enemyDataResult?.name || (rw.factions[enemyIdFromWar]?.name || 'Enemy Faction'),
+                    enemyName: enemyDataResult?.name || (enemyIdFromWar && rw.factions[enemyIdFromWar]?.name ? rw.factions[enemyIdFromWar].name : 'Enemy Faction'),
                     enemyId: enemyIdFromWar,
                     ourScore,
                     theirScore,
@@ -3632,28 +3696,27 @@ app.get('/api/warboard', async (req, res) => {
         if (activeWar && activeWar.war && myData.ID) {
             let warStart = activeWar.war.start;
             let warEnd = activeWar.war.end || 0;
-            currentEnemyFacId = enemyId;
 
-            if (activeWarId !== warStart) {
-                activeWarId = warStart;
-                activeWarEnd = warEnd;
-                liveWarHits = {};
-                liveOutsideHits = {};
-                liveAssists = {};
-                liveWarDefendsWon = {};
-                liveOutsideDefendsWon = {};
-                liveWarHitsTaken = {};
-                liveOutsideHitsTaken = {};
-                hasBackfilledWar = false;
-                processedAttackIds.clear();
-                backfillWarDefends(userKey, myData.ID, warStart, enemyId, warEnd);
-            } else if (!hasBackfilledWar && !isBackfillingWar) {
-                backfillWarDefends(userKey, myData.ID, warStart, enemyId, warEnd);
+            if (fState.activeWarId !== warStart) {
+                fState.activeWarId = warStart;
+                fState.activeWarEnd = warEnd;
+                fState.liveWarHits = {};
+                fState.liveOutsideHits = {};
+                fState.liveAssists = {};
+                fState.liveWarDefendsWon = {};
+                fState.liveOutsideDefendsWon = {};
+                fState.liveWarHitsTaken = {};
+                fState.liveOutsideHitsTaken = {};
+                fState.hasBackfilledWar = false;
+                fState.processedAttackIds.clear();
+                backfillWarDefends(userKey, myFacId, warStart, enemyId, warEnd);
+            } else if (!fState.hasBackfilledWar && !fState.isBackfillingWar) {
+                backfillWarDefends(userKey, myFacId, warStart, enemyId, warEnd);
             }
 
             if (myData.attacks && typeof myData.attacks === 'object') {
                 for (let atk of Object.values(myData.attacks)) {
-                    processWarAttack(atk, myData.ID, enemyId, warStart, warEnd);
+                    processWarAttack(atk, myFacId, enemyId, warStart, warEnd);
                 }
             }
         }
@@ -3672,7 +3735,7 @@ app.get('/api/warboard', async (req, res) => {
         const parseMembers = (data, isEnemy = false) => {
             if (!data.members) return [];
             return Object.entries(data.members).map(([id, m]) => {
-                let est = (spyDatabase[id] && spyDatabase[id].total) ? spyDatabase[id].total : (manualStats[id]?.stats !== undefined ? manualStats[id].stats : (statsCache[id]?.stats !== undefined ? statsCache[id].stats : (isPremium ? "Scanning..." : "🔒 Requires FF Scouter")));
+                let est = (spyDatabase[id] && spyDatabase[id].total) ? spyDatabase[id].total : (fState.manualStats[id]?.stats !== undefined ? fState.manualStats[id].stats : (statsCache[id]?.stats !== undefined ? statsCache[id].stats : (isPremium ? "Scanning..." : "🔒 Requires FF Scouter")));
                 
                 const isTraveling = m.status?.state === "Traveling" || m.status?.description?.includes("Traveling");
                 let finalUntil = m.status?.until; let finalLandingTime = null; let needsFfScouterForFlights = false;
@@ -3688,16 +3751,16 @@ app.get('/api/warboard', async (req, res) => {
                     ? warAuditArchive[recentWarInfo.id].members.find(am => am.id.toString() === id.toString())
                     : null;
 
-                let warAttacks = activeWar ? Math.max(baseWarAttacks, liveWarHits[id] || 0) : (auditMember ? auditMember.hitsMade : baseWarAttacks);
-                let assists = Math.max(baseAssists, liveAssists[id] || 0);
-                let outsideAttacks = liveOutsideHits[id] || 0;
+                let warAttacks = activeWar ? Math.max(baseWarAttacks, fState.liveWarHits[id] || 0) : (auditMember ? auditMember.hitsMade : baseWarAttacks);
+                let assists = Math.max(baseAssists, fState.liveAssists[id] || 0);
+                let outsideAttacks = fState.liveOutsideHits[id] || 0;
 
-                let warHitsTaken = activeWar ? (liveWarHitsTaken[id] || 0) : (auditMember ? (auditMember.warHitsTaken || auditMember.timesHit || 0) : 0);
-                let outsideHitsTaken = activeWar ? (liveOutsideHitsTaken[id] || 0) : (auditMember ? (auditMember.outsideHitsTaken || 0) : 0);
+                let warHitsTaken = activeWar ? (fState.liveWarHitsTaken[id] || 0) : (auditMember ? (auditMember.warHitsTaken || auditMember.timesHit || 0) : 0);
+                let outsideHitsTaken = activeWar ? (fState.liveOutsideHitsTaken[id] || 0) : (auditMember ? (auditMember.outsideHitsTaken || 0) : 0);
                 let hitsTaken = warHitsTaken + outsideHitsTaken;
 
-                let warDefendsWon = activeWar ? (liveWarDefendsWon[id] || 0) : (auditMember ? (auditMember.timesDefended || 0) : 0);
-                let outsideDefendsWon = liveOutsideDefendsWon[id] || 0;
+                let warDefendsWon = activeWar ? (fState.liveWarDefendsWon[id] || 0) : (auditMember ? (auditMember.timesDefended || 0) : 0);
+                let outsideDefendsWon = fState.liveOutsideDefendsWon[id] || 0;
                 let defendsWon = warDefendsWon + outsideDefendsWon;
 
                 let attacks = warAttacks + outsideAttacks;
@@ -3719,11 +3782,11 @@ app.get('/api/warboard', async (req, res) => {
                     lastActionTimestamp: m.last_action?.timestamp || 0, 
                     landingTime: finalLandingTime, 
                     needsFfScouterForFlights, 
-                    claimedBy: isEnemy ? claims[id]?.playerName || null : null, 
-                    needsBackup: isEnemy ? backups[id]?.playerName || null : null, 
+                    claimedBy: isEnemy ? fState.claims[id]?.playerName || null : null, 
+                    needsBackup: isEnemy ? fState.backups[id]?.playerName || null : null, 
                     estStats: est, 
                     intelScore: isEnemy ? computeWarIntel({ id, state: m.status?.state, until: finalUntil, onlineStatus: m.last_action?.status || "Offline", estStats: typeof est === 'number' ? est : null }, statsCache) : null, 
-                    isManual: !!manualStats[id], 
+                    isManual: !!fState.manualStats[id], 
                     attacks, 
                     warAttacks,
                     outsideAttacks,
@@ -3743,8 +3806,13 @@ app.get('/api/warboard', async (req, res) => {
         const friendlyMembers = parseMembers(myData, false);
         const enemyMembers = parseMembers(enemyDataResult, true);
 
-        if (friendlyMembers.length === 0 && lastGoodWarboardPayload) {
-            return res.json(lastGoodWarboardPayload);
+        if (friendlyMembers.length === 0) {
+            if (lastGoodWarboardByFaction[myFacId]) {
+                return res.json(lastGoodWarboardByFaction[myFacId]);
+            }
+            if (lastGoodWarboardPayload && String(myFacId) === "52355") {
+                return res.json(lastGoodWarboardPayload);
+            }
         }
 
         const payload = {
@@ -3752,15 +3820,15 @@ app.get('/api/warboard', async (req, res) => {
             enemy: enemyMembers,
             detectedEnemyId: enemyId,
             premiumActive: isPremium,
-            syncStatus: warSyncStatus,
+            syncStatus: fState.syncStatus,
             warInfo: activeWar ? {
                 active: true,
                 start: activeWar.war?.start || 0,
                 end: activeWar.war?.end || 0,
                 target: activeWar.war?.target || 0,
                 myFaction: {
-                    id: myData?.ID || null,
-                    name: myData?.name || "Spider-Verse",
+                    id: myData?.ID || myFacId,
+                    name: myData?.name || (myData?.ID ? "Faction #" + myData.ID : "Spider-Verse"),
                     score: (activeWar.factions && myData.ID && activeWar.factions[myData.ID.toString()]) ? (activeWar.factions[myData.ID.toString()].score || 0) : 0,
                     chain: (activeWar.factions && myData.ID && activeWar.factions[myData.ID.toString()]) ? (activeWar.factions[myData.ID.toString()].chain || 0) : 0
                 },
@@ -3773,8 +3841,8 @@ app.get('/api/warboard', async (req, res) => {
             } : {
                 active: false,
                 myFaction: {
-                    id: myData?.ID || null,
-                    name: myData?.name || "Spider-Verse",
+                    id: myData?.ID || myFacId,
+                    name: myData?.name || (myData?.ID ? "Faction #" + myData.ID : "Spider-Verse"),
                     chain: myData?.chain?.current || 0,
                     chainMax: myData?.chain?.maximum || 100,
                     chainTimeout: myData?.chain?.timeout || 0,
@@ -3790,9 +3858,8 @@ app.get('/api/warboard', async (req, res) => {
         };
 
         if (friendlyMembers.length > 0) {
-            const facId = payload?.warInfo?.myFaction?.id?.toString() || targetMyFacId?.toString();
-            if (facId) lastGoodWarboardByFaction[facId] = payload;
-            if (!lastGoodWarboardPayload || String(facId) === "52355") {
+            lastGoodWarboardByFaction[myFacId] = payload;
+            if (String(myFacId) === "52355") {
                 lastGoodWarboardPayload = payload;
                 try {
                     fs.writeFileSync(WARBOARD_BACKUP_FILE, JSON.stringify(payload));

@@ -2096,17 +2096,37 @@ function showToast(msg, type = "red") {
 }
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
-async function claimTarget(id) { await fetch('/api/claim', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); fetchWarboard(); }
-async function unclaimTarget(id) { await fetch('/api/unclaim', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) }); fetchWarboard(); }
+function getMyCurrentFactionId() {
+    return currentWarboardData?.warInfo?.myFaction?.id || localStorage.getItem("warboard_myFactionId") || '52355';
+}
+async function claimTarget(id) { 
+    const fId = getMyCurrentFactionId();
+    await fetch('/api/claim', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName, factionId: fId }) }); 
+    fetchWarboard(); 
+}
+async function unclaimTarget(id) { 
+    const fId = getMyCurrentFactionId();
+    await fetch('/api/unclaim', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName, factionId: fId }) }); 
+    fetchWarboard(); 
+}
 async function requestBackup(id, name) {
-    await fetch('/api/backup', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName }) });
+    const fId = getMyCurrentFactionId();
+    await fetch('/api/backup', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ enemyId: id, playerName: myName, factionId: fId }) });
     sendDiscordPing?.(`🚨 **SOS FROM ${myName.toUpperCase()}:** Need backup on **${name}** [${id}]!`);
     fetchWarboard();
 }
-async function cancelBackup(id) { await fetch('/api/unbackup', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ enemyId: id }) }); fetchWarboard(); }
+async function cancelBackup(id) { 
+    const fId = getMyCurrentFactionId();
+    await fetch('/api/unbackup', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ enemyId: id, factionId: fId }) }); 
+    fetchWarboard(); 
+}
 async function promptUpdateStats(id) {
     const v = prompt("Enter exact/estimated total stats for this player:");
-    if (v && !isNaN(v)) { await fetch('/api/update-stats', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ enemyId: id, stats: parseInt(v) }) }); fetchWarboard(); }
+    if (v && !isNaN(v)) { 
+        const fId = getMyCurrentFactionId();
+        await fetch('/api/update-stats', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ enemyId: id, stats: parseInt(v), factionId: fId }) }); 
+        fetchWarboard(); 
+    }
 }
 
 // ─── Inspect Modal ────────────────────────────────────────────────────────────
