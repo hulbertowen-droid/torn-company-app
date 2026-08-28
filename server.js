@@ -64,6 +64,17 @@ async function loadConfigFromMongo() {
             if (saved.spyDatabase) spyDatabase = { ...spyDatabase, ...saved.spyDatabase };
             if (saved.userTracking) userTracking = { ...userTracking, ...saved.userTracking };
             if (saved.apiPoolConfig) apiPoolConfig = { ...apiPoolConfig, ...saved.apiPoolConfig };
+            if (saved.inactivityAlerts) {
+                inactivityAlertsMemory = {
+                    alerts: { ...(inactivityAlertsMemory?.alerts || {}), ...(saved.inactivityAlerts.alerts || {}) },
+                    initialized: saved.inactivityAlerts.initialized !== false
+                };
+                console.log(`[Mongo] Restored ${Object.keys(inactivityAlertsMemory.alerts).length} inactivity alerts from MongoDB Atlas.`);
+            }
+            if (saved.warFlightArchive) {
+                warFlightArchive = { ...(warFlightArchive || {}), ...(saved.warFlightArchive || {}) };
+                console.log(`[Mongo] Restored ${Object.keys(warFlightArchive).length} flight archive records from MongoDB Atlas.`);
+            }
             console.log('[Mongo] Restored master configurations from MongoDB Atlas.');
             
             if (discordConfig.apiKey) {
@@ -315,6 +326,8 @@ function saveToMongo() {
                     spyDatabase,
                     userTracking,
                     apiPoolConfig,
+                    inactivityAlerts: inactivityAlertsMemory,
+                    warFlightArchive,
                     updatedAt: new Date()
                 }
             },
@@ -1368,6 +1381,7 @@ function saveInactivityAlerts(data) {
         }
         fs.writeFileSync(INACTIVITY_ALERTS_FILE, JSON.stringify(data, null, 2), 'utf8');
     } catch (e) {}
+    saveToMongo();
 }
 
 let inactivityAlertsMemory = loadInactivityAlerts();
@@ -1392,6 +1406,7 @@ function saveWarFlightArchive() {
         }
         fs.writeFileSync(WAR_FLIGHT_ARCHIVE_FILE, JSON.stringify(warFlightArchive), 'utf8');
     } catch (e) {}
+    saveToMongo();
 }
 loadWarFlightArchive();
 
@@ -1404,12 +1419,13 @@ async function checkFactionMembersInactivity(members) {
     const thresholdSec = thresholdDays * 86400;
     const now = Math.floor(Date.now() / 1000);
 
-    // Initial startup check: seed players who have already been inactive for > 2 days
-    // so we don't spam the channel with historical inactive players on fresh boot.
+    // Initial startup check: if tracker is newly initialized or seeded,
+    // seed ANY member who is ALREADY past the inactivity threshold (>= thresholdSec)
+    // so we NEVER spam Discord on fresh server boots, deploys, or restarts.
     if (!inactivityAlertsMemory.initialized) {
         for (const [id, m] of Object.entries(members)) {
             const lastTs = m.last_action?.timestamp || 0;
-            if (lastTs && (now - lastTs) > 2 * 86400) {
+            if (lastTs && (now - lastTs) >= thresholdSec) {
                 inactivityAlertsMemory.alerts[id] = {
                     lastActionTs: lastTs,
                     alertedAt: now,
