@@ -2054,11 +2054,31 @@ app.get('/api/inactivity-tracker', async (req, res) => {
     try {
         let watchFactionId = discordConfig.factionId || dynamicFactionId || "52355";
         const url = `https://api.torn.com/faction/${watchFactionId}?selections=basic&key=${userKey}`;
-        const facRes = await fetch(url);
-        const facData = await facRes.json();
-        if (facData.error) return res.status(400).json({ error: facData.error.error });
+        let facData = await cachedTornFetch(url, `faction_inact_${watchFactionId}`, 10000);
+        let members = facData?.members;
 
-        const members = facData.members || {};
+        // If throttled or errored, fall back to cached friendly members
+        if ((!members || Object.keys(members).length === 0) && lastGoodWarboardPayload?.friendly?.length > 0) {
+            members = {};
+            lastGoodWarboardPayload.friendly.forEach(m => {
+                members[m.id] = {
+                    name: m.name,
+                    level: m.level,
+                    position: m.position || 'Member',
+                    status: { description: m.statusDescription || m.state || 'Okay', state: m.state || 'Okay' },
+                    last_action: {
+                        timestamp: m.lastActionTimestamp || (Math.floor(Date.now() / 1000) - 3600),
+                        relative: m.lastActionRelative || 'Recently',
+                        status: m.onlineStatus || 'Online'
+                    }
+                };
+            });
+        }
+
+        if (!members || Object.keys(members).length === 0) {
+            if (facData?.error) return res.status(400).json({ error: facData.error.error });
+            return res.status(400).json({ error: "Failed to load faction members." });
+        }
         const now = Math.floor(Date.now() / 1000);
         const thresholdDays = Math.max(1, Number(discordConfig.inactivityDays) || 1);
         const thresholdSec = thresholdDays * 86400;
