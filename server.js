@@ -2217,8 +2217,11 @@ app.get('/api/war-flight-audit', async (req, res) => {
                         }
                     }
 
-                    // Defense check: Enemy attacked our member
-                    if (atk.attacker_faction == enemyId && atk.defender_faction == myId) {
+                    // Defense check: Enemy ranked war attack on our member (includes stealthed enemy hits)
+                    const isEnemyWarAttack = (atk.ranked_war == 1 || atk.ranked_war === true) && atk.defender_faction == myId;
+                    const isDirectEnemyAttack = atk.attacker_faction == enemyId && atk.defender_faction == myId;
+
+                    if (isEnemyWarAttack || isDirectEnemyAttack) {
                         if (defId) {
                             if (!memberStats[defId]) {
                                 memberStats[defId] = { id: defId, name: atk.defender_name || `Member #${defId}`, level: '—', hitsMade: 0, respectEarned: 0, timesHit: 0, timesBeaten: 0, timesDefended: 0, timesFarmed: 0, totalDefends: 0, defendedSuccessfully: 0, respectLeaked: 0, flightSec: 0, flightTrips: 0, overseasHits: 0, overseasTimestamps: [], flightDestinations: [] };
@@ -2229,11 +2232,11 @@ app.get('/api/war-flight-audit', async (req, res) => {
                             if (result === "Lost" || result === "Stalemate") {
                                 memberStats[defId].timesDefended++;
                                 memberStats[defId].defendedSuccessfully++;
-                            } else if (result.includes("Hospital") || result === "Hospitalized" || result === "Mugged" || result === "Attacked") {
+                            } else {
                                 memberStats[defId].timesBeaten++;
                                 memberStats[defId].respectLeaked += Number(atk.respect_gain || 0);
                             }
-                            // Farmed = total number of times hit by enemy
+                            // Farmed = total number of war hits taken
                             memberStats[defId].timesFarmed = memberStats[defId].timesHit;
                         }
                     }
@@ -2335,16 +2338,16 @@ app.get('/api/war-flight-audit', async (req, res) => {
 
                 for (let i = 1; i < m.overseasTimestamps.length; i++) {
                     const cur = m.overseasTimestamps[i];
-                    if (cur - lastTs > 3 * 3600) {
+                    if (cur - lastTs > 4 * 3600) {
                         const tripDuration = (lastTs - tripStart) + (3 * 3600); // 3h round-trip flight buffer
-                        flightSec += Math.min(tripDuration, 6 * 3600); // realistic max 6h per foreign trip
+                        flightSec += Math.min(tripDuration, 8 * 3600); // realistic max 8h per foreign trip
                         trips++;
                         tripStart = cur;
                     }
                     lastTs = cur;
                 }
                 const tripDuration = (lastTs - tripStart) + (3 * 3600);
-                flightSec += Math.min(tripDuration, 6 * 3600);
+                flightSec += Math.min(tripDuration, 8 * 3600);
                 trips++;
 
                 // Logical sanity check: if a player was hit dozens of times on the ground in Torn City,
@@ -2444,7 +2447,7 @@ app.get('/api/war-flight-audit', async (req, res) => {
 
         for (const m of processedMembers) {
             totalAirtimeSec += m.flightSec;
-            if (m.timesHit <= 2 && (m.hitsMade > 0 || m.flightSec > 0)) ghostCount++;
+            if (m.timesHit <= 4 && (m.hitsMade > 0 || m.flightSec > 0)) ghostCount++;
             totalFarmedHits += m.timesHit;
             totalRespectLeaked += m.respectLeaked;
             totalHitsMade += m.hitsMade;
