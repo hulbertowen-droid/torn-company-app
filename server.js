@@ -3727,6 +3727,15 @@ app.get('/api/war-bounties', async (req, res) => {
             }
         }
 
+        let enemyName = "Enemy Faction";
+        if (activeWar && activeWar.factions) {
+            const myId = (facData.ID || facData.faction_id || 52355).toString();
+            const enemyEntry = Object.entries(activeWar.factions).find(([fid]) => fid.toString() !== myId);
+            if (enemyEntry && enemyEntry[1]?.name) enemyName = enemyEntry[1].name;
+        }
+        const isOngoingWar = !!activeWar && (!activeWar.war?.winner || activeWar.war?.winner === 0);
+        const warTitle = isOngoingWar ? `vs ${enemyName} (Active War)` : `vs ${enemyName} (Last War)`;
+
         if (!warStart) warStart = Math.floor(Date.now() / 1000) - (7 * 86400);
 
         // 2. Fetch personalstats (lifetime counts)
@@ -3779,80 +3788,51 @@ app.get('/api/war-bounties', async (req, res) => {
             }
         }
 
-        // 4. Paginate through Torn log entries back to warStart
-        //    Torn log API: GET /user/?selections=log&key=KEY&from=TS&to=TS
-        //    Each page returns up to 100 log entries; we paginate backwards using
-        //    the oldest timestamp on each page as the new `to` for the next call.
-        const nowTs = Math.floor(Date.now() / 1000);
-        let pageTo = nowTs;
-        let totalScanned = 0;
+        // 4. Paginate Torn API v2 events (works with Limited Access & returns up to 100 events per page)
+        let toTs = Math.floor(Date.now() / 1000);
         let pagesScanned = 0;
-        const MAX_PAGES = 30; // Safety limit (~3000 log entries)
+        let totalScanned = 0;
+        const MAX_EVENT_PAGES = 10;
         let reachedWarStart = false;
 
-        while (pagesScanned < MAX_PAGES && !reachedWarStart) {
-            let logData;
+        while (pagesScanned < MAX_EVENT_PAGES && !reachedWarStart) {
             try {
-                const logRes = await fetch(
-                    `https://api.torn.com/user/?selections=log&key=${apiKey}&from=${warStart}&to=${pageTo}`,
-                    { signal: AbortSignal.timeout(10000) }
-                );
-                logData = await logRes.json();
-            } catch(e) { break; }
+                const v2Url = `https://api.torn.com/v2/user/events?key=${apiKey}&to=${toTs}`;
+                const evRes = await fetch(v2Url, { signal: AbortSignal.timeout(8000) });
+                const evData = await evRes.json();
+                const evList = evData.events || [];
+                if (!evList.length) break;
 
-            if (logData.error) break; // No log access or API limit
-            const logEntries = Object.entries(logData.log || {});
-            if (logEntries.length === 0) break;
-
-            let oldestTs = pageTo;
-            for (const [lId, entry] of logEntries) {
-                const ts = entry.timestamp || 0;
-                if (ts < oldestTs) oldestTs = ts;
-                totalScanned++;
-
-                // Log entries have a `title` (e.g. "Bounty placed") and sometimes `data`
-                const title = (entry.title || '').toLowerCase();
-                const category = (entry.category || '').toLowerCase();
-
-                // Check if it's a bounty-related log entry
-                if (title.includes('bounty') || category.includes('bounty')) {
-                    // Log entries have structured data - try to extract from data object
-                    const d = entry.data || {};
-                    const ts2 = entry.timestamp || 0;
-                    if (ts2 < warStart || (warEnd && ts2 > warEnd)) continue;
-
-                    // "Bounty placed" type
-                    if (title.includes('placed') || category === 'bounty') {
-                        const amount = d.money_mugged || d.reward || d.cash || d.bounty_amount || 0;
-                        const targetId = d.player_id?.toString() || d.target?.toString() || null;
-                        const targetName = d.player_name || d.target_name || playerNameCache[targetId] || `Player #${targetId}`;
-                        const key = `placed_log_${ts2}_${targetId}_${amount}`;
-                        bountyHistory.placed[key] = { key, eventId: lId, timestamp: ts2, targetName, targetId, amount, rawText: title };
-                    }
+                let oldestTs = toTs;
+                for (const ev of evList) {
+                    const ts = Number(ev.timestamp) || 0;
+                    if (ts < oldestTs) oldestTs = ts;
+                    totalScanned++;
+                    parseBountyEvent(ev.id, ev);
                 }
-            }
 
-            pagesScanned++;
-            // If oldest entry on this page is at or before warStart, we've covered everything
-            if (oldestTs <= warStart || logEntries.length < 10) {
-                reachedWarStart = true;
+                pagesScanned++;
+                if (oldestTs <= warStart || evList.length < 40) {
+                    reachedWarStart = true;
+                    break;
+                }
+                toTs = oldestTs - 1;
+                await new Promise(r => setTimeout(r, 150));
+            } catch (err) {
                 break;
             }
-            // Move the window back: set `to` to 1 second before the oldest entry
-            pageTo = oldestTs - 1;
-            // Small delay to avoid hammering the API
-            await new Promise(r => setTimeout(r, 300));
         }
 
-        // 5. Also check current events (last 25) for anything not in log yet
-        try {
-            const evRes = await fetch(`https://api.torn.com/user/?selections=events&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
-            const evData = await evRes.json();
-            const events = Object.entries(evData.events || {});
-            for (const [eId, ev] of events) {
-                parseBountyEvent(eId, ev);
-            }
-        } catch(e) {}
+        // Fallback to v1 events if v2 returned nothing
+        if (pagesScanned === 0) {
+            try {
+                const evRes = await fetch(`https://api.torn.com/user/?selections=events&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+                const evData = await evRes.json();
+                for (const [eId, ev] of Object.entries(evData.events || {})) {
+                    parseBountyEvent(eId, ev);
+                }
+            } catch(e) {}
+        }
 
         // Save accumulated history
         saveWarBountiesHistory(bountyHistory);
@@ -3935,7 +3915,9 @@ app.get('/api/war-bounties', async (req, res) => {
             success: true,
             warStart,
             warEnd,
-            warActive: !!activeWar && (!activeWar.war?.winner || activeWar.war?.winner === 0),
+            warActive: isOngoingWar,
+            enemyName,
+            warTitle,
             totalBountiesClaimed: claimedCount,
             totalCashSpent,
             bountiesPlacedInWar: finalPlacedCount,

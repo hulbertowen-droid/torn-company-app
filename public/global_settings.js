@@ -15,32 +15,32 @@ const globalSettingsHTML = `
         <button class="global-close-btn" onclick="closeGlobalSettings()">&times;</button>
         <h2>Board Settings</h2>
         <div>
-            <label>API Key (Requires "Limited" Access & Faction Permissions)</label>
-            <input type="password" id="gs-api-key" placeholder="Paste your Torn API Key here">
+            <label for="gs-api-key">API Key (Requires "Limited" Access & Faction Permissions)</label>
+            <input type="password" id="gs-api-key" aria-label="Torn API Key" placeholder="Paste your Torn API Key here">
         </div>
         <div>
-            <label>FF Scouter Premium Key</label>
-            <input type="password" id="gs-ff-key" placeholder="Optional: Unlocks advanced stats & radar">
+            <label for="gs-ff-key">FF Scouter Premium Key</label>
+            <input type="password" id="gs-ff-key" aria-label="FF Scouter Premium Key" placeholder="Optional: Unlocks advanced stats & radar">
         </div>
         <div>
-            <label>Torn Stats API Key</label>
-            <input type="password" id="gs-ts-key" placeholder="Optional: Unlocks Global Spy Database">
+            <label for="gs-ts-key">Torn Stats API Key</label>
+            <input type="password" id="gs-ts-key" aria-label="Torn Stats API Key" placeholder="Optional: Unlocks Global Spy Database">
         </div>
         <div>
-            <label>Enemy Faction ID</label>
-            <input type="text" id="gs-enemy-id" placeholder="Optional (Auto-detects usually)">
+            <label for="gs-enemy-id">Enemy Faction ID</label>
+            <input type="text" id="gs-enemy-id" aria-label="Enemy Faction ID" placeholder="Optional (Auto-detects usually)">
         </div>
         <div>
-            <label>Your Name (For Targets)</label>
-            <input type="text" id="gs-my-name" placeholder="E.g. Agent">
+            <label for="gs-my-name">Your Name (For Targets)</label>
+            <input type="text" id="gs-my-name" aria-label="Your Name" placeholder="E.g. Agent">
         </div>
         <div>
-            <label>Global Discord Webhook (Auto-Pastes Everywhere)</label>
-            <input type="text" id="gs-discord-webhook" placeholder="Paste Discord Webhook URL here">
+            <label for="gs-discord-webhook">Global Discord Webhook (Auto-Pastes Everywhere)</label>
+            <input type="text" id="gs-discord-webhook" aria-label="Discord Webhook URL" placeholder="Paste Discord Webhook URL here">
         </div>
         <div>
-            <label>API Calls Per Minute (Max 60)</label>
-            <input type="number" id="gs-api-cpm" min="1" max="60" placeholder="e.g. 12 calls/min = 1 refresh every 5s">
+            <label for="gs-api-cpm">API Calls Per Minute (Max 60)</label>
+            <input type="number" id="gs-api-cpm" aria-label="API Calls Per Minute" min="1" max="60" placeholder="e.g. 12 calls/min = 1 refresh every 5s">
         </div>
         <button class="global-btn-save" onclick="saveGlobalSettings()">Save Settings</button>
     </div>

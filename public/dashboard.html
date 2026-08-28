@@ -61,7 +61,7 @@
         .faction-divider { width: 1px; background: var(--border); height: 60px; }
 
         /* KPI ROW */
-        .kpi-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 20px; }
+        .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 20px; }
         .kpi-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; display: flex; align-items: center; gap: 14px; transition: 0.2s; }
         .kpi-card:hover { border-color: #30363d; }
         .kpi-icon { font-size: 1.8em; flex-shrink: 0; }
@@ -71,7 +71,7 @@
 
         /* GRID */
         .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
-        .dash-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+        .dash-grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; margin-bottom: 18px; }
         .span-full { grid-column: 1 / -1; }
 
         /* CARDS */
@@ -160,8 +160,10 @@
 
         /* MOBILE */
         @media (max-width: 900px) {
-            .faction-hero { flex-direction: column; }
-            .faction-hero-stats { flex-wrap: wrap; }
+            .faction-hero { flex-direction: column; align-items: flex-start; }
+            .faction-hero-stats { flex-wrap: wrap; justify-content: space-around; width: 100%; gap: 16px; }
+            .dash-grid, .dash-grid-3 { grid-template-columns: 1fr; }
+            .faction-divider { display: none; }
         }
 
         /* LIGHT MODE */
@@ -230,7 +232,7 @@
             <div class="kpi-card"><div class="kpi-icon">🏆</div><div><div class="kpi-label">Faction Respect</div><div class="kpi-value" id="kpi-respect">—</div><div class="kpi-sub" id="kpi-respect-sub"></div></div></div>
             <div class="kpi-card"><div class="kpi-icon">🔗</div><div><div class="kpi-label">Active Chain</div><div class="kpi-value" id="kpi-chain">—</div><div class="kpi-sub" id="kpi-chain-timeout">—</div></div></div>
             <div class="kpi-card"><div class="kpi-icon">⚔️</div><div><div class="kpi-label">War Status</div><div class="kpi-value" id="kpi-war-status">—</div><div class="kpi-sub" id="kpi-war-sub">—</div></div></div>
-            <div class="kpi-card"><div class="kpi-icon">🏦</div><div><div class="kpi-label">Faction Level</div><div class="kpi-value" id="kpi-level">—</div><div class="kpi-sub" id="kpi-age">—</div></div></div>
+            <div class="kpi-card"><div class="kpi-icon">⚡</div><div><div class="kpi-label">Best Chain</div><div class="kpi-value" id="kpi-best-chain">—</div><div class="kpi-sub" id="kpi-age">—</div></div></div>
         </div>
 
         <!-- WAR SCORE + CHAIN DETAILS -->
@@ -313,7 +315,7 @@
                 <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                     <div style="display:flex; align-items:center; gap:6px;">
                         <span style="font-size:0.75em; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Select War:</span>
-                        <select id="sentinel-war-select" class="sort-select" onchange="runWarFlightAudit()" style="min-width:220px; background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 10px; border-radius:6px; font-size:0.82em;">
+                        <select id="sentinel-war-select" aria-label="Select War" class="sort-select" onchange="runWarFlightAudit()" style="min-width:220px; background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 10px; border-radius:6px; font-size:0.82em;">
                             <option value="">Loading wars...</option>
                         </select>
                     </div>
@@ -370,8 +372,8 @@
                         <button class="filter-chip" onclick="setSentinelFilter('farmed', this)">🚨 Most Farmed (<span id="cnt-audit-farmed">0</span>)</button>
                     </div>
                     <div style="display:flex; gap:8px; align-items:center;">
-                        <input type="text" id="sentinel-search" placeholder="🔍 Search member..." oninput="renderSentinelTable()" style="background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 12px; border-radius:6px; font-size:0.82em; width:160px;">
-                        <select id="sentinel-sort" onchange="renderSentinelTable()" style="background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 10px; border-radius:6px; font-size:0.82em;">
+                        <input type="text" id="sentinel-search" aria-label="Search member" placeholder="🔍 Search member..." oninput="renderSentinelTable()" style="background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 12px; border-radius:6px; font-size:0.82em; width:160px;">
+                        <select id="sentinel-sort" aria-label="Sort members" onchange="renderSentinelTable()" style="background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 10px; border-radius:6px; font-size:0.82em;">
                             <option value="leastFarmed">Safest (Least Farmed)</option>
                             <option value="mostFarmed">Most Farmed</option>
                             <option value="mostAir">Highest Airtime</option>
@@ -385,7 +387,7 @@
                 <!-- Table Container -->
                 <div class="scrollable" style="max-height:420px; overflow-x:auto; border:1px solid var(--border); border-radius:8px;">
                     <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.82em;" id="sentinel-table">
-                        <thead style="background:rgba(255,255,255,0.03); position:sticky; top:0; z-index:2;">
+                        <thead style="background:var(--card, #0d1117); position:sticky; top:0; z-index:2; border-bottom:1px solid var(--border);">
                             <tr style="border-bottom:1px solid var(--border); color:var(--text-dim); font-size:0.9em; text-transform:uppercase; letter-spacing:0.5px;">
                                 <th style="padding:10px 14px;">Member</th>
                                 <th style="padding:10px 10px;">Grade</th>
@@ -506,7 +508,7 @@
             </p>
             <div style="margin:16px 0;">
                 <label style="display:block; font-size:0.78em; text-transform:uppercase; font-weight:700; color:var(--text-dim); margin-bottom:6px;">FF Scouter API Key</label>
-                <input type="text" id="modal-ff-key-input" placeholder="e.g. abc123def456ghi7" style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:white; font-size:0.95em; font-family:monospace;">
+                <input type="text" id="modal-ff-key-input" aria-label="FF Scouter API Key" placeholder="e.g. abc123def456ghi7" style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:white; font-size:0.95em; font-family:monospace;">
             </div>
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px;">
                 <a href="https://ffscouter.com/premium" target="_blank" style="font-size:0.8em; color:var(--blue); text-decoration:none;">Get FF Scouter Premium &rarr;</a>
@@ -519,7 +521,7 @@
     </div>
 
 <script>
-const myKey = localStorage.getItem("warboard_apikey") || "";
+let myKey = localStorage.getItem("warboard_apikey") || "";
 
 function toggleSidebar() {
     const s = document.getElementById('app-sidebar');
@@ -564,6 +566,19 @@ function fmtDuration(s) {
 let dashData = null;
 
 async function loadAll() {
+    if (!myKey) {
+        try {
+            const cfgRes = await fetch('/api/master-config');
+            const cfg = await cfgRes.json();
+            if (cfg.apiKey) {
+                myKey = cfg.apiKey;
+                localStorage.setItem("warboard_apikey", myKey);
+                if (cfg.ffKey && !localStorage.getItem("warboard_ffkey")) {
+                    localStorage.setItem("warboard_ffkey", cfg.ffKey);
+                }
+            }
+        } catch(e) {}
+    }
     if (!myKey) {
         document.getElementById('analyst-output').innerHTML = '<span style="color:var(--red)">⚠️ No API key set. Open Settings (⚙️) to add your Torn API key.</span>';
         document.getElementById('analyst-output').classList.remove('loading');
@@ -611,20 +626,15 @@ async function loadWarBounties() {
         if (lifeEl) lifeEl.innerText = (data.lifetimePlaced || 0).toLocaleString();
 
         if (warBadge) {
-            warBadge.innerText = data.warActive ? '⚡ Active Ranked War' : '🟢 War Timeframe';
-            warBadge.style.color = data.warActive ? 'var(--red)' : 'var(--green)';
+            warBadge.innerText = data.warTitle || (data.warActive ? '⚡ Active Ranked War' : 'Last War Period');
+            warBadge.style.color = data.warActive ? 'var(--red)' : 'var(--gold)';
         }
 
         // Bounties Placed in War — big number
         const placedBig = document.getElementById('bounty-placed-big');
         if (placedBig) {
-            const count = data.bountiesPlacedInWar || 0;
+            const count = data.bountiesPlacedInWar || data.totalBountiesClaimed || 0;
             placedBig.innerText = count;
-            // Also fall back to totalBountiesClaimed if placed tracking finds nothing yet
-            if (count === 0 && data.totalBountiesClaimed > 0) {
-                placedBig.innerText = data.totalBountiesClaimed;
-                placedBig.title = 'Derived from claim events (placed events not yet in log)';
-            }
         }
 
         // Who you placed on list
@@ -743,7 +753,10 @@ async function runWarFlightAudit(force = false) {
 
         const ffBadge = document.getElementById('sentinel-ff-badge');
         if (ffBadge) {
-            if (data.ffScouter?.premium) {
+            const isSameKey = ffKey && myKey && ffKey.trim() === myKey.trim();
+            if (isSameKey) {
+                ffBadge.innerHTML = `<span style="color:var(--gold); font-weight:700;">⚠️ Scouter Key is set to Torn API Key</span> <span style="color:var(--text-dim);">(Requires separate key from <a href="https://ffscouter.com" target="_blank" style="color:var(--teal);text-decoration:underline;">ffscouter.com</a>)</span>`;
+            } else if (data.ffScouter?.premium) {
                 if (data.kpis.totalAirHours > 0) {
                     ffBadge.innerHTML = `<span style="color:var(--green); font-weight:700;">✨ FF Scouter Premium: Active</span> (${data.kpis.totalAirHours}h in flight matched)`;
                 } else if (!data.war.isOngoing && !data.war.isRecent) {
@@ -954,7 +967,7 @@ function renderFactionHero(d) {
             <div class="faction-divider"></div>
             <div class="hero-stat"><div class="val" style="color:var(--blue)">${travel}</div><div class="lbl">Traveling</div></div>
             <div class="faction-divider"></div>
-            <div class="hero-stat"><div class="val gold">${f.level || '—'}</div><div class="lbl">Level</div></div>
+            <div class="hero-stat"><div class="val gold">${members.length} / ${f.capacity || 40}</div><div class="lbl">Capacity</div></div>
         </div>
     `;
 }
@@ -970,7 +983,7 @@ function renderKPIs(d) {
     document.getElementById('kpi-members').innerText = members.length;
     document.getElementById('kpi-online-sub').innerHTML = `<span style="color:var(--green)">${online} online</span>, <span style="color:var(--gold)">${idle} idle</span>`;
     document.getElementById('kpi-respect').innerText = fmtNum(f.respect || 0);
-    document.getElementById('kpi-respect-sub').innerText = `Lvl ${f.level || '—'} faction`;
+    document.getElementById('kpi-respect-sub').innerText = `${f.capacity || 40} member capacity`;
 
     if (chain && chain.current > 0) {
         document.getElementById('kpi-chain').innerText = fmtNum(chain.current);
@@ -990,7 +1003,8 @@ function renderKPIs(d) {
         document.getElementById('kpi-war-sub').innerText = 'No active war';
     }
 
-    document.getElementById('kpi-level').innerText = f.level || '—';
+    const bestChainEl = document.getElementById('kpi-best-chain') || document.getElementById('kpi-level');
+    if (bestChainEl) bestChainEl.innerText = fmtNum(f.best_chain || 0);
     document.getElementById('kpi-age').innerText = f.age ? `${Math.floor(f.age/365)}y ${Math.floor((f.age%365)/30)}m old` : '—';
 }
 
@@ -1118,7 +1132,10 @@ function renderRespect(d) {
         .slice(0, 8);
 
     if (!sorted.length || sorted[0].score === 0) {
-        el.innerHTML = `<div class="empty-state">War respect data not available outside of active wars.</div>`;
+        el.innerHTML = `<div class="empty-state" style="padding:18px;">
+            Faction is currently at peace.<br>
+            <span style="font-size:0.85em;color:var(--text-dim);margin-top:4px;display:inline-block;">See <a href="/payout.html" style="color:var(--blue);font-weight:700;">Payouts</a> or the <a href="#war-sentinel-card" style="color:var(--teal);font-weight:700;">War Sentinel</a> for recent war respect contributions.</span>
+        </div>`;
         return;
     }
 
@@ -1169,7 +1186,7 @@ function renderFactionStats(d) {
         ['Faction Name', f.name || '—'],
         ['Tag', f.tag ? `[${f.tag}]` : '—'],
         ['ID', f.ID || '—'],
-        ['Level', f.level || '—'],
+        ['Capacity', `${members.length} / ${f.capacity || 40}`],
         ['Respect', fmtNum(f.respect || 0)],
         ['Best Chain', fmtNum(f.best_chain || 0)],
         ['Age', f.age ? `${Math.floor(f.age/365)} years` : '—'],
@@ -1221,7 +1238,7 @@ function renderRecentWars(wars) {
         const date = new Date(w.start * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         return `<div class="stat-row" style="padding:10px 0;">
             <div><div style="font-weight:600;font-size:0.88em;">${w.enemy || 'Unknown'}</div><div style="font-size:0.75em;color:var(--text-dim);">${date}</div></div>
-            <a href="/payout.html" style="font-size:0.78em;color:var(--blue);text-decoration:none;font-weight:600;">View →</a>
+            <a href="/payout.html${w.id ? `?warId=${w.id}` : ''}" style="font-size:0.78em;color:var(--blue);text-decoration:none;font-weight:600;">View →</a>
         </div>`;
     }).join('');
 }
@@ -1295,24 +1312,25 @@ The Payout Calculator scrapes your full attack log and calculates per-member sta
         }
 
         else if (mode === 'members') {
-            const total = members.length;
-            const online = members.filter(m => m.last_action?.status === 'Online').length;
-            const idle = members.filter(m => m.last_action?.status === 'Idle').length;
-            const hosp = members.filter(m => m.status?.state === 'Hospital').length;
-            const travel = members.filter(m => m.status?.state === 'Traveling').length;
-            const ok = members.filter(m => m.status?.state === 'Okay').length;
+            const memberEntries = Object.entries(d.members || {});
+            const total = memberEntries.length;
+            const online = memberEntries.filter(([,m]) => m.last_action?.status === 'Online').length;
+            const idle = memberEntries.filter(([,m]) => m.last_action?.status === 'Idle').length;
+            const hosp = memberEntries.filter(([,m]) => m.status?.state === 'Hospital').length;
+            const travel = memberEntries.filter(([,m]) => m.status?.state === 'Traveling').length;
+            const ok = memberEntries.filter(([,m]) => m.status?.state === 'Okay').length;
             const now = Math.floor(Date.now()/1000);
-            const inactive = members.filter(m => {
+            const inactive = memberEntries.filter(([,m]) => {
                 const lastSeen = m.last_action?.timestamp || 0;
                 return (now - lastSeen) > 7 * 86400; // 7 days
             });
 
             el.innerHTML = `<b>👥 MEMBER HEALTH REPORT</b><br><br>
-<b>Total Members:</b> ${total} / 100<br>
+<b>Total Members:</b> ${total} / ${f.capacity || 40}<br>
 <b>Online Right Now:</b> ${online} (${(online/total*100).toFixed(0)}%)<br>
 <b>Idle:</b> ${idle} &nbsp;|&nbsp; <b>In Hospital:</b> ${hosp} &nbsp;|&nbsp; <b>Traveling:</b> ${travel} &nbsp;|&nbsp; <b>OK:</b> ${ok}<br><br>
 <b>⚠️ Inactive Members (&gt;7 days):</b> ${inactive.length}<br>
-${inactive.slice(0,5).map(m => `&nbsp;&nbsp;• <a href="https://www.torn.com/profiles.php?XID=${m.player_id || ''}" target="_blank" style="color:var(--gold)">${m.name}</a> — last seen ${timeSince(m.last_action?.timestamp)}`).join('<br>')}<br>
+${inactive.slice(0,5).map(([id, m]) => `&nbsp;&nbsp;• <a href="https://www.torn.com/profiles.php?XID=${id}" target="_blank" style="color:var(--gold);font-weight:700;text-decoration:none;">${m.name}</a> — last seen ${timeSince(m.last_action?.timestamp)}`).join('<br>')}<br>
 ${inactive.length > 5 ? `<span style="color:var(--text-dim)">&nbsp;&nbsp;...and ${inactive.length - 5} more</span><br>` : ''}
 <br><b>💡 Recommendation:</b> ${inactive.length > 5 ? `Consider recruiting actively. ${inactive.length} members haven't logged in within 7 days.` : 'Member activity looks healthy. Keep up engagement!'}`;
         }
@@ -1325,11 +1343,11 @@ ${inactive.length > 5 ? `<span style="color:var(--text-dim)">&nbsp;&nbsp;...and 
             const chainDanger = chainActive && chain.timeout <= 90;
 
             el.innerHTML = `<b>🎯 TACTICAL RECOMMENDATIONS</b><br><br>
-${chainDanger ? `<b style="color:var(--red)">🚨 URGENT: Chain is about to drop (${chain.timeout}s left)! Someone needs to hit NOW.</b><br><br>` : ''}
+${chainDanger ? `<b style="color:var(--red)">🚨 URGENT: Chain is about to drop (${fmtDuration(chain.timeout)} left)! Someone needs to hit NOW.</b><br><br>` : ''}
 ${chainActive ? `✅ <b>Keep the chain alive</b> — at ${fmtNum(chain.current)} hits<br>` : '🔴 <b>Start a chain</b> — you currently have no active chain. Chaining earns bonus respect.<br>'}
 ${war ? `⚔️ <b>War is active</b> — prioritize war hits over all else. Every point counts.<br>` : ''}
 ${hosp > 0 ? `💊 <b>${hosp} members in hospital</b> — if it's your own members, consider medding them.<br>` : ''}
-${total < 90 ? `👥 <b>Recruiting opportunity</b> — you have ${100 - total} open slots. Fill them for war strength.<br>` : ''}
+${(f.capacity && total < f.capacity) ? `👥 <b>Recruiting opportunity</b> — you have ${f.capacity - total} open slot${(f.capacity - total) > 1 ? 's' : ''}. Fill them for war strength.<br>` : ''}
 ${online < 10 ? `📢 <b>Low online count (${online})</b> — consider pinging members in Discord to be online during wars.<br>` : ''}
 <br>→ Check <a href="/payout.html" style="color:var(--blue)">Payouts</a> to reward your members after wars.<br>
 → Check <a href="/discord.html" style="color:var(--blue)">Discord Alerts</a> for automated notifications.`;
