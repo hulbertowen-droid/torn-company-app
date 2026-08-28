@@ -3332,11 +3332,17 @@ app.get('/api/warboard', async (req, res) => {
         let enemyId = (req.headers['x-enemy-id'] || req.query.enemyFaction) || null;
         
         let activeKey = userKey;
+        let targetMyFacId = dynamicFactionId || discordConfig.factionId || "52355";
         let [myData, enemyDataResult] = await Promise.all([
-            cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${userKey}`, `my_faction_${userKey}`, 2500),
+            cachedTornFetch(`https://api.torn.com/faction/${targetMyFacId}?selections=basic,rankedwars,attacks&key=${userKey}`, `my_faction_${targetMyFacId}_${userKey}`, 2500),
             enemyId ? cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()||userKey}`, `enemy_faction_${enemyId}`, 2500) : Promise.resolve({ members: {} })
         ]);
         
+        // If targeted fetch hit error 6, fallback to user's default /faction/
+        if (myData && myData.error && myData.error.code === 6) {
+            myData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${userKey}`, `my_faction_${userKey}`, 2500);
+        }
+
         // Resilience: If myData hit rate limit or transient error, serve last known good payload
         if ((!myData || myData.error || !myData.members || Object.keys(myData.members).length === 0) && lastGoodWarboardPayload) {
             return res.json(lastGoodWarboardPayload);
