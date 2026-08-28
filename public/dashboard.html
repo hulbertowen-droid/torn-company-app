@@ -352,9 +352,9 @@
                         <div style="font-size:0.72em; color:var(--text-dim);">0 times farmed</div>
                     </div>
                     <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
-                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">⚠️ Total Times Farmed</div>
+                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">🚨 Enemy Hits Taken</div>
                         <div style="font-size:1.6em; font-weight:900; color:var(--red); margin-top:2px;" id="kpi-audit-farmed">—</div>
-                        <div style="font-size:0.72em; color:var(--text-dim);">Hospitalizations taken</div>
+                        <div style="font-size:0.72em; color:var(--text-dim);">Total attacks received</div>
                     </div>
                     <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
                         <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">💸 Respect Leaked</div>
@@ -369,13 +369,13 @@
                         <button class="filter-chip active" onclick="setSentinelFilter('all', this)">All Members (<span id="cnt-audit-all">0</span>)</button>
                         <button class="filter-chip" onclick="setSentinelFilter('ghost', this)">👻 Ghost Aviators (<span id="cnt-audit-ghost">0</span>)</button>
                         <button class="filter-chip" onclick="setSentinelFilter('flyers', this)">✈️ Active Flyers (<span id="cnt-audit-flyers">0</span>)</button>
-                        <button class="filter-chip" onclick="setSentinelFilter('farmed', this)">🚨 Most Farmed (<span id="cnt-audit-farmed">0</span>)</button>
+                        <button class="filter-chip" onclick="setSentinelFilter('farmed', this)">🚨 Most Hit (<span id="cnt-audit-farmed">0</span>)</button>
                     </div>
                     <div style="display:flex; gap:8px; align-items:center;">
                         <input type="text" id="sentinel-search" aria-label="Search member" placeholder="🔍 Search member..." oninput="renderSentinelTable()" style="background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 12px; border-radius:6px; font-size:0.82em; width:160px;">
                         <select id="sentinel-sort" aria-label="Sort members" onchange="renderSentinelTable()" style="background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 10px; border-radius:6px; font-size:0.82em;">
-                            <option value="leastFarmed">Safest (Least Farmed)</option>
-                            <option value="mostFarmed">Most Farmed</option>
+                            <option value="leastFarmed">Safest (Least Times Hit)</option>
+                            <option value="mostFarmed">Most Times Hit</option>
                             <option value="mostAir">Highest Airtime</option>
                             <option value="hitsMade">Most War Hits</option>
                             <option value="netScore">Highest Net Respect</option>
@@ -393,7 +393,7 @@
                                 <th style="padding:10px 10px;">Grade</th>
                                 <th style="padding:10px 10px;">War Airtime</th>
                                 <th style="padding:10px 10px;">Trips</th>
-                                <th style="padding:10px 10px;">Times Farmed</th>
+                                <th style="padding:10px 10px;">Times Hit</th>
                                 <th style="padding:10px 10px;">Respect Leaked</th>
                                 <th style="padding:10px 10px;">Hits Made</th>
                                 <th style="padding:10px 14px;">Net Impact</th>
@@ -831,9 +831,10 @@ function renderSentinelTable() {
     }
 
     tbody.innerHTML = list.map(m => {
-        const farmedBadge = m.timesFarmed === 0
+        const timesHit = m.timesHit || m.timesFarmed || 0;
+        const farmedBadge = timesHit === 0
             ? `<span style="color:var(--green); font-weight:700;">🛡️ 0 (Untouchable)</span>`
-            : `<span style="color:var(--red); font-weight:700; background:rgba(255,71,87,0.12); padding:2px 6px; border-radius:4px;">⚠️ ${m.timesFarmed}x farmed</span>`;
+            : `<span style="color:var(--red); font-weight:700; background:rgba(255,71,87,0.12); padding:2px 6px; border-radius:4px;">⚠️ ${timesHit}x hit${m.timesDefended > 0 ? ` <span style="font-size:0.85em; opacity:0.85;">(${m.timesDefended} def)</span>` : ''}</span>`;
 
         const netStr = m.netScore > 0 ? `+${m.netScore}` : `${m.netScore}`;
         const netColor = m.netScore > 0 ? 'var(--green)' : (m.netScore < 0 ? 'var(--red)' : 'var(--text-dim)');
