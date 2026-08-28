@@ -129,6 +129,18 @@
             </div>
         </div>
 
+        <!-- Emergency Notification Killswitch Banner -->
+        <div id="killswitch-banner" style="background:rgba(46,213,115,0.06); border:1px solid rgba(46,213,115,0.25); border-radius:12px; padding:16px 20px; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; transition:0.3s;">
+            <div style="display:flex; align-items:center; gap:14px;">
+                <div id="killswitch-dot" style="width:12px; height:12px; border-radius:50%; background:var(--green); box-shadow:0 0 10px var(--green); flex-shrink:0;"></div>
+                <div>
+                    <div id="killswitch-title" style="font-weight:800; font-size:0.95em; color:var(--green); letter-spacing:0.3px;">AUTOMATED DISCORD NOTIFICATIONS: ACTIVE &amp; LIVE</div>
+                    <div id="killswitch-desc" style="font-size:0.8em; color:var(--text-dim); margin-top:2px;">All snipers, chain alerts, and inactivity warnings are active. Discord commands <code style="background:var(--card);padding:2px 6px;border-radius:4px;color:var(--text-main);">/kill</code> or <code style="background:var(--card);padding:2px 6px;border-radius:4px;color:var(--text-main);">!kill</code> will immediately halt all alerts.</div>
+                </div>
+            </div>
+            <button id="btn-toggle-killswitch" onclick="toggleKillswitch()" style="background:#ff4757; color:#fff; border:none; padding:9px 20px; border-radius:8px; font-weight:800; font-size:0.88em; cursor:pointer; transition:0.2s; white-space:nowrap; display:flex; align-items:center; gap:6px;">🛑 Kill All Alerts</button>
+        </div>
+
         <div class="setup-guide">
             <div class="setup-guide-header" id="guide-toggle" onclick="toggleGuide()">
                 <span>📖 How to create &amp; invite a Faction Discord Bot</span>
@@ -465,6 +477,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const el = document.getElementById(id);
             if (el) { el.checked = val; const item = el.closest('.trigger-item'); if (item) item.classList.toggle('enabled', val); }
         }
+        updateKillswitchUI(cfg.notificationsKilled === true);
         setConnectionStatus(!!(cfg.globalBotToken && cfg.globalChannelId));
         updateActiveCount();
         updateInviteLink();
@@ -486,6 +499,53 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     } catch (e) { setConnectionStatus(false); }
 });
+
+let isKillswitchActive = false;
+
+function updateKillswitchUI(killed) {
+    isKillswitchActive = !!killed;
+    const banner = document.getElementById('killswitch-banner');
+    const dot = document.getElementById('killswitch-dot');
+    const title = document.getElementById('killswitch-title');
+    const desc = document.getElementById('killswitch-desc');
+    const btn = document.getElementById('btn-toggle-killswitch');
+    if (!banner) return;
+
+    if (isKillswitchActive) {
+        banner.style.background = 'rgba(255,71,87,0.12)';
+        banner.style.borderColor = 'rgba(255,71,87,0.4)';
+        if (dot) { dot.style.background = 'var(--red)'; dot.style.boxShadow = '0 0 12px var(--red)'; }
+        if (title) { title.style.color = 'var(--red)'; title.innerText = '🛑 EMERGENCY KILLSWITCH ACTIVE: ALL NOTIFICATIONS MUTED'; }
+        if (desc) { desc.innerText = 'All snipers, chain alerts, and inactivity warnings are currently blocked. Click below or type /live or !live in Discord to resume.'; }
+        if (btn) { btn.style.background = '#2ed573'; btn.innerHTML = '🟢 Resume Live Notifications'; }
+    } else {
+        banner.style.background = 'rgba(46,213,115,0.06)';
+        banner.style.borderColor = 'rgba(46,213,115,0.25)';
+        if (dot) { dot.style.background = 'var(--green)'; dot.style.boxShadow = '0 0 10px var(--green)'; }
+        if (title) { title.style.color = 'var(--green)'; title.innerText = 'AUTOMATED DISCORD NOTIFICATIONS: ACTIVE & LIVE'; }
+        if (desc) { desc.innerText = 'All snipers, chain alerts, and inactivity warnings are broadcasting. Discord commands /kill and !kill will immediately halt all alerts.'; }
+        if (btn) { btn.style.background = '#ff4757'; btn.innerHTML = '🛑 Kill All Alerts'; }
+    }
+}
+
+async function toggleKillswitch() {
+    const btn = document.getElementById('btn-toggle-killswitch');
+    if (btn) btn.disabled = true;
+    const endpoint = isKillswitchActive ? '/api/discord/live' : '/api/discord/kill';
+    try {
+        const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ actor: 'Web Dashboard' })
+        });
+        const data = await res.json();
+        updateKillswitchUI(data.killed);
+    } catch(e) {
+        alert("Failed to toggle killswitch: " + e.message);
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
 
 function updateInviteLink() {
     const token = document.getElementById('global-bottoken')?.value.trim() || '';

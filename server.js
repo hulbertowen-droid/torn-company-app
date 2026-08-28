@@ -57,7 +57,10 @@ async function loadConfigFromMongo() {
     try {
         const saved = await AppConfig.findById('master').lean();
         if (saved) {
-            if (saved.discordConfig) discordConfig = { ...discordConfig, ...saved.discordConfig };
+            if (saved.discordConfig) {
+                discordConfig = { ...discordConfig, ...saved.discordConfig };
+                global.isNotificationsKilled = !!discordConfig.notificationsKilled;
+            }
             if (saved.companyConfig) companyConfig = { ...companyConfig, ...saved.companyConfig };
             if (saved.ocConfig) ocConfig = { ...ocConfig, ...saved.ocConfig };
             if (saved.marketConfig) marketConfig = { ...marketConfig, ...saved.marketConfig };
@@ -309,7 +312,8 @@ let discordConfig = {
     inactivityRoleId: "",
     inactivityDays: 1,
     apiKey: "", 
-    factionId: "" 
+    factionId: "",
+    notificationsKilled: false
 };
 let marketConfig = { globalChannelId: "", autoDefense: false, sniperTargets: [] };
 let marketMemory = { defense: {}, sniper: {} };
@@ -320,6 +324,7 @@ let companyConfig = { globalChannelId: "", threshold: 0, alertedItems: {}, apiKe
 
 try { if (fs.existsSync('subscriptions.json')) subscriptions = JSON.parse(fs.readFileSync('subscriptions.json')); } catch (e) {}
 try { if (fs.existsSync('discord_config.json')) discordConfig = { ...discordConfig, ...JSON.parse(fs.readFileSync('discord_config.json')) }; } catch(e) {}
+global.isNotificationsKilled = !!discordConfig.notificationsKilled;
 try { if (fs.existsSync('market_config.json')) marketConfig = { ...marketConfig, ...JSON.parse(fs.readFileSync('market_config.json')) }; } catch(e) {}
 try { if (fs.existsSync('oc_config.json')) ocConfig = { ...ocConfig, ...JSON.parse(fs.readFileSync('oc_config.json')) }; } catch(e) {}
 
@@ -369,6 +374,11 @@ let lastDiscordSendTime = 0;
 
 async function sendChannelMessage(token, channelId, embed, content = "", priority = false) {
     if (!token && !channelId) return { success: false, error: "Missing Discord Bot Token or Channel ID / Webhook URL." };
+
+    // Emergency killswitch: instantly drop all automated notifications unless marked priority
+    if (global.isNotificationsKilled && !priority) {
+        return { success: false, error: "Notifications killed by emergency switch." };
+    }
 
     return new Promise((resolve) => {
         const item = { token, channelId, embed, content, resolve, addedAt: Date.now() };
@@ -1050,12 +1060,12 @@ setInterval(async () => {
 // Background Task 1: Wall Watcher & Scraper
 setInterval(async () => {
     if (global.isTurboMining) return;
-    let watchFactionId = adminFactionId || discordConfig.factionId;
-    let watchKey = discordConfig.apiKey || TORN_API_KEY;
+    let watchFactionId = discordConfig.factionId || dynamicFactionId || "52355";
+    let watchKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
     if (!watchKey || !watchFactionId) return;
 
     try {
-        const liveRes = await fetch(`https://api.torn.com/faction/?selections=attacks,basic,rankedwars&key=${watchKey}`);
+        const liveRes = await fetch(`https://api.torn.com/faction/${watchFactionId}?selections=attacks,basic,rankedwars&key=${watchKey}`);
         const liveData = await liveRes.json();
         
         if (liveData.rankedwars) {
@@ -1428,10 +1438,69 @@ function saveWarFlightArchive() {
 }
 loadWarFlightArchive();
 
-async function checkFactionMembersInactivity(members) {
+function handleKillCommand(actorName = "Admin") {
+    global.isNotificationsKilled = true;
+    discordConfig.notificationsKilled = true;
+    discordSendQueue = []; // Instantly drop all queued notifications
+    saveDiscordConfig();
+    console.log(`[Killswitch] 🛑 Emergency Killswitch ACTIVATED by ${actorName}`);
+    
+    return {
+        title: "🛑 EMERGENCY NOTIFICATION KILLSWITCH ACTIVATED",
+        description: `**All Discord notifications, alerts, and pings have been INSTANTLY SUSPENDED.**\n\n` +
+            `• Hospital & Landed snipers: **MUTED**\n` +
+            `• Target online alerts: **MUTED**\n` +
+            `• Chain drop warnings: **MUTED**\n` +
+            `• Player inactivity alerts: **MUTED**\n` +
+            `• Stock & bazaar alerts: **MUTED**\n\n` +
+            `Triggered by: **${actorName}**\n\n` +
+            `*To resume live notifications at any time, type \`/live\` or \`!live\`.*`,
+        color: 16729930, // Bright Red #ff4757
+        footer: { text: "Owen's Faction Tools • Emergency Killswitch" },
+        timestamp: new Date().toISOString()
+    };
+}
+
+function handleLiveCommand(actorName = "Admin") {
+    global.isNotificationsKilled = false;
+    discordConfig.notificationsKilled = false;
+    saveDiscordConfig();
+    console.log(`[Killswitch] 🟢 Notifications RESTORED to LIVE by ${actorName}`);
+    
+    return {
+        title: "🟢 NOTIFICATIONS RESTORED TO LIVE",
+        description: `**Automated faction notifications and alert monitors are now ACTIVE.**\n\n` +
+            `• Hospital & Landed snipers: **LIVE**\n` +
+            `• Target online alerts: **LIVE**\n` +
+            `• Chain drop warnings: **LIVE**\n` +
+            `• Player inactivity alerts: **LIVE**\n` +
+            `• Stock & bazaar alerts: **LIVE**\n\n` +
+            `Restored by: **${actorName}**\n\n` +
+            `*Emergency killswitch is standing by (\`/kill\` or \`!kill\`).*`,
+        color: 3069299, // Bright Green #2ed573
+        footer: { text: "Owen's Faction Tools • Emergency Killswitch" },
+        timestamp: new Date().toISOString()
+    };
+}
+
+async function checkFactionMembersInactivity(members, expectedFactionId, factionName) {
     if (!members || typeof members !== 'object') return;
+    if (global.isNotificationsKilled) return;
     if (discordConfig.inactivityTracker === false) return;
     if (!discordConfig.globalBotToken || !discordConfig.globalChannelId) return;
+
+    const myFacId = String(expectedFactionId || discordConfig.factionId || dynamicFactionId || "52355");
+    const myFacName = factionName || "Spider-Verse";
+
+    // 1. Purge any rogue/stale alerts for members not belonging to this faction
+    let pruned = false;
+    for (const alertId of Object.keys(inactivityAlertsMemory.alerts || {})) {
+        if (!members[alertId]) {
+            delete inactivityAlertsMemory.alerts[alertId];
+            pruned = true;
+        }
+    }
+    if (pruned) saveInactivityAlerts(inactivityAlertsMemory);
 
     const thresholdDays = Math.max(1, Number(discordConfig.inactivityDays) || 1);
     const thresholdSec = thresholdDays * 86400;
@@ -1497,8 +1566,8 @@ async function checkFactionMembersInactivity(members) {
         const memberStatus = m.status?.description || m.status?.state || m.last_action?.status || 'Offline';
 
         const embed = {
-            title: "💤 PLAYER INACTIVITY ALERT",
-            description: `**[${m.name}](https://www.torn.com/profiles.php?XID=${id})** [${id}] has been inactive for **${timeDisplay}**!`,
+            title: `💤 ${myFacName.toUpperCase()} INACTIVITY ALERT`,
+            description: `**[${m.name}](https://www.torn.com/profiles.php?XID=${id})** [${id}] in **${myFacName}** has been inactive for **${timeDisplay}**!`,
             color: 16744272, // Warm Gold/Orange #ffa502
             fields: [
                 { name: "⏱️ Inactive Duration", value: `**${timeDisplay}**`, inline: true },
@@ -1510,11 +1579,11 @@ async function checkFactionMembersInactivity(members) {
                 { label: "👤 View Profile", url: `https://www.torn.com/profiles.php?XID=${id}` },
                 { label: "💬 Send Message", url: `https://www.torn.com/messages.php#/p=compose&XID=${id}` }
             ],
-            footer: { text: "Owen's Faction Tools • Inactivity Watcher" },
+            footer: { text: `${myFacName} [${myFacId}] • Inactivity Watcher` },
             timestamp: new Date().toISOString()
         };
 
-        console.log(`[Inactivity Tracker] 💤 Sending alert for ${m.name} [${id}] (${timeDisplay} inactive) with mention: ${roleMention || 'none'}`);
+        console.log(`[Inactivity Tracker] 💤 Sending alert for ${m.name} [${id}] in ${myFacName} (${timeDisplay} inactive) with mention: ${roleMention || 'none'}`);
         sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, embed, roleMention);
 
         inactivityAlertsMemory.alerts[id] = {
@@ -1530,18 +1599,20 @@ async function checkFactionMembersInactivity(members) {
 // Background Task 3: Sniper & Target Status Watcher
 setInterval(async () => {
     if (global.isTurboMining) return;
+    if (global.isNotificationsKilled) return;
     let watchKey = getNextApiKey();
-    let watchFactionId = adminFactionId || discordConfig.factionId;
+    let watchFactionId = discordConfig.factionId || dynamicFactionId || "52355";
     if (!watchKey || !watchFactionId) return;
 
     try {
         const facRes = await fetch(`https://api.torn.com/faction/${watchFactionId}?selections=basic,chain,rankedwars&key=${watchKey}`);
         const facData = await facRes.json();
         if (facData.error) return;
+        if (facData.ID && String(facData.ID) !== String(watchFactionId)) return;
 
         // Check Friendly Member Inactivity Tracker
         if (facData.members && discordConfig.inactivityTracker !== false && discordConfig.globalChannelId) {
-            checkFactionMembersInactivity(facData.members);
+            checkFactionMembersInactivity(facData.members, watchFactionId, facData.name);
         }
 
         // Continuous Real-Time War Flight Archiver
@@ -1954,15 +2025,35 @@ app.post('/api/test-discord-alert', async (req, res) => {
     res.json({ success: true, warning: result.warning || null });
 });
 
+app.post('/api/discord/kill', (req, res) => {
+    const actor = req.body?.actor || 'Web Dashboard';
+    const embed = handleKillCommand(actor);
+    if (discordConfig.globalBotToken && discordConfig.globalChannelId) {
+        sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, embed, "", true);
+    }
+    res.json({ success: true, killed: true });
+});
+
+app.post('/api/discord/live', (req, res) => {
+    const actor = req.body?.actor || 'Web Dashboard';
+    const embed = handleLiveCommand(actor);
+    if (discordConfig.globalBotToken && discordConfig.globalChannelId) {
+        sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, embed, "", true);
+    }
+    res.json({ success: true, killed: false });
+});
+
+app.get('/api/discord/killswitch-status', (req, res) => {
+    res.json({ killed: !!global.isNotificationsKilled });
+});
+
 app.get('/api/inactivity-tracker', async (req, res) => {
     const userKey = (req.headers['x-api-key'] || req.query.apiKey) || discordConfig.apiKey || TORN_API_KEY;
     if (!userKey) return res.status(400).json({ error: "API Key required" });
 
     try {
-        let watchFactionId = adminFactionId || discordConfig.factionId;
-        const url = watchFactionId
-            ? `https://api.torn.com/faction/${watchFactionId}?selections=basic&key=${userKey}`
-            : `https://api.torn.com/faction/?selections=basic&key=${userKey}`;
+        let watchFactionId = discordConfig.factionId || dynamicFactionId || "52355";
+        const url = `https://api.torn.com/faction/${watchFactionId}?selections=basic&key=${userKey}`;
         const facRes = await fetch(url);
         const facData = await facRes.json();
         if (facData.error) return res.status(400).json({ error: facData.error.error });
@@ -4663,7 +4754,7 @@ async function buildCountryStatusEmbed(country, apiKey) {
     const emoji = COUNTRY_EMOJIS[country] || "✈️";
     const now = Math.floor(Date.now() / 1000);
 
-    let factionId = adminFactionId || discordConfig.factionId;
+    let factionId = discordConfig.factionId || dynamicFactionId || "52355";
     if (!factionId || !apiKey) {
         return {
             title: `${emoji} ${country} — Travel Intel`,
@@ -5870,10 +5961,8 @@ async function buildWarBountiesEmbed(apiKey) {
 async function buildInactiveMembersEmbed(apiKey) {
     if (!apiKey) return { title: "💤 Faction Inactivity Tracker", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
     try {
-        let watchFactionId = adminFactionId || discordConfig.factionId;
-        const url = watchFactionId
-            ? `https://api.torn.com/faction/${watchFactionId}?selections=basic&key=${apiKey}`
-            : `https://api.torn.com/faction/?selections=basic&key=${apiKey}`;
+        let watchFactionId = discordConfig.factionId || dynamicFactionId || "52355";
+        const url = `https://api.torn.com/faction/${watchFactionId}?selections=basic&key=${apiKey}`;
         const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
         const data = await res.json();
         if (data.error) throw new Error(data.error.error || "Torn API error");
@@ -6389,6 +6478,10 @@ async function registerSlashCommands(token, guildId = null) {
 
         // 11. War Flight & Farm Sentinel
         new SlashCommandBuilder().setName('warflights').setDescription('Audit past or current war: see who flew, stayed safe, or got farmed').toJSON(),
+
+        // 12. Emergency Notification Killswitch & Live Commands
+        new SlashCommandBuilder().setName('kill').setDescription('🛑 Emergency Killswitch: instantly stop all Discord notifications and alerts').toJSON(),
+        new SlashCommandBuilder().setName('live').setDescription('🟢 Resume live Discord notifications and alert monitors').toJSON(),
     ];
 
     try {
@@ -6427,7 +6520,7 @@ async function startSlashCommandBot(token) {
         }
 
         slashCommandBot = new Client({
-            intents: [GatewayIntentBits.Guilds]
+            intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
         });
 
         slashCommandBot.once(Events.ClientReady, async (c) => {
@@ -6449,6 +6542,24 @@ async function startSlashCommandBot(token) {
                 console.log(`[Slash Bot] Slash commands auto-registered successfully!`);
             } catch(e) {
                 console.warn("[Slash Bot] Startup registration error:", e.message);
+            }
+        });
+
+        slashCommandBot.on(Events.MessageCreate, async (msg) => {
+            if (msg.author?.bot) return;
+            const text = (msg.content || '').trim().toLowerCase();
+            const isKill = text === '!kill' || text === '/kill' || text === '!mute' || (text.startsWith('kill') && msg.mentions?.has?.(slashCommandBot.user));
+            const isLive = text === '!live' || text === '/live' || text === '!resume' || (text.startsWith('live') && msg.mentions?.has?.(slashCommandBot.user));
+
+            if (isKill) {
+                const actor = msg.author?.username || "Admin";
+                const embed = handleKillCommand(actor);
+                return msg.reply({ embeds: [sanitizeEmbed(embed)] }).catch(() => {});
+            }
+            if (isLive) {
+                const actor = msg.author?.username || "Admin";
+                const embed = handleLiveCommand(actor);
+                return msg.reply({ embeds: [sanitizeEmbed(embed)] }).catch(() => {});
             }
         });
 
@@ -6555,6 +6666,12 @@ async function startSlashCommandBot(token) {
                 } else if (cmd === 'warflights' || cmd === 'warflight' || cmd === 'flights') {
                     const ffKey = getGlobalFFKey() || discordConfig.ffKey;
                     embed = await buildWarFlightsEmbed(apiKey, ffKey);
+                } else if (cmd === 'kill' || cmd === 'mute' || cmd === 'stop') {
+                    const actor = interaction.user?.username || "Admin";
+                    embed = handleKillCommand(actor);
+                } else if (cmd === 'live' || cmd === 'resume' || cmd === 'start') {
+                    const actor = interaction.user?.username || "Admin";
+                    embed = handleLiveCommand(actor);
                 } else {
                     // Travel lookup fallback (e.g. /travel, /south-africa, /mexico, /sa, /uk, etc.)
                     let country = slashNameToCountry(cmd);

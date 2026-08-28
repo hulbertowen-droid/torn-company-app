@@ -1147,6 +1147,8 @@ let chartFilter = 'all';
 let chartViewMode = 'stacked';
 let lastFriendlyPlayers = [];
 let hiddenDatasetLabels = new Set();
+let isActivelySyncingHits = false;
+let hasShownSyncCompleteNotice = false;
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 function openSettings() {
@@ -1497,21 +1499,27 @@ async function fetchWarboard() {
 
         if (data.syncStatus && syncBanner) {
             if (data.syncStatus.isSyncing) {
+                isActivelySyncingHits = true;
+                hasShownSyncCompleteNotice = false;
                 syncBanner.style.display = "flex";
                 if (syncText) syncText.innerText = `🔄 Syncing Attack History (Page ${data.syncStatus.page || 1} • ${data.syncStatus.totalHitsLoaded || 0} hits loaded)...`;
                 if (syncBar) syncBar.style.width = `${data.syncStatus.percent || 10}%`;
                 if (syncPct) syncPct.innerText = `${data.syncStatus.percent || 10}%`;
                 if (syncDot) { syncDot.style.background = "var(--blue)"; syncDot.style.boxShadow = "0 0 8px var(--blue)"; }
-            } else if (data.syncStatus.percent === 100 && data.syncStatus.totalHitsLoaded > 0) {
+            } else if (isActivelySyncingHits && !hasShownSyncCompleteNotice) {
+                // Only flash completion banner once right after an active sync completes!
+                isActivelySyncingHits = false;
+                hasShownSyncCompleteNotice = true;
                 syncBanner.style.display = "flex";
-                if (syncText) syncText.innerText = `✅ War Attacks & Graph Fully Loaded (${data.syncStatus.totalHitsLoaded} total attacks analyzed)`;
+                if (syncText) syncText.innerText = `✅ War Attacks & Graph Fully Loaded (${data.syncStatus.totalHitsLoaded || 0} total attacks analyzed)`;
                 if (syncBar) syncBar.style.width = "100%";
                 if (syncPct) syncPct.innerText = "100%";
                 if (syncDot) { syncDot.style.background = "var(--green)"; syncDot.style.boxShadow = "0 0 8px var(--green)"; }
                 setTimeout(() => { 
-                    if (syncBanner && (!data.syncStatus || !data.syncStatus.isSyncing)) syncBanner.style.display = "none"; 
-                }, 5000);
-            } else {
+                    if (syncBanner && !isActivelySyncingHits) syncBanner.style.display = "none"; 
+                }, 4000);
+            } else if (!isActivelySyncingHits) {
+                // Otherwise remain completely hidden so it never flashes every 5 seconds
                 syncBanner.style.display = "none";
             }
         }
