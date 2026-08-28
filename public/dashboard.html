@@ -715,7 +715,8 @@ async function initSentinel() {
         if (data.wars && data.wars.length > 0) {
             select.innerHTML = data.wars.map(w => {
                 const dateStr = w.start ? new Date(w.start * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-                const tag = w.isOngoing ? '💥 ACTIVE' : (w.winner === Number(localStorage.getItem('warboard_factionid') || 0) ? '🏆 WON' : '⚔️ COMPLETED');
+                const isWon = w.winner === 52355 || w.winner === Number(localStorage.getItem('warboard_factionid') || 0) || (w.ourScore > w.theirScore);
+                const tag = w.isOngoing ? '💥 ACTIVE' : (isWon ? '🏆 WON' : '💀 LOST');
                 return `<option value="${w.id}">[${tag}] vs ${w.enemy} (${dateStr})</option>`;
             }).join('');
             sentinelInitialized = true;
@@ -747,7 +748,7 @@ async function runWarFlightAudit(force = false) {
         const data = await res.json();
 
         if (!data.success) {
-            if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--red);">⚠️ ${data.error || 'Audit failed'}</td></tr>`;
+            if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--red);">⚠️ Audit failed: ${data.error || 'Unknown error'}</td></tr>`;
             return;
         }
 
@@ -776,23 +777,33 @@ async function runWarFlightAudit(force = false) {
             }
         }
 
-        // Render KPIs
-        document.getElementById('kpi-audit-airtime').textContent = `${data.kpis.totalAirHours}h`;
-        document.getElementById('kpi-audit-airtime-sub').textContent = `${data.members.length} members tracked`;
-        document.getElementById('kpi-audit-hits').textContent = `${data.kpis.totalHitsMade}`;
-        document.getElementById('kpi-audit-earned').textContent = `+${data.kpis.totalRespectEarned} pts earned`;
-        document.getElementById('kpi-audit-farmed').textContent = `${data.kpis.totalFarmedHits}`;
-        document.getElementById('kpi-audit-leaked').textContent = `-${data.kpis.totalRespectLeaked} pts conceded`;
-        document.getElementById('kpi-audit-ghosts').textContent = `${data.kpis.ghostCount}`;
-        document.getElementById('kpi-audit-net').textContent = `${data.kpis.netWarScore > 0 ? '+' : ''}${data.kpis.netWarScore} pts`;
-        document.getElementById('kpi-audit-actions').textContent = `${data.kpis.totalWarActions} war actions (${data.kpis.totalHitsMade} + ${data.kpis.totalFarmedHits})`;
+        // Render KPIs with bulletproof fallbacks for older cached records
+        const hitsMade = data.kpis.totalHitsMade || 0;
+        const farmedHits = data.kpis.totalFarmedHits || 0;
+        const totalActions = data.kpis.totalWarActions || (hitsMade + farmedHits);
+        const earned = data.kpis.totalRespectEarned !== undefined ? data.kpis.totalRespectEarned : (data.war.ourScore || 0);
+        const leaked = data.kpis.totalRespectLeaked !== undefined ? data.kpis.totalRespectLeaked : (data.war.theirScore || 0);
+        const netScore = data.kpis.netWarScore !== undefined ? data.kpis.netWarScore : parseFloat((earned - leaked).toFixed(1));
+
+        document.getElementById('kpi-audit-airtime').textContent = `${data.kpis.totalAirHours || 0}h`;
+        document.getElementById('kpi-audit-airtime-sub').textContent = `${data.members?.length || 0} members tracked`;
+        document.getElementById('kpi-audit-hits').textContent = `${hitsMade}`;
+        document.getElementById('kpi-audit-earned').textContent = `+${earned} pts earned`;
+        document.getElementById('kpi-audit-farmed').textContent = `${farmedHits}`;
+        document.getElementById('kpi-audit-leaked').textContent = `-${leaked} pts conceded`;
+        document.getElementById('kpi-audit-ghosts').textContent = `${data.kpis.ghostCount || 0}`;
+        document.getElementById('kpi-audit-net').textContent = `${netScore > 0 ? '+' : ''}${netScore} pts`;
+        document.getElementById('kpi-audit-actions').textContent = `${totalActions} war actions (${hitsMade} + ${farmedHits})`;
 
         // Filter counts
         const all = data.members || [];
         const airCount = all.filter(m => m.airHours > 0 || m.flightTrips > 0).length;
-        const ghostCount = all.filter(m => m.timesHit <= 4 && (m.flightPct > 0 || m.hitsMade > 0)).length;
+        const ghostCount = all.filter(m => {
+            const th = m.timesHit || m.timesFarmed || 0;
+            return th <= 10 && (m.airHours >= 15 || m.grade === 'S' || (m.airHours > 0 && m.hitsMade > 0));
+        }).length;
         const posCount = all.filter(m => m.netScore > 0).length;
-        const farmedCount = all.filter(m => m.timesHit > 0).length;
+        const farmedCount = all.filter(m => (m.timesHit || m.timesFarmed || 0) > 0).length;
         const zeroCount = all.filter(m => m.hitsMade === 0).length;
 
         document.getElementById('cnt-audit-all').textContent = all.length;
