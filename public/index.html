@@ -530,43 +530,43 @@
         <!-- KPI ROW -->
         <div class="kpi-row">
             <div class="kpi-card">
-                <div class="kpi-icon">🟢</div>
+                <div class="kpi-icon" id="kpi-icon-1">🟢</div>
                 <div>
-                    <div class="kpi-label">Friendly Online</div>
+                    <div class="kpi-label" id="kpi-lbl-1">Friendly Online</div>
                     <div class="kpi-value" id="kpi-friendly-online">—</div>
                     <div class="kpi-sub" id="kpi-friendly-total">of — members</div>
                 </div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-icon">🎯</div>
+                <div class="kpi-icon" id="kpi-icon-2">🎯</div>
                 <div>
-                    <div class="kpi-label">Enemy Online</div>
+                    <div class="kpi-label" id="kpi-lbl-2">Enemy Online</div>
                     <div class="kpi-value" id="kpi-enemy-online" style="color:var(--red);">—</div>
                     <div class="kpi-sub" id="kpi-enemy-total">of — targets</div>
                 </div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-icon">🏥</div>
+                <div class="kpi-icon" id="kpi-icon-3">🏥</div>
                 <div>
-                    <div class="kpi-label">Enemy Hospitalized</div>
+                    <div class="kpi-label" id="kpi-lbl-3">Enemy Hospitalized</div>
                     <div class="kpi-value" id="kpi-enemy-hosp" style="color:var(--gold);">—</div>
-                    <div class="kpi-sub">In hospital now</div>
+                    <div class="kpi-sub" id="kpi-sub-3">In hospital now</div>
                 </div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-icon">✈️</div>
+                <div class="kpi-icon" id="kpi-icon-4">✈️</div>
                 <div>
-                    <div class="kpi-label">Enemy Traveling</div>
+                    <div class="kpi-label" id="kpi-lbl-4">Enemy Traveling</div>
                     <div class="kpi-value" id="kpi-enemy-flying" style="color:var(--blue);">—</div>
-                    <div class="kpi-sub">Landing soon</div>
+                    <div class="kpi-sub" id="kpi-sub-4">Landing soon</div>
                 </div>
             </div>
             <div class="kpi-card">
-                <div class="kpi-icon">🎯</div>
+                <div class="kpi-icon" id="kpi-icon-5">🎯</div>
                 <div>
-                    <div class="kpi-label">Claimed Targets</div>
+                    <div class="kpi-label" id="kpi-lbl-5">Claimed Targets</div>
                     <div class="kpi-value" id="kpi-claimed" style="color:var(--purple);">—</div>
-                    <div class="kpi-sub">Active claims</div>
+                    <div class="kpi-sub" id="kpi-sub-5">Active claims</div>
                 </div>
             </div>
         </div>
@@ -688,12 +688,26 @@
                 </div>
             </div>
 
-            <!-- ENEMY TARGETS -->
+            <!-- ENEMY TARGETS / SCOUTER -->
             <div class="card">
                 <div class="card-header" style="flex-direction:column;align-items:stretch;gap:10px;">
                     <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <div class="card-title" style="color:var(--red);">🔴 Enemy Targets</div>
+                        <div class="card-title" id="enemy-card-title" style="color:var(--red);">🔴 Enemy Targets</div>
                         <span id="enemy-count" style="background:rgba(255,71,87,0.1);color:var(--red);padding:2px 8px;border-radius:12px;font-size:0.72em;font-weight:700;border:1px solid rgba(255,71,87,0.3);">0</span>
+                    </div>
+                    <!-- Peacetime Pre-War Scouter Bar -->
+                    <div id="peacetime-scout-bar" style="display:none;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-top:2px;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+                            <div style="font-size:0.75em;font-weight:700;color:var(--text-dim);display:flex;align-items:center;gap:6px;">
+                                <span>🔭 PRE-WAR SCOUTER:</span>
+                                <span id="scouter-current-target" style="color:var(--teal);font-weight:800;">Auto-Scouting Last Opponent</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                <input id="scout-input" type="text" placeholder="Faction ID..." style="background:#161b22;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:0.75em;color:white;width:110px;">
+                                <button onclick="scoutCustomFaction()" class="btn-filter active" style="padding:4px 8px;font-size:0.75em;cursor:pointer;">Scout</button>
+                                <button onclick="scoutLastEnemy()" class="btn-filter" id="btn-reset-scout" style="padding:4px 8px;font-size:0.75em;cursor:pointer;">Last War</button>
+                            </div>
+                        </div>
                     </div>
                     <div class="filter-group">
                         <button id="flt-all" class="btn-filter active" onclick="setEnemyFilter('All')">ALL</button>
@@ -1124,6 +1138,7 @@ let fetchTimer = null;
 let progressTimer = null;
 let currentFriendlyData = [];
 let currentEnemyData = [];
+let currentWarboardData = null;
 let activeFilter = 'All';
 let warChartInstance = null;
 let activityChartInstance = null;
@@ -1286,6 +1301,7 @@ async function fetchWarboard() {
         }
 
         currentFriendlyData = data.friendly;
+        currentWarboardData = data;
         const enemies = data.enemy || [];
         const now = Math.floor(Date.now() / 1000);
         document.getElementById("last-updated").innerText = `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}`;
@@ -1295,8 +1311,15 @@ async function fetchWarboard() {
         const heroSub = document.getElementById("war-hero-sub");
         const scoreBlock = document.getElementById("war-score-block");
         const warBadge = document.getElementById("war-status-badge");
+        const peacetimeScoutBar = document.getElementById("peacetime-scout-bar");
+        const enemyCardTitle = document.getElementById("enemy-card-title");
+        const scouterCurrentTarget = document.getElementById("scouter-current-target");
 
-        if (data.warInfo && data.warInfo.active) {
+        const isWarActive = data.warInfo && data.warInfo.active;
+        const recentWar = data.warInfo?.recentWar;
+        const myFaction = data.warInfo?.myFaction;
+
+        if (isWarActive) {
             const war = data.warInfo;
             if (heroTitle) heroTitle.innerText = `${war.myFaction?.name || 'Friendly'} vs ${war.enemyFaction?.name || 'Enemy'}`;
             if (heroSub) heroSub.innerText = `Ranked War Active • Target Score: ${(war.target || 0).toLocaleString()}`;
@@ -1304,58 +1327,161 @@ async function fetchWarboard() {
                 warBadge.className = "war-badge";
                 warBadge.innerText = "⚡ WAR ACTIVE";
             }
+            if (peacetimeScoutBar) peacetimeScoutBar.style.display = "none";
+            if (enemyCardTitle) enemyCardTitle.innerHTML = `🔴 Enemy Targets`;
+
             if (scoreBlock) {
                 scoreBlock.style.display = "flex";
-                const usEl = document.getElementById("score-us");
-                const themEl = document.getElementById("score-them");
-                const barFill = document.getElementById("war-bar-fill");
                 const usScore = war.myFaction?.score || 0;
                 const themScore = war.enemyFaction?.score || 0;
-                if (usEl) usEl.innerText = usScore.toLocaleString();
-                if (themEl) themEl.innerText = themScore.toLocaleString();
-                if (barFill) {
-                    const total = usScore + themScore;
-                    const pct = total > 0 ? Math.round((usScore / total) * 100) : 50;
-                    barFill.style.width = `${pct}%`;
-                    barFill.className = pct < 45 ? "war-score-bar-fill danger" : "war-score-bar-fill";
-                }
+                const total = usScore + themScore;
+                const pct = total > 0 ? Math.round((usScore / total) * 100) : 50;
+
+                scoreBlock.innerHTML = `
+                    <div class="score-side">
+                        <div class="score-num" id="score-us" style="color:var(--green);">${usScore.toLocaleString()}</div>
+                        <div class="score-label">Our Score</div>
+                    </div>
+                    <div class="score-vs">VS</div>
+                    <div class="score-side">
+                        <div class="score-num" id="score-them" style="color:var(--red);">${themScore.toLocaleString()}</div>
+                        <div class="score-label">Enemy Score</div>
+                    </div>
+                    <div class="war-score-bar-wrap">
+                        <div class="war-score-bar-track">
+                            <div class="war-score-bar-fill ${pct < 45 ? 'danger' : ''}" id="war-bar-fill" style="width:${pct}%"></div>
+                        </div>
+                        <div class="war-score-bar-labels"><span>Us</span><span>Them</span></div>
+                    </div>
+                `;
             }
         } else {
-            if (heroTitle && data.warInfo?.myFaction?.name) {
-                heroTitle.innerText = data.warInfo.myFaction.name;
-                if (heroSub) heroSub.innerText = "Live Faction Warboard • Ready for Combat";
-                if (warBadge) {
-                    warBadge.className = "war-badge peace";
-                    warBadge.innerText = "🟢 STANDBY";
+            // 🟢 PEACETIME STANDBY & HYBRID RECAP MODE
+            if (heroTitle) heroTitle.innerText = myFaction?.name ? `${myFaction.name} [${myFaction.id || '52355'}]` : 'Spider-Verse';
+            if (heroSub) heroSub.innerText = "Peacetime Standby • Faction Operations & Last War Performance Showcase";
+            if (warBadge) {
+                warBadge.className = "war-badge peace";
+                warBadge.innerText = "🟢 STANDBY";
+            }
+            if (peacetimeScoutBar) peacetimeScoutBar.style.display = "block";
+            if (scouterCurrentTarget) {
+                const scoutTargetName = data.warInfo?.scoutedEnemy?.name || (recentWar ? recentWar.enemyName : 'None');
+                const scoutTargetId = data.warInfo?.scoutedEnemy?.id || (recentWar ? recentWar.enemyId : '');
+                scouterCurrentTarget.innerText = `${scoutTargetName} [${scoutTargetId}]`;
+            }
+            if (enemyCardTitle) {
+                const sName = data.warInfo?.scoutedEnemy?.name || (recentWar ? recentWar.enemyName : 'Opponent');
+                enemyCardTitle.innerHTML = `🔴 Opponent Scouter <span style="font-size:0.75em;color:var(--text-dim);font-weight:600;">(${sName})</span>`;
+            }
+
+            if (scoreBlock) {
+                if (recentWar) {
+                    scoreBlock.style.display = "flex";
+                    const outcomeColor = recentWar.isWon ? "var(--green)" : "var(--red)";
+                    const outcomeTag = recentWar.isWon ? "🏆 VICTORY" : "DEFEAT";
+                    scoreBlock.innerHTML = `
+                        <div style="display:flex;align-items:center;gap:14px;background:rgba(255,255,255,0.03);padding:10px 18px;border-radius:10px;border:1px solid var(--border);width:100%;justify-content:space-between;flex-wrap:wrap;">
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <span style="font-size:1.6em;">${recentWar.isWon ? '🏆' : '⚔️'}</span>
+                                <div>
+                                    <div style="font-size:0.88em;font-weight:800;color:var(--text-main);">LAST WAR: vs ${recentWar.enemyName} (${recentWar.ourScore.toLocaleString()} - ${recentWar.theirScore.toLocaleString()})</div>
+                                    <div style="font-size:0.74em;color:${outcomeColor};font-weight:700;margin-top:2px;">${outcomeTag} • +${(recentWar.margin || 0).toLocaleString()} pts Margin • ${recentWar.audited ? `${recentWar.totalHitsMade} hits made` : 'Completed War'}</div>
+                                </div>
+                            </div>
+                            <a href="/dashboard.html" style="background:rgba(0,206,201,0.12);color:var(--teal);border:1px solid var(--teal);padding:5px 12px;border-radius:6px;font-size:0.75em;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">📊 Full War Sentinel Audit &rarr;</a>
+                        </div>
+                    `;
+                } else {
+                    scoreBlock.style.display = "none";
                 }
             }
-            if (scoreBlock) scoreBlock.style.display = "none";
         }
 
         // KPI counts
         const friendlyOnline = data.friendly.filter(p => p.onlineStatus === "Online").length;
+        const friendlyFlying = data.friendly.filter(p => checkIsFlying(p)).length;
+        const friendlyHosp = data.friendly.filter(p => p.state === "Hospital" || p.state === "Jail").length;
         const enemyOnline = enemies.filter(p => p.onlineStatus === "Online").length;
         const enemyHosp = enemies.filter(p => p.state === "Hospital").length;
         const enemyFlying = enemies.filter(p => checkIsFlying(p)).length;
         const claimed = enemies.filter(p => p.claimedBy).length;
+        const chainCount = myFaction?.chain || 0;
+        const chainMax = myFaction?.chainMax || 100;
 
-        document.getElementById("kpi-friendly-online").innerText = friendlyOnline;
-        document.getElementById("kpi-friendly-total").innerText = `of ${data.friendly.length} members`;
-        document.getElementById("kpi-enemy-online").innerText = enemyOnline;
-        document.getElementById("kpi-enemy-total").innerText = `of ${enemies.length} targets`;
-        document.getElementById("kpi-enemy-hosp").innerText = enemyHosp;
-        document.getElementById("kpi-enemy-flying").innerText = enemyFlying;
-        document.getElementById("kpi-claimed").innerText = claimed;
+        if (isWarActive) {
+            document.getElementById("kpi-icon-1").innerText = "🟢";
+            document.getElementById("kpi-lbl-1").innerText = "Friendly Online";
+            document.getElementById("kpi-friendly-online").innerText = friendlyOnline;
+            document.getElementById("kpi-friendly-total").innerText = `of ${data.friendly.length} members`;
+
+            document.getElementById("kpi-icon-2").innerText = "🎯";
+            document.getElementById("kpi-lbl-2").innerText = "Enemy Online";
+            document.getElementById("kpi-enemy-online").style.color = "var(--red)";
+            document.getElementById("kpi-enemy-online").innerText = enemyOnline;
+            document.getElementById("kpi-enemy-total").innerText = `of ${enemies.length} targets`;
+
+            document.getElementById("kpi-icon-3").innerText = "🏥";
+            document.getElementById("kpi-lbl-3").innerText = "Enemy Hospitalized";
+            document.getElementById("kpi-enemy-hosp").innerText = enemyHosp;
+            document.getElementById("kpi-sub-3").innerText = "In hospital now";
+
+            document.getElementById("kpi-icon-4").innerText = "✈️";
+            document.getElementById("kpi-lbl-4").innerText = "Enemy Traveling";
+            document.getElementById("kpi-enemy-flying").style.color = "var(--blue)";
+            document.getElementById("kpi-enemy-flying").innerText = enemyFlying;
+            document.getElementById("kpi-sub-4").innerText = "Landing soon";
+
+            document.getElementById("kpi-icon-5").innerText = "🎯";
+            document.getElementById("kpi-lbl-5").innerText = "Claimed Targets";
+            document.getElementById("kpi-claimed").style.color = "var(--purple)";
+            document.getElementById("kpi-claimed").innerText = claimed;
+            document.getElementById("kpi-sub-5").innerText = "Active claims";
+        } else {
+            // PEACETIME OPERATIONAL KPIS (No dead zeros!)
+            document.getElementById("kpi-icon-1").innerText = "🟢";
+            document.getElementById("kpi-lbl-1").innerText = "Friendly Online";
+            document.getElementById("kpi-friendly-online").innerText = friendlyOnline;
+            document.getElementById("kpi-friendly-total").innerText = `of ${data.friendly.length} members active`;
+
+            document.getElementById("kpi-icon-2").innerText = "✈️";
+            document.getElementById("kpi-lbl-2").innerText = "Members Traveling";
+            document.getElementById("kpi-enemy-online").style.color = "var(--blue)";
+            document.getElementById("kpi-enemy-online").innerText = friendlyFlying;
+            document.getElementById("kpi-enemy-total").innerText = "Running plushies / flowers";
+
+            document.getElementById("kpi-icon-3").innerText = "🏥";
+            document.getElementById("kpi-lbl-3").innerText = "In Hospital / Jail";
+            document.getElementById("kpi-enemy-hosp").innerText = friendlyHosp;
+            document.getElementById("kpi-sub-3").innerText = friendlyHosp > 0 ? "Needs medical / revive" : "All members healthy";
+
+            document.getElementById("kpi-icon-4").innerText = "🔗";
+            document.getElementById("kpi-lbl-4").innerText = "Faction Chain";
+            document.getElementById("kpi-enemy-flying").style.color = "var(--gold)";
+            document.getElementById("kpi-enemy-flying").innerText = chainCount > 0 ? `${chainCount}` : "Ready";
+            document.getElementById("kpi-sub-4").innerText = chainCount > 0 ? `Chain in progress (${chainCount}/${chainMax})` : "Standing by for chain";
+
+            document.getElementById("kpi-icon-5").innerText = recentWar?.isWon ? "🏆" : "⚔️";
+            document.getElementById("kpi-lbl-5").innerText = recentWar ? "Last War Score" : "Ranked War";
+            document.getElementById("kpi-claimed").style.color = recentWar?.isWon ? "var(--green)" : "var(--teal)";
+            document.getElementById("kpi-claimed").innerText = recentWar ? `${recentWar.ourScore} - ${recentWar.theirScore}` : "Ready";
+            document.getElementById("kpi-sub-5").innerText = recentWar ? `vs ${recentWar.enemyName}` : "Awaiting matchup";
+        }
 
         document.getElementById("friendly-count").innerText = data.friendly.length;
         document.getElementById("enemy-count").innerText = enemies.length;
 
+        // Process enemy / scouted targets
         if (enemies.length > 0) {
             processNotifications(enemies);
             renderWatchlist(enemies);
             renderHeatmap(enemies, data.premiumActive);
             currentEnemyData = sortPlayersList(enemies, true);
             renderEnemyList(currentEnemyData, data.premiumActive);
+        } else {
+            const enemyListEl = document.getElementById("enemy-list");
+            if (enemyListEl) {
+                enemyListEl.innerHTML = `<div class="empty-state">No targets loaded. Enter an upcoming opponent Faction ID in the Scouter above to inspect their roster and 24h activity heatmap before the war starts.</div>`;
+            }
         }
         renderFriendlyList(sortPlayersList(data.friendly, false), data.premiumActive);
         renderChart(data.friendly);
@@ -1392,6 +1518,22 @@ async function fetchWarboard() {
     } catch(e) { console.error("Warboard fetch failed:", e); }
 }
 
+// ─── Peacetime Pre-War Scouter Actions ───────────────────────────────────────
+function scoutCustomFaction() {
+    const inp = document.getElementById('scout-input');
+    const val = inp?.value?.trim();
+    if (!val) return;
+    enemyFacId = val;
+    fetchWarboard();
+}
+
+function scoutLastEnemy() {
+    enemyFacId = null;
+    const inp = document.getElementById('scout-input');
+    if (inp) inp.value = '';
+    fetchWarboard();
+}
+
 // ─── Charts ───────────────────────────────────────────────────────────────────
 function setChartSort(sort) {
     chartSortBy = sort;
@@ -1423,6 +1565,17 @@ function setChartViewMode(mode) {
 function renderChart(players) {
     lastFriendlyPlayers = players || [];
     if (!players || players.length === 0) return;
+
+    // Update Chart Card Title (Live War vs Last War Showcase)
+    const chartCardTitle = document.getElementById('war-chart-scroll-wrap')?.closest('.card')?.querySelector('.card-title');
+    if (chartCardTitle) {
+        if (currentWarboardData?.warInfo?.active) {
+            chartCardTitle.innerHTML = `📊 Faction Combat &amp; Hit Performance <span style="font-size:0.75em;color:var(--green);font-weight:700;">(Live War)</span>`;
+        } else if (currentWarboardData?.warInfo?.recentWar) {
+            const rw = currentWarboardData.warInfo.recentWar;
+            chartCardTitle.innerHTML = `📊 Faction Combat Performance • <span style="color:var(--teal);">Last War Showcase (vs ${rw.enemyName})</span>`;
+        }
+    }
 
     // Filter players
     let filtered = [...players];
