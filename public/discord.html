@@ -121,7 +121,7 @@
         <div class="connection-hero">
             <div class="connection-hero-left">
                 <h2>📡 Faction Bot Uplink</h2>
-                <p>Connect a Discord bot to push real-time combat alerts directly to your server. Ping members for chain attacks, hospital releases, travel warnings, and more — all fully automated 24/7.</p>
+                <p>Connect a Discord bot to push real-time combat alerts directly to your server. Features live interactive action buttons (<b>[⚔️ Attack Now]</b>, <b>[🎯 Claim Target]</b>), chain drop warnings, overseas travel alerts, and member inactivity tracking — all fully automated 24/7.</p>
             </div>
             <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;flex-shrink:0;">
                 <span id="active-alerts-count" style="font-size:2em;font-weight:900;color:var(--green);line-height:1;">–</span>
@@ -217,9 +217,10 @@
                         <span class="trigger-icon">✈️</span>
                         <div class="trigger-info">
                             <div class="trigger-name">Landing Tracker <span class="trigger-badge war">WAR</span></div>
-                            <div class="trigger-desc">Pings the instant an enemy target lands from a flight back into Torn.</div>
+                            <div class="trigger-desc">Pings the instant an enemy target lands from a flight back into Torn with clickable Attack and Claim Target buttons.</div>
                         </div>
                         <div class="trigger-actions">
+                            <button class="btn-test" id="btn-test-target" onclick="testAlert('target')">🧪 Test</button>
                             <label class="switch"><input type="checkbox" id="targetLanded" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
@@ -248,9 +249,10 @@
                         <span class="trigger-icon">💊</span>
                         <div class="trigger-info">
                             <div class="trigger-name">Med-Out Sniper <span class="trigger-badge premium">PREMIUM</span></div>
-                            <div class="trigger-desc">Detects if a target uses meds or a revive to escape hospital early, then instantly assigns the hit to an eligible online member.</div>
+                            <div class="trigger-desc">Detects if a target uses meds or a revive to escape hospital early, assigning the hit to an eligible online member with interactive Action Buttons.</div>
                         </div>
                         <div class="trigger-actions">
+                            <button class="btn-test" id="btn-test-sniper" onclick="testAlert('sniper')">🧪 Test</button>
                             <label class="switch"><input type="checkbox" id="medOutSniper" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>

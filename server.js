@@ -473,6 +473,64 @@ function formatEmbedAsMarkdown(embed, ping = "") {
     return lines.join('\n');
 }
 
+// ── Discord Interactive Component (ActionRow & Button) Builder ──
+function buildDiscordComponents(embed, isWebhook = false) {
+    if (!embed) return undefined;
+    if (embed.components && Array.isArray(embed.components)) return embed.components;
+
+    const rawButtons = [];
+
+    // 1. Explicit buttons if passed
+    if (Array.isArray(embed.buttons)) {
+        for (const b of embed.buttons) {
+            if (isWebhook && b.style !== 5 && !b.url) continue;
+            rawButtons.push(b);
+        }
+    }
+
+    // 2. Convert embed.links to Link buttons (style: 5)
+    if (Array.isArray(embed.links)) {
+        for (const link of embed.links) {
+            if (link.label && link.url) {
+                rawButtons.push({
+                    type: 2, // Button
+                    style: 5, // Link button
+                    label: String(link.label).slice(0, 80),
+                    url: String(link.url).trim()
+                });
+            }
+        }
+    }
+
+    // 3. If embed has targetId and is a Bot (not webhook), add a Claim Target button if not already present
+    if (!isWebhook && embed.targetId) {
+        const tId = String(embed.targetId).trim().replace(/[^0-9]/g, '');
+        if (tId) {
+            const hasClaim = rawButtons.some(b => b.custom_id && b.custom_id.startsWith('claim_'));
+            if (!hasClaim) {
+                rawButtons.push({
+                    type: 2, // Button
+                    style: 3, // Success / Green
+                    custom_id: `claim_${tId}`,
+                    label: "🎯 Claim Target"
+                });
+            }
+        }
+    }
+
+    if (rawButtons.length === 0) return undefined;
+
+    // Discord allows max 5 buttons per ActionRow (type: 1), max 5 ActionRows per message
+    const rows = [];
+    for (let i = 0; i < rawButtons.length && rows.length < 5; i += 5) {
+        rows.push({
+            type: 1, // ActionRow
+            components: rawButtons.slice(i, i + 5)
+        });
+    }
+    return rows;
+}
+
 async function executeDiscordSend(token, channelId, embed, content = "") {
     if (!token && !channelId) return { success: false, error: "Missing Discord Bot Token or Channel ID / Webhook URL." };
 
@@ -510,7 +568,8 @@ async function executeDiscordSend(token, channelId, embed, content = "") {
         }
     }
 
-    const payload = { embeds: [embed] };
+    const cleanEmbed = sanitizeEmbed(embed);
+    const payload = cleanEmbed ? { embeds: [cleanEmbed] } : {};
     if (cleanContent) {
         payload.content = cleanContent;
         payload.allowed_mentions = { parse: ['roles', 'users', 'everyone'] };
@@ -518,7 +577,13 @@ async function executeDiscordSend(token, channelId, embed, content = "") {
 
     // A. Webhook route
     if (webhookUrl) {
-        console.log(`[Discord Webhook] Sending alert '${embed.title || 'alert'}' to webhook...`);
+        console.log(`[Discord Webhook] Sending alert '${embed?.title || 'alert'}' to webhook...`);
+        const webhookPayload = { ...payload };
+        const webhookComponents = buildDiscordComponents(embed, true);
+        if (webhookComponents && webhookComponents.length > 0) {
+            webhookPayload.components = webhookComponents;
+        }
+
         try {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 8000);
@@ -527,7 +592,7 @@ async function executeDiscordSend(token, channelId, embed, content = "") {
                 res = await fetch(webhookUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
+                    body: JSON.stringify(webhookPayload),
                     signal: controller.signal
                 });
             } finally {
@@ -576,7 +641,13 @@ async function executeDiscordSend(token, channelId, embed, content = "") {
     }
 
     // 3. Direct Discord REST API Send
-    console.log(`[Discord Bot] Sending '${embed.title || 'alert'}' to channel ${cleanChannelId}...`);
+    console.log(`[Discord Bot] Sending '${embed?.title || 'alert'}' to channel ${cleanChannelId}...`);
+    const botPayload = { ...payload };
+    const botComponents = buildDiscordComponents(embed, false);
+    if (botComponents && botComponents.length > 0) {
+        botPayload.components = botComponents;
+    }
+
     try {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 8000);
@@ -588,7 +659,7 @@ async function executeDiscordSend(token, channelId, embed, content = "") {
                     'Authorization': `Bot ${cleanToken}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(payload),
+                body: JSON.stringify(botPayload),
                 signal: controller.signal
             });
         } finally {
@@ -614,6 +685,26 @@ async function executeDiscordSend(token, channelId, embed, content = "") {
         const data = await res.json();
         if (!res.ok) {
             console.error(`[Discord API Error] Status ${res.status}:`, data);
+
+            // Auto-recovery: if rejected due to components (e.g. 400 Bad Request on component validation), retry without components
+            if (res.status === 400 && botPayload.components) {
+                console.warn(`[Discord REST] Retrying '${embed?.title || 'alert'}' without button components...`);
+                try {
+                    const noCompRes = await fetch(`https://discord.com/api/v10/channels/${cleanChannelId}/messages`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bot ${cleanToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload),
+                        signal: AbortSignal.timeout(8000)
+                    });
+                    if (noCompRes.ok) {
+                        console.log(`[Discord Bot] '${embed?.title || 'alert'}' delivered without components.`);
+                        return { success: true };
+                    }
+                } catch(e) {}
+            }
 
             // Auto-fallback: if Discord rejects due to missing 'Embed Links' (50013),
             // immediately retry as clean Markdown formatted text so the alert is NEVER dropped!
@@ -650,7 +741,7 @@ async function executeDiscordSend(token, channelId, embed, content = "") {
             return { success: false, error: errMsg };
         }
 
-        console.log(`[Discord Bot] '${embed.title || 'alert'}' delivered to channel ${cleanChannelId}.`);
+        console.log(`[Discord Bot] '${embed?.title || 'alert'}' delivered to channel ${cleanChannelId}.`);
         return { success: true };
     } catch (err) {
         if (err.name === 'AbortError') {
@@ -1198,10 +1289,11 @@ setInterval(async () => {
                             title: "🛡️ Wall Watcher: Friendly Attacked", 
                             description: `**${attackerName}** [${attackerId}] from \`${attackerFactionName}\` just attacked **${defenderName}**!`,
                             color: 16729943,
+                            targetId: attackerId,
                             fields: [{ name: "Enemy Est. Stats", value: statStr, inline: true }],
                             links: [
                                 { label: "⚔️ RETALIATE", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${attackerId}` },
-                                { label: "Enemy Profile", url: `https://www.torn.com/profiles.php?XID=${attackerId}` }
+                                { label: "👤 Enemy Profile", url: `https://www.torn.com/profiles.php?XID=${attackerId}` }
                             ]
                         }, pingStr);
                     }
@@ -1711,7 +1803,16 @@ setInterval(async () => {
                     if (oldRecord) {
                         // ── 1. TARGET ONLINE TRACKER ──
                         if (oldRecord.online !== "Online" && newRecord.online === "Online" && discordConfig.targetOnline === true) {
-                            if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { title: "🟢 Target Online", description: `**${m.name}** [${id}] just established a connection and is Online!`, color: 3069299, links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }] });
+                            if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { 
+                                title: "🟢 Target Online", 
+                                description: `**${m.name}** [${id}] just established a connection and is Online!`, 
+                                color: 3069299, 
+                                targetId: id,
+                                links: [
+                                    { label: "⚔️ Attack Now", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` },
+                                    { label: "👤 Profile", url: `https://www.torn.com/profiles.php?XID=${id}` }
+                                ] 
+                            });
                         }
 
                         // ── 2. LANDING TRACKER (FIXED: must be independent, not nested under Hospital) ──
@@ -1722,7 +1823,11 @@ setInterval(async () => {
                                 title: "✈️ Target Landed", 
                                 description: `**${m.name}** [${id}] just landed back in Torn and is now attackable!`, 
                                 color: 5809919, 
-                                links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }] 
+                                targetId: id,
+                                links: [
+                                    { label: "⚔️ Attack Now", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` },
+                                    { label: "👤 Profile", url: `https://www.torn.com/profiles.php?XID=${id}` }
+                                ] 
                             });
                         }
                         
@@ -1745,11 +1850,15 @@ setInterval(async () => {
                                     title: "🚨 MED-OUT SNIPER ENGAGED", 
                                     description: `**${m.name}** [${id}] just used meds or received a revive to escape the hospital early and is currently ONLINE!`,
                                     color: 16729943,
+                                    targetId: id,
                                     fields: [
                                         { name: "Target Est. Stats", value: statStr, inline: true },
                                         { name: "Tactical Assignment", value: `👉 **${bestMatchName}**, you have the stats to take them down!`, inline: false }
                                     ],
-                                    links: [{ label: "⚔️ ATTACK NOW", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }]
+                                    links: [
+                                        { label: "⚔️ Attack Now", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` },
+                                        { label: "👤 Profile", url: `https://www.torn.com/profiles.php?XID=${id}` }
+                                    ]
                                 }, pingStr);
                                 
                             } else if (discordConfig.targetOutHosp === true && !leftEarly) {
@@ -1757,7 +1866,11 @@ setInterval(async () => {
                                     title: "🏥 Target Out of Hospital", 
                                     description: `**${m.name}** [${id}] naturally finished their hospital time and is now Okay!`, 
                                     color: 16753922, 
-                                    links: [{ label: "⚔️ ATTACK", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` }] 
+                                    targetId: id,
+                                    links: [
+                                        { label: "⚔️ Attack Now", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` },
+                                        { label: "👤 Profile", url: `https://www.torn.com/profiles.php?XID=${id}` }
+                                    ] 
                                 });
                             }
                         }
@@ -2031,13 +2144,39 @@ app.post('/api/test-discord-alert', async (req, res) => {
         embed = {
             title: "✈️ TRAVEL WARNING",
             description: `**[Your Name]**, an enemy (**[Test] EnemyName**) is currently flying to **Mexico** where you are located (or heading)!\n\nFly away or return to Torn immediately!`,
-            color: 16729943
+            color: 16729943,
+            links: [
+                { label: "✈️ Travel Agency", url: `https://www.torn.com/travelagency.php` },
+                { label: "🌐 Open Travel Desk", url: `https://spider-verse.net/travel.html` }
+            ]
         };
     } else if (type === 'chain') {
         embed = {
             title: "⚠️ CHAIN ATTACK WARNING",
             description: `**[Your Name]**, you have been hit 3 consecutive times in Torn! Log in and react!`,
-            color: 16729943
+            color: 16729943,
+            links: [
+                { label: "🔗 View Chain", url: `https://www.torn.com/factions.php?step=your#/tab=chains` },
+                { label: "📡 Live Warboard", url: `https://spider-verse.net/` }
+            ]
+        };
+    } else if (type === 'target' || type === 'sniper') {
+        embed = {
+            title: "🎯 TARGET SNIPER (TEST ALERT)",
+            description: `**[Test Enemy]** [999999] just landed back in Torn and is attackable!\n\nThis test verifies your Discord Action Buttons below: click **[⚔️ Attack Now]**, **[👤 Profile]**, or **[🎯 Claim Target]** to test interaction!`,
+            color: 3069299,
+            targetId: "999999",
+            fields: [
+                { name: "Estimated Stats", value: "~15,400,000", inline: true },
+                { name: "Current Status", value: "Online in Torn", inline: true },
+                { name: "Assigned Fighter", value: "You", inline: true }
+            ],
+            links: [
+                { label: "⚔️ Attack Now", url: `https://www.torn.com/loader.php?sid=attack&user2ID=999999` },
+                { label: "👤 Profile", url: `https://www.torn.com/profiles.php?XID=999999` }
+            ],
+            footer: { text: "Owen's Faction Tools • Interactive Button Test" },
+            timestamp: new Date().toISOString()
         };
     } else if (type === 'inactivity') {
         let rolePingStr = "";
@@ -5103,6 +5242,10 @@ async function buildCountryStatusEmbed(country, apiKey) {
 function sanitizeEmbed(embed) {
     if (!embed) return embed;
     const sanitized = { ...embed };
+    delete sanitized.links;
+    delete sanitized.buttons;
+    delete sanitized.targetId;
+    delete sanitized.components;
     if (sanitized.title && sanitized.title.length > 250) {
         sanitized.title = sanitized.title.slice(0, 247) + "...";
     }
@@ -6736,6 +6879,60 @@ async function startSlashCommandBot(token) {
         });
 
         slashCommandBot.on(Events.InteractionCreate, async (interaction) => {
+            // ── Interactive Button Click Handler ──
+            if (interaction.isButton()) {
+                const customId = interaction.customId || '';
+                if (customId.startsWith('claim_')) {
+                    const targetId = customId.replace('claim_', '').trim().replace(/[^0-9]/g, '');
+                    if (!targetId) {
+                        return interaction.reply({ content: "⚠️ Target ID not found.", ephemeral: true }).catch(() => {});
+                    }
+
+                    const claimerName = interaction.user.username;
+                    const now = Date.now();
+                    const facId = discordConfig.factionId || dynamicFactionId || "52355";
+                    const fState = getFactionWarState(facId);
+                    const existingClaim = fState.claims[targetId] || claims[targetId];
+
+                    if (existingClaim && existingClaim.playerName && existingClaim.playerName !== claimerName && (now - existingClaim.time < 15 * 60 * 1000)) {
+                        return interaction.reply({
+                            content: `⚠️ Target **[${targetId}]** is already claimed by **${existingClaim.playerName}** (${Math.round((now - existingClaim.time)/1000)}s ago)!`,
+                            ephemeral: true
+                        }).catch(() => {});
+                    }
+
+                    // Save claim in both states
+                    fState.claims[targetId] = { playerName: claimerName, time: now, discordId: interaction.user.id };
+                    claims[targetId] = { playerName: claimerName, time: now, discordId: interaction.user.id };
+
+                    const attackLink = `https://www.torn.com/loader.php?sid=attack&user2ID=${targetId}`;
+                    return interaction.reply({
+                        embeds: [{
+                            title: `🎯 Target [${targetId}] Claimed!`,
+                            description: `**<@${interaction.user.id}>** has claimed **Target [${targetId}]** directly from Discord.\n\n` +
+                                `[⚔️ Launch Attack in Torn](${attackLink}) • [👤 Profile](https://www.torn.com/profiles.php?XID=${targetId})`,
+                            color: 0x2ed573,
+                            footer: { text: "Owen's Faction Tools • Live Warboard Sync" },
+                            timestamp: new Date().toISOString()
+                        }]
+                    }).catch(() => {});
+                }
+
+                if (customId.startsWith('unclaim_')) {
+                    const targetId = customId.replace('unclaim_', '').trim().replace(/[^0-9]/g, '');
+                    const facId = discordConfig.factionId || dynamicFactionId || "52355";
+                    const fState = getFactionWarState(facId);
+                    delete fState.claims[targetId];
+                    delete claims[targetId];
+                    return interaction.reply({
+                        content: `🔓 Target **[${targetId}]** is now released and unclaimed.`,
+                        ephemeral: true
+                    }).catch(() => {});
+                }
+
+                return;
+            }
+
             if (!interaction.isChatInputCommand()) return;
 
             const cmd = interaction.commandName.toLowerCase();
