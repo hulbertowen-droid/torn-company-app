@@ -6922,59 +6922,97 @@ setInterval(checkExpiredBankRequests, 2 * 60 * 1000);
 
 function buildBankRequestEmbed(req) {
     const formattedAmount = `$${Number(req.amount).toLocaleString()}`;
-    const requesterTag = `<@${req.userId}>`;
-    const tornProfile = req.tornId 
-        ? `[**${req.tornName || 'Torn Player'}** [${req.tornId}]](https://www.torn.com/profiles.php?XID=${req.tornId})`
+    const requesterMention = `<@${req.userId}>`;
+    const tornProfile = req.tornId
+        ? `[${req.tornName || 'Unknown'} [${req.tornId}]](https://www.torn.com/profiles.php?XID=${req.tornId})`
         : null;
 
-    let statusText = `⏳ **Pending Banker Action** (<t:${Math.floor(req.timestamp / 1000)}:R>)`;
-    let color = 0xffa502; // Gold
-    let footerText = "Spider-Verse Faction Tools • Faction Vault Banking";
+    let color = 0xffa502; // Gold — Pending
+    let statusLine = '';
+    let footerText = 'Spider-Verse Faction Tools • Faction Vault Banking';
+    let titlePrefix = '⏳';
 
     if (req.status === 'fulfilled') {
-        statusText = `✅ **Fulfilled by <@${req.fulfilledBy}>** (<t:${Math.floor(req.fulfilledAt / 1000)}:R>)`;
         color = 0x2ed573; // Green
-        footerText = `Fulfilled by @${req.fulfillerName || 'Banker'} • Faction Vault Sync`;
+        titlePrefix = '✅';
+        const fulfillerMention = req.fulfilledBy ? `<@${req.fulfilledBy}>` : `@${req.fulfillerName || 'Banker'}`;
+        statusLine = `✅  **Fulfilled** by ${fulfillerMention} — <t:${Math.floor(req.fulfilledAt / 1000)}:R>`;
+        footerText = `Fulfilled by @${req.fulfillerName || 'Banker'} · Spider-Verse Faction Tools`;
     } else if (req.status === 'cancelled') {
-        statusText = `❌ **Cancelled by <@${req.cancelledBy}>** (<t:${Math.floor(req.cancelledAt / 1000)}:R>)`;
-        color = 0x747d8c; // Grey
-        footerText = `Cancelled by @${req.cancellerName || 'User'} • Faction Vault Banking`;
+        color = 0x57606f; // Grey
+        titlePrefix = '❌';
+        const cancellerStr = req.cancelledBy && req.cancelledBy !== 'system'
+            ? `<@${req.cancelledBy}>`
+            : (req.cancellerName || 'System');
+        statusLine = `❌  **Cancelled** by ${cancellerStr} — <t:${Math.floor(req.cancelledAt / 1000)}:R>`;
+        footerText = `Cancelled · Spider-Verse Faction Tools`;
     } else if (req.status === 'expired') {
-        statusText = `⏱️ **Expired (Cancelled after 60m)** (<t:${Math.floor(req.expiredAt / 1000)}:R>)`;
         color = 0x4f545c; // Dark Grey
-        footerText = `Auto-expired to prevent offline mugs • Faction Vault Banking`;
+        titlePrefix = '⏱️';
+        statusLine = `⏱️  **Expired** after 60 minutes (auto-cancelled to prevent mugs)`;
+        footerText = `Auto-expired · Spider-Verse Faction Tools`;
+    } else {
+        // Pending
+        statusLine = `⏳  **Awaiting Banker** — requested <t:${Math.floor(req.timestamp / 1000)}:R>`;
     }
 
+    // Core fields — amount, requester, balance in a clean row
     const fields = [
-        { name: "👤 Requester", value: tornProfile ? `${requesterTag}\n└ ${tornProfile}` : requesterTag, inline: true },
-        { name: "💰 Amount", value: `**${formattedAmount}**`, inline: true }
+        {
+            name: '💵 Amount Requested',
+            value: `## ${formattedAmount}`,
+            inline: true
+        },
+        {
+            name: '👤 Requester',
+            value: tornProfile
+                ? `${requesterMention}\n└ ${tornProfile}`
+                : requesterMention,
+            inline: true
+        }
     ];
 
     if (req.remainingBalance !== undefined && req.remainingBalance >= 0) {
-        fields.push({ name: "💳 Vault Balance Remaining", value: `**$${Number(req.remainingBalance).toLocaleString()}**`, inline: true });
+        fields.push({
+            name: '🏦 Vault After Withdrawal',
+            value: `$${Number(req.remainingBalance).toLocaleString()}`,
+            inline: true
+        });
     }
 
+    // Fulfilled-by row — shown prominently when fulfilled
+    if (req.status === 'fulfilled' && req.fulfilledBy) {
+        fields.push({
+            name: '🏅 Fulfilled By',
+            value: `<@${req.fulfilledBy}> (@${req.fulfillerName || 'Banker'}) — <t:${Math.floor(req.fulfilledAt / 1000)}:f>`,
+            inline: false
+        });
+    }
+
+    // In-game status
     if (req.memberStatus) {
-        let statusBadge = `🟢 In Torn City (${req.memberStatus.state || 'Okay'})`;
+        let badge = `🟢 In Torn City (${req.memberStatus.state || 'Okay'})`;
         const state = (req.memberStatus.state || '').toLowerCase();
         if (state.includes('travel') || state.includes('abroad')) {
-            statusBadge = `✈️ **Traveling** (${req.memberStatus.description || 'Abroad'}) — ⚠️ *Cannot receive funds in flight!*`;
+            badge = `✈️ Traveling abroad — ⚠️ *Cannot receive vault transfer while in transit!*`;
         } else if (state.includes('hospital')) {
-            statusBadge = `🏥 **In Hospital** (${req.memberStatus.description || 'Medical'})`;
+            badge = `🏥 In Hospital (${req.memberStatus.description || 'Medical'})`;
         } else if (state.includes('jail')) {
-            statusBadge = `🚨 **In Jail** (${req.memberStatus.description || 'Federal'})`;
+            badge = `🚨 In Jail (${req.memberStatus.description || 'Federal'})`;
         }
-        fields.push({ name: "🚦 Requester In-Game Status", value: statusBadge, inline: false });
+        fields.push({ name: '🚦 In-Game Status at Request Time', value: badge, inline: false });
     }
 
-    fields.push({ name: "📋 Status", value: statusText, inline: false });
+    // Status line
+    fields.push({ name: '📋 Status', value: statusLine, inline: false });
 
+    // Reason
     if (req.reason) {
-        fields.push({ name: "📝 Note / Reason", value: String(req.reason).slice(0, 1000), inline: false });
+        fields.push({ name: '📝 Reason', value: String(req.reason).slice(0, 1000), inline: false });
     }
 
     return {
-        title: `🏦 Faction Vault Request #${req.id}`,
+        title: `${titlePrefix}  Vault Request #${req.id}`,
         color,
         fields,
         footer: { text: footerText },
@@ -7294,12 +7332,14 @@ async function executeFulfillRequest(reqId, interaction) {
         } catch(e) {}
     }
 
-    // Notify requester in channel (anti-mug prompt)
+    // Send a private (ephemeral-style) DM/reply only to the requester in the banking channel
+    // Use allowedMentions to suppress the @here noise — just post a quiet notice
     try {
         const targetChan = interaction.client.channels.cache.get(req.channelId || interaction.channelId);
         if (targetChan) {
             await targetChan.send({
-                content: `🎉 <@${req.userId}> Your vault withdrawal of **$${Number(req.amount).toLocaleString()}** was **fulfilled** by <@${interaction.user.id}>!\n⚠️ **Anti-Mug Notice**: Please deposit or spend your cash immediately in Torn to avoid being mugged!`
+                content: `<@${req.userId}> 💸 Your **$${Number(req.amount).toLocaleString()}** withdrawal has been sent by **@${req.fulfillerName || 'a Banker'}** — check your Torn wallet and spend or deposit quickly to stay safe!`,
+                allowedMentions: { users: [req.userId] } // Only ping the requester, not everyone
             });
         }
     } catch(e) {}
@@ -7307,7 +7347,7 @@ async function executeFulfillRequest(reqId, interaction) {
     const vaultUrl = "https://www.torn.com/factions.php?step=your#/tab=controls&option=give-to-user";
     return {
         success: true,
-        message: `🎉 You have fulfilled Request **#${req.id}** ($${Number(req.amount).toLocaleString()}) for <@${req.userId}>!\n👉 [Click here to Give Cash in Torn Vault](${vaultUrl})`
+        message: `✅ Request **#${req.id}** fulfilled — **$${Number(req.amount).toLocaleString()}** sent to **${req.tornName || req.userName}**!\n👉 [Open Torn Vault](${vaultUrl}) to give cash if you haven't yet.`
     };
 }
 
@@ -7640,7 +7680,7 @@ async function registerSlashCommands(token, guildId = null) {
     const commands = [
         // 1. Vault Banking (Tornium Replacement)
         new SlashCommandBuilder().setName('withdraw').setDescription('Request money from the faction vault (with overdraft protection)')
-            .addStringOption(opt => opt.setName('amount').setDescription('Amount to request (e.g. 10m, 500k, 25000000)').setRequired(true))
+            .addStringOption(opt => opt.setName('amount').setDescription('Amount to request (e.g. 10m, 500k, 25000000)').setRequired(true).setAutocomplete(true))
             .addStringOption(opt => opt.setName('reason').setDescription('Reason / notes for withdrawal (optional)')).toJSON(),
 
         new SlashCommandBuilder().setName('balance').setDescription('Check faction vault balance and donations')
@@ -7654,7 +7694,7 @@ async function registerSlashCommands(token, guildId = null) {
 
         new SlashCommandBuilder().setName('bank').setDescription('Faction vault banking suite')
             .addSubcommand(sub => sub.setName('request').setDescription('Request money from the faction vault')
-                .addStringOption(opt => opt.setName('amount').setDescription('Amount (e.g. 10m, 500k, 25000000)').setRequired(true))
+                .addStringOption(opt => opt.setName('amount').setDescription('Amount (e.g. 10m, 500k, 25000000)').setRequired(true).setAutocomplete(true))
                 .addStringOption(opt => opt.setName('reason').setDescription('Reason for withdrawal (optional)')))
             .addSubcommand(sub => sub.setName('balance').setDescription('Check vault balance')
                 .addStringOption(opt => opt.setName('member').setDescription('Member name or ID')))
@@ -7819,8 +7859,83 @@ function setupSlashBotEvents(bot, token) {
     });
 
     bot.on(Events.InteractionCreate, async (interaction) => {
+
+        // ── Amount Autocomplete for /withdraw and /bank request ──
+        if (interaction.isAutocomplete()) {
+            const cmd = interaction.commandName;
+            const focusedOption = interaction.options.getFocused(true);
+            if ((cmd === 'withdraw' || cmd === 'bank') && focusedOption.name === 'amount') {
+                const typed = (focusedOption.value || '').replace(/[$,\s]/g, '');
+                const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+
+                // Build smart preset suggestions based on vault balance if possible
+                let userBalance = null;
+                try {
+                    const vaultInfo = await getFactionVaultAndMember(apiKey, interaction);
+                    if (vaultInfo && vaultInfo.totalBalance > 0) userBalance = vaultInfo.totalBalance;
+                } catch(e) {}
+
+                // Generate nicely formatted amount suggestions
+                const formatAmt = (n) => {
+                    if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(n % 1_000_000_000 === 0 ? 0 : 1)}b`;
+                    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}m`;
+                    if (n >= 1_000) return `$${(n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 0)}k`;
+                    return `$${n.toLocaleString()}`;
+                };
+
+                let suggestions = [];
+
+                // If user has a balance, offer smart presets
+                if (userBalance) {
+                    const presets = [
+                        userBalance,
+                        Math.floor(userBalance * 0.75),
+                        Math.floor(userBalance * 0.5),
+                        Math.floor(userBalance * 0.25),
+                        5_000_000, 10_000_000, 25_000_000, 50_000_000, 100_000_000
+                    ].filter((n, i, arr) => n > 0 && n <= userBalance && arr.indexOf(n) === i)
+                     .sort((a, b) => b - a)
+                     .slice(0, 9);
+
+                    suggestions = presets.map(n => ({
+                        name: `${formatAmt(n)} ($${n.toLocaleString()})${n === userBalance ? ' ← Full Balance' : ''}`,
+                        value: String(n)
+                    }));
+                } else {
+                    // Fallback generic presets
+                    suggestions = [
+                        { name: '$500,000', value: '500000' },
+                        { name: '$1,000,000 (1m)', value: '1000000' },
+                        { name: '$2,500,000 (2.5m)', value: '2500000' },
+                        { name: '$5,000,000 (5m)', value: '5000000' },
+                        { name: '$10,000,000 (10m)', value: '10000000' },
+                        { name: '$25,000,000 (25m)', value: '25000000' },
+                        { name: '$50,000,000 (50m)', value: '50000000' },
+                        { name: '$100,000,000 (100m)', value: '100000000' },
+                        { name: '$250,000,000 (250m)', value: '250000000' }
+                    ];
+                }
+
+                // If the user is typing a number, filter and show a live-formatted match at top
+                if (typed && /^\d/.test(typed)) {
+                    const parsed = parseInt(typed.replace(/[^0-9]/g, ''), 10);
+                    if (!isNaN(parsed) && parsed > 0) {
+                        const liveEntry = {
+                            name: `$${parsed.toLocaleString()} (${formatAmt(parsed)})`,
+                            value: String(parsed)
+                        };
+                        suggestions = [liveEntry, ...suggestions.filter(s => s.value !== String(parsed))].slice(0, 25);
+                    }
+                }
+
+                return interaction.respond(suggestions.slice(0, 25)).catch(() => {});
+            }
+            return interaction.respond([]).catch(() => {});
+        }
+
         // ── Interactive Button Click Handler ──
         if (interaction.isButton()) {
+
             const customId = interaction.customId || '';
 
             // Warboard Target Claim
