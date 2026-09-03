@@ -100,6 +100,7 @@ async function loadConfigFromMongo() {
                 const ids = Object.keys(bankRequests).map(k => parseInt(k, 10)).filter(n => !isNaN(n));
                 if (ids.length > 0) bankRequestCounter = Math.max(bankRequestCounter, ...ids);
                 console.log(`[Mongo] Restored ${Object.keys(bankRequests).length} bank requests from MongoDB Atlas.`);
+                checkExpiredBankRequests();
             }
             if (saved.lastWarboardPayload && (!lastGoodWarboardPayload || !lastGoodWarboardPayload.friendly || lastGoodWarboardPayload.friendly.length === 0)) {
                 lastGoodWarboardPayload = saved.lastWarboardPayload;
@@ -7156,16 +7157,27 @@ async function getFactionVaultAndMember(apiKey, interaction = null, targetQuery 
     // Calculate existing active pending requests for this user
     let activePendingTotal = 0;
     const activePendingReqs = [];
+    let bankStateModified = false;
     for (const r of Object.values(bankRequests)) {
         if (r.status === 'pending') {
             const matchesDiscord = interaction && (r.userId === interaction.user?.id);
             const matchesTorn = targetId && (r.tornId === targetId);
             if (matchesDiscord || matchesTorn) {
+                // If this pending request exceeds total balance, it is an impossible overdraft: auto-cancel it!
+                if (totalBalance > 0 && Number(r.amount || 0) > totalBalance) {
+                    r.status = 'cancelled';
+                    r.cancelledBy = 'system';
+                    r.cancellerName = 'System (Overdraft Purged)';
+                    r.cancelledAt = Date.now();
+                    bankStateModified = true;
+                    continue;
+                }
                 activePendingTotal += Number(r.amount || 0);
                 activePendingReqs.push(r);
             }
         }
     }
+    if (bankStateModified) saveBankRequests();
 
     const availableBalance = Math.max(0, totalBalance - activePendingTotal);
 
@@ -7637,8 +7649,8 @@ async function registerSlashCommands(token, guildId = null) {
         new SlashCommandBuilder().setName('fulfill').setDescription('Fulfill a pending faction vault request (Banker only)')
             .addStringOption(opt => opt.setName('id').setDescription('Request ID (e.g. 1001)').setRequired(true)).toJSON(),
 
-        new SlashCommandBuilder().setName('cancel').setDescription('Cancel a pending vault withdrawal request')
-            .addStringOption(opt => opt.setName('id').setDescription('Request ID (e.g. 1001)').setRequired(true)).toJSON(),
+        new SlashCommandBuilder().setName('cancel').setDescription('Cancel your pending vault withdrawal request')
+            .addStringOption(opt => opt.setName('id').setDescription('Request ID (leave blank to cancel your latest pending request)')).toJSON(),
 
         new SlashCommandBuilder().setName('bank').setDescription('Faction vault banking suite')
             .addSubcommand(sub => sub.setName('request').setDescription('Request money from the faction vault')
@@ -7650,7 +7662,7 @@ async function registerSlashCommands(token, guildId = null) {
             .addSubcommand(sub => sub.setName('fulfill').setDescription('Fulfill a pending vault request (Banker only)')
                 .addStringOption(opt => opt.setName('id').setDescription('Request ID (e.g. 1001)').setRequired(true)))
             .addSubcommand(sub => sub.setName('cancel').setDescription('Cancel a pending vault request')
-                .addStringOption(opt => opt.setName('id').setDescription('Request ID (e.g. 1001)').setRequired(true)))
+                .addStringOption(opt => opt.setName('id').setDescription('Request ID (leave blank to cancel your latest pending request)')))
             .addSubcommand(sub => sub.setName('history').setDescription('View recent vault withdrawal transaction history')
                 .addStringOption(opt => opt.setName('member').setDescription('Filter by member name or ID (optional)'))).toJSON(),
 
@@ -7935,9 +7947,22 @@ function setupSlashBotEvents(bot, token) {
             return interaction.reply({ content: res.message, ephemeral: true }).catch(() => {});
         }
 
-        // Direct handling for /cancel and /bank cancel
+        // Direct handling for /cancel and /bank cancel (with optional ID)
         if (cmd === 'cancel' || (cmd === 'bank' && subcommand === 'cancel')) {
-            const reqId = (interaction.options.getString('id') || '').trim().replace(/[^0-9]/g, '');
+            let reqId = (interaction.options.getString('id') || '').trim().replace(/[^0-9]/g, '');
+            if (!reqId) {
+                const userPending = Object.values(bankRequests)
+                    .filter(r => r.status === 'pending' && (r.userId === interaction.user.id))
+                    .sort((a, b) => b.timestamp - a.timestamp);
+                if (userPending.length > 0) {
+                    reqId = userPending[0].id;
+                } else {
+                    return interaction.reply({ 
+                        content: "ℹ️ You do not have any active pending vault requests to cancel.", 
+                        ephemeral: true 
+                    });
+                }
+            }
             const res = await executeCancelRequest(reqId, interaction);
             return interaction.reply({ content: res.message, ephemeral: true }).catch(() => {});
         }
@@ -7995,17 +8020,14 @@ function setupSlashBotEvents(bot, token) {
             }
 
             // ── OVERDRAFT PREVENTION CHECK ──
-            if (amount > availableBalance) {
-                const pendingListStr = activePendingReqs.map(r => `#${r.id} ($${Number(r.amount).toLocaleString()})`).join(', ');
+            if (amount > totalBalance) {
                 return interaction.editReply({
                     embeds: [{
                         title: "❌ Overdraft Prevention — Request Denied",
-                        description: `You cannot withdraw **$${amount.toLocaleString()}** because it exceeds your available faction vault balance!\n\n` +
+                        description: `You cannot withdraw **$${amount.toLocaleString()}** because it exceeds your total faction vault balance of **$${totalBalance.toLocaleString()}**!\n\n` +
                                      `💵 **Total Vault Balance:** **$${totalBalance.toLocaleString()}**\n` +
-                                     `⏳ **Existing Pending Requests:** **$${activePendingTotal.toLocaleString()}**` + (pendingListStr ? ` (${pendingListStr})\n` : '\n') +
-                                     `💳 **Available to Withdraw:** **$${availableBalance.toLocaleString()}**\n` +
                                      `🚫 **Attempted Request:** **$${amount.toLocaleString()}**\n\n` +
-                                     `*Please reduce your request amount to $${availableBalance.toLocaleString()} or less, or cancel existing pending requests with \`/cancel\`.*`,
+                                     `*Please reduce your request amount to $${totalBalance.toLocaleString()} or less.*`,
                         color: 0xff4757,
                         footer: { text: "Faction Banking • Overdraft Protection Active" }
                     }]
@@ -8014,6 +8036,44 @@ function setupSlashBotEvents(bot, token) {
 
             // Build request object
             const reqId = String(++bankRequestCounter);
+
+            // Automatically supersede (replace) any previous pending request(s) from this member
+            let replacedNote = "";
+            if (activePendingReqs.length > 0) {
+                const oldIds = activePendingReqs.map(r => `#${r.id}`).join(', ');
+                for (const oldReq of activePendingReqs) {
+                    oldReq.status = 'cancelled';
+                    oldReq.cancelledBy = interaction.user.id;
+                    oldReq.cancellerName = `${interaction.user.username} (Superseded by #${reqId})`;
+                    oldReq.cancelledAt = Date.now();
+                    if (oldReq.channelId && oldReq.messageId) {
+                        try {
+                            const chan = interaction.client.channels.cache.get(oldReq.channelId);
+                            if (chan) {
+                                chan.messages.fetch(oldReq.messageId).then(m => {
+                                    if (m) {
+                                        m.edit({
+                                            embeds: [sanitizeEmbed(buildBankRequestEmbed(oldReq))],
+                                            components: [{
+                                                type: 1,
+                                                components: [{
+                                                    type: 2,
+                                                    style: 2,
+                                                    custom_id: `superseded_${oldReq.id}`,
+                                                    label: `🔄 Replaced by #${reqId} ($${amount.toLocaleString()})`,
+                                                    disabled: true
+                                                }]
+                                            }]
+                                        }).catch(() => {});
+                                    }
+                                }).catch(() => {});
+                            }
+                        } catch(e) {}
+                    }
+                }
+                replacedNote = `\n*(Previous pending request ${oldIds} was automatically replaced)*`;
+            }
+
             const req = {
                 id: reqId,
                 userId: interaction.user.id,
@@ -8025,7 +8085,7 @@ function setupSlashBotEvents(bot, token) {
                 timestamp: Date.now(),
                 status: 'pending',
                 balanceBefore: totalBalance,
-                remainingBalance: availableBalance - amount,
+                remainingBalance: totalBalance - amount,
                 memberStatus: memberStatus
             };
             bankRequests[reqId] = req;
@@ -8052,8 +8112,8 @@ function setupSlashBotEvents(bot, token) {
                     saveBankRequests();
 
                     return interaction.editReply({
-                        content: `✅ Your withdrawal request **#${req.id}** for **$${amount.toLocaleString()}** has been posted in <#${bankingChan.id}>!\n` +
-                                 `Remaining available balance: **$${(availableBalance - amount).toLocaleString()}**.`
+                        content: `✅ Your withdrawal request **#${req.id}** for **$${amount.toLocaleString()}** has been posted in <#${bankingChan.id}>!${replacedNote}\n` +
+                                 `Remaining available balance: **$${(totalBalance - amount).toLocaleString()}**.`
                     });
                 } catch(err) {
                     console.error("[Bank Request] Failed sending to banking channel:", err.message);
@@ -8072,8 +8132,8 @@ function setupSlashBotEvents(bot, token) {
                 saveBankRequests();
 
                 return interaction.editReply({
-                    content: `✅ Your withdrawal request **#${req.id}** for **$${amount.toLocaleString()}** has been posted below!\n` +
-                             `Remaining available balance: **$${(availableBalance - amount).toLocaleString()}**.`
+                    content: `✅ Your withdrawal request **#${req.id}** for **$${amount.toLocaleString()}** has been posted below!${replacedNote}\n` +
+                             `Remaining available balance: **$${(totalBalance - amount).toLocaleString()}**.`
                 });
             } catch(e) {
                 console.error("[Bank Request] Failed sending to current channel:", e.message);
