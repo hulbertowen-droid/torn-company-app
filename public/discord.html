@@ -267,12 +267,12 @@
                 <div class="field-grid">
                     <div class="field-group">
                         <label class="field-label" for="global-bottoken">Bot Token</label>
-                        <input class="field-input" type="password" id="global-bottoken" placeholder="Paste token from Discord Developer Portal" autocomplete="off" oninput="updateInviteLink()">
+                        <input class="field-input" type="password" id="global-bottoken" name="discord_bot_token_field" placeholder="Paste token from Discord Developer Portal" autocomplete="new-password" oninput="updateInviteLink()">
                         <span class="field-hint">Stored on the server — never exposed in URLs or logs.</span>
                     </div>
                     <div class="field-group">
                         <label class="field-label" for="global-channelid">Alert Channel ID</label>
-                        <input class="field-input" type="text" id="global-channelid" placeholder="e.g. 1234567890123456789" autocomplete="off">
+                        <input class="field-input" type="text" id="global-channelid" name="discord_alert_channel_id_num" inputmode="numeric" placeholder="e.g. 1234567890123456789" autocomplete="off" oninput="sanitizeChannelIdInput(this)" onpaste="handleChannelPaste(event, this)">
                         <span class="field-hint">Right-click the channel in Discord → Copy Channel ID (requires Developer Mode).</span>
                     </div>
                 </div>
@@ -557,13 +557,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         const res = await fetch('/api/get-discord-config');
         const cfg = await res.json();
-        document.getElementById('global-bottoken').value = cfg.globalBotToken || '';
-        document.getElementById('global-channelid').value = cfg.globalChannelId || localStorage.getItem('warboard_channelid') || '';
+
+        let tokenVal = cfg.globalBotToken || localStorage.getItem('warboard_bottoken') || '';
+        let chanVal = cfg.globalChannelId || localStorage.getItem('warboard_channelid') || '';
+
+        // Clean up accidental swaps or bot tokens saved into channel ID
+        if (chanVal && (chanVal.includes('.') || /[a-zA-Z]/.test(chanVal))) {
+            if (!tokenVal && chanVal.length > 25) {
+                tokenVal = chanVal;
+                localStorage.setItem('warboard_bottoken', tokenVal);
+            }
+            localStorage.removeItem('warboard_channelid');
+            chanVal = '';
+        }
+
+        document.getElementById('global-bottoken').value = tokenVal;
+        document.getElementById('global-channelid').value = chanVal.replace(/[^0-9]/g, '');
         document.getElementById('discord-userid').value = cfg.personalDiscordId || localStorage.getItem('warboard_discordid') || '';
         if (document.getElementById('inactivity-roleid')) document.getElementById('inactivity-roleid').value = cfg.inactivityRoleId || localStorage.getItem('warboard_inactivity_roleid') || '';
-        if (document.getElementById('banking-channelid')) document.getElementById('banking-channelid').value = cfg.bankingChannelId || localStorage.getItem('warboard_banking_channelid') || '';
-        if (document.getElementById('banker-roleid')) document.getElementById('banker-roleid').value = cfg.bankerRoleId || localStorage.getItem('warboard_banker_roleid') || '';
-        if (document.getElementById('guild-id-input')) document.getElementById('guild-id-input').value = cfg.guildId || localStorage.getItem('warboard_guildid') || '';
+        if (document.getElementById('banking-channelid')) document.getElementById('banking-channelid').value = (cfg.bankingChannelId || localStorage.getItem('warboard_banking_channelid') || '').replace(/[^0-9]/g, '');
+        if (document.getElementById('banker-roleid')) document.getElementById('banker-roleid').value = (cfg.bankerRoleId || localStorage.getItem('warboard_banker_roleid') || '').replace(/[^0-9]/g, '');
+        if (document.getElementById('guild-id-input')) document.getElementById('guild-id-input').value = (cfg.guildId || localStorage.getItem('warboard_guildid') || '').replace(/[^0-9]/g, '');
         const flags = {
             targetOnline: cfg.targetOnline === true,
             targetLanded: cfg.targetLanded === true || cfg.targetLanded === undefined,
@@ -581,7 +595,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (el) { el.checked = val; const item = el.closest('.trigger-row'); if (item) item.classList.toggle('on', val); }
         }
         updateKillswitchUI(cfg.notificationsKilled === true);
-        setConnectionStatus(!!(cfg.globalBotToken && cfg.globalChannelId));
+        setConnectionStatus(!!(tokenVal && chanVal));
         updateActiveCount();
         updateInviteLink();
         const localFfKey = localStorage.getItem('warboard_ffkey') || '';
@@ -592,6 +606,34 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     } catch (e) { setConnectionStatus(false); }
 });
+
+function sanitizeChannelIdInput(el) {
+    if (!el) return;
+    const val = el.value.trim();
+    if (val.includes('.') || /[a-zA-Z]/.test(val)) {
+        if (val.length > 25 && val.includes('.')) {
+            const tokenInput = document.getElementById('global-bottoken');
+            if (tokenInput && !tokenInput.value) {
+                tokenInput.value = val;
+                localStorage.setItem('warboard_bottoken', val);
+                updateInviteLink();
+            }
+            const statusEl = document.getElementById('status-msg');
+            if (statusEl) {
+                statusEl.style.color = 'var(--gold)';
+                statusEl.textContent = 'ℹ️ Detected Bot Token pasted into Alert Channel ID — moved to Bot Token field above. Please enter your numeric Channel ID.';
+                setTimeout(() => { statusEl.textContent = ''; }, 7000);
+            }
+        }
+        el.value = el.value.replace(/[^0-9]/g, '');
+    }
+}
+
+function handleChannelPaste(e, el) {
+    setTimeout(() => {
+        sanitizeChannelIdInput(el);
+    }, 10);
+}
 
 let isKillswitchActive = false;
 function updateKillswitchUI(killed) {
@@ -646,13 +688,29 @@ async function saveDiscordConfig() {
     const btn = document.getElementById('save-btn');
     const myKey = localStorage.getItem('warboard_apikey') || '';
     if (!myKey) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ Missing API Key — go to Settings first.'; return; }
-    const botToken = document.getElementById('global-bottoken').value.trim();
-    const channelId = document.getElementById('global-channelid').value.trim();
+    let botToken = document.getElementById('global-bottoken').value.trim();
+    let channelId = document.getElementById('global-channelid').value.trim();
     const discordId = document.getElementById('discord-userid').value.trim();
     const inactivityRoleId = document.getElementById('inactivity-roleid')?.value.trim() || '';
-    const bankingChannelId = document.getElementById('banking-channelid')?.value.trim() || '';
-    const bankerRoleId = document.getElementById('banker-roleid')?.value.trim() || '';
-    const guildId = document.getElementById('guild-id-input')?.value.trim() || '';
+    const bankingChannelId = (document.getElementById('banking-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const bankerRoleId = (document.getElementById('banker-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const guildId = (document.getElementById('guild-id-input')?.value.trim() || '').replace(/[^0-9]/g, '');
+
+    // Guard: Prevent saving a bot token into channel ID
+    if (channelId.includes('.') || /[a-zA-Z]/.test(channelId)) {
+        if (channelId.length > 25 && !botToken) {
+            botToken = channelId;
+            document.getElementById('global-bottoken').value = botToken;
+            updateInviteLink();
+        }
+        channelId = '';
+        document.getElementById('global-channelid').value = '';
+        statusEl.style.color = 'var(--red)';
+        statusEl.textContent = '❌ Alert Channel ID must be numeric digits only (e.g. 1234567890123456789), not a Bot Token. The Bot Token was moved to the Bot Token field above.';
+        return;
+    }
+    channelId = channelId.replace(/[^0-9]/g, '');
+
     localStorage.setItem('warboard_bottoken', botToken); localStorage.setItem('warboard_channelid', channelId); localStorage.setItem('warboard_discordid', discordId);
     localStorage.setItem('warboard_inactivity_roleid', inactivityRoleId); localStorage.setItem('warboard_guildid', guildId);
     localStorage.setItem('warboard_banking_channelid', bankingChannelId); localStorage.setItem('warboard_banker_roleid', bankerRoleId);

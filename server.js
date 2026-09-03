@@ -62,6 +62,17 @@ async function loadConfigFromMongo() {
                 delete discordConfig.apiKey;
                 delete discordConfig.myName;
                 global.isNotificationsKilled = !!discordConfig.notificationsKilled;
+
+                // CRITICAL REPAIR: Ensure channel IDs never contain a bot token
+                if (discordConfig.globalChannelId && (discordConfig.globalChannelId.includes('.') || /[a-zA-Z]/.test(discordConfig.globalChannelId))) {
+                    if (!discordConfig.globalBotToken && discordConfig.globalChannelId.length > 30) {
+                        discordConfig.globalBotToken = discordConfig.globalChannelId.trim();
+                    }
+                    discordConfig.globalChannelId = "";
+                }
+                if (discordConfig.bankingChannelId && (discordConfig.bankingChannelId.includes('.') || /[a-zA-Z]/.test(discordConfig.bankingChannelId))) {
+                    discordConfig.bankingChannelId = "";
+                }
             }
             if (saved.companyConfig) companyConfig = { ...companyConfig, ...saved.companyConfig };
             if (saved.ocConfig) ocConfig = { ...ocConfig, ...saved.ocConfig };
@@ -2136,10 +2147,53 @@ function autoDetectEnemyFaction(data) {
 app.get('/health', (req, res) => res.status(200).send("OK"));
 
 
-app.get('/api/get-discord-config', (req, res) => { res.json(discordConfig); });
+app.get('/api/get-discord-config', (req, res) => {
+    // Safety check: ensure globalChannelId never leaks or stores a bot token
+    if (discordConfig.globalChannelId && (discordConfig.globalChannelId.includes('.') || /[a-zA-Z]/.test(discordConfig.globalChannelId))) {
+        if (!discordConfig.globalBotToken && discordConfig.globalChannelId.length > 30) {
+            discordConfig.globalBotToken = discordConfig.globalChannelId.trim();
+        }
+        discordConfig.globalChannelId = "";
+        saveDiscordConfig();
+    }
+    if (discordConfig.bankingChannelId && (discordConfig.bankingChannelId.includes('.') || /[a-zA-Z]/.test(discordConfig.bankingChannelId))) {
+        discordConfig.bankingChannelId = "";
+        saveDiscordConfig();
+    }
+    res.json(discordConfig);
+});
 
 app.post('/api/save-discord-config', async (req, res) => { 
-    discordConfig = { ...discordConfig, ...req.body }; 
+    const payload = { ...req.body };
+
+    // SANITIZATION: Protect against bot tokens being placed into channel ID fields
+    if (payload.globalChannelId !== undefined) {
+        let rawChan = String(payload.globalChannelId || '').trim();
+        if (rawChan.includes('.') || /[a-zA-Z]/.test(rawChan)) {
+            // It's a bot token! If globalBotToken wasn't passed, rescue it
+            if ((!payload.globalBotToken || !payload.globalBotToken.includes('.')) && rawChan.length > 30) {
+                payload.globalBotToken = rawChan;
+            }
+            payload.globalChannelId = "";
+        } else {
+            payload.globalChannelId = rawChan.replace(/[^0-9]/g, '');
+        }
+    }
+
+    if (payload.bankingChannelId !== undefined) {
+        let rawBank = String(payload.bankingChannelId || '').trim();
+        if (rawBank.includes('.') || /[a-zA-Z]/.test(rawBank)) {
+            payload.bankingChannelId = "";
+        } else {
+            payload.bankingChannelId = rawBank.replace(/[^0-9]/g, '');
+        }
+    }
+
+    if (payload.globalBotToken !== undefined) {
+        payload.globalBotToken = String(payload.globalBotToken || '').trim();
+    }
+
+    discordConfig = { ...discordConfig, ...payload }; 
     if (discordConfig.apiKey) {
         try {
             const profileRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${discordConfig.apiKey}`);
@@ -4151,8 +4205,17 @@ app.get('/api/master-config', (req, res) => {
 app.post('/api/master-config', (req, res) => {
     const { discordWebhook, globalToggles, enemyId } = req.body;
     
-    // Save to discord config
-    if (discordWebhook !== undefined) discordConfig.globalChannelId = discordWebhook;
+    // Save to discord config safely: only set globalChannelId if numeric, not if it's a bot token
+    if (discordWebhook !== undefined && typeof discordWebhook === 'string') {
+        const clean = discordWebhook.trim();
+        if (/^\d{15,22}$/.test(clean)) {
+            discordConfig.globalChannelId = clean;
+        } else if (clean.includes('.') && clean.length > 30) {
+            if (!discordConfig.globalBotToken) discordConfig.globalBotToken = clean;
+        } else if (clean.startsWith('http')) {
+            discordConfig.webhookUrl = clean;
+        }
+    }
     if (enemyId !== undefined) discordConfig.enemyFacId = enemyId;
     
     if (globalToggles) {
@@ -4174,12 +4237,24 @@ app.post('/api/master-config', (req, res) => {
 app.post('/api/sync-configs', (req, res) => {
     const { company, discord, oc, market, apiKey, globalBotToken, globalChannelId, ffKey, tsKey, enemyFacId, myName, cpm } = req.body;
     if (company) { companyConfig = { ...companyConfig, ...company }; saveCompanyConfig(); }
-    if (discord) { discordConfig = { ...discordConfig, ...discord }; saveDiscordConfig(); }
+    if (discord) {
+        const safeDiscord = { ...discord };
+        if (safeDiscord.globalChannelId && (safeDiscord.globalChannelId.includes('.') || /[a-zA-Z]/.test(safeDiscord.globalChannelId))) {
+            delete safeDiscord.globalChannelId;
+        }
+        discordConfig = { ...discordConfig, ...safeDiscord };
+        saveDiscordConfig();
+    }
     if (oc) { ocConfig = { ...ocConfig, ...oc }; saveOcConfig(); }
     if (market) { marketConfig = { ...marketConfig, ...market }; saveMarketConfig(); }
     
-    if (globalBotToken) discordConfig.globalBotToken = globalBotToken;
-    if (globalChannelId) discordConfig.globalChannelId = globalChannelId;
+    if (globalBotToken) discordConfig.globalBotToken = String(globalBotToken).trim();
+    if (globalChannelId) {
+        const cleanChan = String(globalChannelId).trim();
+        if (/^\d{15,22}$/.test(cleanChan)) {
+            discordConfig.globalChannelId = cleanChan;
+        }
+    }
     if (enemyFacId) discordConfig.enemyFacId = enemyFacId;
     if (ffKey) discordConfig.ffKey = ffKey;
     if (tsKey) discordConfig.tsKey = tsKey;

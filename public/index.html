@@ -770,7 +770,7 @@
                 </div>
                 <div>
                     <label>Faction Alert Channel ID</label>
-                    <input type="text" id="discord-channelid" placeholder="Paste Channel ID here">
+                    <input type="text" id="discord-channelid" inputmode="numeric" placeholder="Paste Channel ID here" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
                     <button type="button" onclick="testDiscordWebhook()" style="background:var(--blue);color:#000;margin-top:8px;width:100%;border:none;padding:9px;border-radius:6px;font-weight:700;cursor:pointer;font-family:inherit;font-size:0.85em;">🧪 Test Discord Connection</button>
                     <div id="discord-test-status" style="font-size:0.78em;margin-top:5px;font-weight:700;text-align:center;"></div>
                 </div>
@@ -1164,8 +1164,12 @@ function openSettings() {
     }
     document.getElementById("enemy-id").value = enemyFacId;
     document.getElementById("my-name").value = myName;
+    if (globalChannelId && (globalChannelId.includes('.') || /[a-zA-Z]/.test(globalChannelId))) {
+        globalChannelId = '';
+        localStorage.removeItem('warboard_channelid');
+    }
     document.getElementById("discord-bottoken").value = globalBotToken;
-    document.getElementById("discord-channelid").value = globalChannelId;
+    document.getElementById("discord-channelid").value = globalChannelId.replace(/[^0-9]/g, '');
     document.getElementById("api-cpm").value = cpm;
     document.getElementById("settings-modal").style.display = "flex";
 }
@@ -1196,7 +1200,15 @@ async function saveSettings() {
     enemyFacId = document.getElementById("enemy-id").value.trim();
     myName = document.getElementById("my-name").value.trim() || "Agent";
     globalBotToken = document.getElementById("discord-bottoken").value.trim();
-    globalChannelId = document.getElementById("discord-channelid").value.trim();
+    let rawChan = document.getElementById("discord-channelid").value.trim();
+    if (rawChan.includes('.') || /[a-zA-Z]/.test(rawChan)) {
+        if (!globalBotToken && rawChan.length > 25) {
+            globalBotToken = rawChan;
+            document.getElementById("discord-bottoken").value = globalBotToken;
+        }
+        rawChan = '';
+    }
+    globalChannelId = rawChan.replace(/[^0-9]/g, '');
     let parsedCpm = parseInt(document.getElementById("api-cpm").value);
     cpm = (parsedCpm && parsedCpm > 0 && parsedCpm <= 60) ? parsedCpm : 12;
     localStorage.setItem("warboard_apikey", myKey);

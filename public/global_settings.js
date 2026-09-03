@@ -77,7 +77,9 @@ window.openGlobalSettings = async function() {
             if (data.tsKey) document.getElementById('gs-ts-key').value = data.tsKey;
             if (data.enemyFacId) document.getElementById('gs-enemy-id').value = data.enemyFacId;
             if (data.myName) document.getElementById('gs-my-name').value = data.myName;
-            if (data.globalChannelId) document.getElementById('gs-discord-webhook').value = data.globalChannelId;
+            if (data.globalChannelId && !data.globalChannelId.includes('.') && !/[a-zA-Z]/.test(data.globalChannelId)) {
+                document.getElementById('gs-discord-webhook').value = data.globalChannelId;
+            }
         } catch(e) {}
     }
 };
