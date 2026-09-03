@@ -6912,6 +6912,30 @@ function checkExpiredBankRequests() {
                     } catch(e) {}
                 })();
             }
+        } else if (req.status === 'verifying' && (now - (req.fulfilledAt || req.timestamp) > 3.5 * 60 * 1000)) {
+            // Safety timeout: if left in verifying for >3.5m (e.g. server restart during loop), revert to pending
+            req.status = 'pending';
+            req.fulfilledBy = null;
+            req.fulfillerName = null;
+            req.fulfilledAt = null;
+            changed = true;
+
+            if (req.channelId && req.messageId && slashCommandBot?.isReady?.()) {
+                (async () => {
+                    try {
+                        const chan = slashCommandBot.channels.cache.get(req.channelId);
+                        if (chan) {
+                            const msg = await chan.messages.fetch(req.messageId);
+                            if (msg) {
+                                await msg.edit({
+                                    embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
+                                    components: buildBankRequestButtons(req)
+                                });
+                            }
+                        }
+                    } catch(e) {}
+                })();
+            }
         }
     }
     if (changed) saveBankRequests();
@@ -7004,8 +7028,14 @@ function buildBankRequestEmbed(req) {
     };
 }
 
+function getPreFilledVaultUrl(tornId, amount) {
+    const id = String(tornId || '').trim();
+    const amt = parseInt(amount, 10) || 0;
+    return `https://www.torn.com/factions.php?step=your&option=give-to-user&giveMoneyTo=${id}&addMoneyTo=${id}&money=${amt}#/tab=controls&option=give-to-user&giveMoneyTo=${id}&addMoneyTo=${id}&money=${amt}`;
+}
+
 function buildBankRequestButtons(req) {
-    const vaultLink = `https://www.torn.com/factions.php?step=your#/tab=controls&option=give-to-user`;
+    const vaultUrl = getPreFilledVaultUrl(req.tornId, req.amount);
     const profileLink = req.tornId ? `https://www.torn.com/profiles.php?XID=${req.tornId}` : null;
     const amtFmt = Number(req.amount).toLocaleString();
 
@@ -7013,9 +7043,15 @@ function buildBankRequestButtons(req) {
         const row = [
             {
                 type: 2,
-                style: 1, // Primary / Blue — "Send the money"
+                style: 5, // Direct Link to pre-filled Torn vault
+                label: `💸 Give Cash in Torn ($${amtFmt})`,
+                url: vaultUrl
+            },
+            {
+                type: 2,
+                style: 3, // Green Success - verify payment from logs
                 custom_id: `bank_pay_${req.id}`,
-                label: `💸 Give Cash in Torn ($${amtFmt})`
+                label: '🔍 Verify & Fulfill'
             },
             {
                 type: 2,
@@ -7027,8 +7063,8 @@ function buildBankRequestButtons(req) {
         if (profileLink) {
             row.push({
                 type: 2,
-                style: 5, // Link
-                label: '👤 Member Profile',
+                style: 5,
+                label: '👤 Profile',
                 url: profileLink
             });
         }
@@ -7041,20 +7077,26 @@ function buildBankRequestButtons(req) {
                     type: 2,
                     style: 2,
                     custom_id: `verifying_display_${req.id}`,
-                    label: `🔄 Verifying Payment... (auto-confirms in ~3 min)`,
+                    label: `🔄 Checking Logs... (3m timeout)`,
                     disabled: true
                 },
                 {
                     type: 2,
-                    style: 3, // Green — manual confirm
-                    custom_id: `bank_confirm_${req.id}`,
-                    label: '✅ Confirm Manually'
+                    style: 1, // Primary Blue - manual log check
+                    custom_id: `bank_check_logs_${req.id}`,
+                    label: '🔍 Check Logs Now'
                 },
                 {
                     type: 2,
-                    style: 4,
+                    style: 4, // Danger Red
                     custom_id: `bank_revert_${req.id}`,
-                    label: '↩️ Not Sent — Revert'
+                    label: '↩️ Revert to Pending'
+                },
+                {
+                    type: 2,
+                    style: 5, // Direct Link
+                    label: '💸 Open Vault',
+                    url: vaultUrl
                 }
             ]
         }];
@@ -7072,7 +7114,7 @@ function buildBankRequestButtons(req) {
             row.push({
                 type: 2,
                 style: 5,
-                label: '👤 Member Profile',
+                label: '👤 Profile',
                 url: profileLink
             });
         }
@@ -7251,16 +7293,94 @@ function buildBankHistoryEmbed(targetMember = null) {
     };
 }
 
-// ── Faction log verification: poll after banker clicks Pay ──────────────────
-async function verifyBankPayment(req, apiKey, botClient) {
-    const maxWait = 3 * 60 * 1000; // 3 minutes
-    const pollInterval = 30 * 1000; // every 30 seconds
-    const startedAt = Date.now();
-    const requiredAmount = Number(req.amount);
-    const targetName = (req.tornName || '').toLowerCase();
-    const targetId = req.tornId;
+// ── Faction Log & Balance Verification for Vault Payments ───────────────────
+async function checkFactionLogForPayment(req, apiKey) {
+    if (!apiKey) return { verified: false, reason: "no_api_key" };
+    const facId = discordConfig.factionId || dynamicFactionId || "";
+    const url = facId
+        ? `https://api.torn.com/faction/${facId}?selections=fundsnews,mainnews,donations&key=${apiKey}`
+        : `https://api.torn.com/faction/?selections=fundsnews,mainnews,donations&key=${apiKey}`;
 
-    const updateEmbed = async () => {
+    try {
+        const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+        const data = await res.json();
+        if (data.error) return { verified: false, reason: data.error.error || "api_error" };
+
+        const requiredAmount = Number(req.amount);
+        const targetId = String(req.tornId || "").trim();
+        const targetName = (req.tornName || "").trim().toLowerCase();
+        // Allow up to 2 minutes before the request timestamp to account for clock skew
+        const cutoff = Math.floor((req.timestamp - 120000) / 1000);
+
+        // 1. Check fundsnews and mainnews
+        const newsItems = [
+            ...Object.values(data.fundsnews || {}),
+            ...Object.values(data.mainnews || {})
+        ];
+
+        for (const entry of newsItems) {
+            if (!entry || !entry.timestamp) continue;
+            if (entry.timestamp < cutoff) continue;
+
+            const newsRaw = String(entry.news || "");
+            const newsLower = newsRaw.toLowerCase();
+
+            // Check if entry mentions target member by ID or Name
+            const idMatched = targetId && (
+                newsLower.includes(targetId) ||
+                newsLower.includes(`xid=${targetId}`) ||
+                newsLower.includes(`[${targetId}]`)
+            );
+            const nameMatched = targetName && newsLower.includes(targetName);
+
+            if (!idMatched && !nameMatched) continue;
+
+            // Check if entry mentions the amount
+            const amtFormatted = requiredAmount.toLocaleString().toLowerCase();
+            const amtRaw = String(requiredAmount);
+            const amountMatched = newsLower.includes(`$${amtFormatted}`) ||
+                                  newsLower.includes(amtFormatted) ||
+                                  newsLower.includes(`$${amtRaw}`) ||
+                                  newsLower.includes(amtRaw);
+
+            if (!amountMatched) continue;
+
+            // Action keywords: gave, transferred, sent, withdrawal, give
+            const isGiveAction = newsLower.includes("gave") ||
+                                 newsLower.includes("give") ||
+                                 newsLower.includes("transfer") ||
+                                 newsLower.includes("sent") ||
+                                 newsLower.includes("withdr");
+
+            if (isGiveAction) {
+                return { verified: true, source: "news", entry: newsRaw };
+            }
+        }
+
+        // 2. Check donations balance drop
+        // If the user's money_balance in donations decreased by at least req.amount compared to req.balanceBefore
+        if (targetId && data.donations && data.donations[targetId] && req.balanceBefore !== undefined && req.balanceBefore > 0) {
+            const donor = data.donations[targetId];
+            const currentBal = Number(donor.money_balance ?? donor.money ?? 0);
+            const expectedMax = req.balanceBefore - requiredAmount;
+            if (currentBal <= expectedMax) {
+                return { verified: true, source: "donations_drop", currentBal, balanceBefore: req.balanceBefore };
+            }
+        }
+
+        return { verified: false, reason: "not_found" };
+    } catch(err) {
+        return { verified: false, reason: err.message };
+    }
+}
+
+// ── Background Polling for Log Verification ────────────────────────────────
+async function verifyBankPayment(req, apiKey, botClient) {
+    const maxWait = 3 * 60 * 1000; // 3 minutes timeout
+    const pollInterval = 20 * 1000; // poll every 20 seconds
+    const startedAt = Date.now();
+
+    const updateMsg = async () => {
         if (!req.channelId || !req.messageId) return;
         try {
             const chan = botClient.channels.cache.get(req.channelId);
@@ -7273,60 +7393,46 @@ async function verifyBankPayment(req, apiKey, botClient) {
         } catch(e) {}
     };
 
-    const dmRequester = async (text) => {
-        try {
-            const user = await botClient.users.fetch(req.userId).catch(() => null);
-            if (user) await user.send(text).catch(() => {});
-        } catch(e) {}
-    };
-
-    const dmBanker = async (text) => {
-        if (!req.fulfilledBy) return;
-        try {
-            const user = await botClient.users.fetch(req.fulfilledBy).catch(() => null);
-            if (user) await user.send(text).catch(() => {});
-        } catch(e) {}
-    };
-
     while (Date.now() - startedAt < maxWait) {
         await new Promise(r => setTimeout(r, pollInterval));
-        if (req.status !== 'verifying') return; // manually confirmed or reverted
+        if (req.status !== 'verifying') return; // Cancelled, fulfilled, or reverted manually
 
-        // Poll faction log
         try {
-            const logRes = await fetch(`https://api.torn.com/faction/?selections=log&key=${apiKey}`, { signal: AbortSignal.timeout(6000) });
-            const logData = await logRes.json();
-            const logs = logData.log || {};
-            const cutoff = (req.fulfilledAt || req.timestamp) - 30000; // 30s before pay click
+            const check = await checkFactionLogForPayment(req, apiKey);
+            if (check.verified) {
+                req.status = 'fulfilled';
+                req.verifiedAt = Date.now();
+                saveBankRequests();
+                await updateMsg();
 
-            for (const entry of Object.values(logs)) {
-                if (!entry.timestamp || entry.timestamp * 1000 < cutoff) continue;
-                const news = (entry.news || '').toLowerCase();
-                const amtMatch = news.includes(requiredAmount.toLocaleString()) || news.includes(`$${requiredAmount}`);
-                const memberMatch = (targetId && news.includes(targetId)) || (targetName && news.includes(targetName));
-                // Check for "gave" money entries
-                if ((amtMatch || (Number(entry.data?.money || 0) === requiredAmount)) && memberMatch) {
-                    // ✅ Confirmed in faction log
-                    req.status = 'fulfilled';
-                    req.verifiedAt = Date.now();
-                    saveBankRequests();
-                    await updateEmbed();
-                    await dmRequester(`✅ **${Number(req.amount).toLocaleString()}** from the faction vault is on its way to you — confirmed by @${req.fulfillerName || 'your banker'}. Spend or deposit quickly to stay safe!`);
-                    return;
-                }
+                // DM requester quietly
+                try {
+                    const user = await botClient.users.fetch(req.userId).catch(() => null);
+                    if (user) await user.send(`✅ Your vault withdrawal of **$${Number(req.amount).toLocaleString()}** has been confirmed by @${req.fulfillerName || 'a Banker'}! Spend or deposit quickly to stay safe!`).catch(() => {});
+                } catch(e) {}
+                return;
             }
         } catch(e) {}
     }
 
-    // 3 minutes elapsed — not confirmed in log — revert to pending
+    // If 3 minutes elapsed and still not verified in logs:
     if (req.status === 'verifying') {
+        const bankerId = req.fulfilledBy;
         req.status = 'pending';
         req.fulfilledBy = null;
         req.fulfillerName = null;
         req.fulfilledAt = null;
         saveBankRequests();
-        await updateEmbed();
-        await dmBanker(`⚠️ Vault Request **#${req.id}** ($${Number(req.amount).toLocaleString()} for **${req.tornName || 'member'}**) was not found in the faction logs after 3 minutes and has been **reverted to pending**.\n\nPlease give the cash in Torn and click "Give Cash" again, or ask another banker to handle it.`);
+        await updateMsg();
+
+        if (bankerId) {
+            try {
+                const bankerUser = await botClient.users.fetch(bankerId).catch(() => null);
+                if (bankerUser) {
+                    await bankerUser.send(`⚠️ **Faction Vault Alert:** Request **#${req.id}** ($${Number(req.amount).toLocaleString()} for **${req.tornName || 'member'}**) was not found in Torn faction logs after 3 minutes and has been **reverted to pending**.\n\nPlease ensure you gave the cash in Torn before fulfilling.`).catch(() => {});
+                }
+            } catch(e) {}
+        }
     }
 }
 
@@ -7345,48 +7451,84 @@ async function executeFulfillRequest(reqId, interaction) {
         }
     }
 
-    // CRITICAL RACE CONDITION CHECK
-    if (req.status !== 'pending') {
-        if (req.status === 'verifying') {
-            return { success: false, message: `⚠️ Request **#${reqId}** is already being verified — <@${req.fulfilledBy}> clicked "Give Cash" <t:${Math.floor(req.fulfilledAt / 1000)}:R>. Wait for log confirmation or click **Confirm Manually** / **Revert** on the message.` };
-        } else if (req.status === 'fulfilled') {
+    // Check status
+    if (req.status !== 'pending' && req.status !== 'verifying') {
+        if (req.status === 'fulfilled') {
             return { success: false, message: `⚠️ Request **#${reqId}** was already fulfilled by <@${req.fulfilledBy}> (<t:${Math.floor(req.fulfilledAt / 1000)}:R>).` };
         } else {
             return { success: false, message: `⚠️ Request **#${reqId}** is no longer pending (status: **${req.status}**).` };
         }
     }
 
-    // Lock into verifying state
+    const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+    const check = await checkFactionLogForPayment(req, apiKey);
+
+    if (check.verified) {
+        req.status = 'fulfilled';
+        req.fulfilledBy = interaction.user.id;
+        req.fulfillerName = interaction.user.username;
+        req.fulfilledAt = Date.now();
+        req.verifiedAt = Date.now();
+        saveBankRequests();
+
+        if (req.channelId && req.messageId) {
+            try {
+                const targetChan = interaction.client.channels.cache.get(req.channelId);
+                const targetMsg = targetChan && await targetChan.messages.fetch(req.messageId).catch(() => null);
+                if (targetMsg) {
+                    await targetMsg.edit({
+                        embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
+                        components: buildBankRequestButtons(req)
+                    }).catch(() => {});
+                }
+            } catch(e) {}
+        }
+
+        try {
+            const user = await interaction.client.users.fetch(req.userId).catch(() => null);
+            if (user) await user.send(`✅ Your vault withdrawal of **$${Number(req.amount).toLocaleString()}** has been confirmed by @${req.fulfillerName}! Spend or deposit quickly to stay safe!`).catch(() => {});
+        } catch(e) {}
+
+        return {
+            success: true,
+            verified: true,
+            message: `✅ **Verified in Torn Faction Logs!**\nPayment of **$${Number(req.amount).toLocaleString()}** to **${req.tornName || req.userName} [${req.tornId}]** was confirmed in faction logs.\nRequest **#${req.id}** is now marked fulfilled.`
+        };
+    }
+
+    // Not verified yet in logs:
+    // Transition to verifying state, start 3-minute poller
     req.status = 'verifying';
     req.fulfilledBy = interaction.user.id;
     req.fulfillerName = interaction.user.username;
     req.fulfilledAt = Date.now();
     saveBankRequests();
 
-    // Update embed to verifying state
     if (req.channelId && req.messageId) {
         try {
             const targetChan = interaction.client.channels.cache.get(req.channelId);
-            if (targetChan) {
-                const targetMsg = await targetChan.messages.fetch(req.messageId);
-                if (targetMsg) {
-                    await targetMsg.edit({
-                        embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
-                        components: buildBankRequestButtons(req)
-                    });
-                }
+            const targetMsg = targetChan && await targetChan.messages.fetch(req.messageId).catch(() => null);
+            if (targetMsg) {
+                await targetMsg.edit({
+                    embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
+                    components: buildBankRequestButtons(req)
+                }).catch(() => {});
             }
         } catch(e) {}
     }
 
-    // Start background log verification (non-blocking)
-    const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+    // Start background poller
     verifyBankPayment(req, apiKey, interaction.client).catch(() => {});
 
-    const vaultLink = `https://www.torn.com/factions.php?step=your#/tab=controls&option=give-to-user`;
+    const prefilledUrl = getPreFilledVaultUrl(req.tornId, req.amount);
     return {
         success: true,
-        message: `💸 Go give **$${Number(req.amount).toLocaleString()}** to **${req.tornName || req.userName}** in Torn now!\n👉 [Open Faction Vault](${vaultLink})\n\n🔄 The request will **auto-confirm** once it appears in faction logs (up to 3 min). If it doesn't confirm, it will revert and you'll get a DM.`
+        verified: false,
+        message: `⏳ **Payment not detected in Torn faction logs yet.**\n\n` +
+                 `• **The bot is now checking faction logs** (auto-verifying for 3 minutes).\n` +
+                 `• If you haven't given the money in Torn yet, please do so now: [💸 Open Pre-filled Torn Vault](${prefilledUrl})\n` +
+                 `• Once sent, it will auto-fulfill as soon as Torn registers it (or click **🔍 Check Logs Now** on the message).\n` +
+                 `• If no payment appears after 3 minutes, it will automatically revert to pending.`
     };
 }
 
@@ -8024,58 +8166,59 @@ function setupSlashBotEvents(bot, token) {
                 }).catch(() => {});
             }
 
-            // ── Bank: Pay button (Give Cash in Torn) ──
+            // ── Bank: Verify & Fulfill (check logs) ──
             if (customId.startsWith('bank_pay_')) {
                 const reqId = customId.replace('bank_pay_', '').trim();
+                await interaction.deferReply({ ephemeral: true });
                 const res = await executeFulfillRequest(reqId, interaction);
-                if (!res.success) {
-                    return interaction.reply({ content: res.message, ephemeral: true }).catch(() => {});
-                }
-                const req = bankRequests[reqId];
-                // Build pre-filled vault URL — includes XID hint in URL params Torn reads
-                const vaultUrl = req?.tornId
-                    ? `https://www.torn.com/factions.php?step=your&userID=${req.tornId}#/tab=controls&option=give-to-user`
-                    : `https://www.torn.com/factions.php?step=your#/tab=controls&option=give-to-user`;
-                const amtFmt = req ? `$${Number(req.amount).toLocaleString()}` : '';
-                return interaction.reply({
-                    content: `💸 **Give ${amtFmt} to ${req?.tornName || 'member'} now:**\n👉 [Open Faction Vault (pre-filled)](${vaultUrl})\n\n${res.message}`,
-                    ephemeral: true
-                }).catch(() => {});
+                return interaction.editReply({ content: res.message }).catch(() => {});
             }
 
-            // ── Bank: Manually Confirm (skip log wait) ──
-            if (customId.startsWith('bank_confirm_')) {
-                const reqId = customId.replace('bank_confirm_', '').trim();
+            // ── Bank: Check Logs Now ──
+            if (customId.startsWith('bank_check_logs_')) {
+                const reqId = customId.replace('bank_check_logs_', '').trim();
                 const req = bankRequests[reqId];
-                if (!req) return interaction.reply({ content: '⚠️ Request not found.', ephemeral: true }).catch(() => {});
+                if (!req) return interaction.reply({ content: '⚠️ Request not found or expired.', ephemeral: true }).catch(() => {});
 
-                const isBankerOrAdmin = !discordConfig.bankerRoleId ||
-                    interaction.member?.roles?.cache?.has(discordConfig.bankerRoleId) ||
-                    interaction.member?.permissions?.has?.('Administrator');
-                if (!isBankerOrAdmin) return interaction.reply({ content: `⚠️ Only bankers can confirm payments.`, ephemeral: true }).catch(() => {});
+                await interaction.deferReply({ ephemeral: true });
+                const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+                const check = await checkFactionLogForPayment(req, apiKey);
 
-                req.status = 'fulfilled';
-                req.fulfilledBy = req.fulfilledBy || interaction.user.id;
-                req.fulfillerName = req.fulfillerName || interaction.user.username;
-                req.fulfilledAt = req.fulfilledAt || Date.now();
-                req.verifiedAt = Date.now();
-                req.manuallyConfirmed = true;
-                saveBankRequests();
+                if (check.verified) {
+                    req.status = 'fulfilled';
+                    req.fulfilledBy = req.fulfilledBy || interaction.user.id;
+                    req.fulfillerName = req.fulfillerName || interaction.user.username;
+                    req.fulfilledAt = req.fulfilledAt || Date.now();
+                    req.verifiedAt = Date.now();
+                    saveBankRequests();
 
-                // Update embed
-                if (req.channelId && req.messageId) {
+                    if (req.channelId && req.messageId) {
+                        try {
+                            const chan = interaction.client.channels.cache.get(req.channelId);
+                            const msg = chan && await chan.messages.fetch(req.messageId).catch(() => null);
+                            if (msg) await msg.edit({ embeds: [sanitizeEmbed(buildBankRequestEmbed(req))], components: buildBankRequestButtons(req) }).catch(() => {});
+                        } catch(e) {}
+                    }
                     try {
-                        const chan = interaction.client.channels.cache.get(req.channelId);
-                        const msg = chan && await chan.messages.fetch(req.messageId).catch(() => null);
-                        if (msg) await msg.edit({ embeds: [sanitizeEmbed(buildBankRequestEmbed(req))], components: buildBankRequestButtons(req) }).catch(() => {});
+                        const user = await interaction.client.users.fetch(req.userId).catch(() => null);
+                        if (user) user.send(`✅ Your vault withdrawal of **$${Number(req.amount).toLocaleString()}** has been confirmed by @${req.fulfillerName}! Spend or deposit quickly to stay safe!`).catch(() => {});
                     } catch(e) {}
+
+                    return interaction.editReply({
+                        content: `✅ **Confirmed in Faction Logs!**\nTransfer of **$${Number(req.amount).toLocaleString()}** to **${req.tornName || 'member'} [${req.tornId}]** was verified in Torn logs.\nRequest **#${reqId}** is now fulfilled!`
+                    });
+                } else {
+                    const prefilledUrl = getPreFilledVaultUrl(req.tornId, req.amount);
+                    return interaction.editReply({
+                        content: `❌ **Payment NOT found in Torn logs yet.**\n\n` +
+                                 `Looking for transfer of: **$${Number(req.amount).toLocaleString()}** to **${req.tornName || 'member'} [${req.tornId}]**\n` +
+                                 `• No matching entry found in \`fundsnews\` or \`mainnews\`\n` +
+                                 `• Vault balance has not dropped from $${Number(req.balanceBefore || 0).toLocaleString()}\n\n` +
+                                 `⚠️ **This request was NOT marked as fulfilled** because no record exists in the faction logs.\n` +
+                                 `👉 If you haven't given the money yet, do so here: [💸 Open Pre-filled Vault](${prefilledUrl})\n` +
+                                 `*(Auto-checking is still active and watching for 3 minutes)*`
+                    });
                 }
-                // DM requester quietly
-                try {
-                    const user = await interaction.client.users.fetch(req.userId).catch(() => null);
-                    if (user) user.send(`✅ Your vault withdrawal of **$${Number(req.amount).toLocaleString()}** has been confirmed by @${req.fulfillerName}. Spend or deposit quickly to stay safe!`).catch(() => {});
-                } catch(e) {}
-                return interaction.reply({ content: `✅ Request **#${reqId}** manually confirmed as fulfilled.`, ephemeral: true }).catch(() => {});
             }
 
             // ── Bank: Revert to Pending ──
@@ -8102,7 +8245,7 @@ function setupSlashBotEvents(bot, token) {
                         if (msg) await msg.edit({ embeds: [sanitizeEmbed(buildBankRequestEmbed(req))], components: buildBankRequestButtons(req) }).catch(() => {});
                     } catch(e) {}
                 }
-                return interaction.reply({ content: `↩️ Request **#${reqId}** reverted to pending — another banker can now fulfill it.`, ephemeral: true }).catch(() => {});
+                return interaction.reply({ content: `↩️ Request **#${reqId}** has been reverted to pending.`, ephemeral: true }).catch(() => {});
             }
 
             // ── Bank Request Cancel ──
