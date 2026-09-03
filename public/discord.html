@@ -4,81 +4,176 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Discord Alerts | Owen's Faction Tools</title>
-    <meta name="description" content="Configure and test 24/7 Discord alert automations for your Torn faction.">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    <meta name="description" content="Configure and manage real-time Discord alerts for your Torn City faction — target tracking, chain warnings, hospital monitors, and more.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/global.css">
     <style>
-        :root { --discord: #5865F2; --discord-hover: #4752c4; }
-        .connection-hero {
-            background: linear-gradient(135deg, #0d1117 0%, #0d1123 60%, #0d1117 100%);
-            border: 1px solid var(--border); border-radius: 14px; padding: 28px 32px;
-            margin-bottom: 20px; position: relative; overflow: hidden;
-            display: flex; align-items: center; justify-content: space-between; gap: 24px;
+        :root { --discord: #5865F2; --discord-dim: rgba(88,101,242,0.12); --discord-border: rgba(88,101,242,0.3); }
+
+        /* ── Hero ── */
+        .alerts-hero {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 26px 30px;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            position: relative;
+            overflow: hidden;
         }
-        .connection-hero::before {
-            content: ''; position: absolute; top: -60%; right: -5%; width: 350px; height: 350px;
-            background: radial-gradient(circle, rgba(88,101,242,0.1) 0%, transparent 70%); pointer-events: none;
+        .alerts-hero::before {
+            content: '';
+            position: absolute;
+            top: -80px; right: -60px;
+            width: 320px; height: 320px;
+            background: radial-gradient(circle, rgba(88,101,242,0.07) 0%, transparent 65%);
+            pointer-events: none;
         }
-        .connection-hero-left h2 { margin: 0 0 6px; font-size: 1.5em; font-weight: 900; background: linear-gradient(135deg, #5865F2, var(--blue)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .connection-hero-left p { margin: 0; color: var(--text-dim); font-size: 0.9em; }
-        .connection-status-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 20px; font-size: 0.85em; font-weight: 700; border: 1px solid; white-space: nowrap; transition: 0.3s; }
-        .connection-status-badge.connected { background: rgba(46,213,115,0.1); border-color: var(--green); color: var(--green); }
-        .connection-status-badge.disconnected { background: rgba(255,71,87,0.1); border-color: var(--red); color: var(--red); }
-        .connection-status-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: pulse-dot 2s infinite; }
-        @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-        .config-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
-        .config-card-header { padding: 16px 22px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-        .config-card-title { font-size: 0.85em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--gold); display: flex; align-items: center; gap: 8px; margin: 0; }
-        .config-card-body { padding: 22px; }
-        .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-        .field-row.single { grid-template-columns: 1fr; }
-        .field-group { display: flex; flex-direction: column; gap: 6px; }
-        .field-label { font-size: 0.78em; color: var(--text-dim); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-        .field-input { padding: 11px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text-main); font-size: 0.95em; font-family: 'Inter', system-ui, sans-serif; width: 100%; transition: border-color 0.2s; }
-        .field-input:focus { outline: none; border-color: var(--discord); box-shadow: 0 0 0 3px rgba(88,101,242,0.15); }
-        .field-input.token { letter-spacing: 0.05em; }
-        .field-hint { font-size: 0.75em; color: var(--text-dim); margin-top: 2px; }
-        .setup-guide { background: rgba(88,101,242,0.05); border: 1px solid rgba(88,101,242,0.25); border-radius: 10px; margin-bottom: 20px; overflow: hidden; }
-        .setup-guide-header { padding: 14px 18px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; color: #7289da; font-weight: 700; font-size: 0.9em; user-select: none; }
-        .setup-guide-header:hover { background: rgba(88,101,242,0.08); }
-        .setup-guide-header .chevron { transition: transform 0.25s; }
-        .setup-guide-header.open .chevron { transform: rotate(180deg); }
-        .setup-guide-body { padding: 0 18px; max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s; }
-        .setup-guide-body.open { max-height: 600px; padding: 0 18px 16px; }
-        .setup-guide-body ol { margin: 8px 0; padding-left: 20px; color: var(--text-dim); font-size: 0.88em; line-height: 1.7; }
-        .setup-guide-body ol li { margin-bottom: 6px; }
-        .setup-guide-body a { color: #7289da; }
-        .trigger-grid { display: flex; flex-direction: column; gap: 10px; }
-        .trigger-item { display: flex; align-items: center; gap: 16px; padding: 14px 18px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; transition: border-color 0.2s, background 0.2s; }
-        .trigger-item:hover { border-color: #30363d; }
-        .trigger-item.enabled { border-color: rgba(46,213,115,0.2); background: rgba(46,213,115,0.02); }
-        .trigger-icon { font-size: 1.3em; flex-shrink: 0; width: 32px; text-align: center; }
+        .alerts-hero-text h2 {
+            margin: 0 0 5px;
+            font-size: 1.3em;
+            font-weight: 800;
+            color: var(--text-main);
+        }
+        .alerts-hero-text p {
+            margin: 0;
+            color: var(--text-dim);
+            font-size: 0.875em;
+            line-height: 1.55;
+            max-width: 560px;
+        }
+        .alerts-hero-stat { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; }
+        .stat-num { font-size: 2.4em; font-weight: 900; color: var(--green); line-height: 1; }
+        .stat-label { font-size: 0.7em; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; color: var(--text-dim); }
+
+        /* ── Connection Badge ── */
+        .conn-badge {
+            display: inline-flex; align-items: center; gap: 7px;
+            padding: 6px 14px; border-radius: 20px;
+            font-size: 0.8em; font-weight: 700; border: 1px solid; white-space: nowrap; transition: 0.3s;
+        }
+        .conn-badge.connected { background: rgba(46,213,115,0.1); border-color: var(--green); color: var(--green); }
+        .conn-badge.disconnected { background: rgba(255,71,87,0.1); border-color: var(--red); color: var(--red); }
+        .conn-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse-dot 2s infinite; }
+        @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        /* ── Status Banner ── */
+        .status-banner {
+            border-radius: 12px; padding: 14px 18px; margin-bottom: 18px;
+            display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; transition: 0.25s;
+        }
+        .status-banner.live { background: rgba(46,213,115,0.05); border: 1px solid rgba(46,213,115,0.2); }
+        .status-banner.muted { background: rgba(255,71,87,0.07); border: 1px solid rgba(255,71,87,0.25); }
+        .status-left { display: flex; align-items: center; gap: 13px; }
+        .status-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; transition: 0.3s; }
+        .status-banner.live .status-dot { background: var(--green); box-shadow: 0 0 8px var(--green); }
+        .status-banner.muted .status-dot { background: var(--red); box-shadow: 0 0 8px var(--red); }
+        .status-title { font-size: 0.85em; font-weight: 800; }
+        .status-banner.live .status-title { color: var(--green); }
+        .status-banner.muted .status-title { color: var(--red); }
+        .status-desc { font-size: 0.78em; color: var(--text-dim); margin-top: 2px; }
+        .status-desc code { background: var(--bg); padding: 1px 5px; border-radius: 4px; color: var(--text-main); font-size: 0.92em; }
+        #btn-kill { padding: 8px 18px; border-radius: 7px; font-weight: 800; font-size: 0.82em; cursor: pointer; transition: 0.2s; border: none; white-space: nowrap; font-family: 'Inter', system-ui, sans-serif; }
+
+        /* ── Cards ── */
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 16px; }
+        .card-header { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .card-title { font-size: 0.78em; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--gold); margin: 0; }
+        .card-subtitle { font-size: 0.77em; color: var(--text-dim); }
+        .card-body { padding: 20px; }
+
+        /* ── Fields ── */
+        .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+        .field-grid.single { grid-template-columns: 1fr; }
+        .field-group { display: flex; flex-direction: column; gap: 5px; }
+        .field-label { font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); }
+        .field-label .opt { font-weight: 400; text-transform: none; opacity: 0.7; }
+        .field-input {
+            padding: 10px 13px; border-radius: 8px; border: 1px solid var(--border);
+            background: var(--bg); color: var(--text-main); font-size: 0.92em;
+            font-family: 'Inter', system-ui, sans-serif; width: 100%; box-sizing: border-box;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .field-input:focus { outline: none; border-color: var(--discord); box-shadow: 0 0 0 3px rgba(88,101,242,0.12); }
+        .field-hint { font-size: 0.73em; color: var(--text-dim); line-height: 1.5; }
+
+        /* ── Guide ── */
+        .guide-box { background: rgba(88,101,242,0.04); border: 1px solid rgba(88,101,242,0.2); border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+        .guide-header { padding: 13px 17px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; color: #7289da; font-weight: 700; font-size: 0.875em; user-select: none; transition: background 0.2s; }
+        .guide-header:hover { background: rgba(88,101,242,0.07); }
+        .guide-chevron { transition: transform 0.25s; }
+        .guide-header.open .guide-chevron { transform: rotate(180deg); }
+        .guide-body { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+        .guide-body.open { max-height: 700px; }
+        .guide-inner { padding: 4px 17px 16px; }
+        .guide-inner ol { margin: 8px 0; padding-left: 20px; color: var(--text-dim); font-size: 0.86em; line-height: 1.75; }
+        .guide-inner ol li { margin-bottom: 5px; }
+        .guide-inner a { color: #7289da; }
+        .guide-note { margin-top: 12px; padding: 10px 14px; background: rgba(255,165,2,0.08); border-left: 3px solid var(--gold); border-radius: 6px; font-size: 0.83em; color: var(--text-main); line-height: 1.55; }
+
+        /* ── Triggers ── */
+        .section-heading { font-size: 0.7em; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-dim); padding-bottom: 8px; border-bottom: 1px solid var(--border); margin: 20px 0 10px; }
+        .section-heading:first-of-type { margin-top: 0; }
+        .trigger-list { display: flex; flex-direction: column; gap: 8px; }
+        .trigger-row { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: 9px; border: 1px solid var(--border); background: var(--bg); transition: border-color 0.2s, background 0.2s; }
+        .trigger-row:hover { border-color: rgba(255,255,255,0.1); }
+        .trigger-row.on { border-color: rgba(46,213,115,0.2); background: rgba(46,213,115,0.025); }
+        .trigger-icon { font-size: 1.2em; width: 28px; text-align: center; flex-shrink: 0; }
         .trigger-info { flex: 1; min-width: 0; }
-        .trigger-name { font-weight: 700; font-size: 0.92em; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
-        .trigger-desc { font-size: 0.8em; color: var(--text-dim); margin-top: 2px; }
-        .trigger-badge { font-size: 0.68em; font-weight: 700; padding: 2px 7px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .trigger-badge.premium { background: rgba(255,165,2,0.12); color: var(--gold); border: 1px solid rgba(255,165,2,0.3); }
-        .trigger-badge.war { background: rgba(255,71,87,0.12); color: var(--red); border: 1px solid rgba(255,71,87,0.3); }
-        .trigger-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-        .btn-test { font-size: 0.75em; font-weight: 700; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--item); color: var(--text-dim); cursor: pointer; transition: 0.2s; font-family: 'Inter', system-ui, sans-serif; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
-        .btn-test:hover { border-color: var(--discord); color: #7289da; background: rgba(88,101,242,0.1); }
-        .btn-test:disabled { opacity: 0.5; cursor: not-allowed; }
+        .trigger-name { font-weight: 700; font-size: 0.9em; color: var(--text-main); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .trigger-desc { font-size: 0.79em; color: var(--text-dim); margin-top: 2px; line-height: 1.45; }
+        .trigger-controls { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
+
+        /* Tags */
+        .tag { font-size: 0.65em; font-weight: 800; padding: 2px 7px; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.6px; border: 1px solid; }
+        .tag.war { background: rgba(255,71,87,0.1); color: var(--red); border-color: rgba(255,71,87,0.3); }
+        .tag.faction { background: rgba(255,165,2,0.1); color: var(--gold); border-color: rgba(255,165,2,0.3); }
+        .tag.premium { background: rgba(88,101,242,0.1); color: #7289da; border-color: rgba(88,101,242,0.3); }
+
+        /* Test btn */
+        .btn-test { font-size: 0.73em; font-weight: 700; padding: 5px 11px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text-dim); cursor: pointer; transition: 0.2s; font-family: 'Inter', system-ui, sans-serif; white-space: nowrap; }
+        .btn-test:hover { border-color: var(--discord); color: #7289da; background: var(--discord-dim); }
+        .btn-test:disabled { opacity: 0.45; cursor: not-allowed; }
         .btn-test.sending { border-color: var(--gold); color: var(--gold); }
         .btn-test.success { border-color: var(--green); color: var(--green); }
         .btn-test.fail { border-color: var(--red); color: var(--red); }
-        .save-row { display: flex; align-items: center; gap: 16px; padding-top: 16px; border-top: 1px solid var(--border); margin-top: 4px; }
-        .btn-discord-save { background: var(--discord); color: #fff; border: none; padding: 11px 28px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 0.95em; font-family: 'Inter', system-ui, sans-serif; transition: 0.2s; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-        .btn-discord-save:hover { background: var(--discord-hover); box-shadow: 0 0 14px rgba(88,101,242,0.4); }
-        .btn-discord-save:disabled { opacity: 0.6; cursor: not-allowed; }
-        #status-msg { font-size: 0.88em; font-weight: 600; flex: 1; transition: 0.3s; }
-        .switch { position: relative; display: inline-block; width: 46px; height: 24px; flex-shrink: 0; }
+
+        /* Toggle */
+        .switch { position: relative; display: inline-block; width: 44px; height: 23px; flex-shrink: 0; }
         .switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: var(--border); transition: .3s; border-radius: 34px; }
-        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; transition: .3s; border-radius: 50%; }
-        input:checked + .slider { background: var(--green); }
-        input:checked + .slider:before { transform: translateX(22px); }
-        .section-label { font-size: 0.72em; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); padding: 0 0 8px; border-bottom: 1px solid var(--border); margin-bottom: 12px; margin-top: 4px; }
-        @media(max-width: 700px) { .field-row { grid-template-columns: 1fr; } .connection-hero { flex-direction: column; align-items: flex-start; } }
+        .slider { position: absolute; cursor: pointer; inset: 0; background: rgba(255,255,255,0.1); border: 1px solid var(--border); transition: .3s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 17px; width: 17px; left: 2px; bottom: 2px; background: white; transition: .3s; border-radius: 50%; }
+        input:checked + .slider { background: var(--green); border-color: var(--green); }
+        input:checked + .slider:before { transform: translateX(21px); }
+
+        /* Save row */
+        .save-row { display: flex; align-items: center; gap: 14px; padding-top: 16px; border-top: 1px solid var(--border); margin-top: 6px; }
+        .btn-save { background: var(--discord); color: #fff; border: none; padding: 10px 24px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 0.9em; font-family: 'Inter', system-ui, sans-serif; transition: 0.2s; white-space: nowrap; }
+        .btn-save:hover { background: #4752c4; box-shadow: 0 0 14px rgba(88,101,242,0.35); }
+        .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
+        #status-msg { font-size: 0.85em; font-weight: 600; flex: 1; transition: 0.3s; }
+
+        /* Slash cmds */
+        .cmd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin-bottom: 16px; }
+        .cmd-card { background: rgba(255,255,255,0.025); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+        .cmd-category { font-size: 0.72em; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+        .cmd-list { font-size: 0.79em; color: var(--text-dim); line-height: 1.7; }
+        .cmd-list code { background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 4px; color: var(--text-main); font-size: 0.92em; }
+
+        /* Country */
+        .country-row { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 12px; }
+        #country-result { display: none; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 9px; padding: 16px; margin-top: 4px; }
+
+        #bot-invite-link { display: none; font-size: 0.76em; font-weight: 700; color: var(--discord); text-decoration: none; background: var(--discord-dim); border: 1px solid var(--discord-border); padding: 4px 10px; border-radius: 6px; }
+
+        @media(max-width: 700px) {
+            .field-grid { grid-template-columns: 1fr; }
+            .alerts-hero { flex-direction: column; align-items: flex-start; }
+            .cmd-grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -88,7 +183,7 @@
             <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Theme" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:1.2em;display:flex;justify-content:center;align-items:center;width:35px;height:35px;border-radius:6px;transition:0.2s;margin-right:10px;">🌗</button>
             <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
         </div>
-                                <div class="nav-items">
+        <div class="nav-items">
             <a href="/" class="nav-link ">📡 <span class="nav-text">Live Warboard</span></a>
             <a href="/chain.html" class="nav-link ">🔗 <span class="nav-text">Chain Watcher</span></a>
             <a href="/payout.html" class="nav-link ">💰 <span class="nav-text">Payouts</span></a>
@@ -112,294 +207,302 @@
 
     <main class="main-content">
         <div class="page-header">
-            <div class="page-title">📢 <span>Discord</span> Alert Deck</div>
-            <div id="connection-indicator" class="connection-status-badge disconnected">
+            <div class="page-title">📢 <span>Discord</span> Alerts</div>
+            <div id="connection-indicator" class="conn-badge disconnected">
                 <span class="dot"></span> Not Connected
             </div>
         </div>
 
-        <div class="connection-hero">
-            <div class="connection-hero-left">
-                <h2>📡 Faction Bot Uplink</h2>
-                <p>Connect a Discord bot to push real-time combat alerts directly to your server. Features live interactive action buttons (<b>[⚔️ Attack Now]</b>, <b>[🎯 Claim Target]</b>), chain drop warnings, overseas travel alerts, and member inactivity tracking — all fully automated 24/7.</p>
+        <div class="alerts-hero">
+            <div class="alerts-hero-text">
+                <h2>Faction Alert Bot</h2>
+                <p>Real-time Discord notifications for your faction — target tracking, hospital releases, chain warnings, travel intel, and member activity. Alerts include direct action buttons: <b>Attack</b>, <b>Profile</b>, and <b>Claim Target</b>.</p>
             </div>
-            <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;flex-shrink:0;">
-                <span id="active-alerts-count" style="font-size:2em;font-weight:900;color:var(--green);line-height:1;">–</span>
-                <span style="font-size:0.75em;color:var(--text-dim);text-transform:uppercase;font-weight:700;letter-spacing:0.5px;">Active Triggers</span>
+            <div class="alerts-hero-stat">
+                <span id="active-alerts-count" class="stat-num">–</span>
+                <span class="stat-label">Active Alerts</span>
             </div>
         </div>
 
-        <!-- Emergency Notification Killswitch Banner -->
-        <div id="killswitch-banner" style="background:rgba(46,213,115,0.06); border:1px solid rgba(46,213,115,0.25); border-radius:12px; padding:16px 20px; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; transition:0.3s;">
-            <div style="display:flex; align-items:center; gap:14px;">
-                <div id="killswitch-dot" style="width:12px; height:12px; border-radius:50%; background:var(--green); box-shadow:0 0 10px var(--green); flex-shrink:0;"></div>
+        <div id="status-banner" class="status-banner live">
+            <div class="status-left">
+                <div id="status-dot" class="status-dot"></div>
                 <div>
-                    <div id="killswitch-title" style="font-weight:800; font-size:0.95em; color:var(--green); letter-spacing:0.3px;">AUTOMATED DISCORD NOTIFICATIONS: ACTIVE &amp; LIVE</div>
-                    <div id="killswitch-desc" style="font-size:0.8em; color:var(--text-dim); margin-top:2px;">All snipers, chain alerts, and inactivity warnings are active. Discord commands <code style="background:var(--card);padding:2px 6px;border-radius:4px;color:var(--text-main);">/kill</code> or <code style="background:var(--card);padding:2px 6px;border-radius:4px;color:var(--text-main);">!kill</code> will immediately halt all alerts.</div>
+                    <div id="status-title" class="status-title">Notifications Active</div>
+                    <div id="status-desc" class="status-desc">All alerts are broadcasting. Use <code>/pause</code> or <code>!pause</code> in Discord to temporarily silence alerts.</div>
                 </div>
             </div>
-            <button id="btn-toggle-killswitch" onclick="toggleKillswitch()" style="background:#ff4757; color:#fff; border:none; padding:9px 20px; border-radius:8px; font-weight:800; font-size:0.88em; cursor:pointer; transition:0.2s; white-space:nowrap; display:flex; align-items:center; gap:6px;">🛑 Kill All Alerts</button>
+            <button id="btn-kill" onclick="toggleKillswitch()" style="background:#ff4757; color:#fff;">⏸ Pause All Alerts</button>
         </div>
 
-        <div class="setup-guide">
-            <div class="setup-guide-header" id="guide-toggle" onclick="toggleGuide()">
-                <span>📖 How to create &amp; invite a Faction Discord Bot</span>
-                <span class="chevron">▼</span>
+        <div class="guide-box">
+            <div class="guide-header" id="guide-toggle" onclick="toggleGuide()">
+                <span>📖 How to set up a Faction Discord Bot</span>
+                <span class="guide-chevron">▼</span>
             </div>
-            <div class="setup-guide-body" id="guide-body">
-                <ol>
-                    <li>Go to the <a href="https://discord.com/developers/applications" target="_blank">Discord Developer Portal</a> and click <b>New Application</b>. Give it a name like "Faction Alerts".</li>
-                    <li>Click <b>Bot</b> in the left menu → click <b>Reset Token</b> and copy your Bot Token. Paste it into the <b>Faction Bot Token</b> field below.</li>
-                    <li>Scroll down to <b>Privileged Gateway Intents</b>. Enable <b>Presence Intent</b>, <b>Server Members Intent</b>, and <b>Message Content Intent</b>. Save Changes.</li>
-                    <li>Click <b>OAuth2 → URL Generator</b>. Under Scopes, check <b>bot</b> and <b>applications.commands</b>. Under Bot Permissions, check <b>Send Messages</b>, <b>Embed Links</b> <i>(Required for alert cards!)</i>, and <b>Mention Everyone</b>.</li>
-                    <li>Copy the generated URL at the bottom and open it in a new tab to invite the bot to your Discord server.</li>
-                    <li>In Discord, enable <b>Developer Mode</b> (User Settings → Advanced). Right-click the alert channel → <b>Copy Channel ID</b>. Paste it below.</li>
-                    <li>Optionally right-click your own Discord profile → <b>Copy User ID</b> to enable personal pings on chain attack warnings.</li>
-                </ol>
-                <div style="margin-top:10px;padding:10px 14px;background:rgba(255,165,2,0.1);border-left:3px solid var(--gold);border-radius:6px;font-size:0.85em;color:var(--text-main);line-height:1.5;">
-                    <b>⚠️ Missing Permissions Error?</b> If your bot role lacks the <b>Embed Links</b> permission in your Discord server/channel, Discord hides rich cards and will block alert embeds. In your Discord server, go to <b>Server Settings → Roles → your Bot's Role</b> and enable <b>Embed Links</b>, <b>Send Messages</b>, and <b>Mention @everyone</b> (or grant Administrator).
+            <div class="guide-body" id="guide-body">
+                <div class="guide-inner">
+                    <ol>
+                        <li>Go to the <a href="https://discord.com/developers/applications" target="_blank">Discord Developer Portal</a> → click <b>New Application</b>. Name it something like <b>Faction Alerts</b>.</li>
+                        <li>Click <b>Bot</b> in the sidebar → click <b>Reset Token</b>, copy the token, and paste it into <b>Bot Token</b> below.</li>
+                        <li>Under <b>Privileged Gateway Intents</b>, enable <b>Presence Intent</b>, <b>Server Members Intent</b>, and <b>Message Content Intent</b>. Save Changes.</li>
+                        <li>Go to <b>OAuth2 → URL Generator</b>. Under Scopes check <b>bot</b> and <b>applications.commands</b>. Under Bot Permissions check <b>Send Messages</b>, <b>Embed Links</b> <i>(required for alert cards)</i>, and <b>Mention Everyone</b>.</li>
+                        <li>Copy the generated URL and open it to invite the bot to your server.</li>
+                        <li>In Discord, enable <b>Developer Mode</b> (User Settings → Advanced). Right-click your alert channel → <b>Copy Channel ID</b>. Paste it below.</li>
+                        <li>Optionally right-click your Discord profile → <b>Copy User ID</b> to receive direct @mentions for chain alerts.</li>
+                    </ol>
+                    <div class="guide-note">
+                        <b>⚠️ Embed Links permission required.</b> If the bot role is missing <b>Embed Links</b> in your server or channel, Discord blocks rich alert cards. Go to <b>Server Settings → Roles → Bot Role</b> and enable <b>Embed Links</b> and <b>Send Messages</b>.
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="config-card">
-            <div class="config-card-header">
-                <p class="config-card-title">🔑 Bot Credentials</p>
-                <a id="bot-invite-link" href="#" target="_blank" style="display:none;font-size:0.78em;font-weight:700;color:var(--discord);text-decoration:none;background:rgba(88,101,242,0.1);border:1px solid rgba(88,101,242,0.3);padding:4px 10px;border-radius:6px;">🔗 Re-Invite Bot with Full Permissions</a>
+        <div class="card">
+            <div class="card-header">
+                <p class="card-title">🔑 Bot Credentials</p>
+                <a id="bot-invite-link" href="#" target="_blank">🔗 Re-Invite Bot</a>
             </div>
-            <div class="config-card-body">
-                <div class="field-row">
+            <div class="card-body">
+                <div class="field-grid">
                     <div class="field-group">
-                        <label class="field-label" for="global-bottoken">Faction Bot Token</label>
-                        <input class="field-input token" type="password" id="global-bottoken" placeholder="Bot token from Discord Developer Portal" autocomplete="off" oninput="updateInviteLink()">
-                        <span class="field-hint">Stored securely on the server — never logged or exposed in URLs.</span>
+                        <label class="field-label" for="global-bottoken">Bot Token</label>
+                        <input class="field-input" type="password" id="global-bottoken" placeholder="Paste token from Discord Developer Portal" autocomplete="off" oninput="updateInviteLink()">
+                        <span class="field-hint">Stored on the server — never exposed in URLs or logs.</span>
                     </div>
                     <div class="field-group">
                         <label class="field-label" for="global-channelid">Alert Channel ID</label>
                         <input class="field-input" type="text" id="global-channelid" placeholder="e.g. 1234567890123456789" autocomplete="off">
-                        <span class="field-hint">Right-click the channel in Discord → Copy Channel ID (requires Dev Mode).</span>
+                        <span class="field-hint">Right-click the channel in Discord → Copy Channel ID (requires Developer Mode).</span>
                     </div>
                 </div>
-                <div class="field-row">
+                <div class="field-grid">
                     <div class="field-group">
-                        <label class="field-label" for="discord-userid">Your Personal Discord User ID <span style="font-weight:400;text-transform:none;color:var(--text-dim);font-size:0.9em;">(optional — for personal pings)</span></label>
+                        <label class="field-label" for="discord-userid">Your Discord User ID <span class="opt">(optional — for personal pings)</span></label>
                         <input class="field-input" type="text" id="discord-userid" placeholder="e.g. 987654321098765432" autocomplete="off">
-                        <span class="field-hint">If set, chain attack warnings will @mention you directly in Discord.</span>
+                        <span class="field-hint">If set, chain attack warnings will @mention you directly.</span>
                     </div>
                     <div class="field-group">
-                        <label class="field-label" for="inactivity-roleid">Inactivity Alert Role ID <span style="font-weight:400;text-transform:none;color:var(--text-dim);font-size:0.9em;">(List Role to Ping)</span></label>
-                        <input class="field-input" type="text" id="inactivity-roleid" placeholder="e.g. 123456789012345678 or @here" autocomplete="off">
-                        <span class="field-hint">Right-click role in Discord Settings → Roles → Copy Role ID. Bot pings this role when a member is inactive for 1+ day.</span>
+                        <label class="field-label" for="inactivity-roleid">Inactivity Alert Role ID <span class="opt">(optional)</span></label>
+                        <input class="field-input" type="text" id="inactivity-roleid" placeholder="Role ID, @here, or @everyone" autocomplete="off">
+                        <span class="field-hint">This role is @mentioned when a member goes inactive for 1+ day.</span>
+                    </div>
+                </div>
+                <div class="field-grid">
+                    <div class="field-group">
+                        <label class="field-label" for="banking-channelid">🏦 Vault Requests Channel ID <span class="opt">(optional — Tornium replacement)</span></label>
+                        <input class="field-input" type="text" id="banking-channelid" placeholder="e.g. 1234567890123456789" autocomplete="off">
+                        <span class="field-hint">Channel where <code>/withdraw</code> requests are routed. Leave blank to post in command channel.</span>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="banker-roleid">🏦 Banker Role ID <span class="opt">(optional)</span></label>
+                        <input class="field-input" type="text" id="banker-roleid" placeholder="Role ID for Faction Bankers" autocomplete="off">
+                        <span class="field-hint">If set, only users with this role can click <b>Fulfill</b> on vault withdrawal requests.</span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="config-card">
-            <div class="config-card-header">
-                <p class="config-card-title">⚡ Alert Triggers</p>
-                <span style="font-size:0.78em;color:var(--text-dim);">Toggle alerts on/off. Changes are saved with the button below.</span>
+        <div class="card">
+            <div class="card-header">
+                <p class="card-title">⚡ Alert Triggers</p>
+                <span class="card-subtitle">Saved with the button below</span>
             </div>
-            <div class="config-card-body">
-                <div class="section-label">🎯 Enemy Tracking</div>
-                <div class="trigger-grid">
-                    <div class="trigger-item" id="ti-targetOnline">
+            <div class="card-body">
+
+                <div class="section-heading">🎯 Enemy Targeting</div>
+                <div class="trigger-list">
+                    <div class="trigger-row" id="ti-targetOnline">
                         <span class="trigger-icon">🟢</span>
                         <div class="trigger-info">
-                            <div class="trigger-name">Target Online Tracker <span class="trigger-badge war">WAR</span></div>
-                            <div class="trigger-desc">Pings the channel when an active enemy target signs on and is attackable.</div>
+                            <div class="trigger-name">Enemy Online <span class="tag war">WAR</span></div>
+                            <div class="trigger-desc">Fires when a tracked enemy target comes online in Torn and is attackable.</div>
                         </div>
-                        <div class="trigger-actions">
+                        <div class="trigger-controls">
                             <label class="switch"><input type="checkbox" id="targetOnline" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
-                    <div class="trigger-item" id="ti-targetLanded">
+                    <div class="trigger-row" id="ti-targetLanded">
                         <span class="trigger-icon">✈️</span>
                         <div class="trigger-info">
-                            <div class="trigger-name">Landing Tracker <span class="trigger-badge war">WAR</span></div>
-                            <div class="trigger-desc">Pings the instant an enemy target lands from a flight back into Torn with clickable Attack and Claim Target buttons.</div>
+                            <div class="trigger-name">Target Returned from Abroad <span class="tag war">WAR</span></div>
+                            <div class="trigger-desc">Fires the instant a target lands back in Torn. Includes direct attack and claim buttons.</div>
                         </div>
-                        <div class="trigger-actions">
-                            <button class="btn-test" id="btn-test-target" onclick="testAlert('target')">🧪 Test</button>
+                        <div class="trigger-controls">
+                            <button class="btn-test" id="btn-test-target" onclick="testAlert('target')">▷ Test</button>
                             <label class="switch"><input type="checkbox" id="targetLanded" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
-                    <div class="trigger-item" id="ti-targetOutHosp">
+                    <div class="trigger-row" id="ti-targetOutHosp">
                         <span class="trigger-icon">🏥</span>
                         <div class="trigger-info">
-                            <div class="trigger-name">Natural Hospital Release <span class="trigger-badge war">WAR</span></div>
-                            <div class="trigger-desc">Pings when an enemy's hospital timer naturally expires — they are now attackable.</div>
+                            <div class="trigger-name">Target Out of Hospital <span class="tag war">WAR</span></div>
+                            <div class="trigger-desc">Fires when a target's hospital timer expires naturally — they are now Okay and attackable.</div>
                         </div>
-                        <div class="trigger-actions">
+                        <div class="trigger-controls">
                             <label class="switch"><input type="checkbox" id="targetOutHosp" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
-                    <div class="trigger-item" id="ti-travelWarnings">
-                        <span class="trigger-icon">⚠️</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name">Travel Warning Engine <span class="trigger-badge premium">PREMIUM</span></div>
-                            <div class="trigger-desc">Pings an online faction member if an enemy is flying to their exact location abroad.</div>
-                        </div>
-                        <div class="trigger-actions">
-                            <button class="btn-test" id="btn-test-travel" onclick="testAlert('travel')">🧪 Test</button>
-                            <label class="switch"><input type="checkbox" id="travelWarnings" onchange="onToggle(this)"><span class="slider"></span></label>
-                        </div>
-                    </div>
-                    <div class="trigger-item" id="ti-medOutSniper">
+                    <div class="trigger-row" id="ti-medOutSniper">
                         <span class="trigger-icon">💊</span>
                         <div class="trigger-info">
-                            <div class="trigger-name">Med-Out Sniper <span class="trigger-badge premium">PREMIUM</span></div>
-                            <div class="trigger-desc">Detects if a target uses meds or a revive to escape hospital early, assigning the hit to an eligible online member with interactive Action Buttons.</div>
+                            <div class="trigger-name">Early Hospital Escape <span class="tag premium">PREMIUM</span></div>
+                            <div class="trigger-desc">Fires when a target uses meds or gets a revive to leave hospital early while online. Auto-assigns the hit to the best available faction member.</div>
                         </div>
-                        <div class="trigger-actions">
-                            <button class="btn-test" id="btn-test-sniper" onclick="testAlert('sniper')">🧪 Test</button>
+                        <div class="trigger-controls">
+                            <button class="btn-test" id="btn-test-sniper" onclick="testAlert('sniper')">▷ Test</button>
                             <label class="switch"><input type="checkbox" id="medOutSniper" onchange="onToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="trigger-row" id="ti-travelWarnings">
+                        <span class="trigger-icon">⚠️</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name">Overseas Threat Warning <span class="tag premium">PREMIUM</span></div>
+                            <div class="trigger-desc">Pings a faction member abroad when an enemy is flying to their exact destination. Warns them to return to Torn.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <button class="btn-test" id="btn-test-travel" onclick="testAlert('travel')">▷ Test</button>
+                            <label class="switch"><input type="checkbox" id="travelWarnings" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
                 </div>
 
-                <div class="section-label" style="margin-top:20px;">🔗 Chain Alerts</div>
-                <div class="trigger-grid">
-                    <div class="trigger-item" id="ti-chainWarnings">
+                <div class="section-heading" style="margin-top:20px;">🔗 Chain</div>
+                <div class="trigger-list">
+                    <div class="trigger-row" id="ti-chainWarnings">
                         <span class="trigger-icon">🛡️</span>
                         <div class="trigger-info">
-                            <div class="trigger-name">Chain Attack Warning</div>
-                            <div class="trigger-desc">@mentions a member directly in Discord if they are hit 3+ consecutive times on the ground.</div>
+                            <div class="trigger-name">Consecutive Hit Alert</div>
+                            <div class="trigger-desc">@Mentions a member when they are hit 3+ times in a row without responding — prompts a defensive reaction.</div>
                         </div>
-                        <div class="trigger-actions">
-                            <button class="btn-test" id="btn-test-chain" onclick="testAlert('chain')">🧪 Test</button>
+                        <div class="trigger-controls">
+                            <button class="btn-test" id="btn-test-chain" onclick="testAlert('chain')">▷ Test</button>
                             <label class="switch"><input type="checkbox" id="chainWarnings" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
-                    <div class="trigger-item" id="ti-chainUnder90">
+                    <div class="trigger-row" id="ti-chainUnder90">
                         <span class="trigger-icon">⏱️</span>
                         <div class="trigger-info">
-                            <div class="trigger-name">Chain Critical Timer</div>
-                            <div class="trigger-desc">Pings the channel immediately when the active chain countdown falls below 90 seconds.</div>
+                            <div class="trigger-name">Chain Timer Warning</div>
+                            <div class="trigger-desc">Fires when the active chain countdown drops below 90 seconds — time to get a hit in before the chain drops.</div>
                         </div>
-                        <div class="trigger-actions">
+                        <div class="trigger-controls">
                             <label class="switch"><input type="checkbox" id="chainUnder90" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
-                    <div class="trigger-item" id="ti-chainMilestone">
+                    <div class="trigger-row" id="ti-chainMilestone">
                         <span class="trigger-icon">🏆</span>
                         <div class="trigger-info">
-                            <div class="trigger-name">Chain Milestone Celebrations</div>
-                            <div class="trigger-desc">Automatically logs bonus milestones (10, 25, 50, 100+) to the alert channel.</div>
+                            <div class="trigger-name">Chain Bonus Milestones</div>
+                            <div class="trigger-desc">Posts a message each time the chain hits a bonus threshold — 10, 25, 50, 100, and beyond.</div>
                         </div>
-                        <div class="trigger-actions">
+                        <div class="trigger-controls">
                             <label class="switch"><input type="checkbox" id="chainMilestone" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
                 </div>
 
-                <div class="section-label" style="margin-top:20px;">🛡️ Faction Defense</div>
-                <div class="trigger-grid">
-                    <div class="trigger-item" id="ti-friendlyAttacked">
+                <div class="section-heading" style="margin-top:20px;">🛡️ Faction Defense</div>
+                <div class="trigger-list">
+                    <div class="trigger-row" id="ti-friendlyAttacked">
                         <span class="trigger-icon">🚨</span>
                         <div class="trigger-info">
-                            <div class="trigger-name">Wall Defense Scanner</div>
-                            <div class="trigger-desc">Broadcasts immediate alerts when any alliance member takes incoming fire from an enemy.</div>
+                            <div class="trigger-name">Faction Member Under Attack</div>
+                            <div class="trigger-desc">Fires when an enemy attacks any alliance member — includes their estimated stats and a retaliate button.</div>
                         </div>
-                        <div class="trigger-actions">
+                        <div class="trigger-controls">
                             <label class="switch"><input type="checkbox" id="friendlyAttacked" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
                 </div>
 
-                <div class="section-label" style="margin-top:20px;">👥 Member Monitoring</div>
-                <div class="trigger-grid">
-                    <div class="trigger-item" id="ti-inactivityTracker">
+                <div class="section-heading" style="margin-top:20px;">👥 Members</div>
+                <div class="trigger-list">
+                    <div class="trigger-row" id="ti-inactivityTracker">
                         <span class="trigger-icon">💤</span>
                         <div class="trigger-info">
-                            <div class="trigger-name">Player Inactivity Tracker (1+ Day) <span class="trigger-badge war" style="background:rgba(255,165,2,0.12);color:var(--gold);border-color:rgba(255,165,2,0.3);">FACTION</span></div>
-                            <div class="trigger-desc">Pings the alert channel and @mentions your configured list role whenever any faction member is inactive for 1 day (24 hours). Tracks last seen time in real-time.</div>
+                            <div class="trigger-name">Member Inactivity <span class="tag faction">FACTION</span></div>
+                            <div class="trigger-desc">Fires once per member when they go 24+ hours without any action. @Mentions your configured role. Resets when they come back online.</div>
                         </div>
-                        <div class="trigger-actions">
-                            <button class="btn-test" id="btn-test-inactivity" onclick="testAlert('inactivity')">🧪 Test</button>
+                        <div class="trigger-controls">
+                            <button class="btn-test" id="btn-test-inactivity" onclick="testAlert('inactivity')">▷ Test</button>
                             <label class="switch"><input type="checkbox" id="inactivityTracker" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
                 </div>
 
                 <div class="save-row">
-                    <button class="btn-discord-save" onclick="saveDiscordConfig()" id="save-btn">
-                        💾 Save &amp; Commit to Server
-                    </button>
+                    <button class="btn-save" onclick="saveDiscordConfig()" id="save-btn">💾 Save Settings</button>
                     <span id="status-msg"></span>
                 </div>
             </div>
         </div>
 
-        <!-- Faction Discord Slash Commands Card -->
-        <div class="config-card">
-            <div class="config-card-header">
-                <p class="config-card-title">🤖 Faction Slash Commands</p>
-                <span style="font-size:0.78em;color:var(--text-dim);">Equip your Discord server with instant war, intelligence, and economy commands.</span>
+        <div class="card">
+            <div class="card-header">
+                <p class="card-title">🤖 Slash Commands</p>
+                <span class="card-subtitle">Instant faction intel in Discord</span>
             </div>
-            <div class="config-card-body">
-                <p style="color:var(--text-dim);font-size:0.88em;margin:0 0 14px;">
-                    After saving your Bot Token above, click <b>Register Slash Commands</b> to activate these commands in your Discord server.
-                </p>
-
-                <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));gap:12px;margin-bottom:18px;">
-                    <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:12px;">
-                        <div style="font-weight:800;color:var(--red);font-size:0.85em;margin-bottom:6px;">⚔️ WAR &amp; COMBAT</div>
-                        <div style="font-size:0.8em;color:var(--text-dim);line-height:1.6;">
-                            <code>/war</code> — Live war score, lead &amp; top hitters<br>
-                            <code>/warflights</code> — War flight uptime &amp; least farmed sentinel<br>
-                            <code>/targets</code> — Priority enemy fighters attackable now<br>
-                            <code>/stats [faction]</code> — Full enemy/friendly battle stats roster<br>
-                            <code>/spy &lt;target&gt;</code> — Look up battle stats &amp; spies<br>
-                            <code>/claim &lt;target&gt;</code> — Lock a target for yourself<br>
-                            <code>/unclaim &lt;target&gt;</code> — Release a claimed target<br>
-                            <code>/sos &lt;target&gt;</code> — Request urgent backup
+            <div class="card-body">
+                <p style="color:var(--text-dim);font-size:0.86em;margin:0 0 14px;">Save your Bot Token above, then click <b>Register Commands</b> to activate slash commands in your server.</p>
+                <div class="cmd-grid">
+                    <div class="cmd-card">
+                        <div class="cmd-category" style="color:#2ed573;">🏦 Faction Banking (Tornium Replacement)</div>
+                        <div class="cmd-list">
+                            <code>/withdraw &lt;amount&gt; [reason]</code> — Request vault funds (10m, 500k)<br>
+                            <code>/balance [member]</code> — Vault donation & money balance<br>
+                            <code>/bank request|balance|pending|cancel</code> — Full banking suite<br>
+                            <span style="font-size:0.85em;color:var(--green);">⚡ Anti-race condition locking prevents double fulfillment</span>
                         </div>
                     </div>
-                    <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:12px;">
-                        <div style="font-weight:800;color:var(--blue);font-size:0.85em;margin-bottom:6px;">🔗 CHAIN &amp; ROSTER</div>
-                        <div style="font-size:0.8em;color:var(--text-dim);line-height:1.6;">
-                            <code>/chain</code> — Live hit counter, timer &amp; multiplier<br>
-                            <code>/chainwatch</code> — Online fighters ready in Torn<br>
-                            <code>/profile &lt;player&gt;</code> — Player card &amp; revives status<br>
-                            <code>/hospital</code> — Hospitalized faction members<br>
-                            <code>/roster</code> — Live faction readiness breakdown<br>
-                            <code>/inactive</code> — List members inactive 1+ days
+                    <div class="cmd-card">
+                        <div class="cmd-category" style="color:var(--blue);">📋 Faction & Audit</div>
+                        <div class="cmd-list">
+                            <code>/notindiscord</code> — Audit members missing from Discord<br>
+                            <code>/faction roster</code> — Online, traveling & hospital status<br>
+                            <code>/faction hospital</code> — Friendly members in hosp<br>
+                            <code>/faction inactive</code> — Inactive members 1+ days<br>
+                            <code>/faction oc</code> — Organized Crimes overview & timers<br>
+                            <code>/faction payout</code> — War hits & payout balances
                         </div>
                     </div>
-                    <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:12px;">
-                        <div style="font-weight:800;color:var(--gold);font-size:0.85em;margin-bottom:6px;">💼 OC, BOUNTIES &amp; PAYOUTS</div>
-                        <div style="font-size:0.8em;color:var(--text-dim);line-height:1.6;">
-                            <code>/oc</code> — Ready &amp; in-planning OCs summary<br>
-                            <code>/myoc [player]</code> — Your assigned OC team &amp; timer<br>
-                            <code>/bounties</code> — War bounties placed &amp; claimed<br>
-                            <code>/payout [member]</code> — War hits &amp; owed earnings<br>
-                            <code>/mvp</code> — Top total war hitters &amp; MVPs<br>
-                            <code>/donator [player]</code> — Check Donator / Subscriber status &amp; perks<br>
-                            <code>/travel &lt;country&gt;</code> — Foreign destination intel<br>
-                            <code>/stocks &lt;country&gt;</code> — Foreign plushie/flower stock<br>
-                            <code>/bazaar &lt;item&gt;</code> — Item market price check
+                    <div class="cmd-card">
+                        <div class="cmd-category" style="color:var(--red);">⚔️ War & Chain</div>
+                        <div class="cmd-list">
+                            <code>/war</code> — Live war score, lead & hitters<br>
+                            <code>/targets</code> — Attackable priority enemy targets<br>
+                            <code>/spy &lt;target&gt;</code> — Look up battle stats & spies<br>
+                            <code>/chain</code> — Live hit counter, timer & ready hitters<br>
+                            <code>/faction stats</code> — Battle stats roster comparison<br>
+                            <code>/faction flights</code> — War flight uptime sentinel
+                        </div>
+                    </div>
+                    <div class="cmd-card">
+                        <div class="cmd-category" style="color:var(--gold);">🌐 Market, Intel & Controls</div>
+                        <div class="cmd-list">
+                            <code>/profile &lt;player&gt;</code> — Full player card & revive status<br>
+                            <code>/travel &lt;country&gt;</code> — Foreign intel & stock levels<br>
+                            <code>/bazaar &lt;item&gt;</code> — Lowest market & bazaar price<br>
+                            <code>/alerts &lt;pause|resume|status&gt;</code> — Alert notifications
                         </div>
                     </div>
                 </div>
-
-                <div class="field-row single" style="margin-bottom:14px;">
+                <div class="field-grid single" style="margin-bottom:12px;">
                     <div class="field-group">
-                        <label class="field-label" for="guild-id-input">Guild ID <span style="font-weight:400;color:var(--text-dim);text-transform:none;">(optional — for instant server-specific registration; leave blank for global)</span></label>
-                        <input class="field-input" type="text" id="guild-id-input" placeholder="Right-click your server icon → Copy Server ID (requires Dev Mode)">
-                        <span class="field-hint">Guild commands appear instantly. Global commands can take up to 1 hour to propagate in Discord.</span>
+                        <label class="field-label" for="guild-id-input">Guild ID <span class="opt">(optional — leave blank for auto-detection / global)</span></label>
+                        <input class="field-input" type="text" id="guild-id-input" placeholder="Right-click server icon → Copy Server ID (requires Developer Mode)">
+                        <span class="field-hint">Guild commands appear instantly. Global commands propagate across all servers within an hour.</span>
                     </div>
                 </div>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px;align-items:center;">
-                    <button class="btn-discord-save" id="btn-register-slash" onclick="registerSlashCommands()" style="background:#2ed573;">
-                        ✅ Register Slash Commands
-                    </button>
-                    <span id="slash-status" style="font-size:0.88em;font-weight:600;"></span>
+                    <button class="btn-save" id="btn-register-slash" onclick="registerSlashCommands()" style="background:#2ed573;">✅ Register Commands</button>
+                    <button class="btn-save" id="btn-clean-slash" onclick="cleanSlashCommands()" style="background:rgba(255,255,255,0.08);border:1px solid var(--border);color:var(--text-main);">🧹 Clean & Sync (Fix Duplicates)</button>
+                    <span id="slash-status" style="font-size:0.85em;font-weight:600;"></span>
                 </div>
 
-                <div class="section-label">📍 Live Country Lookup</div>
-                <p style="color:var(--text-dim);font-size:0.83em;margin:0 0 12px;">Check any Torn destination right now — who's there, flying to, or flying back.</p>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+                <div class="section-heading">📍 Live Country Lookup</div>
+                <p style="color:var(--text-dim);font-size:0.82em;margin:0 0 10px;">Check any Torn destination — who's there, flying to, or returning.</p>
+                <div class="country-row">
                     <button class="btn-test" onclick="lookupCountry('Mexico')">🇲🇽 Mexico</button>
                     <button class="btn-test" onclick="lookupCountry('Cayman Islands')">🏝️ Cayman</button>
                     <button class="btn-test" onclick="lookupCountry('Canada')">🇨🇦 Canada</button>
@@ -412,7 +515,7 @@
                     <button class="btn-test" onclick="lookupCountry('UAE')">🇦🇪 UAE</button>
                     <button class="btn-test" onclick="lookupCountry('South Africa')">🇿🇦 South Africa</button>
                 </div>
-                <div id="country-result-panel" style="display:none;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:10px;padding:18px;margin-top:6px;"></div>
+                <div id="country-result"></div>
             </div>
         </div>
     </main>
@@ -437,13 +540,13 @@ function toggleGuide() {
     document.getElementById('guide-body').classList.toggle('open');
 }
 function onToggle(checkbox) {
-    const item = checkbox.closest('.trigger-item');
-    if (item) item.classList.toggle('enabled', checkbox.checked);
+    const item = checkbox.closest('.trigger-row');
+    if (item) item.classList.toggle('on', checkbox.checked);
     updateActiveCount();
 }
 function updateActiveCount() {
-    const toggles = ['targetOnline','targetLanded','targetOutHosp','travelWarnings','medOutSniper','chainWarnings','chainUnder90','chainMilestone','friendlyAttacked','inactivityTracker'];
-    const active = toggles.filter(id => document.getElementById(id)?.checked).length;
+    const ids = ['targetOnline','targetLanded','targetOutHosp','travelWarnings','medOutSniper','chainWarnings','chainUnder90','chainMilestone','friendlyAttacked','inactivityTracker'];
+    const active = ids.filter(id => document.getElementById(id)?.checked).length;
     document.getElementById('active-alerts-count').textContent = active;
 }
 
@@ -457,12 +560,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('global-bottoken').value = cfg.globalBotToken || '';
         document.getElementById('global-channelid').value = cfg.globalChannelId || localStorage.getItem('warboard_channelid') || '';
         document.getElementById('discord-userid').value = cfg.personalDiscordId || localStorage.getItem('warboard_discordid') || '';
-        if (document.getElementById('inactivity-roleid')) {
-            document.getElementById('inactivity-roleid').value = cfg.inactivityRoleId || localStorage.getItem('warboard_inactivity_roleid') || '';
-        }
-        if (document.getElementById('guild-id-input')) {
-            document.getElementById('guild-id-input').value = cfg.guildId || localStorage.getItem('warboard_guildid') || '';
-        }
+        if (document.getElementById('inactivity-roleid')) document.getElementById('inactivity-roleid').value = cfg.inactivityRoleId || localStorage.getItem('warboard_inactivity_roleid') || '';
+        if (document.getElementById('banking-channelid')) document.getElementById('banking-channelid').value = cfg.bankingChannelId || localStorage.getItem('warboard_banking_channelid') || '';
+        if (document.getElementById('banker-roleid')) document.getElementById('banker-roleid').value = cfg.bankerRoleId || localStorage.getItem('warboard_banker_roleid') || '';
+        if (document.getElementById('guild-id-input')) document.getElementById('guild-id-input').value = cfg.guildId || localStorage.getItem('warboard_guildid') || '';
         const flags = {
             targetOnline: cfg.targetOnline === true,
             targetLanded: cfg.targetLanded === true || cfg.targetLanded === undefined,
@@ -477,78 +578,52 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
         for (const [id, val] of Object.entries(flags)) {
             const el = document.getElementById(id);
-            if (el) { el.checked = val; const item = el.closest('.trigger-item'); if (item) item.classList.toggle('enabled', val); }
+            if (el) { el.checked = val; const item = el.closest('.trigger-row'); if (item) item.classList.toggle('on', val); }
         }
         updateKillswitchUI(cfg.notificationsKilled === true);
         setConnectionStatus(!!(cfg.globalBotToken && cfg.globalChannelId));
         updateActiveCount();
         updateInviteLink();
-
-        // Auto-sync FF Scouter key and enemy faction ID from localStorage to server
         const localFfKey = localStorage.getItem('warboard_ffkey') || '';
         const localEnemyId = localStorage.getItem('warboard_enemyId') || '';
         const localApiKey = localStorage.getItem('warboard_apikey') || '';
         if (localFfKey || localEnemyId || localApiKey) {
-            fetch('/api/save-discord-config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    apiKey: localApiKey,
-                    ffKey: localFfKey,
-                    enemyFacId: localEnemyId
-                })
-            }).catch(() => {});
+            fetch('/api/save-discord-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ apiKey: localApiKey, ffKey: localFfKey, enemyFacId: localEnemyId }) }).catch(() => {});
         }
     } catch (e) { setConnectionStatus(false); }
 });
 
 let isKillswitchActive = false;
-
 function updateKillswitchUI(killed) {
     isKillswitchActive = !!killed;
-    const banner = document.getElementById('killswitch-banner');
-    const dot = document.getElementById('killswitch-dot');
-    const title = document.getElementById('killswitch-title');
-    const desc = document.getElementById('killswitch-desc');
-    const btn = document.getElementById('btn-toggle-killswitch');
+    const banner = document.getElementById('status-banner');
+    const title = document.getElementById('status-title');
+    const desc = document.getElementById('status-desc');
+    const btn = document.getElementById('btn-kill');
     if (!banner) return;
-
     if (isKillswitchActive) {
-        banner.style.background = 'rgba(255,71,87,0.12)';
-        banner.style.borderColor = 'rgba(255,71,87,0.4)';
-        if (dot) { dot.style.background = 'var(--red)'; dot.style.boxShadow = '0 0 12px var(--red)'; }
-        if (title) { title.style.color = 'var(--red)'; title.innerText = '🛑 EMERGENCY KILLSWITCH ACTIVE: ALL NOTIFICATIONS MUTED'; }
-        if (desc) { desc.innerText = 'All snipers, chain alerts, and inactivity warnings are currently blocked. Click below or type /live or !live in Discord to resume.'; }
-        if (btn) { btn.style.background = '#2ed573'; btn.innerHTML = '🟢 Resume Live Notifications'; }
+        banner.className = 'status-banner muted';
+        if (title) title.textContent = 'Notifications Paused';
+        if (desc) desc.innerHTML = 'All alerts are currently silenced. Click below or use <code>/resume</code> or <code>!resume</code> in Discord to restore.';
+        if (btn) { btn.style.background = '#2ed573'; btn.textContent = '▷ Resume Alerts'; }
     } else {
-        banner.style.background = 'rgba(46,213,115,0.06)';
-        banner.style.borderColor = 'rgba(46,213,115,0.25)';
-        if (dot) { dot.style.background = 'var(--green)'; dot.style.boxShadow = '0 0 10px var(--green)'; }
-        if (title) { title.style.color = 'var(--green)'; title.innerText = 'AUTOMATED DISCORD NOTIFICATIONS: ACTIVE & LIVE'; }
-        if (desc) { desc.innerText = 'All snipers, chain alerts, and inactivity warnings are broadcasting. Discord commands /kill and !kill will immediately halt all alerts.'; }
-        if (btn) { btn.style.background = '#ff4757'; btn.innerHTML = '🛑 Kill All Alerts'; }
+        banner.className = 'status-banner live';
+        if (title) title.textContent = 'Notifications Active';
+        if (desc) desc.innerHTML = 'All alerts are broadcasting. Use <code>/pause</code> or <code>!pause</code> in Discord to temporarily silence alerts.';
+        if (btn) { btn.style.background = '#ff4757'; btn.textContent = '⏸ Pause All Alerts'; }
     }
 }
-
 async function toggleKillswitch() {
-    const btn = document.getElementById('btn-toggle-killswitch');
+    const btn = document.getElementById('btn-kill');
     if (btn) btn.disabled = true;
     const endpoint = isKillswitchActive ? '/api/discord/live' : '/api/discord/kill';
     try {
-        const res = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ actor: 'Web Dashboard' })
-        });
+        const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actor: 'Web Dashboard' }) });
         const data = await res.json();
         updateKillswitchUI(data.killed);
-    } catch(e) {
-        alert("Failed to toggle killswitch: " + e.message);
-    } finally {
-        if (btn) btn.disabled = false;
-    }
+    } catch(e) { alert('Failed: ' + e.message); }
+    finally { if (btn) btn.disabled = false; }
 }
-
 function updateInviteLink() {
     const token = document.getElementById('global-bottoken')?.value.trim() || '';
     const linkEl = document.getElementById('bot-invite-link');
@@ -556,22 +631,16 @@ function updateInviteLink() {
     if (token && token.includes('.')) {
         try {
             const rawAppId = atob(token.split('.')[0]);
-            if (/^\d{17,20}$/.test(rawAppId)) {
-                linkEl.href = `https://discord.com/oauth2/authorize?client_id=${rawAppId}&scope=bot%20applications.commands&permissions=2147994624`;
-                linkEl.style.display = 'inline-flex';
-                return;
-            }
+            if (/^\d{17,20}$/.test(rawAppId)) { linkEl.href = `https://discord.com/oauth2/authorize?client_id=${rawAppId}&scope=bot%20applications.commands&permissions=2147994624`; linkEl.style.display = 'inline-flex'; return; }
         } catch(e) {}
     }
     linkEl.style.display = 'none';
 }
-
 function setConnectionStatus(connected) {
     const badge = document.getElementById('connection-indicator');
-    badge.className = 'connection-status-badge ' + (connected ? 'connected' : 'disconnected');
+    badge.className = 'conn-badge ' + (connected ? 'connected' : 'disconnected');
     badge.innerHTML = '<span class="dot"></span> ' + (connected ? 'Bot Connected' : 'Not Connected');
 }
-
 async function saveDiscordConfig() {
     const statusEl = document.getElementById('status-msg');
     const btn = document.getElementById('save-btn');
@@ -581,28 +650,20 @@ async function saveDiscordConfig() {
     const channelId = document.getElementById('global-channelid').value.trim();
     const discordId = document.getElementById('discord-userid').value.trim();
     const inactivityRoleId = document.getElementById('inactivity-roleid')?.value.trim() || '';
+    const bankingChannelId = document.getElementById('banking-channelid')?.value.trim() || '';
+    const bankerRoleId = document.getElementById('banker-roleid')?.value.trim() || '';
     const guildId = document.getElementById('guild-id-input')?.value.trim() || '';
-    const ffKey = localStorage.getItem('warboard_ffkey') || '';
-    const enemyFacId = localStorage.getItem('warboard_enemyId') || '';
-
-    localStorage.setItem('warboard_bottoken', botToken);
-    localStorage.setItem('warboard_channelid', channelId);
-    localStorage.setItem('warboard_discordid', discordId);
-    localStorage.setItem('warboard_inactivity_roleid', inactivityRoleId);
-    localStorage.setItem('warboard_guildid', guildId);
-    statusEl.style.color = 'var(--blue)'; statusEl.textContent = '⚡ Transmitting to server...'; btn.disabled = true;
+    localStorage.setItem('warboard_bottoken', botToken); localStorage.setItem('warboard_channelid', channelId); localStorage.setItem('warboard_discordid', discordId);
+    localStorage.setItem('warboard_inactivity_roleid', inactivityRoleId); localStorage.setItem('warboard_guildid', guildId);
+    localStorage.setItem('warboard_banking_channelid', bankingChannelId); localStorage.setItem('warboard_banker_roleid', bankerRoleId);
+    statusEl.style.color = 'var(--blue)'; statusEl.textContent = '⏳ Saving...'; btn.disabled = true;
     try {
         const res = await fetch('/api/save-discord-config', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                apiKey: myKey,
-                ffKey: ffKey,
-                enemyFacId: enemyFacId,
-                globalBotToken: botToken,
-                globalChannelId: channelId,
-                personalDiscordId: discordId,
-                inactivityRoleId: inactivityRoleId,
-                guildId: guildId,
+                apiKey: myKey, ffKey: localStorage.getItem('warboard_ffkey') || '', enemyFacId: localStorage.getItem('warboard_enemyId') || '',
+                globalBotToken: botToken, globalChannelId: channelId, personalDiscordId: discordId, inactivityRoleId, guildId,
+                bankingChannelId, bankerRoleId,
                 targetOnline: document.getElementById('targetOnline').checked,
                 targetLanded: document.getElementById('targetLanded').checked,
                 targetOutHosp: document.getElementById('targetOutHosp').checked,
@@ -616,16 +677,11 @@ async function saveDiscordConfig() {
             })
         });
         const data = await res.json();
-        if (data.success !== false) {
-            statusEl.style.color = 'var(--green)'; statusEl.textContent = '✅ Settings saved to server!';
-            setConnectionStatus(!!(botToken && channelId));
-            updateInviteLink();
-        } else { throw new Error(data.error || 'Server rejected the config'); }
+        if (data.success !== false) { statusEl.style.color = 'var(--green)'; statusEl.textContent = '✅ Settings saved.'; setConnectionStatus(!!(botToken && channelId)); updateInviteLink(); }
+        else { throw new Error(data.error || 'Server rejected config'); }
     } catch (e) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ ' + (e.message || 'Network error'); }
     finally { btn.disabled = false; setTimeout(() => { statusEl.textContent = ''; }, 5000); }
 }
-
-
 async function testAlert(type) {
     const btn = document.getElementById('btn-test-' + type);
     const statusEl = document.getElementById('status-msg');
@@ -633,108 +689,71 @@ async function testAlert(type) {
     const channelId = document.getElementById('global-channelid').value.trim();
     const discordId = document.getElementById('discord-userid').value.trim();
     const inactivityRoleId = document.getElementById('inactivity-roleid')?.value.trim() || '';
-    if (!botToken || !channelId) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ Enter your Bot Token and Channel ID first, then save.'; return; }
-    btn.disabled = true; btn.classList.add('sending'); btn.textContent = '⏳ Sending...';
-    statusEl.style.color = 'var(--gold)'; statusEl.textContent = 'Sending ' + type + ' test alert to Discord...';
+    if (!botToken || !channelId) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ Enter your Bot Token and Channel ID first.'; return; }
+    btn.disabled = true; btn.classList.add('sending'); btn.textContent = '⏳';
+    statusEl.style.color = 'var(--gold)'; statusEl.textContent = 'Sending test alert...';
     try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000);
+        const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 10000);
         let res;
-        try {
-            res = await fetch('/api/test-discord-alert', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type, discordId, inactivityRoleId, globalChannelId: channelId, globalBotToken: botToken }),
-                signal: controller.signal
-            });
-        } finally { clearTimeout(timeout); }
+        try { res = await fetch('/api/test-discord-alert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, discordId, inactivityRoleId, globalChannelId: channelId, globalBotToken: botToken }), signal: controller.signal }); }
+        finally { clearTimeout(timeout); }
         const data = await res.json();
         if (data.success) {
-            btn.classList.remove('sending'); btn.classList.add('success'); btn.innerHTML = '✅ Sent!';
-            if (data.warning) {
-                statusEl.style.color = 'var(--gold)';
-                statusEl.textContent = '⚠️ Delivered as plain text! Enable "Embed Links" in Discord for rich cards.';
-            } else {
-                statusEl.style.color = 'var(--green)';
-                statusEl.textContent = '✅ Test ' + type + ' alert delivered — check your Discord channel!';
-            }
-        } else { throw new Error(data.error || 'Discord API rejected the request'); }
-    } catch (e) {
-        btn.classList.remove('sending'); btn.classList.add('fail'); btn.innerHTML = '❌ Failed';
-        statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ ' + (e.message || 'Request failed');
-    } finally {
-        setTimeout(() => { btn.disabled = false; btn.className = 'btn-test'; btn.innerHTML = '🧪 Test'; statusEl.textContent = ''; }, 7000);
-    }
+            btn.classList.remove('sending'); btn.classList.add('success'); btn.textContent = '✓';
+            statusEl.style.color = data.warning ? 'var(--gold)' : 'var(--green)';
+            statusEl.textContent = data.warning ? '⚠️ Delivered as plain text — enable Embed Links in Discord for rich cards.' : '✅ Test alert sent — check your Discord channel.';
+        } else { throw new Error(data.error || 'Discord rejected the request'); }
+    } catch (e) { btn.classList.remove('sending'); btn.classList.add('fail'); btn.textContent = '✕'; statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ ' + (e.message || 'Request failed'); }
+    finally { setTimeout(() => { btn.disabled = false; btn.className = 'btn-test'; btn.textContent = '▷ Test'; statusEl.textContent = ''; }, 7000); }
 }
-
-
 async function registerSlashCommands() {
-    const btn = document.getElementById('btn-register-slash');
-    const statusEl = document.getElementById('slash-status');
-    const botToken = document.getElementById('global-bottoken').value.trim();
-    const guildId = document.getElementById('guild-id-input').value.trim();
-    if (guildId) {
-        localStorage.setItem('warboard_guildid', guildId);
-        fetch('/api/save-discord-config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ guildId })
-        }).catch(() => {});
-    }
+    const btn = document.getElementById('btn-register-slash'); const statusEl = document.getElementById('slash-status');
+    const botToken = document.getElementById('global-bottoken').value.trim(); const guildId = document.getElementById('guild-id-input').value.trim();
+    if (guildId) { localStorage.setItem('warboard_guildid', guildId); fetch('/api/save-discord-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guildId }) }).catch(() => {}); }
     if (!botToken) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ Save your Bot Token first.'; return; }
-    btn.disabled = true;
-    statusEl.style.color = 'var(--gold)'; statusEl.textContent = '⏳ Registering slash commands with Discord...';
+    btn.disabled = true; statusEl.style.color = 'var(--gold)'; statusEl.textContent = '⏳ Registering...';
     try {
-        const res = await fetch('/api/discord/register-slash-commands', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: botToken, guildId: guildId || null })
-        });
+        const res = await fetch('/api/discord/register-slash-commands', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: botToken, guildId: guildId || null }) });
         const data = await res.json();
-        if (data.success) {
-            statusEl.style.color = 'var(--green)';
-            statusEl.textContent = '✅ ' + data.count + ' slash commands registered! ' + (guildId ? 'Available immediately in your server.' : 'May take up to 1 hour globally.');
-        } else { throw new Error(data.error || 'Registration failed'); }
+        if (data.success) { statusEl.style.color = 'var(--green)'; statusEl.textContent = '✅ ' + data.count + ' commands registered. ' + (guildId ? 'Available immediately.' : 'Takes up to 1 hour globally.'); }
+        else { throw new Error(data.error || 'Registration failed'); }
     } catch (e) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ ' + e.message; }
     finally { btn.disabled = false; setTimeout(() => { statusEl.textContent = ''; }, 10000); }
 }
-
+async function cleanSlashCommands() {
+    const btn = document.getElementById('btn-clean-slash'); const statusEl = document.getElementById('slash-status');
+    const botToken = document.getElementById('global-bottoken').value.trim(); const guildId = document.getElementById('guild-id-input').value.trim();
+    if (!botToken) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ Save your Bot Token first.'; return; }
+    btn.disabled = true; statusEl.style.color = 'var(--gold)'; statusEl.textContent = '⏳ Purging duplicates & re-registering...';
+    try {
+        const res = await fetch('/api/discord/clean-commands', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: botToken, guildId: guildId || null }) });
+        const data = await res.json();
+        if (data.success) { statusEl.style.color = 'var(--green)'; statusEl.textContent = '✅ Purged duplicate commands & registered ' + data.count + ' commands cleanly!'; }
+        else { throw new Error(data.error || 'Purge failed'); }
+    } catch (e) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ ' + e.message; }
+    finally { btn.disabled = false; setTimeout(() => { statusEl.textContent = ''; }, 12000); }
+}
 async function lookupCountry(country) {
-    const panel = document.getElementById('country-result-panel');
+    const panel = document.getElementById('country-result');
     panel.style.display = 'block';
-    panel.innerHTML = '<div style="color:var(--text-dim);font-size:0.9em;">⏳ Loading ' + country + ' travel data...</div>';
+    panel.innerHTML = '<div style="color:var(--text-dim);font-size:0.88em;">Loading ' + country + '...</div>';
     try {
         const res = await fetch('/api/discord/travel-lookup/' + encodeURIComponent(country));
         const data = await res.json();
         if (!data.success) throw new Error(data.error || 'Lookup failed');
         const embed = data.embed;
-        let html = '<div style="font-weight:700;font-size:1.05em;margin-bottom:8px;">' + (embed.title || '') + '</div>';
-        html += '<div style="color:var(--text-dim);font-size:0.88em;margin-bottom:12px;">' + (embed.description || '') + '</div>';
+        let html = '<div style="font-weight:700;font-size:1em;margin-bottom:7px;">' + (embed.title || '') + '</div>';
+        html += '<div style="color:var(--text-dim);font-size:0.86em;margin-bottom:11px;">' + (embed.description || '') + '</div>';
         if (embed.fields && embed.fields.length > 0) {
             embed.fields.forEach(f => {
-                html += '<div style="margin-bottom:10px;">';
-                html += '<div style="font-weight:600;font-size:0.8em;color:var(--gold);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">' + f.name + '</div>';
-                const formatted = f.value
-                    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--blue);">$1</a>')
-                    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-                    .replace(/<t:(\d+):R>/g, (m, ts) => {
-                        const diff = Math.round((parseInt(ts) - Date.now() / 1000) / 60);
-                        return diff <= 0 ? 'landing now' : `in ${diff}m`;
-                    })
-                    .replace(/<t:(\d+):[tT]>/g, (m, ts) => {
-                        return new Date(parseInt(ts) * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-                    })
-                    .replace(/<t:(\d+):[dDfF]>/g, (m, ts) => {
-                        return new Date(parseInt(ts) * 1000).toLocaleDateString();
-                    })
-                    .replace(/\n/g, '<br>');
-                html += '<div style="font-size:0.88em;line-height:1.6;">' + formatted + '</div></div>';
+                html += '<div style="margin-bottom:9px;"><div style="font-weight:700;font-size:0.76em;color:var(--gold);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">' + f.name + '</div>';
+                const formatted = f.value.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" style="color:var(--blue);">$1</a>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>').replace(/<t:(\d+):R>/g,(m,ts)=>{const d=Math.round((parseInt(ts)-Date.now()/1000)/60);return d<=0?'landing now':`in ${d}m`;}).replace(/<t:(\d+):[tT]>/g,(m,ts)=>new Date(parseInt(ts)*1000).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})).replace(/<t:(\d+):[dDfF]>/g,(m,ts)=>new Date(parseInt(ts)*1000).toLocaleDateString()).replace(/\n/g,'<br>');
+                html += '<div style="font-size:0.86em;line-height:1.6;">' + formatted + '</div></div>';
             });
         }
-
-        if (embed.footer) html += '<div style="font-size:0.73em;color:var(--text-dim);margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">' + embed.footer.text + '</div>';
+        if (embed.footer) html += '<div style="font-size:0.72em;color:var(--text-dim);margin-top:9px;border-top:1px solid var(--border);padding-top:7px;">' + embed.footer.text + '</div>';
         panel.innerHTML = html;
-    } catch (e) {
-        panel.innerHTML = '<div style="color:var(--red);font-size:0.88em;">❌ ' + (e.message || 'Failed to load data') + '</div>';
-    }
+    } catch (e) { panel.innerHTML = '<div style="color:var(--red);font-size:0.86em;">❌ ' + (e.message || 'Failed') + '</div>'; }
 }
 </script>
 <script src="/global_settings.js"></script>
