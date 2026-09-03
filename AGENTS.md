@@ -35,10 +35,11 @@ This repository contains the full-stack web application and automated Discord co
    - **Bot Gateways**: Support both Link buttons (`style: 5`) and interactive Action buttons (`style: 1..4`, e.g. `claim_<targetId>`).
    - Maximum of 5 buttons per `ActionRow` (type: 1), and max 5 ActionRows per message.
 
-5. **Deployment Flow**:
-   - The production deployment on Render is linked to the GitHub repository:
+5. **Deployment & GitHub Sync Flow (MANDATORY)**:
+   - **Always Commit & Push**: Every time any code, configuration, or documentation change is made, immediately run `node -c server.js`, commit with a clear message, and push to `origin/main` on GitHub (`git push origin main`). Never leave changes unpushed.
+   - The production deployment on Render is linked to GitHub repository:
      `hulbertowen-droid/torn-company-app` on the `main` branch.
-   - Any commit pushed to `origin/main` automatically triggers Render to build and deploy live to **https://spider-verse.net**.
+   - Pushing to `origin/main` automatically triggers Render to build and deploy live to **https://spider-verse.net**.
 
 ---
 
