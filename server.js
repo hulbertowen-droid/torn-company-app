@@ -6844,6 +6844,41 @@ function parseAmount(input) {
     return finalVal;
 }
 
+function checkExpiredBankRequests() {
+    const now = Date.now();
+    const EXPIRY_MS = 60 * 60 * 1000; // 60 minutes auto-expiration (Tornium anti-mug security)
+    let changed = false;
+
+    for (const req of Object.values(bankRequests)) {
+        if (req.status === 'pending' && (now - req.timestamp > EXPIRY_MS)) {
+            req.status = 'expired';
+            req.expiredAt = now;
+            changed = true;
+
+            if (req.channelId && req.messageId && slashCommandBot?.isReady?.()) {
+                (async () => {
+                    try {
+                        const chan = slashCommandBot.channels.cache.get(req.channelId);
+                        if (chan) {
+                            const msg = await chan.messages.fetch(req.messageId);
+                            if (msg) {
+                                await msg.edit({
+                                    embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
+                                    components: buildBankRequestButtons(req)
+                                });
+                            }
+                        }
+                    } catch(e) {}
+                })();
+            }
+        }
+    }
+    if (changed) saveBankRequests();
+}
+
+// Run expiry check every 2 minutes
+setInterval(checkExpiredBankRequests, 2 * 60 * 1000);
+
 function buildBankRequestEmbed(req) {
     const formattedAmount = `$${Number(req.amount).toLocaleString()}`;
     const requesterTag = `<@${req.userId}>`;
@@ -6853,7 +6888,7 @@ function buildBankRequestEmbed(req) {
 
     let statusText = `⏳ **Pending Banker Action** (<t:${Math.floor(req.timestamp / 1000)}:R>)`;
     let color = 0xffa502; // Gold
-    let footerText = "Owen's Faction Tools • Faction Vault Banking";
+    let footerText = "Spider-Verse Faction Tools • Faction Vault Banking";
 
     if (req.status === 'fulfilled') {
         statusText = `✅ **Fulfilled by <@${req.fulfilledBy}>** (<t:${Math.floor(req.fulfilledAt / 1000)}:R>)`;
@@ -6863,13 +6898,35 @@ function buildBankRequestEmbed(req) {
         statusText = `❌ **Cancelled by <@${req.cancelledBy}>** (<t:${Math.floor(req.cancelledAt / 1000)}:R>)`;
         color = 0x747d8c; // Grey
         footerText = `Cancelled by @${req.cancellerName || 'User'} • Faction Vault Banking`;
+    } else if (req.status === 'expired') {
+        statusText = `⏱️ **Expired (Cancelled after 60m)** (<t:${Math.floor(req.expiredAt / 1000)}:R>)`;
+        color = 0x4f545c; // Dark Grey
+        footerText = `Auto-expired to prevent offline mugs • Faction Vault Banking`;
     }
 
     const fields = [
         { name: "👤 Requester", value: tornProfile ? `${requesterTag}\n└ ${tornProfile}` : requesterTag, inline: true },
-        { name: "💰 Amount Requested", value: `**${formattedAmount}**`, inline: true },
-        { name: "📋 Status", value: statusText, inline: false }
+        { name: "💰 Amount", value: `**${formattedAmount}**`, inline: true }
     ];
+
+    if (req.remainingBalance !== undefined && req.remainingBalance >= 0) {
+        fields.push({ name: "💳 Vault Balance Remaining", value: `**$${Number(req.remainingBalance).toLocaleString()}**`, inline: true });
+    }
+
+    if (req.memberStatus) {
+        let statusBadge = `🟢 In Torn City (${req.memberStatus.state || 'Okay'})`;
+        const state = (req.memberStatus.state || '').toLowerCase();
+        if (state.includes('travel') || state.includes('abroad')) {
+            statusBadge = `✈️ **Traveling** (${req.memberStatus.description || 'Abroad'}) — ⚠️ *Cannot receive funds in flight!*`;
+        } else if (state.includes('hospital')) {
+            statusBadge = `🏥 **In Hospital** (${req.memberStatus.description || 'Medical'})`;
+        } else if (state.includes('jail')) {
+            statusBadge = `🚨 **In Jail** (${req.memberStatus.description || 'Federal'})`;
+        }
+        fields.push({ name: "🚦 Requester In-Game Status", value: statusBadge, inline: false });
+    }
+
+    fields.push({ name: "📋 Status", value: statusText, inline: false });
 
     if (req.reason) {
         fields.push({ name: "📝 Note / Reason", value: String(req.reason).slice(0, 1000), inline: false });
@@ -6886,49 +6943,74 @@ function buildBankRequestEmbed(req) {
 
 function buildBankRequestButtons(req) {
     const vaultLink = "https://www.torn.com/factions.php?step=your#/tab=controls&option=give-to-user";
+    const profileLink = req.tornId ? `https://www.torn.com/profiles.php?XID=${req.tornId}` : null;
+
     if (req.status === 'pending') {
-        return [
+        const row = [
             {
-                type: 1, // ActionRow
-                components: [
-                    {
-                        type: 2, // Button
-                        style: 3, // Success / Green
-                        custom_id: `bank_fulfill_${req.id}`,
-                        label: "✅ Fulfill Request"
-                    },
-                    {
-                        type: 2, // Button
-                        style: 4, // Danger / Red
-                        custom_id: `bank_cancel_${req.id}`,
-                        label: "❌ Cancel Request"
-                    },
-                    {
-                        type: 2, // Button
-                        style: 5, // Link
-                        label: "🏦 Faction Vault",
-                        url: vaultLink
-                    }
-                ]
+                type: 2, // Button
+                style: 3, // Success / Green
+                custom_id: `bank_fulfill_${req.id}`,
+                label: "✅ Fulfill Request"
+            },
+            {
+                type: 2, // Button
+                style: 4, // Danger / Red
+                custom_id: `bank_cancel_${req.id}`,
+                label: "❌ Cancel Request"
+            },
+            {
+                type: 2, // Button
+                style: 5, // Link
+                label: "🏦 Faction Vault",
+                url: vaultLink
             }
         ];
+        if (profileLink) {
+            row.push({
+                type: 2,
+                style: 5,
+                label: "👤 Member Profile",
+                url: profileLink
+            });
+        }
+        return [{ type: 1, components: row }];
     } else if (req.status === 'fulfilled') {
+        const row = [
+            {
+                type: 2,
+                style: 3,
+                custom_id: `fulfilled_display_${req.id}`,
+                label: `✅ Fulfilled by @${req.fulfillerName || 'Banker'}`,
+                disabled: true
+            },
+            {
+                type: 2,
+                style: 5,
+                label: "💸 Give Cash in Torn",
+                url: vaultLink
+            }
+        ];
+        if (profileLink) {
+            row.push({
+                type: 2,
+                style: 5,
+                label: "👤 Member Profile",
+                url: profileLink
+            });
+        }
+        return [{ type: 1, components: row }];
+    } else if (req.status === 'expired') {
         return [
             {
                 type: 1,
                 components: [
                     {
                         type: 2,
-                        style: 3,
-                        custom_id: `fulfilled_display_${req.id}`,
-                        label: `✅ Fulfilled by @${req.fulfillerName || 'Banker'}`,
+                        style: 2,
+                        custom_id: `expired_display_${req.id}`,
+                        label: `⏱️ Expired (Auto-Cancelled after 60m)`,
                         disabled: true
-                    },
-                    {
-                        type: 2,
-                        style: 5,
-                        label: "💸 Give Cash in Torn",
-                        url: vaultLink
                     }
                 ]
             }
@@ -6949,6 +7031,276 @@ function buildBankRequestButtons(req) {
             }
         ];
     }
+}
+
+async function getFactionVaultAndMember(apiKey, interaction = null, targetQuery = null) {
+    if (!apiKey) throw new Error("No Torn API key configured.");
+    const facId = discordConfig.factionId || dynamicFactionId || "";
+    const url = facId 
+        ? `https://api.torn.com/faction/${facId}?selections=basic,donations&key=${apiKey}` 
+        : `https://api.torn.com/faction/?selections=basic,donations&key=${apiKey}`;
+
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.error || "Torn API error");
+
+    const donations = data.donations || {};
+    const members = data.members || {};
+    let targetId = null;
+    let targetDonor = null;
+    let targetMember = null;
+
+    if (targetQuery) {
+        const cleanQuery = String(targetQuery).trim().toLowerCase();
+        const numeric = cleanQuery.replace(/[^0-9]/g, '');
+        if (numeric && (donations[numeric] || members[numeric])) {
+            targetId = numeric;
+        } else {
+            for (const [mId, mInfo] of Object.entries(members)) {
+                const mName = (mInfo.name || '').toLowerCase();
+                if (mName === cleanQuery || mName.includes(cleanQuery) || cleanQuery.includes(mName)) {
+                    targetId = mId;
+                    break;
+                }
+            }
+            if (!targetId) {
+                for (const [dId, dInfo] of Object.entries(donations)) {
+                    const dName = (dInfo.name || '').toLowerCase();
+                    if (dName === cleanQuery || dName.includes(cleanQuery) || cleanQuery.includes(dName)) {
+                        targetId = dId;
+                        break;
+                    }
+                }
+            }
+        }
+    } else if (interaction) {
+        const dName = interaction.member?.displayName || interaction.user?.username || '';
+        const matchId = dName.match(/\[(\d{3,10})\]|\((\d{3,10})\)/);
+        if (matchId && (donations[matchId[1] || matchId[2]] || members[matchId[1] || matchId[2]])) {
+            targetId = matchId[1] || matchId[2];
+        }
+
+        if (!targetId) {
+            const cleanDName = dName.replace(/\[\d+\]|\(\d+\)/g, '').trim().toLowerCase();
+            const uName = (interaction.user?.username || '').toLowerCase();
+            for (const [mId, mInfo] of Object.entries(members)) {
+                const mName = (mInfo.name || '').toLowerCase().trim();
+                if (mName && (cleanDName === mName || uName === mName || cleanDName.includes(mName) || mName.includes(cleanDName))) {
+                    targetId = mId;
+                    break;
+                }
+            }
+        }
+
+        if (!targetId) {
+            for (const [dId, dInfo] of Object.entries(donations)) {
+                const dNameClean = (dInfo.name || '').toLowerCase().trim();
+                const cleanDName = dName.replace(/\[\d+\]|\(\d+\)/g, '').trim().toLowerCase();
+                if (dNameClean && (cleanDName === dNameClean || cleanDName.includes(dNameClean))) {
+                    targetId = dId;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (targetId) {
+        targetDonor = donations[targetId] || null;
+        targetMember = members[targetId] || null;
+    }
+
+    const totalBalance = targetDonor ? Number(targetDonor.money_balance || 0) : 0;
+    const pointsBalance = targetDonor ? Number(targetDonor.points_balance || 0) : 0;
+    const tornName = targetMember?.name || targetDonor?.name || null;
+
+    // Calculate existing active pending requests for this user
+    let activePendingTotal = 0;
+    const activePendingReqs = [];
+    for (const r of Object.values(bankRequests)) {
+        if (r.status === 'pending') {
+            const matchesDiscord = interaction && (r.userId === interaction.user?.id);
+            const matchesTorn = targetId && (r.tornId === targetId);
+            if (matchesDiscord || matchesTorn) {
+                activePendingTotal += Number(r.amount || 0);
+                activePendingReqs.push(r);
+            }
+        }
+    }
+
+    const availableBalance = Math.max(0, totalBalance - activePendingTotal);
+
+    return {
+        factionName: data.name || "Faction",
+        targetId,
+        tornName,
+        targetDonor,
+        targetMember,
+        totalBalance,
+        pointsBalance,
+        activePendingTotal,
+        activePendingReqs,
+        availableBalance,
+        memberStatus: targetMember?.status || null,
+        donations,
+        members
+    };
+}
+
+function buildBankHistoryEmbed(targetMember = null) {
+    const list = Object.values(bankRequests).sort((a, b) => b.timestamp - a.timestamp);
+    let filtered = list;
+    if (targetMember) {
+        const clean = String(targetMember).toLowerCase().trim().replace(/[^0-9a-z]/g, '');
+        filtered = list.filter(r => 
+            (r.tornId && r.tornId === clean) ||
+            (r.tornName && r.tornName.toLowerCase().includes(clean)) ||
+            (r.userName && r.userName.toLowerCase().includes(clean))
+        );
+    }
+
+    if (filtered.length === 0) {
+        return {
+            title: "📜 Faction Vault Banking History",
+            description: targetMember 
+                ? `No banking history found matching **"${targetMember}"**.`
+                : "No vault withdrawal requests have been recorded yet.",
+            color: 0x8b949e,
+            footer: { text: "Spider-Verse Faction Tools • Faction Banking History" }
+        };
+    }
+
+    const recent = filtered.slice(0, 15);
+    const lines = recent.map(r => {
+        const icon = r.status === 'fulfilled' ? '✅' : r.status === 'pending' ? '⏳' : r.status === 'expired' ? '⏱️' : '❌';
+        const formattedAmount = `$${Number(r.amount).toLocaleString()}`;
+        const timeAgo = `<t:${Math.floor(r.timestamp / 1000)}:R>`;
+        const fulfillerInfo = r.status === 'fulfilled' ? ` (fulfilled by @${r.fulfillerName})` : '';
+        const cancellerInfo = r.status === 'cancelled' ? ` (cancelled by @${r.cancellerName})` : '';
+        return `${icon} **Req #${r.id}**: **${formattedAmount}** by <@${r.userId}> [${r.tornName || 'Player'}] — ${r.status}${fulfillerInfo}${cancellerInfo} (${timeAgo})`;
+    }).join('\n');
+
+    return {
+        title: `📜 Faction Vault Banking History (${filtered.length} total)`,
+        description: lines + `\n\n👉 [Open Faction Vault in Torn](https://www.torn.com/factions.php?step=your#/tab=controls&option=give-to-user)`,
+        color: 0x2ed573,
+        footer: { text: "Showing most recent vault requests" },
+        timestamp: new Date().toISOString()
+    };
+}
+
+async function executeFulfillRequest(reqId, interaction) {
+    const req = bankRequests[reqId];
+    if (!req) {
+        return { success: false, message: "⚠️ Bank request not found or expired." };
+    }
+
+    // Check banker role permission if configured
+    if (discordConfig.bankerRoleId && interaction.member?.roles?.cache) {
+        const hasRole = interaction.member.roles.cache.has(discordConfig.bankerRoleId) ||
+                        interaction.member.permissions?.has?.('Administrator');
+        if (!hasRole) {
+            return { success: false, message: `⚠️ Only members with the <@&${discordConfig.bankerRoleId}> role can fulfill bank requests.` };
+        }
+    }
+
+    // CRITICAL RACE CONDITION CHECK (Synchronous atomic lock):
+    if (req.status !== 'pending') {
+        if (req.status === 'fulfilled') {
+            return { 
+                success: false, 
+                message: `⚠️ Request **#${reqId}** was already fulfilled by <@${req.fulfilledBy}> (<t:${Math.floor(req.fulfilledAt / 1000)}:R>)!\nBoth bankers cannot fulfill the same request — you were **not** assigned.` 
+            };
+        } else if (req.status === 'expired') {
+            return { success: false, message: `⚠️ Request **#${reqId}** expired after 60 minutes and cannot be fulfilled.` };
+        } else {
+            return { success: false, message: `⚠️ Request **#${reqId}** is no longer pending (status: **${req.status}**).` };
+        }
+    }
+
+    // Synchronously lock state
+    req.status = 'fulfilled';
+    req.fulfilledBy = interaction.user.id;
+    req.fulfillerName = interaction.user.username;
+    req.fulfilledAt = Date.now();
+    saveBankRequests();
+
+    const updatedEmbed = buildBankRequestEmbed(req);
+    const updatedButtons = buildBankRequestButtons(req);
+
+    if (req.channelId && req.messageId) {
+        try {
+            const targetChan = interaction.client.channels.cache.get(req.channelId);
+            if (targetChan) {
+                const targetMsg = await targetChan.messages.fetch(req.messageId);
+                if (targetMsg) {
+                    await targetMsg.edit({
+                        embeds: [sanitizeEmbed(updatedEmbed)],
+                        components: updatedButtons
+                    });
+                }
+            }
+        } catch(e) {}
+    }
+
+    // Notify requester in channel (anti-mug prompt)
+    try {
+        const targetChan = interaction.client.channels.cache.get(req.channelId || interaction.channelId);
+        if (targetChan) {
+            await targetChan.send({
+                content: `🎉 <@${req.userId}> Your vault withdrawal of **$${Number(req.amount).toLocaleString()}** was **fulfilled** by <@${interaction.user.id}>!\n⚠️ **Anti-Mug Notice**: Please deposit or spend your cash immediately in Torn to avoid being mugged!`
+            });
+        }
+    } catch(e) {}
+
+    const vaultUrl = "https://www.torn.com/factions.php?step=your#/tab=controls&option=give-to-user";
+    return {
+        success: true,
+        message: `🎉 You have fulfilled Request **#${req.id}** ($${Number(req.amount).toLocaleString()}) for <@${req.userId}>!\n👉 [Click here to Give Cash in Torn Vault](${vaultUrl})`
+    };
+}
+
+async function executeCancelRequest(reqId, interaction) {
+    const req = bankRequests[reqId];
+    if (!req) {
+        return { success: false, message: "⚠️ Bank request not found or expired." };
+    }
+
+    const isRequester = (interaction.user.id === req.userId);
+    const isBankerOrAdmin = (discordConfig.bankerRoleId && interaction.member?.roles?.cache?.has(discordConfig.bankerRoleId)) ||
+                            interaction.member?.permissions?.has?.('Administrator');
+    if (!isRequester && !isBankerOrAdmin) {
+        return { success: false, message: `⚠️ Only <@${req.userId}> or a banker/admin can cancel this request.` };
+    }
+
+    if (req.status !== 'pending') {
+        return { success: false, message: `⚠️ Request **#${reqId}** is already ${req.status}.` };
+    }
+
+    req.status = 'cancelled';
+    req.cancelledBy = interaction.user.id;
+    req.cancellerName = interaction.user.username;
+    req.cancelledAt = Date.now();
+    saveBankRequests();
+
+    const updatedEmbed = buildBankRequestEmbed(req);
+    const updatedButtons = buildBankRequestButtons(req);
+
+    if (req.channelId && req.messageId) {
+        try {
+            const targetChan = interaction.client.channels.cache.get(req.channelId);
+            if (targetChan) {
+                const targetMsg = await targetChan.messages.fetch(req.messageId);
+                if (targetMsg) {
+                    await targetMsg.edit({
+                        embeds: [sanitizeEmbed(updatedEmbed)],
+                        components: updatedButtons
+                    });
+                }
+            }
+        } catch(e) {}
+    }
+
+    return { success: true, message: `✅ Request **#${reqId}** has been cancelled.` };
 }
 
 async function buildVaultBalanceEmbed(apiKey, targetQuery = null, requestingUser = null) {
@@ -7235,22 +7587,32 @@ async function registerSlashCommands(token, guildId = null) {
 
     const commands = [
         // 1. Vault Banking (Tornium Replacement)
-        new SlashCommandBuilder().setName('withdraw').setDescription('Request money from the faction vault')
+        new SlashCommandBuilder().setName('withdraw').setDescription('Request money from the faction vault (with overdraft protection)')
             .addStringOption(opt => opt.setName('amount').setDescription('Amount to request (e.g. 10m, 500k, 25000000)').setRequired(true))
             .addStringOption(opt => opt.setName('reason').setDescription('Reason / notes for withdrawal (optional)')).toJSON(),
 
         new SlashCommandBuilder().setName('balance').setDescription('Check faction vault balance and donations')
             .addStringOption(opt => opt.setName('member').setDescription('Member name or ID (leave blank for yourself or leaderboard)')).toJSON(),
 
+        new SlashCommandBuilder().setName('fulfill').setDescription('Fulfill a pending faction vault request (Banker only)')
+            .addStringOption(opt => opt.setName('id').setDescription('Request ID (e.g. 1001)').setRequired(true)).toJSON(),
+
+        new SlashCommandBuilder().setName('cancel').setDescription('Cancel a pending vault withdrawal request')
+            .addStringOption(opt => opt.setName('id').setDescription('Request ID (e.g. 1001)').setRequired(true)).toJSON(),
+
         new SlashCommandBuilder().setName('bank').setDescription('Faction vault banking suite')
             .addSubcommand(sub => sub.setName('request').setDescription('Request money from the faction vault')
-                .addStringOption(opt => opt.setName('amount').setDescription('Amount (e.g. 10m, 500k)').setRequired(true))
+                .addStringOption(opt => opt.setName('amount').setDescription('Amount (e.g. 10m, 500k, 25000000)').setRequired(true))
                 .addStringOption(opt => opt.setName('reason').setDescription('Reason for withdrawal (optional)')))
             .addSubcommand(sub => sub.setName('balance').setDescription('Check vault balance')
                 .addStringOption(opt => opt.setName('member').setDescription('Member name or ID')))
             .addSubcommand(sub => sub.setName('pending').setDescription('List all currently pending vault requests'))
+            .addSubcommand(sub => sub.setName('fulfill').setDescription('Fulfill a pending vault request (Banker only)')
+                .addStringOption(opt => opt.setName('id').setDescription('Request ID (e.g. 1001)').setRequired(true)))
             .addSubcommand(sub => sub.setName('cancel').setDescription('Cancel a pending vault request')
-                .addStringOption(opt => opt.setName('id').setDescription('Request ID (e.g. 1001)').setRequired(true))).toJSON(),
+                .addStringOption(opt => opt.setName('id').setDescription('Request ID (e.g. 1001)').setRequired(true)))
+            .addSubcommand(sub => sub.setName('history').setDescription('View recent vault withdrawal transaction history')
+                .addStringOption(opt => opt.setName('member').setDescription('Filter by member name or ID (optional)'))).toJSON(),
 
         // 2. Faction Discord Member Audit
         new SlashCommandBuilder().setName('notindiscord').setDescription('Audit faction members: list who is not in this Discord server').toJSON(),
@@ -7461,121 +7823,15 @@ function setupSlashBotEvents(bot, token) {
             // ── Bank Request Fulfill (Anti-Race Condition Logic) ──
             if (customId.startsWith('bank_fulfill_')) {
                 const reqId = customId.replace('bank_fulfill_', '').trim();
-                const req = bankRequests[reqId];
-                if (!req) {
-                    return interaction.reply({ content: "⚠️ Bank request not found or expired.", ephemeral: true }).catch(() => {});
-                }
-
-                // Check banker role permission if configured
-                if (discordConfig.bankerRoleId && interaction.member?.roles?.cache) {
-                    const hasRole = interaction.member.roles.cache.has(discordConfig.bankerRoleId) ||
-                                    interaction.member.permissions?.has?.('Administrator');
-                    if (!hasRole) {
-                        return interaction.reply({
-                            content: `⚠️ Only members with the <@&${discordConfig.bankerRoleId}> role can fulfill bank requests.`,
-                            ephemeral: true
-                        }).catch(() => {});
-                    }
-                }
-
-                // CRITICAL RACE CONDITION CHECK (Synchronous atomic lock):
-                // If two bankers click at the same moment, the first one synchronously mutates req.status.
-                // The second banker immediately hits this block and cannot double-fulfill!
-                if (req.status !== 'pending') {
-                    if (req.status === 'fulfilled') {
-                        return interaction.reply({
-                            content: `⚠️ Request **#${reqId}** was already fulfilled by <@${req.fulfilledBy}> (<t:${Math.floor(req.fulfilledAt / 1000)}:R>)!\nBoth bankers cannot fulfill the same request — you were **not** assigned.`,
-                            ephemeral: true
-                        }).catch(() => {});
-                    } else {
-                        return interaction.reply({
-                            content: `⚠️ Request **#${reqId}** is no longer pending (status: **${req.status}**).`,
-                            ephemeral: true
-                        }).catch(() => {});
-                    }
-                }
-
-                // Synchronously lock state
-                req.status = 'fulfilled';
-                req.fulfilledBy = interaction.user.id;
-                req.fulfillerName = interaction.user.username;
-                req.fulfilledAt = Date.now();
-                saveBankRequests();
-
-                const updatedEmbed = buildBankRequestEmbed(req);
-                const updatedButtons = buildBankRequestButtons(req);
-
-                try {
-                    await interaction.update({
-                        embeds: [sanitizeEmbed(updatedEmbed)],
-                        components: updatedButtons
-                    });
-                } catch(e) {
-                    try {
-                        if (interaction.message) {
-                            await interaction.message.edit({
-                                embeds: [sanitizeEmbed(updatedEmbed)],
-                                components: updatedButtons
-                            });
-                        }
-                    } catch(err2) {}
-                }
-
-                const vaultUrl = "https://www.torn.com/factions.php?step=your#/tab=controls&option=give-to-user";
-                return interaction.followUp({
-                    content: `🎉 You have fulfilled Request **#${req.id}** ($${Number(req.amount).toLocaleString()}) for <@${req.userId}>!\n👉 [Click here to Give Cash in Torn Vault](${vaultUrl})`,
-                    ephemeral: true
-                }).catch(() => {});
+                const res = await executeFulfillRequest(reqId, interaction);
+                return interaction.reply({ content: res.message, ephemeral: true }).catch(() => {});
             }
 
             // ── Bank Request Cancel ──
             if (customId.startsWith('bank_cancel_')) {
                 const reqId = customId.replace('bank_cancel_', '').trim();
-                const req = bankRequests[reqId];
-                if (!req) {
-                    return interaction.reply({ content: "⚠️ Bank request not found or expired.", ephemeral: true }).catch(() => {});
-                }
-
-                const isRequester = (interaction.user.id === req.userId);
-                const isBankerOrAdmin = (discordConfig.bankerRoleId && interaction.member?.roles?.cache?.has(discordConfig.bankerRoleId)) ||
-                                        interaction.member?.permissions?.has?.('Administrator');
-                if (!isRequester && !isBankerOrAdmin) {
-                    return interaction.reply({
-                        content: `⚠️ Only <@${req.userId}> or a banker/admin can cancel this request.`,
-                        ephemeral: true
-                    }).catch(() => {});
-                }
-
-                if (req.status !== 'pending') {
-                    return interaction.reply({ content: `⚠️ Request **#${reqId}** is already ${req.status}.`, ephemeral: true }).catch(() => {});
-                }
-
-                req.status = 'cancelled';
-                req.cancelledBy = interaction.user.id;
-                req.cancellerName = interaction.user.username;
-                req.cancelledAt = Date.now();
-                saveBankRequests();
-
-                const updatedEmbed = buildBankRequestEmbed(req);
-                const updatedButtons = buildBankRequestButtons(req);
-
-                try {
-                    await interaction.update({
-                        embeds: [sanitizeEmbed(updatedEmbed)],
-                        components: updatedButtons
-                    });
-                } catch(e) {
-                    try {
-                        if (interaction.message) {
-                            await interaction.message.edit({
-                                embeds: [sanitizeEmbed(updatedEmbed)],
-                                components: updatedButtons
-                            });
-                        }
-                    } catch(err2) {}
-                }
-
-                return interaction.followUp({ content: `Request **#${reqId}** has been cancelled.`, ephemeral: true }).catch(() => {});
+                const res = await executeCancelRequest(reqId, interaction);
+                return interaction.reply({ content: res.message, ephemeral: true }).catch(() => {});
             }
 
             return;
@@ -7632,7 +7888,21 @@ function setupSlashBotEvents(bot, token) {
             });
         }
 
-        // Direct handling for /withdraw and /bank request
+        // Direct handling for /fulfill and /bank fulfill
+        if (cmd === 'fulfill' || (cmd === 'bank' && subcommand === 'fulfill')) {
+            const reqId = (interaction.options.getString('id') || '').trim().replace(/[^0-9]/g, '');
+            const res = await executeFulfillRequest(reqId, interaction);
+            return interaction.reply({ content: res.message, ephemeral: true }).catch(() => {});
+        }
+
+        // Direct handling for /cancel and /bank cancel
+        if (cmd === 'cancel' || (cmd === 'bank' && subcommand === 'cancel')) {
+            const reqId = (interaction.options.getString('id') || '').trim().replace(/[^0-9]/g, '');
+            const res = await executeCancelRequest(reqId, interaction);
+            return interaction.reply({ content: res.message, ephemeral: true }).catch(() => {});
+        }
+
+        // Direct handling for /withdraw and /bank request with STRICT OVERDRAFT PROTECTION
         if (cmd === 'withdraw' || (cmd === 'bank' && subcommand === 'request')) {
             const rawAmount = interaction.options.getString('amount');
             const reason = interaction.options.getString('reason') || '';
@@ -7645,27 +7915,78 @@ function setupSlashBotEvents(bot, token) {
                 });
             }
 
-            // Detect Torn ID from user nickname if formatted like [123456]
-            let userTornId = null;
-            let userTornName = null;
-            const dName = interaction.member?.displayName || interaction.user.username || '';
-            const matchId = dName.match(/\[(\d{3,10})\]|\((\d{3,10})\)/);
-            if (matchId) {
-                userTornId = matchId[1] || matchId[2];
-                userTornName = dName.replace(/\[\d+\]|\(\d+\)/g, '').trim();
+            checkExpiredBankRequests();
+
+            // Defer ephemerally while checking Torn API balance and preventing overdrafts
+            await interaction.deferReply({ ephemeral: true });
+
+            let vaultInfo = null;
+            try {
+                vaultInfo = await getFactionVaultAndMember(apiKey, interaction);
+            } catch(err) {
+                console.error("[Bank Vault Check Error]:", err.message);
             }
 
+            // If we couldn't match the member to a Torn ID:
+            if (!vaultInfo || !vaultInfo.targetId) {
+                return interaction.editReply({
+                    content: `⚠️ **Could not identify your Torn Account in the faction vault!**\n\n` +
+                             `To protect faction funds, the bot must verify your vault balance before withdrawal.\n` +
+                             `Please change your server nickname to include your Torn ID in brackets, e.g.:\n` +
+                             `\`${interaction.user.username} [123456]\`\n\n` +
+                             `Then run \`/withdraw ${rawAmount}\` again.`
+                });
+            }
+
+            const { targetId, tornName, totalBalance, activePendingTotal, activePendingReqs, availableBalance, memberStatus } = vaultInfo;
+
+            // ── ZERO BALANCE CHECK ──
+            if (totalBalance <= 0) {
+                return interaction.editReply({
+                    embeds: [{
+                        title: "❌ Insufficient Vault Balance",
+                        description: `You currently have **$0** deposited in the faction vault for **${vaultInfo.factionName}**.\n\n` +
+                                     `Player: [**${tornName || 'You'}** [${targetId}]](https://www.torn.com/profiles.php?XID=${targetId})\n\n` +
+                                     `You cannot withdraw funds without a positive vault balance.`,
+                        color: 0xff4757,
+                        footer: { text: "Spider-Verse Faction Tools • Faction Banking" }
+                    }]
+                });
+            }
+
+            // ── OVERDRAFT PREVENTION CHECK ──
+            if (amount > availableBalance) {
+                const pendingListStr = activePendingReqs.map(r => `#${r.id} ($${Number(r.amount).toLocaleString()})`).join(', ');
+                return interaction.editReply({
+                    embeds: [{
+                        title: "❌ Overdraft Prevention — Request Denied",
+                        description: `You cannot withdraw **$${amount.toLocaleString()}** because it exceeds your available faction vault balance!\n\n` +
+                                     `💵 **Total Vault Balance:** **$${totalBalance.toLocaleString()}**\n` +
+                                     `⏳ **Existing Pending Requests:** **$${activePendingTotal.toLocaleString()}**` + (pendingListStr ? ` (${pendingListStr})\n` : '\n') +
+                                     `💳 **Available to Withdraw:** **$${availableBalance.toLocaleString()}**\n` +
+                                     `🚫 **Attempted Request:** **$${amount.toLocaleString()}**\n\n` +
+                                     `*Please reduce your request amount to $${availableBalance.toLocaleString()} or less, or cancel existing pending requests with \`/cancel\`.*`,
+                        color: 0xff4757,
+                        footer: { text: "Faction Banking • Overdraft Protection Active" }
+                    }]
+                });
+            }
+
+            // Build request object
             const reqId = String(++bankRequestCounter);
             const req = {
                 id: reqId,
                 userId: interaction.user.id,
                 userName: interaction.user.username,
-                tornId: userTornId,
-                tornName: userTornName,
+                tornId: targetId,
+                tornName: tornName,
                 amount,
                 reason,
                 timestamp: Date.now(),
-                status: 'pending'
+                status: 'pending',
+                balanceBefore: totalBalance,
+                remainingBalance: availableBalance - amount,
+                memberStatus: memberStatus
             };
             bankRequests[reqId] = req;
             saveBankRequests();
@@ -7675,9 +7996,14 @@ function setupSlashBotEvents(bot, token) {
             const bankingChanId = discordConfig.bankingChannelId;
             const bankingChan = bankingChanId && interaction.client.channels.cache.get(bankingChanId);
 
+            const pingContent = discordConfig.bankerRoleId 
+                ? `🔔 <@&${discordConfig.bankerRoleId}> — New vault withdrawal request from **${req.tornName || req.userName}** for **$${amount.toLocaleString()}**!`
+                : undefined;
+
             if (bankingChan && bankingChan.id !== interaction.channelId) {
                 try {
                     const chanMsg = await bankingChan.send({
+                        content: pingContent,
                         embeds: [sanitizeEmbed(reqEmbed)],
                         components: reqButtons
                     });
@@ -7685,64 +8011,34 @@ function setupSlashBotEvents(bot, token) {
                     req.messageId = chanMsg.id;
                     saveBankRequests();
 
-                    return interaction.reply({
-                        content: `✅ Your withdrawal request **#${req.id}** for **$${amount.toLocaleString()}** has been posted in <#${bankingChan.id}>!`,
-                        ephemeral: true
+                    return interaction.editReply({
+                        content: `✅ Your withdrawal request **#${req.id}** for **$${amount.toLocaleString()}** has been posted in <#${bankingChan.id}>!\n` +
+                                 `Remaining available balance: **$${(availableBalance - amount).toLocaleString()}**.`
                     });
                 } catch(err) {
                     console.error("[Bank Request] Failed sending to banking channel:", err.message);
                 }
             }
 
-            const replyMsg = await interaction.reply({
-                embeds: [sanitizeEmbed(reqEmbed)],
-                components: reqButtons,
-                fetchReply: true
-            });
-            req.channelId = interaction.channelId;
-            req.messageId = replyMsg.id;
-            saveBankRequests();
-            return;
-        }
+            // Post in current channel
+            try {
+                const chanMsg = await interaction.channel.send({
+                    content: pingContent,
+                    embeds: [sanitizeEmbed(reqEmbed)],
+                    components: reqButtons
+                });
+                req.channelId = interaction.channelId;
+                req.messageId = chanMsg.id;
+                saveBankRequests();
 
-        // Direct handling for /bank cancel
-        if (cmd === 'bank' && subcommand === 'cancel') {
-            const cancelId = (interaction.options.getString('id') || '').trim().replace(/[^0-9]/g, '');
-            const req = bankRequests[cancelId];
-            if (!req) {
-                return interaction.reply({ content: `⚠️ Request **#${cancelId}** not found.`, ephemeral: true });
+                return interaction.editReply({
+                    content: `✅ Your withdrawal request **#${req.id}** for **$${amount.toLocaleString()}** has been posted below!\n` +
+                             `Remaining available balance: **$${(availableBalance - amount).toLocaleString()}**.`
+                });
+            } catch(e) {
+                console.error("[Bank Request] Failed sending to current channel:", e.message);
+                return interaction.editReply({ content: `⚠️ Failed to post withdrawal request: ${e.message}` });
             }
-            const isRequester = (interaction.user.id === req.userId);
-            const isBankerOrAdmin = (discordConfig.bankerRoleId && interaction.member?.roles?.cache?.has(discordConfig.bankerRoleId)) ||
-                                    interaction.member?.permissions?.has?.('Administrator');
-            if (!isRequester && !isBankerOrAdmin) {
-                return interaction.reply({ content: `⚠️ Only <@${req.userId}> or a banker/admin can cancel this request.`, ephemeral: true });
-            }
-            if (req.status !== 'pending') {
-                return interaction.reply({ content: `⚠️ Request **#${cancelId}** is already ${req.status}.`, ephemeral: true });
-            }
-
-            req.status = 'cancelled';
-            req.cancelledBy = interaction.user.id;
-            req.cancellerName = interaction.user.username;
-            req.cancelledAt = Date.now();
-            saveBankRequests();
-
-            if (req.channelId && req.messageId) {
-                try {
-                    const targetChan = interaction.client.channels.cache.get(req.channelId);
-                    if (targetChan) {
-                        const targetMsg = await targetChan.messages.fetch(req.messageId);
-                        if (targetMsg) {
-                            await targetMsg.edit({
-                                embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
-                                components: buildBankRequestButtons(req)
-                            });
-                        }
-                    }
-                } catch(e) {}
-            }
-            return interaction.reply({ content: `✅ Request **#${cancelId}** has been cancelled.`, ephemeral: true });
         }
 
         // Defer reply for commands that make API calls
@@ -7757,6 +8053,9 @@ function setupSlashBotEvents(bot, token) {
                 embed = await buildVaultBalanceEmbed(apiKey, member, interaction.user);
             } else if (cmd === 'bank' && subcommand === 'pending') {
                 embed = buildPendingRequestsEmbed();
+            } else if (cmd === 'bank' && subcommand === 'history') {
+                const member = interaction.options.getString('member');
+                embed = buildBankHistoryEmbed(member);
             } else if (cmd === 'notindiscord' || (cmd === 'faction' && subcommand === 'notindiscord')) {
                 embed = await buildMissingDiscordEmbed(interaction.guild, apiKey);
             }

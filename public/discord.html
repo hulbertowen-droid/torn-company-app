@@ -451,8 +451,12 @@
                         <div class="cmd-list">
                             <code>/withdraw &lt;amount&gt; [reason]</code> — Request vault funds (10m, 500k)<br>
                             <code>/balance [member]</code> — Vault donation & money balance<br>
-                            <code>/bank request|balance|pending|cancel</code> — Full banking suite<br>
-                            <span style="font-size:0.85em;color:var(--green);">⚡ Anti-race condition locking prevents double fulfillment</span>
+                            <code>/fulfill &lt;id&gt;</code> — Fulfill request (Banker only)<br>
+                            <code>/cancel &lt;id&gt;</code> — Cancel a pending request<br>
+                            <code>/bank request|balance|pending|fulfill|cancel|history</code><br>
+                            <span style="font-size:0.82em;color:var(--green);">🛡️ <b>Overdraft Protection</b>: Blocks withdrawing more than available vault balance</span><br>
+                            <span style="font-size:0.82em;color:var(--gold);">⏱️ <b>Anti-Mug Timeout</b>: 60m auto-cancellation prevents offline mugging</span><br>
+                            <span style="font-size:0.82em;color:var(--blue);">✈️ <b>Flight Sentinel</b>: Flags overseas & hosp status on request cards</span>
                         </div>
                     </div>
                     <div class="cmd-card">
