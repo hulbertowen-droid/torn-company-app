@@ -7473,7 +7473,8 @@ async function executeFulfillRequest(reqId, interaction) {
 
         if (req.channelId && req.messageId) {
             try {
-                const targetChan = interaction.client.channels.cache.get(req.channelId);
+                const targetChan = interaction.client.channels.cache.get(req.channelId)
+                    || await interaction.client.channels.fetch(req.channelId).catch(() => null);
                 const targetMsg = targetChan && await targetChan.messages.fetch(req.messageId).catch(() => null);
                 if (targetMsg) {
                     await targetMsg.edit({
@@ -7506,7 +7507,8 @@ async function executeFulfillRequest(reqId, interaction) {
 
     if (req.channelId && req.messageId) {
         try {
-            const targetChan = interaction.client.channels.cache.get(req.channelId);
+            const targetChan = interaction.client.channels.cache.get(req.channelId)
+                || await interaction.client.channels.fetch(req.channelId).catch(() => null);
             const targetMsg = targetChan && await targetChan.messages.fetch(req.messageId).catch(() => null);
             if (targetMsg) {
                 await targetMsg.edit({
@@ -7560,14 +7562,15 @@ async function executeCancelRequest(reqId, interaction) {
 
     if (req.channelId && req.messageId) {
         try {
-            const targetChan = interaction.client.channels.cache.get(req.channelId);
+            const targetChan = interaction.client.channels.cache.get(req.channelId)
+                || await interaction.client.channels.fetch(req.channelId).catch(() => null);
             if (targetChan) {
-                const targetMsg = await targetChan.messages.fetch(req.messageId);
+                const targetMsg = await targetChan.messages.fetch(req.messageId).catch(() => null);
                 if (targetMsg) {
                     await targetMsg.edit({
                         embeds: [sanitizeEmbed(updatedEmbed)],
                         components: updatedButtons
-                    });
+                    }).catch(() => {});
                 }
             }
         } catch(e) {}
@@ -8194,7 +8197,8 @@ function setupSlashBotEvents(bot, token) {
 
                     if (req.channelId && req.messageId) {
                         try {
-                            const chan = interaction.client.channels.cache.get(req.channelId);
+                            const chan = interaction.client.channels.cache.get(req.channelId)
+                                || await interaction.client.channels.fetch(req.channelId).catch(() => null);
                             const msg = chan && await chan.messages.fetch(req.messageId).catch(() => null);
                             if (msg) await msg.edit({ embeds: [sanitizeEmbed(buildBankRequestEmbed(req))], components: buildBankRequestButtons(req) }).catch(() => {});
                         } catch(e) {}
@@ -8240,7 +8244,8 @@ function setupSlashBotEvents(bot, token) {
 
                 if (req.channelId && req.messageId) {
                     try {
-                        const chan = interaction.client.channels.cache.get(req.channelId);
+                        const chan = interaction.client.channels.cache.get(req.channelId)
+                            || await interaction.client.channels.fetch(req.channelId).catch(() => null);
                         const msg = chan && await chan.messages.fetch(req.messageId).catch(() => null);
                         if (msg) await msg.edit({ embeds: [sanitizeEmbed(buildBankRequestEmbed(req))], components: buildBankRequestButtons(req) }).catch(() => {});
                     } catch(e) {}
@@ -8461,52 +8466,117 @@ function setupSlashBotEvents(bot, token) {
 
             const reqEmbed = buildBankRequestEmbed(req);
             const reqButtons = buildBankRequestButtons(req);
-            const bankingChanId = discordConfig.bankingChannelId;
-            const bankingChan = bankingChanId && interaction.client.channels.cache.get(bankingChanId);
-
             const pingContent = discordConfig.bankerRoleId 
                 ? `🔔 <@&${discordConfig.bankerRoleId}> — New vault withdrawal request from **${req.tornName || req.userName}** for **$${amount.toLocaleString()}**!`
                 : undefined;
 
-            if (bankingChan && bankingChan.id !== interaction.channelId) {
+            // Resolve potential target channels (with cache + fetch fallback)
+            const bankingChanId = discordConfig.bankingChannelId;
+            let bankingChan = null;
+            if (bankingChanId) {
                 try {
-                    const chanMsg = await bankingChan.send({
+                    bankingChan = interaction.client.channels.cache.get(bankingChanId) 
+                        || await interaction.client.channels.fetch(bankingChanId).catch(() => null);
+                } catch(e) {}
+            }
+
+            const globalChanId = discordConfig.globalChannelId;
+            let globalChan = null;
+            if (globalChanId && globalChanId !== bankingChanId) {
+                try {
+                    globalChan = interaction.client.channels.cache.get(globalChanId) 
+                        || await interaction.client.channels.fetch(globalChanId).catch(() => null);
+                } catch(e) {}
+            }
+
+            let chanMsg = null;
+            let postedChan = null;
+
+            // Strategy 1: Try dedicated banking channel
+            if (bankingChan) {
+                try {
+                    chanMsg = await bankingChan.send({
                         content: pingContent,
                         embeds: [sanitizeEmbed(reqEmbed)],
                         components: reqButtons
                     });
-                    req.channelId = bankingChan.id;
-                    req.messageId = chanMsg.id;
-                    saveBankRequests();
-
-                    return interaction.editReply({
-                        content: `✅ Your withdrawal request **#${req.id}** for **$${amount.toLocaleString()}** has been posted in <#${bankingChan.id}>!${replacedNote}\n` +
-                                 `Remaining available balance: **$${(totalBalance - amount).toLocaleString()}**.`
-                    });
+                    postedChan = bankingChan;
                 } catch(err) {
-                    console.error("[Bank Request] Failed sending to banking channel:", err.message);
+                    console.warn(`[Bank Request] Could not send to bankingChannel (${bankingChanId}):`, err.message);
                 }
             }
 
-            // Post in current channel
-            try {
-                const chanMsg = await interaction.channel.send({
-                    content: pingContent,
-                    embeds: [sanitizeEmbed(reqEmbed)],
-                    components: reqButtons
-                });
-                req.channelId = interaction.channelId;
+            // Strategy 2: Try current interaction channel
+            if (!chanMsg && interaction.channel) {
+                try {
+                    chanMsg = await interaction.channel.send({
+                        content: pingContent,
+                        embeds: [sanitizeEmbed(reqEmbed)],
+                        components: reqButtons
+                    });
+                    postedChan = interaction.channel;
+                } catch(err) {
+                    console.warn(`[Bank Request] Could not send to interaction channel (${interaction.channelId}):`, err.message);
+                }
+            }
+
+            // Strategy 3: Try global alert channel (where bot has confirmed permissions)
+            if (!chanMsg && globalChan) {
+                try {
+                    chanMsg = await globalChan.send({
+                        content: pingContent,
+                        embeds: [sanitizeEmbed(reqEmbed)],
+                        components: reqButtons
+                    });
+                    postedChan = globalChan;
+                } catch(err) {
+                    console.warn(`[Bank Request] Could not send to globalChannel (${globalChanId}):`, err.message);
+                }
+            }
+
+            // Strategy 4: Try interaction followUp (uses interaction webhook token)
+            if (!chanMsg) {
+                try {
+                    chanMsg = await interaction.followUp({
+                        content: pingContent,
+                        embeds: [sanitizeEmbed(reqEmbed)],
+                        components: reqButtons,
+                        ephemeral: false
+                    });
+                    postedChan = interaction.channel;
+                } catch(err) {
+                    console.warn("[Bank Request] Could not send via followUp:", err.message);
+                }
+            }
+
+            // If successfully posted to any public channel:
+            if (chanMsg) {
+                req.channelId = postedChan?.id || interaction.channelId;
                 req.messageId = chanMsg.id;
                 saveBankRequests();
 
+                const locationNote = (postedChan && postedChan.id !== interaction.channelId)
+                    ? `in <#${postedChan.id}>`
+                    : `below`;
+
                 return interaction.editReply({
-                    content: `✅ Your withdrawal request **#${req.id}** for **$${amount.toLocaleString()}** has been posted below!${replacedNote}\n` +
+                    content: `✅ Your withdrawal request **#${req.id}** for **$${amount.toLocaleString()}** has been posted ${locationNote}!${replacedNote}\n` +
                              `Remaining available balance: **$${(totalBalance - amount).toLocaleString()}**.`
                 });
-            } catch(e) {
-                console.error("[Bank Request] Failed sending to current channel:", e.message);
-                return interaction.editReply({ content: `⚠️ Failed to post withdrawal request: ${e.message}` });
             }
+
+            // Strategy 5: Resilient Fallback - Keep request active & render directly in ephemeral interaction response
+            req.channelId = interaction.channelId;
+            req.messageId = null;
+            saveBankRequests();
+
+            return interaction.editReply({
+                content: `✅ Your withdrawal request **#${req.id}** for **$${amount.toLocaleString()}** is active!${replacedNote}\n` +
+                         `Remaining available balance: **$${(totalBalance - amount).toLocaleString()}**.\n` +
+                         `*(Note: Bot lacks "Send Messages" permission in this channel to post publicly, but your request has been recorded and Bankers can view & fulfill it via \`/bank pending\`)*`,
+                embeds: [sanitizeEmbed(reqEmbed)],
+                components: reqButtons
+            });
         }
 
         // Defer reply for commands that make API calls
