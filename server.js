@@ -9796,7 +9796,37 @@ async function registerSlashCommands(token, guildId = null) {
         new SlashCommandBuilder().setName('alerts').setDescription('Manage automated Discord faction alert notifications')
             .addSubcommand(sub => sub.setName('status').setDescription('Check alert notifications status'))
             .addSubcommand(sub => sub.setName('pause').setDescription('Temporarily pause all automated alerts'))
-            .addSubcommand(sub => sub.setName('resume').setDescription('Resume automated alerts')).toJSON()
+            .addSubcommand(sub => sub.setName('resume').setDescription('Resume automated alerts')).toJSON(),
+
+        // 10. Direct Faction Standalone Commands
+        new SlashCommandBuilder().setName('roster').setDescription('Live faction readiness breakdown (Online, Traveling, Hospital)').toJSON(),
+        new SlashCommandBuilder().setName('hospital').setDescription('List friendly faction members currently hospitalized').toJSON(),
+        new SlashCommandBuilder().setName('inactive').setDescription('List faction members inactive for 1+ days').toJSON(),
+        new SlashCommandBuilder().setName('payout').setDescription('Check member war payout balance')
+            .addStringOption(opt => opt.setName('member').setDescription('Member name or ID (optional)')).toJSON(),
+        new SlashCommandBuilder().setName('mvp').setDescription('Leaderboard of top war hitters').toJSON(),
+        new SlashCommandBuilder().setName('stats').setDescription('Battle stats roster comparison')
+            .addStringOption(opt => opt.setName('side').setDescription('Select faction').addChoices(
+                { name: '🎯 Enemy Faction', value: 'enemy' },
+                { name: '🛡️ Our Faction', value: 'friendly' }
+            )).toJSON(),
+        new SlashCommandBuilder().setName('bounties').setDescription('Track active war bounties placed and claimed').toJSON(),
+        new SlashCommandBuilder().setName('flights').setDescription('Audit war flight uptime and travel sentinel').toJSON(),
+
+        // 11. Chains & OC Standalone Utilities
+        new SlashCommandBuilder().setName('chainwatch').setDescription('Live chain drop watcher and alert status').toJSON(),
+        new SlashCommandBuilder().setName('myoc').setDescription('Check your personal assigned Organized Crime status')
+            .addStringOption(opt => opt.setName('player').setDescription('Player name or ID (optional)')).toJSON(),
+
+        // 12. Economy & Utilities Standalone
+        new SlashCommandBuilder().setName('stocks').setDescription('Quick check overseas plushie and flower stocks')
+            .addStringOption(opt => opt.setName('country').setDescription('Country name (optional)')).toJSON(),
+        new SlashCommandBuilder().setName('donator').setDescription('Check player Torn donator and subscriber status')
+            .addStringOption(opt => opt.setName('player').setDescription('Player name or ID (optional)')).toJSON(),
+
+        // 13. Alert Control Shortcuts
+        new SlashCommandBuilder().setName('pause').setDescription('Quick shortcut to pause all automated notifications').toJSON(),
+        new SlashCommandBuilder().setName('resume').setDescription('Quick shortcut to resume all automated notifications').toJSON()
     ];
 
     const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : [])
@@ -10146,18 +10176,20 @@ function setupSlashBotEvents(bot, token) {
         if (!interaction.isChatInputCommand()) return;
 
         const cmd = interaction.commandName.toLowerCase();
+        let subcommand = null;
+        try { subcommand = interaction.options.getSubcommand()?.toLowerCase(); } catch(e) {}
+
         const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : [])
             .map(c => String(c).toLowerCase().trim());
-        if (disabledCmds.includes(cmd)) {
+        if (disabledCmds.includes(cmd) || (subcommand && disabledCmds.includes(subcommand))) {
+            const label = subcommand ? `/${cmd} ${subcommand}` : `/${cmd}`;
             return interaction.reply({
-                content: `⚠️ The \`/${cmd}\` command has been disabled by faction leadership on the dashboard.`,
+                content: `⚠️ The \`${label}\` command has been disabled by faction leadership on the dashboard.`,
                 ephemeral: true
             }).catch(() => {});
         }
 
         const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
-        let subcommand = null;
-        try { subcommand = interaction.options.getSubcommand(); } catch(e) {}
 
         // Direct actions (Claim / Unclaim / SOS)
         if (cmd === 'claim') {

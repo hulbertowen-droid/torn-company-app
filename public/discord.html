@@ -156,12 +156,33 @@
         .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
         #status-msg { font-size: 0.85em; font-weight: 600; flex: 1; transition: 0.3s; }
 
-        /* Slash cmds */
-        .cmd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin-bottom: 16px; }
-        .cmd-card { background: rgba(255,255,255,0.025); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
-        .cmd-category { font-size: 0.72em; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
-        .cmd-list { font-size: 0.79em; color: var(--text-dim); line-height: 1.7; }
-        .cmd-list code { background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 4px; color: var(--text-main); font-size: 0.92em; }
+        /* ── Compact Slash Commands Grid & Cards ── */
+        .cmd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-bottom: 18px; }
+        .cmd-card {
+            background: rgba(255,255,255,0.025);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 9px 12px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 68px;
+            transition: border-color 0.2s, background 0.2s, opacity 0.2s;
+        }
+        .cmd-card:hover { border-color: rgba(255,255,255,0.14); }
+        .cmd-card.on { border-color: rgba(46,213,115,0.3); background: rgba(46,213,115,0.035); }
+        .cmd-card:not(.on) { opacity: 0.45; background: rgba(0,0,0,0.15); border-color: var(--border); }
+        .cmd-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+        .cmd-card-title { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.88em; color: var(--text-main); }
+        .cmd-card-title code { background: rgba(0,206,201,0.12); color: var(--teal); padding: 2px 6px; border-radius: 4px; font-size: 0.92em; font-weight: 700; }
+        .cmd-card-desc { font-size: 0.74em; color: var(--text-dim); line-height: 1.35; }
+        
+        .switch-sm { position: relative; display: inline-block; width: 34px; height: 18px; flex-shrink: 0; }
+        .switch-sm input { opacity: 0; width: 0; height: 0; }
+        .switch-sm .slider { position: absolute; cursor: pointer; inset: 0; background: rgba(255,255,255,0.1); border: 1px solid var(--border); transition: .25s; border-radius: 20px; }
+        .switch-sm .slider:before { position: absolute; content: ""; height: 12px; width: 12px; left: 2px; bottom: 2px; background: white; transition: .25s; border-radius: 50%; }
+        .switch-sm input:checked + .slider { background: var(--green); border-color: var(--green); }
+        .switch-sm input:checked + .slider:before { transform: translateX(16px); }
 
         /* Country */
         .country-row { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -828,221 +849,262 @@
                     <span style="font-size:0.8em;color:var(--text-dim);margin-left:auto;">Toggle any switch to disable a command</span>
                 </div>
 
-                <div class="section-heading">🛡️ Member Verification & Access</div>
-                <div class="trigger-list">
-                    <div class="trigger-row on" id="cmd-row-verify">
-                        <span class="trigger-icon">🛡️</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name"><code>/verify</code> <span class="tag faction">SECURITY</span></div>
-                            <div class="trigger-desc">Official 1-click Torn verification. Checks global link, updates nickname to <code>Name [ID]</code>, and grants verified roles.</div>
+                <div class="section-heading">🛡️ Member Verification & Security</div>
+                <div class="cmd-grid">
+                    <div class="cmd-card on" id="cmd-card-verify">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>🛡️</span><code>/verify</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="verify" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
-                        <div class="trigger-controls">
-                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="verify" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
-                        </div>
+                        <div class="cmd-card-desc">1-click official Torn verification & server role unlock.</div>
                     </div>
-                    <div class="trigger-row on" id="cmd-row-verifyall">
-                        <span class="trigger-icon">👥</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name"><code>/verifyall</code> <span class="tag premium">ADMIN</span></div>
-                            <div class="trigger-desc">Admin command: Re-verifies all members currently in the Discord server and syncs nicknames and position roles.</div>
+                    <div class="cmd-card on" id="cmd-card-verifyall">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>👥</span><code>/verifyall</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="verifyall" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
-                        <div class="trigger-controls">
-                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="verifyall" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
-                        </div>
+                        <div class="cmd-card-desc">Admin: Re-verify all Discord members and sync roles.</div>
                     </div>
-                    <div class="trigger-row on" id="cmd-row-postverify">
-                        <span class="trigger-icon">📌</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name"><code>/postverify</code> <span class="tag premium">ADMIN</span></div>
-                            <div class="trigger-desc">Admin command: Posts a permanent, interactive verification card with the <b>🛡️ Verify Me</b> button into the channel.</div>
+                    <div class="cmd-card on" id="cmd-card-postverify">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>📌</span><code>/postverify</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="postverify" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
-                        <div class="trigger-controls">
-                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="postverify" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
-                        </div>
+                        <div class="cmd-card-desc">Admin: Post permanent interactive verification card.</div>
                     </div>
                 </div>
 
-                <div class="section-heading" style="margin-top:20px;">🏦 Faction Vault & Banking</div>
-                <div class="trigger-list">
-                    <div class="trigger-row on" id="cmd-row-withdraw">
-                        <span class="trigger-icon">💸</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name"><code>/withdraw</code> <span class="tag faction">BANKING</span></div>
-                            <div class="trigger-desc">Member withdrawal requests with strict overdraft protection, auto-fulfillment, and 60m anti-mug timeout.</div>
+                <div class="section-heading">🏦 Faction Vault & Banking</div>
+                <div class="cmd-grid">
+                    <div class="cmd-card on" id="cmd-card-withdraw">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>💸</span><code>/withdraw</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="withdraw" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
-                        <div class="trigger-controls">
-                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="withdraw" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
-                        </div>
+                        <div class="cmd-card-desc">Member withdrawal requests with overdraft protection.</div>
                     </div>
-                    <div class="trigger-row on" id="cmd-row-balance">
-                        <span class="trigger-icon">🏦</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name"><code>/balance</code> <span class="tag faction">BANKING</span></div>
-                            <div class="trigger-desc">Check faction vault balance and individual member vault deposits directly from Discord.</div>
+                    <div class="cmd-card on" id="cmd-card-balance">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>🏦</span><code>/balance</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="balance" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
-                        <div class="trigger-controls">
-                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="balance" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
-                        </div>
+                        <div class="cmd-card-desc">Check faction vault balance and member deposits.</div>
                     </div>
                 </div>
 
-                <div class="section-heading" style="margin-top:20px;">⚔️ War & Combat Intelligence</div>
-                <div class="trigger-list">
-                    <div class="trigger-row on" id="cmd-row-war">
-                        <span class="trigger-icon">📡</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name"><code>/war</code> <span class="tag war">WAR</span></div>
-                            <div class="trigger-desc">Live ranked war scorecard: lead score, target lead, points remaining, and top war hitters.</div>
+                <div class="section-heading">⚔️ War & Combat Intelligence</div>
+                <div class="cmd-grid">
+                    <div class="cmd-card on" id="cmd-card-war">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>📡</span><code>/war</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="war" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
-                        <div class="trigger-controls">
-                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="war" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
-                        </div>
+                        <div class="cmd-card-desc">Live ranked war scorecard: lead score & top hitters.</div>
                     </div>
-                    <div class="trigger-row on" id="cmd-row-targets">
-                        <span class="trigger-icon">🎯</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name"><code>/targets</code> <span class="tag war">WAR</span></div>
-                            <div class="trigger-desc">List attackable enemy targets in Torn right now with direct attack links and fair fight multipliers.</div>
+                    <div class="cmd-card on" id="cmd-card-targets">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>🎯</span><code>/targets</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="targets" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
-                        <div class="trigger-controls">
-                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="targets" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
-                        </div>
+                        <div class="cmd-card-desc">List attackable enemy targets in Torn right now.</div>
                     </div>
-                    <div class="trigger-row on" id="cmd-row-claim">
-                        <span class="trigger-icon">🔒</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name"><code>/claim</code> <span class="tag war">WAR</span></div>
-                            <div class="trigger-desc">Claim an attackable enemy target during war to coordinate attacks with faction teammates.</div>
+                    <div class="cmd-card on" id="cmd-card-claim">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>🔒</span><code>/claim</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="claim" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
-                        <div class="trigger-controls">
-                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="claim" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
-                        </div>
+                        <div class="cmd-card-desc">Claim attackable enemy target to coordinate hits.</div>
                     </div>
-                    <div class="trigger-row on" id="cmd-row-unclaim">
-                        <span class="trigger-icon">🔓</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name"><code>/unclaim</code> <span class="tag war">WAR</span></div>
-                            <div class="trigger-desc">Release an active target claim so other faction members can attack the target.</div>
+                    <div class="cmd-card on" id="cmd-card-unclaim">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>🔓</span><code>/unclaim</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="unclaim" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
-                        <div class="trigger-controls">
-                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="unclaim" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
-                        </div>
+                        <div class="cmd-card-desc">Release an active target claim for teammates.</div>
                     </div>
-                    <div class="trigger-row on" id="cmd-row-sos">
-                        <span class="trigger-icon">🚨</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name"><code>/sos</code> <span class="tag war">WAR</span></div>
-                            <div class="trigger-desc">Request emergency combat backup for a target in Discord with ping notifications.</div>
+                    <div class="cmd-card on" id="cmd-card-sos">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>🚨</span><code>/sos</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="sos" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
-                        <div class="trigger-controls">
-                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="sos" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
-                        </div>
+                        <div class="cmd-card-desc">Request emergency combat backup with ping alerts.</div>
                     </div>
-                    <div class="trigger-row on" id="cmd-row-spy">
-                        <span class="trigger-icon">🔍</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name"><code>/spy</code> <span class="tag premium">INTEL</span></div>
-                            <div class="trigger-desc">Look up known battle stats, estimated stats, and historical spy reports for any Torn player.</div>
+                    <div class="cmd-card on" id="cmd-card-spy">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>🔍</span><code>/spy</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="spy" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
-                        <div class="trigger-controls">
-                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="spy" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
-                        </div>
+                        <div class="cmd-card-desc">Look up battle stats & spy records for any player.</div>
                     </div>
                 </div>
 
-                <div class="section-heading" style="margin-top:20px;">🔗 Chains & Organized Crimes</div>
-                <div class="trigger-list">
-                    <div class="trigger-row on" id="cmd-row-chain">
-                        <span class="trigger-icon">⛓️</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name"><code>/chain</code> <span class="tag war">CHAIN</span></div>
-                            <div class="trigger-desc">Live chain hit counter, countdown timer, respect multiplier, and ready hitters list.</div>
+                <div class="section-heading">🔗 Chains & Organized Crimes</div>
+                <div class="cmd-grid">
+                    <div class="cmd-card on" id="cmd-card-chain">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>⛓️</span><code>/chain</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="chain" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
-                        <div class="trigger-controls">
-                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="chain" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
-                        </div>
+                        <div class="cmd-card-desc">Live chain hit counter, countdown timer & multiplier.</div>
                     </div>
-                    <div class="trigger-row on" id="cmd-row-oc">
-                        <span class="trigger-icon">💼</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name"><code>/oc</code> <span class="tag faction">CRIMES</span></div>
-                            <div class="trigger-desc">Summary of live Organized Crimes status, ready teams, and delayed or hospitalized participants.</div>
+                    <div class="cmd-card on" id="cmd-card-chainwatch">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>⏱️</span><code>/chainwatch</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="chainwatch" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
-                        <div class="trigger-controls">
-                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="oc" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
-                        </div>
+                        <div class="cmd-card-desc">Chain drop warning monitor & ready hitters list.</div>
                     </div>
-                </div>
-
-                <div class="section-heading" style="margin-top:20px;">👥 Faction Management Suite</div>
-                <div class="trigger-list">
-                    <div class="trigger-row on" id="cmd-row-faction">
-                        <span class="trigger-icon">🏢</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name"><code>/faction</code> <span class="tag faction">MANAGEMENT</span></div>
-                            <div class="trigger-desc">Full faction management suite: <code>roster</code>, <code>hospital</code>, <code>inactive</code>, <code>payout</code>, <code>mvp</code>, <code>stats</code>, <code>bounties</code>, and <code>flights</code>.</div>
+                    <div class="cmd-card on" id="cmd-card-oc">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>💼</span><code>/oc</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="oc" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
-                        <div class="trigger-controls">
-                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="faction" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
-                        </div>
+                        <div class="cmd-card-desc">Summary of live OCs, ready teams & delayed members.</div>
                     </div>
-                    <div class="trigger-row on" id="cmd-row-notindiscord">
-                        <span class="trigger-icon">🕵️</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name"><code>/notindiscord</code> <span class="tag faction">AUDIT</span></div>
-                            <div class="trigger-desc">Audits faction roster against Discord members to detect who has not joined the Discord server yet.</div>
+                    <div class="cmd-card on" id="cmd-card-myoc">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>📋</span><code>/myoc</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="myoc" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
-                        <div class="trigger-controls">
-                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="notindiscord" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
-                        </div>
+                        <div class="cmd-card-desc">Check your personal assigned Organized Crime.</div>
                     </div>
                 </div>
 
-                <div class="section-heading" style="margin-top:20px;">🌍 Economy & Player Tools</div>
-                <div class="trigger-list">
-                    <div class="trigger-row on" id="cmd-row-profile">
-                        <span class="trigger-icon">👤</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name"><code>/profile</code> <span class="tag premium">TOOLS</span></div>
-                            <div class="trigger-desc">View comprehensive player profile card, status, level, faction, and revival status.</div>
+                <div class="section-heading">👥 Faction Management Suite</div>
+                <div class="cmd-grid">
+                    <div class="cmd-card on" id="cmd-card-faction">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>🏢</span><code>/faction</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="faction" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
-                        <div class="trigger-controls">
-                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="profile" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
-                        </div>
+                        <div class="cmd-card-desc">Full faction management suite with all subcommands.</div>
                     </div>
-                    <div class="trigger-row on" id="cmd-row-travel">
-                        <span class="trigger-icon">✈️</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name"><code>/travel</code> <span class="tag premium">TOOLS</span></div>
-                            <div class="trigger-desc">Foreign destination intel and real-time overseas item stock for plushies and flowers.</div>
+                    <div class="cmd-card on" id="cmd-card-roster">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>📋</span><code>/roster</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="roster" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
-                        <div class="trigger-controls">
-                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="travel" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
-                        </div>
+                        <div class="cmd-card-desc">Live readiness breakdown (Online, Traveling, Hospital).</div>
                     </div>
-                    <div class="trigger-row on" id="cmd-row-bazaar">
-                        <span class="trigger-icon">🛒</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name"><code>/bazaar</code> <span class="tag premium">TOOLS</span></div>
-                            <div class="trigger-desc">Check lowest Torn market prices and active bazaar listings for any item.</div>
+                    <div class="cmd-card on" id="cmd-card-hospital">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>🏥</span><code>/hospital</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="hospital" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
-                        <div class="trigger-controls">
-                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="bazaar" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        <div class="cmd-card-desc">List friendly faction members currently hospitalized.</div>
+                    </div>
+                    <div class="cmd-card on" id="cmd-card-inactive">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>💤</span><code>/inactive</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="inactive" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
+                        <div class="cmd-card-desc">List faction members offline or inactive for 1+ days.</div>
+                    </div>
+                    <div class="cmd-card on" id="cmd-card-notindiscord">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>🕵️</span><code>/notindiscord</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="notindiscord" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                        <div class="cmd-card-desc">Audit faction roster vs members not in Discord.</div>
+                    </div>
+                    <div class="cmd-card on" id="cmd-card-payout">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>💰</span><code>/payout</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="payout" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                        <div class="cmd-card-desc">Check member war payout balance and earnings.</div>
+                    </div>
+                    <div class="cmd-card on" id="cmd-card-mvp">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>🏆</span><code>/mvp</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="mvp" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                        <div class="cmd-card-desc">Leaderboard of top war hitters and contributors.</div>
+                    </div>
+                    <div class="cmd-card on" id="cmd-card-stats">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>📊</span><code>/stats</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="stats" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                        <div class="cmd-card-desc">Battle stats roster comparison (friendly vs enemy).</div>
+                    </div>
+                    <div class="cmd-card on" id="cmd-card-bounties">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>🎯</span><code>/bounties</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="bounties" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                        <div class="cmd-card-desc">Track active war bounties placed and claimed.</div>
+                    </div>
+                    <div class="cmd-card on" id="cmd-card-flights">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>✈️</span><code>/flights</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="flights" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                        <div class="cmd-card-desc">Audit war flight uptime and travel sentinel.</div>
                     </div>
                 </div>
 
-                <div class="section-heading" style="margin-top:20px;">📢 Alert Controls</div>
-                <div class="trigger-list">
-                    <div class="trigger-row on" id="cmd-row-alerts">
-                        <span class="trigger-icon">📢</span>
-                        <div class="trigger-info">
-                            <div class="trigger-name"><code>/alerts</code> <span class="tag faction">CONTROLS</span></div>
-                            <div class="trigger-desc">Control automated Discord alert broadcasts (<code>pause</code>, <code>resume</code>, or check broadcast <code>status</code>).</div>
+                <div class="section-heading">🌍 Economy & Player Tools</div>
+                <div class="cmd-grid">
+                    <div class="cmd-card on" id="cmd-card-profile">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>👤</span><code>/profile</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="profile" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
-                        <div class="trigger-controls">
-                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="alerts" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        <div class="cmd-card-desc">View player profile card, status, level & revives.</div>
+                    </div>
+                    <div class="cmd-card on" id="cmd-card-travel">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>✈️</span><code>/travel</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="travel" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
+                        <div class="cmd-card-desc">Foreign destination intel & real-time item stock.</div>
+                    </div>
+                    <div class="cmd-card on" id="cmd-card-stocks">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>📦</span><code>/stocks</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="stocks" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                        <div class="cmd-card-desc">Quick check overseas plushie and flower stocks.</div>
+                    </div>
+                    <div class="cmd-card on" id="cmd-card-bazaar">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>🛒</span><code>/bazaar</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="bazaar" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                        <div class="cmd-card-desc">Check lowest market price & active bazaar listings.</div>
+                    </div>
+                    <div class="cmd-card on" id="cmd-card-donator">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>⭐</span><code>/donator</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="donator" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                        <div class="cmd-card-desc">Check player Torn donator and subscriber status.</div>
+                    </div>
+                </div>
+
+                <div class="section-heading">📢 Alert Controls & Utilities</div>
+                <div class="cmd-grid">
+                    <div class="cmd-card on" id="cmd-card-alerts">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>📢</span><code>/alerts</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="alerts" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                        <div class="cmd-card-desc">Manage alert broadcasts (pause, resume, status).</div>
+                    </div>
+                    <div class="cmd-card on" id="cmd-card-pause">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>⏸️</span><code>/pause</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="pause" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                        <div class="cmd-card-desc">Quick shortcut to silence automated notifications.</div>
+                    </div>
+                    <div class="cmd-card on" id="cmd-card-resume">
+                        <div class="cmd-card-top">
+                            <div class="cmd-card-title"><span>▶️</span><code>/resume</code></div>
+                            <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="resume" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                        <div class="cmd-card-desc">Quick shortcut to re-enable automated notifications.</div>
                     </div>
                 </div>
 
@@ -1335,8 +1397,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             const cmdName = (chk.dataset.cmd || '').toLowerCase().trim();
             const isEnabled = !disabledCmds.includes(cmdName);
             chk.checked = isEnabled;
-            const row = chk.closest('.trigger-row');
-            if (row) row.classList.toggle('on', isEnabled);
+            const card = chk.closest('.cmd-card') || chk.closest('.trigger-row');
+            if (card) card.classList.toggle('on', isEnabled);
         });
         updateCommandsBadge();
 
@@ -1360,8 +1422,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function onCommandToggle(el) {
-    const row = el.closest('.trigger-row');
-    if (row) row.classList.toggle('on', el.checked);
+    const card = el.closest('.cmd-card') || el.closest('.trigger-row');
+    if (card) card.classList.toggle('on', el.checked);
     updateCommandsBadge();
 }
 
@@ -1380,20 +1442,20 @@ function updateCommandsBadge() {
 function setAllCommands(enable) {
     document.querySelectorAll('.cmd-toggle').forEach(chk => {
         chk.checked = enable;
-        const row = chk.closest('.trigger-row');
-        if (row) row.classList.toggle('on', enable);
+        const card = chk.closest('.cmd-card') || chk.closest('.trigger-row');
+        if (card) card.classList.toggle('on', enable);
     });
     updateCommandsBadge();
 }
 
 function setEssentialCommands() {
-    const essentials = ['verify', 'verifyall', 'postverify', 'withdraw', 'balance', 'war', 'targets', 'chain', 'oc', 'faction'];
+    const essentials = ['verify', 'verifyall', 'postverify', 'withdraw', 'balance', 'war', 'targets', 'chain', 'oc', 'faction', 'hospital', 'roster', 'payout', 'profile'];
     document.querySelectorAll('.cmd-toggle').forEach(chk => {
         const cmd = (chk.dataset.cmd || '').toLowerCase().trim();
         const enable = essentials.includes(cmd);
         chk.checked = enable;
-        const row = chk.closest('.trigger-row');
-        if (row) row.classList.toggle('on', enable);
+        const card = chk.closest('.cmd-card') || chk.closest('.trigger-row');
+        if (card) card.classList.toggle('on', enable);
     });
     updateCommandsBadge();
 }
