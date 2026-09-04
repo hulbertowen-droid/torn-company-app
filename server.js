@@ -6956,7 +6956,7 @@ function buildBankRequestEmbed(req) {
 
     let color = 0xffa502;
     let statusLine = `⏳ Awaiting banker — requested <t:${Math.floor(req.timestamp / 1000)}:R>`;
-    let footerText = 'Spider-Verse Faction Tools • Faction Vault Banking';
+    let footerText = 'F.R.I.D.A.Y • Faction Vault Banking';
     let titlePrefix = '⏳';
 
     if (req.status === 'verifying') {
@@ -6978,19 +6978,19 @@ function buildBankRequestEmbed(req) {
         }
         const timeRef = req.fulfilledAt || req.verifiedAt || req.timestamp || Date.now();
         statusLine = `✅ **Fulfilled** ${fulfillerStr} — <t:${Math.floor(timeRef / 1000)}:R>`;
-        footerText = `Fulfilled · Faction Vault Banking`;
+        footerText = `Fulfilled · F.R.I.D.A.Y Vault Banking`;
     } else if (req.status === 'cancelled') {
         color = 0x57606f;
         titlePrefix = '❌';
         const cancellerStr = req.cancelledBy && req.cancelledBy !== 'system'
             ? `<@${req.cancelledBy}>` : (req.cancellerName || 'System');
         statusLine = `❌ **Cancelled** by ${cancellerStr} — <t:${Math.floor(req.cancelledAt / 1000)}:R>`;
-        footerText = `Cancelled · Spider-Verse Faction Tools`;
+        footerText = `Cancelled · F.R.I.D.A.Y Faction AI`;
     } else if (req.status === 'expired') {
         color = 0x4f545c;
         titlePrefix = '⏱️';
         statusLine = `⏱️ **Timed out** after 60 minutes (auto-cancelled)`;
-        footerText = `Timed out · Spider-Verse Faction Tools`;
+        footerText = `Timed out · F.R.I.D.A.Y Faction AI`;
     }
 
     const fields = [
@@ -8236,6 +8236,12 @@ function setupSlashBotEvents(bot, token) {
     bot.once(Events.ClientReady, async (c) => {
         console.log(`[Slash Bot] Ready as ${c.user.tag}`);
         slashBotStarted = true;
+
+        try {
+            if (c.user.username !== 'F.R.I.D.A.Y') {
+                await c.user.setUsername('F.R.I.D.A.Y').catch(() => {});
+            }
+        } catch(e) {}
 
         // Automatically register slash commands without duplicates
         try {
