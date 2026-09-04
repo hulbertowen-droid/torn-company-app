@@ -2421,37 +2421,15 @@ app.post('/api/test-discord-alert', async (req, res) => {
         const pName = "Owen777";
         const pId = "3490493";
         const itemName = "C4 Explosive";
-        const itemId = 190;
-        const itemType = "Material";
-        const armoryUrl = "https://www.torn.com/factions.php?step=your#/tab=armory&sub=utilities";
+        const armoryUrl = "https://www.torn.com/factions.php?step=your&type=1#/tab=armoury&start=0&sub=utilities";
         const profileUrl = `https://www.torn.com/profiles.php?XID=${pId}`;
         embed = {
-            title: "🚨 OC Missing Item: Bidding War [TEST]",
-            description: `A team member is missing a required item to execute **Bidding War**!\n\n` +
-                         `👤 **Player:** [${pName} [${pId}]](${profileUrl})\n` +
-                         `🎯 **Assigned Role:** Bomber #1\n` +
-                         `📦 **Missing Item:** ⚠️ **${itemName}** (Item #${itemId} · ${itemType})\n` +
-                         `ℹ️ **Requirement:** Consumable (Used up in crime)\n\n` +
-                         `📦 **Faction Armory Action:**\n` +
-                         `Faction leaders / bankers can loan or give this item to ${pName}:\n` +
-                         `👉 [Click to Open Armory to Give / Loan ${itemName}](${armoryUrl})`,
-            color: 0xff4757,
-            buttons: [
-                {
-                    type: 2,
-                    style: 5,
-                    label: `📦 Armory: Give ${itemName}`,
-                    url: armoryUrl
-                },
-                {
-                    type: 2,
-                    style: 5,
-                    label: `👤 View ${pName}'s Profile`,
-                    url: profileUrl
-                }
-            ],
-            footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" },
-            timestamp: new Date().toISOString()
+            title: "🚨 OC Issue: Bidding War",
+            description: `**Player:** [${pName}](${profileUrl})\n` +
+                         `**Role:** Bomber #1\n` +
+                         `**Item Needed:** ${itemName}\n` +
+                         `**Armory:** [Give / Loan on Torn](${armoryUrl})`,
+            color: 16733695
         };
     } else if (type === 'oc_ready') {
         chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
@@ -4792,18 +4770,8 @@ app.get('/api/ocs', async (req, res) => {
                     if (slot.item_requirement && !slot.item_requirement.is_available) {
                         const itemId = slot.item_requirement.id;
                         const itemInfo = await getTornItemInfo(itemId, userKey);
-                        const itemType = itemInfo.type || 'Material';
-                        const isReusable = !!slot.item_requirement.is_reusable;
-                        const reusableText = isReusable ? "Reusable (kept after crime)" : "Consumable (used up in crime)";
-                        
-                        let armorySubtab = 'utilities';
-                        const lowType = itemType.toLowerCase();
-                        if (lowType.includes('temp')) armorySubtab = 'temporary';
-                        else if (lowType.includes('weapon')) armorySubtab = 'weapons';
-                        else if (lowType.includes('armor')) armorySubtab = 'armor';
-                        else if (lowType.includes('med')) armorySubtab = 'medical';
-
-                        const armoryUrl = `https://www.torn.com/factions.php?step=your#/tab=armory&sub=${armorySubtab}`;
+                        const itemName = itemInfo.name || `Item #${itemId}`;
+                        const armoryUrl = "https://www.torn.com/factions.php?step=your&type=1#/tab=armoury&start=0&sub=utilities";
                         const profileUrl = `https://www.torn.com/profiles.php?XID=${pId}`;
                         const roleLabel = slot.position_info?.label || slot.position || "Team Member";
 
@@ -4814,31 +4782,12 @@ app.get('/api/ocs', async (req, res) => {
                             const botToken = discordConfig.globalBotToken;
                             if (botToken) {
                                 sendChannelMessage(botToken, targetChan, {
-                                    title: `🚨 OC Missing Item: ${crime.name}`,
-                                    description: `A team member is missing a required item to execute **${crime.name}**!\n\n` +
-                                                 `👤 **Player:** [${pName} [${pId}]](${profileUrl})\n` +
-                                                 `🎯 **Assigned Role:** ${roleLabel}\n` +
-                                                 `📦 **Missing Item:** ⚠️ **${itemInfo.name}** (Item #${itemId} · ${itemType})\n` +
-                                                 `ℹ️ **Requirement:** ${reusableText}\n\n` +
-                                                 `📦 **Faction Armory Action:**\n` +
-                                                 `Faction leaders / bankers can loan or give this item to ${pName}:\n` +
-                                                 `👉 [Click to Open Armory to Give / Loan ${itemInfo.name}](${armoryUrl})`,
-                                    color: 0xff4757,
-                                    buttons: [
-                                        {
-                                            type: 2,
-                                            style: 5,
-                                            label: `📦 Armory: Give ${itemInfo.name}`,
-                                            url: armoryUrl
-                                        },
-                                        {
-                                            type: 2,
-                                            style: 5,
-                                            label: `👤 View ${pName}'s Profile`,
-                                            url: profileUrl
-                                        }
-                                    ],
-                                    footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" }
+                                    title: `🚨 OC Issue: ${crime.name}`,
+                                    description: `**Player:** [${pName}](${profileUrl})\n` +
+                                                 `**Role:** ${roleLabel}\n` +
+                                                 `**Item Needed:** ${itemName}\n` +
+                                                 `**Armory:** [Give / Loan on Torn](${armoryUrl})`,
+                                    color: 16733695
                                 }, mention);
                             }
                         }
@@ -4852,8 +4801,7 @@ app.get('/api/ocs', async (req, res) => {
                                 sendChannelMessage(botToken, targetChan, {
                                     title: `🚨 OC Issue: ${crime.name}`,
                                     description: `**Player:** [${pName}](https://www.torn.com/profiles.php?XID=${pId})\n**Role:** ${slot.position_info?.label || slot.position}\n**Status:** Currently **${slot.user.outcome}**`,
-                                    color: 0xff4757,
-                                    footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" }
+                                    color: 16733695
                                 }, mention);
                             }
                         }
@@ -8330,18 +8278,8 @@ async function checkFactionOrganizedCrimes() {
                             const pName = members[String(pId)]?.name || slot.user.name || `Player [${pId}]`;
                             const itemId = slot.item_requirement.id;
                             const itemInfo = await getTornItemInfo(itemId, apiKey);
-                            const itemType = itemInfo.type || 'Material';
-                            const isReusable = !!slot.item_requirement.is_reusable;
-                            const reusableText = isReusable ? "Reusable (kept after crime)" : "Consumable (used up in crime)";
-                            
-                            let armorySubtab = 'utilities';
-                            const lowType = itemType.toLowerCase();
-                            if (lowType.includes('temp')) armorySubtab = 'temporary';
-                            else if (lowType.includes('weapon')) armorySubtab = 'weapons';
-                            else if (lowType.includes('armor')) armorySubtab = 'armor';
-                            else if (lowType.includes('med')) armorySubtab = 'medical';
-
-                            const armoryUrl = `https://www.torn.com/factions.php?step=your#/tab=armory&sub=${armorySubtab}`;
+                            const itemName = itemInfo.name || `Item #${itemId}`;
+                            const armoryUrl = "https://www.torn.com/factions.php?step=your&type=1#/tab=armoury&start=0&sub=utilities";
                             const profileUrl = `https://www.torn.com/profiles.php?XID=${pId}`;
                             const roleLabel = slot.position_info?.label || slot.position || "Team Member";
 
@@ -8349,31 +8287,12 @@ async function checkFactionOrganizedCrimes() {
                             if (!ocMemory[trackingId] || (Date.now() - ocMemory[trackingId]) > 3600000 * 6) {
                                 ocMemory[trackingId] = Date.now();
                                 await sendChannelMessage(botToken, channelId, {
-                                    title: `🚨 OC Missing Item: ${v2Crime.name}`,
-                                    description: `A team member is missing a required item to execute **${v2Crime.name}**!\n\n` +
-                                                 `👤 **Player:** [${pName} [${pId}]](${profileUrl})\n` +
-                                                 `🎯 **Assigned Role:** ${roleLabel}\n` +
-                                                 `📦 **Missing Item:** ⚠️ **${itemInfo.name}** (Item #${itemId} · ${itemType})\n` +
-                                                 `ℹ️ **Requirement:** ${reusableText}\n\n` +
-                                                 `📦 **Faction Armory Action:**\n` +
-                                                 `Faction leaders / bankers can loan or give this item to ${pName}:\n` +
-                                                 `👉 [Click to Open Armory to Give / Loan ${itemInfo.name}](${armoryUrl})`,
-                                    color: 0xff4757,
-                                    buttons: [
-                                        {
-                                            type: 2,
-                                            style: 5,
-                                            label: `📦 Armory: Give ${itemInfo.name}`,
-                                            url: armoryUrl
-                                        },
-                                        {
-                                            type: 2,
-                                            style: 5,
-                                            label: `👤 View ${pName}'s Profile`,
-                                            url: profileUrl
-                                        }
-                                    ],
-                                    footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" }
+                                    title: `🚨 OC Issue: ${v2Crime.name}`,
+                                    description: `**Player:** [${pName}](${profileUrl})\n` +
+                                                 `**Role:** ${roleLabel}\n` +
+                                                 `**Item Needed:** ${itemName}\n` +
+                                                 `**Armory:** [Give / Loan on Torn](${armoryUrl})`,
+                                    color: 16733695
                                 }, mention).catch(() => {});
                             }
                         }
