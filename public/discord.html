@@ -337,6 +337,18 @@
                         <span class="field-hint">Role automatically granted when a verified user belongs to your faction.</span>
                     </div>
                 </div>
+                <div class="field-grid">
+                    <div class="field-group">
+                        <label class="field-label" for="leader-roleid">👑 Faction Leader Role ID <span class="opt">(optional)</span></label>
+                        <input class="field-input" type="text" id="leader-roleid" placeholder="Role ID for Faction Leaders & Co-Leaders" autocomplete="off">
+                        <span class="field-hint">Role automatically granted if verified player is Leader or Co-Leader in your faction.</span>
+                    </div>
+                    <div class="field-group" style="display: flex; flex-direction: column; justify-content: center;">
+                        <div style="font-size: 0.82em; color: var(--text-dim); line-height: 1.5; padding: 10px; background: rgba(255, 165, 2, 0.08); border: 1px solid rgba(255, 165, 2, 0.2); border-radius: 6px;">
+                            👑 <b>Leadership & Roles Sync:</b> When members verify, F.R.I.D.A.Y detects their faction rank from Torn API and automatically grants Leader, Banker, and Faction roles!
+                        </div>
+                    </div>
+                </div>
                 <div style="margin-top: 14px; padding: 12px 14px; background: rgba(0, 206, 201, 0.05); border: 1px solid rgba(0, 206, 201, 0.2); border-radius: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
                     <div>
                         <div style="font-size: 0.9em; font-weight: 700; color: var(--teal);">📌 Sticky Verification Card</div>
@@ -593,9 +605,13 @@
                     <li><b>Unlock Verification Channel:</b> Right-click your <b>#verification</b> (or #welcome) channel &rarr; <i>Edit Channel &rarr; Permissions</i>: Set <b>@everyone</b> to <b>View Channel: ON (✅)</b> and <b>Send Messages: ON (✅)</b>.</li>
                     <li><b>Grant Server Access to Verified:</b> In your server categories or channel permissions: Add your <b>@Verified</b> role and set <b>View Channels: ON (✅)</b>.</li>
                     <li><b>Enable Bot Privileged Intent:</b> In the <a href="https://discord.com/developers/applications" target="_blank" style="color:var(--teal);text-decoration:underline;">Discord Developer Portal</a> &rarr; your Bot application &rarr; <b>Bot</b> tab &rarr; under <b>Privileged Gateway Intents</b>: Toggle <b>SERVER MEMBERS INTENT</b> to <b>ON</b>.</li>
+                    <li><b>Position Bot Role on Top:</b> In <i>Server Settings &rarr; Roles</i>: Drag the <b>F.R.I.D.A.Y</b> role <b>above</b> your @Verified, @Spider-Verse, @Leader, and @Banker roles. Discord prevents bots from assigning any role positioned higher than themselves.</li>
                 </ol>
-                <div style="background: rgba(46, 213, 115, 0.08); border: 1px solid rgba(46, 213, 115, 0.25); border-radius: 6px; padding: 10px 14px; font-size: 0.84em; color: var(--green);">
+                <div style="background: rgba(46, 213, 115, 0.08); border: 1px solid rgba(46, 213, 115, 0.25); border-radius: 6px; padding: 10px 14px; font-size: 0.84em; color: var(--green); margin-bottom: 10px;">
                     ⚡ <b>Result:</b> When new members join, they can <i>only</i> see the <b>#verification</b> channel. F.R.I.D.A.Y immediately greets them with the 1-click verification card. As soon as they verify, F.R.I.D.A.Y automatically assigns the <b>@Verified</b> role, instantly unlocking the rest of your server!
+                </div>
+                <div style="background: rgba(255, 165, 2, 0.08); border: 1px solid rgba(255, 165, 2, 0.25); border-radius: 6px; padding: 10px 14px; font-size: 0.84em; color: var(--gold);">
+                    👑 <b>Role Hierarchy Notice:</b> If the bot reports a role hierarchy error, simply open Discord <i>Server Settings &rarr; Roles</i> and drag the <b>F.R.I.D.A.Y</b> role higher up the list!
                 </div>
             </div>
         </div>
@@ -780,6 +796,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (document.getElementById('unverified-roleid')) document.getElementById('unverified-roleid').value = (cfg.unverifiedRoleId || localStorage.getItem('warboard_unverified_roleid') || '').replace(/[^0-9]/g, '');
         if (document.getElementById('verified-roleid')) document.getElementById('verified-roleid').value = cfg.verifiedRoleId || localStorage.getItem('warboard_verified_roleid') || '';
         if (document.getElementById('faction-roleid')) document.getElementById('faction-roleid').value = cfg.factionRoleId || localStorage.getItem('warboard_faction_roleid') || '';
+        if (document.getElementById('leader-roleid')) document.getElementById('leader-roleid').value = (cfg.leaderRoleId || localStorage.getItem('warboard_leader_roleid') || '').replace(/[^0-9]/g, '');
         if (document.getElementById('guild-id-input')) document.getElementById('guild-id-input').value = (cfg.guildId || localStorage.getItem('warboard_guildid') || '').replace(/[^0-9]/g, '');
         const flags = {
             targetOnline: cfg.targetOnline === true,
@@ -911,6 +928,7 @@ async function saveDiscordConfig() {
     const unverifiedRoleId = (document.getElementById('unverified-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const verifiedRoleId = (document.getElementById('verified-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const factionRoleId = (document.getElementById('faction-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const leaderRoleId = (document.getElementById('leader-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const guildId = (document.getElementById('guild-id-input')?.value.trim() || '').replace(/[^0-9]/g, '');
 
     // Guard: Prevent saving a bot token into channel ID
@@ -934,6 +952,7 @@ async function saveDiscordConfig() {
     localStorage.setItem('warboard_oc_channelid', ocChannelId); localStorage.setItem('warboard_oc_roleid', ocRoleId);
     localStorage.setItem('warboard_verification_channelid', verificationChannelId); localStorage.setItem('warboard_unverified_roleid', unverifiedRoleId);
     localStorage.setItem('warboard_verified_roleid', verifiedRoleId); localStorage.setItem('warboard_faction_roleid', factionRoleId);
+    localStorage.setItem('warboard_leader_roleid', leaderRoleId);
     statusEl.style.color = 'var(--blue)'; statusEl.textContent = '⏳ Saving...'; btn.disabled = true;
     try {
         const res = await fetch('/api/save-discord-config', {
@@ -944,7 +963,7 @@ async function saveDiscordConfig() {
                 bankingChannelId, bankerRoleId,
                 ocChannelId, ocRoleId, ocUpcomingMinutes,
                 verificationChannelId, unverifiedRoleId,
-                verifiedRoleId, factionRoleId,
+                verifiedRoleId, factionRoleId, leaderRoleId,
                 targetOnline: document.getElementById('targetOnline').checked,
                 targetLanded: document.getElementById('targetLanded').checked,
                 targetOutHosp: document.getElementById('targetOutHosp').checked,

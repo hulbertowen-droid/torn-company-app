@@ -386,6 +386,7 @@ let discordConfig = {
     unverifiedRoleId: "",
     verifiedRoleId: "",
     factionRoleId: "",
+    leaderRoleId: "",
     autoVerifyOnJoin: true
 };
 let marketConfig = { globalChannelId: "", autoDefense: false, sniperTargets: [] };
@@ -2310,6 +2311,7 @@ app.post('/api/save-discord-config', async (req, res) => {
     if (payload.unverifiedRoleId !== undefined) payload.unverifiedRoleId = String(payload.unverifiedRoleId || '').replace(/[^0-9]/g, '');
     if (payload.verifiedRoleId !== undefined) payload.verifiedRoleId = String(payload.verifiedRoleId || '').replace(/[^0-9]/g, '');
     if (payload.factionRoleId !== undefined) payload.factionRoleId = String(payload.factionRoleId || '').replace(/[^0-9]/g, '');
+    if (payload.leaderRoleId !== undefined) payload.leaderRoleId = String(payload.leaderRoleId || '').replace(/[^0-9]/g, '');
     if (payload.autoVerifyOnJoin !== undefined) payload.autoVerifyOnJoin = !!payload.autoVerifyOnJoin;
 
     discordConfig = { ...discordConfig, ...payload }; 
@@ -2375,6 +2377,12 @@ app.post('/api/discord/post-verification-card', async (req, res) => {
                     custom_id: 'btn_verify_open_modal',
                     label: '🛡️ Verify My Account',
                     emoji: { name: '🛡️' }
+                },
+                {
+                    type: 2,
+                    style: 5, // Link
+                    label: '🔗 Link at Torn.com/discord',
+                    url: 'https://www.torn.com/discord'
                 },
                 {
                     type: 2,
@@ -8817,6 +8825,73 @@ function buildPendingRequestsEmbed() {
 }
 
 // ─── Tornium Verification Suite (/verify & /verifyall) ─────────────────────────
+
+// Helper: Safely apply or remove a guild member role with pre-flight hierarchy and permission validation
+async function applyGuildMemberRole(guild, guildMember, botMember, roleId, action = 'add', reason = '') {
+    if (!roleId || !guild || !guildMember) return { success: false, reason: 'Missing parameters' };
+
+    // 1. Resolve target Role
+    let role = guild.roles.cache.get(roleId);
+    if (!role) {
+        try {
+            role = await guild.roles.fetch(roleId).catch(() => null);
+        } catch(e) {}
+    }
+    if (!role) {
+        return { success: false, reason: `Role [${roleId}] not found in server` };
+    }
+
+    // 2. Resolve Bot Member
+    if (!botMember) {
+        botMember = guild.members.me || await guild.members.fetchMe().catch(() => null);
+    }
+    if (!botMember) {
+        return { success: false, reason: 'Could not resolve bot member in server' };
+    }
+    if (!botMember.permissions?.has?.('ManageRoles')) {
+        return { success: false, reason: 'Bot lacks "Manage Roles" permission in server' };
+    }
+
+    // 3. Discord Role Hierarchy Check
+    // A bot can only add or remove roles strictly LOWER than its own highest role
+    const botHighest = botMember.roles.highest;
+    if (role.position >= botHighest.position) {
+        const warning = `Role hierarchy error: Bot role "${botHighest.name}" (pos ${botHighest.position}) is not higher than target role "${role.name}" (pos ${role.position}). In Discord Server Settings ➔ Roles, drag the F.R.I.D.A.Y role above "${role.name}".`;
+        console.warn(`[Discord Roles] Hierarchy block: ${warning}`);
+        return {
+            success: false,
+            hierarchyError: true,
+            roleName: role.name,
+            roleId: role.id,
+            reason: warning
+        };
+    }
+
+    // 4. Perform Add or Remove
+    try {
+        const hasRole = guildMember.roles?.cache ? guildMember.roles.cache.has(role.id) : false;
+        if (action === 'add') {
+            if (!hasRole) {
+                await guildMember.roles.add(role.id, reason || 'F.R.I.D.A.Y Verification Sync');
+                console.log(`[Discord Roles] Added role "${role.name}" (${role.id}) to ${guildMember.user?.tag || guildMember.id}`);
+                return { success: true, action: 'added', role };
+            }
+            return { success: true, action: 'already_had', role };
+        } else if (action === 'remove') {
+            if (hasRole) {
+                await guildMember.roles.remove(role.id, reason || 'F.R.I.D.A.Y Verification Sync');
+                console.log(`[Discord Roles] Removed role "${role.name}" (${role.id}) from ${guildMember.user?.tag || guildMember.id}`);
+                return { success: true, action: 'removed', role };
+            }
+            return { success: true, action: 'already_lacked', role };
+        }
+    } catch(err) {
+        console.error(`[Discord Roles] Failed to ${action} role "${role.name}" (${role.id}) for ${guildMember.id}:`, err.message);
+        return { success: false, error: err.message, roleName: role.name, roleId: role.id };
+    }
+    return { success: false, reason: 'Unknown state' };
+}
+
 async function executeVerifyMember(memberOrUser, guild, playerInput, apiKey) {
     if (!apiKey) {
         return { title: "🛡️ Verification Failed", description: "⚠️ Torn API Key is not configured on the dashboard.", color: 0xff4757 };
@@ -8826,17 +8901,32 @@ async function executeVerifyMember(memberOrUser, guild, playerInput, apiKey) {
     }
 
     const discordUserId = memberOrUser.id;
+
+    // Guaranteed resolution of a real GuildMember instance (Discord.js v14)
     let guildMember = null;
     try {
-        guildMember = guild.members.cache.get(discordUserId) || await guild.members.fetch(discordUserId).catch(() => null);
+        guildMember = await guild.members.fetch(discordUserId).catch(() => null);
     } catch(e) {}
+    if (!guildMember && guild.members?.cache) {
+        guildMember = guild.members.cache.get(discordUserId);
+    }
+
+    // Resolve bot member and fetch roles cache if needed
+    let botMember = guild.members.me;
+    if (!botMember) {
+        try { botMember = await guild.members.fetchMe().catch(() => null); } catch(e) {}
+    }
+    if (guild.roles.cache.size < 3) {
+        try { await guild.roles.fetch().catch(() => null); } catch(e) {}
+    }
 
     let tornUser = null;
+    let verifiedViaGlobalLink = false;
     const facId = discordConfig.factionId || dynamicFactionId || 52355;
 
-    // 1. If player argument is provided (numeric ID or player name)
+    // ── FLOW 1: Player Argument Provided (Numeric ID or Name) ──
     if (playerInput) {
-        const numericId = playerInput.replace(/\D/g, '');
+        const numericId = String(playerInput).replace(/\D/g, '');
         if (numericId.length >= 1 && numericId.length <= 10) {
             try {
                 const res = await fetch(`https://api.torn.com/user/${numericId}?selections=profile,discord&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
@@ -8846,15 +8936,15 @@ async function executeVerifyMember(memberOrUser, guild, playerInput, apiKey) {
                 }
             } catch(e) {}
         }
-        
+
         // If not found by numeric ID, check by name in faction roster
         if (!tornUser) {
             try {
-                const facRes = await fetch(`https://api.torn.com/faction/${facId}?selections=basic&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+                const facRes = await fetch(`https://api.torn.com/faction/${facId}?selections=basic,positions&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
                 const facData = await facRes.json();
-                if (facData.members) {
+                if (facData && facData.members) {
                     const foundEntry = Object.entries(facData.members).find(([id, m]) =>
-                        m.name.toLowerCase() === playerInput.toLowerCase()
+                        m.name.toLowerCase() === String(playerInput).toLowerCase().trim()
                     );
                     if (foundEntry) {
                         const res = await fetch(`https://api.torn.com/user/${foundEntry[0]}?selections=profile,discord&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
@@ -8866,24 +8956,42 @@ async function executeVerifyMember(memberOrUser, guild, playerInput, apiKey) {
         }
     }
 
-    // 2. If no player argument provided, attempt auto-match via Torn v2 or Discord name in faction roster
+    // ── FLOW 2: Tornium Official Flow (Torn API v2 Cross-Reference) ──
+    // Checks if user linked their Discord ID globally on the Official Torn Discord (torn.com/discord)
     if (!tornUser) {
         try {
             const v2Res = await fetch(`https://api.torn.com/v2/user/${discordUserId}/discord?key=${apiKey}`, { signal: AbortSignal.timeout(6000) });
             const v2Data = await v2Res.json();
-            if (v2Data && v2Data.user_id) {
-                const res = await fetch(`https://api.torn.com/user/${v2Data.user_id}?selections=profile,discord&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+            const matchedTornId = v2Data?.discord?.user_id || v2Data?.user_id || v2Data?.discord?.player_id || v2Data?.player_id || v2Data?.userID;
+            if (matchedTornId) {
+                const res = await fetch(`https://api.torn.com/user/${matchedTornId}?selections=profile,discord&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
                 const data = await res.json();
-                if (data && !data.error && data.player_id) tornUser = data;
+                if (data && !data.error && data.player_id) {
+                    tornUser = data;
+                    verifiedViaGlobalLink = true;
+                }
             }
         } catch(e) {}
     }
 
+    // ── FLOW 3: v1 Discord Endpoint Fallback ──
     if (!tornUser) {
         try {
-            const facRes = await fetch(`https://api.torn.com/faction/${facId}?selections=basic&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+            const v1Res = await fetch(`https://api.torn.com/user/${discordUserId}?selections=profile,discord&key=${apiKey}`, { signal: AbortSignal.timeout(6000) });
+            const v1Data = await v1Res.json();
+            if (v1Data && !v1Data.error && v1Data.player_id) {
+                tornUser = v1Data;
+                verifiedViaGlobalLink = true;
+            }
+        } catch(e) {}
+    }
+
+    // ── FLOW 4: Discord Display Name Fallback in Faction Roster ──
+    if (!tornUser && guildMember) {
+        try {
+            const facRes = await fetch(`https://api.torn.com/faction/${facId}?selections=basic,positions&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
             const facData = await facRes.json();
-            if (facData.members && guildMember) {
+            if (facData && facData.members) {
                 const searchNames = [
                     guildMember.displayName,
                     guildMember.nickname,
@@ -8903,72 +9011,160 @@ async function executeVerifyMember(memberOrUser, guild, playerInput, apiKey) {
         } catch(e) {}
     }
 
+    // ── UNVERIFIED: Present Official Tornium Instructions & Buttons ──
     if (!tornUser) {
         return {
             success: false,
-            title: "🛡️ Verification Required",
-            description: `⚠️ Could not automatically detect your Torn account.\n\nPlease run the command with your Torn Player ID or Name:\n\`\`\`\n/verify player:YourTornID\n\`\`\`\nExample: \`/verify player:3490493\``,
-            color: 0xffa502
+            title: "🛡️ Torn Account Verification Required",
+            description: `Welcome <@${discordUserId}>! To unlock faction channels and sync your roles, please link your Torn City account.\n\n` +
+                         `**Option 1: Official Global Link (Recommended)**\n` +
+                         `Link your Discord account at **[torn.com/discord](https://www.torn.com/discord)**. Once linked on Torn's official server, you are automatically verified everywhere!\n\n` +
+                         `**Option 2: Instant Manual Verification**\n` +
+                         `Click **🛡️ Verify My Account** below to enter your Torn Player ID or Name, or type:\n` +
+                         `\`\`\`\n/verify player:YourTornID\n\`\`\`\n` +
+                         `*(Example: \`/verify player:3490493\`)*`,
+            color: 0xffa502,
+            components: [{
+                type: 1,
+                components: [
+                    {
+                        type: 2,
+                        style: 1, // Blurple
+                        custom_id: 'btn_verify_open_modal',
+                        label: '🛡️ Verify My Account',
+                        emoji: { name: '🛡️' }
+                    },
+                    {
+                        type: 2,
+                        style: 5, // Link
+                        label: '🔗 Link at Torn.com/discord',
+                        url: 'https://www.torn.com/discord'
+                    },
+                    {
+                        type: 2,
+                        style: 5, // Link
+                        label: '👤 My Torn Profile',
+                        url: 'https://www.torn.com/profiles.php'
+                    }
+                ]
+            }]
         };
     }
 
+    // ── VERIFIED: Process Player, Positions, Nickname, and Roles ──
     const playerName = tornUser.name;
     const playerId = tornUser.player_id;
     const playerFactionId = tornUser.faction?.faction_id || 0;
     const playerFactionName = tornUser.faction?.faction_name || "None";
     const isOurFaction = (playerFactionId === 52355) || (String(playerFactionId) === String(facId));
 
-    let nickUpdated = false;
-    let nickError = null;
-    const targetNickname = `${playerName} [${playerId}]`.slice(0, 32);
+    // Detect Faction Position (Leader, Co-Leader, Banker, etc.)
+    let isLeader = false;
+    let isBanker = false;
+    let memberPositionTitle = "";
 
-    if (guildMember && guildMember.manageable) {
+    if (isOurFaction) {
         try {
-            await guildMember.setNickname(targetNickname, "F.R.I.D.A.Y Tornium Verification");
-            nickUpdated = true;
-        } catch(err) {
-            nickError = err.message;
-        }
-    } else if (guildMember && !guildMember.manageable) {
-        nickError = "Cannot change nickname of Server Owner or member with higher role";
-    }
-
-    // Role assignments
-    const rolesAdded = [];
-    if (guildMember && guild.members.me?.permissions?.has?.('ManageRoles')) {
-        const verifiedRoleId = discordConfig.verifiedRoleId ||
-            guild.roles.cache.find(r => r.name.toLowerCase() === 'verified')?.id;
-
-        const factionRoleId = discordConfig.factionRoleId ||
-            guild.roles.cache.find(r => r.name.toLowerCase().includes('spider-verse') || r.name.toLowerCase() === 'member')?.id;
-
-        const unverifiedRole = discordConfig.unverifiedRoleId ?
-            guild.roles.cache.get(discordConfig.unverifiedRoleId) :
-            guild.roles.cache.find(r => r.name.toLowerCase() === 'unverified');
-
-        try {
-            if (verifiedRoleId && !guildMember.roles.cache.has(verifiedRoleId)) {
-                await guildMember.roles.add(verifiedRoleId, "Tornium Verification");
-                rolesAdded.push(`<@&${verifiedRoleId}>`);
-            }
-            if (isOurFaction && factionRoleId && !guildMember.roles.cache.has(factionRoleId)) {
-                await guildMember.roles.add(factionRoleId, "Tornium Faction Member");
-                rolesAdded.push(`<@&${factionRoleId}>`);
-            }
-            if (unverifiedRole && guildMember.roles.cache.has(unverifiedRole.id)) {
-                await guildMember.roles.remove(unverifiedRole.id, "Verified on Torn");
+            const facRes = await fetch(`https://api.torn.com/faction/${facId}?selections=basic,positions&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+            const facData = await facRes.json();
+            if (facData) {
+                const mData = facData.members?.[String(playerId)] || facData.members?.[playerId];
+                memberPositionTitle = mData?.position || "";
+                const pLower = memberPositionTitle.toLowerCase();
+                isLeader = (String(playerId) === String(facData.leader)) ||
+                           (String(playerId) === String(facData['co-leader'])) ||
+                           pLower.includes('leader');
+                isBanker = isLeader ||
+                           pLower.includes('bank') ||
+                           pLower.includes('vault') ||
+                           pLower.includes('treasur');
             }
         } catch(e) {}
     }
 
+    // Sync Server Nickname to "Name [ID]"
+    let nickUpdated = false;
+    let nickNote = "";
+    const targetNickname = `${playerName} [${playerId}]`.slice(0, 32);
+
+    if (guildMember && guildMember.manageable) {
+        try {
+            if (guildMember.nickname !== targetNickname) {
+                await guildMember.setNickname(targetNickname, "F.R.I.D.A.Y Tornium Verification");
+                nickUpdated = true;
+            }
+        } catch(err) {
+            nickNote = err.message;
+        }
+    } else if (guildMember && !guildMember.manageable) {
+        nickNote = "Cannot change nickname of Server Owner or member with higher role";
+    }
+
+    // Apply Roles with Hierarchy Check & Error Collection
+    const rolesAdded = [];
+    const roleWarnings = [];
+
+    // 1. Verified Role
+    const verifiedRoleId = discordConfig.verifiedRoleId ||
+        guild.roles.cache.find(r => r.name.toLowerCase() === 'verified')?.id;
+    if (verifiedRoleId) {
+        const res = await applyGuildMemberRole(guild, guildMember, botMember, verifiedRoleId, 'add', 'Tornium Verified');
+        if (res.success && res.action === 'added') rolesAdded.push(`<@&${verifiedRoleId}>`);
+        else if (res.hierarchyError) roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${verifiedRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
+    }
+
+    // 2. Faction Member Role (Spider-Verse 52355)
+    if (isOurFaction) {
+        const factionRoleId = discordConfig.factionRoleId ||
+            guild.roles.cache.find(r => r.name.toLowerCase().includes('spider-verse') || r.name.toLowerCase() === 'member')?.id;
+        if (factionRoleId) {
+            const res = await applyGuildMemberRole(guild, guildMember, botMember, factionRoleId, 'add', 'Faction Member (52355)');
+            if (res.success && res.action === 'added') rolesAdded.push(`<@&${factionRoleId}>`);
+            else if (res.hierarchyError) roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${factionRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
+        }
+
+        // 3. Faction Leader Role
+        if (isLeader && discordConfig.leaderRoleId) {
+            const res = await applyGuildMemberRole(guild, guildMember, botMember, discordConfig.leaderRoleId, 'add', 'Faction Leader / Co-Leader');
+            if (res.success && res.action === 'added') rolesAdded.push(`<@&${discordConfig.leaderRoleId}> (👑 Leadership)`);
+            else if (res.hierarchyError) roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${discordConfig.leaderRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
+        }
+
+        // 4. Faction Banker Role
+        if (isBanker && discordConfig.bankerRoleId) {
+            const res = await applyGuildMemberRole(guild, guildMember, botMember, discordConfig.bankerRoleId, 'add', 'Faction Banker / Vault Controller');
+            if (res.success && res.action === 'added') rolesAdded.push(`<@&${discordConfig.bankerRoleId}> (🏦 Banker)`);
+            else if (res.hierarchyError) roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${discordConfig.bankerRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
+        }
+    }
+
+    // 5. Remove Unverified Quarantine Role
+    const unverifiedRoleId = discordConfig.unverifiedRoleId ||
+        guild.roles.cache.find(r => r.name.toLowerCase() === 'unverified')?.id;
+    if (unverifiedRoleId) {
+        await applyGuildMemberRole(guild, guildMember, botMember, unverifiedRoleId, 'remove', 'Verified on Torn');
+    }
+
     const fields = [
         { name: "👤 Torn Profile", value: `[${playerName} [${playerId}]](https://www.torn.com/profiles.php?XID=${playerId})`, inline: true },
-        { name: "🏢 Faction", value: `${playerFactionName} [${playerFactionId}] ${isOurFaction ? '🕷️' : ''}`, inline: true },
-        { name: "🏷️ Server Nickname", value: nickUpdated ? `\`${targetNickname}\` (Updated)` : (nickError ? `⚠️ ${nickError}` : `\`${targetNickname}\``), inline: false }
+        { name: "🏢 Faction", value: `${playerFactionName} [${playerFactionId}] ${isOurFaction ? '🕷️' : ''} ${memberPositionTitle ? `· *${memberPositionTitle}*` : ''}`, inline: true },
+        { name: "🏷️ Server Nickname", value: `\`${targetNickname}\`${nickUpdated ? ' *(Updated)*' : (nickNote ? ` *(⚠️ ${nickNote})*` : '')}`, inline: false }
     ];
 
     if (rolesAdded.length > 0) {
         fields.push({ name: "🎖️ Roles Granted", value: rolesAdded.join(', '), inline: false });
+    }
+
+    if (roleWarnings.length > 0) {
+        fields.push({ name: "⚠️ Action Required: Role Hierarchy", value: roleWarnings.join('\n\n'), inline: false });
+    }
+
+    if (!verifiedViaGlobalLink) {
+        fields.push({
+            name: "💡 Pro Tip",
+            value: `Link your Discord account globally at **[torn.com/discord](https://www.torn.com/discord)** so you're automatically verified across all Torn servers!`,
+            inline: false
+        });
     }
 
     return {
@@ -8977,12 +9173,15 @@ async function executeVerifyMember(memberOrUser, guild, playerInput, apiKey) {
         playerId,
         playerFactionId,
         isOurFaction,
+        isLeader,
+        isBanker,
         rolesAdded,
+        roleWarnings,
         title: `🛡️ Verified: ${playerName} [${playerId}]`,
-        description: `✅ <@${discordUserId}> has been successfully verified!`,
+        description: `✅ <@${discordUserId}> has been successfully verified! Full server access granted.`,
         color: isOurFaction ? 0x2ed573 : 0x3498db,
         fields,
-        footer: { text: "F.R.I.D.A.Y • Identity & Verification Suite" },
+        footer: { text: "F.R.I.D.A.Y • Tornium Identity Sentinel" },
         timestamp: new Date().toISOString()
     };
 }
@@ -8994,7 +9193,7 @@ async function executeVerifyAll(guild, apiKey) {
     const facId = discordConfig.factionId || dynamicFactionId || 52355;
     let facData = null;
     try {
-        const res = await fetch(`https://api.torn.com/faction/${facId}?selections=basic&key=${apiKey}`, { signal: AbortSignal.timeout(9000) });
+        const res = await fetch(`https://api.torn.com/faction/${facId}?selections=basic,positions&key=${apiKey}`, { signal: AbortSignal.timeout(9000) });
         facData = await res.json();
     } catch(e) {
         return { title: "🛡️ Batch Verification", description: `⚠️ Failed to fetch faction roster: ${e.message}`, color: 0xff4757 };
@@ -9005,6 +9204,8 @@ async function executeVerifyAll(guild, apiKey) {
     }
 
     const membersMap = facData.members;
+
+    // Fetch all guild members and ensure botMember & roles are resolved
     let guildMembers = null;
     try {
         guildMembers = await guild.members.fetch();
@@ -9012,9 +9213,18 @@ async function executeVerifyAll(guild, apiKey) {
         guildMembers = guild.members.cache;
     }
 
+    let botMember = guild.members.me;
+    if (!botMember) {
+        try { botMember = await guild.members.fetchMe().catch(() => null); } catch(e) {}
+    }
+    if (guild.roles.cache.size < 3) {
+        try { await guild.roles.fetch().catch(() => null); } catch(e) {}
+    }
+
     let updatedCount = 0;
     let alreadySynced = 0;
     let unmatchedCount = 0;
+    const globalRoleWarnings = new Set();
 
     const verifiedRoleId = discordConfig.verifiedRoleId ||
         guild.roles.cache.find(r => r.name.toLowerCase() === 'verified')?.id;
@@ -9022,7 +9232,8 @@ async function executeVerifyAll(guild, apiKey) {
     const factionRoleId = discordConfig.factionRoleId ||
         guild.roles.cache.find(r => r.name.toLowerCase().includes('spider-verse') || r.name.toLowerCase() === 'member')?.id;
 
-    const unverifiedRole = guild.roles.cache.find(r => r.name.toLowerCase() === 'unverified');
+    const unverifiedRoleId = discordConfig.unverifiedRoleId ||
+        guild.roles.cache.find(r => r.name.toLowerCase() === 'unverified')?.id;
 
     for (const [gmId, gm] of guildMembers) {
         if (gm.user.bot) continue;
@@ -9053,20 +9264,41 @@ async function executeVerifyAll(guild, apiKey) {
                 } catch(e) {}
             }
 
-            if (guild.members.me?.permissions?.has?.('ManageRoles')) {
-                try {
-                    if (verifiedRoleId && !gm.roles.cache.has(verifiedRoleId)) {
-                        await gm.roles.add(verifiedRoleId);
-                        changed = true;
-                    }
-                    if (factionRoleId && !gm.roles.cache.has(factionRoleId)) {
-                        await gm.roles.add(factionRoleId);
-                        changed = true;
-                    }
-                    if (unverifiedRole && gm.roles.cache.has(unverifiedRole.id)) {
-                        await gm.roles.remove(unverifiedRole.id);
-                    }
-                } catch(e) {}
+            // Detect Positions
+            const mData = membersMap[matchedPlayerId];
+            const pLower = (mData?.position || '').toLowerCase();
+            const isLeader = (String(matchedPlayerId) === String(facData.leader)) ||
+                             (String(matchedPlayerId) === String(facData['co-leader'])) ||
+                             pLower.includes('leader');
+            const isBanker = isLeader ||
+                             pLower.includes('bank') ||
+                             pLower.includes('vault') ||
+                             pLower.includes('treasur');
+
+            // Apply Roles via applyGuildMemberRole helper
+            if (verifiedRoleId) {
+                const res = await applyGuildMemberRole(guild, gm, botMember, verifiedRoleId, 'add', 'Batch Verified');
+                if (res.success && res.action === 'added') changed = true;
+                else if (res.hierarchyError) globalRoleWarnings.add(res.reason);
+            }
+            if (factionRoleId) {
+                const res = await applyGuildMemberRole(guild, gm, botMember, factionRoleId, 'add', 'Batch Faction Member');
+                if (res.success && res.action === 'added') changed = true;
+                else if (res.hierarchyError) globalRoleWarnings.add(res.reason);
+            }
+            if (isLeader && discordConfig.leaderRoleId) {
+                const res = await applyGuildMemberRole(guild, gm, botMember, discordConfig.leaderRoleId, 'add', 'Batch Faction Leader');
+                if (res.success && res.action === 'added') changed = true;
+                else if (res.hierarchyError) globalRoleWarnings.add(res.reason);
+            }
+            if (isBanker && discordConfig.bankerRoleId) {
+                const res = await applyGuildMemberRole(guild, gm, botMember, discordConfig.bankerRoleId, 'add', 'Batch Faction Banker');
+                if (res.success && res.action === 'added') changed = true;
+                else if (res.hierarchyError) globalRoleWarnings.add(res.reason);
+            }
+            if (unverifiedRoleId) {
+                const res = await applyGuildMemberRole(guild, gm, botMember, unverifiedRoleId, 'remove', 'Batch Verified');
+                if (res.success && res.action === 'removed') changed = true;
             }
 
             if (changed) updatedCount++;
@@ -9076,13 +9308,18 @@ async function executeVerifyAll(guild, apiKey) {
         }
     }
 
+    const warningText = globalRoleWarnings.size > 0
+        ? `\n\n⚠️ **Role Hierarchy Warning:**\n${Array.from(globalRoleWarnings).join('\n')}`
+        : '';
+
     return {
         title: "🛡️ Tornium Verification Audit Complete",
         description: `Batch re-verification scan of **${guild.name}** finished!\n\n` +
                      `✅ **Updated & Synced:** ${updatedCount} members\n` +
                      `🔒 **Already Synced:** ${alreadySynced} members\n` +
                      `⚠️ **Unmatched / Guests:** ${unmatchedCount} members\n\n` +
-                     `*Members who were not matched can run \`/verify player:YourID\` to link manually.*`,
+                     `*Members who were not matched can link at [torn.com/discord](https://www.torn.com/discord) or run \`/verify player:YourID\`.*` +
+                     warningText,
         color: 0x2ed573,
         footer: { text: "F.R.I.D.A.Y • Identity & Verification Suite" },
         timestamp: new Date().toISOString()
@@ -9102,7 +9339,13 @@ async function handleGuildMemberAdd(member) {
 
     console.log(`[Verification-on-Join] New member joined ${guild.name}: ${member.user.tag} (${member.id})`);
 
-    // 1. Attempt instant auto-verification
+    // Ensure botMember is ready
+    let botMember = guild.members.me;
+    if (!botMember) {
+        try { botMember = await guild.members.fetchMe().catch(() => null); } catch(e) {}
+    }
+
+    // 1. Attempt instant auto-verification via Tornium flow (Torn v2 discord cross-reference)
     let verifyResult = null;
     if (apiKey) {
         verifyResult = await executeVerifyMember(member, guild, null, apiKey);
@@ -9135,14 +9378,8 @@ async function handleGuildMemberAdd(member) {
     console.log(`[Verification-on-Join] Member ${member.user.tag} is unverified. Restricting access and sending verification guide.`);
 
     // Assign Unverified quarantine role if configured
-    if (unverifiedRoleId && guild.members.me?.permissions?.has?.('ManageRoles')) {
-        try {
-            if (!member.roles.cache.has(unverifiedRoleId)) {
-                await member.roles.add(unverifiedRoleId, "Unverified new joiner");
-            }
-        } catch(e) {
-            console.warn("[Verification-on-Join] Could not add unverified role:", e.message);
-        }
+    if (unverifiedRoleId) {
+        await applyGuildMemberRole(guild, member, botMember, unverifiedRoleId, 'add', 'Unverified new joiner quarantine');
     }
 
     const verifyEmbed = {
@@ -9150,10 +9387,10 @@ async function handleGuildMemberAdd(member) {
         description: `Hey <@${member.id}>, welcome!\n\n` +
                      `🔒 **Server Access Locked**\n` +
                      `To protect faction intel and prevent unauthorized visitors, all channels in this server are locked until you verify your Torn City identity.\n\n` +
-                     `**How to get verified & unlock the server:**\n` +
-                     `1️⃣ Click the **🛡️ Verify My Account** button below to enter your Torn ID or Name.\n` +
-                     `2️⃣ Or type \`/verify player:YourTornID\` in this channel.\n\n` +
-                     `Once verified, your nickname will be synced to \`Name [ID]\` and you will automatically receive the ${verifiedRoleId ? `<@&${verifiedRoleId}>` : '**Verified**'} role, granting full access!`,
+                     `**How to get verified & unlock the server:**\n\n` +
+                     `**Method 1 (Instant):** Click **🛡️ Verify My Account** below to enter your Torn ID or Name.\n` +
+                     `**Method 2 (Global):** Link your Discord on the **[Official Torn Discord](https://www.torn.com/discord)** for automatic 1-click verification.\n\n` +
+                     `Once verified, your nickname will be synced to \`Name [ID]\` and you will receive the ${verifiedRoleId ? `<@&${verifiedRoleId}>` : '**Verified**'} role, granting full access!`,
         color: 0xff4757,
         thumbnail: { url: "https://www.torn.com/favicon.ico" },
         footer: { text: "F.R.I.D.A.Y • Spider-Verse Security Sentinel" },
@@ -9169,6 +9406,12 @@ async function handleGuildMemberAdd(member) {
                 custom_id: 'btn_verify_open_modal',
                 label: '🛡️ Verify My Account',
                 emoji: { name: '🛡️' }
+            },
+            {
+                type: 2,
+                style: 5, // Link
+                label: '🔗 Link at Torn.com/discord',
+                url: 'https://www.torn.com/discord'
             },
             {
                 type: 2,
@@ -9420,7 +9663,11 @@ function setupSlashBotEvents(bot, token) {
                         } catch(e) {}
                     }
                 }
-                return await interaction.editReply({ embeds: [sanitizeEmbed(result)] });
+                const replyPayload = { embeds: [sanitizeEmbed(result)] };
+                if (result.components && result.components.length > 0) {
+                    replyPayload.components = result.components;
+                }
+                return await interaction.editReply(replyPayload);
             }
         }
 
@@ -9675,7 +9922,11 @@ function setupSlashBotEvents(bot, token) {
             await interaction.deferReply({ ephemeral: false });
             const playerInput = (interaction.options.getString('player') || '').trim();
             const resultEmbed = await executeVerifyMember(interaction.member || interaction.user, interaction.guild, playerInput, apiKey);
-            return interaction.editReply({ embeds: [resultEmbed] });
+            const replyPayload = { embeds: [sanitizeEmbed(resultEmbed)] };
+            if (resultEmbed.components && resultEmbed.components.length > 0) {
+                replyPayload.components = resultEmbed.components;
+            }
+            return interaction.editReply(replyPayload);
         }
 
         if (cmd === 'verifyall') {
@@ -9686,7 +9937,7 @@ function setupSlashBotEvents(bot, token) {
             }
             await interaction.deferReply({ ephemeral: false });
             const resultEmbed = await executeVerifyAll(interaction.guild, apiKey);
-            return interaction.editReply({ embeds: [resultEmbed] });
+            return interaction.editReply({ embeds: [sanitizeEmbed(resultEmbed)] });
         }
 
         if (cmd === 'postverify') {
@@ -9704,7 +9955,8 @@ function setupSlashBotEvents(bot, token) {
                              `🔒 **All other channels are locked until verified.**\n\n` +
                              `**How to Verify:**\n` +
                              `1️⃣ Click the **🛡️ Verify My Account** button below to enter your Torn Player ID or Name.\n` +
-                             `2️⃣ Or type \`/verify player:YourTornID\` in this channel.\n\n` +
+                             `2️⃣ Or link your account globally at **[torn.com/discord](https://www.torn.com/discord)**.\n` +
+                             `3️⃣ Or type \`/verify player:YourTornID\` in this channel.\n\n` +
                              `*Once verified, your server nickname will be synced to \`Name [ID]\` and you will automatically receive the ${verifiedRoleId ? `<@&${verifiedRoleId}>` : '**Verified**'} role, granting full access!*`,
                 color: 0x2ed573,
                 thumbnail: { url: "https://www.torn.com/favicon.ico" },
@@ -9721,6 +9973,12 @@ function setupSlashBotEvents(bot, token) {
                         custom_id: 'btn_verify_open_modal',
                         label: '🛡️ Verify My Account',
                         emoji: { name: '🛡️' }
+                    },
+                    {
+                        type: 2,
+                        style: 5,
+                        label: '🔗 Link at Torn.com/discord',
+                        url: 'https://www.torn.com/discord'
                     },
                     {
                         type: 2,
