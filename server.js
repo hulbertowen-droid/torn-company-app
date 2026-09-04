@@ -9679,6 +9679,7 @@ function setupSlashBotEvents(bot, token) {
 
         // ── Interactive Button Click Handler ──
         if (interaction.isButton()) {
+            const customId = interaction.customId || '';
 
             // ── Instant 1-Click Verification (Official Torn Discord Flow) ──
             if (customId === 'btn_verify_now' || customId === 'btn_verify_open_modal') {
