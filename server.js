@@ -9513,3 +9513,15 @@ async function fetchAndProcess(id, watchKey, mode) {
         }
     } catch(e) { }
 }
+
+// ── Graceful Shutdown Handler for Fast Render Deploys ───────────────────────
+// Responds immediately to Render's SIGTERM signal when deploying new code,
+// preventing Render from waiting its 30-60 second timeout before force-killing.
+process.on('SIGTERM', () => {
+    console.log('[Process] SIGTERM received from Render. Exiting immediately for fast deploy...');
+    process.exit(0);
+});
+process.on('SIGINT', () => {
+    process.exit(0);
+});
+
