@@ -379,6 +379,7 @@ let discordConfig = {
     inactivityTracker: true,
     inactivityRoleId: "",
     inactivityDays: 1,
+    inactivityChannelId: "",
     apiKey: "", 
     factionId: "",
     notificationsKilled: false,
@@ -401,7 +402,21 @@ let ocConfig = {
     alertReady: true,
     alertDelayed: true,
     alertMissingItems: true,
-    alertCompleted: true
+    alertCompleted: true,
+    alertLowCpr: true,
+    lowCprDefaultThreshold: 30,
+    lowCprLevels: {
+        1: 30,
+        2: 35,
+        3: 45,
+        4: 55,
+        5: 65,
+        6: 75,
+        7: 80,
+        8: 85
+    },
+    alertNoParticipation: true,
+    noParticipationDays: 1
 };
 let ocMemory = {};
 
@@ -1672,6 +1687,29 @@ function saveInactivityAlerts(data) {
 
 let inactivityAlertsMemory = loadInactivityAlerts();
 
+// ─── Organized Crime Member Participation History ───────────────────────────
+const OC_MEMBER_HISTORY_FILE = path.join(__dirname, 'data', 'oc_member_history.json');
+function loadOcMemberHistory() {
+    try {
+        if (!fs.existsSync(path.dirname(OC_MEMBER_HISTORY_FILE))) {
+            fs.mkdirSync(path.dirname(OC_MEMBER_HISTORY_FILE), { recursive: true });
+        }
+        if (fs.existsSync(OC_MEMBER_HISTORY_FILE)) {
+            return JSON.parse(fs.readFileSync(OC_MEMBER_HISTORY_FILE, 'utf8'));
+        }
+    } catch (e) {}
+    return {};
+}
+function saveOcMemberHistory(data) {
+    try {
+        if (!fs.existsSync(path.dirname(OC_MEMBER_HISTORY_FILE))) {
+            fs.mkdirSync(path.dirname(OC_MEMBER_HISTORY_FILE), { recursive: true });
+        }
+        fs.writeFileSync(OC_MEMBER_HISTORY_FILE, JSON.stringify(data, null, 2), 'utf8');
+    } catch (e) {}
+}
+let ocMemberHistory = loadOcMemberHistory();
+
 // Persistent Real-Time War Flight Archive
 const WAR_FLIGHT_ARCHIVE_FILE = path.join(__dirname, 'data', 'war_flight_archive.json');
 let warFlightArchive = {};
@@ -1840,8 +1878,9 @@ async function checkFactionMembersInactivity(members, expectedFactionId, faction
             timestamp: new Date().toISOString()
         };
 
-        console.log(`[Inactivity Tracker] 💤 Sending alert for ${m.name} [${id}] in ${myFacName} (${timeDisplay} inactive) with mention: ${roleMention || 'none'}`);
-        sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, embed, roleMention);
+        const targetInactivityChan = discordConfig.inactivityChannelId || discordConfig.globalChannelId;
+        console.log(`[Inactivity Tracker] 💤 Sending alert for ${m.name} [${id}] in ${myFacName} (${timeDisplay} inactive) to channel ${targetInactivityChan} with mention: ${roleMention || 'none'}`);
+        sendChannelMessage(discordConfig.globalBotToken, targetInactivityChan, embed, roleMention);
 
         inactivityAlertsMemory.alerts[id] = {
             lastActionTs: lastTs,
@@ -1868,7 +1907,8 @@ setInterval(async () => {
         if (facData.ID && String(facData.ID) !== String(watchFactionId)) return;
 
         // Check Friendly Member Inactivity Tracker
-        if (facData.members && discordConfig.inactivityTracker !== false && discordConfig.globalChannelId) {
+        const inactChan = discordConfig.inactivityChannelId || discordConfig.globalChannelId;
+        if (facData.members && discordConfig.inactivityTracker !== false && inactChan) {
             checkFactionMembersInactivity(facData.members, watchFactionId, facData.name);
         }
 
@@ -2239,6 +2279,7 @@ app.get('/api/get-discord-config', (req, res) => {
     }
     const fullConfig = {
         ...discordConfig,
+        inactivityChannelId: discordConfig.inactivityChannelId || "",
         ocChannelId: ocConfig.globalChannelId || discordConfig.ocChannelId || "",
         ocRoleId: ocConfig.roleId || discordConfig.ocRoleId || "",
         alertOcPlanned: ocConfig.alertPlanned !== false,
@@ -2247,7 +2288,12 @@ app.get('/api/get-discord-config', (req, res) => {
         alertOcReady: ocConfig.alertReady !== false,
         alertOcDelayed: ocConfig.alertDelayed !== false,
         alertOcMissingItems: ocConfig.alertMissingItems !== false,
-        alertOcCompleted: ocConfig.alertCompleted !== false
+        alertOcCompleted: ocConfig.alertCompleted !== false,
+        alertOcLowCpr: ocConfig.alertLowCpr !== false,
+        lowCprDefaultThreshold: ocConfig.lowCprDefaultThreshold || 30,
+        lowCprLevels: ocConfig.lowCprLevels || { 1: 30, 2: 35, 3: 45, 4: 55, 5: 65, 6: 75, 7: 80, 8: 85 },
+        alertOcNoParticipation: ocConfig.alertNoParticipation !== false,
+        noParticipationDays: ocConfig.noParticipationDays || 1
     };
     res.json(fullConfig);
 });
@@ -2266,6 +2312,15 @@ app.post('/api/save-discord-config', async (req, res) => {
             payload.globalChannelId = "";
         } else {
             payload.globalChannelId = rawChan.replace(/[^0-9]/g, '');
+        }
+    }
+
+    if (payload.inactivityChannelId !== undefined) {
+        let rawInact = String(payload.inactivityChannelId || '').trim();
+        if (rawInact.includes('.') || /[a-zA-Z]/.test(rawInact)) {
+            payload.inactivityChannelId = "";
+        } else {
+            payload.inactivityChannelId = rawInact.replace(/[^0-9]/g, '');
         }
     }
 
@@ -2295,6 +2350,13 @@ app.post('/api/save-discord-config', async (req, res) => {
     if (payload.alertOcDelayed !== undefined) ocConfig.alertDelayed = !!payload.alertOcDelayed;
     if (payload.alertOcMissingItems !== undefined) ocConfig.alertMissingItems = !!payload.alertOcMissingItems;
     if (payload.alertOcCompleted !== undefined) ocConfig.alertCompleted = !!payload.alertOcCompleted;
+    if (payload.alertOcLowCpr !== undefined) ocConfig.alertLowCpr = !!payload.alertOcLowCpr;
+    if (payload.lowCprDefaultThreshold !== undefined) ocConfig.lowCprDefaultThreshold = Math.max(1, Math.min(100, parseInt(payload.lowCprDefaultThreshold, 10) || 30));
+    if (payload.lowCprLevels !== undefined && typeof payload.lowCprLevels === 'object') {
+        ocConfig.lowCprLevels = { ...ocConfig.lowCprLevels, ...payload.lowCprLevels };
+    }
+    if (payload.alertOcNoParticipation !== undefined) ocConfig.alertNoParticipation = !!payload.alertOcNoParticipation;
+    if (payload.noParticipationDays !== undefined) ocConfig.noParticipationDays = Math.max(0.1, parseFloat(payload.noParticipationDays) || 1);
     saveOcConfig();
 
     if (payload.globalBotToken !== undefined) {
@@ -2408,6 +2470,120 @@ app.post('/api/discord/post-verification-card', async (req, res) => {
     }
 });
 
+// API endpoint: Auto-detect Discord Guild, channels, and roles
+app.get('/api/discord/guild-info', async (req, res) => {
+    try {
+        const token = (req.query.token || discordConfig.globalBotToken || '').trim();
+        if (!token) {
+            return res.status(400).json({ error: "Missing bot token. Please enter or save your Bot Token." });
+        }
+
+        const headers = { Authorization: `Bot ${token}` };
+
+        // 1. Fetch user / bot identity
+        const meRes = await fetch('https://discord.com/api/v10/users/@me', { headers });
+        const meData = await meRes.json();
+        if (meData.message || !meData.id) {
+            return res.status(401).json({ error: meData.message || "Invalid bot token" });
+        }
+
+        // 2. Fetch guilds the bot is in
+        const guildsRes = await fetch('https://discord.com/api/v10/users/@me/guilds', { headers });
+        const guilds = await guildsRes.json();
+        if (!Array.isArray(guilds)) {
+            return res.status(400).json({ error: guilds.message || "Failed to fetch guilds from Discord" });
+        }
+
+        if (guilds.length === 0) {
+            return res.json({
+                success: true,
+                bot: { id: meData.id, username: meData.username },
+                guilds: [],
+                guildId: null,
+                guildName: null,
+                channels: [],
+                roles: [],
+                message: "Bot is not in any Discord servers yet. Invite the bot to your server first."
+            });
+        }
+
+        // Active guild: if req.query.guildId or discordConfig.guildId matches one of the guilds, use it. Otherwise default to the first guild.
+        let activeGuildId = req.query.guildId || discordConfig.guildId;
+        let activeGuild = guilds.find(g => g.id === activeGuildId);
+        if (!activeGuild) {
+            activeGuild = guilds[0];
+            activeGuildId = activeGuild.id;
+            // Auto-sync into discordConfig if not set
+            if (!discordConfig.guildId || guilds.length === 1) {
+                discordConfig.guildId = activeGuildId;
+                saveDiscordConfig();
+            }
+        }
+
+        // 3. Fetch channels and roles for the active guild
+        const [channelsRes, rolesRes] = await Promise.all([
+            fetch(`https://discord.com/api/v10/guilds/${activeGuildId}/channels`, { headers }),
+            fetch(`https://discord.com/api/v10/guilds/${activeGuildId}/roles`, { headers })
+        ]);
+
+        const rawChannels = await channelsRes.json();
+        const rawRoles = await rolesRes.json();
+
+        // Build category map (type 4 = GuildCategory)
+        const categories = {};
+        if (Array.isArray(rawChannels)) {
+            rawChannels.forEach(c => {
+                if (c.type === 4) categories[c.id] = c.name;
+            });
+        }
+
+        // Filter text & announcement channels (type 0: GuildText, 5: GuildAnnouncement)
+        const channels = [];
+        if (Array.isArray(rawChannels)) {
+            rawChannels
+                .filter(c => c.type === 0 || c.type === 5)
+                .sort((a, b) => (a.position || 0) - (b.position || 0))
+                .forEach(c => {
+                    channels.push({
+                        id: c.id,
+                        name: c.name,
+                        type: c.type,
+                        parentName: c.parent_id ? categories[c.parent_id] : null,
+                        position: c.position || 0
+                    });
+                });
+        }
+
+        // Filter roles
+        const roles = [];
+        if (Array.isArray(rawRoles)) {
+            rawRoles
+                .filter(r => r.name !== '@everyone')
+                .sort((a, b) => (b.position || 0) - (a.position || 0))
+                .forEach(r => {
+                    roles.push({
+                        id: r.id,
+                        name: r.name,
+                        color: r.color ? '#' + r.color.toString(16).padStart(6, '0') : null,
+                        position: r.position || 0
+                    });
+                });
+        }
+
+        res.json({
+            success: true,
+            bot: { id: meData.id, username: meData.username },
+            guilds: guilds.map(g => ({ id: g.id, name: g.name, icon: g.icon })),
+            guildId: activeGuildId,
+            guildName: activeGuild.name,
+            channels,
+            roles
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/get-market-config', (req, res) => { res.json(marketConfig); });
 app.post('/api/save-market-config', (req, res) => { marketConfig = { ...marketConfig, ...req.body }; saveMarketConfig(); res.json({ success: true }); });
 
@@ -2469,6 +2645,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             timestamp: new Date().toISOString()
         };
     } else if (type === 'inactivity') {
+        chanId = req.body.inactivityChannelId || discordConfig.inactivityChannelId || chanId;
         let rolePingStr = "";
         const roleInput = req.body.inactivityRoleId || discordConfig.inactivityRoleId;
         if (roleInput && String(roleInput).trim()) {
@@ -2500,6 +2677,43 @@ app.post('/api/test-discord-alert', async (req, res) => {
             timestamp: new Date().toISOString()
         };
         pingStr = rolePingStr;
+    } else if (type === 'oc_low_cpr') {
+        chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
+        const roleId = req.body.ocRoleId || ocConfig.roleId;
+        if (roleId && String(roleId).trim()) {
+            const numOnly = String(roleId).replace(/\D/g, '');
+            if (numOnly.length >= 15 && numOnly.length <= 22) pingStr = `<@&${numOnly}>`;
+            else pingStr = roleId;
+        }
+        embed = {
+            title: "⚠️ Low CPR in OC: Robbing of a Money Train [TEST]",
+            description: `**[Owen777](https://www.torn.com/profiles.php?XID=3490493)** [3490493] joined role **Hacker** in **Robbing of a Money Train** (Difficulty Level **5**), but only has **30% CPR**.\n\n` +
+                         `🎯 **Faction Minimum:** **65%** for Level 5\n` +
+                         `⚠️ This significantly lowers the team's chance of completing the crime.\n\n` +
+                         `👉 [Review Organized Crimes](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+            color: 16733695,
+            footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" },
+            timestamp: new Date().toISOString()
+        };
+    } else if (type === 'oc_no_participation') {
+        chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
+        const roleId = req.body.ocRoleId || ocConfig.roleId;
+        if (roleId && String(roleId).trim()) {
+            const numOnly = String(roleId).replace(/\D/g, '');
+            if (numOnly.length >= 15 && numOnly.length <= 22) pingStr = `<@&${numOnly}>`;
+            else pingStr = roleId;
+        }
+        embed = {
+            title: "⏳ Member Missing from OC: Owen777 [TEST]",
+            description: `**[Owen777](https://www.torn.com/profiles.php?XID=3490493)** [3490493] has not been assigned to an Organized Crime for **1.2 days (29 hours)**.\n\n` +
+                         `🎖️ **Position:** Co-Leader (Lvl 58)\n` +
+                         `📊 **Status:** Online\n` +
+                         `🕒 **Last Action:** 15 mins ago\n\n` +
+                         `👉 [Assign to an OC on Torn](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+            color: 16744272,
+            footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" },
+            timestamp: new Date().toISOString()
+        };
     } else if (type === 'oc_missing_item') {
         chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
         const roleId = req.body.ocRoleId || ocConfig.roleId;
@@ -8193,7 +8407,7 @@ async function checkFactionOrganizedCrimes() {
     if (global.isNotificationsKilled) return;
 
     const botToken = discordConfig.globalBotToken;
-    const channelId = ocConfig.globalChannelId || discordConfig.globalChannelId;
+    const channelId = ocConfig.globalChannelId || discordConfig.ocChannelId || discordConfig.globalChannelId;
     if (!botToken || !channelId) return;
 
     const apiKey = discordConfig.apiKey || discordConfig.ffKey || TORN_API_KEY || getNextApiKey();
@@ -8211,6 +8425,7 @@ async function checkFactionOrganizedCrimes() {
         const now = Math.floor(Date.now() / 1000);
         const mention = ocConfig.roleId ? `<@&${ocConfig.roleId}>` : "";
         const upcomingSec = (ocConfig.upcomingMinutes || 30) * 60;
+        const activeOcMemberIds = new Set();
 
         for (const [crimeId, crime] of Object.entries(data.crimes)) {
             if (!crime) continue;
@@ -8232,6 +8447,13 @@ async function checkFactionOrganizedCrimes() {
                 }
                 if (!pId) continue;
                 pId = String(pId);
+
+                if (crime.initiated === 0) {
+                    activeOcMemberIds.add(pId);
+                    ocMemberHistory[pId] = now;
+                } else if (crime.initiated === 1 && crime.time_completed) {
+                    ocMemberHistory[pId] = Math.max(ocMemberHistory[pId] || 0, crime.time_completed);
+                }
 
                 const memberObj = members[pId];
                 const pName = memberObj?.name || `Player [${pId}]`;
@@ -8352,43 +8574,130 @@ async function checkFactionOrganizedCrimes() {
             }
         }
 
-        // ── TRIGGER 6: Missing Required Items Check (v2 API) ─────────────
-        if (ocConfig.alertMissingItems !== false) {
-            const fid = discordConfig.factionId || "52355";
-            try {
-                const v2Res = await fetch(`https://api.torn.com/v2/faction/${fid}/crimes?cat=available&key=${apiKey}&timestamp=${Date.now()}`, {
-                    signal: AbortSignal.timeout(9000)
-                });
-                const v2Data = await v2Res.json();
-                if (v2Data && v2Data.crimes && Array.isArray(v2Data.crimes)) {
-                    for (const v2Crime of v2Data.crimes) {
-                        for (const slot of (v2Crime.slots || [])) {
-                            if (!slot.user || !slot.item_requirement || slot.item_requirement.is_available) continue;
-                            const pId = slot.user.id;
-                            const pName = members[String(pId)]?.name || slot.user.name || `Player [${pId}]`;
-                            const itemId = slot.item_requirement.id;
-                            const itemInfo = await getTornItemInfo(itemId, apiKey);
-                            const itemName = itemInfo.name || `Item #${itemId}`;
-                            const armoryUrl = `https://www.torn.com/factions.php?step=your&type=1&autoItem=${encodeURIComponent(itemName)}&autoUser=${encodeURIComponent(pName)}&autoUserId=${pId}&autoAction=loan#/tab=armoury&start=0&sub=utilities`;
-                            const profileUrl = `https://www.torn.com/profiles.php?XID=${pId}`;
-                            const roleLabel = slot.position_info?.label || slot.position || "Team Member";
+        // ── TRIGGER 6 & 7: Missing Required Items & Low CPR Alerts (v2 API) ───────
+        const fid = discordConfig.factionId || "52355";
+        let v2Data = null;
+        try {
+            const v2Res = await fetch(`https://api.torn.com/v2/faction/${fid}/crimes?cat=available&key=${apiKey}&timestamp=${Date.now()}`, {
+                signal: AbortSignal.timeout(9000)
+            });
+            v2Data = await v2Res.json();
+        } catch(e) {}
 
-                            const trackingId = `${v2Crime.id}_${pId}_item_${itemId}`;
-                            if (!ocMemory[trackingId] || (Date.now() - ocMemory[trackingId]) > 3600000 * 6) {
+        if (v2Data && v2Data.crimes && Array.isArray(v2Data.crimes)) {
+            for (const v2Crime of v2Data.crimes) {
+                const diffLvl = v2Crime.difficulty || 1;
+                const minCpr = (ocConfig.lowCprLevels && ocConfig.lowCprLevels[diffLvl] !== undefined)
+                    ? Number(ocConfig.lowCprLevels[diffLvl])
+                    : (Number(ocConfig.lowCprDefaultThreshold) || 30);
+
+                for (const slot of (v2Crime.slots || [])) {
+                    if (!slot.user) continue;
+                    const pId = slot.user.id;
+                    const pName = members[String(pId)]?.name || slot.user.name || `Player [${pId}]`;
+                    const roleLabel = slot.position_info?.label || slot.position || "Team Member";
+                    const profileUrl = `https://www.torn.com/profiles.php?XID=${pId}`;
+
+                    // Mark player as active in an OC
+                    activeOcMemberIds.add(String(pId));
+                    ocMemberHistory[String(pId)] = now;
+
+                    // Trigger 6: Missing Required Items Check
+                    if (ocConfig.alertMissingItems !== false && slot.item_requirement && !slot.item_requirement.is_available) {
+                        const itemId = slot.item_requirement.id;
+                        const itemInfo = await getTornItemInfo(itemId, apiKey);
+                        const itemName = itemInfo.name || `Item #${itemId}`;
+                        const armoryUrl = `https://www.torn.com/factions.php?step=your&type=1&autoItem=${encodeURIComponent(itemName)}&autoUser=${encodeURIComponent(pName)}&autoUserId=${pId}&autoAction=loan#/tab=armoury&start=0&sub=utilities`;
+
+                        const trackingId = `${v2Crime.id}_${pId}_item_${itemId}`;
+                        if (!ocMemory[trackingId] || (Date.now() - ocMemory[trackingId]) > 3600000 * 6) {
+                            ocMemory[trackingId] = Date.now();
+                            await sendChannelMessage(botToken, channelId, {
+                                title: `🚨 OC Issue: ${v2Crime.name}`,
+                                description: `**Player:** [${pName}](${profileUrl})\n` +
+                                             `**Role:** ${roleLabel}\n` +
+                                             `**Item Needed:** ${itemName}\n` +
+                                             `**Armory:** [Give / Loan on Torn](${armoryUrl})`,
+                                color: 16733695
+                            }, mention).catch(() => {});
+                        }
+                    }
+
+                    // Trigger 7: Low CPR (Crime Pass Rate) Alert
+                    if (ocConfig.alertLowCpr !== false && slot.checkpoint_pass_rate !== undefined && slot.checkpoint_pass_rate !== null) {
+                        const passRate = Number(slot.checkpoint_pass_rate);
+                        if (passRate < minCpr) {
+                            const trackingId = `lowcpr_${v2Crime.id}_${pId}_${diffLvl}_${passRate}`;
+                            if (!ocMemory[trackingId] || (Date.now() - ocMemory[trackingId]) > 3600000 * 12) {
                                 ocMemory[trackingId] = Date.now();
                                 await sendChannelMessage(botToken, channelId, {
-                                    title: `🚨 OC Issue: ${v2Crime.name}`,
-                                    description: `**Player:** [${pName}](${profileUrl})\n` +
-                                                 `**Role:** ${roleLabel}\n` +
-                                                 `**Item Needed:** ${itemName}\n` +
-                                                 `**Armory:** [Give / Loan on Torn](${armoryUrl})`,
-                                    color: 16733695
+                                    title: `⚠️ Low CPR in OC: ${v2Crime.name}`,
+                                    description: `**[${pName}](${profileUrl})** [${pId}] joined role **${roleLabel}** in **${v2Crime.name}** (Difficulty Level **${diffLvl}**), but only has **${passRate}% CPR**.\n\n` +
+                                                 `🎯 **Recommended Minimum:** **${minCpr}%** for Level ${diffLvl}\n` +
+                                                 `⚠️ This significantly lowers the team's chance of completing the crime.\n\n` +
+                                                 `👉 [Review Organized Crimes](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+                                    color: 16733695,
+                                    footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" }
                                 }, mention).catch(() => {});
                             }
                         }
                     }
                 }
-            } catch(e) {}
+            }
+        }
+
+        // Save updated member participation history
+        saveOcMemberHistory(ocMemberHistory);
+
+        // ── TRIGGER 8: No OC Participation for 1 Day (24 Hours) ──────────
+        if (ocConfig.alertNoParticipation !== false && members && Object.keys(members).length > 0) {
+            const thresholdDays = Math.max(0.1, Number(ocConfig.noParticipationDays) || 1);
+            const thresholdSec = thresholdDays * 86400;
+
+            for (const [mId, member] of Object.entries(members)) {
+                // Skip members who joined the faction less than the threshold
+                if (member.days_in_faction !== undefined && member.days_in_faction < thresholdDays) continue;
+                // Skip fallen members
+                const state = (member.status?.state || '').toLowerCase();
+                if (state === 'fallen') continue;
+
+                // If currently assigned in an active OC, they are active!
+                if (activeOcMemberIds.has(String(mId)) || activeOcMemberIds.has(Number(mId))) {
+                    continue;
+                }
+
+                const lastOcTs = ocMemberHistory[String(mId)] || 0;
+                const secSinceLastOc = now - lastOcTs;
+
+                if (secSinceLastOc >= thresholdSec) {
+                    const trackingId = `no_oc_${mId}`;
+                    // Alert at most once per 24 hours per member until they join an OC
+                    if (!ocMemory[trackingId] || (Date.now() - ocMemory[trackingId]) > 86400000) {
+                        ocMemory[trackingId] = Date.now();
+
+                        const inactiveHours = Math.floor(secSinceLastOc / 3600);
+                        const daysText = lastOcTs > 0
+                            ? `${(secSinceLastOc / 86400).toFixed(1)} days (${inactiveHours} hours)`
+                            : `over ${thresholdDays} day(s) (no recent OCs)`;
+
+                        const pName = member.name || `Player [${mId}]`;
+                        const profileUrl = `https://www.torn.com/profiles.php?XID=${mId}`;
+                        const memberStatus = member.status?.description || member.status?.state || member.last_action?.status || 'Offline';
+
+                        console.log(`[OC Watcher] ⏳ Alerting for ${pName} [${mId}] missing from OC for ${daysText}`);
+                        await sendChannelMessage(botToken, channelId, {
+                            title: `⏳ Member Missing from OC: ${pName}`,
+                            description: `**[${pName}](${profileUrl})** [${mId}] has not been in an Organized Crime for **${daysText}**.\n\n` +
+                                         `🎖️ **Position:** ${member.position || 'Member'} (Lvl ${member.level || '—'})\n` +
+                                         `📊 **Status:** ${memberStatus}\n` +
+                                         `🕒 **Last Action:** ${member.last_action?.relative || 'Recently'}\n\n` +
+                                         `👉 [Assign to an OC on Torn](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+                            color: 16744272, // Warm Gold
+                            footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" }
+                        }, mention).catch(() => {});
+                    }
+                }
+            }
         }
     } catch(err) {
         // Transient API errors ignored

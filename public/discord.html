@@ -265,88 +265,183 @@
                 <a id="bot-invite-link" href="#" target="_blank">🔗 Re-Invite Bot</a>
             </div>
             <div class="card-body">
+                <!-- Live Discord Server Detection Bar -->
+                <div id="guild-status-bar" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding:12px 14px; background:rgba(112, 161, 255, 0.08); border:1px solid rgba(112, 161, 255, 0.25); border-radius:8px; margin-bottom:16px;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span style="font-size:1.4em;" id="server-icon-indicator">🌐</span>
+                        <div>
+                            <div style="font-weight:700; font-size:0.92em; color:var(--blue);" id="detected-server-name">Detecting Discord Server...</div>
+                            <div style="font-size:0.78em; color:var(--text-dim);" id="detected-server-detail">Save your Bot Token to automatically read and populate channels & roles</div>
+                        </div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <select id="guild-picker-select" onchange="onGuildSelectChange(this)" style="display:none; background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 10px; border-radius:6px; font-size:0.8em; font-weight:600;"></select>
+                        <button type="button" onclick="fetchGuildAndChannels(true)" id="btn-refresh-channels" style="background:rgba(255,255,255,0.08); border:1px solid var(--border); color:var(--text-main); padding:6px 12px; border-radius:6px; font-size:0.8em; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:6px;">
+                            🔄 Refresh Channels & Server
+                        </button>
+                    </div>
+                </div>
+
                 <div class="field-grid">
                     <div class="field-group">
                         <label class="field-label" for="global-bottoken">Bot Token</label>
-                        <input class="field-input" type="password" id="global-bottoken" name="discord_bot_token_field" placeholder="Paste token from Discord Developer Portal" autocomplete="new-password" oninput="updateInviteLink()">
+                        <input class="field-input" type="password" id="global-bottoken" name="discord_bot_token_field" placeholder="Paste token from Discord Developer Portal" autocomplete="new-password" oninput="updateInviteLink(); if (this.value.length > 30) fetchGuildAndChannels();">
                         <span class="field-hint">Stored on the server — never exposed in URLs or logs.</span>
                     </div>
                     <div class="field-group">
-                        <label class="field-label" for="global-channelid">Alert Channel ID</label>
-                        <input class="field-input" type="text" id="global-channelid" name="discord_alert_channel_id_num" inputmode="numeric" placeholder="e.g. 1234567890123456789" autocomplete="off" oninput="sanitizeChannelIdInput(this)" onpaste="handleChannelPaste(event, this)">
-                        <span class="field-hint">Right-click the channel in Discord → Copy Channel ID (requires Developer Mode).</span>
-                    </div>
-                </div>
-                <div class="field-grid">
-                    <div class="field-group">
-                        <label class="field-label" for="discord-userid">Your Discord User ID <span class="opt">(optional — for personal pings)</span></label>
-                        <input class="field-input" type="text" id="discord-userid" placeholder="e.g. 987654321098765432" autocomplete="off">
-                        <span class="field-hint">If set, chain attack warnings will @mention you directly.</span>
-                    </div>
-                    <div class="field-group">
-                        <label class="field-label" for="inactivity-roleid">Inactivity Alert Role ID <span class="opt">(optional)</span></label>
-                        <input class="field-input" type="text" id="inactivity-roleid" placeholder="Role ID, @here, or @everyone" autocomplete="off">
-                        <span class="field-hint">This role is @mentioned when a member goes inactive for 1+ day.</span>
-                    </div>
-                </div>
-                <div class="field-grid">
-                    <div class="field-group">
-                        <label class="field-label" for="banking-channelid">🏦 Vault Requests Channel ID <span class="opt">(optional — Tornium replacement)</span></label>
-                        <input class="field-input" type="text" id="banking-channelid" placeholder="e.g. 1234567890123456789" autocomplete="off">
-                        <span class="field-hint">Channel where <code>/withdraw</code> requests are routed. Leave blank to post in command channel.</span>
-                    </div>
-                    <div class="field-group">
-                        <label class="field-label" for="banker-roleid">🏦 Banker Role ID <span class="opt">(optional)</span></label>
-                        <input class="field-input" type="text" id="banker-roleid" placeholder="Role ID for Faction Bankers" autocomplete="off">
-                        <span class="field-hint">If set, only users with this role can click <b>Fulfill</b> on vault withdrawal requests.</span>
-                    </div>
-                </div>
-                <div class="field-grid">
-                    <div class="field-group">
-                        <label class="field-label" for="oc-channelid">📋 OC Alert Channel ID <span class="opt">(optional — defaults to Alert Channel ID)</span></label>
-                        <input class="field-input" type="text" id="oc-channelid" placeholder="e.g. 1491526701673349180 (#the-oc-room)" autocomplete="off">
-                        <span class="field-hint">Dedicated channel for Organized Crime notifications. Leave blank to post to main Alert Channel.</span>
-                    </div>
-                    <div class="field-group">
-                        <label class="field-label" for="oc-roleid">📋 OC Ping Role ID <span class="opt">(optional)</span></label>
-                        <input class="field-input" type="text" id="oc-roleid" placeholder="Role ID for Organized Crimes" autocomplete="off">
-                        <span class="field-hint">Role to @mention for ready, upcoming, delayed, and missing item alerts.</span>
-                    </div>
-                </div>
-                <div class="field-grid">
-                    <div class="field-group">
-                        <label class="field-label" for="verification-channelid">🛡️ Verification Channel ID <span class="opt">(optional — #verify or #welcome)</span></label>
-                        <input class="field-input" type="text" id="verification-channelid" placeholder="e.g. 1491526701673349180" autocomplete="off">
-                        <span class="field-hint">Channel where new unverified members are directed and verification buttons are posted.</span>
-                    </div>
-                    <div class="field-group">
-                        <label class="field-label" for="unverified-roleid">🔒 Unverified Role ID <span class="opt">(optional quarantine role)</span></label>
-                        <input class="field-input" type="text" id="unverified-roleid" placeholder="Role ID for Unverified Members" autocomplete="off">
-                        <span class="field-hint">Optional role assigned upon joining to hide channels. Automatically removed upon verification.</span>
-                    </div>
-                </div>
-                <div class="field-grid">
-                    <div class="field-group">
-                        <label class="field-label" for="verified-roleid">🛡️ Verified Role ID <span class="opt">(server unlock role)</span></label>
-                        <input class="field-input" type="text" id="verified-roleid" placeholder="Role ID for Verified Members" autocomplete="off">
-                        <span class="field-hint">Role automatically granted when members verify on Torn. Unlocks view access to server channels.</span>
-                    </div>
-                    <div class="field-group">
-                        <label class="field-label" for="faction-roleid">🕷️ Faction Member Role ID <span class="opt">(optional — Spider-Verse)</span></label>
-                        <input class="field-input" type="text" id="faction-roleid" placeholder="Role ID for Faction Members (52355)" autocomplete="off">
-                        <span class="field-hint">Role automatically granted when a verified user belongs to your faction.</span>
-                    </div>
-                </div>
-                <div class="field-grid">
-                    <div class="field-group">
-                        <label class="field-label" for="leader-roleid">👑 Faction Leader Role ID <span class="opt">(optional)</span></label>
-                        <input class="field-input" type="text" id="leader-roleid" placeholder="Role ID for Faction Leaders & Co-Leaders" autocomplete="off">
-                        <span class="field-hint">Role automatically granted if verified player is Leader or Co-Leader in your faction.</span>
-                    </div>
-                    <div class="field-group" style="display: flex; flex-direction: column; justify-content: center;">
-                        <div style="font-size: 0.82em; color: var(--text-dim); line-height: 1.5; padding: 10px; background: rgba(255, 165, 2, 0.08); border: 1px solid rgba(255, 165, 2, 0.2); border-radius: 6px;">
-                            👑 <b>Leadership & Roles Sync:</b> When members verify, F.R.I.D.A.Y detects their faction rank from Torn API and automatically grants Leader, Banker, and Faction roles!
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <label class="field-label" for="global-channelid" style="margin:0;">🚨 Main Alert Channel</label>
+                            <a href="javascript:void(0)" onclick="toggleManualInput('global-channelid')" style="font-size:0.75em; color:var(--blue); text-decoration:none;">✏️ Custom ID</a>
                         </div>
+                        <select class="field-input channel-picker" id="global-channelid-select" onchange="onChannelSelectChange(this, 'global-channelid')">
+                            <option value="">-- Select Channel --</option>
+                        </select>
+                        <input class="field-input manual-id-input" type="text" id="global-channelid" name="discord_alert_channel_id_num" inputmode="numeric" placeholder="e.g. 1234567890123456789" autocomplete="off" oninput="sanitizeChannelIdInput(this)" onpaste="handleChannelPaste(event, this)" style="display:none; margin-top:6px;">
+                        <span class="field-hint">Primary channel for war alerts, chain drops, and emergency combat intel.</span>
+                    </div>
+                </div>
+
+                <div class="field-grid">
+                    <div class="field-group">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <label class="field-label" for="inactivity-channelid" style="margin:0;">💤 Inactivity Alerts Channel <span class="opt">(optional)</span></label>
+                            <a href="javascript:void(0)" onclick="toggleManualInput('inactivity-channelid')" style="font-size:0.75em; color:var(--blue); text-decoration:none;">✏️ Custom ID</a>
+                        </div>
+                        <select class="field-input channel-picker" id="inactivity-channelid-select" onchange="onChannelSelectChange(this, 'inactivity-channelid')">
+                            <option value="">-- Same as Main Alert Channel --</option>
+                        </select>
+                        <input class="field-input manual-id-input" type="text" id="inactivity-channelid" placeholder="e.g. 1234567890123456789" autocomplete="off" oninput="sanitizeChannelIdInput(this)" style="display:none; margin-top:6px;">
+                        <span class="field-hint">Separate channel for offline member warnings to prevent cluttering main alerts.</span>
+                    </div>
+                    <div class="field-group">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <label class="field-label" for="inactivity-roleid" style="margin:0;">💤 Inactivity Alert Role <span class="opt">(optional)</span></label>
+                            <a href="javascript:void(0)" onclick="toggleManualInput('inactivity-roleid')" style="font-size:0.75em; color:var(--blue); text-decoration:none;">✏️ Custom ID</a>
+                        </div>
+                        <select class="field-input role-picker" id="inactivity-roleid-select" onchange="onRoleSelectChange(this, 'inactivity-roleid')">
+                            <option value="">-- Select Role --</option>
+                        </select>
+                        <input class="field-input manual-id-input" type="text" id="inactivity-roleid" placeholder="Role ID, @here, or @everyone" autocomplete="off" style="display:none; margin-top:6px;">
+                        <span class="field-hint">This role is @mentioned when a member goes inactive for 24+ hours.</span>
+                    </div>
+                </div>
+
+                <div class="field-grid">
+                    <div class="field-group">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <label class="field-label" for="oc-channelid" style="margin:0;">📋 OC Alert Channel <span class="opt">(optional)</span></label>
+                            <a href="javascript:void(0)" onclick="toggleManualInput('oc-channelid')" style="font-size:0.75em; color:var(--blue); text-decoration:none;">✏️ Custom ID</a>
+                        </div>
+                        <select class="field-input channel-picker" id="oc-channelid-select" onchange="onChannelSelectChange(this, 'oc-channelid')">
+                            <option value="">-- Same as Main Alert Channel --</option>
+                        </select>
+                        <input class="field-input manual-id-input" type="text" id="oc-channelid" placeholder="e.g. 1491526701673349180" autocomplete="off" oninput="sanitizeChannelIdInput(this)" style="display:none; margin-top:6px;">
+                        <span class="field-hint">Dedicated room for Organized Crime launches, missing items, and low CPR pings.</span>
+                    </div>
+                    <div class="field-group">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <label class="field-label" for="oc-roleid" style="margin:0;">📋 OC Ping Role <span class="opt">(optional)</span></label>
+                            <a href="javascript:void(0)" onclick="toggleManualInput('oc-roleid')" style="font-size:0.75em; color:var(--blue); text-decoration:none;">✏️ Custom ID</a>
+                        </div>
+                        <select class="field-input role-picker" id="oc-roleid-select" onchange="onRoleSelectChange(this, 'oc-roleid')">
+                            <option value="">-- Select Role --</option>
+                        </select>
+                        <input class="field-input manual-id-input" type="text" id="oc-roleid" placeholder="Role ID for Organized Crimes" autocomplete="off" style="display:none; margin-top:6px;">
+                        <span class="field-hint">Role to @mention for ready, upcoming, delayed, and low CPR alerts.</span>
+                    </div>
+                </div>
+
+                <div class="field-grid">
+                    <div class="field-group">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <label class="field-label" for="verification-channelid" style="margin:0;">🛡️ Verification Channel <span class="opt">(optional)</span></label>
+                            <a href="javascript:void(0)" onclick="toggleManualInput('verification-channelid')" style="font-size:0.75em; color:var(--blue); text-decoration:none;">✏️ Custom ID</a>
+                        </div>
+                        <select class="field-input channel-picker" id="verification-channelid-select" onchange="onChannelSelectChange(this, 'verification-channelid')">
+                            <option value="">-- Select Channel --</option>
+                        </select>
+                        <input class="field-input manual-id-input" type="text" id="verification-channelid" placeholder="e.g. 1491526701673349180" autocomplete="off" oninput="sanitizeChannelIdInput(this)" style="display:none; margin-top:6px;">
+                        <span class="field-hint">Where unverified members are directed and 1-click verification cards are posted.</span>
+                    </div>
+                    <div class="field-group">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <label class="field-label" for="banking-channelid" style="margin:0;">🏦 Vault Requests Channel <span class="opt">(optional)</span></label>
+                            <a href="javascript:void(0)" onclick="toggleManualInput('banking-channelid')" style="font-size:0.75em; color:var(--blue); text-decoration:none;">✏️ Custom ID</a>
+                        </div>
+                        <select class="field-input channel-picker" id="banking-channelid-select" onchange="onChannelSelectChange(this, 'banking-channelid')">
+                            <option value="">-- Post in Command Channel --</option>
+                        </select>
+                        <input class="field-input manual-id-input" type="text" id="banking-channelid" placeholder="e.g. 1234567890123456789" autocomplete="off" oninput="sanitizeChannelIdInput(this)" style="display:none; margin-top:6px;">
+                        <span class="field-hint">Channel where <code>/withdraw</code> requests are routed. Leave blank for command channel.</span>
+                    </div>
+                </div>
+
+                <div class="field-grid">
+                    <div class="field-group">
+                        <label class="field-label" for="discord-userid">Your Discord User ID <span class="opt">(optional — personal pings)</span></label>
+                        <input class="field-input" type="text" id="discord-userid" placeholder="e.g. 987654321098765432" autocomplete="off">
+                        <span class="field-hint">If set, personal chain attack warnings will @mention you directly.</span>
+                    </div>
+                    <div class="field-group">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <label class="field-label" for="banker-roleid" style="margin:0;">🏦 Banker Role <span class="opt">(optional)</span></label>
+                            <a href="javascript:void(0)" onclick="toggleManualInput('banker-roleid')" style="font-size:0.75em; color:var(--blue); text-decoration:none;">✏️ Custom ID</a>
+                        </div>
+                        <select class="field-input role-picker" id="banker-roleid-select" onchange="onRoleSelectChange(this, 'banker-roleid')">
+                            <option value="">-- Select Role --</option>
+                        </select>
+                        <input class="field-input manual-id-input" type="text" id="banker-roleid" placeholder="Role ID for Faction Bankers" autocomplete="off" style="display:none; margin-top:6px;">
+                        <span class="field-hint">If set, only users with this role can click <b>Fulfill</b> on vault requests.</span>
+                    </div>
+                </div>
+
+                <div class="field-grid">
+                    <div class="field-group">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <label class="field-label" for="unverified-roleid" style="margin:0;">🔒 Unverified Role <span class="opt">(quarantine role)</span></label>
+                            <a href="javascript:void(0)" onclick="toggleManualInput('unverified-roleid')" style="font-size:0.75em; color:var(--blue); text-decoration:none;">✏️ Custom ID</a>
+                        </div>
+                        <select class="field-input role-picker" id="unverified-roleid-select" onchange="onRoleSelectChange(this, 'unverified-roleid')">
+                            <option value="">-- Select Role --</option>
+                        </select>
+                        <input class="field-input manual-id-input" type="text" id="unverified-roleid" placeholder="Role ID for Unverified Members" autocomplete="off" style="display:none; margin-top:6px;">
+                        <span class="field-hint">Role assigned on join to lock channels. Removed upon verification.</span>
+                    </div>
+                    <div class="field-group">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <label class="field-label" for="verified-roleid" style="margin:0;">🛡️ Verified Role <span class="opt">(server unlock role)</span></label>
+                            <a href="javascript:void(0)" onclick="toggleManualInput('verified-roleid')" style="font-size:0.75em; color:var(--blue); text-decoration:none;">✏️ Custom ID</a>
+                        </div>
+                        <select class="field-input role-picker" id="verified-roleid-select" onchange="onRoleSelectChange(this, 'verified-roleid')">
+                            <option value="">-- Select Role --</option>
+                        </select>
+                        <input class="field-input manual-id-input" type="text" id="verified-roleid" placeholder="Role ID for Verified Members" autocomplete="off" style="display:none; margin-top:6px;">
+                        <span class="field-hint">Granted when members verify with Torn City to unlock channels.</span>
+                    </div>
+                </div>
+
+                <div class="field-grid">
+                    <div class="field-group">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <label class="field-label" for="faction-roleid" style="margin:0;">🕷️ Faction Member Role <span class="opt">(Spider-Verse)</span></label>
+                            <a href="javascript:void(0)" onclick="toggleManualInput('faction-roleid')" style="font-size:0.75em; color:var(--blue); text-decoration:none;">✏️ Custom ID</a>
+                        </div>
+                        <select class="field-input role-picker" id="faction-roleid-select" onchange="onRoleSelectChange(this, 'faction-roleid')">
+                            <option value="">-- Select Role --</option>
+                        </select>
+                        <input class="field-input manual-id-input" type="text" id="faction-roleid" placeholder="Role ID for Faction Members" autocomplete="off" style="display:none; margin-top:6px;">
+                        <span class="field-hint">Granted automatically if verified user belongs to your faction.</span>
+                    </div>
+                    <div class="field-group">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <label class="field-label" for="leader-roleid" style="margin:0;">👑 Faction Leader Role <span class="opt">(optional)</span></label>
+                            <a href="javascript:void(0)" onclick="toggleManualInput('leader-roleid')" style="font-size:0.75em; color:var(--blue); text-decoration:none;">✏️ Custom ID</a>
+                        </div>
+                        <select class="field-input role-picker" id="leader-roleid-select" onchange="onRoleSelectChange(this, 'leader-roleid')">
+                            <option value="">-- Select Role --</option>
+                        </select>
+                        <input class="field-input manual-id-input" type="text" id="leader-roleid" placeholder="Role ID for Leaders" autocomplete="off" style="display:none; margin-top:6px;">
+                        <span class="field-hint">Granted automatically to Leaders and Co-Leaders in Torn.</span>
                     </div>
                 </div>
                 <div style="margin-top: 14px; padding: 12px 14px; background: rgba(0, 206, 201, 0.05); border: 1px solid rgba(0, 206, 201, 0.2); border-radius: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
@@ -566,6 +661,82 @@
                         <div class="trigger-controls">
                             <button class="btn-test" id="btn-test-oc_completed" onclick="testAlert('oc_completed')">▷ Test</button>
                             <label class="switch"><input type="checkbox" id="alertOcCompleted" onchange="onToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+
+                    <!-- Trigger: Low CPR Warning -->
+                    <div class="trigger-row" id="ti-alertOcLowCpr">
+                        <span class="trigger-icon">⚠️</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name">Low CPR (Crime Pass Rate) Warning <span class="tag faction">FACTION</span></div>
+                            <div class="trigger-desc">Warns when a member joins an OC slot with CPR lower than your recommended pass rate for that crime difficulty.</div>
+                            
+                            <div style="margin-top:8px; padding:10px 12px; background:rgba(0,0,0,0.25); border:1px solid var(--border); border-radius:8px;">
+                                <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+                                    <div style="font-size:0.78em; font-weight:700; color:var(--gold);">Default CPR Threshold:</div>
+                                    <div style="display:flex; align-items:center; gap:5px;">
+                                        <input type="number" id="lowCprDefaultThreshold" min="1" max="100" value="30" style="width:65px; padding:3px 6px; background:var(--bg); border:1px solid var(--border); color:var(--text-main); border-radius:4px; font-weight:700; text-align:center;">
+                                        <span style="font-size:0.78em; color:var(--text-dim);">%</span>
+                                    </div>
+                                </div>
+                                <div style="font-size:0.74em; color:var(--text-dim); margin-bottom:8px;">Custom CPR Threshold per OC Difficulty Level (1 through 8):</div>
+                                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(110px, 1fr)); gap:6px;">
+                                    <div style="background:rgba(255,255,255,0.03); padding:5px 8px; border-radius:5px; border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between;">
+                                        <span style="font-size:0.74em; color:var(--text-dim);">Lvl 1:</span>
+                                        <input type="number" class="cpr-lvl-input" data-lvl="1" min="1" max="100" value="30" style="width:48px; padding:2px 4px; background:var(--bg); border:1px solid var(--border); color:var(--text-main); border-radius:4px; font-size:0.78em; font-weight:700; text-align:center;">
+                                    </div>
+                                    <div style="background:rgba(255,255,255,0.03); padding:5px 8px; border-radius:5px; border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between;">
+                                        <span style="font-size:0.74em; color:var(--text-dim);">Lvl 2:</span>
+                                        <input type="number" class="cpr-lvl-input" data-lvl="2" min="1" max="100" value="35" style="width:48px; padding:2px 4px; background:var(--bg); border:1px solid var(--border); color:var(--text-main); border-radius:4px; font-size:0.78em; font-weight:700; text-align:center;">
+                                    </div>
+                                    <div style="background:rgba(255,255,255,0.03); padding:5px 8px; border-radius:5px; border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between;">
+                                        <span style="font-size:0.74em; color:var(--text-dim);">Lvl 3:</span>
+                                        <input type="number" class="cpr-lvl-input" data-lvl="3" min="1" max="100" value="45" style="width:48px; padding:2px 4px; background:var(--bg); border:1px solid var(--border); color:var(--text-main); border-radius:4px; font-size:0.78em; font-weight:700; text-align:center;">
+                                    </div>
+                                    <div style="background:rgba(255,255,255,0.03); padding:5px 8px; border-radius:5px; border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between;">
+                                        <span style="font-size:0.74em; color:var(--text-dim);">Lvl 4:</span>
+                                        <input type="number" class="cpr-lvl-input" data-lvl="4" min="1" max="100" value="55" style="width:48px; padding:2px 4px; background:var(--bg); border:1px solid var(--border); color:var(--text-main); border-radius:4px; font-size:0.78em; font-weight:700; text-align:center;">
+                                    </div>
+                                    <div style="background:rgba(255,255,255,0.03); padding:5px 8px; border-radius:5px; border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between;">
+                                        <span style="font-size:0.74em; color:var(--text-dim);">Lvl 5:</span>
+                                        <input type="number" class="cpr-lvl-input" data-lvl="5" min="1" max="100" value="65" style="width:48px; padding:2px 4px; background:var(--bg); border:1px solid var(--border); color:var(--text-main); border-radius:4px; font-size:0.78em; font-weight:700; text-align:center;">
+                                    </div>
+                                    <div style="background:rgba(255,255,255,0.03); padding:5px 8px; border-radius:5px; border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between;">
+                                        <span style="font-size:0.74em; color:var(--text-dim);">Lvl 6:</span>
+                                        <input type="number" class="cpr-lvl-input" data-lvl="6" min="1" max="100" value="75" style="width:48px; padding:2px 4px; background:var(--bg); border:1px solid var(--border); color:var(--text-main); border-radius:4px; font-size:0.78em; font-weight:700; text-align:center;">
+                                    </div>
+                                    <div style="background:rgba(255,255,255,0.03); padding:5px 8px; border-radius:5px; border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between;">
+                                        <span style="font-size:0.74em; color:var(--text-dim);">Lvl 7:</span>
+                                        <input type="number" class="cpr-lvl-input" data-lvl="7" min="1" max="100" value="80" style="width:48px; padding:2px 4px; background:var(--bg); border:1px solid var(--border); color:var(--text-main); border-radius:4px; font-size:0.78em; font-weight:700; text-align:center;">
+                                    </div>
+                                    <div style="background:rgba(255,255,255,0.03); padding:5px 8px; border-radius:5px; border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between;">
+                                        <span style="font-size:0.74em; color:var(--text-dim);">Lvl 8:</span>
+                                        <input type="number" class="cpr-lvl-input" data-lvl="8" min="1" max="100" value="85" style="width:48px; padding:2px 4px; background:var(--bg); border:1px solid var(--border); color:var(--text-main); border-radius:4px; font-size:0.78em; font-weight:700; text-align:center;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="trigger-controls">
+                            <button class="btn-test" id="btn-test-oc_low_cpr" onclick="testAlert('oc_low_cpr')">▷ Test</button>
+                            <label class="switch"><input type="checkbox" id="alertOcLowCpr" onchange="onToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+
+                    <!-- Trigger: Member Missing from OC for 1 Day -->
+                    <div class="trigger-row" id="ti-alertOcNoParticipation">
+                        <span class="trigger-icon">⏳</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name">Member Missing from OC (24h) <span class="tag faction">FACTION</span></div>
+                            <div class="trigger-desc">Pings when a faction member hasn't participated in any Organized Crime for 24 hours (1 day).</div>
+                            <div style="margin-top:6px; display:flex; align-items:center; gap:8px;">
+                                <span style="font-size:0.75em; color:var(--text-dim);">Inactivity Threshold:</span>
+                                <input type="number" id="noParticipationDays" min="0.5" step="0.5" value="1" style="width:65px; padding:3px 6px; background:var(--bg); border:1px solid var(--border); color:var(--text-main); border-radius:4px; font-size:0.8em; font-weight:700; text-align:center;">
+                                <span style="font-size:0.75em; color:var(--text-dim);">Day(s) (24 hours)</span>
+                            </div>
+                        </div>
+                        <div class="trigger-controls">
+                            <button class="btn-test" id="btn-test-oc_no_participation" onclick="testAlert('oc_no_participation')">▷ Test</button>
+                            <label class="switch"><input type="checkbox" id="alertOcNoParticipation" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
                 </div>
@@ -933,9 +1104,149 @@ function onToggle(checkbox) {
     updateActiveCount();
 }
 function updateActiveCount() {
-    const ids = ['targetOnline','targetLanded','targetOutHosp','travelWarnings','medOutSniper','chainWarnings','chainUnder90','chainMilestone','friendlyAttacked','inactivityTracker','alertOcPlanned','alertOcUpcoming','alertOcReady','alertOcDelayed','alertOcMissingItems','alertOcCompleted'];
+    const ids = ['targetOnline','targetLanded','targetOutHosp','travelWarnings','medOutSniper','chainWarnings','chainUnder90','chainMilestone','friendlyAttacked','inactivityTracker','alertOcPlanned','alertOcUpcoming','alertOcReady','alertOcDelayed','alertOcMissingItems','alertOcCompleted','alertOcLowCpr','alertOcNoParticipation'];
     const active = ids.filter(id => document.getElementById(id)?.checked).length;
     document.getElementById('active-alerts-count').textContent = active;
+}
+
+let serverChannels = [];
+let serverRoles = [];
+
+async function fetchGuildAndChannels(force = false) {
+    const token = (document.getElementById('global-bottoken')?.value.trim() || '');
+    if (!token) return;
+    const btn = document.getElementById('btn-refresh-channels');
+    if (btn) btn.disabled = true;
+    try {
+        const guildIdInput = (document.getElementById('guild-id-input')?.value.trim() || '').replace(/[^0-9]/g, '');
+        const url = `/api/discord/guild-info?token=${encodeURIComponent(token)}${guildIdInput ? `&guildId=${guildIdInput}` : ''}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.success && data.guildName) {
+            const nameEl = document.getElementById('detected-server-name');
+            const detailEl = document.getElementById('detected-server-detail');
+            if (nameEl) nameEl.textContent = `Connected: ${data.guildName}`;
+            if (detailEl) detailEl.textContent = `${data.channels.length} text channels, ${data.roles.length} roles discovered`;
+            const iconEl = document.getElementById('server-icon-indicator');
+            if (iconEl) iconEl.textContent = '🏰';
+
+            const guildPicker = document.getElementById('guild-picker-select');
+            if (guildPicker && Array.isArray(data.guilds) && data.guilds.length > 1) {
+                guildPicker.style.display = 'inline-block';
+                guildPicker.innerHTML = data.guilds.map(g => `<option value="${g.id}" ${g.id === data.guildId ? 'selected' : ''}>${g.name}</option>`).join('');
+            }
+
+            if (document.getElementById('guild-id-input') && !document.getElementById('guild-id-input').value) {
+                document.getElementById('guild-id-input').value = data.guildId || '';
+            }
+            serverChannels = data.channels || [];
+            serverRoles = data.roles || [];
+            populateChannelSelects();
+            populateRoleSelects();
+        } else if (data.bot) {
+            const nameEl = document.getElementById('detected-server-name');
+            const detailEl = document.getElementById('detected-server-detail');
+            if (nameEl) nameEl.textContent = `Bot: ${data.bot.username}`;
+            if (detailEl) detailEl.textContent = data.message || 'Bot is not in any server yet. Click Re-Invite Bot above.';
+        }
+    } catch(e) {
+        console.warn("Failed to fetch guild channels:", e);
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+function onGuildSelectChange(sel) {
+    const val = sel.value;
+    if (val) {
+        const inp = document.getElementById('guild-id-input');
+        if (inp) inp.value = val;
+        fetchGuildAndChannels();
+    }
+}
+
+function populateChannelSelects() {
+    const channelFields = [
+        { id: 'global-channelid', defaultLabel: '-- Select Channel --' },
+        { id: 'inactivity-channelid', defaultLabel: '-- Same as Main Alert Channel --' },
+        { id: 'oc-channelid', defaultLabel: '-- Same as Main Alert Channel --' },
+        { id: 'verification-channelid', defaultLabel: '-- Select Channel --' },
+        { id: 'banking-channelid', defaultLabel: '-- Post in Command Channel --' }
+    ];
+    channelFields.forEach(({ id, defaultLabel }) => {
+        const sel = document.getElementById(id + '-select');
+        const inp = document.getElementById(id);
+        if (!sel || !inp) return;
+        const currentVal = inp.value.trim();
+
+        let html = `<option value="">${defaultLabel}</option>`;
+        serverChannels.forEach(c => {
+            const cat = c.parentName ? ` (${c.parentName})` : '';
+            html += `<option value="${c.id}"># ${c.name}${cat}</option>`;
+        });
+        sel.innerHTML = html;
+        if (currentVal) {
+            sel.value = currentVal;
+            if (!sel.value) {
+                sel.innerHTML += `<option value="${currentVal}" selected>Custom ID: ${currentVal}</option>`;
+                sel.value = currentVal;
+            }
+        }
+    });
+}
+
+function populateRoleSelects() {
+    const roleFields = [
+        { id: 'inactivity-roleid', defaultLabel: '-- Select Role (or leave blank) --' },
+        { id: 'oc-roleid', defaultLabel: '-- Select Role (or leave blank) --' },
+        { id: 'banker-roleid', defaultLabel: '-- Select Role (or leave blank) --' },
+        { id: 'unverified-roleid', defaultLabel: '-- Select Role --' },
+        { id: 'verified-roleid', defaultLabel: '-- Select Role --' },
+        { id: 'faction-roleid', defaultLabel: '-- Select Role --' },
+        { id: 'leader-roleid', defaultLabel: '-- Select Role --' }
+    ];
+    roleFields.forEach(({ id, defaultLabel }) => {
+        const sel = document.getElementById(id + '-select');
+        const inp = document.getElementById(id);
+        if (!sel || !inp) return;
+        const currentVal = inp.value.trim();
+
+        let html = `<option value="">${defaultLabel}</option>`;
+        serverRoles.forEach(r => {
+            html += `<option value="${r.id}">@${r.name}</option>`;
+        });
+        sel.innerHTML = html;
+        if (currentVal) {
+            sel.value = currentVal;
+            if (!sel.value) {
+                sel.innerHTML += `<option value="${currentVal}" selected>Custom Role: ${currentVal}</option>`;
+                sel.value = currentVal;
+            }
+        }
+    });
+}
+
+function onChannelSelectChange(sel, targetId) {
+    const inp = document.getElementById(targetId);
+    if (inp) {
+        inp.value = sel.value;
+        sanitizeChannelIdInput(inp);
+    }
+}
+
+function onRoleSelectChange(sel, targetId) {
+    const inp = document.getElementById(targetId);
+    if (inp) {
+        inp.value = sel.value;
+    }
+}
+
+function toggleManualInput(targetId) {
+    const inp = document.getElementById(targetId);
+    if (inp) {
+        inp.style.display = (inp.style.display === 'none' || !inp.style.display) ? 'block' : 'none';
+        if (inp.style.display === 'block') inp.focus();
+    }
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -962,6 +1273,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('global-bottoken').value = tokenVal;
         document.getElementById('global-channelid').value = chanVal.replace(/[^0-9]/g, '');
         document.getElementById('discord-userid').value = cfg.personalDiscordId || localStorage.getItem('warboard_discordid') || '';
+        if (document.getElementById('inactivity-channelid')) document.getElementById('inactivity-channelid').value = (cfg.inactivityChannelId || localStorage.getItem('warboard_inactivity_channelid') || '').replace(/[^0-9]/g, '');
         if (document.getElementById('inactivity-roleid')) document.getElementById('inactivity-roleid').value = cfg.inactivityRoleId || localStorage.getItem('warboard_inactivity_roleid') || '';
         if (document.getElementById('banking-channelid')) document.getElementById('banking-channelid').value = (cfg.bankingChannelId || localStorage.getItem('warboard_banking_channelid') || '').replace(/[^0-9]/g, '');
         if (document.getElementById('banker-roleid')) document.getElementById('banker-roleid').value = (cfg.bankerRoleId || localStorage.getItem('warboard_banker_roleid') || '').replace(/[^0-9]/g, '');
@@ -973,6 +1285,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (document.getElementById('faction-roleid')) document.getElementById('faction-roleid').value = cfg.factionRoleId || localStorage.getItem('warboard_faction_roleid') || '';
         if (document.getElementById('leader-roleid')) document.getElementById('leader-roleid').value = (cfg.leaderRoleId || localStorage.getItem('warboard_leader_roleid') || '').replace(/[^0-9]/g, '');
         if (document.getElementById('guild-id-input')) document.getElementById('guild-id-input').value = (cfg.guildId || localStorage.getItem('warboard_guildid') || '').replace(/[^0-9]/g, '');
+
+        if (document.getElementById('lowCprDefaultThreshold')) {
+            document.getElementById('lowCprDefaultThreshold').value = cfg.lowCprDefaultThreshold ?? 30;
+        }
+        if (cfg.lowCprLevels && typeof cfg.lowCprLevels === 'object') {
+            document.querySelectorAll('.cpr-lvl-input').forEach(inp => {
+                const lvl = inp.dataset.lvl;
+                if (lvl && cfg.lowCprLevels[lvl] !== undefined) {
+                    inp.value = cfg.lowCprLevels[lvl];
+                }
+            });
+        }
+        if (document.getElementById('noParticipationDays')) {
+            document.getElementById('noParticipationDays').value = cfg.noParticipationDays ?? 1;
+        }
+
         const flags = {
             targetOnline: cfg.targetOnline === true,
             targetLanded: cfg.targetLanded === true || cfg.targetLanded === undefined,
@@ -990,6 +1318,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             alertOcDelayed: cfg.alertOcDelayed !== false,
             alertOcMissingItems: cfg.alertOcMissingItems !== false,
             alertOcCompleted: cfg.alertOcCompleted !== false,
+            alertOcLowCpr: cfg.alertOcLowCpr !== false,
+            alertOcNoParticipation: cfg.alertOcNoParticipation !== false,
             autoVerifyOnJoin: cfg.autoVerifyOnJoin !== false,
         };
         for (const [id, val] of Object.entries(flags)) {
@@ -1014,6 +1344,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         setConnectionStatus(!!(tokenVal && chanVal));
         updateActiveCount();
         updateInviteLink();
+
+        // Auto-fetch guild info, channels, and roles if token is present
+        if (tokenVal && tokenVal.length > 20) {
+            fetchGuildAndChannels();
+        }
+
         const localFfKey = localStorage.getItem('warboard_ffkey') || '';
         const localEnemyId = localStorage.getItem('warboard_enemyId') || '';
         const localApiKey = localStorage.getItem('warboard_apikey') || '';
@@ -1146,12 +1482,20 @@ async function saveDiscordConfig() {
     let botToken = document.getElementById('global-bottoken').value.trim();
     let channelId = document.getElementById('global-channelid').value.trim();
     const discordId = document.getElementById('discord-userid').value.trim();
+    const inactivityChannelId = (document.getElementById('inactivity-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const inactivityRoleId = document.getElementById('inactivity-roleid')?.value.trim() || '';
     const bankingChannelId = (document.getElementById('banking-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const bankerRoleId = (document.getElementById('banker-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const ocChannelId = (document.getElementById('oc-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const ocRoleId = (document.getElementById('oc-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const ocUpcomingMinutes = parseInt(document.getElementById('ocUpcomingMinutes')?.value || '30', 10);
+    const lowCprDefaultThreshold = parseInt(document.getElementById('lowCprDefaultThreshold')?.value || '30', 10);
+    const lowCprLevels = {};
+    document.querySelectorAll('.cpr-lvl-input').forEach(inp => {
+        const lvl = inp.dataset.lvl;
+        if (lvl) lowCprLevels[lvl] = parseInt(inp.value || '30', 10);
+    });
+    const noParticipationDays = parseFloat(document.getElementById('noParticipationDays')?.value || '1');
     const verificationChannelId = (document.getElementById('verification-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const unverifiedRoleId = (document.getElementById('unverified-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const verifiedRoleId = (document.getElementById('verified-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
@@ -1175,6 +1519,7 @@ async function saveDiscordConfig() {
     channelId = channelId.replace(/[^0-9]/g, '');
 
     localStorage.setItem('warboard_bottoken', botToken); localStorage.setItem('warboard_channelid', channelId); localStorage.setItem('warboard_discordid', discordId);
+    localStorage.setItem('warboard_inactivity_channelid', inactivityChannelId);
     localStorage.setItem('warboard_inactivity_roleid', inactivityRoleId); localStorage.setItem('warboard_guildid', guildId);
     localStorage.setItem('warboard_banking_channelid', bankingChannelId); localStorage.setItem('warboard_banker_roleid', bankerRoleId);
     localStorage.setItem('warboard_oc_channelid', ocChannelId); localStorage.setItem('warboard_oc_roleid', ocRoleId);
@@ -1187,9 +1532,15 @@ async function saveDiscordConfig() {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 apiKey: myKey, ffKey: localStorage.getItem('warboard_ffkey') || '', enemyFacId: localStorage.getItem('warboard_enemyId') || '',
-                globalBotToken: botToken, globalChannelId: channelId, personalDiscordId: discordId, inactivityRoleId, guildId,
+                globalBotToken: botToken, globalChannelId: channelId, personalDiscordId: discordId, 
+                inactivityChannelId, inactivityRoleId, guildId,
                 bankingChannelId, bankerRoleId,
                 ocChannelId, ocRoleId, ocUpcomingMinutes,
+                alertOcLowCpr: document.getElementById('alertOcLowCpr')?.checked ?? true,
+                lowCprDefaultThreshold,
+                lowCprLevels,
+                alertOcNoParticipation: document.getElementById('alertOcNoParticipation')?.checked ?? true,
+                noParticipationDays,
                 verificationChannelId, unverifiedRoleId,
                 verifiedRoleId, factionRoleId, leaderRoleId,
                 targetOnline: document.getElementById('targetOnline').checked,
@@ -1266,6 +1617,7 @@ async function testAlert(type) {
     let channelId = document.getElementById('global-channelid').value.trim();
     const discordId = document.getElementById('discord-userid').value.trim();
     const inactivityRoleId = document.getElementById('inactivity-roleid')?.value.trim() || '';
+    const inactivityChannelId = (document.getElementById('inactivity-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     let ocRoleId = '';
     let ocChannelId = '';
     const isOc = type.startsWith('oc_');
@@ -1273,10 +1625,12 @@ async function testAlert(type) {
         ocChannelId = (document.getElementById('oc-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
         ocRoleId = (document.getElementById('oc-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
         if (ocChannelId) channelId = ocChannelId;
+    } else if (type === 'inactivity' && inactivityChannelId) {
+        channelId = inactivityChannelId;
     }
     if (!botToken || !channelId) {
         statusEl.style.color = 'var(--red)';
-        statusEl.textContent = '❌ Enter your Bot Token and ' + (isOc ? 'OC Channel ID (or Alert Channel ID)' : 'Channel ID') + ' first.';
+        statusEl.textContent = '❌ Enter your Bot Token and ' + (isOc ? 'OC Channel ID (or Alert Channel ID)' : (type === 'inactivity' ? 'Inactivity Channel ID (or Main Channel ID)' : 'Channel ID')) + ' first.';
         return;
     }
     btn.disabled = true; btn.classList.add('sending'); btn.textContent = '⏳';
@@ -1292,6 +1646,7 @@ async function testAlert(type) {
                     type,
                     discordId,
                     inactivityRoleId,
+                    inactivityChannelId,
                     ocChannelId,
                     ocRoleId,
                     globalChannelId: channelId,
