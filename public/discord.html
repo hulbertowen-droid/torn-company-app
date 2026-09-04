@@ -313,6 +313,18 @@
                         <span class="field-hint">Role to @mention for ready, upcoming, delayed, and missing item alerts.</span>
                     </div>
                 </div>
+                <div class="field-grid">
+                    <div class="field-group">
+                        <label class="field-label" for="verified-roleid">🛡️ Verified Role ID <span class="opt">(optional — Tornium verification)</span></label>
+                        <input class="field-input" type="text" id="verified-roleid" placeholder="Role ID for Verified Members" autocomplete="off">
+                        <span class="field-hint">Role automatically granted when members run <code>/verify</code> in your Discord server.</span>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="faction-roleid">🕷️ Faction Member Role ID <span class="opt">(optional — Spider-Verse)</span></label>
+                        <input class="field-input" type="text" id="faction-roleid" placeholder="Role ID for Faction Members (52355)" autocomplete="off">
+                        <span class="field-hint">Role automatically granted when a verified user belongs to your faction.</span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -529,6 +541,27 @@
             </div>
         </div>
 
+        <div class="card" style="border-left: 3px solid #ff4757;">
+            <div class="card-header">
+                <p class="card-title">⚡ Faction Armory 1-Click Auto-Fill (Tampermonkey)</p>
+                <span class="card-subtitle">Auto-fill player name & quantity on Torn</span>
+            </div>
+            <div class="card-body">
+                <p style="color:var(--text-dim);font-size:0.88em;margin:0 0 12px;line-height:1.5;">
+                    Torn does not allow external website URLs to automatically populate member names or click buttons inside the Armory page due to browser security. 
+                    We created a lightweight, official <b>Spider-Verse Tampermonkey Userscript</b> that detects the Discord link, navigates to the item, clicks <b>Loan</b>, sets quantity to <b>1</b>, and automatically enters the member's name and ID!
+                </p>
+                <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:rgba(255,255,255,0.03);padding:14px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);">
+                    <a href="/torn-armory-autofill.user.js" target="_blank" class="btn-primary" style="background:#ff4757;color:#fff;text-decoration:none;padding:8px 18px;border-radius:6px;font-weight:600;display:inline-flex;align-items:center;gap:6px;">
+                        📥 Install Auto-Fill Userscript
+                    </a>
+                    <span style="color:var(--text-dim);font-size:0.84em;">
+                        Requires <a href="https://www.tampermonkey.net/" target="_blank" style="color:var(--blue);text-decoration:none;">Tampermonkey</a> or Violentmonkey extension.
+                    </span>
+                </div>
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-header">
                 <p class="card-title">🤖 Slash Commands</p>
@@ -537,6 +570,15 @@
             <div class="card-body">
                 <p style="color:var(--text-dim);font-size:0.86em;margin:0 0 14px;">Save your Bot Token above, then click <b>Register Commands</b> to activate slash commands in your server.</p>
                 <div class="cmd-grid">
+                    <div class="cmd-card">
+                        <div class="cmd-category" style="color:#00cec9;">🛡️ Member Verification (Tornium Replacement)</div>
+                        <div class="cmd-list">
+                            <code>/verify [player]</code> — Verify Torn identity, sync nickname & assign roles<br>
+                            <code>/verifyall</code> — Admin: Re-verify all server members and sync nicknames<br>
+                            <span style="font-size:0.82em;color:var(--green);">🏷️ <b>Nickname Sync</b>: Automatically formats names as <code>Name [ID]</code></span><br>
+                            <span style="font-size:0.82em;color:var(--blue);">🎖️ <b>Auto-Roles</b>: Automatically grants <code>Verified</code> and <code>Spider-Verse</code> roles</span>
+                        </div>
+                    </div>
                     <div class="cmd-card">
                         <div class="cmd-category" style="color:#2ed573;">🏦 Faction Banking (Tornium Replacement)</div>
                         <div class="cmd-list">
@@ -675,6 +717,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (document.getElementById('oc-channelid')) document.getElementById('oc-channelid').value = (cfg.ocChannelId || localStorage.getItem('warboard_oc_channelid') || '').replace(/[^0-9]/g, '');
         if (document.getElementById('oc-roleid')) document.getElementById('oc-roleid').value = cfg.ocRoleId || localStorage.getItem('warboard_oc_roleid') || '';
         if (document.getElementById('ocUpcomingMinutes')) document.getElementById('ocUpcomingMinutes').value = String(cfg.ocUpcomingMinutes || 30);
+        if (document.getElementById('verified-roleid')) document.getElementById('verified-roleid').value = cfg.verifiedRoleId || localStorage.getItem('warboard_verified_roleid') || '';
+        if (document.getElementById('faction-roleid')) document.getElementById('faction-roleid').value = cfg.factionRoleId || localStorage.getItem('warboard_faction_roleid') || '';
         if (document.getElementById('guild-id-input')) document.getElementById('guild-id-input').value = (cfg.guildId || localStorage.getItem('warboard_guildid') || '').replace(/[^0-9]/g, '');
         const flags = {
             targetOnline: cfg.targetOnline === true,
@@ -801,6 +845,8 @@ async function saveDiscordConfig() {
     const ocChannelId = (document.getElementById('oc-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const ocRoleId = (document.getElementById('oc-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const ocUpcomingMinutes = parseInt(document.getElementById('ocUpcomingMinutes')?.value || '30', 10);
+    const verifiedRoleId = (document.getElementById('verified-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const factionRoleId = (document.getElementById('faction-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const guildId = (document.getElementById('guild-id-input')?.value.trim() || '').replace(/[^0-9]/g, '');
 
     // Guard: Prevent saving a bot token into channel ID
@@ -822,6 +868,7 @@ async function saveDiscordConfig() {
     localStorage.setItem('warboard_inactivity_roleid', inactivityRoleId); localStorage.setItem('warboard_guildid', guildId);
     localStorage.setItem('warboard_banking_channelid', bankingChannelId); localStorage.setItem('warboard_banker_roleid', bankerRoleId);
     localStorage.setItem('warboard_oc_channelid', ocChannelId); localStorage.setItem('warboard_oc_roleid', ocRoleId);
+    localStorage.setItem('warboard_verified_roleid', verifiedRoleId); localStorage.setItem('warboard_faction_roleid', factionRoleId);
     statusEl.style.color = 'var(--blue)'; statusEl.textContent = '⏳ Saving...'; btn.disabled = true;
     try {
         const res = await fetch('/api/save-discord-config', {
@@ -831,6 +878,7 @@ async function saveDiscordConfig() {
                 globalBotToken: botToken, globalChannelId: channelId, personalDiscordId: discordId, inactivityRoleId, guildId,
                 bankingChannelId, bankerRoleId,
                 ocChannelId, ocRoleId, ocUpcomingMinutes,
+                verifiedRoleId, factionRoleId,
                 targetOnline: document.getElementById('targetOnline').checked,
                 targetLanded: document.getElementById('targetLanded').checked,
                 targetOutHosp: document.getElementById('targetOutHosp').checked,
