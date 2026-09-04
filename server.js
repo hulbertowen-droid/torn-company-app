@@ -8655,9 +8655,14 @@ async function checkFactionOrganizedCrimes() {
             const thresholdSec = thresholdDays * 86400;
 
             for (const [mId, member] of Object.entries(members)) {
-                // Skip members who joined the faction less than the threshold
-                if (member.days_in_faction !== undefined && member.days_in_faction < thresholdDays) continue;
-                // Skip fallen members
+                // Skip recruits (in Torn, recruits cannot join or participate in Organized Crimes)
+                const position = String(member.position || '').trim().toLowerCase();
+                if (position.includes('recruit') || position.includes('trial') || position.includes('probation')) continue;
+
+                // In Torn, new faction members have an initial 72-hour (3-day) cooldown where they cannot participate in OCs
+                if (member.days_in_faction !== undefined && member.days_in_faction < Math.max(3, thresholdDays)) continue;
+
+                // Skip fallen / deleted members
                 const state = (member.status?.state || '').toLowerCase();
                 if (state === 'fallen') continue;
 
