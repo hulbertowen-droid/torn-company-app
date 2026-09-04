@@ -385,7 +385,16 @@ let discordConfig = {
 };
 let marketConfig = { globalChannelId: "", autoDefense: false, sniperTargets: [] };
 let marketMemory = { defense: {}, sniper: {} };
-let ocConfig = { globalChannelId: "", roleId: "" };
+let ocConfig = { 
+    globalChannelId: "", 
+    roleId: "",
+    alertPlanned: true,
+    alertUpcoming: true,
+    upcomingMinutes: 30,
+    alertReady: true,
+    alertDelayed: true,
+    alertCompleted: true
+};
 let ocMemory = {};
  
 let companyConfig = { globalChannelId: "", threshold: 0, alertedItems: {}, apiKey: "" };
@@ -4144,12 +4153,162 @@ app.get('/api/warboard', async (req, res) => {
         res.status(403).json({ error: err.message });
     }
 });
+// ── Faction Portal Access Control ──────────────────────────────────────────
+app.post('/api/auth/verify-faction-access', async (req, res) => {
+    try {
+        const apiKey = (req.body.apiKey || '').trim();
+        if (!apiKey) return res.status(400).json({ success: false, authorized: false, reason: "Torn API Key is required." });
+
+        const targetFactionId = String(discordConfig.factionId || adminFactionId || '52355');
+
+        const tornRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${apiKey}&timestamp=${Date.now()}`, {
+            signal: AbortSignal.timeout(9000)
+        });
+        const data = await tornRes.json();
+
+        if (data.error) {
+            return res.status(400).json({ success: false, authorized: false, reason: data.error.error || "Invalid Torn API key." });
+        }
+
+        const userFacId = String(data.faction?.faction_id || '0');
+        const userFacName = data.faction?.faction_name || 'None';
+        const isMember = userFacId === targetFactionId;
+
+        if (!isMember) {
+            return res.json({
+                success: true,
+                authorized: false,
+                reason: `You are currently in "${userFacName}" [ID: ${userFacId}]. Only active members of Spider-Verse [${targetFactionId}] are authorized to enter.`,
+                player: {
+                    id: data.player_id,
+                    name: data.name,
+                    factionName: userFacName,
+                    factionId: userFacId
+                }
+            });
+        }
+
+        return res.json({
+            success: true,
+            authorized: true,
+            player: {
+                id: data.player_id,
+                name: data.name,
+                level: data.level,
+                role: data.faction?.position || 'Member',
+                factionId: userFacId,
+                factionName: userFacName
+            }
+        });
+    } catch(err) {
+        return res.status(500).json({ success: false, authorized: false, reason: err.message });
+    }
+});
+
+// ── Organized Crime (OC) Configuration & Testing ────────────────────────────
+app.get('/api/oc-config', (req, res) => {
+    res.json({
+        globalChannelId: ocConfig.globalChannelId || "",
+        roleId: ocConfig.roleId || "",
+        alertPlanned: ocConfig.alertPlanned !== false,
+        alertUpcoming: ocConfig.alertUpcoming !== false,
+        upcomingMinutes: ocConfig.upcomingMinutes || 30,
+        alertReady: ocConfig.alertReady !== false,
+        alertDelayed: ocConfig.alertDelayed !== false,
+        alertCompleted: ocConfig.alertCompleted !== false
+    });
+});
+
 app.post('/api/save-oc-config', (req, res) => {
-    const { globalChannelId, roleId } = req.body;
-    if (globalChannelId !== undefined) ocConfig.globalChannelId = globalChannelId;
-    if (roleId !== undefined) ocConfig.roleId = roleId;
+    const { 
+        globalChannelId, 
+        roleId, 
+        alertPlanned, 
+        alertUpcoming, 
+        upcomingMinutes, 
+        alertReady, 
+        alertDelayed, 
+        alertCompleted 
+    } = req.body;
+
+    if (globalChannelId !== undefined) ocConfig.globalChannelId = String(globalChannelId).trim();
+    if (roleId !== undefined) ocConfig.roleId = String(roleId).trim();
+    if (alertPlanned !== undefined) ocConfig.alertPlanned = !!alertPlanned;
+    if (alertUpcoming !== undefined) ocConfig.alertUpcoming = !!alertUpcoming;
+    if (upcomingMinutes !== undefined) ocConfig.upcomingMinutes = Math.max(5, parseInt(upcomingMinutes, 10) || 30);
+    if (alertReady !== undefined) ocConfig.alertReady = !!alertReady;
+    if (alertDelayed !== undefined) ocConfig.alertDelayed = !!alertDelayed;
+    if (alertCompleted !== undefined) ocConfig.alertCompleted = !!alertCompleted;
+
     saveOcConfig();
-    res.json({ success: true });
+    res.json({ success: true, ocConfig });
+});
+
+app.post('/api/test-oc-alert', async (req, res) => {
+    try {
+        const { type, channelId } = req.body;
+        const targetChan = channelId || ocConfig.globalChannelId || discordConfig.globalChannelId;
+        const token = discordConfig.globalBotToken;
+
+        if (!targetChan) return res.status(400).json({ error: "No Discord channel configured for OC alerts." });
+        if (!token) return res.status(400).json({ error: "No Discord Bot Token configured." });
+
+        let embed = null;
+        let mention = ocConfig.roleId ? `<@&${ocConfig.roleId}>` : "";
+        const now = Math.floor(Date.now() / 1000);
+
+        if (type === 'upcoming') {
+            embed = {
+                title: "⏳ OC Upcoming: Bomb Threat [TEST]",
+                description: `Crime is scheduled to be ready in **<t:${now + 1800}:R>** (<t:${now + 1800}:t>)!\n\n` +
+                             `⚠️ **Attention Team Members:** Please stay out of hospital and wrap up foreign travel:\n` +
+                             `• [Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)\n` +
+                             `• [MF_Pikle [3419413]](https://www.torn.com/profiles.php?XID=3419413)\n\n` +
+                             `👉 [View Organized Crimes](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+                color: 0xffa502,
+                footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" }
+            };
+        } else if (type === 'delayed') {
+            embed = {
+                title: "🚨 OC Delayed: Kidnapping [TEST]",
+                description: `Countdown reached zero, but **team cannot launch** because participant(s) are unavailable:\n\n` +
+                             `• ❌ **[Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)**: **Hospitalized** (in hospital · Free <t:${now + 450}:R>)\n\n` +
+                             `Team members must med out, bust, or land before the crime can be initiated.\n\n` +
+                             `👉 [Open Faction Crimes Tab](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+                color: 0xff4757,
+                footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" }
+            };
+        } else if (type === 'planned') {
+            embed = {
+                title: "📋 OC Scheduled: Planned Robbery [TEST]",
+                description: `A new Organized Crime has been scheduled for **Spider-Verse**!\n\n` +
+                             `**Target Ready Time:** <t:${now + 86400}:F> (<t:${now + 86400}:R>)\n` +
+                             `**Planned By:** [Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)\n\n` +
+                             `**Assigned Roster:**\n` +
+                             `• [Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)\n` +
+                             `• [MF_Pikle [3419413]](https://www.torn.com/profiles.php?XID=3419413)\n\n` +
+                             `👉 [View Organized Crimes](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+                color: 0x70a1ff,
+                footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" }
+            };
+        } else {
+            embed = {
+                title: "🟢 OC Ready to Launch: Robbing of a Money Train [TEST]",
+                description: `All team members are in Torn City and ready! Crime can now be initiated by the planner.\n\n` +
+                             `**Team:**\n` +
+                             `• [Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)\n` +
+                             `• [MF_Pikle [3419413]](https://www.torn.com/profiles.php?XID=3419413)\n\n` +
+                             `👉 [Initiate Organized Crime](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+                color: 0x2ed573,
+                footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" }
+            };
+        }
+
+        await sendChannelMessage(token, targetChan, embed, mention);
+        res.json({ success: true, message: `Test ${type || 'ready'} alert sent to channel ${targetChan}` });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.post('/api/save-company-config', (req, res) => {
@@ -7681,6 +7840,183 @@ async function autoCheckActiveBankRequests() {
 // Check every 3.5 seconds for instant near-realtime detection
 setInterval(autoCheckActiveBankRequests, 3500);
 
+// ── Automated F.R.I.D.A.Y Organized Crime (OC) Background Watcher ─────────────
+let ocAlertTracker = {};
+let isCheckingOc = false;
+
+async function checkFactionOrganizedCrimes() {
+    if (isCheckingOc) return;
+    if (global.isNotificationsKilled) return;
+
+    const botToken = discordConfig.globalBotToken;
+    const channelId = ocConfig.globalChannelId || discordConfig.globalChannelId;
+    if (!botToken || !channelId) return;
+
+    const apiKey = discordConfig.apiKey || discordConfig.ffKey || TORN_API_KEY || getNextApiKey();
+    if (!apiKey) return;
+
+    isCheckingOc = true;
+    try {
+        const res = await fetch(`https://api.torn.com/faction/?selections=crimes,basic&key=${apiKey}&timestamp=${Date.now()}`, {
+            signal: AbortSignal.timeout(9000)
+        });
+        const data = await res.json();
+        if (!data || data.error || !data.crimes) return;
+
+        const members = data.members || {};
+        const now = Math.floor(Date.now() / 1000);
+        const mention = ocConfig.roleId ? `<@&${ocConfig.roleId}>` : "";
+        const upcomingSec = (ocConfig.upcomingMinutes || 30) * 60;
+
+        for (const [crimeId, crime] of Object.entries(data.crimes)) {
+            if (!crime) continue;
+            if (!ocAlertTracker[crimeId]) {
+                ocAlertTracker[crimeId] = {};
+            }
+            const tracker = ocAlertTracker[crimeId];
+
+            // Resolve participant details and unavailable members
+            const participantDetails = [];
+            let unavailableMembers = [];
+
+            for (const p of (crime.participants || [])) {
+                let pId = null;
+                if (p && typeof p === 'object') {
+                    pId = p.player_id || Object.keys(p)[0];
+                } else if (p) {
+                    pId = String(p);
+                }
+                if (!pId) continue;
+                pId = String(pId);
+
+                const memberObj = members[pId];
+                const pName = memberObj?.name || `Player [${pId}]`;
+                const pState = memberObj?.status?.state || 'Okay';
+                const pDesc = memberObj?.status?.description || '';
+                const pUntil = memberObj?.status?.until ? Math.floor(memberObj.status.until) : null;
+
+                participantDetails.push({ id: pId, name: pName, state: pState, desc: pDesc, until: pUntil });
+
+                if (pState.toLowerCase() !== 'okay') {
+                    unavailableMembers.push({ id: pId, name: pName, state: pState, desc: pDesc, until: pUntil });
+                }
+            }
+
+            const pListMarkdown = participantDetails.map(p => `• [${p.name} [${p.id}]](https://www.torn.com/profiles.php?XID=${p.id})`).join('\n') || '• *Slots filling...*';
+
+            // ── TRIGGER 1: OC Planned ──────────────────────────────────────────
+            if (crime.initiated === 0 && !tracker.planned && (ocConfig.alertPlanned !== false)) {
+                if (crime.time_started && (now - crime.time_started < 7200)) {
+                    tracker.planned = true;
+                    const plannerObj = members[String(crime.planned_by)];
+                    const plannerName = plannerObj?.name ? `${plannerObj.name} [${crime.planned_by}]` : `Player [${crime.planned_by}]`;
+                    const readyTimeStr = crime.time_ready ? `<t:${crime.time_ready}:F> (<t:${crime.time_ready}:R>)` : "Unknown";
+
+                    await sendChannelMessage(botToken, channelId, {
+                        title: `📋 OC Scheduled: ${crime.crime_name}`,
+                        description: `A new Organized Crime has been scheduled for **Spider-Verse**!\n\n` +
+                                     `**Target Ready Time:** ${readyTimeStr}\n` +
+                                     `**Planned By:** [${plannerName}](https://www.torn.com/profiles.php?XID=${crime.planned_by})\n\n` +
+                                     `**Assigned Roster:**\n${pListMarkdown}\n\n` +
+                                     `👉 [View Organized Crimes](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+                        color: 0x70a1ff,
+                        footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" }
+                    }, mention).catch(() => {});
+                } else {
+                    tracker.planned = true;
+                }
+            }
+
+            // ── TRIGGER 2: OC Upcoming ─────────────────────────────────────────
+            const timeLeft = crime.time_left !== undefined ? crime.time_left : (crime.time_ready ? (crime.time_ready - now) : 9999);
+            if (crime.initiated === 0 && timeLeft > 0 && timeLeft <= upcomingSec && !tracker.upcoming && (ocConfig.alertUpcoming !== false)) {
+                tracker.upcoming = true;
+                await sendChannelMessage(botToken, channelId, {
+                    title: `⏳ OC Upcoming: ${crime.crime_name}`,
+                    description: `Crime is scheduled to become ready in **<t:${crime.time_ready}:R>** (<t:${crime.time_ready}:t>)!\n\n` +
+                                 `⚠️ **Attention Team Members:** Please stay out of hospital, avoid traveling, and remain in Torn City:\n` +
+                                 `${pListMarkdown}\n\n` +
+                                 `👉 [View Organized Crimes](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+                    color: 0xffa502,
+                    footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" }
+                }, mention).catch(() => {});
+            }
+
+            // ── TRIGGER 3 & 4: OC Ready vs OC Delayed ──────────────────────────
+            const isReadyTime = (crime.time_ready && now >= crime.time_ready) || crime.time_left === 0 || crime.ready === 1;
+
+            if (crime.initiated === 0 && isReadyTime) {
+                if (unavailableMembers.length > 0) {
+                    // Delayed: Participants holding up team!
+                    if (!tracker.delayed && (ocConfig.alertDelayed !== false)) {
+                        tracker.delayed = true;
+                        const delayLines = unavailableMembers.map(u => {
+                            const untilStr = u.until ? ` · Free <t:${u.until}:R>` : '';
+                            return `• ❌ **[${u.name} [${u.id}]](https://www.torn.com/profiles.php?XID=${u.id})**: **${u.state}** (${u.desc}${untilStr})`;
+                        }).join('\n');
+
+                        await sendChannelMessage(botToken, channelId, {
+                            title: `🚨 OC Delayed: ${crime.crime_name}`,
+                            description: `Crime countdown reached zero, but **team cannot launch** because participant(s) are unavailable:\n\n` +
+                                         `${delayLines}\n\n` +
+                                         `Team members must med out, bust, or land before the crime can be initiated.\n\n` +
+                                         `👉 [Open Faction Crimes Tab](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+                            color: 0xff4757,
+                            footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" }
+                        }, mention).catch(() => {});
+                    }
+                } else {
+                    // Ready: All team members present and clear!
+                    if (!tracker.ready && (ocConfig.alertReady !== false)) {
+                        tracker.ready = true;
+                        await sendChannelMessage(botToken, channelId, {
+                            title: `🟢 OC Ready to Launch: ${crime.crime_name}`,
+                            description: `All team members are in Torn City and available! Planner can initiate the crime now.\n\n` +
+                                         `**Team:**\n${pListMarkdown}\n\n` +
+                                         `👉 [Initiate Organized Crime](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+                            color: 0x2ed573,
+                            footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" }
+                        }, mention).catch(() => {});
+                    }
+                }
+            }
+
+            // ── TRIGGER 5: OC Completed / Outcome Report ───────────────────────
+            if (crime.initiated === 1 && (crime.time_completed > 0 || crime.success !== undefined) && !tracker.completed && (ocConfig.alertCompleted !== false)) {
+                if (crime.time_completed && (now - crime.time_completed < 3600)) {
+                    tracker.completed = true;
+                    const isSuccess = crime.success === 1;
+                    const moneyGain = crime.money_gain ? `$${Number(crime.money_gain).toLocaleString()}` : '$0';
+                    const respectGain = crime.respect_gain || 0;
+
+                    await sendChannelMessage(botToken, channelId, {
+                        title: isSuccess ? `🎉 OC Success: ${crime.crime_name}!` : `💥 OC Failed: ${crime.crime_name}`,
+                        description: isSuccess
+                            ? `The team successfully executed **${crime.crime_name}**!\n\n` +
+                              `💰 **Payout:** +${moneyGain} deposited into faction vault\n` +
+                              `🏆 **Respect:** +${respectGain} Faction Respect\n\n` +
+                              `**Team:**\n${pListMarkdown}`
+                            : `The team failed **${crime.crime_name}**.\n\n` +
+                              `Participants may have been sent to jail or hospital.\n\n` +
+                              `**Team:**\n${pListMarkdown}`,
+                        color: isSuccess ? 0x2ed573 : 0xff4757,
+                        footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" }
+                    }, mention).catch(() => {});
+                } else {
+                    tracker.completed = true;
+                }
+            }
+        }
+    } catch(err) {
+        // Transient API errors ignored
+    } finally {
+        isCheckingOc = false;
+    }
+}
+
+setInterval(checkFactionOrganizedCrimes, 30000);
+setTimeout(checkFactionOrganizedCrimes, 15000);
+
 // ── Render Free-Tier Keepalive Pinger ──────────────────────────────────────
 // Pings the public endpoint every 9 minutes to prevent Render's free tier
 // from spinning down into a 50-second cold-boot slumber during inactivity!
@@ -8136,6 +8472,7 @@ async function registerSlashCommands(token, guildId = null) {
 
         // 4. Chain Management
         new SlashCommandBuilder().setName('chain').setDescription('Check live faction chain status, timer, and multiplier').toJSON(),
+        new SlashCommandBuilder().setName('oc').setDescription('Check live Organized Crimes status, ready teams, and delayed members').toJSON(),
 
         // 5. Player Intelligence
         new SlashCommandBuilder().setName('profile').setDescription('View comprehensive player profile, status, and stats')
