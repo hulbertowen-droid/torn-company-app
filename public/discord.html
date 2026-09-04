@@ -315,14 +315,38 @@
                 </div>
                 <div class="field-grid">
                     <div class="field-group">
-                        <label class="field-label" for="verified-roleid">🛡️ Verified Role ID <span class="opt">(optional — Tornium verification)</span></label>
+                        <label class="field-label" for="verification-channelid">🛡️ Verification Channel ID <span class="opt">(optional — #verify or #welcome)</span></label>
+                        <input class="field-input" type="text" id="verification-channelid" placeholder="e.g. 1491526701673349180" autocomplete="off">
+                        <span class="field-hint">Channel where new unverified members are directed and verification buttons are posted.</span>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="unverified-roleid">🔒 Unverified Role ID <span class="opt">(optional quarantine role)</span></label>
+                        <input class="field-input" type="text" id="unverified-roleid" placeholder="Role ID for Unverified Members" autocomplete="off">
+                        <span class="field-hint">Optional role assigned upon joining to hide channels. Automatically removed upon verification.</span>
+                    </div>
+                </div>
+                <div class="field-grid">
+                    <div class="field-group">
+                        <label class="field-label" for="verified-roleid">🛡️ Verified Role ID <span class="opt">(server unlock role)</span></label>
                         <input class="field-input" type="text" id="verified-roleid" placeholder="Role ID for Verified Members" autocomplete="off">
-                        <span class="field-hint">Role automatically granted when members run <code>/verify</code> in your Discord server.</span>
+                        <span class="field-hint">Role automatically granted when members verify on Torn. Unlocks view access to server channels.</span>
                     </div>
                     <div class="field-group">
                         <label class="field-label" for="faction-roleid">🕷️ Faction Member Role ID <span class="opt">(optional — Spider-Verse)</span></label>
                         <input class="field-input" type="text" id="faction-roleid" placeholder="Role ID for Faction Members (52355)" autocomplete="off">
                         <span class="field-hint">Role automatically granted when a verified user belongs to your faction.</span>
+                    </div>
+                </div>
+                <div style="margin-top: 14px; padding: 12px 14px; background: rgba(0, 206, 201, 0.05); border: 1px solid rgba(0, 206, 201, 0.2); border-radius: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                    <div>
+                        <div style="font-size: 0.9em; font-weight: 700; color: var(--teal);">📌 Sticky Verification Card</div>
+                        <div style="font-size: 0.82em; color: var(--text-dim);">Post a permanent, interactive "🛡️ Verify My Account" button card into your verification channel.</div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span id="post-verify-status" style="font-size: 0.84em;"></span>
+                        <button type="button" class="btn-primary" onclick="postVerificationCard()" id="btn-post-verify" style="background: var(--teal); color: #000; font-weight: 700; padding: 7px 16px; border-radius: 6px; border: none; cursor: pointer;">
+                            📌 Post Verification Card
+                        </button>
                     </div>
                 </div>
             </div>
@@ -534,9 +558,44 @@
                     </div>
                 </div>
 
+                <div class="section-heading">🛡️ Server Security & Verification</div>
+                <div class="trigger-list">
+                    <div class="trigger-row" id="ti-autoVerifyOnJoin">
+                        <span class="trigger-icon">🛡️</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name">Verification-on-Join <span class="tag faction">SECURITY</span></div>
+                            <div class="trigger-desc">Automatically verifies new members the moment they join your Discord server. If unverified, isolates them from other channels, explains how to verify with an interactive button, and grants verified roles upon completion.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" id="autoVerifyOnJoin" onchange="onToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="save-row">
                     <button class="btn-save" onclick="saveDiscordConfig()" id="save-btn">💾 Save Settings</button>
                     <span id="status-msg"></span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="border-left: 3px solid #00cec9;">
+            <div class="card-header">
+                <p class="card-title">🔒 How to Setup Channel Locking in Discord</p>
+                <span class="card-subtitle">Keep channels hidden until verified</span>
+            </div>
+            <div class="card-body">
+                <p style="color:var(--text-dim);font-size:0.88em;line-height:1.6;margin:0 0 10px;">
+                    Follow these 4 quick steps in your Discord server to ensure unverified users cannot view any channels until they verify:
+                </p>
+                <ol style="color:var(--text-normal);font-size:0.86em;line-height:1.9;padding-left:22px;margin:0 0 14px;">
+                    <li><b>Lock Everyone Out:</b> In Discord <i>Server Settings &rarr; Roles &rarr; @everyone</i>: Set <b>View Channels</b> to <b>OFF (❌ Denied)</b>.</li>
+                    <li><b>Unlock Verification Channel:</b> Right-click your <b>#verification</b> (or #welcome) channel &rarr; <i>Edit Channel &rarr; Permissions</i>: Set <b>@everyone</b> to <b>View Channel: ON (✅)</b> and <b>Send Messages: ON (✅)</b>.</li>
+                    <li><b>Grant Server Access to Verified:</b> In your server categories or channel permissions: Add your <b>@Verified</b> role and set <b>View Channels: ON (✅)</b>.</li>
+                    <li><b>Enable Bot Privileged Intent:</b> In the <a href="https://discord.com/developers/applications" target="_blank" style="color:var(--teal);text-decoration:underline;">Discord Developer Portal</a> &rarr; your Bot application &rarr; <b>Bot</b> tab &rarr; under <b>Privileged Gateway Intents</b>: Toggle <b>SERVER MEMBERS INTENT</b> to <b>ON</b>.</li>
+                </ol>
+                <div style="background: rgba(46, 213, 115, 0.08); border: 1px solid rgba(46, 213, 115, 0.25); border-radius: 6px; padding: 10px 14px; font-size: 0.84em; color: var(--green);">
+                    ⚡ <b>Result:</b> When new members join, they can <i>only</i> see the <b>#verification</b> channel. F.R.I.D.A.Y immediately greets them with the 1-click verification card. As soon as they verify, F.R.I.D.A.Y automatically assigns the <b>@Verified</b> role, instantly unlocking the rest of your server!
                 </div>
             </div>
         </div>
@@ -575,6 +634,7 @@
                         <div class="cmd-list">
                             <code>/verify [player]</code> — Verify Torn identity, sync nickname & assign roles<br>
                             <code>/verifyall</code> — Admin: Re-verify all server members and sync nicknames<br>
+                            <code>/postverify</code> — Admin: Post 1-click verification card to this channel<br>
                             <span style="font-size:0.82em;color:var(--green);">🏷️ <b>Nickname Sync</b>: Automatically formats names as <code>Name [ID]</code></span><br>
                             <span style="font-size:0.82em;color:var(--blue);">🎖️ <b>Auto-Roles</b>: Automatically grants <code>Verified</code> and <code>Spider-Verse</code> roles</span>
                         </div>
@@ -716,7 +776,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (document.getElementById('banker-roleid')) document.getElementById('banker-roleid').value = (cfg.bankerRoleId || localStorage.getItem('warboard_banker_roleid') || '').replace(/[^0-9]/g, '');
         if (document.getElementById('oc-channelid')) document.getElementById('oc-channelid').value = (cfg.ocChannelId || localStorage.getItem('warboard_oc_channelid') || '').replace(/[^0-9]/g, '');
         if (document.getElementById('oc-roleid')) document.getElementById('oc-roleid').value = cfg.ocRoleId || localStorage.getItem('warboard_oc_roleid') || '';
-        if (document.getElementById('ocUpcomingMinutes')) document.getElementById('ocUpcomingMinutes').value = String(cfg.ocUpcomingMinutes || 30);
+        if (document.getElementById('verification-channelid')) document.getElementById('verification-channelid').value = (cfg.verificationChannelId || localStorage.getItem('warboard_verification_channelid') || '').replace(/[^0-9]/g, '');
+        if (document.getElementById('unverified-roleid')) document.getElementById('unverified-roleid').value = (cfg.unverifiedRoleId || localStorage.getItem('warboard_unverified_roleid') || '').replace(/[^0-9]/g, '');
         if (document.getElementById('verified-roleid')) document.getElementById('verified-roleid').value = cfg.verifiedRoleId || localStorage.getItem('warboard_verified_roleid') || '';
         if (document.getElementById('faction-roleid')) document.getElementById('faction-roleid').value = cfg.factionRoleId || localStorage.getItem('warboard_faction_roleid') || '';
         if (document.getElementById('guild-id-input')) document.getElementById('guild-id-input').value = (cfg.guildId || localStorage.getItem('warboard_guildid') || '').replace(/[^0-9]/g, '');
@@ -737,6 +798,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             alertOcDelayed: cfg.alertOcDelayed !== false,
             alertOcMissingItems: cfg.alertOcMissingItems !== false,
             alertOcCompleted: cfg.alertOcCompleted !== false,
+            autoVerifyOnJoin: cfg.autoVerifyOnJoin !== false,
         };
         for (const [id, val] of Object.entries(flags)) {
             const el = document.getElementById(id);
@@ -845,6 +907,8 @@ async function saveDiscordConfig() {
     const ocChannelId = (document.getElementById('oc-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const ocRoleId = (document.getElementById('oc-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const ocUpcomingMinutes = parseInt(document.getElementById('ocUpcomingMinutes')?.value || '30', 10);
+    const verificationChannelId = (document.getElementById('verification-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const unverifiedRoleId = (document.getElementById('unverified-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const verifiedRoleId = (document.getElementById('verified-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const factionRoleId = (document.getElementById('faction-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const guildId = (document.getElementById('guild-id-input')?.value.trim() || '').replace(/[^0-9]/g, '');
@@ -868,6 +932,7 @@ async function saveDiscordConfig() {
     localStorage.setItem('warboard_inactivity_roleid', inactivityRoleId); localStorage.setItem('warboard_guildid', guildId);
     localStorage.setItem('warboard_banking_channelid', bankingChannelId); localStorage.setItem('warboard_banker_roleid', bankerRoleId);
     localStorage.setItem('warboard_oc_channelid', ocChannelId); localStorage.setItem('warboard_oc_roleid', ocRoleId);
+    localStorage.setItem('warboard_verification_channelid', verificationChannelId); localStorage.setItem('warboard_unverified_roleid', unverifiedRoleId);
     localStorage.setItem('warboard_verified_roleid', verifiedRoleId); localStorage.setItem('warboard_faction_roleid', factionRoleId);
     statusEl.style.color = 'var(--blue)'; statusEl.textContent = '⏳ Saving...'; btn.disabled = true;
     try {
@@ -878,6 +943,7 @@ async function saveDiscordConfig() {
                 globalBotToken: botToken, globalChannelId: channelId, personalDiscordId: discordId, inactivityRoleId, guildId,
                 bankingChannelId, bankerRoleId,
                 ocChannelId, ocRoleId, ocUpcomingMinutes,
+                verificationChannelId, unverifiedRoleId,
                 verifiedRoleId, factionRoleId,
                 targetOnline: document.getElementById('targetOnline').checked,
                 targetLanded: document.getElementById('targetLanded').checked,
@@ -895,6 +961,7 @@ async function saveDiscordConfig() {
                 alertOcDelayed: document.getElementById('alertOcDelayed')?.checked ?? true,
                 alertOcMissingItems: document.getElementById('alertOcMissingItems')?.checked ?? true,
                 alertOcCompleted: document.getElementById('alertOcCompleted')?.checked ?? true,
+                autoVerifyOnJoin: document.getElementById('autoVerifyOnJoin')?.checked ?? true,
             })
         });
         const data = await res.json();
@@ -902,6 +969,38 @@ async function saveDiscordConfig() {
         else { throw new Error(data.error || 'Server rejected config'); }
     } catch (e) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ ' + (e.message || 'Network error'); }
     finally { btn.disabled = false; setTimeout(() => { statusEl.textContent = ''; }, 5000); }
+}
+
+async function postVerificationCard() {
+    const statusEl = document.getElementById('post-verify-status');
+    const btn = document.getElementById('btn-post-verify');
+    const chanId = (document.getElementById('verification-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    if (!chanId) {
+        if (statusEl) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ Enter a Verification Channel ID first.'; }
+        return;
+    }
+
+    if (statusEl) { statusEl.style.color = 'var(--blue)'; statusEl.textContent = '⏳ Posting card...'; }
+    if (btn) btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/discord/post-verification-card', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channelId: chanId })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (statusEl) { statusEl.style.color = 'var(--green)'; statusEl.textContent = '✅ Posted to channel!'; }
+        } else {
+            if (statusEl) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ ' + (data.error || 'Failed'); }
+        }
+    } catch(err) {
+        if (statusEl) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ ' + err.message; }
+    } finally {
+        if (btn) btn.disabled = false;
+        setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 6000);
+    }
 }
 async function testAlert(type) {
     const btn = document.getElementById('btn-test-' + type);
