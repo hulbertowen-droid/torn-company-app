@@ -8118,31 +8118,12 @@ async function registerSlashCommands(token, guildId = null) {
     const rest = new REST({ version: '10' }).setToken(token);
 
     const commands = [
-        // 1. Vault Banking (Tornium Replacement)
+        // 1. Vault Banking
         new SlashCommandBuilder().setName('withdraw').setDescription('Request money from the faction vault (with overdraft protection)')
             .addStringOption(opt => opt.setName('amount').setDescription('Amount to request (e.g. 10m, 500k, 25000000)').setRequired(true).setAutocomplete(true)).toJSON(),
 
         new SlashCommandBuilder().setName('balance').setDescription('Check faction vault balance and donations')
             .addStringOption(opt => opt.setName('member').setDescription('Member name or ID (leave blank for yourself or leaderboard)')).toJSON(),
-
-        new SlashCommandBuilder().setName('fulfill').setDescription('Fulfill a pending faction vault request (Banker only)')
-            .addStringOption(opt => opt.setName('id').setDescription('Request ID (e.g. 1001)').setRequired(true)).toJSON(),
-
-        new SlashCommandBuilder().setName('cancel').setDescription('Cancel your pending vault withdrawal request')
-            .addStringOption(opt => opt.setName('id').setDescription('Request ID (leave blank to cancel your latest pending request)')).toJSON(),
-
-        new SlashCommandBuilder().setName('bank').setDescription('Faction vault banking suite')
-            .addSubcommand(sub => sub.setName('request').setDescription('Request money from the faction vault')
-                .addStringOption(opt => opt.setName('amount').setDescription('Amount (e.g. 10m, 500k, 25000000)').setRequired(true).setAutocomplete(true)))
-            .addSubcommand(sub => sub.setName('balance').setDescription('Check vault balance')
-                .addStringOption(opt => opt.setName('member').setDescription('Member name or ID')))
-            .addSubcommand(sub => sub.setName('pending').setDescription('List all currently pending vault requests'))
-            .addSubcommand(sub => sub.setName('fulfill').setDescription('Fulfill a pending vault request (Banker only)')
-                .addStringOption(opt => opt.setName('id').setDescription('Request ID (e.g. 1001)').setRequired(true)))
-            .addSubcommand(sub => sub.setName('cancel').setDescription('Cancel a pending vault request')
-                .addStringOption(opt => opt.setName('id').setDescription('Request ID (leave blank to cancel your latest pending request)')))
-            .addSubcommand(sub => sub.setName('history').setDescription('View recent vault withdrawal transaction history')
-                .addStringOption(opt => opt.setName('member').setDescription('Filter by member name or ID (optional)'))).toJSON(),
 
         // 2. Faction Discord Member Audit
         new SlashCommandBuilder().setName('notindiscord').setDescription('Audit faction members: list who is not in this Discord server').toJSON(),
@@ -8298,11 +8279,11 @@ function setupSlashBotEvents(bot, token) {
 
     bot.on(Events.InteractionCreate, async (interaction) => {
 
-        // ── Amount Autocomplete for /withdraw and /bank request ──
+        // ── Amount Autocomplete for /withdraw ──
         if (interaction.isAutocomplete()) {
             const cmd = interaction.commandName;
             const focusedOption = interaction.options.getFocused(true);
-            if ((cmd === 'withdraw' || cmd === 'bank') && focusedOption.name === 'amount') {
+            if (cmd === 'withdraw' && focusedOption.name === 'amount') {
                 const typed = (focusedOption.value || '').replace(/[$,\s]/g, '');
                 const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
 
@@ -8523,35 +8504,8 @@ function setupSlashBotEvents(bot, token) {
             });
         }
 
-        // Direct handling for /fulfill and /bank fulfill
-        if (cmd === 'fulfill' || (cmd === 'bank' && subcommand === 'fulfill')) {
-            const reqId = (interaction.options.getString('id') || '').trim().replace(/[^0-9]/g, '');
-            const res = await executeFulfillRequest(reqId, interaction);
-            return interaction.reply({ content: res.message, ephemeral: true }).catch(() => {});
-        }
-
-        // Direct handling for /cancel and /bank cancel (with optional ID)
-        if (cmd === 'cancel' || (cmd === 'bank' && subcommand === 'cancel')) {
-            let reqId = (interaction.options.getString('id') || '').trim().replace(/[^0-9]/g, '');
-            if (!reqId) {
-                const userPending = Object.values(bankRequests)
-                    .filter(r => r.status === 'pending' && (r.userId === interaction.user.id))
-                    .sort((a, b) => b.timestamp - a.timestamp);
-                if (userPending.length > 0) {
-                    reqId = userPending[0].id;
-                } else {
-                    return interaction.reply({ 
-                        content: "ℹ️ You do not have any active pending vault requests to cancel.", 
-                        ephemeral: true 
-                    });
-                }
-            }
-            const res = await executeCancelRequest(reqId, interaction);
-            return interaction.reply({ content: res.message, ephemeral: true }).catch(() => {});
-        }
-
-        // Direct handling for /withdraw and /bank request with STRICT OVERDRAFT PROTECTION
-        if (cmd === 'withdraw' || (cmd === 'bank' && subcommand === 'request')) {
+        // Direct handling for /withdraw with STRICT OVERDRAFT PROTECTION
+        if (cmd === 'withdraw') {
             const rawAmount = interaction.options.getString('amount');
             const amount = parseAmount(rawAmount);
 
@@ -8781,7 +8735,7 @@ function setupSlashBotEvents(bot, token) {
             return interaction.editReply({
                 content: `✅ Your withdrawal request **#${req.id}** for **$${amount.toLocaleString()}** is active!${replacedNote}\n` +
                          `Remaining available balance: **$${(totalBalance - amount).toLocaleString()}**.\n` +
-                         `*(Note: Bot lacks "Send Messages" permission in this channel to post publicly, but your request has been recorded and Bankers can view & fulfill it via \`/bank pending\`)*`,
+                         `*(Note: Bot lacks "Send Messages" permission in this channel to post publicly, but your request has been recorded and will be auto-fulfilled when cash is sent)*`,
                 embeds: [sanitizeEmbed(reqEmbed)],
                 components: reqButtons
             });
@@ -8794,14 +8748,9 @@ function setupSlashBotEvents(bot, token) {
 
         try {
             // ── Banking & Discord Audit ──
-            if (cmd === 'balance' || (cmd === 'bank' && subcommand === 'balance')) {
+            if (cmd === 'balance') {
                 const member = interaction.options.getString('member');
                 embed = await buildVaultBalanceEmbed(apiKey, member, interaction.user);
-            } else if (cmd === 'bank' && subcommand === 'pending') {
-                embed = buildPendingRequestsEmbed();
-            } else if (cmd === 'bank' && subcommand === 'history') {
-                const member = interaction.options.getString('member');
-                embed = buildBankHistoryEmbed(member);
             } else if (cmd === 'notindiscord' || (cmd === 'faction' && subcommand === 'notindiscord')) {
                 embed = await buildMissingDiscordEmbed(interaction.guild, apiKey);
             }
