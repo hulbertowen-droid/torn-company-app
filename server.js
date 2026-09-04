@@ -2359,9 +2359,9 @@ app.post('/api/discord/post-verification-card', async (req, res) => {
             description: `Welcome! To access all faction channels, war intel, and banking commands, you must verify your Torn City identity.\n\n` +
                          `🔒 **All other channels are locked until verified.**\n\n` +
                          `**How to Verify:**\n` +
-                         `1️⃣ Click the **🛡️ Verify My Account** button below to enter your Torn Player ID or Name.\n` +
-                         `2️⃣ Or type \`/verify player:YourTornID\` in this channel.\n\n` +
-                         `*Once verified, your server nickname will be synced to \`Name [ID]\` and you will automatically receive the ${verifiedRoleId ? `<@&${verifiedRoleId}>` : '**Verified**'} role, granting full access!*`,
+                         `1️⃣ Link your Discord account at **[torn.com/discord](https://www.torn.com/discord)** on the Official Torn Discord.\n` +
+                         `2️⃣ Click the **🛡️ Verify Me** button below (or type \`/verify\`).\n\n` +
+                         `*F.R.I.D.A.Y automatically checks your account with Torn, syncs your nickname to \`Name [ID]\`, and grants your ${verifiedRoleId ? `<@&${verifiedRoleId}>` : '**Verified**'} role!*`,
             color: 0x2ed573,
             thumbnail: { url: "https://www.torn.com/favicon.ico" },
             footer: { text: "F.R.I.D.A.Y • Identity & Security Sentinel" },
@@ -2374,8 +2374,8 @@ app.post('/api/discord/post-verification-card', async (req, res) => {
                 {
                     type: 2,
                     style: 1, // Primary (Blurple)
-                    custom_id: 'btn_verify_open_modal',
-                    label: '🛡️ Verify My Account',
+                    custom_id: 'btn_verify_now',
+                    label: '🛡️ Verify Me',
                     emoji: { name: '🛡️' }
                 },
                 {
@@ -8892,7 +8892,10 @@ async function applyGuildMemberRole(guild, guildMember, botMember, roleId, actio
     return { success: false, reason: 'Unknown state' };
 }
 
-async function executeVerifyMember(memberOrUser, guild, playerInput, apiKey) {
+async function executeVerifyMember(memberOrUser, guild, arg3, arg4) {
+    const apiKey = (typeof arg4 === 'string' && arg4.length > 5) ? arg4 : 
+                   (typeof arg3 === 'string' && arg3.length > 5) ? arg3 : 
+                   (discordConfig.apiKey || TORN_API_KEY || getNextApiKey());
     if (!apiKey) {
         return { title: "🛡️ Verification Failed", description: "⚠️ Torn API Key is not configured on the dashboard.", color: 0xff4757 };
     }
@@ -8924,57 +8927,23 @@ async function executeVerifyMember(memberOrUser, guild, playerInput, apiKey) {
     let verifiedViaGlobalLink = false;
     const facId = discordConfig.factionId || dynamicFactionId || 52355;
 
-    // ── FLOW 1: Player Argument Provided (Numeric ID or Name) ──
-    if (playerInput) {
-        const numericId = String(playerInput).replace(/\D/g, '');
-        if (numericId.length >= 1 && numericId.length <= 10) {
-            try {
-                const res = await fetch(`https://api.torn.com/user/${numericId}?selections=profile,discord&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
-                const data = await res.json();
-                if (data && !data.error && data.player_id) {
-                    tornUser = data;
-                }
-            } catch(e) {}
-        }
-
-        // If not found by numeric ID, check by name in faction roster
-        if (!tornUser) {
-            try {
-                const facRes = await fetch(`https://api.torn.com/faction/${facId}?selections=basic,positions&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
-                const facData = await facRes.json();
-                if (facData && facData.members) {
-                    const foundEntry = Object.entries(facData.members).find(([id, m]) =>
-                        m.name.toLowerCase() === String(playerInput).toLowerCase().trim()
-                    );
-                    if (foundEntry) {
-                        const res = await fetch(`https://api.torn.com/user/${foundEntry[0]}?selections=profile,discord&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
-                        const data = await res.json();
-                        if (data && !data.error && data.player_id) tornUser = data;
-                    }
-                }
-            } catch(e) {}
-        }
-    }
-
-    // ── FLOW 2: Tornium Official Flow (Torn API v2 Cross-Reference) ──
+    // ── Tornium Official Flow: Torn API v2 Discord Cross-Reference ──
     // Checks if user linked their Discord ID globally on the Official Torn Discord (torn.com/discord)
-    if (!tornUser) {
-        try {
-            const v2Res = await fetch(`https://api.torn.com/v2/user/${discordUserId}/discord?key=${apiKey}`, { signal: AbortSignal.timeout(6000) });
-            const v2Data = await v2Res.json();
-            const matchedTornId = v2Data?.discord?.user_id || v2Data?.user_id || v2Data?.discord?.player_id || v2Data?.player_id || v2Data?.userID;
-            if (matchedTornId) {
-                const res = await fetch(`https://api.torn.com/user/${matchedTornId}?selections=profile,discord&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
-                const data = await res.json();
-                if (data && !data.error && data.player_id) {
-                    tornUser = data;
-                    verifiedViaGlobalLink = true;
-                }
+    try {
+        const v2Res = await fetch(`https://api.torn.com/v2/user/${discordUserId}/discord?key=${apiKey}`, { signal: AbortSignal.timeout(6000) });
+        const v2Data = await v2Res.json();
+        const matchedTornId = v2Data?.discord?.user_id || v2Data?.user_id || v2Data?.discord?.player_id || v2Data?.player_id || v2Data?.userID;
+        if (matchedTornId) {
+            const res = await fetch(`https://api.torn.com/user/${matchedTornId}?selections=profile,discord&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+            const data = await res.json();
+            if (data && !data.error && data.player_id) {
+                tornUser = data;
+                verifiedViaGlobalLink = true;
             }
-        } catch(e) {}
-    }
+        }
+    } catch(e) {}
 
-    // ── FLOW 3: v1 Discord Endpoint Fallback ──
+    // ── Fallback: v1 Discord Selection Endpoint ──
     if (!tornUser) {
         try {
             const v1Res = await fetch(`https://api.torn.com/user/${discordUserId}?selections=profile,discord&key=${apiKey}`, { signal: AbortSignal.timeout(6000) });
@@ -8986,52 +8955,25 @@ async function executeVerifyMember(memberOrUser, guild, playerInput, apiKey) {
         } catch(e) {}
     }
 
-    // ── FLOW 4: Discord Display Name Fallback in Faction Roster ──
-    if (!tornUser && guildMember) {
-        try {
-            const facRes = await fetch(`https://api.torn.com/faction/${facId}?selections=basic,positions&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
-            const facData = await facRes.json();
-            if (facData && facData.members) {
-                const searchNames = [
-                    guildMember.displayName,
-                    guildMember.nickname,
-                    guildMember.user?.username,
-                    guildMember.user?.globalName
-                ].filter(Boolean).map(s => s.toLowerCase().replace(/\[\d+\]/g, '').trim());
-
-                const foundEntry = Object.entries(facData.members).find(([id, m]) =>
-                    searchNames.some(sn => sn && (m.name.toLowerCase() === sn || sn.includes(m.name.toLowerCase())))
-                );
-                if (foundEntry) {
-                    const res = await fetch(`https://api.torn.com/user/${foundEntry[0]}?selections=profile,discord&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
-                    const data = await res.json();
-                    if (data && !data.error && data.player_id) tornUser = data;
-                }
-            }
-        } catch(e) {}
-    }
-
-    // ── UNVERIFIED: Present Official Tornium Instructions & Buttons ──
+    // ── UNVERIFIED: Discord Account Not Linked on Official Torn Discord ──
     if (!tornUser) {
         return {
             success: false,
-            title: "🛡️ Torn Account Verification Required",
-            description: `Welcome <@${discordUserId}>! To unlock faction channels and sync your roles, please link your Torn City account.\n\n` +
-                         `**Option 1: Official Global Link (Recommended)**\n` +
-                         `Link your Discord account at **[torn.com/discord](https://www.torn.com/discord)**. Once linked on Torn's official server, you are automatically verified everywhere!\n\n` +
-                         `**Option 2: Instant Manual Verification**\n` +
-                         `Click **🛡️ Verify My Account** below to enter your Torn Player ID or Name, or type:\n` +
-                         `\`\`\`\n/verify player:YourTornID\n\`\`\`\n` +
-                         `*(Example: \`/verify player:3490493\`)*`,
-            color: 0xffa502,
+            title: "🛡️ Official Torn Discord Link Required",
+            description: `Hey <@${discordUserId}>! Your Discord account is not linked to your Torn City account yet.\n\n` +
+                         `**How to Verify:**\n` +
+                         `1️⃣ Join or open the **[Official Torn Discord Server](https://www.torn.com/discord)**.\n` +
+                         `2️⃣ Complete the official verification steps to link your Discord account to your Torn player identity.\n` +
+                         `3️⃣ Once linked, click the **🛡️ Verify Me** button below (or type \`/verify\`) and F.R.I.D.A.Y will automatically verify you and unlock the server!`,
+            color: 0xff4757,
             components: [{
                 type: 1,
                 components: [
                     {
                         type: 2,
                         style: 1, // Blurple
-                        custom_id: 'btn_verify_open_modal',
-                        label: '🛡️ Verify My Account',
+                        custom_id: 'btn_verify_now',
+                        label: '🛡️ Verify Me',
                         emoji: { name: '🛡️' }
                     },
                     {
@@ -9157,14 +9099,6 @@ async function executeVerifyMember(memberOrUser, guild, playerInput, apiKey) {
 
     if (roleWarnings.length > 0) {
         fields.push({ name: "⚠️ Action Required: Role Hierarchy", value: roleWarnings.join('\n\n'), inline: false });
-    }
-
-    if (!verifiedViaGlobalLink) {
-        fields.push({
-            name: "💡 Pro Tip",
-            value: `Link your Discord account globally at **[torn.com/discord](https://www.torn.com/discord)** so you're automatically verified across all Torn servers!`,
-            inline: false
-        });
     }
 
     return {
@@ -9387,10 +9321,10 @@ async function handleGuildMemberAdd(member) {
         description: `Hey <@${member.id}>, welcome!\n\n` +
                      `🔒 **Server Access Locked**\n` +
                      `To protect faction intel and prevent unauthorized visitors, all channels in this server are locked until you verify your Torn City identity.\n\n` +
-                     `**How to get verified & unlock the server:**\n\n` +
-                     `**Method 1 (Instant):** Click **🛡️ Verify My Account** below to enter your Torn ID or Name.\n` +
-                     `**Method 2 (Global):** Link your Discord on the **[Official Torn Discord](https://www.torn.com/discord)** for automatic 1-click verification.\n\n` +
-                     `Once verified, your nickname will be synced to \`Name [ID]\` and you will receive the ${verifiedRoleId ? `<@&${verifiedRoleId}>` : '**Verified**'} role, granting full access!`,
+                     `**How to Verify:**\n` +
+                     `1️⃣ Link your Discord account at **[torn.com/discord](https://www.torn.com/discord)** on the Official Torn Discord.\n` +
+                     `2️⃣ Click the **🛡️ Verify Me** button below (or type \`/verify\`).\n\n` +
+                     `*F.R.I.D.A.Y automatically cross-references your account with Torn, syncs your nickname to \`Name [ID]\`, and grants your ${verifiedRoleId ? `<@&${verifiedRoleId}>` : '**Verified**'} role!*`,
         color: 0xff4757,
         thumbnail: { url: "https://www.torn.com/favicon.ico" },
         footer: { text: "F.R.I.D.A.Y • Spider-Verse Security Sentinel" },
@@ -9403,8 +9337,8 @@ async function handleGuildMemberAdd(member) {
             {
                 type: 2,
                 style: 1, // Primary (Blurple)
-                custom_id: 'btn_verify_open_modal',
-                label: '🛡️ Verify My Account',
+                custom_id: 'btn_verify_now',
+                label: '🛡️ Verify Me',
                 emoji: { name: '🛡️' }
             },
             {
@@ -9459,8 +9393,7 @@ async function registerSlashCommands(token, guildId = null) {
 
     const commands = [
         // 0. Member Verification (Tornium Feature)
-        new SlashCommandBuilder().setName('verify').setDescription('Verify your Torn account, sync nickname, and receive faction roles')
-            .addStringOption(opt => opt.setName('player').setDescription('Your Torn Player ID or Name (optional if already verified on Torn)')).toJSON(),
+        new SlashCommandBuilder().setName('verify').setDescription('Verify your Torn account via official Torn Discord link and receive faction roles').toJSON(),
 
         new SlashCommandBuilder().setName('verifyall').setDescription('Admin: Re-verify all members in this Discord server and sync nicknames & roles').toJSON(),
 
@@ -9747,27 +9680,30 @@ function setupSlashBotEvents(bot, token) {
         // ── Interactive Button Click Handler ──
         if (interaction.isButton()) {
 
-            const customId = interaction.customId || '';
+            // ── Instant 1-Click Verification (Official Torn Discord Flow) ──
+            if (customId === 'btn_verify_now' || customId === 'btn_verify_open_modal') {
+                await interaction.deferReply({ ephemeral: true });
+                const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+                const result = await executeVerifyMember(interaction.member || interaction.user, interaction.guild, apiKey);
 
-            // Verification Modal Trigger
-            if (customId === 'btn_verify_open_modal') {
-                const modal = new ModalBuilder()
-                    .setCustomId('modal_verify_user')
-                    .setTitle('Torn City Account Verification');
-
-                const playerInput = new TextInputBuilder()
-                    .setCustomId('torn_player_input')
-                    .setLabel('Your Torn Player ID or Name')
-                    .setPlaceholder('e.g. 4352227 or Tibora')
-                    .setStyle(TextInputStyle.Short)
-                    .setRequired(true)
-                    .setMinLength(1)
-                    .setMaxLength(32);
-
-                const row = new ActionRowBuilder().addComponents(playerInput);
-                modal.addComponents(row);
-
-                return await interaction.showModal(modal);
+                if (result && result.success && interaction.guild) {
+                    const vChanId = discordConfig.verificationChannelId;
+                    if (vChanId) {
+                        try {
+                            const chan = interaction.guild.channels.cache.get(vChanId) || await interaction.guild.channels.fetch(vChanId).catch(() => null);
+                            if (chan && chan.isTextBased()) {
+                                await chan.send({
+                                    content: `🎉 <@${interaction.user.id}> has successfully verified as **[${result.playerName} [${result.playerId}]](https://www.torn.com/profiles.php?XID=${result.playerId})**! Full server access granted.`
+                                });
+                            }
+                        } catch(e) {}
+                    }
+                }
+                const replyPayload = { embeds: [sanitizeEmbed(result)] };
+                if (result.components && result.components.length > 0) {
+                    replyPayload.components = result.components;
+                }
+                return await interaction.editReply(replyPayload);
             }
 
             // Warboard Target Claim
@@ -9920,8 +9856,7 @@ function setupSlashBotEvents(bot, token) {
         // ── Member Verification (Tornium Feature) ──
         if (cmd === 'verify') {
             await interaction.deferReply({ ephemeral: false });
-            const playerInput = (interaction.options.getString('player') || '').trim();
-            const resultEmbed = await executeVerifyMember(interaction.member || interaction.user, interaction.guild, playerInput, apiKey);
+            const resultEmbed = await executeVerifyMember(interaction.member || interaction.user, interaction.guild, apiKey);
             const replyPayload = { embeds: [sanitizeEmbed(resultEmbed)] };
             if (resultEmbed.components && resultEmbed.components.length > 0) {
                 replyPayload.components = resultEmbed.components;
@@ -9954,10 +9889,9 @@ function setupSlashBotEvents(bot, token) {
                 description: `Welcome! To access all faction channels, war intel, and banking commands, you must verify your Torn City identity.\n\n` +
                              `🔒 **All other channels are locked until verified.**\n\n` +
                              `**How to Verify:**\n` +
-                             `1️⃣ Click the **🛡️ Verify My Account** button below to enter your Torn Player ID or Name.\n` +
-                             `2️⃣ Or link your account globally at **[torn.com/discord](https://www.torn.com/discord)**.\n` +
-                             `3️⃣ Or type \`/verify player:YourTornID\` in this channel.\n\n` +
-                             `*Once verified, your server nickname will be synced to \`Name [ID]\` and you will automatically receive the ${verifiedRoleId ? `<@&${verifiedRoleId}>` : '**Verified**'} role, granting full access!*`,
+                             `1️⃣ Link your Discord account at **[torn.com/discord](https://www.torn.com/discord)** on the Official Torn Discord.\n` +
+                             `2️⃣ Click the **🛡️ Verify Me** button below (or type \`/verify\`).\n\n` +
+                             `*F.R.I.D.A.Y automatically checks your account with Torn, syncs your nickname to \`Name [ID]\`, and grants your ${verifiedRoleId ? `<@&${verifiedRoleId}>` : '**Verified**'} role!*`,
                 color: 0x2ed573,
                 thumbnail: { url: "https://www.torn.com/favicon.ico" },
                 footer: { text: "F.R.I.D.A.Y • Identity & Security Sentinel" },
@@ -9970,8 +9904,8 @@ function setupSlashBotEvents(bot, token) {
                     {
                         type: 2,
                         style: 1,
-                        custom_id: 'btn_verify_open_modal',
-                        label: '🛡️ Verify My Account',
+                        custom_id: 'btn_verify_now',
+                        label: '🛡️ Verify Me',
                         emoji: { name: '🛡️' }
                     },
                     {
