@@ -7271,121 +7271,123 @@ async function checkFactionLogForPayment(req, apiKey) {
     const targetId = String(req.tornId || "").trim();
     const targetName = (req.tornName || "").trim().toLowerCase();
 
-    // ── Strategy 1: Verify via Faction Donations (Vault Balance Drop) ──
-    // This is the most reliable method because ANY key in the faction can read donations
-    // (no special AA permissions required). When cash is given from the vault, balance drops instantly.
+    // Cache-busting parameter forces Torn's CDN to bypass its 30-second cache
+    // and query live fresh database balances immediately!
+    const cacheBuster = Date.now();
+    const donUrl = facId
+        ? `https://api.torn.com/faction/${facId}?selections=donations&timestamp=${cacheBuster}&key=${apiKey}`
+        : `https://api.torn.com/faction/?selections=donations&timestamp=${cacheBuster}&key=${apiKey}`;
+    const newsUrl = facId
+        ? `https://api.torn.com/faction/${facId}?selections=fundsnews,mainnews&timestamp=${cacheBuster}&key=${apiKey}`
+        : `https://api.torn.com/faction/?selections=fundsnews,mainnews&timestamp=${cacheBuster}&key=${apiKey}`;
+
     try {
-        const donUrl = facId
-            ? `https://api.torn.com/faction/${facId}?selections=donations&key=${apiKey}`
-            : `https://api.torn.com/faction/?selections=donations&key=${apiKey}`;
-        const donRes = await fetch(donUrl, { signal: AbortSignal.timeout(8000) });
-        const donData = await donRes.json();
+        // Fetch both donations & news simultaneously in parallel for maximum speed
+        const [donResult, newsResult] = await Promise.allSettled([
+            fetch(donUrl, { signal: AbortSignal.timeout(6000) }).then(r => r.json()),
+            fetch(newsUrl, { signal: AbortSignal.timeout(6000) }).then(r => r.json())
+        ]);
 
-        if (donData && !donData.error && donData.donations && targetId && donData.donations[targetId]) {
-            const donor = donData.donations[targetId];
-            const currentBal = Number(donor.money_balance ?? donor.money ?? 0);
+        // ── Strategy 1: Verify via Faction Donations (Vault Balance Drop) ──
+        if (donResult.status === 'fulfilled') {
+            const donData = donResult.value;
+            if (donData && !donData.error && donData.donations && targetId && donData.donations[targetId]) {
+                const donor = donData.donations[targetId];
+                const currentBal = Number(donor.money_balance ?? donor.money ?? 0);
 
-            if (req.balanceBefore !== undefined && req.balanceBefore > 0) {
-                const expectedMax = req.balanceBefore - requiredAmount;
-                if (currentBal <= expectedMax) {
-                    return {
-                        verified: true,
-                        source: "donations_drop",
-                        currentBal,
-                        balanceBefore: req.balanceBefore,
-                        detail: `Vault balance dropped from $${req.balanceBefore.toLocaleString()} to $${currentBal.toLocaleString()}`
-                    };
-                }
-            }
-        }
-    } catch(err) {
-        console.warn("[Bank Verify] Donations check error:", err.message);
-    }
-
-    // ── Strategy 2: Check Faction News Logs (fundsnews & mainnews) ──
-    // If the API key has Faction API Access (AA), this confirms the transaction from official logs
-    // and extracts the banker's name.
-    try {
-        const newsUrl = facId
-            ? `https://api.torn.com/faction/${facId}?selections=fundsnews,mainnews&key=${apiKey}`
-            : `https://api.torn.com/faction/?selections=fundsnews,mainnews&key=${apiKey}`;
-        const newsRes = await fetch(newsUrl, { signal: AbortSignal.timeout(8000) });
-        const newsData = await newsRes.json();
-
-        if (newsData && !newsData.error) {
-            const refTime = req.fulfilledAt || req.timestamp;
-            const cutoff = Math.floor((refTime - 180000) / 1000); // 3 minutes before reference
-
-            const newsItems = [
-                ...Object.values(newsData.fundsnews || {}),
-                ...Object.values(newsData.mainnews || {})
-            ];
-
-            for (const entry of newsItems) {
-                if (!entry || !entry.timestamp) continue;
-                if (entry.timestamp < cutoff) continue;
-
-                const newsRaw = String(entry.news || "");
-                const newsLower = newsRaw.toLowerCase();
-
-                // Must mention target by ID or name
-                const idMatched = targetId && (
-                    newsLower.includes(targetId) ||
-                    newsLower.includes(`xid=${targetId}`) ||
-                    newsLower.includes(`[${targetId}]`) ||
-                    (entry.id && String(entry.id) === targetId)
-                );
-                const nameMatched = targetName && targetName.length > 2 && newsLower.includes(targetName);
-
-                if (!idMatched && !nameMatched) continue;
-
-                // Must mention the amount
-                const amtFormatted = requiredAmount.toLocaleString();
-                const amtRaw = String(requiredAmount);
-                const amountMatched =
-                    newsLower.includes(amtFormatted.toLowerCase()) ||
-                    newsLower.includes(`$${amtFormatted.toLowerCase()}`) ||
-                    newsLower.includes(amtRaw) ||
-                    newsLower.includes(`$${amtRaw}`);
-
-                if (!amountMatched) continue;
-
-                // Action keywords
-                const isGiveAction =
-                    newsLower.includes("gave") ||
-                    newsLower.includes("give") ||
-                    newsLower.includes("transfer") ||
-                    newsLower.includes("sent") ||
-                    newsLower.includes("withdr") ||
-                    newsLower.includes("paid");
-
-                if (isGiveAction) {
-                    let bankerFromLog = null;
-                    const giverMatch = newsRaw.match(/<a[^>]*href=[^>]*XID=(\d+)[^>]*>([^<]+)<\/a>\s*(?:gave|transferred|sent|paid)/i);
-                    if (giverMatch) {
-                        bankerFromLog = giverMatch[2];
+                if (req.balanceBefore !== undefined && req.balanceBefore > 0) {
+                    const expectedMax = req.balanceBefore - requiredAmount;
+                    if (currentBal <= expectedMax) {
+                        return {
+                            verified: true,
+                            source: "donations_drop",
+                            currentBal,
+                            balanceBefore: req.balanceBefore,
+                            detail: `Vault balance dropped from $${req.balanceBefore.toLocaleString()} to $${currentBal.toLocaleString()}`
+                        };
                     }
-
-                    return {
-                        verified: true,
-                        source: "news",
-                        entry: newsRaw,
-                        bankerName: bankerFromLog
-                    };
                 }
             }
         }
-    } catch(err) {
-        console.warn("[Bank Verify] News check error:", err.message);
-    }
 
-    return { verified: false, reason: "not_found" };
+        // ── Strategy 2: Check Faction News Logs (fundsnews & mainnews) ──
+        if (newsResult.status === 'fulfilled') {
+            const newsData = newsResult.value;
+            if (newsData && !newsData.error) {
+                const refTime = req.fulfilledAt || req.timestamp;
+                const cutoff = Math.floor((refTime - 180000) / 1000); // 3 minutes before reference
+
+                const newsItems = [
+                    ...Object.values(newsData.fundsnews || {}),
+                    ...Object.values(newsData.mainnews || {})
+                ];
+
+                for (const entry of newsItems) {
+                    if (!entry || !entry.timestamp) continue;
+                    if (entry.timestamp < cutoff) continue;
+
+                    const newsRaw = String(entry.news || "");
+                    const newsLower = newsRaw.toLowerCase();
+
+                    // Must mention target by ID or name
+                    const idMatched = targetId && (
+                        newsLower.includes(targetId) ||
+                        newsLower.includes(`xid=${targetId}`) ||
+                        newsLower.includes(`[${targetId}]`) ||
+                        (entry.id && String(entry.id) === targetId)
+                    );
+                    const nameMatched = targetName && targetName.length > 2 && newsLower.includes(targetName);
+
+                    if (!idMatched && !nameMatched) continue;
+
+                    // Must mention the amount
+                    const amtFormatted = requiredAmount.toLocaleString();
+                    const amtRaw = String(requiredAmount);
+                    const amountMatched =
+                        newsLower.includes(amtFormatted.toLowerCase()) ||
+                        newsLower.includes(`$${amtFormatted.toLowerCase()}`) ||
+                        newsLower.includes(amtRaw) ||
+                        newsLower.includes(`$${amtRaw}`);
+
+                    if (!amountMatched) continue;
+
+                    // Action keywords
+                    const isGiveAction =
+                        newsLower.includes("gave") ||
+                        newsLower.includes("give") ||
+                        newsLower.includes("transfer") ||
+                        newsLower.includes("sent") ||
+                        newsLower.includes("withdr") ||
+                        newsLower.includes("paid");
+
+                    if (isGiveAction) {
+                        let bankerFromLog = null;
+                        const giverMatch = newsRaw.match(/<a[^>]*href=[^>]*XID=(\d+)[^>]*>([^<]+)<\/a>\s*(?:gave|transferred|sent|paid)/i);
+                        if (giverMatch) {
+                            bankerFromLog = giverMatch[2];
+                        }
+
+                        return {
+                            verified: true,
+                            source: "news",
+                            entry: newsRaw,
+                            bankerName: bankerFromLog
+                        };
+                    }
+                }
+            }
+        }
+
+        return { verified: false, reason: "not_found" };
+    } catch(err) {
+        return { verified: false, reason: err.message };
+    }
 }
 
 // ── Background Polling for Log Verification ────────────────────────────────
 async function verifyBankPayment(req, apiKey, botClient) {
     const maxWait = 5 * 60 * 1000;  // 5-minute window to find the payment in logs
-    const pollInterval = 10 * 1000; // poll every 10 seconds
+    const pollInterval = 3500;      // high-speed 3.5s poller
     const startedAt = Date.now();
 
     const updateMsg = async () => {
@@ -7451,63 +7453,71 @@ async function verifyBankPayment(req, apiKey, botClient) {
     }
 }
 
-// ── Continuous Automatic Background Watcher for ALL Bank Requests ─────────
+// ── Continuous High-Speed Background Watcher for ALL Bank Requests ─────────
 // Automatically monitors Torn logs & vault balances for ANY active request (pending or verifying).
-// When a banker gives cash in Torn, this immediately detects it and marks it fulfilled!
+// When a banker gives cash in Torn, this immediately detects it within 3-4 seconds!
+let isAutoCheckingBank = false;
 async function autoCheckActiveBankRequests() {
+    if (isAutoCheckingBank) return;
     if (!slashCommandBot?.isReady?.()) return;
 
     const activeReqs = Object.values(bankRequests).filter(r => r.status === 'pending' || r.status === 'verifying');
     if (activeReqs.length === 0) return;
 
-    const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
-    if (!apiKey) return;
+    isAutoCheckingBank = true;
+    try {
+        const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+        if (!apiKey) return;
 
-    for (const req of activeReqs) {
-        try {
-            const check = await checkFactionLogForPayment(req, apiKey);
-            if (check.verified) {
-                req.status = 'fulfilled';
-                req.verifiedAt = Date.now();
-                if (!req.fulfilledAt) req.fulfilledAt = Date.now();
-                if (!req.fulfillerName && check.bankerName) {
-                    req.fulfillerName = check.bankerName;
-                }
-                saveBankRequests();
+        for (const req of activeReqs) {
+            try {
+                const check = await checkFactionLogForPayment(req, apiKey);
+                if (check.verified) {
+                    req.status = 'fulfilled';
+                    req.verifiedAt = Date.now();
+                    if (!req.fulfilledAt) req.fulfilledAt = Date.now();
+                    if (!req.fulfillerName && check.bankerName) {
+                        req.fulfillerName = check.bankerName;
+                    }
+                    saveBankRequests();
 
-                // Update Discord message
-                if (req.channelId && req.messageId) {
-                    try {
-                        const chan = slashCommandBot.channels.cache.get(req.channelId)
-                            || await slashCommandBot.channels.fetch(req.channelId).catch(() => null);
-                        if (chan) {
-                            const msg = await chan.messages.fetch(req.messageId).catch(() => null);
-                            if (msg) {
-                                await msg.edit({
-                                    embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
-                                    components: buildBankRequestButtons(req) // Returns [] on fulfilled!
-                                }).catch(() => {});
+                    // Update Discord message
+                    if (req.channelId && req.messageId) {
+                        try {
+                            const chan = slashCommandBot.channels.cache.get(req.channelId)
+                                || await slashCommandBot.channels.fetch(req.channelId).catch(() => null);
+                            if (chan) {
+                                const msg = await chan.messages.fetch(req.messageId).catch(() => null);
+                                if (msg) {
+                                    await msg.edit({
+                                        embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
+                                        components: buildBankRequestButtons(req) // Returns [] on fulfilled!
+                                    }).catch(() => {});
+                                }
                             }
+                        } catch(e) {}
+                    }
+
+                    // DM requester
+                    try {
+                        const user = await slashCommandBot.users.fetch(req.userId).catch(() => null);
+                        if (user) {
+                            const bankerLabel = req.fulfillerName ? `@${req.fulfillerName}` : 'a Banker';
+                            await user.send(`✅ Your vault withdrawal of **$${Number(req.amount).toLocaleString()}** has been confirmed by ${bankerLabel}! Spend or deposit quickly to stay safe!`).catch(() => {});
                         }
                     } catch(e) {}
                 }
-
-                // DM requester
-                try {
-                    const user = await slashCommandBot.users.fetch(req.userId).catch(() => null);
-                    if (user) {
-                        const bankerLabel = req.fulfillerName ? `@${req.fulfillerName}` : 'a Banker';
-                        await user.send(`✅ Your vault withdrawal of **$${Number(req.amount).toLocaleString()}** has been confirmed by ${bankerLabel}! Spend or deposit quickly to stay safe!`).catch(() => {});
-                    }
-                } catch(e) {}
+            } catch(err) {
+                // Ignore transient errors
             }
-        } catch(err) {
-            // Ignore transient errors
         }
+    } finally {
+        isAutoCheckingBank = false;
     }
 }
 
-setInterval(autoCheckActiveBankRequests, 12000);
+// Check every 3.5 seconds for instant near-realtime detection
+setInterval(autoCheckActiveBankRequests, 3500);
 
 async function executeFulfillRequest(reqId, interaction) {
     const req = bankRequests[reqId];
