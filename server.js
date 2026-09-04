@@ -7310,8 +7310,9 @@ async function checkFactionLogForPayment(req, apiKey) {
         if (newsResult.status === 'fulfilled') {
             const newsData = newsResult.value;
             if (newsData && !newsData.error) {
-                const refTime = req.fulfilledAt || req.timestamp;
-                const cutoff = Math.floor((refTime - 180000) / 1000); // 3 minutes before reference
+                // STRICT CUTOFF: Log must have occurred AFTER the request was made!
+                // Allow only up to 5 seconds before request timestamp for clock skew
+                const cutoff = Math.floor((req.timestamp - 5000) / 1000);
 
                 const newsItems = [
                     ...Object.values(newsData.fundsnews || {}),
@@ -7506,6 +7507,8 @@ async function autoCheckActiveBankRequests() {
             const targetName = (userReqs[0].tornName || '').trim().toLowerCase();
 
             // Extract relevant news entries for this player
+            // STRICT: Must have occurred at or after the request was created!
+            const minReqTsSec = Math.floor((Math.min(...userReqs.map(r => r.timestamp || Date.now())) - 5000) / 1000);
             const relevantNews = [];
             if (newsData) {
                 const allNews = [
@@ -7514,6 +7517,10 @@ async function autoCheckActiveBankRequests() {
                 ];
                 for (const entry of allNews) {
                     if (!entry || !entry.timestamp || !entry.news) continue;
+
+                    // STRICT: Discard any news entries that happened before the request was created!
+                    if (entry.timestamp < minReqTsSec) continue;
+
                     const newsRaw = String(entry.news);
                     const newsLower = newsRaw.toLowerCase();
 
@@ -7547,7 +7554,7 @@ async function autoCheckActiveBankRequests() {
             if (currentBal !== null) {
                 const totalRequested = userReqs.reduce((sum, r) => sum + Number(r.amount || 0), 0);
                 const baseline = Math.max(...userReqs.map(r => Number(r.balanceBefore || 0)));
-                const totalPaidOut = (baseline > 0) ? Math.max(0, baseline - currentBal) : 0;
+                const totalPaidOut = (baseline > 0 && currentBal < baseline) ? (baseline - currentBal) : 0;
 
                 if (totalPaidOut >= totalRequested && totalRequested > 0) {
                     // Banker paid enough to satisfy ALL pending requests! (e.g. sent 15k for 10k + 5k requests)
@@ -7599,10 +7606,12 @@ async function autoCheckActiveBankRequests() {
                 const reqAmt = Number(r.amount || 0);
                 const amtFormatted = reqAmt.toLocaleString();
                 const amtRaw = String(reqAmt);
+                const reqTsSec = Math.floor(((r.timestamp || Date.now()) - 5000) / 1000);
 
-                // Find a matching news log that hasn't been used by another request
+                // Find a matching news log that hasn't been used AND occurred after request creation
                 const matchingLog = relevantNews.find(n => {
                     if (usedNewsEntries.has(n.entry)) return false;
+                    if (n.ts < reqTsSec) return false; // STRICT: log timestamp must be >= request creation timestamp
                     const amtMatched =
                         n.newsLower.includes(amtFormatted.toLowerCase()) ||
                         n.newsLower.includes(`$${amtFormatted.toLowerCase()}`) ||
