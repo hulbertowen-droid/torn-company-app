@@ -803,8 +803,8 @@ async function executeDiscordSend(token, channelId, embed, content = "") {
             }
 
             let errMsg = data.message || `Discord API error (${res.status})`;
-            if (data.code === 50001) errMsg = "Missing Access — make sure your bot is invited to the server and has 'Send Messages' permission in that channel.";
-            if (data.code === 50013) errMsg = "Missing Permissions — Please ensure your bot role has 'Embed Links' and 'Send Messages' enabled in your Discord server.";
+            if (data.code === 50001) errMsg = "Missing Access (50001) — This channel is private or hidden. In Discord channel settings -> Permissions, add the bot (or 'SV Bot' role) and give it 'View Channel' and 'Send Messages' permissions.";
+            if (data.code === 50013) errMsg = "Missing Permissions (50013) — Please ensure your bot role has 'Embed Links' and 'Send Messages' enabled in your Discord server.";
             if (data.code === 10003) errMsg = "Unknown Channel — verify your Alert Channel ID is correct.";
             if (res.status === 401) errMsg = "Unauthorized — your Bot Token is invalid. Please reset it in the Discord Developer Portal.";
             return { success: false, error: errMsg };
@@ -4304,7 +4304,10 @@ app.post('/api/test-oc-alert', async (req, res) => {
             };
         }
 
-        await sendChannelMessage(token, targetChan, embed, mention);
+        const sendResult = await sendChannelMessage(token, targetChan, embed, mention);
+        if (sendResult && !sendResult.success) {
+            return res.status(400).json({ error: sendResult.error || "Failed to deliver message to Discord." });
+        }
         res.json({ success: true, message: `Test ${type || 'ready'} alert sent to channel ${targetChan}` });
     } catch (e) {
         res.status(500).json({ error: e.message });
