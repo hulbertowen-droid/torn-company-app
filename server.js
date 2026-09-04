@@ -387,7 +387,8 @@ let discordConfig = {
     verifiedRoleId: "",
     factionRoleId: "",
     leaderRoleId: "",
-    autoVerifyOnJoin: true
+    autoVerifyOnJoin: true,
+    disabledCommands: []
 };
 let marketConfig = { globalChannelId: "", autoDefense: false, sniperTargets: [] };
 let marketMemory = { defense: {}, sniper: {} };
@@ -2313,6 +2314,9 @@ app.post('/api/save-discord-config', async (req, res) => {
     if (payload.factionRoleId !== undefined) payload.factionRoleId = String(payload.factionRoleId || '').replace(/[^0-9]/g, '');
     if (payload.leaderRoleId !== undefined) payload.leaderRoleId = String(payload.leaderRoleId || '').replace(/[^0-9]/g, '');
     if (payload.autoVerifyOnJoin !== undefined) payload.autoVerifyOnJoin = !!payload.autoVerifyOnJoin;
+    if (payload.disabledCommands !== undefined && Array.isArray(payload.disabledCommands)) {
+        payload.disabledCommands = payload.disabledCommands.map(c => String(c).toLowerCase().trim()).filter(Boolean);
+    }
 
     discordConfig = { ...discordConfig, ...payload }; 
     if (discordConfig.apiKey) {
@@ -2330,12 +2334,16 @@ app.post('/api/save-discord-config', async (req, res) => {
     }
     saveDiscordConfig(); 
 
-    // Auto-start slash command bot whenever a new bot token is saved
+    // Auto-start slash command bot whenever a bot token is saved, and auto-sync registered slash commands
     if (discordConfig.globalBotToken && discordConfig.globalBotToken.trim().length > 20) {
         startSlashCommandBot(discordConfig.globalBotToken.trim()).catch(() => {});
+        const targetGuild = discordConfig.guildId;
+        registerSlashCommands(discordConfig.globalBotToken.trim(), targetGuild).catch(err => {
+            console.warn("[Slash Bot] Auto command re-registration error:", err.message);
+        });
     }
 
-    res.json({ success: true }); 
+    res.json({ success: true, disabledCommands: discordConfig.disabledCommands || [] }); 
 });
 
 app.post('/api/discord/post-verification-card', async (req, res) => {
@@ -9412,6 +9420,13 @@ async function registerSlashCommands(token, guildId = null) {
         // 3. War & Combat Intelligence
         new SlashCommandBuilder().setName('war').setDescription('Show live ranked war status, scores, lead, and top war hitters').toJSON(),
         new SlashCommandBuilder().setName('targets').setDescription('List priority enemy targets attackable in Torn right now').toJSON(),
+        new SlashCommandBuilder().setName('claim').setDescription('Claim an attackable enemy target during war')
+            .addStringOption(opt => opt.setName('target').setDescription('Numeric Torn Player ID').setRequired(true)).toJSON(),
+        new SlashCommandBuilder().setName('unclaim').setDescription('Release a claimed enemy target')
+            .addStringOption(opt => opt.setName('target').setDescription('Numeric Torn Player ID').setRequired(true)).toJSON(),
+        new SlashCommandBuilder().setName('sos').setDescription('Request emergency combat backup for a target')
+            .addStringOption(opt => opt.setName('target').setDescription('Numeric Torn Player ID').setRequired(true))
+            .addStringOption(opt => opt.setName('note').setDescription('Optional emergency backup note')).toJSON(),
         new SlashCommandBuilder().setName('spy').setDescription('Look up battle stats & spy records for a player')
             .addStringOption(opt => opt.setName('target').setDescription('Torn Player ID or Name').setRequired(true)).toJSON(),
 
@@ -9470,6 +9485,10 @@ async function registerSlashCommands(token, guildId = null) {
             .addSubcommand(sub => sub.setName('resume').setDescription('Resume automated alerts')).toJSON()
     ];
 
+    const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : [])
+        .map(c => String(c).toLowerCase().trim());
+    const activeCommands = commands.filter(cmd => !disabledCmds.includes(cmd.name.toLowerCase()));
+
     try {
         const botRes = await fetch(`https://discord.com/api/v10/users/@me`, {
             headers: { Authorization: `Bot ${token}` }
@@ -9479,8 +9498,8 @@ async function registerSlashCommands(token, guildId = null) {
         if (!applicationId) throw new Error("Could not get bot application ID. Check your bot token.");
 
         if (guildId) {
-            await rest.put(Routes.applicationGuildCommands(applicationId, guildId), { body: commands });
-            console.log(`[Slash Commands] Registered ${commands.length} guild commands for guild ${guildId}`);
+            await rest.put(Routes.applicationGuildCommands(applicationId, guildId), { body: activeCommands });
+            console.log(`[Slash Commands] Registered ${activeCommands.length}/${commands.length} guild commands for guild ${guildId} (${disabledCmds.length} disabled)`);
             // Wipe global commands so Discord doesn't display duplicate entries in this guild
             await rest.put(Routes.applicationCommands(applicationId), { body: [] }).catch(() => {});
             if (slashCommandBot?.isReady?.()) {
@@ -9491,8 +9510,8 @@ async function registerSlashCommands(token, guildId = null) {
                 }
             }
         } else {
-            await rest.put(Routes.applicationCommands(applicationId), { body: commands });
-            console.log(`[Slash Commands] Registered ${commands.length} global commands`);
+            await rest.put(Routes.applicationCommands(applicationId), { body: activeCommands });
+            console.log(`[Slash Commands] Registered ${activeCommands.length}/${commands.length} global commands (${disabledCmds.length} disabled)`);
             // Wipe guild commands from known guilds so Discord doesn't display duplicate entries
             if (discordConfig.guildId) {
                 await rest.put(Routes.applicationGuildCommands(applicationId, discordConfig.guildId), { body: [] }).catch(() => {});
@@ -9503,7 +9522,7 @@ async function registerSlashCommands(token, guildId = null) {
                 }
             }
         }
-        return { success: true, count: commands.length };
+        return { success: true, count: activeCommands.length, total: commands.length, disabledCount: disabledCmds.length };
     } catch (e) {
         console.error("[Slash Commands] Registration failed:", e.message);
         return { success: false, error: e.message };
@@ -9683,6 +9702,13 @@ function setupSlashBotEvents(bot, token) {
 
             // ── Instant 1-Click Verification (Official Torn Discord Flow) ──
             if (customId === 'btn_verify_now' || customId === 'btn_verify_open_modal') {
+                const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : []).map(c => String(c).toLowerCase().trim());
+                if (disabledCmds.includes('verify')) {
+                    return interaction.reply({
+                        content: `⚠️ Member verification is currently disabled by faction leadership in the dashboard.`,
+                        ephemeral: true
+                    }).catch(() => {});
+                }
                 await interaction.deferReply({ ephemeral: true });
                 const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
                 const result = await executeVerifyMember(interaction.member || interaction.user, interaction.guild, apiKey);
@@ -9806,6 +9832,15 @@ function setupSlashBotEvents(bot, token) {
         if (!interaction.isChatInputCommand()) return;
 
         const cmd = interaction.commandName.toLowerCase();
+        const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : [])
+            .map(c => String(c).toLowerCase().trim());
+        if (disabledCmds.includes(cmd)) {
+            return interaction.reply({
+                content: `⚠️ The \`/${cmd}\` command has been disabled by faction leadership on the dashboard.`,
+                ephemeral: true
+            }).catch(() => {});
+        }
+
         const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
         let subcommand = null;
         try { subcommand = interaction.options.getSubcommand(); } catch(e) {}
@@ -10371,6 +10406,10 @@ app.post('/api/discord/register-slash-commands', async (req, res) => {
     try {
         const token = req.body.token || discordConfig.globalBotToken;
         const guildId = req.body.guildId || null;
+        if (req.body.disabledCommands !== undefined && Array.isArray(req.body.disabledCommands)) {
+            discordConfig.disabledCommands = req.body.disabledCommands.map(c => String(c).toLowerCase().trim()).filter(Boolean);
+            saveDiscordConfig();
+        }
         if (!token) return res.status(400).json({ error: "Missing bot token" });
         const result = await registerSlashCommands(token.trim(), guildId);
         if (result.success) {
@@ -10388,6 +10427,10 @@ app.post('/api/discord/clean-commands', async (req, res) => {
     try {
         const token = req.body.token || discordConfig.globalBotToken;
         const guildId = req.body.guildId || discordConfig.guildId || null;
+        if (req.body.disabledCommands !== undefined && Array.isArray(req.body.disabledCommands)) {
+            discordConfig.disabledCommands = req.body.disabledCommands.map(c => String(c).toLowerCase().trim()).filter(Boolean);
+            saveDiscordConfig();
+        }
         if (!token) return res.status(400).json({ error: "Missing bot token" });
 
         const rest = new REST({ version: '10' }).setToken(token.trim());
@@ -10416,7 +10459,7 @@ app.post('/api/discord/clean-commands', async (req, res) => {
         if (result.success) {
             startSlashCommandBot(token.trim()).catch(() => {});
         }
-        res.json({ success: true, count: result.count, message: "Commands purged and re-registered cleanly with zero duplicates!" });
+        res.json({ success: true, count: result.count, disabledCount: result.disabledCount, message: "Commands purged and re-registered cleanly with zero duplicates!" });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

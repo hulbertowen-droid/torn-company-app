@@ -638,69 +638,244 @@
         </div>
 
         <div class="card">
-            <div class="card-header">
-                <p class="card-title">🤖 Slash Commands</p>
-                <span class="card-subtitle">Instant faction intel in Discord</span>
+            <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+                <div>
+                    <p class="card-title">🤖 Discord Slash Commands Manager</p>
+                    <span class="card-subtitle">Turn individual commands ON or OFF. Disabled commands are hidden from Discord.</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <span id="commands-active-badge" style="background:rgba(46,213,115,0.15);color:var(--green);border:1px solid rgba(46,213,115,0.3);padding:4px 12px;border-radius:12px;font-size:0.8em;font-weight:700;">19 / 19 Active</span>
+                </div>
             </div>
             <div class="card-body">
-                <p style="color:var(--text-dim);font-size:0.86em;margin:0 0 14px;">Save your Bot Token above, then click <b>Register Commands</b> to activate slash commands in your server.</p>
-                <div class="cmd-grid">
-                    <div class="cmd-card">
-                        <div class="cmd-category" style="color:#00cec9;">🛡️ Member Verification (Tornium Replacement)</div>
-                        <div class="cmd-list">
-                            <code>/verify [player]</code> — Verify Torn identity, sync nickname & assign roles<br>
-                            <code>/verifyall</code> — Admin: Re-verify all server members and sync nicknames<br>
-                            <code>/postverify</code> — Admin: Post 1-click verification card to this channel<br>
-                            <span style="font-size:0.82em;color:var(--green);">🏷️ <b>Nickname Sync</b>: Automatically formats names as <code>Name [ID]</code></span><br>
-                            <span style="font-size:0.82em;color:var(--blue);">🎖️ <b>Auto-Roles</b>: Automatically grants <code>Verified</code> and <code>Spider-Verse</code> roles</span>
+                <p style="color:var(--text-dim);font-size:0.86em;margin:0 0 12px;">Customize which commands are available to your members. When you toggle commands off and save, F.R.I.D.A.Y automatically re-registers with Discord to add or remove them from your server's autocomplete menu.</p>
+                
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
+                    <button type="button" onclick="setAllCommands(true)" style="background:rgba(46,213,115,0.12);border:1px solid rgba(46,213,115,0.3);color:var(--green);padding:5px 12px;border-radius:6px;font-size:0.8em;font-weight:700;cursor:pointer;transition:0.2s;">✅ Enable All</button>
+                    <button type="button" onclick="setAllCommands(false)" style="background:rgba(255,71,87,0.12);border:1px solid rgba(255,71,87,0.3);color:var(--red);padding:5px 12px;border-radius:6px;font-size:0.8em;font-weight:700;cursor:pointer;transition:0.2s;">❌ Disable All</button>
+                    <button type="button" onclick="setEssentialCommands()" style="background:rgba(0,206,201,0.12);border:1px solid rgba(0,206,201,0.3);color:var(--teal);padding:5px 12px;border-radius:6px;font-size:0.8em;font-weight:700;cursor:pointer;transition:0.2s;">🛡️ Essentials Only</button>
+                    <span style="font-size:0.8em;color:var(--text-dim);margin-left:auto;">Toggle any switch to disable a command</span>
+                </div>
+
+                <div class="section-heading">🛡️ Member Verification & Access</div>
+                <div class="trigger-list">
+                    <div class="trigger-row on" id="cmd-row-verify">
+                        <span class="trigger-icon">🛡️</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name"><code>/verify</code> <span class="tag faction">SECURITY</span></div>
+                            <div class="trigger-desc">Official 1-click Torn verification. Checks global link, updates nickname to <code>Name [ID]</code>, and grants verified roles.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="verify" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
-                    <div class="cmd-card">
-                        <div class="cmd-category" style="color:#2ed573;">🏦 Faction Banking (Tornium Replacement)</div>
-                        <div class="cmd-list">
-                            <code>/withdraw &lt;amount&gt; [reason]</code> — Request vault funds (10m, 500k)<br>
-                            <code>/balance [member]</code> — Vault donation & money balance<br>
-                            <code>/fulfill &lt;id&gt;</code> — Fulfill request (Banker only)<br>
-                            <code>/cancel &lt;id&gt;</code> — Cancel a pending request<br>
-                            <code>/bank request|balance|pending|fulfill|cancel|history</code><br>
-                            <span style="font-size:0.82em;color:var(--green);">🛡️ <b>Overdraft Protection</b>: Blocks withdrawing more than available vault balance</span><br>
-                            <span style="font-size:0.82em;color:var(--gold);">⏱️ <b>Anti-Mug Timeout</b>: 60m auto-cancellation prevents offline mugging</span><br>
-                            <span style="font-size:0.82em;color:var(--blue);">✈️ <b>Flight Sentinel</b>: Flags overseas & hosp status on request cards</span>
+                    <div class="trigger-row on" id="cmd-row-verifyall">
+                        <span class="trigger-icon">👥</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name"><code>/verifyall</code> <span class="tag premium">ADMIN</span></div>
+                            <div class="trigger-desc">Admin command: Re-verifies all members currently in the Discord server and syncs nicknames and position roles.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="verifyall" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
-                    <div class="cmd-card">
-                        <div class="cmd-category" style="color:var(--blue);">📋 Faction & Audit</div>
-                        <div class="cmd-list">
-                            <code>/notindiscord</code> — Audit members missing from Discord<br>
-                            <code>/faction roster</code> — Online, traveling & hospital status<br>
-                            <code>/faction hospital</code> — Friendly members in hosp<br>
-                            <code>/faction inactive</code> — Inactive members 1+ days<br>
-                            <code>/faction oc</code> — Organized Crimes overview & timers<br>
-                            <code>/faction payout</code> — War hits & payout balances
+                    <div class="trigger-row on" id="cmd-row-postverify">
+                        <span class="trigger-icon">📌</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name"><code>/postverify</code> <span class="tag premium">ADMIN</span></div>
+                            <div class="trigger-desc">Admin command: Posts a permanent, interactive verification card with the <b>🛡️ Verify Me</b> button into the channel.</div>
                         </div>
-                    </div>
-                    <div class="cmd-card">
-                        <div class="cmd-category" style="color:var(--red);">⚔️ War & Chain</div>
-                        <div class="cmd-list">
-                            <code>/war</code> — Live war score, lead & hitters<br>
-                            <code>/targets</code> — Attackable priority enemy targets<br>
-                            <code>/spy &lt;target&gt;</code> — Look up battle stats & spies<br>
-                            <code>/chain</code> — Live hit counter, timer & ready hitters<br>
-                            <code>/faction stats</code> — Battle stats roster comparison<br>
-                            <code>/faction flights</code> — War flight uptime sentinel
-                        </div>
-                    </div>
-                    <div class="cmd-card">
-                        <div class="cmd-category" style="color:var(--gold);">🌐 Market, Intel & Controls</div>
-                        <div class="cmd-list">
-                            <code>/profile &lt;player&gt;</code> — Full player card & revive status<br>
-                            <code>/travel &lt;country&gt;</code> — Foreign intel & stock levels<br>
-                            <code>/bazaar &lt;item&gt;</code> — Lowest market & bazaar price<br>
-                            <code>/alerts &lt;pause|resume|status&gt;</code> — Alert notifications
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="postverify" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
                 </div>
-                <div class="field-grid single" style="margin-bottom:12px;">
+
+                <div class="section-heading" style="margin-top:20px;">🏦 Faction Vault & Banking</div>
+                <div class="trigger-list">
+                    <div class="trigger-row on" id="cmd-row-withdraw">
+                        <span class="trigger-icon">💸</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name"><code>/withdraw</code> <span class="tag faction">BANKING</span></div>
+                            <div class="trigger-desc">Member withdrawal requests with strict overdraft protection, auto-fulfillment, and 60m anti-mug timeout.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="withdraw" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="trigger-row on" id="cmd-row-balance">
+                        <span class="trigger-icon">🏦</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name"><code>/balance</code> <span class="tag faction">BANKING</span></div>
+                            <div class="trigger-desc">Check faction vault balance and individual member vault deposits directly from Discord.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="balance" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-heading" style="margin-top:20px;">⚔️ War & Combat Intelligence</div>
+                <div class="trigger-list">
+                    <div class="trigger-row on" id="cmd-row-war">
+                        <span class="trigger-icon">📡</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name"><code>/war</code> <span class="tag war">WAR</span></div>
+                            <div class="trigger-desc">Live ranked war scorecard: lead score, target lead, points remaining, and top war hitters.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="war" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="trigger-row on" id="cmd-row-targets">
+                        <span class="trigger-icon">🎯</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name"><code>/targets</code> <span class="tag war">WAR</span></div>
+                            <div class="trigger-desc">List attackable enemy targets in Torn right now with direct attack links and fair fight multipliers.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="targets" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="trigger-row on" id="cmd-row-claim">
+                        <span class="trigger-icon">🔒</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name"><code>/claim</code> <span class="tag war">WAR</span></div>
+                            <div class="trigger-desc">Claim an attackable enemy target during war to coordinate attacks with faction teammates.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="claim" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="trigger-row on" id="cmd-row-unclaim">
+                        <span class="trigger-icon">🔓</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name"><code>/unclaim</code> <span class="tag war">WAR</span></div>
+                            <div class="trigger-desc">Release an active target claim so other faction members can attack the target.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="unclaim" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="trigger-row on" id="cmd-row-sos">
+                        <span class="trigger-icon">🚨</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name"><code>/sos</code> <span class="tag war">WAR</span></div>
+                            <div class="trigger-desc">Request emergency combat backup for a target in Discord with ping notifications.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="sos" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="trigger-row on" id="cmd-row-spy">
+                        <span class="trigger-icon">🔍</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name"><code>/spy</code> <span class="tag premium">INTEL</span></div>
+                            <div class="trigger-desc">Look up known battle stats, estimated stats, and historical spy reports for any Torn player.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="spy" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-heading" style="margin-top:20px;">🔗 Chains & Organized Crimes</div>
+                <div class="trigger-list">
+                    <div class="trigger-row on" id="cmd-row-chain">
+                        <span class="trigger-icon">⛓️</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name"><code>/chain</code> <span class="tag war">CHAIN</span></div>
+                            <div class="trigger-desc">Live chain hit counter, countdown timer, respect multiplier, and ready hitters list.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="chain" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="trigger-row on" id="cmd-row-oc">
+                        <span class="trigger-icon">💼</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name"><code>/oc</code> <span class="tag faction">CRIMES</span></div>
+                            <div class="trigger-desc">Summary of live Organized Crimes status, ready teams, and delayed or hospitalized participants.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="oc" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-heading" style="margin-top:20px;">👥 Faction Management Suite</div>
+                <div class="trigger-list">
+                    <div class="trigger-row on" id="cmd-row-faction">
+                        <span class="trigger-icon">🏢</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name"><code>/faction</code> <span class="tag faction">MANAGEMENT</span></div>
+                            <div class="trigger-desc">Full faction management suite: <code>roster</code>, <code>hospital</code>, <code>inactive</code>, <code>payout</code>, <code>mvp</code>, <code>stats</code>, <code>bounties</code>, and <code>flights</code>.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="faction" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="trigger-row on" id="cmd-row-notindiscord">
+                        <span class="trigger-icon">🕵️</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name"><code>/notindiscord</code> <span class="tag faction">AUDIT</span></div>
+                            <div class="trigger-desc">Audits faction roster against Discord members to detect who has not joined the Discord server yet.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="notindiscord" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-heading" style="margin-top:20px;">🌍 Economy & Player Tools</div>
+                <div class="trigger-list">
+                    <div class="trigger-row on" id="cmd-row-profile">
+                        <span class="trigger-icon">👤</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name"><code>/profile</code> <span class="tag premium">TOOLS</span></div>
+                            <div class="trigger-desc">View comprehensive player profile card, status, level, faction, and revival status.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="profile" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="trigger-row on" id="cmd-row-travel">
+                        <span class="trigger-icon">✈️</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name"><code>/travel</code> <span class="tag premium">TOOLS</span></div>
+                            <div class="trigger-desc">Foreign destination intel and real-time overseas item stock for plushies and flowers.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="travel" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="trigger-row on" id="cmd-row-bazaar">
+                        <span class="trigger-icon">🛒</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name"><code>/bazaar</code> <span class="tag premium">TOOLS</span></div>
+                            <div class="trigger-desc">Check lowest Torn market prices and active bazaar listings for any item.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="bazaar" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-heading" style="margin-top:20px;">📢 Alert Controls</div>
+                <div class="trigger-list">
+                    <div class="trigger-row on" id="cmd-row-alerts">
+                        <span class="trigger-icon">📢</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name"><code>/alerts</code> <span class="tag faction">CONTROLS</span></div>
+                            <div class="trigger-desc">Control automated Discord alert broadcasts (<code>pause</code>, <code>resume</code>, or check broadcast <code>status</code>).</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <label class="switch"><input type="checkbox" class="cmd-toggle" data-cmd="alerts" checked onchange="onCommandToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field-grid single" style="margin:20px 0 12px;">
                     <div class="field-group">
                         <label class="field-label" for="guild-id-input">Guild ID <span class="opt">(optional — leave blank for auto-detection / global)</span></label>
                         <input class="field-input" type="text" id="guild-id-input" placeholder="Right-click server icon → Copy Server ID (requires Developer Mode)">
@@ -708,7 +883,7 @@
                     </div>
                 </div>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px;align-items:center;">
-                    <button class="btn-save" id="btn-register-slash" onclick="registerSlashCommands()" style="background:#2ed573;">✅ Register Commands</button>
+                    <button class="btn-save" id="btn-register-slash" onclick="registerSlashCommands()" style="background:#2ed573;">✅ Register & Sync Commands</button>
                     <button class="btn-save" id="btn-clean-slash" onclick="cleanSlashCommands()" style="background:rgba(255,255,255,0.08);border:1px solid var(--border);color:var(--text-main);">🧹 Clean & Sync (Fix Duplicates)</button>
                     <span id="slash-status" style="font-size:0.85em;font-weight:600;"></span>
                 </div>
@@ -821,6 +996,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             const el = document.getElementById(id);
             if (el) { el.checked = val; const item = el.closest('.trigger-row'); if (item) item.classList.toggle('on', val); }
         }
+
+        // Initialize slash command toggles
+        const localDisabled = JSON.parse(localStorage.getItem('warboard_disabled_commands') || '[]');
+        const disabledCmds = (Array.isArray(cfg.disabledCommands) ? cfg.disabledCommands : localDisabled)
+            .map(c => String(c).toLowerCase().trim());
+        document.querySelectorAll('.cmd-toggle').forEach(chk => {
+            const cmdName = (chk.dataset.cmd || '').toLowerCase().trim();
+            const isEnabled = !disabledCmds.includes(cmdName);
+            chk.checked = isEnabled;
+            const row = chk.closest('.trigger-row');
+            if (row) row.classList.toggle('on', isEnabled);
+        });
+        updateCommandsBadge();
+
         updateKillswitchUI(cfg.notificationsKilled === true);
         setConnectionStatus(!!(tokenVal && chanVal));
         updateActiveCount();
@@ -833,6 +1022,45 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     } catch (e) { setConnectionStatus(false); }
 });
+
+function onCommandToggle(el) {
+    const row = el.closest('.trigger-row');
+    if (row) row.classList.toggle('on', el.checked);
+    updateCommandsBadge();
+}
+
+function updateCommandsBadge() {
+    const all = document.querySelectorAll('.cmd-toggle');
+    const active = document.querySelectorAll('.cmd-toggle:checked').length;
+    const badge = document.getElementById('commands-active-badge');
+    if (badge) {
+        badge.textContent = `${active} / ${all.length} Active`;
+        badge.style.color = active > 0 ? 'var(--green)' : 'var(--red)';
+        badge.style.borderColor = active > 0 ? 'rgba(46,213,115,0.3)' : 'rgba(255,71,87,0.3)';
+        badge.style.background = active > 0 ? 'rgba(46,213,115,0.15)' : 'rgba(255,71,87,0.15)';
+    }
+}
+
+function setAllCommands(enable) {
+    document.querySelectorAll('.cmd-toggle').forEach(chk => {
+        chk.checked = enable;
+        const row = chk.closest('.trigger-row');
+        if (row) row.classList.toggle('on', enable);
+    });
+    updateCommandsBadge();
+}
+
+function setEssentialCommands() {
+    const essentials = ['verify', 'verifyall', 'postverify', 'withdraw', 'balance', 'war', 'targets', 'chain', 'oc', 'faction'];
+    document.querySelectorAll('.cmd-toggle').forEach(chk => {
+        const cmd = (chk.dataset.cmd || '').toLowerCase().trim();
+        const enable = essentials.includes(cmd);
+        chk.checked = enable;
+        const row = chk.closest('.trigger-row');
+        if (row) row.classList.toggle('on', enable);
+    });
+    updateCommandsBadge();
+}
 
 function sanitizeChannelIdInput(el) {
     if (!el) return;
@@ -981,11 +1209,21 @@ async function saveDiscordConfig() {
                 alertOcMissingItems: document.getElementById('alertOcMissingItems')?.checked ?? true,
                 alertOcCompleted: document.getElementById('alertOcCompleted')?.checked ?? true,
                 autoVerifyOnJoin: document.getElementById('autoVerifyOnJoin')?.checked ?? true,
+                disabledCommands: Array.from(document.querySelectorAll('.cmd-toggle'))
+                    .filter(el => !el.checked)
+                    .map(el => (el.dataset.cmd || '').toLowerCase().trim())
+                    .filter(Boolean),
             })
         });
         const data = await res.json();
-        if (data.success !== false) { statusEl.style.color = 'var(--green)'; statusEl.textContent = '✅ Settings saved.'; setConnectionStatus(!!(botToken && channelId)); updateInviteLink(); }
-        else { throw new Error(data.error || 'Server rejected config'); }
+        if (data.success !== false) { 
+            const disCmds = Array.from(document.querySelectorAll('.cmd-toggle')).filter(el => !el.checked).map(el => (el.dataset.cmd || '').toLowerCase().trim()).filter(Boolean);
+            localStorage.setItem('warboard_disabled_commands', JSON.stringify(disCmds));
+            statusEl.style.color = 'var(--green)'; 
+            statusEl.textContent = '✅ Settings & active slash commands saved.'; 
+            setConnectionStatus(!!(botToken && channelId)); 
+            updateInviteLink(); 
+        } else { throw new Error(data.error || 'Server rejected config'); }
     } catch (e) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ ' + (e.message || 'Network error'); }
     finally { btn.disabled = false; setTimeout(() => { statusEl.textContent = ''; }, 5000); }
 }
@@ -1074,13 +1312,25 @@ async function testAlert(type) {
 async function registerSlashCommands() {
     const btn = document.getElementById('btn-register-slash'); const statusEl = document.getElementById('slash-status');
     const botToken = document.getElementById('global-bottoken').value.trim(); const guildId = document.getElementById('guild-id-input').value.trim();
-    if (guildId) { localStorage.setItem('warboard_guildid', guildId); fetch('/api/save-discord-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guildId }) }).catch(() => {}); }
+    const disabledCommands = Array.from(document.querySelectorAll('.cmd-toggle'))
+        .filter(el => !el.checked)
+        .map(el => (el.dataset.cmd || '').toLowerCase().trim())
+        .filter(Boolean);
+    localStorage.setItem('warboard_disabled_commands', JSON.stringify(disabledCommands));
+    if (guildId) { localStorage.setItem('warboard_guildid', guildId); fetch('/api/save-discord-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guildId, disabledCommands }) }).catch(() => {}); }
     if (!botToken) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ Save your Bot Token first.'; return; }
-    btn.disabled = true; statusEl.style.color = 'var(--gold)'; statusEl.textContent = '⏳ Registering...';
+    btn.disabled = true; statusEl.style.color = 'var(--gold)'; statusEl.textContent = '⏳ Registering & syncing...';
     try {
-        const res = await fetch('/api/discord/register-slash-commands', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: botToken, guildId: guildId || null }) });
+        const res = await fetch('/api/discord/register-slash-commands', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ token: botToken, guildId: guildId || null, disabledCommands }) 
+        });
         const data = await res.json();
-        if (data.success) { statusEl.style.color = 'var(--green)'; statusEl.textContent = '✅ ' + data.count + ' commands registered. ' + (guildId ? 'Available immediately.' : 'Takes up to 1 hour globally.'); }
+        if (data.success) { 
+            statusEl.style.color = 'var(--green)'; 
+            statusEl.textContent = '✅ ' + data.count + ' active commands registered' + (data.disabledCount ? ` (${data.disabledCount} disabled)` : '') + '. ' + (guildId ? 'Available immediately.' : 'Takes up to 1 hour globally.'); 
+        }
         else { throw new Error(data.error || 'Registration failed'); }
     } catch (e) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ ' + e.message; }
     finally { btn.disabled = false; setTimeout(() => { statusEl.textContent = ''; }, 10000); }
@@ -1088,12 +1338,24 @@ async function registerSlashCommands() {
 async function cleanSlashCommands() {
     const btn = document.getElementById('btn-clean-slash'); const statusEl = document.getElementById('slash-status');
     const botToken = document.getElementById('global-bottoken').value.trim(); const guildId = document.getElementById('guild-id-input').value.trim();
+    const disabledCommands = Array.from(document.querySelectorAll('.cmd-toggle'))
+        .filter(el => !el.checked)
+        .map(el => (el.dataset.cmd || '').toLowerCase().trim())
+        .filter(Boolean);
+    localStorage.setItem('warboard_disabled_commands', JSON.stringify(disabledCommands));
     if (!botToken) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ Save your Bot Token first.'; return; }
     btn.disabled = true; statusEl.style.color = 'var(--gold)'; statusEl.textContent = '⏳ Purging duplicates & re-registering...';
     try {
-        const res = await fetch('/api/discord/clean-commands', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: botToken, guildId: guildId || null }) });
+        const res = await fetch('/api/discord/clean-commands', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ token: botToken, guildId: guildId || null, disabledCommands }) 
+        });
         const data = await res.json();
-        if (data.success) { statusEl.style.color = 'var(--green)'; statusEl.textContent = '✅ Purged duplicate commands & registered ' + data.count + ' commands cleanly!'; }
+        if (data.success) { 
+            statusEl.style.color = 'var(--green)'; 
+            statusEl.textContent = '✅ Purged duplicate commands & registered ' + data.count + ' active commands cleanly' + (data.disabledCount ? ` (${data.disabledCount} disabled)` : '') + '!'; 
+        }
         else { throw new Error(data.error || 'Purge failed'); }
     } catch (e) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ ' + e.message; }
     finally { btn.disabled = false; setTimeout(() => { statusEl.textContent = ''; }, 12000); }
