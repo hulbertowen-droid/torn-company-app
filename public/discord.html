@@ -301,6 +301,18 @@
                         <span class="field-hint">If set, only users with this role can click <b>Fulfill</b> on vault withdrawal requests.</span>
                     </div>
                 </div>
+                <div class="field-grid">
+                    <div class="field-group">
+                        <label class="field-label" for="oc-channelid">📋 OC Alert Channel ID <span class="opt">(optional — defaults to Alert Channel ID)</span></label>
+                        <input class="field-input" type="text" id="oc-channelid" placeholder="e.g. 1491526701673349180 (#the-oc-room)" autocomplete="off">
+                        <span class="field-hint">Dedicated channel for Organized Crime notifications. Leave blank to post to main Alert Channel.</span>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="oc-roleid">📋 OC Ping Role ID <span class="opt">(optional)</span></label>
+                        <input class="field-input" type="text" id="oc-roleid" placeholder="Role ID for Organized Crimes" autocomplete="off">
+                        <span class="field-hint">Role to @mention for ready, upcoming, delayed, and missing item alerts.</span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -432,6 +444,84 @@
                     </div>
                 </div>
 
+                <div class="section-heading" style="margin-top:20px;">📋 Organized Crimes (Spider-Verse)</div>
+                <div class="trigger-list">
+                    <div class="trigger-row" id="ti-alertOcPlanned">
+                        <span class="trigger-icon">📋</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name">OC Planned & Scheduled <span class="tag faction">FACTION</span></div>
+                            <div class="trigger-desc">Fires when a new Organized Crime is scheduled or slots are filled. Displays planner, target ready time, and assigned roster.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <button class="btn-test" id="btn-test-oc_planned" onclick="testAlert('oc_planned')">▷ Test</button>
+                            <label class="switch"><input type="checkbox" id="alertOcPlanned" onchange="onToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="trigger-row" id="ti-alertOcUpcoming">
+                        <span class="trigger-icon">⏳</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name">OC Upcoming Warning <span class="tag faction">FACTION</span></div>
+                            <div class="trigger-desc">Warns team members to stay in Torn City and avoid hospital, jail, or travel before launch.</div>
+                            <div style="margin-top:6px; display:flex; align-items:center; gap:8px;">
+                                <span style="font-size:0.75em; color:var(--text-dim);">Lead Time:</span>
+                                <select id="ocUpcomingMinutes" style="background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:3px 8px; border-radius:6px; font-size:0.8em;">
+                                    <option value="15">15 Minutes Before</option>
+                                    <option value="30" selected>30 Minutes Before</option>
+                                    <option value="60">60 Minutes Before</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="trigger-controls">
+                            <button class="btn-test" id="btn-test-oc_upcoming" onclick="testAlert('oc_upcoming')">▷ Test</button>
+                            <label class="switch"><input type="checkbox" id="alertOcUpcoming" onchange="onToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="trigger-row" id="ti-alertOcReady">
+                        <span class="trigger-icon">🟢</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name">OC Ready to Launch <span class="tag faction">FACTION</span></div>
+                            <div class="trigger-desc">Fires the exact moment countdown reaches zero and all team members are present in Torn City and ready to initiate.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <button class="btn-test" id="btn-test-oc_ready" onclick="testAlert('oc_ready')">▷ Test</button>
+                            <label class="switch"><input type="checkbox" id="alertOcReady" onchange="onToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="trigger-row" id="ti-alertOcDelayed">
+                        <span class="trigger-icon">🚨</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name">OC Delayed (Unavailable Members) <span class="tag faction">FACTION</span></div>
+                            <div class="trigger-desc">Fires when countdown hits zero but participants are in hospital, jail, or abroad, specifying who is holding up the team.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <button class="btn-test" id="btn-test-oc_delayed" onclick="testAlert('oc_delayed')">▷ Test</button>
+                            <label class="switch"><input type="checkbox" id="alertOcDelayed" onchange="onToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="trigger-row" id="ti-alertOcMissingItems">
+                        <span class="trigger-icon">📦</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name">OC Missing Required Items <span class="tag faction">FACTION</span></div>
+                            <div class="trigger-desc">Fires when a participant is missing their required tool or material. Names the item and provides direct links to loan/give from the Faction Armory.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <button class="btn-test" id="btn-test-oc_missing_item" onclick="testAlert('oc_missing_item')">▷ Test</button>
+                            <label class="switch"><input type="checkbox" id="alertOcMissingItems" onchange="onToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="trigger-row" id="ti-alertOcCompleted">
+                        <span class="trigger-icon">🎉</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name">OC Outcome & Vault Deposit <span class="tag faction">FACTION</span></div>
+                            <div class="trigger-desc">Fires on crime completion, reporting success/failure outcome, vault money gain, and respect earned.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <button class="btn-test" id="btn-test-oc_completed" onclick="testAlert('oc_completed')">▷ Test</button>
+                            <label class="switch"><input type="checkbox" id="alertOcCompleted" onchange="onToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="save-row">
                     <button class="btn-save" onclick="saveDiscordConfig()" id="save-btn">💾 Save Settings</button>
                     <span id="status-msg"></span>
@@ -550,7 +640,7 @@ function onToggle(checkbox) {
     updateActiveCount();
 }
 function updateActiveCount() {
-    const ids = ['targetOnline','targetLanded','targetOutHosp','travelWarnings','medOutSniper','chainWarnings','chainUnder90','chainMilestone','friendlyAttacked','inactivityTracker'];
+    const ids = ['targetOnline','targetLanded','targetOutHosp','travelWarnings','medOutSniper','chainWarnings','chainUnder90','chainMilestone','friendlyAttacked','inactivityTracker','alertOcPlanned','alertOcUpcoming','alertOcReady','alertOcDelayed','alertOcMissingItems','alertOcCompleted'];
     const active = ids.filter(id => document.getElementById(id)?.checked).length;
     document.getElementById('active-alerts-count').textContent = active;
 }
@@ -582,6 +672,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (document.getElementById('inactivity-roleid')) document.getElementById('inactivity-roleid').value = cfg.inactivityRoleId || localStorage.getItem('warboard_inactivity_roleid') || '';
         if (document.getElementById('banking-channelid')) document.getElementById('banking-channelid').value = (cfg.bankingChannelId || localStorage.getItem('warboard_banking_channelid') || '').replace(/[^0-9]/g, '');
         if (document.getElementById('banker-roleid')) document.getElementById('banker-roleid').value = (cfg.bankerRoleId || localStorage.getItem('warboard_banker_roleid') || '').replace(/[^0-9]/g, '');
+        if (document.getElementById('oc-channelid')) document.getElementById('oc-channelid').value = (cfg.ocChannelId || localStorage.getItem('warboard_oc_channelid') || '').replace(/[^0-9]/g, '');
+        if (document.getElementById('oc-roleid')) document.getElementById('oc-roleid').value = cfg.ocRoleId || localStorage.getItem('warboard_oc_roleid') || '';
+        if (document.getElementById('ocUpcomingMinutes')) document.getElementById('ocUpcomingMinutes').value = String(cfg.ocUpcomingMinutes || 30);
         if (document.getElementById('guild-id-input')) document.getElementById('guild-id-input').value = (cfg.guildId || localStorage.getItem('warboard_guildid') || '').replace(/[^0-9]/g, '');
         const flags = {
             targetOnline: cfg.targetOnline === true,
@@ -594,6 +687,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             travelWarnings: cfg.travelWarnings === true || cfg.travelWarnings === undefined,
             chainWarnings: cfg.chainWarnings === true || cfg.chainWarnings === undefined,
             inactivityTracker: cfg.inactivityTracker !== false,
+            alertOcPlanned: cfg.alertOcPlanned !== false,
+            alertOcUpcoming: cfg.alertOcUpcoming !== false,
+            alertOcReady: cfg.alertOcReady !== false,
+            alertOcDelayed: cfg.alertOcDelayed !== false,
+            alertOcMissingItems: cfg.alertOcMissingItems !== false,
+            alertOcCompleted: cfg.alertOcCompleted !== false,
         };
         for (const [id, val] of Object.entries(flags)) {
             const el = document.getElementById(id);
@@ -699,6 +798,9 @@ async function saveDiscordConfig() {
     const inactivityRoleId = document.getElementById('inactivity-roleid')?.value.trim() || '';
     const bankingChannelId = (document.getElementById('banking-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const bankerRoleId = (document.getElementById('banker-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const ocChannelId = (document.getElementById('oc-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const ocRoleId = (document.getElementById('oc-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const ocUpcomingMinutes = parseInt(document.getElementById('ocUpcomingMinutes')?.value || '30', 10);
     const guildId = (document.getElementById('guild-id-input')?.value.trim() || '').replace(/[^0-9]/g, '');
 
     // Guard: Prevent saving a bot token into channel ID
@@ -719,6 +821,7 @@ async function saveDiscordConfig() {
     localStorage.setItem('warboard_bottoken', botToken); localStorage.setItem('warboard_channelid', channelId); localStorage.setItem('warboard_discordid', discordId);
     localStorage.setItem('warboard_inactivity_roleid', inactivityRoleId); localStorage.setItem('warboard_guildid', guildId);
     localStorage.setItem('warboard_banking_channelid', bankingChannelId); localStorage.setItem('warboard_banker_roleid', bankerRoleId);
+    localStorage.setItem('warboard_oc_channelid', ocChannelId); localStorage.setItem('warboard_oc_roleid', ocRoleId);
     statusEl.style.color = 'var(--blue)'; statusEl.textContent = '⏳ Saving...'; btn.disabled = true;
     try {
         const res = await fetch('/api/save-discord-config', {
@@ -727,6 +830,7 @@ async function saveDiscordConfig() {
                 apiKey: myKey, ffKey: localStorage.getItem('warboard_ffkey') || '', enemyFacId: localStorage.getItem('warboard_enemyId') || '',
                 globalBotToken: botToken, globalChannelId: channelId, personalDiscordId: discordId, inactivityRoleId, guildId,
                 bankingChannelId, bankerRoleId,
+                ocChannelId, ocRoleId, ocUpcomingMinutes,
                 targetOnline: document.getElementById('targetOnline').checked,
                 targetLanded: document.getElementById('targetLanded').checked,
                 targetOutHosp: document.getElementById('targetOutHosp').checked,
@@ -737,6 +841,12 @@ async function saveDiscordConfig() {
                 travelWarnings: document.getElementById('travelWarnings').checked,
                 chainWarnings: document.getElementById('chainWarnings').checked,
                 inactivityTracker: document.getElementById('inactivityTracker')?.checked ?? true,
+                alertOcPlanned: document.getElementById('alertOcPlanned')?.checked ?? true,
+                alertOcUpcoming: document.getElementById('alertOcUpcoming')?.checked ?? true,
+                alertOcReady: document.getElementById('alertOcReady')?.checked ?? true,
+                alertOcDelayed: document.getElementById('alertOcDelayed')?.checked ?? true,
+                alertOcMissingItems: document.getElementById('alertOcMissingItems')?.checked ?? true,
+                alertOcCompleted: document.getElementById('alertOcCompleted')?.checked ?? true,
             })
         });
         const data = await res.json();
@@ -749,17 +859,43 @@ async function testAlert(type) {
     const btn = document.getElementById('btn-test-' + type);
     const statusEl = document.getElementById('status-msg');
     const botToken = document.getElementById('global-bottoken').value.trim();
-    const channelId = document.getElementById('global-channelid').value.trim();
+    let channelId = document.getElementById('global-channelid').value.trim();
     const discordId = document.getElementById('discord-userid').value.trim();
     const inactivityRoleId = document.getElementById('inactivity-roleid')?.value.trim() || '';
-    if (!botToken || !channelId) { statusEl.style.color = 'var(--red)'; statusEl.textContent = '❌ Enter your Bot Token and Channel ID first.'; return; }
+    let ocRoleId = '';
+    let ocChannelId = '';
+    const isOc = type.startsWith('oc_');
+    if (isOc) {
+        ocChannelId = (document.getElementById('oc-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
+        ocRoleId = (document.getElementById('oc-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
+        if (ocChannelId) channelId = ocChannelId;
+    }
+    if (!botToken || !channelId) {
+        statusEl.style.color = 'var(--red)';
+        statusEl.textContent = '❌ Enter your Bot Token and ' + (isOc ? 'OC Channel ID (or Alert Channel ID)' : 'Channel ID') + ' first.';
+        return;
+    }
     btn.disabled = true; btn.classList.add('sending'); btn.textContent = '⏳';
     statusEl.style.color = 'var(--gold)'; statusEl.textContent = 'Sending test alert...';
     try {
         const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 10000);
         let res;
-        try { res = await fetch('/api/test-discord-alert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, discordId, inactivityRoleId, globalChannelId: channelId, globalBotToken: botToken }), signal: controller.signal }); }
-        finally { clearTimeout(timeout); }
+        try {
+            res = await fetch('/api/test-discord-alert', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    type,
+                    discordId,
+                    inactivityRoleId,
+                    ocChannelId,
+                    ocRoleId,
+                    globalChannelId: channelId,
+                    globalBotToken: botToken
+                }),
+                signal: controller.signal
+            });
+        } finally { clearTimeout(timeout); }
         const data = await res.json();
         if (data.success) {
             btn.classList.remove('sending'); btn.classList.add('success'); btn.textContent = '✓';

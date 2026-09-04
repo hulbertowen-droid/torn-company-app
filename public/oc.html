@@ -213,55 +213,16 @@
                 <label>Your Torn API Key (needs Faction access)</label>
                 <input type="password" id="api-key" placeholder="Paste your 16-char Torn API key">
             </div>
-            <div>
-                <label>OC Alerts Channel ID</label>
-                <input type="text" id="discord-webhook" placeholder="Channel ID for OC notifications">
-            </div>
-            <div>
-                <label>Discord Role ID to Ping (Optional)</label>
-                <input type="text" id="discord-role" placeholder="e.g. 123456789012345678">
-            </div>
 
-            <div style="border-top: 1px solid #2f3542; padding-top: 12px; margin-top: 6px;">
-                <label style="color: #00cec9; margin-bottom: 8px;">⚡ F.R.I.D.A.Y OC Alert Triggers</label>
-                
-                <div style="display: flex; flex-direction: column; gap: 8px; font-size: 0.85em;">
-                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; text-transform:none; font-weight:normal; color:#f1f2f6;">
-                        <input type="checkbox" id="oc-alert-planned" checked style="width:auto;"> 📋 <strong>OC Planned:</strong> When scheduled / slots filled
-                    </label>
-
-                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; text-transform:none; font-weight:normal; color:#f1f2f6;">
-                        <input type="checkbox" id="oc-alert-upcoming" checked style="width:auto;"> ⏳ <strong>OC Upcoming:</strong> Warning before launch
-                    </label>
-                    <div style="margin-left: 24px; display:flex; align-items:center; gap:8px;">
-                        <span style="font-size:0.75em; color:var(--text-dim);">Lead Time:</span>
-                        <select id="oc-upcoming-mins" style="background:#0b0d13; border:1px solid #2f3542; color:#fff; padding:4px 8px; border-radius:6px; font-size:0.8em;">
-                            <option value="15">15 Minutes Before</option>
-                            <option value="30" selected>30 Minutes Before</option>
-                            <option value="60">60 Minutes Before</option>
-                        </select>
-                    </div>
-
-                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; text-transform:none; font-weight:normal; color:#f1f2f6;">
-                        <input type="checkbox" id="oc-alert-ready" checked style="width:auto;"> 🟢 <strong>OC Ready:</strong> Exact moment timer hits 0
-                    </label>
-
-                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; text-transform:none; font-weight:normal; color:#f1f2f6;">
-                        <input type="checkbox" id="oc-alert-delayed" checked style="width:auto;"> 🚨 <strong>OC Delayed:</strong> Held up by Hosp/Jail/Travel
-                    </label>
-
-                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; text-transform:none; font-weight:normal; color:#f1f2f6;">
-                        <input type="checkbox" id="oc-alert-completed" checked style="width:auto;"> 🎉 <strong>OC Completed:</strong> Success/Bust result report
-                    </label>
+            <div style="margin: 16px 0; padding: 14px 16px; background: rgba(88,101,242,0.08); border: 1px solid rgba(88,101,242,0.3); border-radius: 10px;">
+                <div style="font-weight: 700; color: #7289da; font-size: 0.88em; margin-bottom: 5px;">📢 Discord OC Alerts & Notifications</div>
+                <div style="font-size: 0.78em; color: var(--text-dim); line-height: 1.5;">
+                    Organized Crime notification channels, role mentions, missing item alerts, upcoming warnings, and live test triggers are managed on the <strong>Discord Alerts</strong> page.
                 </div>
+                <a href="/discord.html" style="display:inline-flex; align-items:center; gap:6px; margin-top:10px; font-size:0.82em; color:#00cec9; text-decoration:none; font-weight:700;">
+                    ➔ Open Discord Alerts Settings
+                </a>
             </div>
-
-            <div style="border-top: 1px solid #2f3542; padding-top: 10px; display:flex; gap:6px; flex-wrap:wrap;">
-                <button type="button" onclick="testOcAlert('ready')" style="flex:1; padding:7px; background:#2ed57322; border:1px solid #2ed573; color:#2ed573; border-radius:6px; cursor:pointer; font-size:0.75rem; font-weight:700;">Test Ready</button>
-                <button type="button" onclick="testOcAlert('delayed')" style="flex:1; padding:7px; background:#ff475722; border:1px solid #ff4757; color:#ff4757; border-radius:6px; cursor:pointer; font-size:0.75rem; font-weight:700;">Test Delayed</button>
-                <button type="button" onclick="testOcAlert('upcoming')" style="flex:1; padding:7px; background:#ffa50222; border:1px solid #ffa502; color:#ffa502; border-radius:6px; cursor:pointer; font-size:0.75rem; font-weight:700;">Test Upcoming</button>
-            </div>
-            <div id="oc-test-status" style="font-size:0.75rem; color:#00cec9; text-align:center; min-height:16px;"></div>
 
             <button class="btn-save" onclick="saveSettings()">💾 Save Settings</button>
         </div>
@@ -270,8 +231,6 @@
 <script src="/auth-gate.js"></script>
 <script>
 let myKey = localStorage.getItem("warboard_apikey") || "";
-let ocWebhook = localStorage.getItem("oc_channelid") || "";
-let ocRole = localStorage.getItem("oc_role") || "";
 let allCrimes = [];
 let currentTab = "recruiting";
 let refreshTimer = null;
@@ -279,29 +238,6 @@ let progressTimer = null;
 const REFRESH_MS = 300000;
 
 document.getElementById("api-key").value = myKey;
-document.getElementById("discord-webhook").value = ocWebhook;
-document.getElementById("discord-role").value = ocRole;
-
-// Fetch saved OC config from server
-fetch('/api/oc-config')
-    .then(r => r.json())
-    .then(cfg => {
-        if (cfg.globalChannelId) {
-            document.getElementById("discord-webhook").value = cfg.globalChannelId;
-            ocWebhook = cfg.globalChannelId;
-        }
-        if (cfg.roleId) {
-            document.getElementById("discord-role").value = cfg.roleId;
-            ocRole = cfg.roleId;
-        }
-        if (document.getElementById("oc-alert-planned")) document.getElementById("oc-alert-planned").checked = cfg.alertPlanned !== false;
-        if (document.getElementById("oc-alert-upcoming")) document.getElementById("oc-alert-upcoming").checked = cfg.alertUpcoming !== false;
-        if (document.getElementById("oc-upcoming-mins")) document.getElementById("oc-upcoming-mins").value = String(cfg.upcomingMinutes || 30);
-        if (document.getElementById("oc-alert-ready")) document.getElementById("oc-alert-ready").checked = cfg.alertReady !== false;
-        if (document.getElementById("oc-alert-delayed")) document.getElementById("oc-alert-delayed").checked = cfg.alertDelayed !== false;
-        if (document.getElementById("oc-alert-completed")) document.getElementById("oc-alert-completed").checked = cfg.alertCompleted !== false;
-    })
-    .catch(() => {});
 
 function toggleSidebar() { document.getElementById('app-sidebar').classList.toggle('collapsed'); }
 function openSettings() { document.getElementById("settings-modal").style.display = "flex"; }
@@ -309,59 +245,9 @@ function closeSettings() { document.getElementById("settings-modal").style.displ
 
 function saveSettings() {
     myKey = document.getElementById("api-key").value.trim();
-    ocWebhook = document.getElementById("discord-webhook").value.trim();
-    ocRole = document.getElementById("discord-role").value.trim();
-    const alertPlanned = document.getElementById("oc-alert-planned") ? document.getElementById("oc-alert-planned").checked : true;
-    const alertUpcoming = document.getElementById("oc-alert-upcoming") ? document.getElementById("oc-alert-upcoming").checked : true;
-    const upcomingMinutes = parseInt(document.getElementById("oc-upcoming-mins")?.value, 10) || 30;
-    const alertReady = document.getElementById("oc-alert-ready") ? document.getElementById("oc-alert-ready").checked : true;
-    const alertDelayed = document.getElementById("oc-alert-delayed") ? document.getElementById("oc-alert-delayed").checked : true;
-    const alertCompleted = document.getElementById("oc-alert-completed") ? document.getElementById("oc-alert-completed").checked : true;
-
     localStorage.setItem("warboard_apikey", myKey);
-    localStorage.setItem("oc_channelid", ocWebhook);
-    localStorage.setItem("oc_role", ocRole);
-
-    fetch('/api/save-oc-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            globalChannelId: ocWebhook, 
-            roleId: ocRole,
-            alertPlanned,
-            alertUpcoming,
-            upcomingMinutes,
-            alertReady,
-            alertDelayed,
-            alertCompleted
-        })
-    }).then(r => r.json()).then(() => {
-        closeSettings();
-        fetchOCs();
-    }).catch(console.error);
-}
-
-async function testOcAlert(type) {
-    const statusEl = document.getElementById('oc-test-status');
-    const chan = document.getElementById('discord-webhook').value.trim();
-    if (statusEl) statusEl.textContent = 'Sending test ' + type + ' alert...';
-    try {
-        const res = await fetch('/api/test-oc-alert', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type, channelId: chan })
-        });
-        const data = await res.json();
-        if (statusEl) {
-            if (data.success) {
-                statusEl.textContent = '✅ ' + data.message;
-            } else {
-                statusEl.textContent = '❌ ' + (data.error || 'Failed');
-            }
-        }
-    } catch(e) {
-        if (statusEl) statusEl.textContent = '⚠️ ' + e.message;
-    }
+    closeSettings();
+    fetchOCs();
 }
 
 function setTab(tab) {

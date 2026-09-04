@@ -393,9 +393,47 @@ let ocConfig = {
     upcomingMinutes: 30,
     alertReady: true,
     alertDelayed: true,
+    alertMissingItems: true,
     alertCompleted: true
 };
 let ocMemory = {};
+
+let tornItemsCache = null;
+let tornItemsCacheTime = 0;
+
+const KNOWN_OC_ITEMS = {
+    190: { name: "C4 Explosive", type: "Material" },
+    222: { name: "Flash Grenade", type: "Temporary" },
+    1203: { name: "Lockpicks", type: "Tool" },
+    1217: { name: "Shaving Foam", type: "Material" },
+    1313: { name: "Cassock", type: "Tool" },
+    1361: { name: "Dog Treats", type: "Material" },
+    1362: { name: "Net", type: "Tool" },
+    1379: { name: "ATM Key", type: "Tool" },
+    1381: { name: "ID Badge", type: "Material" }
+};
+
+async function getTornItemInfo(itemId, apiKey) {
+    if (!itemId) return { name: "Required Item", type: "Utility" };
+    const numId = Number(itemId);
+    if (KNOWN_OC_ITEMS[numId]) return KNOWN_OC_ITEMS[numId];
+    if (tornItemsCache && (Date.now() - tornItemsCacheTime < 24 * 3600 * 1000)) {
+        if (tornItemsCache[numId]) return tornItemsCache[numId];
+    }
+    try {
+        const k = apiKey || discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+        if (k) {
+            const res = await fetch(`https://api.torn.com/torn/${numId}?selections=items&key=${k}`, { signal: AbortSignal.timeout(5000) });
+            const data = await res.json();
+            if (data.items && data.items[numId]) {
+                if (!tornItemsCache) tornItemsCache = {};
+                tornItemsCache[numId] = data.items[numId];
+                return data.items[numId];
+            }
+        }
+    } catch(e) {}
+    return { name: `Required Item #${itemId}`, type: "Utility" };
+}
  
 let companyConfig = { globalChannelId: "", threshold: 0, alertedItems: {}, apiKey: "" };
 
@@ -2192,7 +2230,19 @@ app.get('/api/get-discord-config', (req, res) => {
         discordConfig.bankingChannelId = "";
         saveDiscordConfig();
     }
-    res.json(discordConfig);
+    const fullConfig = {
+        ...discordConfig,
+        ocChannelId: ocConfig.globalChannelId || discordConfig.ocChannelId || "",
+        ocRoleId: ocConfig.roleId || discordConfig.ocRoleId || "",
+        alertOcPlanned: ocConfig.alertPlanned !== false,
+        alertOcUpcoming: ocConfig.alertUpcoming !== false,
+        ocUpcomingMinutes: ocConfig.upcomingMinutes || 30,
+        alertOcReady: ocConfig.alertReady !== false,
+        alertOcDelayed: ocConfig.alertDelayed !== false,
+        alertOcMissingItems: ocConfig.alertMissingItems !== false,
+        alertOcCompleted: ocConfig.alertCompleted !== false
+    };
+    res.json(fullConfig);
 });
 
 app.post('/api/save-discord-config', async (req, res) => { 
@@ -2220,6 +2270,25 @@ app.post('/api/save-discord-config', async (req, res) => {
             payload.bankingChannelId = rawBank.replace(/[^0-9]/g, '');
         }
     }
+
+    if (payload.ocChannelId !== undefined) {
+        let rawOc = String(payload.ocChannelId || '').trim();
+        if (rawOc.includes('.') || /[a-zA-Z]/.test(rawOc)) {
+            payload.ocChannelId = "";
+        } else {
+            payload.ocChannelId = rawOc.replace(/[^0-9]/g, '');
+        }
+        ocConfig.globalChannelId = payload.ocChannelId;
+    }
+    if (payload.ocRoleId !== undefined) ocConfig.roleId = String(payload.ocRoleId || '').trim();
+    if (payload.alertOcPlanned !== undefined) ocConfig.alertPlanned = !!payload.alertOcPlanned;
+    if (payload.alertOcUpcoming !== undefined) ocConfig.alertUpcoming = !!payload.alertOcUpcoming;
+    if (payload.ocUpcomingMinutes !== undefined) ocConfig.upcomingMinutes = parseInt(payload.ocUpcomingMinutes, 10) || 30;
+    if (payload.alertOcReady !== undefined) ocConfig.alertReady = !!payload.alertOcReady;
+    if (payload.alertOcDelayed !== undefined) ocConfig.alertDelayed = !!payload.alertOcDelayed;
+    if (payload.alertOcMissingItems !== undefined) ocConfig.alertMissingItems = !!payload.alertOcMissingItems;
+    if (payload.alertOcCompleted !== undefined) ocConfig.alertCompleted = !!payload.alertOcCompleted;
+    saveOcConfig();
 
     if (payload.globalBotToken !== undefined) {
         payload.globalBotToken = String(payload.globalBotToken || '').trim();
@@ -2341,6 +2410,189 @@ app.post('/api/test-discord-alert', async (req, res) => {
             timestamp: new Date().toISOString()
         };
         pingStr = rolePingStr;
+    } else if (type === 'oc_missing_item') {
+        chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
+        const roleId = req.body.ocRoleId || ocConfig.roleId;
+        if (roleId && String(roleId).trim()) {
+            const numOnly = String(roleId).replace(/\D/g, '');
+            if (numOnly.length >= 15 && numOnly.length <= 22) pingStr = `<@&${numOnly}>`;
+            else pingStr = roleId;
+        }
+        const pName = "Owen777";
+        const pId = "3490493";
+        const itemName = "C4 Explosive";
+        const itemId = 190;
+        const itemType = "Material";
+        const armoryUrl = "https://www.torn.com/factions.php?step=your#/tab=armory&sub=utilities";
+        const profileUrl = `https://www.torn.com/profiles.php?XID=${pId}`;
+        embed = {
+            title: "🚨 OC Missing Item: Bidding War [TEST]",
+            description: `A team member is missing a required item to execute **Bidding War**!\n\n` +
+                         `👤 **Player:** [${pName} [${pId}]](${profileUrl})\n` +
+                         `🎯 **Assigned Role:** Bomber #1\n` +
+                         `📦 **Missing Item:** ⚠️ **${itemName}** (Item #${itemId} · ${itemType})\n` +
+                         `ℹ️ **Requirement:** Consumable (Used up in crime)\n\n` +
+                         `📦 **Faction Armory Action:**\n` +
+                         `Faction leaders / bankers can loan or give this item to ${pName}:\n` +
+                         `👉 [Click to Open Armory to Give / Loan ${itemName}](${armoryUrl})`,
+            color: 0xff4757,
+            buttons: [
+                {
+                    type: 2,
+                    style: 5,
+                    label: `📦 Armory: Give ${itemName}`,
+                    url: armoryUrl
+                },
+                {
+                    type: 2,
+                    style: 5,
+                    label: `👤 View ${pName}'s Profile`,
+                    url: profileUrl
+                }
+            ],
+            footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" },
+            timestamp: new Date().toISOString()
+        };
+    } else if (type === 'oc_ready') {
+        chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
+        const roleId = req.body.ocRoleId || ocConfig.roleId;
+        if (roleId && String(roleId).trim()) {
+            const numOnly = String(roleId).replace(/\D/g, '');
+            if (numOnly.length >= 15 && numOnly.length <= 22) pingStr = `<@&${numOnly}>`;
+            else pingStr = roleId;
+        }
+        embed = {
+            title: "🟢 OC Ready to Launch: Robbing of a Money Train [TEST]",
+            description: `All team members are in Torn City and ready! Crime can now be initiated by the planner.\n\n` +
+                         `**Team:**\n` +
+                         `• [Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)\n` +
+                         `• [MF_Pikle [3419413]](https://www.torn.com/profiles.php?XID=3419413)\n\n` +
+                         `👉 [Initiate Organized Crime](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+            color: 0x2ed573,
+            buttons: [
+                {
+                    type: 2,
+                    style: 5,
+                    label: "🚀 Launch Organized Crime",
+                    url: "https://www.torn.com/factions.php?step=your#/tab=crimes"
+                }
+            ],
+            footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" },
+            timestamp: new Date().toISOString()
+        };
+    } else if (type === 'oc_delayed') {
+        chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
+        const roleId = req.body.ocRoleId || ocConfig.roleId;
+        if (roleId && String(roleId).trim()) {
+            const numOnly = String(roleId).replace(/\D/g, '');
+            if (numOnly.length >= 15 && numOnly.length <= 22) pingStr = `<@&${numOnly}>`;
+            else pingStr = roleId;
+        }
+        const nowSec = Math.floor(Date.now() / 1000);
+        embed = {
+            title: "🚨 OC Delayed: Kidnapping [TEST]",
+            description: `Countdown reached zero, but **team cannot launch** because participant(s) are unavailable:\n\n` +
+                         `• ❌ **[Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)**: **Hospitalized** (in hospital · Free <t:${nowSec + 450}:R>)\n\n` +
+                         `Team members must med out, bust, or land before the crime can be initiated.\n\n` +
+                         `👉 [Open Faction Crimes Tab](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+            color: 0xff4757,
+            buttons: [
+                {
+                    type: 2,
+                    style: 5,
+                    label: "🏥 Open Faction Crimes",
+                    url: "https://www.torn.com/factions.php?step=your#/tab=crimes"
+                }
+            ],
+            footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" },
+            timestamp: new Date().toISOString()
+        };
+    } else if (type === 'oc_upcoming') {
+        chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
+        const roleId = req.body.ocRoleId || ocConfig.roleId;
+        if (roleId && String(roleId).trim()) {
+            const numOnly = String(roleId).replace(/\D/g, '');
+            if (numOnly.length >= 15 && numOnly.length <= 22) pingStr = `<@&${numOnly}>`;
+            else pingStr = roleId;
+        }
+        const nowSec = Math.floor(Date.now() / 1000);
+        embed = {
+            title: "⏳ OC Upcoming: Bomb Threat [TEST]",
+            description: `Crime is scheduled to be ready in **<t:${nowSec + 1800}:R>** (<t:${nowSec + 1800}:t>)!\n\n` +
+                         `⚠️ **Attention Team Members:** Please stay out of hospital and wrap up foreign travel:\n` +
+                         `• [Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)\n` +
+                         `• [MF_Pikle [3419413]](https://www.torn.com/profiles.php?XID=3419413)\n\n` +
+                         `👉 [View Organized Crimes](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+            color: 0xffa502,
+            buttons: [
+                {
+                    type: 2,
+                    style: 5,
+                    label: "⏳ View Crimes Tab",
+                    url: "https://www.torn.com/factions.php?step=your#/tab=crimes"
+                }
+            ],
+            footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" },
+            timestamp: new Date().toISOString()
+        };
+    } else if (type === 'oc_planned') {
+        chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
+        const roleId = req.body.ocRoleId || ocConfig.roleId;
+        if (roleId && String(roleId).trim()) {
+            const numOnly = String(roleId).replace(/\D/g, '');
+            if (numOnly.length >= 15 && numOnly.length <= 22) pingStr = `<@&${numOnly}>`;
+            else pingStr = roleId;
+        }
+        const nowSec = Math.floor(Date.now() / 1000);
+        embed = {
+            title: "📋 OC Scheduled: Planned Robbery [TEST]",
+            description: `A new Organized Crime has been scheduled for **Spider-Verse**!\n\n` +
+                         `**Target Ready Time:** <t:${nowSec + 86400}:F> (<t:${nowSec + 86400}:R>)\n` +
+                         `**Planned By:** [Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)\n\n` +
+                         `**Assigned Roster:**\n` +
+                         `• [Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)\n` +
+                         `• [MF_Pikle [3419413]](https://www.torn.com/profiles.php?XID=3419413)\n\n` +
+                         `👉 [View Organized Crimes](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+            color: 0x70a1ff,
+            buttons: [
+                {
+                    type: 2,
+                    style: 5,
+                    label: "📋 View Crimes Tab",
+                    url: "https://www.torn.com/factions.php?step=your#/tab=crimes"
+                }
+            ],
+            footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" },
+            timestamp: new Date().toISOString()
+        };
+    } else if (type === 'oc_completed') {
+        chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
+        const roleId = req.body.ocRoleId || ocConfig.roleId;
+        if (roleId && String(roleId).trim()) {
+            const numOnly = String(roleId).replace(/\D/g, '');
+            if (numOnly.length >= 15 && numOnly.length <= 22) pingStr = `<@&${numOnly}>`;
+            else pingStr = roleId;
+        }
+        embed = {
+            title: "🎉 OC Success: Robbing of a Money Train [TEST]!",
+            description: `The team successfully executed **Robbing of a Money Train**!\n\n` +
+                         `💰 **Payout:** +$14,250,000 deposited into faction vault\n` +
+                         `🏆 **Respect:** +112 Faction Respect\n\n` +
+                         `**Team:**\n` +
+                         `• [Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)\n` +
+                         `• [MF_Pikle [3419413]](https://www.torn.com/profiles.php?XID=3419413)`,
+            color: 0x2ed573,
+            buttons: [
+                {
+                    type: 2,
+                    style: 5,
+                    label: "🏦 Open Faction Vault",
+                    url: "https://www.torn.com/factions.php?step=your#/tab=armory"
+                }
+            ],
+            footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" },
+            timestamp: new Date().toISOString()
+        };
     } else {
         return res.json({ success: false, error: "Unknown test type." });
     }
@@ -4528,35 +4780,86 @@ app.get('/api/ocs', async (req, res) => {
             return { ...crime, slots };
         });
 
-        // Discord alerts for missing items
-        if (ocConfig.globalChannelId) {
-            crimes.forEach(crime => {
-                (crime.slots || []).forEach(slot => {
-                    if (!slot.user) return;
+        // Discord alerts for missing items & participant issues
+        const targetChan = ocConfig.globalChannelId || discordConfig.ocChannelId || discordConfig.globalChannelId;
+        if (targetChan && (ocConfig.alertMissingItems !== false)) {
+            for (const crime of crimes) {
+                for (const slot of (crime.slots || [])) {
+                    if (!slot.user) continue;
                     let pId = slot.user.id;
                     let pName = slot.user.name || pId;
-                    let issueMessage = null;
+                    
                     if (slot.item_requirement && !slot.item_requirement.is_available) {
-                        issueMessage = `Missing required item for their role`;
-                    } else if (slot.user.outcome && (slot.user.outcome.toLowerCase() === 'hospitalized' || slot.user.outcome.toLowerCase() === 'jailed')) {
-                        issueMessage = `Currently ${slot.user.outcome}`;
-                    }
-                    if (issueMessage) {
-                        const trackingId = crime.id + "_" + pId + "_" + issueMessage;
-                        if (!ocMemory[trackingId] || (Date.now() - ocMemory[trackingId]) > 3600000 * 12) {
+                        const itemId = slot.item_requirement.id;
+                        const itemInfo = await getTornItemInfo(itemId, userKey);
+                        const itemType = itemInfo.type || 'Material';
+                        const isReusable = !!slot.item_requirement.is_reusable;
+                        const reusableText = isReusable ? "Reusable (kept after crime)" : "Consumable (used up in crime)";
+                        
+                        let armorySubtab = 'utilities';
+                        const lowType = itemType.toLowerCase();
+                        if (lowType.includes('temp')) armorySubtab = 'temporary';
+                        else if (lowType.includes('weapon')) armorySubtab = 'weapons';
+                        else if (lowType.includes('armor')) armorySubtab = 'armor';
+                        else if (lowType.includes('med')) armorySubtab = 'medical';
+
+                        const armoryUrl = `https://www.torn.com/factions.php?step=your#/tab=armory&sub=${armorySubtab}`;
+                        const profileUrl = `https://www.torn.com/profiles.php?XID=${pId}`;
+                        const roleLabel = slot.position_info?.label || slot.position || "Team Member";
+
+                        const trackingId = `${crime.id}_${pId}_item_${itemId}`;
+                        if (!ocMemory[trackingId] || (Date.now() - ocMemory[trackingId]) > 3600000 * 6) {
                             ocMemory[trackingId] = Date.now();
                             let mention = ocConfig.roleId ? `<@&${ocConfig.roleId}>` : "";
-                            if (discordConfig.globalBotToken) {
-                                sendChannelMessage(discordConfig.globalBotToken, ocConfig.globalChannelId, {
+                            const botToken = discordConfig.globalBotToken;
+                            if (botToken) {
+                                sendChannelMessage(botToken, targetChan, {
+                                    title: `🚨 OC Missing Item: ${crime.name}`,
+                                    description: `A team member is missing a required item to execute **${crime.name}**!\n\n` +
+                                                 `👤 **Player:** [${pName} [${pId}]](${profileUrl})\n` +
+                                                 `🎯 **Assigned Role:** ${roleLabel}\n` +
+                                                 `📦 **Missing Item:** ⚠️ **${itemInfo.name}** (Item #${itemId} · ${itemType})\n` +
+                                                 `ℹ️ **Requirement:** ${reusableText}\n\n` +
+                                                 `📦 **Faction Armory Action:**\n` +
+                                                 `Faction leaders / bankers can loan or give this item to ${pName}:\n` +
+                                                 `👉 [Click to Open Armory to Give / Loan ${itemInfo.name}](${armoryUrl})`,
+                                    color: 0xff4757,
+                                    buttons: [
+                                        {
+                                            type: 2,
+                                            style: 5,
+                                            label: `📦 Armory: Give ${itemInfo.name}`,
+                                            url: armoryUrl
+                                        },
+                                        {
+                                            type: 2,
+                                            style: 5,
+                                            label: `👤 View ${pName}'s Profile`,
+                                            url: profileUrl
+                                        }
+                                    ],
+                                    footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" }
+                                }, mention);
+                            }
+                        }
+                    } else if (slot.user.outcome && (slot.user.outcome.toLowerCase() === 'hospitalized' || slot.user.outcome.toLowerCase() === 'jailed')) {
+                        const trackingId = `${crime.id}_${pId}_${slot.user.outcome}`;
+                        if (!ocMemory[trackingId] || (Date.now() - ocMemory[trackingId]) > 3600000 * 6) {
+                            ocMemory[trackingId] = Date.now();
+                            let mention = ocConfig.roleId ? `<@&${ocConfig.roleId}>` : "";
+                            const botToken = discordConfig.globalBotToken;
+                            if (botToken) {
+                                sendChannelMessage(botToken, targetChan, {
                                     title: `🚨 OC Issue: ${crime.name}`,
-                                    description: `**Player:** [${pName}](https://www.torn.com/profiles.php?XID=${pId})\n**Role:** ${slot.position_info?.label || slot.position}\n**Issue:** ${issueMessage}`, 
-                                    color: 16733695
+                                    description: `**Player:** [${pName}](https://www.torn.com/profiles.php?XID=${pId})\n**Role:** ${slot.position_info?.label || slot.position}\n**Status:** Currently **${slot.user.outcome}**`,
+                                    color: 0xff4757,
+                                    footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" }
                                 }, mention);
                             }
                         }
                     }
-                });
-            });
+                }
+            }
         }
 
         res.json({ success: true, crimes });
@@ -8009,6 +8312,74 @@ async function checkFactionOrganizedCrimes() {
                     tracker.completed = true;
                 }
             }
+        }
+
+        // ── TRIGGER 6: Missing Required Items Check (v2 API) ─────────────
+        if (ocConfig.alertMissingItems !== false) {
+            const fid = discordConfig.factionId || "52355";
+            try {
+                const v2Res = await fetch(`https://api.torn.com/v2/faction/${fid}/crimes?cat=available&key=${apiKey}&timestamp=${Date.now()}`, {
+                    signal: AbortSignal.timeout(9000)
+                });
+                const v2Data = await v2Res.json();
+                if (v2Data && v2Data.crimes && Array.isArray(v2Data.crimes)) {
+                    for (const v2Crime of v2Data.crimes) {
+                        for (const slot of (v2Crime.slots || [])) {
+                            if (!slot.user || !slot.item_requirement || slot.item_requirement.is_available) continue;
+                            const pId = slot.user.id;
+                            const pName = members[String(pId)]?.name || slot.user.name || `Player [${pId}]`;
+                            const itemId = slot.item_requirement.id;
+                            const itemInfo = await getTornItemInfo(itemId, apiKey);
+                            const itemType = itemInfo.type || 'Material';
+                            const isReusable = !!slot.item_requirement.is_reusable;
+                            const reusableText = isReusable ? "Reusable (kept after crime)" : "Consumable (used up in crime)";
+                            
+                            let armorySubtab = 'utilities';
+                            const lowType = itemType.toLowerCase();
+                            if (lowType.includes('temp')) armorySubtab = 'temporary';
+                            else if (lowType.includes('weapon')) armorySubtab = 'weapons';
+                            else if (lowType.includes('armor')) armorySubtab = 'armor';
+                            else if (lowType.includes('med')) armorySubtab = 'medical';
+
+                            const armoryUrl = `https://www.torn.com/factions.php?step=your#/tab=armory&sub=${armorySubtab}`;
+                            const profileUrl = `https://www.torn.com/profiles.php?XID=${pId}`;
+                            const roleLabel = slot.position_info?.label || slot.position || "Team Member";
+
+                            const trackingId = `${v2Crime.id}_${pId}_item_${itemId}`;
+                            if (!ocMemory[trackingId] || (Date.now() - ocMemory[trackingId]) > 3600000 * 6) {
+                                ocMemory[trackingId] = Date.now();
+                                await sendChannelMessage(botToken, channelId, {
+                                    title: `🚨 OC Missing Item: ${v2Crime.name}`,
+                                    description: `A team member is missing a required item to execute **${v2Crime.name}**!\n\n` +
+                                                 `👤 **Player:** [${pName} [${pId}]](${profileUrl})\n` +
+                                                 `🎯 **Assigned Role:** ${roleLabel}\n` +
+                                                 `📦 **Missing Item:** ⚠️ **${itemInfo.name}** (Item #${itemId} · ${itemType})\n` +
+                                                 `ℹ️ **Requirement:** ${reusableText}\n\n` +
+                                                 `📦 **Faction Armory Action:**\n` +
+                                                 `Faction leaders / bankers can loan or give this item to ${pName}:\n` +
+                                                 `👉 [Click to Open Armory to Give / Loan ${itemInfo.name}](${armoryUrl})`,
+                                    color: 0xff4757,
+                                    buttons: [
+                                        {
+                                            type: 2,
+                                            style: 5,
+                                            label: `📦 Armory: Give ${itemInfo.name}`,
+                                            url: armoryUrl
+                                        },
+                                        {
+                                            type: 2,
+                                            style: 5,
+                                            label: `👤 View ${pName}'s Profile`,
+                                            url: profileUrl
+                                        }
+                                    ],
+                                    footer: { text: "F.R.I.D.A.Y • Organized Crime Intelligence" }
+                                }, mention).catch(() => {});
+                            }
+                        }
+                    }
+                }
+            } catch(e) {}
         }
     } catch(err) {
         // Transient API errors ignored
