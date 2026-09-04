@@ -217,11 +217,14 @@ app.get('/recruitment.html', (req, res) => {
 });
 
 app.use(express.static('public', {
+    maxAge: '1h',
     setHeaders: (res, path) => {
         if (path.endsWith('.html')) {
             res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
             res.setHeader('Pragma', 'no-cache');
             res.setHeader('Expires', '0');
+        } else {
+            res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
         }
     }
 })); 
@@ -7047,7 +7050,7 @@ function buildBankRequestButtons(req) {
     const amtFmt = Number(req.amount).toLocaleString();
 
     if (req.status === 'pending') {
-        // Two buttons: Give Cash (link to Torn) + Fulfill (checks logs) + Cancel
+        // Only 2 buttons: Give Cash (direct link to Torn vault) and Cancel
         return [{ type: 1, components: [
             {
                 type: 2,
@@ -7057,25 +7060,18 @@ function buildBankRequestButtons(req) {
             },
             {
                 type: 2,
-                style: 3, // Green — initiates verification + marks verifying
-                custom_id: `bank_pay_${req.id}`,
-                label: '✅ Fulfill'
-            },
-            {
-                type: 2,
                 style: 4, // Red
                 custom_id: `bank_cancel_${req.id}`,
                 label: '❌ Cancel'
             }
         ]}];
     } else if (req.status === 'verifying') {
-        // Show who clicked Fulfill + Give Cash link + Revert button. No "Check Logs" clutter.
         return [{ type: 1, components: [
             {
                 type: 2,
                 style: 2, // Grey disabled — status indicator
                 custom_id: `verifying_display_${req.id}`,
-                label: `⏳ Verifying payment by @${(req.fulfillerName || 'Banker').split(/[^a-zA-Z0-9_]/, 1)[0]}...`,
+                label: `⏳ Verifying payment...`,
                 disabled: true
             },
             {
@@ -7455,7 +7451,10 @@ async function verifyBankPayment(req, apiKey, botClient) {
 
 // ── Continuous High-Speed Background Watcher for ALL Bank Requests ─────────
 // Automatically monitors Torn logs & vault balances for ANY active request (pending or verifying).
-// When a banker gives cash in Torn, this immediately detects it within 3-4 seconds!
+// Accurately handles MULTIPLE withdrawals per user:
+// - If user has $10k and $5k requests, and banker sends $10k: only the $10k request is fulfilled, $5k stays pending.
+// - If banker sends $15k in one transfer: both $10k and $5k get fulfilled!
+// - If banker sends $5k: only the $5k request is fulfilled!
 let isAutoCheckingBank = false;
 async function autoCheckActiveBankRequests() {
     if (isAutoCheckingBank) return;
@@ -7469,48 +7468,202 @@ async function autoCheckActiveBankRequests() {
         const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
         if (!apiKey) return;
 
+        const facId = discordConfig.factionId || dynamicFactionId || "";
+        const cacheBuster = Date.now();
+        const donUrl = facId
+            ? `https://api.torn.com/faction/${facId}?selections=donations&timestamp=${cacheBuster}&key=${apiKey}`
+            : `https://api.torn.com/faction/?selections=donations&timestamp=${cacheBuster}&key=${apiKey}`;
+        const newsUrl = facId
+            ? `https://api.torn.com/faction/${facId}?selections=fundsnews,mainnews&timestamp=${cacheBuster}&key=${apiKey}`
+            : `https://api.torn.com/faction/?selections=fundsnews,mainnews&timestamp=${cacheBuster}&key=${apiKey}`;
+
+        // Single parallel fetch for the entire faction per cycle (saves API calls & runs in 200ms)
+        const [donResult, newsResult] = await Promise.allSettled([
+            fetch(donUrl, { signal: AbortSignal.timeout(6000) }).then(r => r.json()),
+            fetch(newsUrl, { signal: AbortSignal.timeout(6000) }).then(r => r.json())
+        ]);
+
+        const donData = (donResult.status === 'fulfilled' && !donResult.value?.error) ? donResult.value : null;
+        const newsData = (newsResult.status === 'fulfilled' && !newsResult.value?.error) ? newsResult.value : null;
+
+        // Group active requests by target Torn ID
+        const reqsByTornId = {};
         for (const req of activeReqs) {
-            try {
-                const check = await checkFactionLogForPayment(req, apiKey);
-                if (check.verified) {
-                    req.status = 'fulfilled';
-                    req.verifiedAt = Date.now();
-                    if (!req.fulfilledAt) req.fulfilledAt = Date.now();
-                    if (!req.fulfillerName && check.bankerName) {
-                        req.fulfillerName = check.bankerName;
-                    }
-                    saveBankRequests();
+            const tId = String(req.tornId || 'unknown');
+            if (!reqsByTornId[tId]) reqsByTornId[tId] = [];
+            reqsByTornId[tId].push(req);
+        }
 
-                    // Update Discord message
-                    if (req.channelId && req.messageId) {
-                        try {
-                            const chan = slashCommandBot.channels.cache.get(req.channelId)
-                                || await slashCommandBot.channels.fetch(req.channelId).catch(() => null);
-                            if (chan) {
-                                const msg = await chan.messages.fetch(req.messageId).catch(() => null);
-                                if (msg) {
-                                    await msg.edit({
-                                        embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
-                                        components: buildBankRequestButtons(req) // Returns [] on fulfilled!
-                                    }).catch(() => {});
-                                }
+        const fulfilledToNotify = [];
+        const usedNewsEntries = new Set();
+
+        for (const [tId, userReqs] of Object.entries(reqsByTornId)) {
+            // Sort oldest request first
+            userReqs.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+            const donor = donData?.donations?.[tId];
+            const currentBal = (donor && donor.money_balance !== undefined) ? Number(donor.money_balance) : null;
+            const targetName = (userReqs[0].tornName || '').trim().toLowerCase();
+
+            // Extract relevant news entries for this player
+            const relevantNews = [];
+            if (newsData) {
+                const allNews = [
+                    ...Object.values(newsData.fundsnews || {}),
+                    ...Object.values(newsData.mainnews || {})
+                ];
+                for (const entry of allNews) {
+                    if (!entry || !entry.timestamp || !entry.news) continue;
+                    const newsRaw = String(entry.news);
+                    const newsLower = newsRaw.toLowerCase();
+
+                    const idMatched = tId && tId !== 'unknown' && (
+                        newsLower.includes(tId) ||
+                        newsLower.includes(`xid=${tId}`) ||
+                        newsLower.includes(`[${tId}]`) ||
+                        (entry.id && String(entry.id) === tId)
+                    );
+                    const nameMatched = targetName && targetName.length > 2 && newsLower.includes(targetName);
+                    if (!idMatched && !nameMatched) continue;
+
+                    const isGiveAction =
+                        newsLower.includes("gave") ||
+                        newsLower.includes("give") ||
+                        newsLower.includes("transfer") ||
+                        newsLower.includes("sent") ||
+                        newsLower.includes("withdr") ||
+                        newsLower.includes("paid");
+                    if (!isGiveAction) continue;
+
+                    let bankerName = null;
+                    const giverMatch = newsRaw.match(/<a[^>]*href=[^>]*XID=(\d+)[^>]*>([^<]+)<\/a>\s*(?:gave|transferred|sent|paid)/i);
+                    if (giverMatch) bankerName = giverMatch[2];
+
+                    relevantNews.push({ entry, newsLower, newsRaw, bankerName, ts: entry.timestamp });
+                }
+            }
+
+            // ── Multi-request balance drop logic ──
+            if (currentBal !== null) {
+                const totalRequested = userReqs.reduce((sum, r) => sum + Number(r.amount || 0), 0);
+                const baseline = Math.max(...userReqs.map(r => Number(r.balanceBefore || 0)));
+                const totalPaidOut = (baseline > 0) ? Math.max(0, baseline - currentBal) : 0;
+
+                if (totalPaidOut >= totalRequested && totalRequested > 0) {
+                    // Banker paid enough to satisfy ALL pending requests! (e.g. sent 15k for 10k + 5k requests)
+                    for (const r of userReqs) {
+                        r.status = 'fulfilled';
+                        r.verifiedAt = Date.now();
+                        if (!r.fulfilledAt) r.fulfilledAt = Date.now();
+                        fulfilledToNotify.push(r);
+                    }
+                } else if (totalPaidOut > 0) {
+                    // Banker paid a partial amount.
+                    // Case 1: Does totalPaidOut match ANY single request's exact amount?
+                    const exactReq = userReqs.find(r => Number(r.amount) === totalPaidOut);
+                    if (exactReq) {
+                        exactReq.status = 'fulfilled';
+                        exactReq.verifiedAt = Date.now();
+                        if (!exactReq.fulfilledAt) exactReq.fulfilledAt = Date.now();
+                        fulfilledToNotify.push(exactReq);
+
+                        // For all remaining unfulfilled requests of this user, update balanceBefore to currentBal
+                        for (const r of userReqs) {
+                            if (r.status !== 'fulfilled') {
+                                r.balanceBefore = currentBal;
                             }
-                        } catch(e) {}
+                        }
+                    } else {
+                        // Case 2: Greedily satisfy from oldest to newest with remaining paid-out
+                        let remainingPaid = totalPaidOut;
+                        for (const r of userReqs) {
+                            const amt = Number(r.amount || 0);
+                            if (remainingPaid >= amt && amt > 0) {
+                                r.status = 'fulfilled';
+                                r.verifiedAt = Date.now();
+                                if (!r.fulfilledAt) r.fulfilledAt = Date.now();
+                                remainingPaid -= amt;
+                                fulfilledToNotify.push(r);
+                            } else {
+                                r.balanceBefore = currentBal;
+                            }
+                        }
                     }
+                }
+            }
 
-                    // DM requester
+            // ── Cross-check News Logs for any remaining pending requests ──
+            for (const r of userReqs) {
+                if (r.status === 'fulfilled') continue; // already fulfilled above
+
+                const reqAmt = Number(r.amount || 0);
+                const amtFormatted = reqAmt.toLocaleString();
+                const amtRaw = String(reqAmt);
+
+                // Find a matching news log that hasn't been used by another request
+                const matchingLog = relevantNews.find(n => {
+                    if (usedNewsEntries.has(n.entry)) return false;
+                    const amtMatched =
+                        n.newsLower.includes(amtFormatted.toLowerCase()) ||
+                        n.newsLower.includes(`$${amtFormatted.toLowerCase()}`) ||
+                        n.newsLower.includes(amtRaw) ||
+                        n.newsLower.includes(`$${amtRaw}`);
+                    return amtMatched;
+                });
+
+                if (matchingLog) {
+                    usedNewsEntries.add(matchingLog.entry);
+                    r.status = 'fulfilled';
+                    r.verifiedAt = Date.now();
+                    if (!r.fulfilledAt) r.fulfilledAt = Date.now();
+                    if (!r.fulfillerName && matchingLog.bankerName) {
+                        r.fulfillerName = matchingLog.bankerName;
+                    }
+                    fulfilledToNotify.push(r);
+
+                    // Update baseline for other pending requests
+                    if (currentBal !== null) {
+                        for (const other of userReqs) {
+                            if (other.status !== 'fulfilled') other.balanceBefore = currentBal;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Save state if any requests were fulfilled
+        if (fulfilledToNotify.length > 0) {
+            saveBankRequests();
+
+            // Update Discord embeds & send DMs
+            for (const req of fulfilledToNotify) {
+                if (req.channelId && req.messageId) {
                     try {
-                        const user = await slashCommandBot.users.fetch(req.userId).catch(() => null);
-                        if (user) {
-                            const bankerLabel = req.fulfillerName ? `@${req.fulfillerName}` : 'a Banker';
-                            await user.send(`✅ Your vault withdrawal of **$${Number(req.amount).toLocaleString()}** has been confirmed by ${bankerLabel}! Spend or deposit quickly to stay safe!`).catch(() => {});
+                        const chan = slashCommandBot.channels.cache.get(req.channelId)
+                            || await slashCommandBot.channels.fetch(req.channelId).catch(() => null);
+                        if (chan) {
+                            const msg = await chan.messages.fetch(req.messageId).catch(() => null);
+                            if (msg) {
+                                await msg.edit({
+                                    embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
+                                    components: buildBankRequestButtons(req) // Returns [] (no buttons)
+                                }).catch(() => {});
+                            }
                         }
                     } catch(e) {}
                 }
-            } catch(err) {
-                // Ignore transient errors
+
+                try {
+                    const user = await slashCommandBot.users.fetch(req.userId).catch(() => null);
+                    if (user) {
+                        const bankerLabel = req.fulfillerName ? `@${req.fulfillerName}` : 'a Banker';
+                        await user.send(`✅ Your vault withdrawal of **$${Number(req.amount).toLocaleString()}** has been confirmed by ${bankerLabel}! Spend or deposit quickly to stay safe!`).catch(() => {});
+                    }
+                } catch(e) {}
             }
         }
+    } catch(err) {
+        // Ignore transient errors
     } finally {
         isAutoCheckingBank = false;
     }
@@ -7518,6 +7671,18 @@ async function autoCheckActiveBankRequests() {
 
 // Check every 3.5 seconds for instant near-realtime detection
 setInterval(autoCheckActiveBankRequests, 3500);
+
+// ── Render Free-Tier Keepalive Pinger ──────────────────────────────────────
+// Pings the public endpoint every 9 minutes to prevent Render's free tier
+// from spinning down into a 50-second cold-boot slumber during inactivity!
+setInterval(async () => {
+    try {
+        const pingUrl = process.env.RENDER_EXTERNAL_URL
+            ? `${process.env.RENDER_EXTERNAL_URL}/api/discord/killswitch-status`
+            : `https://spider-verse.net/api/discord/killswitch-status`;
+        await fetch(pingUrl, { signal: AbortSignal.timeout(6000) });
+    } catch(e) {}
+}, 9 * 60 * 1000);
 
 async function executeFulfillRequest(reqId, interaction) {
     const req = bankRequests[reqId];
