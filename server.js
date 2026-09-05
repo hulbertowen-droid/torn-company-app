@@ -634,35 +634,40 @@ try { if (fs.existsSync('user_tracking.json')) userTracking = JSON.parse(fs.read
 try { if (fs.existsSync('api_pool.json')) apiPoolConfig = JSON.parse(fs.readFileSync('api_pool.json')); } catch(e) {}
 try { if (fs.existsSync('company_config.json')) companyConfig = { ...companyConfig, ...JSON.parse(fs.readFileSync('company_config.json')) }; } catch(e) {}
 
+let mongoSaveTimeout = null;
 function saveToMongo() {
-    if (mongoose.connection.readyState === 1) {
-        AppConfig.updateOne(
-            { _id: 'master' },
-            {
-                $set: {
-                    discordConfig,
-                    companyConfig,
-                    ocConfig,
-                    marketConfig,
-                    spyDatabase,
-                    userTracking,
-                    apiPoolConfig,
-                    bankRequests,
-                    inactivityAlerts: inactivityAlertsMemory,
-                    odAlerts: odAlertsMemory,
-                    ocAlertTracker: (typeof ocAlertTracker !== 'undefined' ? ocAlertTracker : {}),
-                    ocMemory: (typeof ocMemory !== 'undefined' ? ocMemory : {}),
-                    ocMemberHistory: (typeof ocMemberHistory !== 'undefined' ? ocMemberHistory : {}),
-                    giveaways: (typeof activeGiveaways !== 'undefined' ? activeGiveaways : {}),
-                    warFlightArchive,
-                    warAuditArchive,
-                    lastWarboardPayload: lastGoodWarboardPayload,
-                    updatedAt: new Date()
-                }
-            },
-            { upsert: true }
-        ).catch(e => console.error('[Mongo] Config save error:', e.message));
-    }
+    if (mongoSaveTimeout) return;
+    mongoSaveTimeout = setTimeout(() => {
+        mongoSaveTimeout = null;
+        if (mongoose.connection.readyState === 1) {
+            AppConfig.updateOne(
+                { _id: 'master' },
+                {
+                    $set: {
+                        discordConfig,
+                        companyConfig,
+                        ocConfig,
+                        marketConfig,
+                        spyDatabase,
+                        userTracking,
+                        apiPoolConfig,
+                        bankRequests,
+                        inactivityAlerts: inactivityAlertsMemory,
+                        odAlerts: odAlertsMemory,
+                        ocAlertTracker: (typeof ocAlertTracker !== 'undefined' ? ocAlertTracker : {}),
+                        ocMemory: (typeof ocMemory !== 'undefined' ? ocMemory : {}),
+                        ocMemberHistory: (typeof ocMemberHistory !== 'undefined' ? ocMemberHistory : {}),
+                        giveaways: (typeof activeGiveaways !== 'undefined' ? activeGiveaways : {}),
+                        warFlightArchive,
+                        warAuditArchive,
+                        lastWarboardPayload: lastGoodWarboardPayload,
+                        updatedAt: new Date()
+                    }
+                },
+                { upsert: true }
+            ).catch(e => console.error('[Mongo] Config save error:', e.message));
+        }
+    }, 2000);
 }
 
 function saveDiscordConfig() { fs.writeFileSync('discord_config.json', JSON.stringify(discordConfig)); saveToMongo(); }
@@ -9088,6 +9093,9 @@ async function checkFactionOrganizedCrimes() {
         const mention = ocConfig.roleId ? `<@&${ocConfig.roleId}>` : "";
         const upcomingSec = (ocConfig.upcomingMinutes || 30) * 60;
         const activeOcMemberIds = new Set();
+        let trackerChanged = false;
+        let memoryChanged = false;
+        let historyChanged = false;
 
         for (const [crimeId, crime] of Object.entries(data.crimes)) {
             if (!crime) continue;
@@ -9112,9 +9120,16 @@ async function checkFactionOrganizedCrimes() {
 
                 if (crime.initiated === 0) {
                     activeOcMemberIds.add(pId);
-                    ocMemberHistory[pId] = now;
+                    if (ocMemberHistory[pId] !== now) {
+                        ocMemberHistory[pId] = now;
+                        historyChanged = true;
+                    }
                 } else if (crime.initiated === 1 && crime.time_completed) {
-                    ocMemberHistory[pId] = Math.max(ocMemberHistory[pId] || 0, crime.time_completed);
+                    const newTs = Math.max(ocMemberHistory[pId] || 0, crime.time_completed);
+                    if (ocMemberHistory[pId] !== newTs) {
+                        ocMemberHistory[pId] = newTs;
+                        historyChanged = true;
+                    }
                 }
 
                 const memberObj = members[pId];
@@ -9137,7 +9152,7 @@ async function checkFactionOrganizedCrimes() {
                 // Only alert if scheduled recently (within 45 minutes)
                 if (crime.time_started && (now - crime.time_started < 2700)) {
                     tracker.planned = true;
-                    saveOcAlertTracker();
+                    trackerChanged = true;
                     const plannerObj = members[String(crime.planned_by)];
                     const plannerName = plannerObj?.name ? `${plannerObj.name} [${crime.planned_by}]` : `Player [${crime.planned_by}]`;
                     const readyTimeStr = crime.time_ready ? `<t:${crime.time_ready}:F> (<t:${crime.time_ready}:R>)` : "Unknown";
@@ -9154,7 +9169,7 @@ async function checkFactionOrganizedCrimes() {
                     }, mention).catch(() => {});
                 } else {
                     tracker.planned = true;
-                    saveOcAlertTracker();
+                    trackerChanged = true;
                 }
             }
 
@@ -9162,7 +9177,7 @@ async function checkFactionOrganizedCrimes() {
             const timeLeft = crime.time_left !== undefined ? crime.time_left : (crime.time_ready ? (crime.time_ready - now) : 9999);
             if (crime.initiated === 0 && timeLeft > 0 && timeLeft <= upcomingSec && !tracker.upcoming && (ocConfig.alertUpcoming !== false)) {
                 tracker.upcoming = true;
-                saveOcAlertTracker();
+                trackerChanged = true;
                 await sendChannelMessage(botToken, channelId, {
                     title: `⏳ OC Upcoming: ${crime.crime_name}`,
                     description: `Crime is scheduled to become ready in **<t:${crime.time_ready}:R>** (<t:${crime.time_ready}:t>)!\n\n` +
@@ -9184,7 +9199,7 @@ async function checkFactionOrganizedCrimes() {
                     // Delayed: Participants holding up team!
                     if (!tracker.delayed && (ocConfig.alertDelayed !== false)) {
                         tracker.delayed = true;
-                        saveOcAlertTracker();
+                        trackerChanged = true;
                         const delayLines = unavailableMembers.map(u => {
                             const untilStr = u.until ? ` · Free <t:${u.until}:R>` : '';
                             return `• ❌ **[${u.name} [${u.id}]](https://www.torn.com/profiles.php?XID=${u.id})**: **${u.state}** (${u.desc}${untilStr})`;
@@ -9204,7 +9219,7 @@ async function checkFactionOrganizedCrimes() {
                     // Ready: All team members present and clear!
                     if (!tracker.ready && (ocConfig.alertReady !== false)) {
                         tracker.ready = true;
-                        saveOcAlertTracker();
+                        trackerChanged = true;
                         await sendChannelMessage(botToken, channelId, {
                             title: `🟢 OC Ready to Launch: ${crime.crime_name}`,
                             description: `All team members are in Torn City and available! Planner can initiate the crime now.\n\n` +
@@ -9216,16 +9231,18 @@ async function checkFactionOrganizedCrimes() {
                     }
                 }
             } else if (isStaleReady) {
-                tracker.ready = true;
-                tracker.delayed = true;
-                saveOcAlertTracker();
+                if (!tracker.ready || !tracker.delayed) {
+                    tracker.ready = true;
+                    tracker.delayed = true;
+                    trackerChanged = true;
+                }
             }
 
             // ── TRIGGER 5: OC Completed / Outcome Report ───────────────────────
             if (crime.initiated === 1 && (crime.time_completed > 0 || crime.success !== undefined) && !tracker.completed && (ocConfig.alertCompleted !== false)) {
                 if (crime.time_completed && (now - crime.time_completed < 1800)) {
                     tracker.completed = true;
-                    saveOcAlertTracker();
+                    trackerChanged = true;
                     const isSuccess = crime.success === 1;
                     const moneyGain = crime.money_gain ? `$${Number(crime.money_gain).toLocaleString()}` : '$0';
                     const respectGain = crime.respect_gain || 0;
@@ -9245,7 +9262,7 @@ async function checkFactionOrganizedCrimes() {
                     }, mention).catch(() => {});
                 } else {
                     tracker.completed = true;
-                    saveOcAlertTracker();
+                    trackerChanged = true;
                 }
             }
         }
@@ -9276,7 +9293,10 @@ async function checkFactionOrganizedCrimes() {
 
                     // Mark player as active in an OC
                     activeOcMemberIds.add(String(pId));
-                    ocMemberHistory[String(pId)] = now;
+                    if (ocMemberHistory[String(pId)] !== now) {
+                        ocMemberHistory[String(pId)] = now;
+                        historyChanged = true;
+                    }
 
                     // Trigger 6: Missing Required Items Check (At most ONCE per crime per item)
                     if (ocConfig.alertMissingItems !== false && slot.item_requirement && !slot.item_requirement.is_available) {
@@ -9288,7 +9308,7 @@ async function checkFactionOrganizedCrimes() {
                         const trackingId = `item_${v2Crime.id}_${pId}_${itemId}`;
                         if (!ocMemory[trackingId]) {
                             ocMemory[trackingId] = Date.now();
-                            saveOcMemory();
+                            memoryChanged = true;
                             await sendChannelMessage(botToken, channelId, {
                                 title: `🚨 OC Issue: ${v2Crime.name}`,
                                 description: `**Player:** [${pName}](${profileUrl})\n` +
@@ -9307,7 +9327,7 @@ async function checkFactionOrganizedCrimes() {
                             const trackingId = `lowcpr_${v2Crime.id}_${pId}`;
                             if (!ocMemory[trackingId]) {
                                 ocMemory[trackingId] = Date.now();
-                                saveOcMemory();
+                                memoryChanged = true;
                                 await sendChannelMessage(botToken, channelId, {
                                     title: `⚠️ Low CPR in OC: ${v2Crime.name}`,
                                     description: `**[${pName}](${profileUrl})** [${pId}] joined role **${roleLabel}** in **${v2Crime.name}** (Difficulty Level **${diffLvl}**), but only has **${passRate}% CPR**.\n\n` +
@@ -9323,9 +9343,6 @@ async function checkFactionOrganizedCrimes() {
                 }
             }
         }
-
-        // Save updated member participation history
-        saveOcMemberHistory(ocMemberHistory);
 
         // ── TRIGGER 8: No OC Participation for 1 Day (24 Hours) ──────────
         if (ocConfig.alertNoParticipation !== false && members && Object.keys(members).length > 0) {
@@ -9357,7 +9374,7 @@ async function checkFactionOrganizedCrimes() {
                     // Alert at most once per 24 hours per member until they join an OC
                     if (!ocMemory[trackingId] || (Date.now() - ocMemory[trackingId]) > 86400000) {
                         ocMemory[trackingId] = Date.now();
-                        saveOcMemory();
+                        memoryChanged = true;
 
                         const inactiveHours = Math.floor(secSinceLastOc / 3600);
                         const daysText = lastOcTs > 0
@@ -9383,6 +9400,11 @@ async function checkFactionOrganizedCrimes() {
                 }
             }
         }
+
+        // Batch persist state changes once after all triggers to prevent event loop saturation
+        if (trackerChanged) saveOcAlertTracker();
+        if (memoryChanged) saveOcMemory();
+        if (historyChanged) saveOcMemberHistory(ocMemberHistory);
     } catch(err) {
         // Transient API errors ignored
     } finally {
