@@ -2470,6 +2470,134 @@ app.post('/api/discord/post-verification-card', async (req, res) => {
     }
 });
 
+// API endpoint: Send message through the bot to one or multiple Discord channels
+app.post('/api/discord/send-bot-message', async (req, res) => {
+    try {
+        const token = (discordConfig.globalBotToken || '').trim();
+        if (!token) {
+            return res.status(400).json({ error: "F.R.I.D.A.Y bot is not currently connected. Please configure and save your Bot Token first." });
+        }
+
+        let { channelIds, message, mention, asEmbed, embedTitle, embedColor, embedFooter } = req.body;
+
+        // Parse and clean channel IDs
+        let targetIds = [];
+        if (Array.isArray(channelIds)) {
+            targetIds = channelIds.map(id => String(id).trim().replace(/[^0-9]/g, '')).filter(Boolean);
+        } else if (typeof channelIds === 'string') {
+            targetIds = channelIds.split(',').map(id => id.trim().replace(/[^0-9]/g, '')).filter(Boolean);
+        }
+        targetIds = [...new Set(targetIds)];
+
+        if (targetIds.length === 0) {
+            return res.status(400).json({ error: "Please select or enter at least one destination Channel ID." });
+        }
+
+        message = (message || '').trim();
+        if (!message) {
+            return res.status(400).json({ error: "Message content cannot be empty." });
+        }
+
+        // Construct mention string if requested
+        let mentionText = '';
+        if (mention === 'everyone') {
+            mentionText = '@everyone\n';
+        } else if (mention === 'here') {
+            mentionText = '@here\n';
+        } else if (mention && /^\d+$/.test(mention)) {
+            mentionText = `<@&${mention}>\n`;
+        }
+
+        let messagePayload = {};
+        if (asEmbed) {
+            const hexClean = (embedColor || '#5865f2').replace('#', '');
+            const colorNum = parseInt(hexClean, 16) || 0x5865f2;
+            const embedObj = {
+                title: embedTitle ? embedTitle.slice(0, 250) : undefined,
+                description: message.slice(0, 4000),
+                color: colorNum,
+                footer: embedFooter ? { text: embedFooter.slice(0, 2048) } : { text: "F.R.I.D.A.Y • Faction Operations" },
+                timestamp: new Date().toISOString()
+            };
+            messagePayload = {
+                content: mentionText ? mentionText.trim() : undefined,
+                embeds: [sanitizeEmbed(embedObj)]
+            };
+        } else {
+            // Natural plain chat message directly from the bot
+            const fullContent = mentionText ? `${mentionText}${message}` : message;
+            messagePayload = {
+                content: fullContent.slice(0, 2000)
+            };
+        }
+
+        const results = [];
+        let successCount = 0;
+
+        for (const chanId of targetIds) {
+            let channelName = chanId;
+            let delivered = false;
+            let errorDetail = null;
+            let messageId = null;
+
+            // Method 1: Use Discord.js client if ready
+            if (slashCommandBot && slashCommandBot.isReady?.()) {
+                try {
+                    const chan = await slashCommandBot.channels.fetch(chanId).catch(() => null);
+                    if (chan && chan.isTextBased()) {
+                        channelName = chan.name ? `#${chan.name}` : chanId;
+                        const sent = await chan.send(messagePayload);
+                        delivered = true;
+                        messageId = sent.id;
+                    }
+                } catch (e) {
+                    errorDetail = e.message;
+                }
+            }
+
+            // Method 2: Fallback to Discord REST API directly
+            if (!delivered) {
+                try {
+                    const restRes = await fetch(`https://discord.com/api/v10/channels/${chanId}/messages`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bot ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(messagePayload)
+                    });
+                    const data = await restRes.json();
+                    if (restRes.ok && data.id) {
+                        delivered = true;
+                        messageId = data.id;
+                    } else {
+                        errorDetail = data.message || `HTTP ${restRes.status} from Discord API`;
+                    }
+                } catch (e) {
+                    errorDetail = errorDetail || e.message;
+                }
+            }
+
+            if (delivered) {
+                successCount++;
+                results.push({ channelId: chanId, channelName, success: true, messageId });
+            } else {
+                results.push({ channelId: chanId, channelName, success: false, error: errorDetail || "Failed to deliver message" });
+            }
+        }
+
+        return res.json({
+            success: successCount > 0,
+            sentCount: successCount,
+            totalCount: targetIds.length,
+            results
+        });
+    } catch (err) {
+        console.error("[Send Bot Message Error]:", err);
+        return res.status(500).json({ error: err.message || "Internal server error sending message" });
+    }
+});
+
 // API endpoint: Auto-detect Discord Guild, channels, and roles
 app.get('/api/discord/guild-info', async (req, res) => {
     try {
@@ -2487,6 +2615,8 @@ app.get('/api/discord/guild-info', async (req, res) => {
             return res.status(401).json({ error: meData.message || "Invalid bot token" });
         }
 
+        const botAvatarUrl = meData.avatar ? `https://cdn.discordapp.com/avatars/${meData.id}/${meData.avatar}.png` : null;
+
         // 2. Fetch guilds the bot is in
         const guildsRes = await fetch('https://discord.com/api/v10/users/@me/guilds', { headers });
         const guilds = await guildsRes.json();
@@ -2497,7 +2627,7 @@ app.get('/api/discord/guild-info', async (req, res) => {
         if (guilds.length === 0) {
             return res.json({
                 success: true,
-                bot: { id: meData.id, username: meData.username },
+                bot: { id: meData.id, username: meData.username, avatar: botAvatarUrl },
                 guilds: [],
                 guildId: null,
                 guildName: null,
@@ -2572,7 +2702,7 @@ app.get('/api/discord/guild-info', async (req, res) => {
 
         res.json({
             success: true,
-            bot: { id: meData.id, username: meData.username },
+            bot: { id: meData.id, username: meData.username, avatar: botAvatarUrl },
             guilds: guilds.map(g => ({ id: g.id, name: g.name, icon: g.icon })),
             guildId: activeGuildId,
             guildName: activeGuild.name,

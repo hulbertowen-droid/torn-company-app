@@ -190,6 +190,204 @@
 
         #bot-invite-link { display: none; font-size: 0.76em; font-weight: 700; color: var(--discord); text-decoration: none; background: var(--discord-dim); border: 1px solid var(--discord-border); padding: 4px 10px; border-radius: 6px; }
 
+        /* ── Speak as Bot / Broadcaster Styles ── */
+        .channel-pills-wrap {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            max-height: 180px;
+            overflow-y: auto;
+            padding: 8px;
+            background: rgba(0,0,0,0.22);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .channel-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 10px;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.035);
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            font-size: 0.8em;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.18s ease;
+        }
+        .channel-pill:hover {
+            background: rgba(255,255,255,0.07);
+            border-color: rgba(255,255,255,0.18);
+            color: var(--text-main);
+        }
+        .channel-pill.selected {
+            background: rgba(88,101,242,0.18);
+            border-color: #5865f2;
+            color: #fff;
+            font-weight: 600;
+        }
+        .channel-pill .chan-cat {
+            font-size: 0.8em;
+            color: var(--text-dim);
+            opacity: 0.8;
+        }
+        .channel-pill.selected .chan-cat {
+            color: #c9cdfb;
+        }
+        .template-chip {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            font-size: 0.74em;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .template-chip:hover {
+            background: rgba(255,255,255,0.1);
+            color: var(--text-main);
+            border-color: rgba(255,255,255,0.2);
+        }
+        .color-preset-btn {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: transform 0.15s, border-color 0.15s;
+        }
+        .color-preset-btn:hover {
+            transform: scale(1.15);
+            border-color: #fff;
+        }
+
+        /* Live Discord Message Preview */
+        .discord-preview-box {
+            background: #313338;
+            border: 1px solid #232428;
+            border-radius: 8px;
+            padding: 14px 16px;
+            display: flex;
+            gap: 14px;
+            font-family: 'gg sans', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .dc-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #5865F2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+            overflow: hidden;
+        }
+        .dc-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .dc-msg-body {
+            flex: 1;
+            min-width: 0;
+        }
+        .dc-header {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+        .dc-name {
+            color: #f2f3f5;
+            font-size: 0.94em;
+            font-weight: 600;
+        }
+        .dc-bot-tag {
+            background: #5865F2;
+            color: #fff;
+            font-size: 9px;
+            font-weight: 700;
+            padding: 1px 4px;
+            border-radius: 3px;
+            line-height: 1.2;
+            vertical-align: middle;
+        }
+        .dc-timestamp {
+            color: #949ba4;
+            font-size: 0.72em;
+            font-weight: 400;
+        }
+        .dc-content {
+            color: #dbdee1;
+            font-size: 0.9em;
+            line-height: 1.375;
+            word-break: break-word;
+            white-space: pre-wrap;
+        }
+        .dc-mention {
+            background: hsla(235, 85.6%, 64.7%, 0.15);
+            color: #c9cdfb;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-weight: 500;
+            display: inline-block;
+        }
+        .dc-embed {
+            background: #2b2d31;
+            border-left: 4px solid #5865F2;
+            border-radius: 4px;
+            padding: 10px 14px;
+            margin-top: 6px;
+            max-width: 520px;
+        }
+        .dc-embed-title {
+            font-weight: 700;
+            font-size: 0.92em;
+            color: #f2f3f5;
+            margin-bottom: 4px;
+        }
+        .dc-embed-desc {
+            font-size: 0.86em;
+            color: #dbdee1;
+            line-height: 1.35;
+            word-break: break-word;
+            white-space: pre-wrap;
+        }
+        .dc-embed-footer {
+            font-size: 0.72em;
+            color: #949ba4;
+            margin-top: 8px;
+        }
+        .dc-codeblock {
+            background: #1e1f22;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.85em;
+            color: #dbdee1;
+            margin: 4px 0;
+            overflow-x: auto;
+        }
+        .dc-inlinecode {
+            background: #1e1f22;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 0.85em;
+            color: #dbdee1;
+        }
+        .dc-quote {
+            border-left: 4px solid #4e5058;
+            padding-left: 10px;
+            margin: 4px 0;
+            color: #949ba4;
+        }
+
         @media(max-width: 700px) {
             .field-grid { grid-template-columns: 1fr; }
             .alerts-hero { flex-direction: column; align-items: flex-start; }
@@ -477,6 +675,171 @@
                         </button>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- 💬 Speak as Bot / Channel Broadcaster Card -->
+        <div class="card" id="card-bot-broadcaster" style="border-left: 3px solid #5865f2;">
+            <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+                <div>
+                    <p class="card-title" style="display:flex;align-items:center;gap:8px;margin:0;">
+                        <span>🤖</span> Speak as Bot <span class="tag faction" style="background:rgba(88,101,242,0.15);color:#5865f2;border:1px solid rgba(88,101,242,0.3);">BROADCASTER</span>
+                    </p>
+                    <p class="card-desc" style="margin:4px 0 0;">Broadcast messages, alerts, or orders directly through F.R.I.D.A.Y. Looks natively posted by the bot in Discord with the verified BOT badge. Select one or multiple channels to broadcast simultaneously.</p>
+                </div>
+                <div id="broadcaster-bot-tag" style="display:flex;align-items:center;gap:8px;background:rgba(88,101,242,0.1);padding:5px 12px;border-radius:20px;border:1px solid rgba(88,101,242,0.25);">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#2ed573;"></span>
+                    <span style="font-size:0.8em;font-weight:700;color:var(--text-main);" id="broadcaster-bot-name">F.R.I.D.A.Y</span>
+                    <span style="background:#5865F2;color:#fff;font-size:10px;padding:1px 4px;border-radius:3px;font-weight:700;">BOT</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Channel Selector Section -->
+                <div style="margin-bottom:18px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+                        <label class="field-label" style="margin:0;display:flex;align-items:center;gap:6px;">
+                            <span>📡</span> Destination Channel(s)
+                            <span id="selected-channels-badge" style="background:rgba(0,206,201,0.12);color:var(--teal);border:1px solid rgba(0,206,201,0.25);font-size:0.75em;padding:2px 8px;border-radius:12px;font-weight:700;">0 selected</span>
+                        </label>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                            <button type="button" class="btn-test" onclick="quickSelectChannel('main')" style="font-size:0.75em;padding:3px 8px;">🚨 Main Alert</button>
+                            <button type="button" class="btn-test" onclick="quickSelectChannel('oc')" style="font-size:0.75em;padding:3px 8px;">💼 OC Channel</button>
+                            <button type="button" class="btn-test" onclick="quickSelectChannel('inactivity')" style="font-size:0.75em;padding:3px 8px;">💤 Inactivity</button>
+                            <button type="button" class="btn-test" onclick="quickSelectChannel('banking')" style="font-size:0.75em;padding:3px 8px;">🏦 Banking</button>
+                            <button type="button" class="btn-test" onclick="selectAllBroadcastChannels(true)" style="font-size:0.75em;padding:3px 8px;color:var(--green);">✅ All</button>
+                            <button type="button" class="btn-test" onclick="selectAllBroadcastChannels(false)" style="font-size:0.75em;padding:3px 8px;color:var(--red);">❌ Clear</button>
+                        </div>
+                    </div>
+
+                    <!-- Channel Pills Container -->
+                    <div id="broadcast-channels-container" class="channel-pills-wrap">
+                        <div style="color:var(--text-dim);font-size:0.8em;padding:6px;">Connect your Bot Token or click "Refresh Channels" to discover text channels, or enter Custom Channel IDs below.</div>
+                    </div>
+
+                    <!-- Custom Channel ID Input for extra / manual channels -->
+                    <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+                        <span style="font-size:0.8em;color:var(--text-dim);white-space:nowrap;">✏️ Custom Channel ID(s):</span>
+                        <input type="text" id="custom-broadcast-channels" class="field-input" placeholder="e.g. 123456789012345678, 987654321098765432 (comma-separated)" style="font-size:0.82em;padding:6px 10px;" oninput="updateBroadcastPreview()">
+                    </div>
+                </div>
+
+                <!-- Formatting & Mention Options Row -->
+                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));gap:12px;margin-bottom:16px;">
+                    <!-- Mention Selector -->
+                    <div>
+                        <label class="field-label" for="broadcast-mention-select">📢 Audience Mention / Ping</label>
+                        <select id="broadcast-mention-select" class="field-input" onchange="updateBroadcastPreview()" style="font-size:0.86em;">
+                            <option value="">No Mention (Silent / Normal)</option>
+                            <option value="everyone">@everyone (Notify all members)</option>
+                            <option value="here">@here (Notify online members)</option>
+                            <optgroup label="Server Roles" id="broadcast-role-group">
+                                <!-- Dynamically populated from serverRoles -->
+                            </optgroup>
+                        </select>
+                    </div>
+
+                    <!-- Mode Selector: Plain text vs Embed Card -->
+                    <div>
+                        <label class="field-label">💬 Message Style</label>
+                        <div style="display:flex;gap:14px;align-items:center;padding-top:6px;">
+                            <label style="display:flex;align-items:center;gap:6px;font-size:0.85em;cursor:pointer;color:var(--text-main);">
+                                <input type="radio" name="broadcast_msg_style" value="chat" checked onchange="onBroadcastStyleChange()">
+                                <span>💬 Plain Chat <span style="color:var(--text-dim);font-size:0.85em;">(Bot chats directly)</span></span>
+                            </label>
+                            <label style="display:flex;align-items:center;gap:6px;font-size:0.85em;cursor:pointer;color:var(--text-main);">
+                                <input type="radio" name="broadcast_msg_style" value="embed" onchange="onBroadcastStyleChange()">
+                                <span>📋 Announcement Card <span style="color:var(--text-dim);font-size:0.85em;">(Rich Embed)</span></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Rich Embed Customization Options (Toggled when embed style is selected) -->
+                <div id="embed-options-panel" style="display:none;background:rgba(0,0,0,0.22);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:16px;">
+                    <div style="font-size:0.84em;font-weight:700;color:var(--text-main);margin-bottom:10px;">🎨 Embed Card Customization</div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:10px;">
+                        <div>
+                            <label class="field-label" style="font-size:0.78em;">Embed Title</label>
+                            <input type="text" id="embed-title-input" class="field-input" placeholder="e.g. 🚨 Official Faction Directive" style="font-size:0.84em;" oninput="updateBroadcastPreview()">
+                        </div>
+                        <div>
+                            <label class="field-label" style="font-size:0.78em;">Accent Color</label>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <input type="color" id="embed-color-input" value="#5865F2" style="width:36px;height:32px;border:none;background:none;cursor:pointer;border-radius:4px;" onchange="updateBroadcastPreview()">
+                                <button type="button" class="color-preset-btn" onclick="setEmbedColor('#5865F2')" style="background:#5865F2;" title="Blurple"></button>
+                                <button type="button" class="color-preset-btn" onclick="setEmbedColor('#2ed573')" style="background:#2ed573;" title="Green"></button>
+                                <button type="button" class="color-preset-btn" onclick="setEmbedColor('#ff4757')" style="background:#ff4757;" title="Red"></button>
+                                <button type="button" class="color-preset-btn" onclick="setEmbedColor('#ffa502')" style="background:#ffa502;" title="Gold"></button>
+                                <button type="button" class="color-preset-btn" onclick="setEmbedColor('#00cec9')" style="background:#00cec9;" title="Teal"></button>
+                                <button type="button" class="color-preset-btn" onclick="setEmbedColor('#9b59b6')" style="background:#9b59b6;" title="Purple"></button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="field-label" style="font-size:0.78em;">Footer Text</label>
+                            <input type="text" id="embed-footer-input" class="field-input" placeholder="F.R.I.D.A.Y • Faction Operations" style="font-size:0.84em;" oninput="updateBroadcastPreview()">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Message Templates & Composer -->
+                <div style="margin-bottom:16px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+                        <label class="field-label" for="broadcast-content" style="margin:0;">📝 Message Content</label>
+                        <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;">
+                            <span style="font-size:0.75em;color:var(--text-dim);">Templates:</span>
+                            <button type="button" class="template-chip" onclick="applyTemplate('war')">⚔️ War Call</button>
+                            <button type="button" class="template-chip" onclick="applyTemplate('chain')">🔗 Chain Alert</button>
+                            <button type="button" class="template-chip" onclick="applyTemplate('oc')">💼 OC Slots</button>
+                            <button type="button" class="template-chip" onclick="applyTemplate('payout')">💰 Payouts</button>
+                            <button type="button" class="template-chip" onclick="applyTemplate('clear')">🧼 Clear</button>
+                        </div>
+                    </div>
+                    <textarea id="broadcast-content" rows="4" class="field-input" style="font-family:'Inter',system-ui,sans-serif;resize:vertical;font-size:0.9em;line-height:1.5;min-height:95px;" placeholder="Type what you want the bot to say... Markdown supported: **bold**, *italics*, `code`, > quotes, - lists, emojis" oninput="updateBroadcastPreview()"></textarea>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;font-size:0.75em;color:var(--text-dim);">
+                        <span>Formatting: <code>**bold**</code>, <code>*italic*</code>, <code>```code```</code>, <code>> quote</code>, <code># heading</code></span>
+                        <span id="broadcast-char-count">0 / 2000</span>
+                    </div>
+                </div>
+
+                <!-- Live Discord Message Preview -->
+                <div style="margin-bottom:18px;">
+                    <div style="font-size:0.78em;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                        <span>👁️</span> Live Discord Chat Preview <span style="font-size:0.9em;font-weight:400;text-transform:none;">(How it will appear in Discord)</span>
+                    </div>
+                    <div class="discord-preview-box">
+                        <div class="dc-avatar" id="dc-preview-avatar">🤖</div>
+                        <div class="dc-msg-body">
+                            <div class="dc-header">
+                                <span class="dc-name" id="dc-preview-name">F.R.I.D.A.Y</span>
+                                <span class="dc-bot-tag">BOT</span>
+                                <span class="dc-timestamp" id="dc-preview-timestamp">Today at 10:14 PM</span>
+                            </div>
+                            <!-- Live mention preview -->
+                            <div id="dc-preview-mention" style="display:none;margin-bottom:4px;"></div>
+                            
+                            <!-- Plain text message preview -->
+                            <div id="dc-preview-text" class="dc-content">Type a message above to preview how F.R.I.D.A.Y will speak in Discord...</div>
+
+                            <!-- Embed card preview -->
+                            <div id="dc-preview-embed" class="dc-embed" style="display:none;">
+                                <div class="dc-embed-title" id="dc-embed-title" style="display:none;"></div>
+                                <div class="dc-embed-desc" id="dc-embed-desc">Type a message above to preview the announcement card...</div>
+                                <div class="dc-embed-footer" id="dc-embed-footer">F.R.I.D.A.Y • Faction Operations</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action & Status Row -->
+                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                    <button type="button" id="btn-send-broadcast" class="btn-save" onclick="sendBroadcastMessage()" style="background:#5865F2;display:flex;align-items:center;gap:8px;font-size:0.92em;padding:10px 22px;">
+                        <span>🚀</span> Send Message as F.R.I.D.A.Y
+                    </button>
+                    <span id="broadcast-status-msg" style="font-size:0.86em;font-weight:600;"></span>
+                </div>
+
+                <!-- Detailed Delivery Report Container -->
+                <div id="broadcast-delivery-report" style="display:none;margin-top:14px;padding:12px 14px;border-radius:8px;border:1px solid var(--border);background:rgba(0,0,0,0.25);font-size:0.84em;"></div>
             </div>
         </div>
 
@@ -1205,7 +1568,11 @@ async function fetchGuildAndChannels(force = false) {
             serverRoles = data.roles || [];
             populateChannelSelects();
             populateRoleSelects();
+            renderBroadcastChannels();
+            populateBroadcastRoles();
+            if (data.bot) updateBroadcasterBotInfo(data.bot);
         } else if (data.bot) {
+            updateBroadcasterBotInfo(data.bot);
             const nameEl = document.getElementById('detected-server-name');
             const detailEl = document.getElementById('detected-server-detail');
             if (nameEl) nameEl.textContent = `Bot: ${data.bot.username}`;
@@ -1411,6 +1778,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (tokenVal && tokenVal.length > 20) {
             fetchGuildAndChannels();
         }
+        updateBroadcastPreview();
 
         const localFfKey = localStorage.getItem('warboard_ffkey') || '';
         const localEnemyId = localStorage.getItem('warboard_enemyId') || '';
@@ -1798,6 +2166,382 @@ async function lookupCountry(country) {
         if (embed.footer) html += '<div style="font-size:0.72em;color:var(--text-dim);margin-top:9px;border-top:1px solid var(--border);padding-top:7px;">' + embed.footer.text + '</div>';
         panel.innerHTML = html;
     } catch (e) { panel.innerHTML = '<div style="color:var(--red);font-size:0.86em;">❌ ' + (e.message || 'Failed') + '</div>'; }
+}
+
+// ── Speak as Bot / Channel Broadcaster System ──
+let currentBotInfo = { username: 'F.R.I.D.A.Y', avatar: null };
+
+function updateBroadcasterBotInfo(bot) {
+    if (!bot) return;
+    currentBotInfo = bot;
+    const nameEl = document.getElementById('broadcaster-bot-name');
+    const prevName = document.getElementById('dc-preview-name');
+    const prevAvatar = document.getElementById('dc-preview-avatar');
+    if (nameEl && bot.username) nameEl.textContent = bot.username;
+    if (prevName && bot.username) prevName.textContent = bot.username;
+    if (prevAvatar) {
+        if (bot.avatar) {
+            prevAvatar.innerHTML = `<img src="${bot.avatar}" alt="${bot.username || 'Bot'}">`;
+        } else {
+            prevAvatar.innerHTML = `🤖`;
+        }
+    }
+}
+
+function renderBroadcastChannels() {
+    const container = document.getElementById('broadcast-channels-container');
+    if (!container) return;
+    if (!serverChannels || serverChannels.length === 0) {
+        container.innerHTML = `<div style="color:var(--text-dim);font-size:0.8em;padding:6px;">No text channels discovered yet. Ensure Bot Token is saved and bot has permissions.</div>`;
+        return;
+    }
+
+    // Default: Check the main alert channel if configured
+    const mainChanId = (document.getElementById('global-channelid')?.value.trim() || '');
+
+    let html = '';
+    serverChannels.forEach(c => {
+        const cat = c.parentName ? `<span class="chan-cat">[${c.parentName}]</span>` : '';
+        const isDefault = (c.id === mainChanId);
+        html += `
+            <label class="channel-pill ${isDefault ? 'selected' : ''}" id="pill-${c.id}" onclick="onChannelPillClick('${c.id}', event)">
+                <input type="checkbox" class="broadcast-chan-cb" data-id="${c.id}" data-name="${c.name}" ${isDefault ? 'checked' : ''} onchange="updateSelectedChannelsBadge()">
+                <span>#${c.name}</span>
+                ${cat}
+            </label>
+        `;
+    });
+    container.innerHTML = html;
+    updateSelectedChannelsBadge();
+}
+
+function onChannelPillClick(chanId, event) {
+    setTimeout(() => {
+        const pill = document.getElementById(`pill-${chanId}`);
+        const cb = pill?.querySelector('.broadcast-chan-cb');
+        if (pill && cb) {
+            pill.classList.toggle('selected', cb.checked);
+        }
+        updateSelectedChannelsBadge();
+    }, 10);
+}
+
+function populateBroadcastRoles() {
+    const group = document.getElementById('broadcast-role-group');
+    if (!group) return;
+    if (!serverRoles || serverRoles.length === 0) {
+        group.innerHTML = '';
+        return;
+    }
+    group.innerHTML = serverRoles.map(r => `<option value="${r.id}">@${r.name}</option>`).join('');
+}
+
+function updateSelectedChannelsBadge() {
+    const checked = document.querySelectorAll('.broadcast-chan-cb:checked');
+    const customInput = document.getElementById('custom-broadcast-channels');
+    const customIds = (customInput?.value || '').split(',').map(s => s.trim().replace(/[^0-9]/g, '')).filter(Boolean);
+    const totalCount = checked.length + customIds.length;
+
+    const badge = document.getElementById('selected-channels-badge');
+    if (badge) {
+        badge.textContent = `${totalCount} selected`;
+        badge.style.background = totalCount > 0 ? 'rgba(88,101,242,0.18)' : 'rgba(255,255,255,0.05)';
+        badge.style.color = totalCount > 0 ? '#c9cdfb' : 'var(--text-dim)';
+        badge.style.borderColor = totalCount > 0 ? '#5865f2' : 'var(--border)';
+    }
+
+    document.querySelectorAll('.broadcast-chan-cb').forEach(cb => {
+        const pill = cb.closest('.channel-pill');
+        if (pill) pill.classList.toggle('selected', cb.checked);
+    });
+}
+
+function quickSelectChannel(type) {
+    let targetId = '';
+    if (type === 'main') targetId = document.getElementById('global-channelid')?.value.trim();
+    else if (type === 'oc') targetId = document.getElementById('oc-channelid')?.value.trim();
+    else if (type === 'inactivity') targetId = document.getElementById('inactivity-channelid')?.value.trim();
+    else if (type === 'banking') targetId = document.getElementById('banking-channelid')?.value.trim();
+
+    if (!targetId) {
+        const statusMsg = document.getElementById('broadcast-status-msg');
+        if (statusMsg) {
+            statusMsg.style.color = 'var(--gold)';
+            statusMsg.textContent = `ℹ️ ${type.toUpperCase()} Channel is not configured yet in Bot Credentials above.`;
+            setTimeout(() => { statusMsg.textContent = ''; }, 5000);
+        }
+        return;
+    }
+
+    let found = false;
+    document.querySelectorAll('.broadcast-chan-cb').forEach(cb => {
+        if (cb.dataset.id === targetId) {
+            cb.checked = true;
+            found = true;
+        }
+    });
+
+    if (!found) {
+        const customInput = document.getElementById('custom-broadcast-channels');
+        if (customInput) {
+            const current = customInput.value.split(',').map(s => s.trim()).filter(Boolean);
+            if (!current.includes(targetId)) {
+                current.push(targetId);
+                customInput.value = current.join(', ');
+            }
+        }
+    }
+    updateSelectedChannelsBadge();
+}
+
+function selectAllBroadcastChannels(select) {
+    document.querySelectorAll('.broadcast-chan-cb').forEach(cb => {
+        cb.checked = select;
+    });
+    if (!select) {
+        const customInput = document.getElementById('custom-broadcast-channels');
+        if (customInput) customInput.value = '';
+    }
+    updateSelectedChannelsBadge();
+}
+
+function onBroadcastStyleChange() {
+    const isEmbed = document.querySelector('input[name="broadcast_msg_style"]:checked')?.value === 'embed';
+    const panel = document.getElementById('embed-options-panel');
+    if (panel) panel.style.display = isEmbed ? 'block' : 'none';
+    updateBroadcastPreview();
+}
+
+function setEmbedColor(color) {
+    const input = document.getElementById('embed-color-input');
+    if (input) input.value = color;
+    updateBroadcastPreview();
+}
+
+function applyTemplate(type) {
+    const content = document.getElementById('broadcast-content');
+    const titleInput = document.getElementById('embed-title-input');
+    if (!content) return;
+
+    if (type === 'war') {
+        content.value = `🚨 **FACTION WAR CALL TO ARMS** 🚨\n\nAttention hitters: War is live! Ensure your energy is stacked, medical supplies are loaded, and coordinate hits via the live warboard.\n\n🎯 Check targets on the dashboard: https://spider-verse.net/\n⚔️ Remember to claim targets before hitting!`;
+        if (titleInput) titleInput.value = `⚔️ Official Faction War Directive`;
+        setEmbedColor('#ff4757');
+    } else if (type === 'chain') {
+        content.value = `⚠️ **CHAIN DROP WARNING** ⚠️\n\nThe faction chain is under 90 seconds! Any available member please hit an attackable target immediately to protect our chain bonus!`;
+        if (titleInput) titleInput.value = `🔗 Urgent Chain Watch Alert`;
+        setEmbedColor('#ffa502');
+    } else if (type === 'oc') {
+        content.value = `💼 **ORGANIZED CRIME TEAMS READY**\n\nNew OC assignments are open. Please check your assigned roles and ensure you have all required items in inventory. Let's get these crimes executed on time!`;
+        if (titleInput) titleInput.value = `💼 Organized Crime Briefing`;
+        setEmbedColor('#00cec9');
+    } else if (type === 'payout') {
+        content.value = `💰 **WAR PAYOUTS DISTRIBUTED**\n\nWar payouts have been calculated and credited to the faction vault balances. You can check your share using \`/payout\` or request withdrawals using \`/withdraw\`!`;
+        if (titleInput) titleInput.value = `💰 War Payout Notification`;
+        setEmbedColor('#2ed573');
+    } else if (type === 'clear') {
+        content.value = '';
+        if (titleInput) titleInput.value = '';
+    }
+    updateBroadcastPreview();
+}
+
+function formatDiscordMarkdown(text) {
+    if (!text) return '';
+    let escaped = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    escaped = escaped.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--blue);text-decoration:underline;">$1</a>');
+    escaped = escaped.replace(/```([\s\S]*?)```/g, '<pre class="dc-codeblock"><code>$1</code></pre>');
+    escaped = escaped.replace(/`([^`]+)`/g, '<code class="dc-inlinecode">$1</code>');
+    escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    escaped = escaped.replace(/_([^_]+)_/g, '<em>$1</em>');
+    escaped = escaped.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+    escaped = escaped.replace(/^> (.*)$/gm, '<blockquote class="dc-quote">$1</blockquote>');
+    escaped = escaped.replace(/^### (.*)$/gm, '<div style="font-weight:700;font-size:1.05em;margin:4px 0;">$1</div>');
+    escaped = escaped.replace(/^## (.*)$/gm, '<div style="font-weight:700;font-size:1.15em;margin:5px 0;">$1</div>');
+    escaped = escaped.replace(/^# (.*)$/gm, '<div style="font-weight:800;font-size:1.25em;margin:6px 0;">$1</div>');
+    escaped = escaped.replace(/\n/g, '<br>');
+    return escaped;
+}
+
+function updateBroadcastPreview() {
+    const content = (document.getElementById('broadcast-content')?.value || '');
+    const charCountEl = document.getElementById('broadcast-char-count');
+    const isEmbed = document.querySelector('input[name="broadcast_msg_style"]:checked')?.value === 'embed';
+    const limit = isEmbed ? 4000 : 2000;
+    if (charCountEl) {
+        charCountEl.textContent = `${content.length} / ${limit}`;
+        charCountEl.style.color = content.length > limit ? 'var(--red)' : 'var(--text-dim)';
+    }
+
+    const mentionSel = document.getElementById('broadcast-mention-select');
+    const mentionVal = mentionSel?.value || '';
+    const mentionPreviewEl = document.getElementById('dc-preview-mention');
+    if (mentionPreviewEl) {
+        if (mentionVal === 'everyone') {
+            mentionPreviewEl.innerHTML = `<span class="dc-mention">@everyone</span>`;
+            mentionPreviewEl.style.display = 'block';
+        } else if (mentionVal === 'here') {
+            mentionPreviewEl.innerHTML = `<span class="dc-mention">@here</span>`;
+            mentionPreviewEl.style.display = 'block';
+        } else if (mentionVal) {
+            const roleName = mentionSel.options[mentionSel.selectedIndex]?.text || `@Role`;
+            mentionPreviewEl.innerHTML = `<span class="dc-mention">${roleName}</span>`;
+            mentionPreviewEl.style.display = 'block';
+        } else {
+            mentionPreviewEl.style.display = 'none';
+        }
+    }
+
+    const timeEl = document.getElementById('dc-preview-timestamp');
+    if (timeEl) {
+        const now = new Date();
+        timeEl.textContent = `Today at ${now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+    }
+
+    const textPreviewEl = document.getElementById('dc-preview-text');
+    const embedPreviewEl = document.getElementById('dc-preview-embed');
+
+    if (!isEmbed) {
+        if (embedPreviewEl) embedPreviewEl.style.display = 'none';
+        if (textPreviewEl) {
+            textPreviewEl.style.display = 'block';
+            textPreviewEl.innerHTML = content ? formatDiscordMarkdown(content) : '<span style="color:#949ba4;font-style:italic;">Type a message above to preview how F.R.I.D.A.Y will speak in Discord...</span>';
+        }
+    } else {
+        if (textPreviewEl) textPreviewEl.style.display = 'none';
+        if (embedPreviewEl) {
+            embedPreviewEl.style.display = 'block';
+            const color = document.getElementById('embed-color-input')?.value || '#5865F2';
+            embedPreviewEl.style.borderLeftColor = color;
+
+            const title = (document.getElementById('embed-title-input')?.value || '').trim();
+            const titleEl = document.getElementById('dc-embed-title');
+            if (titleEl) {
+                if (title) {
+                    titleEl.textContent = title;
+                    titleEl.style.display = 'block';
+                } else {
+                    titleEl.style.display = 'none';
+                }
+            }
+
+            const descEl = document.getElementById('dc-embed-desc');
+            if (descEl) {
+                descEl.innerHTML = content ? formatDiscordMarkdown(content) : '<span style="color:#949ba4;font-style:italic;">Type a message above to preview the announcement card...</span>';
+            }
+
+            const footer = (document.getElementById('embed-footer-input')?.value || 'F.R.I.D.A.Y • Faction Operations').trim();
+            const footerEl = document.getElementById('dc-embed-footer');
+            if (footerEl) footerEl.textContent = footer;
+        }
+    }
+}
+
+async function sendBroadcastMessage() {
+    const btn = document.getElementById('btn-send-broadcast');
+    const statusMsg = document.getElementById('broadcast-status-msg');
+    const reportBox = document.getElementById('broadcast-delivery-report');
+    const content = (document.getElementById('broadcast-content')?.value || '').trim();
+
+    if (!content) {
+        if (statusMsg) {
+            statusMsg.style.color = 'var(--red)';
+            statusMsg.textContent = '❌ Please enter message text before sending.';
+            setTimeout(() => { statusMsg.textContent = ''; }, 4000);
+        }
+        return;
+    }
+
+    const checkedChannels = Array.from(document.querySelectorAll('.broadcast-chan-cb:checked'))
+        .map(cb => ({ id: cb.dataset.id, name: cb.dataset.name }));
+    const customVal = document.getElementById('custom-broadcast-channels')?.value || '';
+    const customIds = customVal.split(',').map(s => s.trim().replace(/[^0-9]/g, '')).filter(Boolean);
+
+    const allChannelIds = [...new Set([...checkedChannels.map(c => c.id), ...customIds])];
+
+    if (allChannelIds.length === 0) {
+        if (statusMsg) {
+            statusMsg.style.color = 'var(--red)';
+            statusMsg.textContent = '❌ Please select or enter at least one destination channel.';
+            setTimeout(() => { statusMsg.textContent = ''; }, 4000);
+        }
+        return;
+    }
+
+    const isEmbed = document.querySelector('input[name="broadcast_msg_style"]:checked')?.value === 'embed';
+    const mention = document.getElementById('broadcast-mention-select')?.value || '';
+    const embedTitle = document.getElementById('embed-title-input')?.value || '';
+    const embedColor = document.getElementById('embed-color-input')?.value || '#5865F2';
+    const embedFooter = document.getElementById('embed-footer-input')?.value || '';
+
+    btn.disabled = true;
+    if (statusMsg) {
+        statusMsg.style.color = 'var(--blue)';
+        statusMsg.textContent = `⏳ Broadcasting to ${allChannelIds.length} channel(s)...`;
+    }
+    if (reportBox) reportBox.style.display = 'none';
+
+    try {
+        const res = await fetch('/api/discord/send-bot-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                channelIds: allChannelIds,
+                message: content,
+                mention,
+                asEmbed: isEmbed,
+                embedTitle,
+                embedColor,
+                embedFooter
+            })
+        });
+
+        const data = await res.json();
+        if (!data.success && data.sentCount === 0) {
+            throw new Error(data.error || 'Failed to send broadcast');
+        }
+
+        if (statusMsg) {
+            statusMsg.style.color = data.sentCount === data.totalCount ? 'var(--green)' : 'var(--gold)';
+            statusMsg.textContent = `✅ Broadcast delivered to ${data.sentCount} / ${data.totalCount} channel(s)!`;
+        }
+
+        if (reportBox && Array.isArray(data.results)) {
+            reportBox.style.display = 'block';
+            let reportHtml = `<div style="font-weight:700;margin-bottom:8px;color:${data.sentCount > 0 ? 'var(--green)' : 'var(--red)'};">Delivery Report (${data.sentCount}/${data.totalCount} Succeeded):</div>`;
+            reportHtml += '<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:6px;">';
+            data.results.forEach(r => {
+                if (r.success) {
+                    reportHtml += `
+                        <div style="background:rgba(46,213,115,0.08);border:1px solid rgba(46,213,115,0.25);border-radius:6px;padding:6px 10px;font-size:0.82em;color:var(--green);">
+                            ✅ <b>${r.channelName}</b> <span style="font-size:0.75em;color:var(--text-dim);">(ID: ${r.channelId})</span>
+                        </div>
+                    `;
+                } else {
+                    reportHtml += `
+                        <div style="background:rgba(255,71,87,0.08);border:1px solid rgba(255,71,87,0.25);border-radius:6px;padding:6px 10px;font-size:0.82em;color:var(--red);">
+                            ❌ <b>${r.channelName}</b>: ${r.error || 'Failed'}
+                        </div>
+                    `;
+                }
+            });
+            reportHtml += '</div>';
+            reportBox.innerHTML = reportHtml;
+        }
+
+    } catch (e) {
+        if (statusMsg) {
+            statusMsg.style.color = 'var(--red)';
+            statusMsg.textContent = `❌ ${e.message || 'Error broadcasting message'}`;
+        }
+    } finally {
+        btn.disabled = false;
+    }
 }
 </script>
 <script src="/global_settings.js"></script>
