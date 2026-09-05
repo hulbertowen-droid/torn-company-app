@@ -10228,6 +10228,261 @@ async function handleGuildMemberAdd(member) {
     } catch(e) {}
 }
 
+// ─── Discord Giveaway Subsystem ───────────────────────────────────────────────
+const GIVEAWAYS_FILE = path.join(__dirname, 'giveaways.json');
+let activeGiveaways = {};
+
+function loadGiveaways() {
+    try {
+        if (fs.existsSync(GIVEAWAYS_FILE)) {
+            activeGiveaways = JSON.parse(fs.readFileSync(GIVEAWAYS_FILE, 'utf8')) || {};
+            console.log(`[Giveaways] Loaded ${Object.keys(activeGiveaways).length} giveaways from storage`);
+        }
+    } catch(e) {
+        console.error("[Giveaways Load Error]", e.message);
+        activeGiveaways = {};
+    }
+}
+
+function saveGiveaways() {
+    try {
+        fs.writeFileSync(GIVEAWAYS_FILE, JSON.stringify(activeGiveaways, null, 2), 'utf8');
+    } catch(e) {
+        console.error("[Giveaways Save Error]", e.message);
+    }
+}
+
+function parseGiveawayDuration(input) {
+    if (!input) return null;
+    const str = String(input).trim().toLowerCase();
+    const match = str.match(/^(\d+(?:\.\d+)?)\s*(m(?:in(?:ute)?s?)?|h(?:(?:ou)?rs?)?|d(?:ays?)?|s(?:ec(?:ond)?s?)?)?$/);
+    if (!match) return null;
+    const val = parseFloat(match[1]);
+    const unit = (match[2] || 'm')[0];
+    if (isNaN(val) || val <= 0) return null;
+    if (unit === 's') return Math.max(10, Math.round(val)) * 1000;
+    if (unit === 'm') return Math.round(val * 60 * 1000);
+    if (unit === 'h') return Math.round(val * 3600 * 1000);
+    if (unit === 'd') return Math.round(val * 86400 * 1000);
+    return null;
+}
+
+function buildGiveawayEmbed(g) {
+    const endTimestamp = Math.floor(g.endsAt / 1000);
+    return {
+        title: `🎉 GIVEAWAY: ${g.prize}`,
+        description: `Click the **🎉 Enter** button below to participate!\n\n` +
+            `🎁 **Prize**: **${g.prize}**\n` +
+            `👑 **Hosted by**: <@${g.hostId}>\n` +
+            `🏆 **Winners**: **${g.winnersCount}**\n` +
+            `⏰ **Ends**: <t:${endTimestamp}:R> (<t:${endTimestamp}:f>)\n` +
+            `👥 **Entries**: **${g.entries.length}** participants`,
+        color: 0x00cec9,
+        footer: { text: `F.R.I.D.A.Y Giveaway • ID: ${g.id}` },
+        timestamp: new Date(g.createdAt).toISOString()
+    };
+}
+
+function buildGiveawayButtons(g) {
+    return [{
+        type: 1,
+        components: [
+            {
+                type: 2,
+                style: 3, // Green
+                custom_id: `giveaway_enter_${g.id}`,
+                label: `🎉 Enter (${g.entries.length})`,
+                emoji: { name: '🎉' }
+            },
+            {
+                type: 2,
+                style: 2, // Secondary
+                custom_id: `giveaway_list_${g.id}`,
+                label: '👥 View Entries'
+            },
+            {
+                type: 2,
+                style: 4, // Danger
+                custom_id: `giveaway_end_${g.id}`,
+                label: '⏹️ End'
+            }
+        ]
+    }];
+}
+
+function buildEndedGiveawayEmbed(g) {
+    const winnersText = Array.isArray(g.winners) && g.winners.length > 0
+        ? g.winners.map(wId => `<@${wId}>`).join(', ')
+        : 'No valid entries / No winners';
+    return {
+        title: `🎉 GIVEAWAY ENDED: ${g.prize}`,
+        description: `This giveaway has concluded!\n\n` +
+            `🎁 **Prize**: **${g.prize}**\n` +
+            `👑 **Hosted by**: <@${g.hostId}>\n` +
+            `🏆 **Winner(s)**: ${winnersText}\n` +
+            `👥 **Total Entries**: **${g.entries.length}**`,
+        color: 0xffa502,
+        footer: { text: `F.R.I.D.A.Y Giveaway • ID: ${g.id}` },
+        timestamp: new Date().toISOString()
+    };
+}
+
+function buildEndedGiveawayButtons(g) {
+    return [{
+        type: 1,
+        components: [
+            {
+                type: 2,
+                style: 2,
+                custom_id: `giveaway_ended_${g.id}`,
+                label: `🎉 Ended (${g.entries.length} entered)`,
+                disabled: true
+            },
+            {
+                type: 2,
+                style: 1, // Blurple
+                custom_id: `giveaway_reroll_${g.id}`,
+                label: '🎲 Reroll Winner'
+            }
+        ]
+    }];
+}
+
+function getAnyActiveDiscordClient() {
+    if (slashCommandBot && slashCommandBot.isReady?.()) return slashCommandBot;
+    return Object.values(activeDiscordBots).find(c => c && c.isReady && c.isReady()) || null;
+}
+
+async function endGiveaway(gId, client = null) {
+    const g = activeGiveaways[gId];
+    if (!g || g.ended) return;
+
+    g.ended = true;
+    g.endedAt = Date.now();
+
+    const winners = [];
+    if (Array.isArray(g.entries) && g.entries.length > 0) {
+        const pool = [...g.entries];
+        const numToPick = Math.min(g.winnersCount || 1, pool.length);
+        for (let i = 0; i < numToPick; i++) {
+            const randIdx = Math.floor(Math.random() * pool.length);
+            winners.push(pool[randIdx]);
+            pool.splice(randIdx, 1);
+        }
+    }
+    g.winners = winners;
+    saveGiveaways();
+
+    const dClient = client || getAnyActiveDiscordClient();
+    if (!dClient) return;
+
+    try {
+        const chan = dClient.channels.cache.get(g.channelId) || await dClient.channels.fetch(g.channelId).catch(() => null);
+        if (!chan || !chan.isTextBased()) return;
+
+        if (g.messageId) {
+            const msg = await chan.messages.fetch(g.messageId).catch(() => null);
+            if (msg) {
+                await msg.edit({
+                    embeds: [sanitizeEmbed(buildEndedGiveawayEmbed(g))],
+                    components: buildEndedGiveawayButtons(g)
+                }).catch(() => {});
+            }
+        }
+
+        if (winners.length > 0) {
+            const winnerPings = winners.map(w => `<@${w}>`).join(' ');
+            await chan.send({
+                content: `🎉 **GIVEAWAY CONCLUDED!**\nCongratulations ${winnerPings}! You won **${g.prize}** (hosted by <@${g.hostId}>)! 🥳`
+            }).catch(() => {});
+        } else {
+            await chan.send({
+                content: `⚠️ **GIVEAWAY CONCLUDED:** The giveaway for **${g.prize}** ended with no entries.`
+            }).catch(() => {});
+        }
+    } catch(err) {
+        console.error(`[End Giveaway ${gId} Error]`, err.message);
+    }
+}
+
+async function launchGiveaway(interaction, prize, durationStr, winnersCount) {
+    if (!interaction.deferred && !interaction.replied) {
+        await interaction.deferReply({ ephemeral: true }).catch(() => {});
+    }
+
+    const replyNotice = async (text) => {
+        try {
+            if (interaction.deferred) {
+                return await interaction.editReply({ content: text });
+            } else if (interaction.replied) {
+                return await interaction.followUp({ content: text, ephemeral: true });
+            } else {
+                return await interaction.reply({ content: text, ephemeral: true });
+            }
+        } catch(e) {}
+    };
+
+    const durationMs = parseGiveawayDuration(durationStr);
+    if (!durationMs) {
+        return await replyNotice(`⚠️ Invalid duration format "${durationStr}". Please use formats like: \`10m\` (10 minutes), \`1h\` (1 hour), \`1d\` (1 day).`);
+    }
+
+    const giveawayId = `gw_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
+    const endsAt = Date.now() + durationMs;
+
+    const giveaway = {
+        id: giveawayId,
+        channelId: interaction.channelId,
+        guildId: interaction.guildId,
+        hostId: interaction.user.id,
+        hostUsername: interaction.user.username,
+        prize,
+        winnersCount: Math.max(1, Math.min(20, parseInt(winnersCount, 10) || 1)),
+        durationMs,
+        createdAt: Date.now(),
+        endsAt,
+        entries: [],
+        ended: false,
+        winners: []
+    };
+
+    const embed = buildGiveawayEmbed(giveaway);
+    const components = buildGiveawayButtons(giveaway);
+
+    try {
+        const channel = interaction.channel;
+        if (!channel || !channel.isTextBased()) {
+            return await replyNotice("⚠️ Could not post giveaway in this channel.");
+        }
+
+        const msg = await channel.send({
+            content: `🎉 **NEW GIVEAWAY!** Hosted by <@${interaction.user.id}>`,
+            embeds: [sanitizeEmbed(embed)],
+            components
+        });
+
+        giveaway.messageId = msg.id;
+        activeGiveaways[giveawayId] = giveaway;
+        saveGiveaways();
+
+        return await replyNotice(`✅ Your giveaway for **${prize}** has been posted!`);
+    } catch(err) {
+        console.error("[Giveaway Launch Error]", err.message);
+        return await replyNotice(`⚠️ Failed to launch giveaway: ${err.message}`);
+    }
+}
+
+// Load persisted giveaways and start auto-expiry loop
+loadGiveaways();
+setInterval(() => {
+    const now = Date.now();
+    for (const [id, g] of Object.entries(activeGiveaways)) {
+        if (!g.ended && g.endsAt <= now) {
+            endGiveaway(id).catch(e => console.error(`[Giveaway Auto-End Error: ${id}]`, e.message));
+        }
+    }
+}, 5000);
+
 // ─── Register Slash Commands with Discord ─────────────────────────────────────
 async function registerSlashCommands(token, guildId = null) {
     const rest = new REST({ version: '10' }).setToken(token);
@@ -10345,7 +10600,14 @@ async function registerSlashCommands(token, guildId = null) {
 
         // 13. Alert Control Shortcuts
         new SlashCommandBuilder().setName('pause').setDescription('Quick shortcut to pause all automated notifications').toJSON(),
-        new SlashCommandBuilder().setName('resume').setDescription('Quick shortcut to resume all automated notifications').toJSON()
+        new SlashCommandBuilder().setName('resume').setDescription('Quick shortcut to resume all automated notifications').toJSON(),
+
+        // 14. Interactive Giveaways
+        new SlashCommandBuilder().setName('giveaway').setDescription('Host an interactive giveaway with live countdown and automatic winner picking')
+            .addStringOption(opt => opt.setName('prize').setDescription('What are you giving away? (e.g. 10x Xanax, $25,000,000, Donator Pack)'))
+            .addStringOption(opt => opt.setName('duration').setDescription('Giveaway duration (e.g. 10m, 1h, 1d)'))
+            .addIntegerOption(opt => opt.setName('winners').setDescription('Number of winners (1 to 20, default: 1)').setMinValue(1).setMaxValue(20))
+            .toJSON()
     ];
 
     const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : [])
@@ -10457,8 +10719,18 @@ function setupSlashBotEvents(bot, token) {
 
     bot.on(Events.InteractionCreate, async (interaction) => {
 
-        // ── Modal Submit Handling (Torn Verification Modal) ──
+        // ── Modal Submit Handling (Torn Verification Modal & Giveaways) ──
         if (interaction.type === InteractionType.ModalSubmit || interaction.isModalSubmit?.()) {
+            if (interaction.customId === 'modal_create_giveaway') {
+                const prize = (interaction.fields.getTextInputValue('giveaway_prize') || '').trim();
+                const durationStr = (interaction.fields.getTextInputValue('giveaway_duration') || '').trim();
+                let winnersCount = parseInt(interaction.fields.getTextInputValue('giveaway_winners') || '1', 10);
+                if (isNaN(winnersCount) || winnersCount < 1) winnersCount = 1;
+                if (winnersCount > 20) winnersCount = 20;
+                await launchGiveaway(interaction, prize, durationStr, winnersCount);
+                return;
+            }
+
             if (interaction.customId === 'modal_verify_user') {
                 await interaction.deferReply({ ephemeral: true });
                 const playerInput = (interaction.fields.getTextInputValue('torn_player_input') || '').trim();
@@ -10687,6 +10959,105 @@ function setupSlashBotEvents(bot, token) {
                 const reqId = customId.replace('bank_cancel_', '').trim();
                 const res = await executeCancelRequest(reqId, interaction);
                 return interaction.reply({ content: res.message, ephemeral: true }).catch(() => {});
+            }
+
+            // ── Giveaway: Enter / Leave ──
+            if (customId.startsWith('giveaway_enter_')) {
+                const gId = customId.replace('giveaway_enter_', '').trim();
+                const g = activeGiveaways[gId];
+                if (!g || g.ended) {
+                    return interaction.reply({ content: '⚠️ This giveaway has already ended or does not exist.', ephemeral: true }).catch(() => {});
+                }
+                const userId = interaction.user.id;
+                const existingIdx = g.entries.indexOf(userId);
+                if (existingIdx !== -1) {
+                    g.entries.splice(existingIdx, 1);
+                    saveGiveaways();
+                    await interaction.message.edit({
+                        embeds: [sanitizeEmbed(buildGiveawayEmbed(g))],
+                        components: buildGiveawayButtons(g)
+                    }).catch(() => {});
+                    return interaction.reply({
+                        content: `👋 You left the giveaway for **${g.prize}**. Click "Enter" anytime if you want to re-enter!`,
+                        ephemeral: true
+                    }).catch(() => {});
+                } else {
+                    g.entries.push(userId);
+                    saveGiveaways();
+                    await interaction.message.edit({
+                        embeds: [sanitizeEmbed(buildGiveawayEmbed(g))],
+                        components: buildGiveawayButtons(g)
+                    }).catch(() => {});
+                    return interaction.reply({
+                        content: `🎉 You're entered in the giveaway for **${g.prize}**! Good luck!`,
+                        ephemeral: true
+                    }).catch(() => {});
+                }
+            }
+
+            // ── Giveaway: View Entries ──
+            if (customId.startsWith('giveaway_list_')) {
+                const gId = customId.replace('giveaway_list_', '').trim();
+                const g = activeGiveaways[gId];
+                if (!g) {
+                    return interaction.reply({ content: '⚠️ Giveaway not found.', ephemeral: true }).catch(() => {});
+                }
+                if (!Array.isArray(g.entries) || g.entries.length === 0) {
+                    return interaction.reply({ content: `👥 No participants have entered the giveaway for **${g.prize}** yet. Be the first!`, ephemeral: true }).catch(() => {});
+                }
+                const entriesList = g.entries.slice(0, 50).map(uId => `<@${uId}>`).join(', ');
+                const moreCount = g.entries.length > 50 ? ` and **${g.entries.length - 50}** more` : '';
+                return interaction.reply({
+                    content: `👥 **Current Participants (${g.entries.length}) for ${g.prize}:**\n${entriesList}${moreCount}`,
+                    ephemeral: true
+                }).catch(() => {});
+            }
+
+            // ── Giveaway: Early End (Host or Admin) ──
+            if (customId.startsWith('giveaway_end_')) {
+                const gId = customId.replace('giveaway_end_', '').trim();
+                const g = activeGiveaways[gId];
+                if (!g || g.ended) {
+                    return interaction.reply({ content: '⚠️ This giveaway has already ended.', ephemeral: true }).catch(() => {});
+                }
+                const isHost = g.hostId === interaction.user.id;
+                const isAdmin = interaction.member?.permissions?.has?.('Administrator') ||
+                                (discordConfig.bankerRoleId && interaction.member?.roles?.cache?.has?.(discordConfig.bankerRoleId));
+                if (!isHost && !isAdmin) {
+                    return interaction.reply({ content: `⚠️ Only the giveaway host (<@${g.hostId}>) or a server administrator can end this giveaway.`, ephemeral: true }).catch(() => {});
+                }
+                await interaction.reply({ content: `⏹️ Ending giveaway for **${g.prize}**...`, ephemeral: true }).catch(() => {});
+                await endGiveaway(gId, interaction.client);
+                return;
+            }
+
+            // ── Giveaway: Reroll Winner (Host or Admin) ──
+            if (customId.startsWith('giveaway_reroll_')) {
+                const gId = customId.replace('giveaway_reroll_', '').trim();
+                const g = activeGiveaways[gId];
+                if (!g) {
+                    return interaction.reply({ content: '⚠️ Giveaway not found.', ephemeral: true }).catch(() => {});
+                }
+                const isHost = g.hostId === interaction.user.id;
+                const isAdmin = interaction.member?.permissions?.has?.('Administrator') ||
+                                (discordConfig.bankerRoleId && interaction.member?.roles?.cache?.has?.(discordConfig.bankerRoleId));
+                if (!isHost && !isAdmin) {
+                    return interaction.reply({ content: '⚠️ Only the giveaway host or a server administrator can reroll winners.', ephemeral: true }).catch(() => {});
+                }
+                if (!Array.isArray(g.entries) || g.entries.length === 0) {
+                    return interaction.reply({ content: '⚠️ No entries exist to reroll a winner from.', ephemeral: true }).catch(() => {});
+                }
+                const newWinner = g.entries[Math.floor(Math.random() * g.entries.length)];
+                if (!Array.isArray(g.winners)) g.winners = [];
+                g.winners.push(newWinner);
+                saveGiveaways();
+
+                if (interaction.channel && interaction.channel.isTextBased()) {
+                    await interaction.channel.send({
+                        content: `🎲 **GIVEAWAY REROLL!**\nNew Winner for **${g.prize}**: <@${newWinner}>! Congratulations! 🥳 (Rerolled by <@${interaction.user.id}>)`
+                    }).catch(() => {});
+                }
+                return interaction.reply({ content: `🎲 New winner <@${newWinner}> picked and announced!`, ephemeral: true }).catch(() => {});
             }
 
             return;
@@ -11063,6 +11434,56 @@ function setupSlashBotEvents(bot, token) {
                 embeds: [sanitizeEmbed(reqEmbed)],
                 components: reqButtons
             });
+        }
+
+        // ── Interactive Giveaway Creation ──
+        if (cmd === 'giveaway') {
+            const prize = (interaction.options.getString('prize') || '').trim();
+            const duration = (interaction.options.getString('duration') || '').trim();
+            const winners = interaction.options.getInteger('winners') || 1;
+
+            if (prize && duration) {
+                return await launchGiveaway(interaction, prize, duration, winners);
+            }
+
+            // If parameters were omitted, prompt with interactive modal
+            const modal = new ModalBuilder()
+                .setCustomId('modal_create_giveaway')
+                .setTitle('🎉 Create a Giveaway');
+
+            const prizeInput = new TextInputBuilder()
+                .setCustomId('giveaway_prize')
+                .setLabel('What are you giving away?')
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder('e.g. 10x Xanax, $25,000,000, Donator Pack')
+                .setRequired(true)
+                .setMaxLength(150);
+            if (prize) prizeInput.setValue(prize);
+
+            const durationInput = new TextInputBuilder()
+                .setCustomId('giveaway_duration')
+                .setLabel('How long should it run?')
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder('e.g. 10m, 30m, 1h, 12h, 1d, 3d')
+                .setRequired(true)
+                .setMaxLength(30);
+            if (duration) durationInput.setValue(duration);
+
+            const winnersInput = new TextInputBuilder()
+                .setCustomId('giveaway_winners')
+                .setLabel('How many winners? (1 to 20)')
+                .setStyle(TextInputStyle.Short)
+                .setValue(String(winners || 1))
+                .setRequired(false)
+                .setMaxLength(2);
+
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(prizeInput),
+                new ActionRowBuilder().addComponents(durationInput),
+                new ActionRowBuilder().addComponents(winnersInput)
+            );
+
+            return await interaction.showModal(modal);
         }
 
         // Defer reply for commands that make API calls
