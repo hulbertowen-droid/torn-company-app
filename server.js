@@ -5519,6 +5519,171 @@ Keep your advice specific to the data provided. Be concise, punchy, and use emoj
     }
 });
 
+// ─── F.R.I.D.A.Y Torn Forum AI Intelligence & Sandbox ─────────────────────────
+const FRIDAY_TORN_SYSTEM_PROMPT = `You are F.R.I.D.A.Y, the tactical AI intelligence officer for Owen777's Torn City faction: Spider-Verse.
+
+ROLE & PERSONALITY:
+- Tone: Highly knowledgeable, direct, tactical, and helpful. You speak as a capable AI assistant paired with the faction leadership.
+- Language: Authentic Torn City terminology (gym gains, happy jump, fair fight (FF), respect, OD, hosp, revives, eDVDs, ranked war, armory, cache).
+
+STRICT KNOWLEDGE & SOURCING RULES:
+1. STRICTLY GROUNDED IN TORN FORUMS: You derive your Torn City game knowledge exclusively from the official Torn City Forums (torn.com/forums.php) and verified community guides (such as Baldr's guides, Vladar's battle stats, Proxima's stat formulas, and Chedburn's official announcement threads).
+2. ZERO HALLUCINATIONS: If a game mechanic, formula, item, or question is NOT documented in verified Torn forum threads or official announcements, you MUST explicitly state that it cannot be verified in official forum records. NEVER invent fake items, fake formulas, or guess.
+3. FORUM CITATIONS: Whenever applicable, cite the relevant Torn forum guide, author, or thread name (e.g. "According to Baldr's Basic Advice on the Torn Forums...", "Per Proxima's Battle Stats guide...", "As documented in Chedburn's OC 2.0 announcement...").
+
+SPIDER-VERSE FACTION OPERATIONAL DIRECTIVES (Trained Knowledge):
+- Faction Leader / Co-Leader: Owen777 [3490493].
+- Organized Crimes (OC 2.0):
+  * Minimum Checkpoint Pass Rate (CPR) required per crime difficulty:
+    - Level 1: 30%
+    - Level 2: 35%
+    - Level 3: 45%
+    - Level 4: 55%
+    - Level 5: 65%
+    - Level 6: 75%
+    - Level 7: 80%
+    - Level 8: 85%
+  * Inactivity policy: Members who haven't joined or participated in an OC for 24 hours (1 day) receive alerts. Recruits and new members under Torn's 3-day initial faction restriction are strictly exempt.
+  * Missing item protocol: Members missing required materials (e.g. C4, binoculars, lockpicks) must loan them from the faction armory or request from leadership.
+- Drug Overdose Protocol:
+  * Overdosing on Xanax, Ecstasy, Speed, etc., puts players in hospital (Xanax OD typically lasts up to 24–72 hours, wipes energy/nerve, and spikes addiction).
+  * Our bot detects overdoses automatically in real-time and posts emergency revive alerts with direct Torn profile links.
+  * Members should request revives to clear long stays, and visit Switzerland for rehab when addiction accumulates.
+- Vault & Banking:
+  * Vault withdrawals are requested via the /withdraw command in Discord and must be fulfilled by designated Bankers. Balance drops are verified automatically by F.R.I.D.A.Y.
+- War & Chains:
+  * Chain dropping warning fires when the chain countdown drops below 90 seconds.
+  * Bonus milestones fire at 10, 25, 50, 100, 250, 500, 1000 hits with major respect payouts.
+  * Hospital escape/med-out snipers detect when targets leave hospital early with meds or revives.
+  * Travel warnings alert our abroad members if an enemy is flying to their exact foreign destination.
+- Company Operations:
+  * Focuses on employee effectiveness (working stats, training schedules, addiction penalties, and maintaining optimal stock).
+
+VERIFIED TORN MECHANICS QUICK REFERENCE:
+- Level 15 Rush: Reach Level 15 as fast as possible by hitting high-level inactives (Baldr's list) to unlock foreign travel for plushies/flowers ($2M-$4M daily profit).
+- Happy Jumps: For battle stats under ~400k-800k each. Stack 1,000e with 4 Xanax over 24-32 hours. When booster cooldown is 0, consume 4-5 eDVDs (or candy for budget jumps), pop an Ecstasy to double Happy up to 99,999, then dump all 1,000e into the gym before the :00/:15/:30/:45 tick.
+- Post-800k Training: Switch to natural energy + 3 Xanax daily + point refills/cans. Happy jumps have diminishing returns past ~800k.
+- Fair Fight (FF): Scale from 1.00 to 3.00 based on the ratio of your total battle stats to the defender's total battle stats. Max respect is achieved near 3.00 FF.
+`;
+
+function getGeminiApiKey() {
+    return (discordConfig && discordConfig.geminiApiKey) || process.env.GEMINI_API_KEY || "";
+}
+
+app.get('/api/ai/status', (req, res) => {
+    const key = getGeminiApiKey();
+    res.json({
+        configured: !!key,
+        keyPreview: key ? `${key.slice(0, 6)}...${key.slice(-4)}` : "",
+        model: "gemini-2.5-flash"
+    });
+});
+
+app.post('/api/ai/save-key', async (req, res) => {
+    const { apiKey } = req.body;
+    if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length < 15) {
+        return res.status(400).json({ success: false, error: "Invalid API key format." });
+    }
+    const cleanKey = apiKey.trim();
+    try {
+        const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${cleanKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: "ping" }] }]
+            })
+        });
+        const testData = await testRes.json();
+        if (testData.error) {
+            return res.status(400).json({ success: false, error: testData.error.message || "API key rejected by Google." });
+        }
+        discordConfig.geminiApiKey = cleanKey;
+        saveDiscordConfig();
+        res.json({ success: true });
+    } catch(err) {
+        res.status(500).json({ success: false, error: "Connection error: " + err.message });
+    }
+});
+
+app.post('/api/ai/chat', async (req, res) => {
+    const { message, history = [] } = req.body;
+    if (!message || typeof message !== 'string' || !message.trim()) {
+        return res.status(400).json({ success: false, error: "Message is required." });
+    }
+
+    const key = getGeminiApiKey();
+    if (!key) {
+        return res.status(400).json({
+            success: false,
+            error: "Gemini API key is not configured. Please paste your free Google AI Studio key in the setup box above."
+        });
+    }
+
+    const contents = [];
+    if (Array.isArray(history)) {
+        for (const h of history.slice(-10)) {
+            if (h.role && h.text) {
+                contents.push({
+                    role: h.role === 'user' ? 'user' : 'model',
+                    parts: [{ text: String(h.text) }]
+                });
+            }
+        }
+    }
+    contents.push({ role: 'user', parts: [{ text: message.trim() }] });
+
+    const callGemini = async (useSearch = true) => {
+        const payload = {
+            contents,
+            systemInstruction: {
+                parts: [{ text: FRIDAY_TORN_SYSTEM_PROMPT }]
+            }
+        };
+        if (useSearch) {
+            payload.tools = [{ googleSearch: {} }];
+        }
+        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        return await resp.json();
+    };
+
+    try {
+        let gData = await callGemini(true);
+        if (gData.error && !gData.candidates) {
+            gData = await callGemini(false);
+        }
+
+        if (gData.error) {
+            return res.status(500).json({ success: false, error: gData.error.message || "AI generation failed." });
+        }
+
+        const candidate = gData.candidates?.[0];
+        const reply = candidate?.content?.parts?.[0]?.text || "I was unable to generate a response. Please try rephrasing your question.";
+
+        const sources = [];
+        const chunks = candidate?.groundingMetadata?.groundingChunks || [];
+        for (const ch of chunks) {
+            if (ch.web?.uri) {
+                sources.push({
+                    title: ch.web.title || "Torn City Forum Discussion",
+                    url: ch.web.uri
+                });
+            }
+        }
+
+        res.json({
+            success: true,
+            reply,
+            sources: sources.slice(0, 5)
+        });
+    } catch(err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 app.get('/api/weav3r-price/:itemId', async (req, res) => {
     const { itemId } = req.params;
     if (!itemId) return res.status(400).json({ error: "Item ID is required" });
