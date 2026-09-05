@@ -1687,6 +1687,34 @@ function saveInactivityAlerts(data) {
 
 let inactivityAlertsMemory = loadInactivityAlerts();
 
+// ─── Player Drug Overdose Tracker & Discord Alerts ───────────────────────────
+const OVERDOSE_ALERTS_FILE = path.join(__dirname, 'data', 'overdose_alerts.json');
+
+function loadOverdoseAlerts() {
+    try {
+        if (!fs.existsSync(path.dirname(OVERDOSE_ALERTS_FILE))) {
+            fs.mkdirSync(path.dirname(OVERDOSE_ALERTS_FILE), { recursive: true });
+        }
+        if (fs.existsSync(OVERDOSE_ALERTS_FILE)) {
+            return JSON.parse(fs.readFileSync(OVERDOSE_ALERTS_FILE, 'utf8'));
+        }
+    } catch (e) {}
+    return { alerts: {}, initialized: false };
+}
+
+function saveOverdoseAlerts(data) {
+    try {
+        if (!fs.existsSync(path.dirname(OVERDOSE_ALERTS_FILE))) {
+            fs.mkdirSync(path.dirname(OVERDOSE_ALERTS_FILE), { recursive: true });
+        }
+        fs.writeFileSync(OVERDOSE_ALERTS_FILE, JSON.stringify(data, null, 2), 'utf8');
+    } catch (e) {}
+    saveToMongo();
+}
+
+let odAlertsMemory = loadOverdoseAlerts();
+
+
 // ─── Organized Crime Member Participation History ───────────────────────────
 const OC_MEMBER_HISTORY_FILE = path.join(__dirname, 'data', 'oc_member_history.json');
 function loadOcMemberHistory() {
@@ -1892,6 +1920,133 @@ async function checkFactionMembersInactivity(members, expectedFactionId, faction
     }
 }
 
+async function checkFactionOverdoses(members, expectedFactionId, factionName) {
+    if (!members || typeof members !== 'object') return;
+    if (global.isNotificationsKilled) return;
+    if (discordConfig.alertOverdose === false) return;
+    const botToken = discordConfig.globalBotToken;
+    const targetChan = discordConfig.overdoseChannelId || discordConfig.globalChannelId;
+    if (!botToken || !targetChan) return;
+
+    const myFacId = String(expectedFactionId || discordConfig.factionId || dynamicFactionId || "52355");
+    const myFacName = factionName || "Spider-Verse";
+    const nowSec = Math.floor(Date.now() / 1000);
+
+    // Initial startup check: seed existing active overdoses so server restart never triggers spam
+    if (!odAlertsMemory.initialized) {
+        for (const [id, m] of Object.entries(members)) {
+            const desc = (m.status?.description || '').toLowerCase();
+            const details = (m.status?.details || '').toLowerCase();
+            const isOd = desc.includes('overdose') || details.includes('overdose') || desc.includes('overdosed') || details.includes('overdosed');
+            if (isOd && m.status?.until && m.status.until > nowSec) {
+                odAlertsMemory.alerts[id] = {
+                    until: m.status.until,
+                    alertedAt: nowSec,
+                    name: m.name,
+                    seeded: true
+                };
+            }
+        }
+        odAlertsMemory.initialized = true;
+        saveOverdoseAlerts(odAlertsMemory);
+    }
+
+    // Clean up stale alerts for players no longer in hospital or whose hospital time elapsed
+    let pruned = false;
+    for (const [id, alertInfo] of Object.entries(odAlertsMemory.alerts || {})) {
+        const m = members[id];
+        if (!m || (m.status?.state && m.status.state !== 'Hospital') || (m.status?.until && m.status.until <= nowSec)) {
+            delete odAlertsMemory.alerts[id];
+            pruned = true;
+        }
+    }
+    if (pruned) saveOverdoseAlerts(odAlertsMemory);
+
+    // Resolve optional role mention
+    let roleMention = "";
+    if (discordConfig.overdoseRoleId && String(discordConfig.overdoseRoleId).trim()) {
+        const rawRole = String(discordConfig.overdoseRoleId).trim();
+        const numOnly = rawRole.replace(/\D/g, '');
+        if (numOnly.length >= 15 && numOnly.length <= 22) {
+            roleMention = `<@&${numOnly}>`;
+        } else if (rawRole.startsWith('<@&') && rawRole.endsWith('>')) {
+            roleMention = rawRole;
+        } else if (rawRole === "@here" || rawRole === "@everyone") {
+            roleMention = rawRole;
+        }
+    }
+
+    for (const [id, m] of Object.entries(members)) {
+        const state = (m.status?.state || '').toLowerCase();
+        const desc = (m.status?.description || '');
+        const details = (m.status?.details || '');
+        const descLower = desc.toLowerCase();
+        const detailsLower = details.toLowerCase();
+
+        const isOd = descLower.includes('overdose') || detailsLower.includes('overdose') ||
+                     descLower.includes('overdosed') || detailsLower.includes('overdosed');
+
+        if (!isOd) continue;
+        if (m.status?.until && m.status.until <= nowSec) continue;
+
+        const untilTs = m.status?.until || 0;
+        const prior = odAlertsMemory.alerts[id];
+
+        // Skip if already alerted for this specific hospital stay
+        if (prior && (prior.until === untilTs || (untilTs === 0 && (Date.now() - (prior.alertedAt * 1000)) < 14400000))) {
+            continue;
+        }
+
+        const pName = m.name || `Player [${id}]`;
+        const profileUrl = `https://www.torn.com/profiles.php?XID=${id}`;
+        const msgUrl = `https://www.torn.com/messages.php#/p=compose&XID=${id}`;
+
+        let timeLeftStr = "Unknown";
+        if (untilTs > nowSec) {
+            const diffSec = untilTs - nowSec;
+            const hrs = Math.floor(diffSec / 3600);
+            const mins = Math.floor((diffSec % 3600) / 60);
+            const durStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+            timeLeftStr = `**${durStr}** (Free <t:${untilTs}:R>)`;
+        } else if (desc) {
+            timeLeftStr = desc;
+        }
+
+        const embed = {
+            title: `💊 Member Overdosed: ${pName}`,
+            description: `**[${pName}](${profileUrl})** [${id}] has overdosed on drugs and is currently in the hospital!\n\n` +
+                         `🚑 **Needs a revive or medical attention.**`,
+            color: 0xe84118, // Emergency crimson red
+            fields: [
+                { name: "🏥 Hospital Status", value: desc || "In hospital from drug overdose", inline: true },
+                { name: "⏱️ Time Left", value: timeLeftStr, inline: true },
+                { name: "🎖️ Faction Position", value: `${m.position || 'Member'} (Lvl ${m.level || '—'})`, inline: true },
+                { name: "🕒 Last Action", value: `${m.last_action?.relative || 'Recently'} (${m.last_action?.status || 'Offline'})`, inline: true }
+            ],
+            links: [
+                { label: "🚑 Revive on Torn", url: profileUrl },
+                { label: "👤 View Profile", url: profileUrl },
+                { label: "💬 Send Message", url: msgUrl }
+            ],
+            footer: { text: `${myFacName} • Overdose Watcher` },
+            timestamp: new Date().toISOString()
+        };
+
+        console.log(`[Overdose Watcher] 💊 Alerting for ${pName} [${id}] in ${myFacName} (OD: ${desc}) to channel ${targetChan} with mention: ${roleMention || 'none'}`);
+        sendChannelMessage(botToken, targetChan, embed, roleMention).catch(err => {
+            console.error('[Overdose Watcher] Send error:', err.message);
+        });
+
+        odAlertsMemory.alerts[id] = {
+            until: untilTs,
+            alertedAt: nowSec,
+            name: pName,
+            desc
+        };
+        saveOverdoseAlerts(odAlertsMemory);
+    }
+}
+
 // Background Task 3: Sniper & Target Status Watcher
 setInterval(async () => {
     if (global.isTurboMining) return;
@@ -1910,6 +2065,11 @@ setInterval(async () => {
         const inactChan = discordConfig.inactivityChannelId || discordConfig.globalChannelId;
         if (facData.members && discordConfig.inactivityTracker !== false && inactChan) {
             checkFactionMembersInactivity(facData.members, watchFactionId, facData.name);
+        }
+
+        // Check Friendly Member Drug Overdoses
+        if (facData.members && discordConfig.alertOverdose !== false) {
+            checkFactionOverdoses(facData.members, watchFactionId, facData.name);
         }
 
         // Continuous Real-Time War Flight Archiver
@@ -2280,6 +2440,9 @@ app.get('/api/get-discord-config', (req, res) => {
     const fullConfig = {
         ...discordConfig,
         inactivityChannelId: discordConfig.inactivityChannelId || "",
+        overdoseChannelId: discordConfig.overdoseChannelId || "",
+        overdoseRoleId: discordConfig.overdoseRoleId || "",
+        alertOverdose: discordConfig.alertOverdose !== false,
         ocChannelId: ocConfig.globalChannelId || discordConfig.ocChannelId || "",
         ocRoleId: ocConfig.roleId || discordConfig.ocRoleId || "",
         alertOcPlanned: ocConfig.alertPlanned !== false,
@@ -2323,6 +2486,17 @@ app.post('/api/save-discord-config', async (req, res) => {
             payload.inactivityChannelId = rawInact.replace(/[^0-9]/g, '');
         }
     }
+
+    if (payload.overdoseChannelId !== undefined) {
+        let rawOd = String(payload.overdoseChannelId || '').trim();
+        if (rawOd.includes('.') || /[a-zA-Z]/.test(rawOd)) {
+            payload.overdoseChannelId = "";
+        } else {
+            payload.overdoseChannelId = rawOd.replace(/[^0-9]/g, '');
+        }
+    }
+    if (payload.overdoseRoleId !== undefined) payload.overdoseRoleId = String(payload.overdoseRoleId || '').trim();
+    if (payload.alertOverdose !== undefined) payload.alertOverdose = !!payload.alertOverdose;
 
     if (payload.bankingChannelId !== undefined) {
         let rawBank = String(payload.bankingChannelId || '').trim();
@@ -2804,6 +2978,49 @@ app.post('/api/test-discord-alert', async (req, res) => {
                 { label: "💬 Send Message", url: "https://www.torn.com/messages.php#/p=compose&XID=1234567" }
             ],
             footer: { text: "Owen's Faction Tools • Inactivity Watcher Test" },
+            timestamp: new Date().toISOString()
+        };
+        pingStr = rolePingStr;
+    } else if (type === 'overdose') {
+        chanId = req.body.overdoseChannelId || discordConfig.overdoseChannelId || chanId;
+        let rolePingStr = "";
+        const roleInput = req.body.overdoseRoleId || discordConfig.overdoseRoleId;
+        if (roleInput && String(roleInput).trim()) {
+            const rawRole = String(roleInput).trim();
+            const numOnly = rawRole.replace(/\D/g, '');
+            if (numOnly.length >= 15 && numOnly.length <= 22) {
+                rolePingStr = `<@&${numOnly}>`;
+            } else if (rawRole.startsWith('<@&') && rawRole.endsWith('>')) {
+                rolePingStr = rawRole;
+            } else if (rawRole === "@here" || rawRole === "@everyone") {
+                rolePingStr = rawRole;
+            }
+        }
+        const pName = "Owen777";
+        const pId = "3490493";
+        const profileUrl = `https://www.torn.com/profiles.php?XID=${pId}`;
+        const msgUrl = `https://www.torn.com/messages.php#/p=compose&XID=${pId}`;
+        const nowSec = Math.floor(Date.now() / 1000);
+        const freeSec = nowSec + (24 * 3600);
+
+        embed = {
+            title: `💊 Member Overdosed: ${pName} [TEST]`,
+            description: `**[${pName}](${profileUrl})** [${pId}] has overdosed on drugs and is currently in the hospital!\n\n` +
+                         `🚑 **Needs a revive or medical attention.**`,
+            color: 0xe84118, // Emergency Crimson Red
+            fields: [
+                { name: "🏥 Hospital Status", value: "In hospital for 24 hrs with an overdose.", inline: true },
+                { name: "⏱️ Time Left", value: `Free <t:${freeSec}:R> (<t:${freeSec}:t>)`, inline: true },
+                { name: "🎖️ Faction Position", value: "Co-Leader (Lvl 58)", inline: true },
+                { name: "🕒 Last Action", value: "Just now (Online)", inline: true },
+                { name: "🎯 Role Mentioned", value: rolePingStr ? `Pinging ${rolePingStr}` : "None configured", inline: true }
+            ],
+            links: [
+                { label: "🚑 Revive on Torn", url: profileUrl },
+                { label: "👤 View Profile", url: profileUrl },
+                { label: "💬 Send Message", url: msgUrl }
+            ],
+            footer: { text: "F.R.I.D.A.Y • Overdose Intelligence Test" },
             timestamp: new Date().toISOString()
         };
         pingStr = rolePingStr;
@@ -8552,6 +8769,9 @@ async function checkFactionOrganizedCrimes() {
         if (!data || data.error || !data.crimes) return;
 
         const members = data.members || {};
+        if (discordConfig.alertOverdose !== false && Object.keys(members).length > 0) {
+            checkFactionOverdoses(members, discordConfig.factionId || "52355", data.name);
+        }
         const now = Math.floor(Date.now() / 1000);
         const mention = ocConfig.roleId ? `<@&${ocConfig.roleId}>` : "";
         const upcomingSec = (ocConfig.upcomingMinutes || 30) * 60;

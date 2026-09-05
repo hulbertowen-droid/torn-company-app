@@ -548,6 +548,31 @@
                 <div class="field-grid">
                     <div class="field-group">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <label class="field-label" for="overdose-channelid" style="margin:0;">💊 Overdose Alerts Channel <span class="opt">(optional)</span></label>
+                            <a href="javascript:void(0)" onclick="toggleManualInput('overdose-channelid')" style="font-size:0.75em; color:var(--blue); text-decoration:none;">✏️ Custom ID</a>
+                        </div>
+                        <select class="field-input channel-picker" id="overdose-channelid-select" onchange="onChannelSelectChange(this, 'overdose-channelid')">
+                            <option value="">-- Same as Main Alert Channel --</option>
+                        </select>
+                        <input class="field-input manual-id-input" type="text" id="overdose-channelid" placeholder="e.g. 1234567890123456789" autocomplete="off" oninput="sanitizeChannelIdInput(this)" style="display:none; margin-top:6px;">
+                        <span class="field-hint">Dedicated room for drug overdose warnings and revive requests.</span>
+                    </div>
+                    <div class="field-group">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <label class="field-label" for="overdose-roleid" style="margin:0;">💊 Overdose Alert Role <span class="opt">(optional)</span></label>
+                            <a href="javascript:void(0)" onclick="toggleManualInput('overdose-roleid')" style="font-size:0.75em; color:var(--blue); text-decoration:none;">✏️ Custom ID</a>
+                        </div>
+                        <select class="field-input role-picker" id="overdose-roleid-select" onchange="onRoleSelectChange(this, 'overdose-roleid')">
+                            <option value="">-- Select Role --</option>
+                        </select>
+                        <input class="field-input manual-id-input" type="text" id="overdose-roleid" placeholder="Role ID, @here, or @everyone" autocomplete="off" style="display:none; margin-top:6px;">
+                        <span class="field-hint">Role to @mention when a member overdoses (e.g. Revivers, Medics, or Leadership).</span>
+                    </div>
+                </div>
+
+                <div class="field-grid">
+                    <div class="field-group">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                             <label class="field-label" for="oc-channelid" style="margin:0;">📋 OC Alert Channel <span class="opt">(optional)</span></label>
                             <a href="javascript:void(0)" onclick="toggleManualInput('oc-channelid')" style="font-size:0.75em; color:var(--blue); text-decoration:none;">✏️ Custom ID</a>
                         </div>
@@ -703,6 +728,7 @@
                         </label>
                         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
                             <button type="button" class="btn-test" onclick="quickSelectChannel('main')" style="font-size:0.75em;padding:3px 8px;">🚨 Main Alert</button>
+                            <button type="button" class="btn-test" onclick="quickSelectChannel('overdose')" style="font-size:0.75em;padding:3px 8px;">💊 Overdose</button>
                             <button type="button" class="btn-test" onclick="quickSelectChannel('oc')" style="font-size:0.75em;padding:3px 8px;">💼 OC Channel</button>
                             <button type="button" class="btn-test" onclick="quickSelectChannel('inactivity')" style="font-size:0.75em;padding:3px 8px;">💤 Inactivity</button>
                             <button type="button" class="btn-test" onclick="quickSelectChannel('banking')" style="font-size:0.75em;padding:3px 8px;">🏦 Banking</button>
@@ -967,6 +993,17 @@
                         <div class="trigger-controls">
                             <button class="btn-test" id="btn-test-inactivity" onclick="testAlert('inactivity')">▷ Test</button>
                             <label class="switch"><input type="checkbox" id="inactivityTracker" onchange="onToggle(this)"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                    <div class="trigger-row" id="ti-alertOverdose">
+                        <span class="trigger-icon">💊</span>
+                        <div class="trigger-info">
+                            <div class="trigger-name">Member Drug Overdose <span class="tag faction">FACTION</span></div>
+                            <div class="trigger-desc">Pings immediately when a faction member overdoses on drugs (e.g. Xanax, Ecstasy, etc.) and is sent to the hospital. Shows hospital duration, remaining time, and provides direct 1-click links to revive them on Torn.</div>
+                        </div>
+                        <div class="trigger-controls">
+                            <button class="btn-test" id="btn-test-overdose" onclick="testAlert('overdose')">▷ Test</button>
+                            <label class="switch"><input type="checkbox" id="alertOverdose" onchange="onToggle(this)"><span class="slider"></span></label>
                         </div>
                     </div>
                 </div>
@@ -1529,7 +1566,7 @@ function onToggle(checkbox) {
     updateActiveCount();
 }
 function updateActiveCount() {
-    const ids = ['targetOnline','targetLanded','targetOutHosp','travelWarnings','medOutSniper','chainWarnings','chainUnder90','chainMilestone','friendlyAttacked','inactivityTracker','alertOcPlanned','alertOcUpcoming','alertOcReady','alertOcDelayed','alertOcMissingItems','alertOcCompleted','alertOcLowCpr','alertOcNoParticipation'];
+    const ids = ['targetOnline','targetLanded','targetOutHosp','travelWarnings','medOutSniper','chainWarnings','chainUnder90','chainMilestone','friendlyAttacked','inactivityTracker','alertOverdose','alertOcPlanned','alertOcUpcoming','alertOcReady','alertOcDelayed','alertOcMissingItems','alertOcCompleted','alertOcLowCpr','alertOcNoParticipation'];
     const active = ids.filter(id => document.getElementById(id)?.checked).length;
     document.getElementById('active-alerts-count').textContent = active;
 }
@@ -1598,6 +1635,7 @@ function populateChannelSelects() {
     const channelFields = [
         { id: 'global-channelid', defaultLabel: '-- Select Channel --' },
         { id: 'inactivity-channelid', defaultLabel: '-- Same as Main Alert Channel --' },
+        { id: 'overdose-channelid', defaultLabel: '-- Same as Main Alert Channel --' },
         { id: 'oc-channelid', defaultLabel: '-- Same as Main Alert Channel --' },
         { id: 'verification-channelid', defaultLabel: '-- Select Channel --' },
         { id: 'banking-channelid', defaultLabel: '-- Post in Command Channel --' }
@@ -1627,6 +1665,7 @@ function populateChannelSelects() {
 function populateRoleSelects() {
     const roleFields = [
         { id: 'inactivity-roleid', defaultLabel: '-- Select Role (or leave blank) --' },
+        { id: 'overdose-roleid', defaultLabel: '-- Select Role (or leave blank) --' },
         { id: 'oc-roleid', defaultLabel: '-- Select Role (or leave blank) --' },
         { id: 'banker-roleid', defaultLabel: '-- Select Role (or leave blank) --' },
         { id: 'unverified-roleid', defaultLabel: '-- Select Role --' },
@@ -1704,6 +1743,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('discord-userid').value = cfg.personalDiscordId || localStorage.getItem('warboard_discordid') || '';
         if (document.getElementById('inactivity-channelid')) document.getElementById('inactivity-channelid').value = (cfg.inactivityChannelId || localStorage.getItem('warboard_inactivity_channelid') || '').replace(/[^0-9]/g, '');
         if (document.getElementById('inactivity-roleid')) document.getElementById('inactivity-roleid').value = cfg.inactivityRoleId || localStorage.getItem('warboard_inactivity_roleid') || '';
+        if (document.getElementById('overdose-channelid')) document.getElementById('overdose-channelid').value = (cfg.overdoseChannelId || localStorage.getItem('warboard_overdose_channelid') || '').replace(/[^0-9]/g, '');
+        if (document.getElementById('overdose-roleid')) document.getElementById('overdose-roleid').value = cfg.overdoseRoleId || localStorage.getItem('warboard_overdose_roleid') || '';
         if (document.getElementById('banking-channelid')) document.getElementById('banking-channelid').value = (cfg.bankingChannelId || localStorage.getItem('warboard_banking_channelid') || '').replace(/[^0-9]/g, '');
         if (document.getElementById('banker-roleid')) document.getElementById('banker-roleid').value = (cfg.bankerRoleId || localStorage.getItem('warboard_banker_roleid') || '').replace(/[^0-9]/g, '');
         if (document.getElementById('oc-channelid')) document.getElementById('oc-channelid').value = (cfg.ocChannelId || localStorage.getItem('warboard_oc_channelid') || '').replace(/[^0-9]/g, '');
@@ -1741,6 +1782,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             travelWarnings: cfg.travelWarnings === true || cfg.travelWarnings === undefined,
             chainWarnings: cfg.chainWarnings === true || cfg.chainWarnings === undefined,
             inactivityTracker: cfg.inactivityTracker !== false,
+            alertOverdose: cfg.alertOverdose !== false,
             alertOcPlanned: cfg.alertOcPlanned !== false,
             alertOcUpcoming: cfg.alertOcUpcoming !== false,
             alertOcReady: cfg.alertOcReady !== false,
@@ -1914,6 +1956,8 @@ async function saveDiscordConfig() {
     const discordId = document.getElementById('discord-userid').value.trim();
     const inactivityChannelId = (document.getElementById('inactivity-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const inactivityRoleId = document.getElementById('inactivity-roleid')?.value.trim() || '';
+    const overdoseChannelId = (document.getElementById('overdose-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const overdoseRoleId = document.getElementById('overdose-roleid')?.value.trim() || '';
     const bankingChannelId = (document.getElementById('banking-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const bankerRoleId = (document.getElementById('banker-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const ocChannelId = (document.getElementById('oc-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
@@ -1950,7 +1994,10 @@ async function saveDiscordConfig() {
 
     localStorage.setItem('warboard_bottoken', botToken); localStorage.setItem('warboard_channelid', channelId); localStorage.setItem('warboard_discordid', discordId);
     localStorage.setItem('warboard_inactivity_channelid', inactivityChannelId);
-    localStorage.setItem('warboard_inactivity_roleid', inactivityRoleId); localStorage.setItem('warboard_guildid', guildId);
+    localStorage.setItem('warboard_inactivity_roleid', inactivityRoleId);
+    localStorage.setItem('warboard_overdose_channelid', overdoseChannelId);
+    localStorage.setItem('warboard_overdose_roleid', overdoseRoleId);
+    localStorage.setItem('warboard_guildid', guildId);
     localStorage.setItem('warboard_banking_channelid', bankingChannelId); localStorage.setItem('warboard_banker_roleid', bankerRoleId);
     localStorage.setItem('warboard_oc_channelid', ocChannelId); localStorage.setItem('warboard_oc_roleid', ocRoleId);
     localStorage.setItem('warboard_verification_channelid', verificationChannelId); localStorage.setItem('warboard_unverified_roleid', unverifiedRoleId);
@@ -1964,6 +2011,7 @@ async function saveDiscordConfig() {
                 apiKey: myKey, ffKey: localStorage.getItem('warboard_ffkey') || '', enemyFacId: localStorage.getItem('warboard_enemyId') || '',
                 globalBotToken: botToken, globalChannelId: channelId, personalDiscordId: discordId, 
                 inactivityChannelId, inactivityRoleId, guildId,
+                overdoseChannelId, overdoseRoleId,
                 bankingChannelId, bankerRoleId,
                 ocChannelId, ocRoleId, ocUpcomingMinutes,
                 alertOcLowCpr: document.getElementById('alertOcLowCpr')?.checked ?? true,
@@ -1983,6 +2031,7 @@ async function saveDiscordConfig() {
                 travelWarnings: document.getElementById('travelWarnings').checked,
                 chainWarnings: document.getElementById('chainWarnings').checked,
                 inactivityTracker: document.getElementById('inactivityTracker')?.checked ?? true,
+                alertOverdose: document.getElementById('alertOverdose')?.checked ?? true,
                 alertOcPlanned: document.getElementById('alertOcPlanned')?.checked ?? true,
                 alertOcUpcoming: document.getElementById('alertOcUpcoming')?.checked ?? true,
                 alertOcReady: document.getElementById('alertOcReady')?.checked ?? true,
@@ -2048,6 +2097,8 @@ async function testAlert(type) {
     const discordId = document.getElementById('discord-userid').value.trim();
     const inactivityRoleId = document.getElementById('inactivity-roleid')?.value.trim() || '';
     const inactivityChannelId = (document.getElementById('inactivity-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const overdoseRoleId = document.getElementById('overdose-roleid')?.value.trim() || '';
+    const overdoseChannelId = (document.getElementById('overdose-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     let ocRoleId = '';
     let ocChannelId = '';
     const isOc = type.startsWith('oc_');
@@ -2057,10 +2108,12 @@ async function testAlert(type) {
         if (ocChannelId) channelId = ocChannelId;
     } else if (type === 'inactivity' && inactivityChannelId) {
         channelId = inactivityChannelId;
+    } else if (type === 'overdose' && overdoseChannelId) {
+        channelId = overdoseChannelId;
     }
     if (!botToken || !channelId) {
         statusEl.style.color = 'var(--red)';
-        statusEl.textContent = '❌ Enter your Bot Token and ' + (isOc ? 'OC Channel ID (or Alert Channel ID)' : (type === 'inactivity' ? 'Inactivity Channel ID (or Main Channel ID)' : 'Channel ID')) + ' first.';
+        statusEl.textContent = '❌ Enter your Bot Token and ' + (isOc ? 'OC Channel ID (or Alert Channel ID)' : (type === 'inactivity' ? 'Inactivity Channel ID (or Main Channel ID)' : (type === 'overdose' ? 'Overdose Channel ID (or Main Channel ID)' : 'Channel ID'))) + ' first.';
         return;
     }
     btn.disabled = true; btn.classList.add('sending'); btn.textContent = '⏳';
@@ -2077,6 +2130,8 @@ async function testAlert(type) {
                     discordId,
                     inactivityRoleId,
                     inactivityChannelId,
+                    overdoseRoleId,
+                    overdoseChannelId,
                     ocChannelId,
                     ocRoleId,
                     globalChannelId: channelId,
@@ -2259,6 +2314,7 @@ function updateSelectedChannelsBadge() {
 function quickSelectChannel(type) {
     let targetId = '';
     if (type === 'main') targetId = document.getElementById('global-channelid')?.value.trim();
+    else if (type === 'overdose') targetId = document.getElementById('overdose-channelid')?.value.trim();
     else if (type === 'oc') targetId = document.getElementById('oc-channelid')?.value.trim();
     else if (type === 'inactivity') targetId = document.getElementById('inactivity-channelid')?.value.trim();
     else if (type === 'banking') targetId = document.getElementById('banking-channelid')?.value.trim();
