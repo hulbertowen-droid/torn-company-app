@@ -5553,8 +5553,20 @@ SPIDER-VERSE FACTION OPERATIONAL DIRECTIVES (Trained Knowledge):
   * Fair Fight (FF) scales 1.00 to 3.00 based on battle stat ratios. Max respect is achieved near 3.00 FF.
 - Fast Level 15:
   * Hit high-level inactives from Baldr's list using energy refills to unlock foreign travel for plushies/flowers ($2M-$4M daily profit).
-- Happy Jumps (Stats under ~400k-800k):
-  * Stack 1,000e with 4 Xanax. Wait for booster cooldown = 0. Use 4-5 eDVDs, take Ecstasy to double happy up to 99,999, then dump 1,000e into the gym before the 15-minute tick (:00, :15, :30, :45).
+- Spider-Verse Happy Jump Protocols (Trained Faction Regimen):
+  * Faction Candy Perk: Our faction gives +50% Happy from candy boosters (25-happy candies yield 37 happy each; 75-happy candies yield 112 happy each).
+  * 1. Budget / Lollipop Jump (Used ~80% of the time — consistent gains every ~30 hours):
+    - Wait until at max natural energy (150e).
+    - Pop 3 Xanax in a row (as each drug cooldown clears) to reach 850 or 900 energy.
+    - When drug cooldown wears off at 850/900e, do a lollipop jump (25-happy candies giving 37 happy each with our perk) to reach ~15k Happy (depending on property).
+    - Train all 850–900e in the gym before the 15-minute tick (:00, :15, :30, :45).
+    - Frequency: Every ~30 hours based on our current booster cooldown.
+  * 2. Medium Jump (Used ~20% of the time — ~$7M cost, gives ~25k Happy):
+    - Buying Tip: Always buy candy from player Bazaars (Item Market is up to 5% more expensive).
+    - Requirements: 69 Tootsie Rolls (or similar 75-happy candies), 4 Xanax (from faction), 1 Ecstasy.
+    - How to: Empty out natural energy, take 4 Xanax over cooldowns to stack 1,000e. Wait for drug cooldown to wear off completely (crucial so you can take Ecstasy!). Eat all 69 Tootsie Rolls (giving 112 happy each with our boost), then pop 1 Ecstasy to double happy to ~25k. Dump all 1,000e into the gym before the 15-minute tick.
+    - Frequency: Every ~40 hours.
+  * 3. 99k Jump: Advanced jump using 4–5 eDVDs + 1 Ecstasy + 1,000e for stats under 400k-800k.
 `;
 
 function getGeminiApiKey() {
