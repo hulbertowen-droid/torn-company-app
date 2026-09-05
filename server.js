@@ -1,3 +1,11 @@
+// ── Process Crash Shields (Ensures 24/7 uninterrupted uptime on Render) ──
+process.on('uncaughtException', (err, origin) => {
+    console.error('[CRITICAL] Uncaught Exception:', err?.message || err, 'Origin:', origin);
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[CRITICAL] Unhandled Promise Rejection:', reason?.message || reason);
+});
+
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
@@ -7,8 +15,73 @@ require('dotenv').config();
 // Hardcoded MongoDB URI to bypass Render settings
 process.env.MONGODB_URI = "mongodb+srv://WarBoard:WarBoardPass123@cluster0.iwnnnj3.mongodb.net/?appName=Cluster0";
 
-
 const mongoose = require('mongoose');
+
+// ── Master State & Configuration Store (Pre-initialized to prevent TDZ ReferenceErrors) ──
+let discordConfig = { 
+    globalChannelId: "", 
+    globalBotToken: "",
+    personalDiscordId: "",
+    guildId: "",
+    bankingChannelId: "",
+    bankerRoleId: "",
+    targetOnline: false, 
+    targetLanded: true, 
+    targetOutHosp: false, 
+    chainUnder90: true, 
+    chainMilestone: true, 
+    friendlyAttacked: false, 
+    medOutSniper: true,
+    travelWarnings: true,
+    chainWarnings: true,
+    inactivityTracker: true,
+    inactivityRoleId: "",
+    inactivityDays: 1,
+    inactivityChannelId: "",
+    apiKey: "", 
+    factionId: "",
+    notificationsKilled: false,
+    verificationChannelId: "",
+    unverifiedRoleId: "",
+    verifiedRoleId: "",
+    factionRoleId: "",
+    leaderRoleId: "",
+    autoVerifyOnJoin: true,
+    disabledCommands: []
+};
+let companyConfig = { apiKey: "", companyId: "", globalChannelId: "", threshold: 0, alertedItems: {} };
+let marketConfig = { globalChannelId: "", autoDefense: false, sniperTargets: [] };
+let ocConfig = { 
+    globalChannelId: "", 
+    roleId: "",
+    alertPlanned: true,
+    alertUpcoming: true,
+    upcomingMinutes: 30,
+    alertReady: true,
+    alertDelayed: true,
+    alertMissingItems: true,
+    alertCompleted: true,
+    alertLowCpr: true,
+    lowCprDefaultThreshold: 30,
+    lowCprLevels: { 1: 0, 2: 0, 3: 40, 4: 40, 5: 36, 6: 36, 7: 80, 8: 85 },
+    alertNoParticipation: true,
+    noParticipationDays: 1
+};
+let subscriptions = {};
+let spyDatabase = {};
+let userTracking = {};
+let apiPoolConfig = {};
+let bankRequests = {};
+let bankRequestCounter = 1000;
+let inactivityAlertsMemory = { alerts: {}, initialized: false };
+let odAlertsMemory = { alerts: {}, initialized: false };
+let ocAlertTracker = {};
+let ocMemory = {};
+let ocMemberHistory = {};
+let activeGiveaways = {};
+let warFlightArchive = {};
+let warAuditArchive = {};
+let lastGoodWarboardPayload = null;
 
 const configSchema = new mongoose.Schema({
     _id: { type: String, default: 'master' },
@@ -24,18 +97,24 @@ const configSchema = new mongoose.Schema({
 const AppConfig = mongoose.model('AppConfig', configSchema, 'app_configs');
 
 global.mongoConnectionError = null;
-if (process.env.MONGODB_URI) {
+let mongoRetryTimeout = null;
+function connectMongo() {
+    if (!process.env.MONGODB_URI) return;
     mongoose.connect(process.env.MONGODB_URI)
         .then(async () => {
-            console.log("Connected to MongoDB Atlas");
+            console.log("[MongoDB] Connected to MongoDB Atlas successfully");
+            global.mongoConnectionError = null;
             await loadConfigFromMongo();
             await syncRecruitsToPlayers();
         })
         .catch(err => {
-            console.log("MongoDB connection error:", err);
+            console.warn("[MongoDB] Atlas connection warning (retrying in 10s):", err.message || err);
             global.mongoConnectionError = err.message || err.toString();
+            if (mongoRetryTimeout) clearTimeout(mongoRetryTimeout);
+            mongoRetryTimeout = setTimeout(connectMongo, 10_000);
         });
 }
+connectMongo();
 
 const recruitSchema = new mongoose.Schema({
     id: { type: Number, unique: true },
@@ -137,6 +216,12 @@ async function loadConfigFromMongo() {
                     addKey(discordConfig.apiKey, discordConfig.factionId || 0, null);
                 } catch(e) {}
             }
+
+            if (discordConfig.globalBotToken && discordConfig.globalBotToken.trim().length > 20 && !global.slashBotStarted) {
+                try {
+                    startSlashCommandBot(discordConfig.globalBotToken.trim()).catch(() => {});
+                } catch(e) {}
+            }
         }
     } catch(e) {
         console.error('[Mongo] Config load error:', e.message);
@@ -235,6 +320,16 @@ global.turboStats = { found: 0, checked: 0 };
 app.use(cors());
 app.use(express.json());
 
+// Instant root healthcheck for Render router, Cloudflare, and keep-alive sentinel
+app.get(['/healthz', '/health', '/api/health'], (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        uptime: Math.floor(process.uptime()),
+        mongo: mongoose.connection.readyState === 1 ? 'connected' : 'connecting',
+        timestamp: Date.now()
+    });
+});
+
 app.get('/recruitment.html', (req, res) => {
     res.redirect(301, '/recruit/');
 });
@@ -271,12 +366,12 @@ let activityCache = {};
 let warScrapeCache = {};
 let warScrapeCache_v2 = {}; 
 
-let spyDatabase = {}; 
+spyDatabase = {}; 
 let subCache = {}; 
 
-let userTracking = {}; 
+userTracking = {}; 
 let discordIdCache = {}; 
-let apiPoolConfig = { keys: [] }; 
+apiPoolConfig = { keys: [] }; 
 
 let statQueue = new Map();
 let flightQueue = new Map();
@@ -338,7 +433,7 @@ let activeWarEnd = null;
 let isBackfillingWar = false;
 let hasBackfilledWar = false;
 let processedAttackIds = new Set();
-let lastGoodWarboardPayload = null;
+lastGoodWarboardPayload = null;
 let lastGoodWarboardByFaction = {};
 const WARBOARD_BACKUP_FILE = path.join(__dirname, 'data', 'last_warboard.json');
 try {
@@ -383,7 +478,7 @@ let lastEventTimestamp = Math.floor(Date.now() / 1000);
 let lastChainTimeoutAlertState = false;
 let backgroundEnemyTrackingState = {};
 
-let discordConfig = { 
+discordConfig = { 
     globalChannelId: "", 
     globalBotToken: "",
     personalDiscordId: "",
@@ -414,9 +509,9 @@ let discordConfig = {
     autoVerifyOnJoin: true,
     disabledCommands: []
 };
-let marketConfig = { globalChannelId: "", autoDefense: false, sniperTargets: [] };
+marketConfig = { globalChannelId: "", autoDefense: false, sniperTargets: [] };
 let marketMemory = { defense: {}, sniper: {} };
-let ocConfig = { 
+ocConfig = { 
     globalChannelId: "", 
     roleId: "",
     alertPlanned: true,
@@ -479,10 +574,10 @@ async function getTornItemInfo(itemId, apiKey) {
     return { name: `Required Item #${itemId}`, type: "Utility" };
 }
  
-let companyConfig = { globalChannelId: "", threshold: 0, alertedItems: {}, apiKey: "" };
+companyConfig = { globalChannelId: "", threshold: 0, alertedItems: {}, apiKey: "" };
 
-let bankRequests = {};
-let bankRequestCounter = 1000;
+bankRequests = {};
+bankRequestCounter = 1000;
 
 try { if (fs.existsSync('subscriptions.json')) subscriptions = JSON.parse(fs.readFileSync('subscriptions.json')); } catch (e) {}
 try { if (fs.existsSync('discord_config.json')) discordConfig = { ...discordConfig, ...JSON.parse(fs.readFileSync('discord_config.json')) }; } catch(e) {}
@@ -1712,7 +1807,7 @@ function saveInactivityAlerts(data) {
     saveToMongo();
 }
 
-let inactivityAlertsMemory = loadInactivityAlerts();
+inactivityAlertsMemory = loadInactivityAlerts();
 
 // ─── Player Drug Overdose Tracker & Discord Alerts ───────────────────────────
 const OVERDOSE_ALERTS_FILE = path.join(__dirname, 'data', 'overdose_alerts.json');
@@ -1739,7 +1834,7 @@ function saveOverdoseAlerts(data) {
     saveToMongo();
 }
 
-let odAlertsMemory = loadOverdoseAlerts();
+odAlertsMemory = loadOverdoseAlerts();
 
 
 // ─── Organized Crime Member Participation History ───────────────────────────
@@ -1763,7 +1858,7 @@ function saveOcMemberHistory(data) {
         fs.writeFileSync(OC_MEMBER_HISTORY_FILE, JSON.stringify(data, null, 2), 'utf8');
     } catch (e) {}
 }
-let ocMemberHistory = loadOcMemberHistory();
+ocMemberHistory = loadOcMemberHistory();
 
 // ─── Organized Crime Alert Trackers & Memory (Persistent Across Deploys & Restarts) ───
 const OC_ALERT_TRACKER_FILE = path.join(__dirname, 'data', 'oc_alert_tracker.json');
@@ -1787,7 +1882,7 @@ function saveOcAlertTracker() {
     } catch(e) {}
     saveToMongo();
 }
-let ocAlertTracker = loadOcAlertTracker();
+ocAlertTracker = loadOcAlertTracker();
 
 const OC_MEMORY_FILE = path.join(__dirname, 'data', 'oc_memory.json');
 function loadOcMemory() {
@@ -1817,12 +1912,10 @@ function saveOcMemory() {
     } catch(e) {}
     saveToMongo();
 }
-let ocMemory = loadOcMemory();
+ocMemory = loadOcMemory();
 
 // Persistent Real-Time War Flight Archive
 const WAR_FLIGHT_ARCHIVE_FILE = path.join(__dirname, 'data', 'war_flight_archive.json');
-let warFlightArchive = {};
-let warAuditArchive = {};
 function loadWarFlightArchive() {
     try {
         if (!fs.existsSync(path.dirname(WAR_FLIGHT_ARCHIVE_FILE))) {
@@ -9278,18 +9371,6 @@ async function checkFactionOrganizedCrimes() {
 setInterval(checkFactionOrganizedCrimes, 30000);
 setTimeout(checkFactionOrganizedCrimes, 15000);
 
-// ── Render Free-Tier Keepalive Pinger ──────────────────────────────────────
-// Pings the public endpoint every 9 minutes to prevent Render's free tier
-// from spinning down into a 50-second cold-boot slumber during inactivity!
-setInterval(async () => {
-    try {
-        const pingUrl = process.env.RENDER_EXTERNAL_URL
-            ? `${process.env.RENDER_EXTERNAL_URL}/api/discord/killswitch-status`
-            : `https://spider-verse.net/api/discord/killswitch-status`;
-        await fetch(pingUrl, { signal: AbortSignal.timeout(6000) });
-    } catch(e) {}
-}, 9 * 60 * 1000);
-
 async function executeFulfillRequest(reqId, interaction) {
     const req = bankRequests[reqId];
     if (!req) {
@@ -10275,17 +10356,17 @@ async function handleGuildMemberAdd(member) {
 
 // ─── Discord Giveaway Subsystem ───────────────────────────────────────────────
 const GIVEAWAYS_FILE = path.join(__dirname, 'giveaways.json');
-let activeGiveaways = {};
+activeGiveaways = activeGiveaways || {};
 
 function loadGiveaways() {
     try {
         if (fs.existsSync(GIVEAWAYS_FILE)) {
-            activeGiveaways = JSON.parse(fs.readFileSync(GIVEAWAYS_FILE, 'utf8')) || {};
+            const diskGiveaways = JSON.parse(fs.readFileSync(GIVEAWAYS_FILE, 'utf8')) || {};
+            activeGiveaways = { ...(activeGiveaways || {}), ...diskGiveaways };
             console.log(`[Giveaways] Loaded ${Object.keys(activeGiveaways).length} giveaways from storage`);
         }
     } catch(e) {
         console.error("[Giveaways Load Error]", e.message);
-        activeGiveaways = {};
     }
 }
 
@@ -10520,11 +10601,17 @@ async function launchGiveaway(interaction, prize, durationStr, winnersCount) {
 // Load persisted giveaways and start auto-expiry loop
 loadGiveaways();
 setInterval(() => {
-    const now = Date.now();
-    for (const [id, g] of Object.entries(activeGiveaways)) {
-        if (!g.ended && g.endsAt <= now) {
-            endGiveaway(id).catch(e => console.error(`[Giveaway Auto-End Error: ${id}]`, e.message));
+    try {
+        const now = Date.now();
+        if (activeGiveaways && typeof activeGiveaways === 'object') {
+            for (const [id, g] of Object.entries(activeGiveaways)) {
+                if (g && typeof g === 'object' && !g.ended && g.endsAt && g.endsAt <= now) {
+                    endGiveaway(id).catch(e => console.error(`[Giveaway Auto-End Error: ${id}]`, e.message));
+                }
+            }
         }
+    } catch(e) {
+        console.error("[Giveaway Loop Error]", e.message);
     }
 }, 5000);
 
@@ -12058,20 +12145,36 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     initRecruitPlatform(app, server).catch(e => console.error("[Recruit Init Error]", e));
 });
 
-// ── Keep-Alive Self-Ping (Ensures 24/7 scanning on Render even when computer is turned off) ──
+// ── Robust 24/7 Keep-Alive Sentinel (Keeps Render awake & eliminates cold starts) ──
 function startKeepAlive() {
-    const appUrl = process.env.RENDER_EXTERNAL_URL || process.env.APP_URL;
-    if (appUrl) {
-        console.log(`[KeepAlive] 24/7 Self-Ping active for ${appUrl} (pings every 10 min)`);
-        setInterval(async () => {
+    const targets = new Set();
+    targets.add('https://spider-verse.net');
+    if (process.env.RENDER_EXTERNAL_URL) targets.add(process.env.RENDER_EXTERNAL_URL.replace(/\/$/, ''));
+    if (process.env.APP_URL) targets.add(process.env.APP_URL.replace(/\/$/, ''));
+
+    console.log(`[KeepAlive] 24/7 Keep-Alive Sentinel active for: ${Array.from(targets).join(', ')} (every 3 min)`);
+
+    const doPing = async () => {
+        for (const baseUrl of targets) {
             try {
-                const res = await fetch(`${appUrl}/recruit-api/admin/health`, { signal: AbortSignal.timeout(10_000) });
-                if (res.ok) console.log('[KeepAlive] Heartbeat ping OK — Render kept awake');
+                const res = await fetch(`${baseUrl}/healthz`, {
+                    signal: AbortSignal.timeout(15_000),
+                    headers: { 'User-Agent': 'Render-KeepAlive-Sentinel/2.0' }
+                });
+                if (res.ok) {
+                    // Success: Inbound HTTP traffic registered by Render routing proxy
+                } else {
+                    console.warn(`[KeepAlive] Ping to ${baseUrl}/healthz returned ${res.status}`);
+                }
             } catch(e) {
-                console.warn('[KeepAlive] Ping:', e.message);
+                // Transient network delays ignored
             }
-        }, 10 * 60_000);
-    }
+        }
+    };
+
+    // First ping 15s after startup, then repeating every 3 minutes (180,000 ms)
+    setTimeout(doPing, 15_000);
+    setInterval(doPing, 3 * 60_000);
 }
 
 async function startFrontierPipeline() {
