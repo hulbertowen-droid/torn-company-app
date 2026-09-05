@@ -12,12 +12,6 @@ try {
     v8.setFlagsFromString('--max_old_space_size=384');
 } catch(e) {}
 
-// Set resilient Google & Cloudflare public DNS servers to avoid SRV lookup failures
-try {
-    const dns = require('dns');
-    dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']);
-} catch(e) {}
-
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
@@ -9395,8 +9389,8 @@ async function checkFactionOrganizedCrimes() {
     }
 }
 
-setInterval(checkFactionOrganizedCrimes, 30000);
-setTimeout(checkFactionOrganizedCrimes, 15000);
+setInterval(checkFactionOrganizedCrimes, 45000);
+setTimeout(checkFactionOrganizedCrimes, 60000);
 
 async function executeFulfillRequest(reqId, interaction) {
     const req = bankRequests[reqId];
@@ -12182,11 +12176,12 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 // ── Robust 24/7 Keep-Alive Sentinel (Keeps Render awake & eliminates cold starts) ──
 function startKeepAlive() {
     const targets = new Set();
-    targets.add('https://spider-verse.net');
     if (process.env.RENDER_EXTERNAL_URL) targets.add(process.env.RENDER_EXTERNAL_URL.replace(/\/$/, ''));
+    targets.add('https://torn-company-app.onrender.com');
+    targets.add('https://spider-verse.net');
     if (process.env.APP_URL) targets.add(process.env.APP_URL.replace(/\/$/, ''));
 
-    console.log(`[KeepAlive] 24/7 Keep-Alive Sentinel active for: ${Array.from(targets).join(', ')} (every 4 min)`);
+    console.log(`[KeepAlive] 24/7 Keep-Alive Sentinel active for: ${Array.from(targets).join(', ')} (every 5 min)`);
 
     const doPing = async () => {
         for (const baseUrl of targets) {
@@ -12209,9 +12204,9 @@ function startKeepAlive() {
         }
     };
 
-    // First ping 15s after startup, then repeating every 4 minutes (240,000 ms)
-    setTimeout(doPing, 15_000);
-    setInterval(doPing, 4 * 60_000);
+    // First ping 5 minutes after startup, then repeating every 5 minutes (300,000 ms)
+    setTimeout(doPing, 5 * 60_000);
+    setInterval(doPing, 5 * 60_000);
 
     // Heartbeat Telemetry: Log process health & memory every 60s
     setInterval(() => {
