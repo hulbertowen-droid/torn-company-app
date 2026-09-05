@@ -742,12 +742,12 @@
                 <div>
                     <h2 class="ai-hero-title">F.R.I.D.A.Y <span>Tactical Oracle</span></h2>
                     <p class="ai-hero-desc">
-                        Spider-Verse's private AI assistant. Trained on our faction operations (Owen777 [3490493], OC 2.0 CPR matrices, 24h inactivity rules, overdose response) and grounded strictly in official Torn City Forums (<code>torn.com/forums.php</code>) with verified citations and zero guessing.
+                        Torn City Strategic Oracle &amp; Faction Assistant. Ask any question about Torn City gameplay, training, wars, crimes, travel, and faction policies. Grounded strictly in official Torn City Forums (<code>torn.com/forums.php</code>) with concise, high-yield summaries and zero guessing.
                     </p>
                     <div class="ai-hero-badges">
                         <span class="ai-badge cyan">⚡ Gemini 2.5 Flash</span>
                         <span class="ai-badge purple">🔍 Real-Time Forum Grounding</span>
-                        <span class="ai-badge cyan">🛡️ Spider-Verse Trained</span>
+                        <span class="ai-badge cyan">🎯 Concise Summaries</span>
                     </div>
                 </div>
             </div>
@@ -781,7 +781,7 @@
                     <div class="knowledge-grid">
                         <div class="knowledge-item">
                             <div class="knowledge-item-title">👑 Leadership & Identity</div>
-                            <div>Faction Leader: <b>Owen777 [3490493]</b>. Co-Leader permissions apply. F.R.I.D.A.Y addresses the faction as its autonomous command assistant.</div>
+                            <div>Faction Leader: <b>Owen777 [3490493]</b>. Co-Leader permissions apply. F.R.I.D.A.Y addresses the faction as its autonomous tactical assistant.</div>
                         </div>
                         <div class="knowledge-item">
                             <div class="knowledge-item-title">💼 OC 2.0 CPR Matrix</div>
@@ -800,8 +800,8 @@
                             <div>If a Torn mechanic or formula is not documented in verified Torn forum threads or official Chedburn announcements, F.R.I.D.A.Y will refuse to guess and state it cannot be verified.</div>
                         </div>
                         <div class="knowledge-item">
-                            <div class="knowledge-item-title">💰 Vault & Banking</div>
-                            <div>Discord <code>/withdraw</code> commands handled by designated Bankers. Balance drops auto-tracked.</div>
+                            <div class="knowledge-item-title">🎯 Summary-First Answers</div>
+                            <div>Delivers 1-2 sentence core summaries upfront, followed by concise action steps or exact Torn numbers. Strictly Torn gameplay — no website tech talk.</div>
                         </div>
                     </div>
                 </div>
@@ -810,16 +810,16 @@
 
         <!-- ── Quick Test Preset Prompts ── -->
         <div class="presets-wrap">
-            <div class="presets-label">⚡ One-Click Test Prompts</div>
+            <div class="presets-label">⚡ One-Click Test Prompts (Torn Gameplay)</div>
             <div class="presets-grid">
-                <button class="preset-chip" onclick="runPreset('Explain the full 99k Happy Jump strategy, timetable, and item requirements step-by-step.')">🏋️ 99k Happy Jump Guide</button>
+                <button class="preset-chip" onclick="runPreset('Give a quick summary of the 99k Happy Jump: items needed, energy stacking, and when to train.')">🏋️ 99k Happy Jump Summary</button>
                 <button class="preset-chip" onclick="runPreset('What are Spider-Verse\'s exact OC 2.0 CPR threshold rules and inactivity policy?')">📋 Faction OC CPR Rules</button>
-                <button class="preset-chip" onclick="runPreset('How does Fair Fight (FF) and respect scaling work in Torn ranked wars?')">⚔️ Fair Fight & Respect Formula</button>
-                <button class="preset-chip" onclick="runPreset('What is our faction protocol when a member overdoses on Xanax?')">💊 Overdose Protocol</button>
-                <button class="preset-chip" onclick="runPreset('What is the best country for plushie/flower running profit and how does travel capacity work?')">✈️ Travel Profit Strategy</button>
-                <button class="preset-chip" onclick="runPreset('How does employee addiction impact company effectiveness in Torn?')">🏢 Company Addiction & Stats</button>
-                <button class="preset-chip" onclick="runPreset('Who leads our faction and how do we handle vault withdrawals?')">🛡️ Faction Leadership & Vault</button>
-                <button class="preset-chip" onclick="runPreset('Can you tell me how to get the mythical Flying Unicorn weapon in Torn?')">❓ Test Hallucination Prevention</button>
+                <button class="preset-chip" onclick="runPreset('Briefly explain how Fair Fight (FF) and respect scaling work in attacks.')">⚔️ Fair Fight & Respect</button>
+                <button class="preset-chip" onclick="runPreset('What happens when you overdose on Xanax and what is our faction protocol?')">💊 Xanax Overdose Protocol</button>
+                <button class="preset-chip" onclick="runPreset('What are the most profitable foreign travel destinations for plushie/flower running?')">✈️ Travel Profit Ranking</button>
+                <button class="preset-chip" onclick="runPreset('How does employee drug addiction affect company effectiveness in Torn?')">🏢 Company Addiction Penalty</button>
+                <button class="preset-chip" onclick="runPreset('Summarize the fastest way to reach Level 15 in Torn City.')">🥊 Baldr Level 15 Rush</button>
+                <button class="preset-chip" onclick="runPreset('How do I get the Mythical Golden AK47 in Torn City?')">❓ Hallucination Check</button>
             </div>
         </div>
 
@@ -830,7 +830,7 @@
                     <img src="/friday_avatar.png" onerror="this.onerror=null;this.src='/friday_avatar.jpg'" class="chat-avatar-mini" alt="F.R.I.D.A.Y">
                     <div>
                         <div class="chat-title-mini">F.R.I.D.A.Y Intelligence Session</div>
-                        <div class="chat-sub-mini">Grounded in site:torn.com/forums.php · Spider-Verse Directives</div>
+                        <div class="chat-sub-mini">Grounded in site:torn.com/forums.php · Torn Gameplay & Strategy</div>
                     </div>
                 </div>
                 <button class="btn-clear-chat" onclick="clearChat()">🗑️ Clear Chat</button>
@@ -849,9 +849,9 @@
                             <span class="timestamp" id="welcome-timestamp">Now</span>
                         </div>
                         <div class="chat-bubble">
-                            <p><b>Systems online, Boss.</b> I am F.R.I.D.A.Y, your autonomous faction tactical assistant.</p>
-                            <p>My intelligence is trained on <b>Spider-Verse</b> operational procedures (led by <b>Owen777 [3490493]</b>) and grounded strictly in official <b>Torn City Forums</b> records. Whenever you ask about game strategy, training math, or mechanics, I fetch verified data from forum guides like Baldr, Vladar, and Chedburn's official releases.</p>
-                            <p>Click any of the quick-test prompt buttons above or type your question below to test my responses.</p>
+                            <p><b>Systems online, Boss.</b> I am F.R.I.D.A.Y, your tactical Torn City oracle.</p>
+                            <p>I deliver <b>concise, summary-first answers</b> on Torn City gameplay, training math, ranked wars, crimes, travel, and Spider-Verse faction policies. All my intelligence is grounded strictly in official <b>Torn City Forums</b> records (Baldr, Vladar, Chedburn).</p>
+                            <p>Click any quick prompt above or ask any Torn question below to get started.</p>
                         </div>
                     </div>
                 </div>
@@ -868,7 +868,7 @@
             </div>
 
             <div class="chat-input-card">
-                <textarea id="chat-input" class="chat-textarea" placeholder="Ask F.R.I.D.A.Y anything about Torn mechanics, faction rules, or strategies... (Shift+Enter for new line)" rows="1" onkeydown="handleInputKeydown(event)"></textarea>
+                <textarea id="chat-input" class="chat-textarea" placeholder="Ask a Torn gameplay, training, warring, or faction question... (Shift+Enter for new line)" rows="1" onkeydown="handleInputKeydown(event)"></textarea>
                 <button id="btn-send" class="btn-send" onclick="sendMessage()">
                     <span>Send</span> ✈️
                 </button>
