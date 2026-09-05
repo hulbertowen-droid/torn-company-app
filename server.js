@@ -6,6 +6,18 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('[CRITICAL] Unhandled Promise Rejection:', reason?.message || reason);
 });
 
+// Enforce strict memory budget for Render 512MB container
+try {
+    const v8 = require('v8');
+    v8.setFlagsFromString('--max_old_space_size=384');
+} catch(e) {}
+
+// Set resilient Google & Cloudflare public DNS servers to avoid SRV lookup failures
+try {
+    const dns = require('dns');
+    dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']);
+} catch(e) {}
+
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
@@ -105,7 +117,10 @@ function connectMongo() {
             console.log("[MongoDB] Connected to MongoDB Atlas successfully");
             global.mongoConnectionError = null;
             await loadConfigFromMongo();
-            await syncRecruitsToPlayers();
+            // Defer heavy recruit sync to 45s after boot so server starts in < 500ms
+            setTimeout(() => {
+                syncRecruitsToPlayers().catch(e => console.error("[RecruitSync Error]", e.message));
+            }, 45_000);
         })
         .catch(err => {
             console.warn("[MongoDB] Atlas connection warning (retrying in 10s):", err.message || err);
@@ -244,10 +259,19 @@ async function syncRecruitsToPlayers() {
             ]
         }).catch(() => {});
 
-        // 2. Filter and sync quality recruits into Player search pool
-        const recruits = await Recruit.find({}).lean();
-        if (recruits.length > 0) {
-            const qualityRecruits = recruits.filter(r => {
+        // 2. Stream/batch sync quality recruits into Player search pool to keep RAM tiny (< 50MB)
+        const totalRecruits = await Recruit.countDocuments().catch(() => 0);
+        if (totalRecruits === 0) return;
+
+        const BATCH_SIZE = 200;
+        let syncedCount = 0;
+        let skip = 0;
+
+        while (skip < totalRecruits) {
+            const batch = await Recruit.find({}).skip(skip).limit(BATCH_SIZE).lean();
+            if (!batch || batch.length === 0) break;
+
+            const qualityRecruits = batch.filter(r => {
                 const state = r.status || 'Okay';
                 if (state === 'Fallen' || state === 'Federal' || state === 'Deleted') return false;
                 
@@ -260,7 +284,6 @@ async function syncRecruitsToPlayers() {
                 const age = r.age || 1;
                 const lvl = r.level || 1;
 
-                // Discard low progression sluggish accounts (e.g. 500 days old lvl 5)
                 if (age > 30 && lvl < 10) return false;
                 if (age > 90 && lvl < 15) return false;
                 if (age > 365 && lvl < 25) return false;
@@ -302,10 +325,14 @@ async function syncRecruitsToPlayers() {
                         }
                     };
                 });
-                await Player.bulkWrite(ops, { ordered: false });
-                console.log(`[RecruitSync] Synced ${qualityRecruits.length} quality recruits into Player search pool.`);
+                await Player.bulkWrite(ops, { ordered: false }).catch(() => {});
+                syncedCount += qualityRecruits.length;
             }
+
+            skip += BATCH_SIZE;
         }
+
+        console.log(`[RecruitSync] Synced ${syncedCount} quality recruits into Player search pool.`);
     } catch(e) {
         console.error('[RecruitSync] Error syncing recruits to players:', e.message);
     }
@@ -10791,6 +10818,13 @@ let slashCommandBot = null;
 let slashBotStarted = false;
 
 function setupSlashBotEvents(bot, token) {
+    bot.on('error', (err) => {
+        console.warn('[Slash Bot] Discord Client Error (resilient):', err?.message || err);
+    });
+    bot.on('shardError', (err) => {
+        console.warn('[Slash Bot] Discord Shard Error (resilient):', err?.message || err);
+    });
+
     bot.once(Events.ClientReady, async (c) => {
         console.log(`[Slash Bot] Ready as ${c.user.tag}`);
         slashBotStarted = true;
@@ -12152,14 +12186,17 @@ function startKeepAlive() {
     if (process.env.RENDER_EXTERNAL_URL) targets.add(process.env.RENDER_EXTERNAL_URL.replace(/\/$/, ''));
     if (process.env.APP_URL) targets.add(process.env.APP_URL.replace(/\/$/, ''));
 
-    console.log(`[KeepAlive] 24/7 Keep-Alive Sentinel active for: ${Array.from(targets).join(', ')} (every 3 min)`);
+    console.log(`[KeepAlive] 24/7 Keep-Alive Sentinel active for: ${Array.from(targets).join(', ')} (every 4 min)`);
 
     const doPing = async () => {
         for (const baseUrl of targets) {
             try {
                 const res = await fetch(`${baseUrl}/healthz`, {
                     signal: AbortSignal.timeout(15_000),
-                    headers: { 'User-Agent': 'Render-KeepAlive-Sentinel/2.0' }
+                    headers: { 
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+                        'Accept': 'application/json'
+                    }
                 });
                 if (res.ok) {
                     // Success: Inbound HTTP traffic registered by Render routing proxy
@@ -12172,9 +12209,15 @@ function startKeepAlive() {
         }
     };
 
-    // First ping 15s after startup, then repeating every 3 minutes (180,000 ms)
+    // First ping 15s after startup, then repeating every 4 minutes (240,000 ms)
     setTimeout(doPing, 15_000);
-    setInterval(doPing, 3 * 60_000);
+    setInterval(doPing, 4 * 60_000);
+
+    // Heartbeat Telemetry: Log process health & memory every 60s
+    setInterval(() => {
+        const mem = process.memoryUsage();
+        console.log(`[Heartbeat] Uptime: ${Math.floor(process.uptime())}s | RSS: ${Math.round(mem.rss / 1024 / 1024)}MB | Heap: ${Math.round(mem.heapUsed / 1024 / 1024)}MB / ${Math.round(mem.heapTotal / 1024 / 1024)}MB`);
+    }, 60_000);
 }
 
 async function startFrontierPipeline() {

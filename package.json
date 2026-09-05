@@ -4,7 +4,7 @@
   "description": "Faction Warboard",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node --max-old-space-size=384 server.js"
   },
   "dependencies": {
     "bull": "^4.16.5",
