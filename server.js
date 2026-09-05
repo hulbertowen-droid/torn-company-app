@@ -111,10 +111,6 @@ function connectMongo() {
             console.log("[MongoDB] Connected to MongoDB Atlas successfully");
             global.mongoConnectionError = null;
             await loadConfigFromMongo();
-            // Defer heavy recruit sync to 45s after boot so server starts in < 500ms
-            setTimeout(() => {
-                syncRecruitsToPlayers().catch(e => console.error("[RecruitSync Error]", e.message));
-            }, 45_000);
         })
         .catch(err => {
             console.warn("[MongoDB] Atlas connection warning (retrying in 10s):", err.message || err);
@@ -353,6 +349,11 @@ app.get(['/healthz', '/health', '/api/health'], (req, res) => {
 
 app.get('/recruitment.html', (req, res) => {
     res.redirect(301, '/recruit/');
+});
+
+app.post('/api/sync-recruits-now', async (req, res) => {
+    syncRecruitsToPlayers().catch(e => console.error("[Manual RecruitSync Error]", e.message));
+    res.json({ success: true, message: "Recruit sync triggered in background" });
 });
 
 app.use(express.static('public', {
