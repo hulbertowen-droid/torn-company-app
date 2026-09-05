@@ -406,12 +406,12 @@ let ocConfig = {
     alertLowCpr: true,
     lowCprDefaultThreshold: 30,
     lowCprLevels: {
-        1: 30,
-        2: 35,
-        3: 45,
-        4: 55,
-        5: 65,
-        6: 75,
+        1: 0,
+        2: 0,
+        3: 40,
+        4: 40,
+        5: 36,
+        6: 36,
         7: 80,
         8: 85
     },
@@ -2454,7 +2454,7 @@ app.get('/api/get-discord-config', (req, res) => {
         alertOcCompleted: ocConfig.alertCompleted !== false,
         alertOcLowCpr: ocConfig.alertLowCpr !== false,
         lowCprDefaultThreshold: ocConfig.lowCprDefaultThreshold || 30,
-        lowCprLevels: ocConfig.lowCprLevels || { 1: 30, 2: 35, 3: 45, 4: 55, 5: 65, 6: 75, 7: 80, 8: 85 },
+        lowCprLevels: ocConfig.lowCprLevels || { 1: 0, 2: 0, 3: 40, 4: 40, 5: 36, 6: 36, 7: 80, 8: 85 },
         alertOcNoParticipation: ocConfig.alertNoParticipation !== false,
         noParticipationDays: ocConfig.noParticipationDays || 1
     };
@@ -5537,10 +5537,11 @@ STRICT KNOWLEDGE & SOURCING RULES:
 
 SPIDER-VERSE FACTION OPERATIONAL DIRECTIVES (Trained Knowledge):
 - Faction Leader / Co-Leader: Owen777 [3490493].
-- Organized Crimes (OC 2.0):
-  * Minimum Checkpoint Pass Rate (CPR) required per crime difficulty:
-    - Level 1: 30% | Level 2: 35% | Level 3: 45% | Level 4: 55%
-    - Level 5: 65% | Level 6: 75% | Level 7: 80% | Level 8: 85%
+- Organized Crimes (OC 2.0) CPR Limits (Trained Faction Thresholds):
+  * Level 1 & Level 2: NO minimum CPR needed (0% — any member can join without restriction).
+  * Level 3 & Level 4: Around 40% and higher (40%+ required).
+  * Level 5 & Level 6: Higher than 35% (>35% required).
+  * Level 7 & Level 8: High tier (higher CPR required / leadership coordination).
   * Inactivity policy: Members who haven't joined or participated in an OC for 24 hours receive alerts. Recruits under Torn's 3-day initial faction restriction are strictly exempt.
   * Missing item protocol: Members missing required materials (e.g. C4, binoculars, lockpicks) should loan them from the faction armory or request from leadership.
 - Drug Overdose Protocol:
