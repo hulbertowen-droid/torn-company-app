@@ -10791,7 +10791,7 @@ async function registerSlashCommands(token, guildId = null) {
             .toJSON(),
 
         // 15. Tactical Torn AI Oracle (Ultron)
-        new SlashCommandBuilder().setName('ask').setDescription('Ask Ultron any question about Torn City mechanics, wiki guides, and faction rules')
+        new SlashCommandBuilder().setName('ask').setDescription('Ask F.R.I.D.A.Y any question about Torn City mechanics, wiki guides, and faction rules')
             .addStringOption(opt => opt.setName('question').setDescription('What is your Torn City question?').setRequired(true))
             .toJSON()
     ];
@@ -11278,15 +11278,13 @@ function setupSlashBotEvents(bot, token) {
         if (cmd === 'ask') {
             const question = (interaction.options.getString('question') || '').trim();
             if (!question) {
-                return interaction.reply({ content: "⚠️ Please provide a question to ask Ultron.", ephemeral: true });
+                return interaction.reply({ content: "⚠️ Please provide a question.", ephemeral: true });
             }
 
             await interaction.deferReply({ ephemeral: true });
 
             try {
                 const { reply, sources } = await askTornAI(question);
-
-                const ULTRON_AVATAR = "https://spider-verse.net/ultron_avatar.png";
 
                 // Ensure reply fits within Discord embed description limit (4096 chars)
                 const desc = reply.length > 4000 ? reply.slice(0, 3990) + "\n\n*(response truncated)*" : reply;
@@ -11307,17 +11305,12 @@ function setupSlashBotEvents(bot, token) {
                 }
 
                 const ultronEmbed = {
-                    author: {
-                        name: "Ultron",
-                        icon_url: ULTRON_AVATAR
-                    },
                     title: `❓ ${question.length > 250 ? question.slice(0, 247) + '...' : question}`,
                     description: desc,
-                    color: 0xff4757, // Ultron Crimson Red
+                    color: 0x00cec9, // F.R.I.D.A.Y Teal
                     fields: fields.length > 0 ? fields : undefined,
                     footer: {
-                        text: "Ultron • Grounded exclusively in Torn Wiki & Forums • Spider-Verse Intel",
-                        icon_url: ULTRON_AVATAR
+                        text: "F.R.I.D.A.Y • Torn Wiki & Forums Intel • Spider-Verse"
                     },
                     timestamp: new Date().toISOString()
                 };
@@ -11327,10 +11320,11 @@ function setupSlashBotEvents(bot, token) {
                 });
             } catch(err) {
                 return await interaction.editReply({
-                    content: `⚠️ **Ultron encountered an error:** ${err.message}`
+                    content: `⚠️ **F.R.I.D.A.Y encountered an error:** ${err.message}`
                 });
             }
         }
+
 
         // Direct actions (Claim / Unclaim / SOS)
         if (cmd === 'claim') {
