@@ -6205,6 +6205,54 @@ app.get('/api/war-bounties', async (req, res) => {
 });
 
 
+// ── Live YATA Overseas Stock Cache (Stale-While-Revalidate) ─────────────────
+let cachedYataStocks = null;
+let lastYataFetchTime = 0;
+let yataFetchPromise = null;
+const YATA_CACHE_TTL = 60 * 1000; // 60 seconds
+
+async function getLiveYataStocks() {
+    const now = Date.now();
+    if (cachedYataStocks && (now - lastYataFetchTime < YATA_CACHE_TTL)) {
+        return cachedYataStocks;
+    }
+
+    if (yataFetchPromise) {
+        return await yataFetchPromise;
+    }
+
+    yataFetchPromise = (async () => {
+        try {
+            const resp = await fetch('https://yata.yt/api/v1/travel/export/', {
+                signal: AbortSignal.timeout(12000), // 12 seconds
+                headers: {
+                    'User-Agent': 'SpiderVerse-FactionBot/1.0'
+                }
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                if (data && data.stocks) {
+                    cachedYataStocks = data;
+                    lastYataFetchTime = Date.now();
+                    return cachedYataStocks;
+                }
+            }
+        } catch (err) {
+            console.warn(`[YATA Stock] Live fetch notice: ${err.message}. Using cache if available.`);
+        } finally {
+            yataFetchPromise = null;
+        }
+
+        if (cachedYataStocks) {
+            return cachedYataStocks;
+        }
+
+        return null;
+    })();
+
+    return await yataFetchPromise;
+}
+
 app.get('/api/travel-profits', async (req, res) => {
     const apiKey = req.headers['x-api-key'] || req.query.apiKey;
     if (!apiKey) return res.status(400).json({ error: "API Key required" });
@@ -6216,9 +6264,11 @@ app.get('/api/travel-profits', async (req, res) => {
         const data = await resp.json();
         if (data.error) return res.status(400).json({ error: "Torn API Error: " + data.error.error });
 
-        // Fetch live YATA stock data
-        const yataResp = await fetch('https://yata.yt/api/v1/travel/export/');
-        const yataData = await yataResp.json();
+        // Fetch live YATA stock data (with cache & timeout resilience)
+        const yataData = await getLiveYataStocks();
+        if (!yataData || !yataData.stocks) {
+            return res.status(503).json({ error: "YATA travel stock feed is temporarily unavailable. Please try again shortly." });
+        }
         
         const yataCountryMap = {
             "Mexico": "mex", "Cayman Islands": "cay", "Canada": "can", "Hawaii": "haw",
@@ -7475,42 +7525,103 @@ async function buildMyOCEmbed(playerQuery, apiKey, callerUsername) {
     }
 }
 
-async function buildStocksEmbed(country, apiKey) {
+const YATA_COUNTRIES = {
+    "mex": { name: "Mexico", flag: "🇲🇽", yCode: "mex" },
+    "cay": { name: "Cayman Islands", flag: "🇰🇾", yCode: "cay" },
+    "can": { name: "Canada", flag: "🇨🇦", yCode: "can" },
+    "haw": { name: "Hawaii", flag: "🌺", yCode: "haw" },
+    "uni": { name: "United Kingdom", flag: "🇬🇧", yCode: "uni" },
+    "arg": { name: "Argentina", flag: "🇦🇷", yCode: "arg" },
+    "swi": { name: "Switzerland", flag: "🇨🇭", yCode: "swi" },
+    "jap": { name: "Japan", flag: "🇯🇵", yCode: "jap" },
+    "chi": { name: "China", flag: "🇨🇳", yCode: "chi" },
+    "uae": { name: "UAE", flag: "🇦🇪", yCode: "uae" },
+    "sou": { name: "South Africa", flag: "🇿🇦", yCode: "sou" }
+};
+
+function resolveYataCountry(input) {
+    if (!input || typeof input !== 'string') return YATA_COUNTRIES["sou"];
+    const c = input.toLowerCase().trim().replace(/[-_]/g, " ");
+
+    if (c.includes("south") || c.includes("africa") || c === "sa" || c === "sou" || c === "za") return YATA_COUNTRIES["sou"];
+    if (c.includes("mex") || c === "mexico") return YATA_COUNTRIES["mex"];
+    if (c.includes("cayman") || c === "cay") return YATA_COUNTRIES["cay"];
+    if (c.includes("can") || c === "canada") return YATA_COUNTRIES["can"];
+    if (c.includes("haw") || c === "hawaii") return YATA_COUNTRIES["haw"];
+    if (c.includes("uk") || c.includes("united kingdom") || c.includes("london") || c.includes("britain") || c === "uni") return YATA_COUNTRIES["uni"];
+    if (c.includes("arg") || c === "argentina") return YATA_COUNTRIES["arg"];
+    if (c.includes("swi") || c.includes("switz") || c === "switzerland") return YATA_COUNTRIES["swi"];
+    if (c.includes("jap") || c === "japan") return YATA_COUNTRIES["jap"];
+    if (c.includes("chi") || c === "china") return YATA_COUNTRIES["chi"];
+    if (c.includes("uae") || c.includes("dubai")) return YATA_COUNTRIES["uae"];
+
+    return YATA_COUNTRIES["sou"];
+}
+
+async function buildStocksEmbed(countryInput, apiKey) {
+    const target = resolveYataCountry(countryInput);
     try {
-        const yataCountryMap = {
-            "Mexico": "mex", "Cayman Islands": "cay", "Canada": "can", "Hawaii": "haw",
-            "United Kingdom": "uni", "Argentina": "arg", "Switzerland": "swi", "Japan": "jap",
-            "China": "chi", "UAE": "uae", "South Africa": "sou"
-        };
-        const yCode = yataCountryMap[country] || "mex";
-        const yataRes = await fetch(`https://yata.yt/api/v1/travel/export/`, { signal: AbortSignal.timeout(6000) });
-        const yataData = await yataRes.json();
-        
-        const countryStocks = yataData.stocks?.[yCode]?.stocks || [];
+        const yataData = await getLiveYataStocks();
+        const countryStocks = yataData?.stocks?.[target.yCode]?.stocks || [];
+        const isFromCache = cachedYataStocks && (Date.now() - lastYataFetchTime > 45000);
+
         if (countryStocks.length === 0) {
             return {
-                title: `✈️ ${country} — No Stock Data`,
-                description: `No live stock data available for **${country}** right now.`,
-                color: 0x58a6ff
+                title: `${target.flag} ${target.name} — Overseas Stock`,
+                description: `No live stock data currently available on YATA for **${target.name}**.\n\nCheck back shortly or view directly on [YATA Travel](https://yata.yt/bazaar/abroad/).`,
+                color: 0x58a6ff,
+                fields: [
+                    { name: "🔗 Travel Tools", value: `[Open Travel Calculator](https://spider-verse.net/travel.html) • [Live YATA Abroad](https://yata.yt/bazaar/abroad/)`, inline: false }
+                ],
+                footer: { text: `Foreign Stock • Spider-Verse Intel` }
             };
         }
 
-        const lines = countryStocks.slice(0, 10).map(s => {
-            const stockIcon = s.quantity > 500 ? '🟢' : (s.quantity > 50 ? '🟡' : '🔴');
-            return `${stockIcon} **${s.name}**: **${(s.quantity || 0).toLocaleString()}** in stock · $${(s.cost || 0).toLocaleString()}`;
+        // Prioritize: Plushies & Flowers and high-demand items (Xanax)
+        const isPriorityItem = (name = "") => {
+            const n = name.toLowerCase();
+            return n.includes("plushie") || n.includes("violet") || n.includes("flower") || n.includes("xanax") || 
+                   n.includes("heather") || n.includes("orchid") || n.includes("cherry") || n.includes("dahlia") || 
+                   n.includes("crocus") || n.includes("edelweiss") || n.includes("peony") || n.includes("ceibo") || 
+                   n.includes("tribulus");
+        };
+
+        const sorted = [...countryStocks].sort((a, b) => {
+            const aPrio = isPriorityItem(a.name) ? 1 : 0;
+            const bPrio = isPriorityItem(b.name) ? 1 : 0;
+            if (aPrio !== bPrio) return bPrio - aPrio;
+            if ((a.quantity > 0) !== (b.quantity > 0)) {
+                return (b.quantity > 0) ? -1 : 1;
+            }
+            return (b.quantity || 0) - (a.quantity || 0);
         });
 
+        const lines = sorted.slice(0, 12).map(s => {
+            const qty = s.quantity || 0;
+            const stockIcon = qty > 500 ? '🟢' : (qty > 50 ? '🟡' : (qty > 0 ? '🟠' : '🔴'));
+            const costStr = s.cost ? ` · $${s.cost.toLocaleString()}` : '';
+            return `${stockIcon} **${s.name}**: **${qty.toLocaleString()}** in stock${costStr}`;
+        });
+
+        const cacheNote = isFromCache ? ` • (Cached ${Math.round((Date.now() - lastYataFetchTime) / 1000)}s ago)` : '';
+
         return {
-            title: `✈️ ${country} — Overseas Stock`,
+            title: `${target.flag} ${target.name} — Overseas Stock`,
             description: lines.join("\n"),
             color: 0x00cec9,
             fields: [
-                { name: "🔗 Travel Calculator", value: `[Open Travel Calculator](https://spider-verse.net/travel.html)`, inline: false }
+                { name: "🔗 Travel Calculator", value: `[Open Travel Calculator](https://spider-verse.net/travel.html) • [YATA Live Abroad](https://yata.yt/bazaar/abroad/)`, inline: false }
             ],
-            footer: { text: `Foreign Stock • YATA • ${new Date().toUTCString()}` }
+            footer: { text: `Foreign Stock • YATA${cacheNote} • Spider-Verse Intel` },
+            timestamp: new Date().toISOString()
         };
     } catch(e) {
-        return { title: `✈️ ${country} — Overseas Stock`, description: `⚠️ Error fetching stocks: ${e.message}`, color: 0xff4757 };
+        return {
+            title: `${target.flag} ${target.name} — Overseas Stock`,
+            description: `⚠️ YATA stock feed is currently slow or busy.\n\nYou can view real-time stocks directly on [YATA Travel Abroad](https://yata.yt/bazaar/abroad/) or use the [Spider-Verse Travel Calculator](https://spider-verse.net/travel.html).`,
+            color: 0xffa502,
+            footer: { text: `Foreign Stock • Spider-Verse Intel` }
+        };
     }
 }
 
