@@ -6212,7 +6212,7 @@ let yataFetchPromise = null;
 const YATA_CACHE_TTL = 60 * 1000; // 60 seconds
 
 // Velocity & Restock Tracker (measures how fast items are bought per minute)
-const stockVelocityTracker = {}; // key: "cCode_itemId" -> { lastQty, lastTs, burnRatePerMin, lastRestockTs, lastRestockAmount }
+const stockVelocityTracker = {}; // key: "cCode_itemId" -> { lastQty, lastTs, burnRatePerMin, lastRestockTs, lastRestockAmount, zeroSinceTs }
 
 function trackStockVelocities(data) {
     if (!data || !data.stocks) return;
@@ -6234,10 +6234,18 @@ function trackStockVelocities(data) {
                                 ? Math.round(((prev.burnRatePerMin * 0.6) + (instantRate * 0.4)) * 10) / 10
                                 : Math.round(instantRate * 10) / 10;
                         }
-                    } else if (qty > prev.lastQty + 100) {
+                    } else if (qty > prev.lastQty + 100 || (prev.lastQty === 0 && qty > 0)) {
                         prev.lastRestockTs = now;
                         prev.lastRestockAmount = qty - prev.lastQty;
+                        prev.zeroSinceTs = null;
                     }
+
+                    if (qty === 0) {
+                        if (!prev.zeroSinceTs) prev.zeroSinceTs = now;
+                    } else {
+                        prev.zeroSinceTs = null;
+                    }
+
                     prev.lastQty = qty;
                     prev.lastTs = now;
                 }
@@ -6246,7 +6254,9 @@ function trackStockVelocities(data) {
                     lastQty: qty,
                     lastTs: now,
                     burnRatePerMin: 0,
-                    lastRestockTs: null
+                    lastRestockTs: null,
+                    lastRestockAmount: 0,
+                    zeroSinceTs: qty === 0 ? now : null
                 };
             }
         }
@@ -7779,6 +7789,77 @@ async function buildStocksEmbed(countryInput, apiKey) {
             return "📦";
         }
 
+        // Restock Window & Quarter-Hour Cycle Calculator
+        function getEstimatedRestock(cCode, item) {
+            const now = Date.now();
+            const curDate = new Date(now);
+            const curMins = curDate.getUTCMinutes();
+            const curSecs = curDate.getUTCSeconds();
+            const minsToNextQuarter = 15 - (curMins % 15);
+            
+            const key = `${cCode}_${item.id}`;
+            const tracked = stockVelocityTracker[key];
+            let zeroAgeMins = 15;
+            if (tracked && tracked.zeroSinceTs) {
+                zeroAgeMins = Math.round((now - tracked.zeroSinceTs) / 60000);
+            }
+
+            // Torn Quarter-Hour restock heuristic (:00, :15, :30, :45)
+            let estMinsUntilRestock = minsToNextQuarter;
+            if (zeroAgeMins < 15) {
+                estMinsUntilRestock = minsToNextQuarter + 15;
+            } else if (zeroAgeMins > 45) {
+                estMinsUntilRestock = Math.max(2, minsToNextQuarter);
+            }
+
+            const restockDate = new Date(now + estMinsUntilRestock * 60000);
+            const restockTimeStr = restockDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' TCT';
+
+            return {
+                estMinsUntilRestock,
+                restockTimeStr,
+                zeroAgeMins
+            };
+        }
+
+        // Calculates exact flight departure timing to land right on restock
+        function getFlightTimingAdvice(fMins, item, restock) {
+            const now = Date.now();
+            const { estMinsUntilRestock, restockTimeStr } = restock;
+
+            // Short flight (e.g. Mexico 18m, Cayman 25m, Canada 29m)
+            if (fMins < estMinsUntilRestock) {
+                const waitMins = Math.max(1, estMinsUntilRestock - fMins);
+                const departDate = new Date(now + waitMins * 60000);
+                const departTimeStr = departDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' TCT';
+                return {
+                    isHold: true,
+                    waitMins,
+                    departTimeStr,
+                    timingText: `⏳ **Takeoff Advice:** Hold departure for **~${waitMins}m** *(fly at \`${departTimeStr}\`)* to touchdown right as restock hits at \`${restockTimeStr}\`!`
+                };
+            }
+
+            // Long flight (Restock hits while in the air, e.g. Switzerland 123m, China 164m, SA 209m)
+            const minsAfterRestockAtTouchdown = fMins - estMinsUntilRestock;
+            const burn = item.burnRate || 16;
+            const expectedRestockSize = 2800; // typical foreign shop restock quantity
+            const estStockLeftAtTouchdown = Math.max(0, expectedRestockSize - Math.round(burn * minsAfterRestockAtTouchdown));
+
+            if (estStockLeftAtTouchdown > 400) {
+                return {
+                    isFlyNow: true,
+                    estStockLeftAtTouchdown,
+                    timingText: `✈️ **Takeoff Advice:** **Depart NOW!** Restocks in ~${estMinsUntilRestock}m during flight ➔ Est. **~${estStockLeftAtTouchdown.toLocaleString()}** fresh units waiting at landing!`
+                };
+            } else {
+                return {
+                    isRisky: true,
+                    timingText: `⚠️ **Takeoff Advice:** Restocks in ~${estMinsUntilRestock}m *(at \`${restockTimeStr}\`)*, but long flight may sell out before arrival.`
+                };
+            }
+        }
+
         // Calculate arrival forecast for each item
         const processed = countryStocks.map(s => {
             const qty = s.quantity || 0;
@@ -7791,22 +7872,25 @@ async function buildStocksEmbed(countryInput, apiKey) {
             const isRecentlyRestocked = tracked?.lastRestockTs && (Date.now() - tracked.lastRestockTs < 7200000);
             const restockMinsAgo = isRecentlyRestocked ? Math.round((Date.now() - tracked.lastRestockTs) / 60000) : 0;
 
+            const restockInfo = getEstimatedRestock(target.yCode, s);
+            const timing = getFlightTimingAdvice(flightMins, { ...s, burnRate }, restockInfo);
+
             let badge = "`🟢 Safe`";
             let forecastDetail = `Est. **~${estStockAtLanding.toLocaleString()}** waiting for you *(burn: ~${burnRate}/m)*`;
 
             if (qty === 0) {
                 badge = "`⚪ Sold Out`";
-                forecastDetail = "Currently 0 in stock · Needs restock";
+                forecastDetail = `0 in stock · Next restock: **~${restockInfo.estMinsUntilRestock}m** *(at \`${restockInfo.restockTimeStr}\`)*\n> ${timing.timingText}`;
             } else if (estStockAtLanding <= 0) {
                 const minsToDeplete = Math.max(1, Math.round(qty / burnRate));
                 badge = "`🔴 Depletes`";
-                forecastDetail = `Runs out in **~${formatFlightDuration(minsToDeplete)}** *(burn: ~${burnRate}/m)*`;
+                forecastDetail = `Runs out in **~${formatFlightDuration(minsToDeplete)}** *(burn: ~${burnRate}/m)* · Next restock: **~${restockInfo.estMinsUntilRestock}m** *(at \`${restockInfo.restockTimeStr}\`)*`;
             } else if (estStockAtLanding < 350) {
                 badge = "`🟡 Tight`";
                 forecastDetail = `Est. **~${estStockAtLanding.toLocaleString()}** left at landing *(burn: ~${burnRate}/m)*`;
             }
 
-            if (isRecentlyRestocked) {
+            if (isRecentlyRestocked && qty > 0) {
                 forecastDetail += ` · 🔄 *Restocked ${restockMinsAgo}m ago*`;
             }
 
@@ -7816,6 +7900,8 @@ async function buildStocksEmbed(countryInput, apiKey) {
                 estStockAtLanding,
                 badge,
                 forecastDetail,
+                restockInfo,
+                timing,
                 isPriority: isPriorityItem(s.name)
             };
         });
@@ -7831,9 +7917,21 @@ async function buildStocksEmbed(countryInput, apiKey) {
 
         const safeItems = processed.filter(p => p.isPriority && p.estStockAtLanding >= 350);
         const riskyItems = processed.filter(p => p.isPriority && p.quantity > 0 && p.estStockAtLanding <= 0);
+        const soldOutPriority = processed.find(p => p.isPriority && p.quantity === 0);
 
         let verdict = "";
-        if (safeItems.length > 0) {
+        if (soldOutPriority) {
+            const t = soldOutPriority.timing;
+            if (t && t.isHold) {
+                verdict = `⏳ **Takeoff Timing:** **${soldOutPriority.name}** is sold out. Hold flight for **~${t.waitMins}m** *(depart at \`${t.departTimeStr}\`)* to catch the restock!`;
+            } else if (t && t.isFlyNow) {
+                verdict = `✈️ **Takeoff Timing:** **${soldOutPriority.name}** is sold out. **Depart NOW** to touchdown right after the restock hits!`;
+            } else if (safeItems.length > 0) {
+                verdict = `💡 **Best Pick:** **${safeItems[0].name}** (safe arrival)`;
+            } else {
+                verdict = `⚠️ **Alert:** **${soldOutPriority.name}** is sold out. Next restock window: ~${soldOutPriority.restockInfo.estMinsUntilRestock}m.`;
+            }
+        } else if (safeItems.length > 0) {
             verdict = `💡 **Best Pick:** **${safeItems[0].name}** (safe arrival)`;
             if (riskyItems.length > 0) {
                 verdict += ` · ⚠️ Avoid **${riskyItems[0].name}** (will sell out)`;
@@ -7850,7 +7948,8 @@ async function buildStocksEmbed(countryInput, apiKey) {
         const primaryCards = primaryItems.map(s => {
             const icon = getItemIcon(s.name);
             const costStr = s.cost ? ` · \`$${s.cost.toLocaleString()}\`` : '';
-            return `**${icon} ${s.name}**${costStr}\n> ${s.badge} ${s.forecastDetail} *(now: ${s.quantity.toLocaleString()})*`;
+            const qtyNote = s.quantity > 0 ? ` *(now: ${s.quantity.toLocaleString()})*` : '';
+            return `**${icon} ${s.name}**${costStr}\n> ${s.badge} ${s.forecastDetail}${qtyNote}`;
         });
 
         let secondarySection = "";
