@@ -7760,6 +7760,25 @@ async function buildStocksEmbed(countryInput, apiKey) {
                    n.includes("tribulus");
         };
 
+        function getItemIcon(name = "") {
+            const n = name.toLowerCase();
+            if (n.includes("panda")) return "🐼";
+            if (n.includes("lion")) return "🦁";
+            if (n.includes("jaguar")) return "🐆";
+            if (n.includes("wolverine")) return "🦡";
+            if (n.includes("nessie")) return "🦕";
+            if (n.includes("red fox")) return "🦊";
+            if (n.includes("chamois")) return "🐐";
+            if (n.includes("monkey")) return "🐒";
+            if (n.includes("camel")) return "🐫";
+            if (n.includes("stingray")) return "🐟";
+            if (n.includes("kitten")) return "🐱";
+            if (n.includes("plushie")) return "🧸";
+            if (n.includes("violet") || n.includes("peony") || n.includes("cherry") || n.includes("orchid") || n.includes("dahlia") || n.includes("crocus") || n.includes("edelweiss") || n.includes("flower") || n.includes("heather") || n.includes("ceibo")) return "🌸";
+            if (n.includes("xanax") || n.includes("ecstasy") || n.includes("lsd") || n.includes("opium") || n.includes("pcp") || n.includes("speed") || n.includes("shrooms")) return "💊";
+            return "📦";
+        }
+
         // Calculate arrival forecast for each item
         const processed = countryStocks.map(s => {
             const qty = s.quantity || 0;
@@ -7772,81 +7791,88 @@ async function buildStocksEmbed(countryInput, apiKey) {
             const isRecentlyRestocked = tracked?.lastRestockTs && (Date.now() - tracked.lastRestockTs < 7200000);
             const restockMinsAgo = isRecentlyRestocked ? Math.round((Date.now() - tracked.lastRestockTs) / 60000) : 0;
 
-            let chanceBadge = "🟢";
-            let chanceLabel = "HIGH CHANCE (SAFE)";
-            let forecastDetail = `Est. ~${estStockAtLanding.toLocaleString()} left when you land`;
+            let badge = "`🟢 Safe`";
+            let forecastDetail = `Est. **~${estStockAtLanding.toLocaleString()}** waiting for you *(burn: ~${burnRate}/m)*`;
 
             if (qty === 0) {
-                chanceBadge = "⚪";
-                chanceLabel = "OUT OF STOCK";
-                forecastDetail = "0 in stock now (needs unannounced restock)";
+                badge = "`⚪ Sold Out`";
+                forecastDetail = "Currently 0 in stock · Needs restock";
             } else if (estStockAtLanding <= 0) {
                 const minsToDeplete = Math.max(1, Math.round(qty / burnRate));
-                chanceBadge = "🔴";
-                chanceLabel = "HIGH RISK (WILL RUN OUT)";
-                forecastDetail = `Runs out in ~${formatFlightDuration(minsToDeplete)} (Flight is ${formatFlightDuration(flightMins)})`;
+                badge = "`🔴 Depletes`";
+                forecastDetail = `Runs out in **~${formatFlightDuration(minsToDeplete)}** *(burn: ~${burnRate}/m)*`;
             } else if (estStockAtLanding < 350) {
-                chanceBadge = "🟡";
-                chanceLabel = "MODERATE RISK";
-                forecastDetail = `Tight! Est. only ~${estStockAtLanding.toLocaleString()} left at touchdown`;
+                badge = "`🟡 Tight`";
+                forecastDetail = `Est. **~${estStockAtLanding.toLocaleString()}** left at landing *(burn: ~${burnRate}/m)*`;
             }
 
             if (isRecentlyRestocked) {
-                forecastDetail += ` · 🔄 Restocked ${restockMinsAgo}m ago`;
+                forecastDetail += ` · 🔄 *Restocked ${restockMinsAgo}m ago*`;
             }
 
             return {
                 ...s,
                 burnRate,
                 estStockAtLanding,
-                chanceBadge,
-                chanceLabel,
+                badge,
                 forecastDetail,
                 isPriority: isPriorityItem(s.name)
             };
         });
 
-        // Sort: Priority items (Plushies/Flowers/Xanax) first, then items that will have stock at landing, then by available quantity
+        // Sort: Priority items (Plushies/Flowers/Xanax) first, then by quantity
         processed.sort((a, b) => {
             if (a.isPriority !== b.isPriority) return a.isPriority ? -1 : 1;
             if ((a.estStockAtLanding > 0) !== (b.estStockAtLanding > 0)) {
                 return (a.estStockAtLanding > 0) ? -1 : 1;
             }
-            if ((a.quantity > 0) !== (b.quantity > 0)) {
-                return (a.quantity > 0) ? -1 : 1;
-            }
             return (b.quantity || 0) - (a.quantity || 0);
         });
 
-        const lines = processed.slice(0, 10).map(s => {
-            const costStr = s.cost ? ` · $${s.cost.toLocaleString()}` : '';
-            return `${s.chanceBadge} **${s.name}**: **${(s.quantity || 0).toLocaleString()}** now${costStr}\n   ↳ **${s.chanceLabel}** · ${s.forecastDetail} *(Burn: ~${s.burnRate}/m)*`;
-        });
-
-        // Determine pilot verdict
         const safeItems = processed.filter(p => p.isPriority && p.estStockAtLanding >= 350);
         const riskyItems = processed.filter(p => p.isPriority && p.quantity > 0 && p.estStockAtLanding <= 0);
+
         let verdict = "";
         if (safeItems.length > 0) {
-            verdict = `💡 **Pilot Verdict:** **${safeItems[0].name}** is your safest profit pick for this flight.`;
+            verdict = `💡 **Best Pick:** **${safeItems[0].name}** (safe arrival)`;
             if (riskyItems.length > 0) {
-                verdict += ` ⚠️ Avoid **${riskyItems[0].name}** — will likely sell out before you land.`;
+                verdict += ` · ⚠️ Avoid **${riskyItems[0].name}** (will sell out)`;
             }
         } else if (riskyItems.length > 0) {
-            verdict = `⚠️ **Pilot Alert:** High risk of top plushies/flowers selling out before touchdown. Consider checking another destination or waiting for a restock.`;
+            verdict = `⚠️ **Warning:** Top items are predicted to sell out before touchdown.`;
         } else {
-            verdict = `ℹ️ **Pilot Info:** Stocks are currently lean. Monitor [YATA](https://yata.yt/bazaar/abroad/) for incoming restocks.`;
+            verdict = `ℹ️ Stocks are currently lean. Waiting for restock.`;
+        }
+
+        const primaryItems = processed.filter(p => p.isPriority);
+        const secondaryItems = processed.filter(p => !p.isPriority && p.quantity > 0).slice(0, 3);
+
+        const primaryCards = primaryItems.map(s => {
+            const icon = getItemIcon(s.name);
+            const costStr = s.cost ? ` · \`$${s.cost.toLocaleString()}\`` : '';
+            return `**${icon} ${s.name}**${costStr}\n> ${s.badge} ${s.forecastDetail} *(now: ${s.quantity.toLocaleString()})*`;
+        });
+
+        let secondarySection = "";
+        if (secondaryItems.length > 0) {
+            const secLines = secondaryItems.map(s => {
+                const icon = getItemIcon(s.name);
+                const estStr = s.estStockAtLanding > 0 ? `~${s.estStockAtLanding.toLocaleString()} left` : `will sell out`;
+                return `• ${icon} **${s.name}**: ${s.quantity.toLocaleString()} in stock ➔ ${s.badge} *(${estStr})*`;
+            });
+            secondarySection = `\n**📦 Other Overseas Goods:**\n` + secLines.join('\n');
         }
 
         const cacheNote = isFromCache ? ` • (Cached ${Math.round((Date.now() - lastYataFetchTime) / 1000)}s ago)` : '';
 
         const description = [
-            `✈️ **Flight Time:** **${formatFlightDuration(target.airstrip)}** *(Private Jet)* · **${formatFlightDuration(target.standard)}** *(Standard)*`,
-            `🎯 **Arrival Time:** **~${landingTimeStr}** *(touchdown in ${formatFlightDuration(target.airstrip)})*`,
-            `${verdict}`,
-            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-            ...lines
-        ].join('\n');
+            `> ✈️ **Flight:** \`${formatFlightDuration(target.airstrip)}\` *(Jet)* · \`${formatFlightDuration(target.standard)}\` *(Std)* ➔ **Landing:** \`~${landingTimeStr}\``,
+            `> ${verdict}`,
+            ``,
+            `**🧸 Plushies & Flowers Arrival Forecast:**`,
+            primaryCards.join('\n\n'),
+            secondarySection
+        ].filter(Boolean).join('\n');
 
         return {
             title: `${target.flag} ${target.name} — Flight Stock & Arrival Forecast`,
