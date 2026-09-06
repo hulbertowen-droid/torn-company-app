@@ -5668,8 +5668,8 @@ Keep your advice specific to the data provided. Be concise, punchy, and use emoj
     }
 });
 
-// ─── Ultron Torn Wiki & Forum AI Intelligence & Sandbox ─────────────────────────
-const FRIDAY_TORN_SYSTEM_PROMPT = `You are Ultron, the tactical Torn City intelligence oracle for Owen777's faction: Spider-Verse.
+// ─── F.R.I.D.A.Y Torn Wiki & Forum AI Intelligence & Sandbox ─────────────────
+const FRIDAY_TORN_SYSTEM_PROMPT = `You are F.R.I.D.A.Y, the tactical Torn City intelligence oracle for Owen777's faction: Spider-Verse.
 
 PRIMARY PURPOSE & STRICT SCOPE:
 1. EXCLUSIVELY TORN CITY GAMEPLAY: You are strictly a Torn City game intelligence oracle. You ONLY answer questions about Torn City gameplay, training math, gym gains, battle stats, happy jumps, ranked wars, chains, crimes (Crimes 2.0 & OC 2.0), travel, items, company management, and faction rules.
@@ -5826,6 +5826,68 @@ async function askTornAI(message, history = []) {
         reply,
         sources: sources.slice(0, 5)
     };
+}
+
+// ─── F.R.I.D.A.Y Natural Conversation Responder ──────────────────────────────
+const FRIDAY_RESPONDER_SYSTEM_PROMPT = `You are F.R.I.D.A.Y, a member hanging out in the Spider-Verse faction Discord server.
+Your task is to read the recent conversation between members, pick up on their personality tones, banter, humor, or frustration, and jump in naturally.
+
+CRITICAL RULES FOR HOW YOU TALK:
+1. TALK LIKE A REAL HUMAN IN DISCORD:
+   - Be casual, punchy, relaxed, and authentic.
+   - NEVER sound like an AI assistant, robot, Wikipedia article, or customer service representative.
+   - Absolutely NEVER say things like: "I noticed you were discussing...", "As an AI...", "Here are my thoughts on...", "That's an interesting point!", "Greetings fellow members!", or "Hope that helps!".
+2. NOT LENGTHY — 1 TO 2 SENTENCES MAX:
+   - Respond in 1 or 2 short, crisp sentences. Just like a normal gamer typing a quick line into Discord.
+   - No bullet points, no headers, no bold essay formatting.
+3. READ THE ROOM & MATCH PERSONALITY TONES:
+   - If members are joking, roasting, or messing around, match their energy and joke with them.
+   - If someone got hospitalized, caught an overdose, or got mugged, give a realistic gamer reaction (e.g. laughing at their luck or offering sympathy).
+   - If they're discussing Torn mechanics (gym, Xanax, wars, chains, OCs, travel), chime in with an effortless, sharp insider take.
+4. SPIDER-VERSE FACTION CONTEXT:
+   - Co-leader: Owen777.
+   - You know Torn culture (Xanax, happy jumps, ODs, revives, travel, hospital, chains, RW, OCs).
+5. DO NOT SUMMARIZE:
+   - Don't summarize what they just said. Just speak directly as if you've been in the room the whole time.`;
+
+async function generateChatResponse(convoLines = [], hint = "") {
+    const key = getGeminiApiKey();
+    if (!key) {
+        throw new Error("Gemini API key is not configured.");
+    }
+
+    let convoPrompt = "Here is the recent conversation transcript in the Discord channel:\n";
+    if (!convoLines || convoLines.length === 0) {
+        convoPrompt += "(The channel was quiet, someone just called you over)\n";
+    } else {
+        convoPrompt += convoLines.slice(-15).join('\n') + "\n";
+    }
+
+    if (hint && hint.trim()) {
+        convoPrompt += `\nMember prompt / hint: "${hint.trim()}"\n`;
+    }
+
+    convoPrompt += "\nJump into the conversation and reply naturally in 1-2 sentences matching the vibe:";
+
+    const payload = {
+        contents: [{ role: 'user', parts: [{ text: convoPrompt }] }],
+        systemInstruction: {
+            parts: [{ text: FRIDAY_RESPONDER_SYSTEM_PROMPT }]
+        }
+    };
+
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const data = await resp.json();
+    if (data.error) {
+        throw new Error(data.error.message || "AI chat generation failed.");
+    }
+    const candidate = data.candidates?.[0];
+    const reply = candidate?.content?.parts?.[0]?.text?.trim() || "What's good?";
+    return reply;
 }
 
 app.post('/api/ai/chat', async (req, res) => {
@@ -10790,9 +10852,14 @@ async function registerSlashCommands(token, guildId = null) {
             .addIntegerOption(opt => opt.setName('winners').setDescription('Number of winners (1 to 20, default: 1)').setMinValue(1).setMaxValue(20))
             .toJSON(),
 
-        // 15. Tactical Torn AI Oracle (Ultron)
+        // 15. Tactical Torn AI Oracle
         new SlashCommandBuilder().setName('ask').setDescription('Ask F.R.I.D.A.Y any question about Torn City mechanics, wiki guides, and faction rules')
             .addStringOption(opt => opt.setName('question').setDescription('What is your Torn City question?').setRequired(true))
+            .toJSON(),
+
+        // 16. Natural Chat Wingman / Conversation Responder
+        new SlashCommandBuilder().setName('respond').setDescription('F.R.I.D.A.Y reads recent chat vibes and responds naturally like a person in conversation')
+            .addStringOption(opt => opt.setName('hint').setDescription('Optional angle or thought to chime in with').setRequired(false))
             .toJSON()
     ];
 
@@ -11274,7 +11341,7 @@ function setupSlashBotEvents(bot, token) {
 
         const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
 
-        // ── Tactical Torn AI Oracle (Ultron - Option C: Private Ephemeral) ──
+        // ── Tactical Torn AI Oracle (F.R.I.D.A.Y - Private Ephemeral) ──
         if (cmd === 'ask') {
             const question = (interaction.options.getString('question') || '').trim();
             if (!question) {
@@ -11304,30 +11371,66 @@ function setupSlashBotEvents(bot, token) {
                     }
                 }
 
-                const ULTRON_AVATAR = "https://spider-verse.net/ultron_avatar.png";
+                const botAvatar = slashCommandBot?.user?.displayAvatarURL?.() || undefined;
 
-                const ultronEmbed = {
+                const fridayEmbed = {
                     author: {
-                        name: "Ultron",
-                        icon_url: ULTRON_AVATAR
+                        name: "F.R.I.D.A.Y",
+                        icon_url: botAvatar
                     },
                     title: `❓ ${question.length > 250 ? question.slice(0, 247) + '...' : question}`,
                     description: desc,
-                    color: 0xff4757, // Ultron Crimson Red
+                    color: 0x00cec9, // F.R.I.D.A.Y Teal
                     fields: fields.length > 0 ? fields : undefined,
                     footer: {
-                        text: "Ultron • Grounded exclusively in Torn Wiki & Forums • Spider-Verse Intel",
-                        icon_url: ULTRON_AVATAR
+                        text: "F.R.I.D.A.Y • Torn Wiki & Forums Intel • Spider-Verse",
+                        icon_url: botAvatar
                     },
                     timestamp: new Date().toISOString()
                 };
 
                 return await interaction.editReply({
-                    embeds: [sanitizeEmbed(ultronEmbed)]
+                    embeds: [sanitizeEmbed(fridayEmbed)]
                 });
             } catch(err) {
                 return await interaction.editReply({
                     content: `⚠️ **F.R.I.D.A.Y encountered an error:** ${err.message}`
+                });
+            }
+        }
+
+        // ── Natural Conversation Responder (/respond) ──
+        if (cmd === 'respond') {
+            const hint = (interaction.options.getString('hint') || '').trim();
+
+            await interaction.deferReply(); // Public reply in channel so she joins the group
+
+            try {
+                const convoLines = [];
+                if (interaction.channel && interaction.channel.messages) {
+                    const fetched = await interaction.channel.messages.fetch({ limit: 20 }).catch(() => null);
+                    if (fetched && fetched.size > 0) {
+                        const sorted = Array.from(fetched.values())
+                            .filter(m => m.id !== interaction.id && !m.interaction)
+                            .reverse();
+                        for (const m of sorted) {
+                            const authorName = m.member?.displayName || m.author?.username || "Member";
+                            const text = (m.cleanContent || m.content || "").trim();
+                            if (text) {
+                                convoLines.push(`${authorName}: ${text}`);
+                            }
+                        }
+                    }
+                }
+
+                const aiReply = await generateChatResponse(convoLines, hint);
+
+                return await interaction.editReply({
+                    content: aiReply
+                });
+            } catch(err) {
+                return await interaction.editReply({
+                    content: `⚠️ **F.R.I.D.A.Y couldn't join chat:** ${err.message}`
                 });
             }
         }
@@ -11899,12 +12002,13 @@ async function startSlashCommandBot(token) {
             try { slashCommandBot.destroy(); } catch(e) {}
         }
 
-        // Try initializing with GuildMembers intent for full member auditing
+        // Try initializing with GuildMembers & MessageContent intent for full member auditing & /respond chat reading
         slashCommandBot = new Client({
             intents: [
                 GatewayIntentBits.Guilds,
                 GatewayIntentBits.GuildMessages,
-                GatewayIntentBits.GuildMembers
+                GatewayIntentBits.GuildMembers,
+                GatewayIntentBits.MessageContent
             ]
         });
 
