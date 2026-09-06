@@ -5668,11 +5668,11 @@ Keep your advice specific to the data provided. Be concise, punchy, and use emoj
     }
 });
 
-// ─── F.R.I.D.A.Y Torn Forum AI Intelligence & Sandbox ─────────────────────────
-const FRIDAY_TORN_SYSTEM_PROMPT = `You are F.R.I.D.A.Y, the tactical Torn City AI intelligence officer for Owen777's faction: Spider-Verse.
+// ─── Ultron Torn Wiki & Forum AI Intelligence & Sandbox ─────────────────────────
+const FRIDAY_TORN_SYSTEM_PROMPT = `You are Ultron, the tactical Torn City intelligence oracle for Owen777's faction: Spider-Verse.
 
 PRIMARY PURPOSE & STRICT SCOPE:
-1. EXCLUSIVELY TORN CITY GAMEPLAY: You are strictly a Torn City game intelligence oracle. You ONLY answer questions about Torn City gameplay, training math, gym gains, battle stats, happy jumps, ranked wars, chains, crimes (OC 2.0), travel, items, company management, and faction rules.
+1. EXCLUSIVELY TORN CITY GAMEPLAY: You are strictly a Torn City game intelligence oracle. You ONLY answer questions about Torn City gameplay, training math, gym gains, battle stats, happy jumps, ranked wars, chains, crimes (Crimes 2.0 & OC 2.0), travel, items, company management, and faction rules.
 2. ABSOLUTELY NO WEBSITE / TECHNICAL DEV DISCUSSIONS: You do NOT answer questions about web development, website code, source files, HTML, CSS, JavaScript, Node.js, databases, servers, or internal app architecture. If anyone asks about website code or features, decline politely and concisely: "I am exclusively trained on Torn City gameplay, mechanics, and faction operations. For website or app technical questions, please contact Owen777 or leadership."
 3. SUMMARIZE THE CORE IDEA FIRST (CONCISE & ACTIONABLE):
    - Always lead with a quick, punchy summary (1-2 sentences) giving the direct bottom-line answer.
@@ -5680,9 +5680,9 @@ PRIMARY PURPOSE & STRICT SCOPE:
    - Keep answers short, crisp, and high-yield. Avoid rambling explanations, filler phrases, or long-winded introductions.
 
 STRICT KNOWLEDGE & SOURCING RULES:
-1. STRICTLY GROUNDED IN TORN FORUMS: You derive your Torn City game knowledge exclusively from the official Torn City Forums (site:torn.com/forums.php) and verified community guides (such as Baldr, Vladar, Proxima, and Chedburn's official announcements).
-2. ZERO HALLUCINATIONS: If a game mechanic, weapon, item, or formula is NOT documented in verified Torn forum threads or official announcements, you MUST explicitly state: "This item or mechanic cannot be verified in official Torn forum records." NEVER invent fake items, weapons, or formulas.
-3. FORUM CITATIONS: Whenever applicable, cite the relevant Torn forum guide, author, or thread name (e.g. "Baldr's Guide", "Vladar's FF guide", "Chedburn's OC 2.0 announcement").
+1. STRICTLY GROUNDED IN TORN WIKI & TORN FORUMS: You derive your Torn City game knowledge exclusively from the official Torn City Wiki (wiki.torn.com) and the official Torn City Forums (site:torn.com/forums.php) including verified community guides (such as Baldr, Vladar, Proxima, and Chedburn's official announcements).
+2. ZERO HALLUCINATIONS: If a game mechanic, weapon, item, formula, or update is NOT documented in verified Torn Wiki articles or official Torn forum threads, you MUST explicitly state: "This item or mechanic cannot be verified in official Torn Wiki or Forum records." NEVER invent fake items, weapons, or formulas.
+3. WIKI & FORUM CITATIONS: Whenever applicable, cite the relevant Torn Wiki page or forum guide/author (e.g. "Torn Wiki: Happy", "Baldr's Basic Advice", "Vladar's FF Guide", "Chedburn's OC 2.0 Announcement").
 
 SPIDER-VERSE FACTION OPERATIONAL DIRECTIVES (Trained Knowledge):
 - Faction Leader / Co-Leader: Owen777 [3490493].
@@ -5758,18 +5758,14 @@ app.post('/api/ai/save-key', async (req, res) => {
     }
 });
 
-app.post('/api/ai/chat', async (req, res) => {
-    const { message, history = [] } = req.body;
+async function askTornAI(message, history = []) {
     if (!message || typeof message !== 'string' || !message.trim()) {
-        return res.status(400).json({ success: false, error: "Message is required." });
+        throw new Error("Message is required.");
     }
 
     const key = getGeminiApiKey();
     if (!key) {
-        return res.status(400).json({
-            success: false,
-            error: "Gemini API key is not configured. Please paste your free Google AI Studio key in the setup box above."
-        });
+        throw new Error("Gemini API key is not configured. Please paste your Google AI Studio key in the dashboard or ai-sandbox.");
     }
 
     const contents = [];
@@ -5803,34 +5799,43 @@ app.post('/api/ai/chat', async (req, res) => {
         return await resp.json();
     };
 
+    let gData = await callGemini(true);
+    if (gData.error && !gData.candidates) {
+        gData = await callGemini(false);
+    }
+
+    if (gData.error) {
+        throw new Error(gData.error.message || "AI generation failed.");
+    }
+
+    const candidate = gData.candidates?.[0];
+    const reply = candidate?.content?.parts?.[0]?.text || "I was unable to generate a response. Please try rephrasing your question.";
+
+    const sources = [];
+    const chunks = candidate?.groundingMetadata?.groundingChunks || [];
+    for (const ch of chunks) {
+        if (ch.web?.uri) {
+            sources.push({
+                title: ch.web.title || "Torn City Reference",
+                url: ch.web.uri
+            });
+        }
+    }
+
+    return {
+        reply,
+        sources: sources.slice(0, 5)
+    };
+}
+
+app.post('/api/ai/chat', async (req, res) => {
     try {
-        let gData = await callGemini(true);
-        if (gData.error && !gData.candidates) {
-            gData = await callGemini(false);
-        }
-
-        if (gData.error) {
-            return res.status(500).json({ success: false, error: gData.error.message || "AI generation failed." });
-        }
-
-        const candidate = gData.candidates?.[0];
-        const reply = candidate?.content?.parts?.[0]?.text || "I was unable to generate a response. Please try rephrasing your question.";
-
-        const sources = [];
-        const chunks = candidate?.groundingMetadata?.groundingChunks || [];
-        for (const ch of chunks) {
-            if (ch.web?.uri) {
-                sources.push({
-                    title: ch.web.title || "Torn City Forum Discussion",
-                    url: ch.web.uri
-                });
-            }
-        }
-
+        const { message, history = [] } = req.body;
+        const result = await askTornAI(message, history);
         res.json({
             success: true,
-            reply,
-            sources: sources.slice(0, 5)
+            reply: result.reply,
+            sources: result.sources
         });
     } catch(err) {
         res.status(500).json({ success: false, error: err.message });
@@ -10783,6 +10788,11 @@ async function registerSlashCommands(token, guildId = null) {
             .addStringOption(opt => opt.setName('prize').setDescription('What are you giving away? (e.g. 10x Xanax, $25,000,000, Donator Pack)'))
             .addStringOption(opt => opt.setName('duration').setDescription('Giveaway duration (e.g. 10m, 1h, 1d)'))
             .addIntegerOption(opt => opt.setName('winners').setDescription('Number of winners (1 to 20, default: 1)').setMinValue(1).setMaxValue(20))
+            .toJSON(),
+
+        // 15. Tactical Torn AI Oracle (Ultron)
+        new SlashCommandBuilder().setName('ask').setDescription('Ask Ultron any question about Torn City mechanics, wiki guides, and faction rules')
+            .addStringOption(opt => opt.setName('question').setDescription('What is your Torn City question?').setRequired(true))
             .toJSON()
     ];
 
@@ -11263,6 +11273,64 @@ function setupSlashBotEvents(bot, token) {
         }
 
         const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+
+        // ── Tactical Torn AI Oracle (Ultron - Option C: Private Ephemeral) ──
+        if (cmd === 'ask') {
+            const question = (interaction.options.getString('question') || '').trim();
+            if (!question) {
+                return interaction.reply({ content: "⚠️ Please provide a question to ask Ultron.", ephemeral: true });
+            }
+
+            await interaction.deferReply({ ephemeral: true });
+
+            try {
+                const { reply, sources } = await askTornAI(question);
+
+                const ULTRON_AVATAR = "https://spider-verse.net/ultron_avatar.png";
+
+                // Ensure reply fits within Discord embed description limit (4096 chars)
+                const desc = reply.length > 4000 ? reply.slice(0, 3990) + "\n\n*(response truncated)*" : reply;
+
+                const fields = [];
+                if (Array.isArray(sources) && sources.length > 0) {
+                    const srcLinks = sources
+                        .filter(s => s.url)
+                        .map(s => `• [${s.title || 'Torn Reference'}](${s.url})`)
+                        .slice(0, 4)
+                        .join('\n');
+                    if (srcLinks) {
+                        fields.push({
+                            name: "📚 Verified Wiki & Forum Sources",
+                            value: srcLinks
+                        });
+                    }
+                }
+
+                const ultronEmbed = {
+                    author: {
+                        name: "Ultron",
+                        icon_url: ULTRON_AVATAR
+                    },
+                    title: `❓ ${question.length > 250 ? question.slice(0, 247) + '...' : question}`,
+                    description: desc,
+                    color: 0xff4757, // Ultron Crimson Red
+                    fields: fields.length > 0 ? fields : undefined,
+                    footer: {
+                        text: "Ultron • Grounded exclusively in Torn Wiki & Forums • Spider-Verse Intel",
+                        icon_url: ULTRON_AVATAR
+                    },
+                    timestamp: new Date().toISOString()
+                };
+
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(ultronEmbed)]
+                });
+            } catch(err) {
+                return await interaction.editReply({
+                    content: `⚠️ **Ultron encountered an error:** ${err.message}`
+                });
+            }
+        }
 
         // Direct actions (Claim / Unclaim / SOS)
         if (cmd === 'claim') {
