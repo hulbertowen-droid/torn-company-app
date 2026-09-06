@@ -6268,7 +6268,10 @@ async function getLiveYataStocks() {
             const resp = await fetch('https://yata.yt/api/v1/travel/export/', {
                 signal: AbortSignal.timeout(12000), // 12 seconds
                 headers: {
-                    'User-Agent': 'SpiderVerse-FactionBot/1.0'
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                    'Accept': 'application/json, text/plain, */*',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Cache-Control': 'no-cache'
                 }
             });
             if (resp.ok) {
@@ -6279,6 +6282,8 @@ async function getLiveYataStocks() {
                     trackStockVelocities(data);
                     return cachedYataStocks;
                 }
+            } else {
+                console.warn(`[YATA Stock] Live fetch returned HTTP ${resp.status} ${resp.statusText}`);
             }
         } catch (err) {
             console.warn(`[YATA Stock] Live fetch notice: ${err.message}. Using cache if available.`);
@@ -6295,6 +6300,20 @@ async function getLiveYataStocks() {
 
     return await yataFetchPromise;
 }
+
+// Auto-warm YATA overseas cache on boot and refresh every 60 seconds
+setTimeout(() => {
+    getLiveYataStocks().then(data => {
+        if (data && data.stocks) {
+            console.log(`[YATA Stock] Cache warmed successfully (${Object.keys(data.stocks).length} countries loaded)`);
+        }
+    }).catch(e => console.warn("[YATA Stock] Warmup error:", e.message));
+}, 1000);
+
+setInterval(() => {
+    getLiveYataStocks().catch(() => {});
+}, 60 * 1000);
+
 
 app.get('/api/travel-profits', async (req, res) => {
     const apiKey = req.headers['x-api-key'] || req.query.apiKey;
@@ -7650,11 +7669,71 @@ function getItemBurnRate(cCode, item) {
     return 1.2; // Default low-demand items (armor/weapons)
 }
 
+const FALLBACK_DESTINATIONS = {
+    "cay": [
+        { id: 618, name: "Stingray Plushie", cost: 400, quantity: 1800 },
+        { id: 617, name: "Banana Orchid", cost: 4000, quantity: 900 },
+        { id: 1482, name: "Bearer Bond", cost: 86273, quantity: 4500 },
+        { id: 612, name: "Tavor TAR-21", cost: 495000, quantity: 120 }
+    ],
+    "mex": [
+        { id: 274, name: "Jaguar Plushie", cost: 10000, quantity: 2000 },
+        { id: 275, name: "Dahlia", cost: 300, quantity: 3500 },
+        { id: 278, name: "Short Bow", cost: 3000, quantity: 50 }
+    ],
+    "can": [
+        { id: 261, name: "Wolverine Plushie", cost: 30, quantity: 1800 },
+        { id: 262, name: "Crocus", cost: 600, quantity: 4000 }
+    ],
+    "haw": [
+        { id: 265, name: "Tiki Statue", cost: 500, quantity: 100 },
+        { id: 270, name: "Ceibo Flower", cost: 500, quantity: 2000 }
+    ],
+    "uni": [
+        { id: 266, name: "Nessie Plushie", cost: 200, quantity: 2000 },
+        { id: 268, name: "Red Fox Plushie", cost: 1000, quantity: 1500 },
+        { id: 267, name: "Heather", cost: 5000, quantity: 3000 }
+    ],
+    "arg": [
+        { id: 273, name: "Monkey Plushie", cost: 400, quantity: 1800 },
+        { id: 270, name: "Ceibo Flower", cost: 500, quantity: 2500 }
+    ],
+    "swi": [
+        { id: 269, name: "Chamois Plushie", cost: 400, quantity: 3000 },
+        { id: 271, name: "Edelweiss", cost: 3000, quantity: 2000 },
+        { id: 277, name: "Kitten Plushie", cost: 500, quantity: 500 }
+    ],
+    "jap": [
+        { id: 272, name: "Stingray Plushie", cost: 400, quantity: 1500 },
+        { id: 282, name: "Cherry Blossom", cost: 500, quantity: 2500 }
+    ],
+    "chi": [
+        { id: 264, name: "Panda Plushie", cost: 400, quantity: 2000 },
+        { id: 276, name: "Peony", cost: 5000, quantity: 2500 }
+    ],
+    "uae": [
+        { id: 281, name: "Camel Plushie", cost: 14000, quantity: 1500 },
+        { id: 260, name: "Tribulus Omanense", cost: 6000, quantity: 2000 }
+    ],
+    "sou": [
+        { id: 258, name: "Lion Plushie", cost: 400, quantity: 1500 },
+        { id: 263, name: "African Violet", cost: 2000, quantity: 3000 },
+        { id: 206, name: "Xanax", cost: 799500, quantity: 1800 }
+    ]
+};
+
 async function buildStocksEmbed(countryInput, apiKey) {
     const target = resolveYataCountry(countryInput);
     try {
         const yataData = await getLiveYataStocks();
-        const countryStocks = yataData?.stocks?.[target.yCode]?.stocks || [];
+        let countryStocks = yataData?.stocks?.[target.yCode]?.stocks || [];
+        let isUsingFallback = false;
+
+        if (countryStocks.length === 0 && FALLBACK_DESTINATIONS[target.yCode]) {
+            countryStocks = FALLBACK_DESTINATIONS[target.yCode];
+            isUsingFallback = true;
+        }
+
         const isFromCache = cachedYataStocks && (Date.now() - lastYataFetchTime > 45000);
 
         if (countryStocks.length === 0) {
