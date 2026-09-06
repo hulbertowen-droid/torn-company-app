@@ -11304,13 +11304,20 @@ function setupSlashBotEvents(bot, token) {
                     }
                 }
 
+                const ULTRON_AVATAR = "https://spider-verse.net/ultron_avatar.png";
+
                 const ultronEmbed = {
+                    author: {
+                        name: "Ultron",
+                        icon_url: ULTRON_AVATAR
+                    },
                     title: `❓ ${question.length > 250 ? question.slice(0, 247) + '...' : question}`,
                     description: desc,
-                    color: 0x00cec9, // F.R.I.D.A.Y Teal
+                    color: 0xff4757, // Ultron Crimson Red
                     fields: fields.length > 0 ? fields : undefined,
                     footer: {
-                        text: "F.R.I.D.A.Y • Torn Wiki & Forums Intel • Spider-Verse"
+                        text: "Ultron • Grounded exclusively in Torn Wiki & Forums • Spider-Verse Intel",
+                        icon_url: ULTRON_AVATAR
                     },
                     timestamp: new Date().toISOString()
                 };
