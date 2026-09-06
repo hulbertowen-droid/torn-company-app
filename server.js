@@ -7736,7 +7736,8 @@ async function buildStocksEmbed(countryInput, apiKey) {
     const target = resolveYataCountry(countryInput);
     try {
         const yataData = await getLiveYataStocks();
-        let countryStocks = yataData?.stocks?.[target.yCode]?.stocks || [];
+        const yataCountry = yataData?.stocks?.[target.yCode];
+        let countryStocks = yataCountry?.stocks || [];
         let isUsingFallback = false;
 
         if (countryStocks.length === 0 && FALLBACK_DESTINATIONS[target.yCode]) {
@@ -7757,6 +7758,11 @@ async function buildStocksEmbed(countryInput, apiKey) {
                 footer: { text: `Foreign Stock • Spider-Verse Intel` }
             };
         }
+
+        const yataUpdateSec = yataCountry?.update || 0;
+        const minsSinceYataUpdate = yataUpdateSec ? Math.max(0, Math.round((Date.now() / 1000 - yataUpdateSec) / 60)) : 0;
+        const yataUpdateTctStr = yataUpdateSec ? (new Date(yataUpdateSec * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' TCT') : 'Live';
+        const yataAgeStr = minsSinceYataUpdate <= 0 ? 'just now' : `${minsSinceYataUpdate}m ago`;
 
         const flightMins = target.airstrip; // Baseline calculations on Airstrip (Private Jet)
         const landingDate = new Date(Date.now() + flightMins * 60000);
@@ -7789,12 +7795,11 @@ async function buildStocksEmbed(countryInput, apiKey) {
             return "📦";
         }
 
-        // Restock Window & Quarter-Hour Cycle Calculator
-        function getEstimatedRestock(cCode, item) {
+        // Restock Window & Quarter-Hour Cycle Calculator (grounded in YATA update data)
+        function getEstimatedRestock(cCode, item, yataSec) {
             const now = Date.now();
             const curDate = new Date(now);
             const curMins = curDate.getUTCMinutes();
-            const curSecs = curDate.getUTCSeconds();
             const minsToNextQuarter = 15 - (curMins % 15);
             
             const key = `${cCode}_${item.id}`;
@@ -7802,11 +7807,13 @@ async function buildStocksEmbed(countryInput, apiKey) {
             let zeroAgeMins = 15;
             if (tracked && tracked.zeroSinceTs) {
                 zeroAgeMins = Math.round((now - tracked.zeroSinceTs) / 60000);
+            } else if (yataSec) {
+                zeroAgeMins = Math.max(0, Math.round((now / 1000 - yataSec) / 60));
             }
 
-            // Torn Quarter-Hour restock heuristic (:00, :15, :30, :45)
+            // Torn Quarter-Hour restock cadence (:00, :15, :30, :45)
             let estMinsUntilRestock = minsToNextQuarter;
-            if (zeroAgeMins < 15) {
+            if (zeroAgeMins < 10) {
                 estMinsUntilRestock = minsToNextQuarter + 15;
             } else if (zeroAgeMins > 45) {
                 estMinsUntilRestock = Math.max(2, minsToNextQuarter);
@@ -7836,7 +7843,7 @@ async function buildStocksEmbed(countryInput, apiKey) {
                     isHold: true,
                     waitMins,
                     departTimeStr,
-                    timingText: `⏳ **Takeoff Advice:** Hold departure for **~${waitMins}m** *(fly at \`${departTimeStr}\`)* to touchdown right as restock hits at \`${restockTimeStr}\`!`
+                    timingText: `🛫 **Takeoff Advice:** Hold departure for **~${waitMins}m** *(fly at \`${departTimeStr}\`)* to touchdown right as restock hits at \`${restockTimeStr}\`!`
                 };
             }
 
@@ -7850,7 +7857,7 @@ async function buildStocksEmbed(countryInput, apiKey) {
                 return {
                     isFlyNow: true,
                     estStockLeftAtTouchdown,
-                    timingText: `✈️ **Takeoff Advice:** **Depart NOW!** Restocks in ~${estMinsUntilRestock}m during flight ➔ Est. **~${estStockLeftAtTouchdown.toLocaleString()}** fresh units waiting at landing!`
+                    timingText: `🛫 **Takeoff Advice:** **Depart NOW!** Restocks in ~${estMinsUntilRestock}m mid-flight ➔ Est. **~${estStockLeftAtTouchdown.toLocaleString()}** fresh units waiting at landing!`
                 };
             } else {
                 return {
@@ -7872,7 +7879,7 @@ async function buildStocksEmbed(countryInput, apiKey) {
             const isRecentlyRestocked = tracked?.lastRestockTs && (Date.now() - tracked.lastRestockTs < 7200000);
             const restockMinsAgo = isRecentlyRestocked ? Math.round((Date.now() - tracked.lastRestockTs) / 60000) : 0;
 
-            const restockInfo = getEstimatedRestock(target.yCode, s);
+            const restockInfo = getEstimatedRestock(target.yCode, s, yataUpdateSec);
             const timing = getFlightTimingAdvice(flightMins, { ...s, burnRate }, restockInfo);
 
             let badge = "`🟢 Safe`";
@@ -7880,7 +7887,7 @@ async function buildStocksEmbed(countryInput, apiKey) {
 
             if (qty === 0) {
                 badge = "`⚪ Sold Out`";
-                forecastDetail = `0 in stock · Next restock: **~${restockInfo.estMinsUntilRestock}m** *(at \`${restockInfo.restockTimeStr}\`)*\n> ${timing.timingText}`;
+                forecastDetail = `0 in stock · Next YATA Restock: **~${restockInfo.estMinsUntilRestock}m** *(at \`${restockInfo.restockTimeStr}\`)*`;
             } else if (estStockAtLanding <= 0) {
                 const minsToDeplete = Math.max(1, Math.round(qty / burnRate));
                 badge = "`🔴 Depletes`";
@@ -7949,6 +7956,9 @@ async function buildStocksEmbed(countryInput, apiKey) {
             const icon = getItemIcon(s.name);
             const costStr = s.cost ? ` · \`$${s.cost.toLocaleString()}\`` : '';
             const qtyNote = s.quantity > 0 ? ` *(now: ${s.quantity.toLocaleString()})*` : '';
+            if (s.quantity === 0 && s.timing) {
+                return `**${icon} ${s.name}**${costStr}\n> ${s.badge} ${s.forecastDetail}\n> ${s.timing.timingText}`;
+            }
             return `**${icon} ${s.name}**${costStr}\n> ${s.badge} ${s.forecastDetail}${qtyNote}`;
         });
 
@@ -7966,6 +7976,7 @@ async function buildStocksEmbed(countryInput, apiKey) {
 
         const description = [
             `> ✈️ **Flight:** \`${formatFlightDuration(target.airstrip)}\` *(Jet)* · \`${formatFlightDuration(target.standard)}\` *(Std)* ➔ **Landing:** \`~${landingTimeStr}\``,
+            `> 📡 **YATA Sync:** Verified **${yataAgeStr}** *(at \`${yataUpdateTctStr}\`)*`,
             `> ${verdict}`,
             ``,
             `**🧸 Plushies & Flowers Arrival Forecast:**`,
@@ -7980,7 +7991,7 @@ async function buildStocksEmbed(countryInput, apiKey) {
             fields: [
                 { name: "🔗 Travel Calculator", value: `[Open Travel Calculator](https://spider-verse.net/travel.html) • [Live YATA Abroad](https://yata.yt/bazaar/abroad/)`, inline: false }
             ],
-            footer: { text: `Arrival Forecast • YATA Velocity Model${cacheNote} • Spider-Verse Intel` },
+            footer: { text: `YATA Synced Restock Cadence • Quarter-Hour Model (:00, :15, :30, :45)${cacheNote} • Spider-Verse Intel` },
             timestamp: new Date().toISOString()
         };
     } catch(e) {
