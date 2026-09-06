@@ -6211,6 +6211,48 @@ let lastYataFetchTime = 0;
 let yataFetchPromise = null;
 const YATA_CACHE_TTL = 60 * 1000; // 60 seconds
 
+// Velocity & Restock Tracker (measures how fast items are bought per minute)
+const stockVelocityTracker = {}; // key: "cCode_itemId" -> { lastQty, lastTs, burnRatePerMin, lastRestockTs, lastRestockAmount }
+
+function trackStockVelocities(data) {
+    if (!data || !data.stocks) return;
+    const now = Date.now();
+    for (const [cCode, cObj] of Object.entries(data.stocks)) {
+        if (!cObj || !Array.isArray(cObj.stocks)) continue;
+        for (const item of cObj.stocks) {
+            const key = `${cCode}_${item.id}`;
+            const qty = item.quantity || 0;
+            const prev = stockVelocityTracker[key];
+            if (prev && prev.lastTs) {
+                const diffMins = (now - prev.lastTs) / 60000;
+                if (diffMins >= 0.5) { // at least 30s delta
+                    if (qty < prev.lastQty) {
+                        const itemsBought = prev.lastQty - qty;
+                        const instantRate = itemsBought / diffMins;
+                        if (instantRate > 0 && instantRate < 400) {
+                            prev.burnRatePerMin = prev.burnRatePerMin
+                                ? Math.round(((prev.burnRatePerMin * 0.6) + (instantRate * 0.4)) * 10) / 10
+                                : Math.round(instantRate * 10) / 10;
+                        }
+                    } else if (qty > prev.lastQty + 100) {
+                        prev.lastRestockTs = now;
+                        prev.lastRestockAmount = qty - prev.lastQty;
+                    }
+                    prev.lastQty = qty;
+                    prev.lastTs = now;
+                }
+            } else {
+                stockVelocityTracker[key] = {
+                    lastQty: qty,
+                    lastTs: now,
+                    burnRatePerMin: 0,
+                    lastRestockTs: null
+                };
+            }
+        }
+    }
+}
+
 async function getLiveYataStocks() {
     const now = Date.now();
     if (cachedYataStocks && (now - lastYataFetchTime < YATA_CACHE_TTL)) {
@@ -6234,6 +6276,7 @@ async function getLiveYataStocks() {
                 if (data && data.stocks) {
                     cachedYataStocks = data;
                     lastYataFetchTime = Date.now();
+                    trackStockVelocities(data);
                     return cachedYataStocks;
                 }
             }
@@ -7525,37 +7568,86 @@ async function buildMyOCEmbed(playerQuery, apiKey, callerUsername) {
     }
 }
 
-const YATA_COUNTRIES = {
-    "mex": { name: "Mexico", flag: "🇲🇽", yCode: "mex" },
-    "cay": { name: "Cayman Islands", flag: "🇰🇾", yCode: "cay" },
-    "can": { name: "Canada", flag: "🇨🇦", yCode: "can" },
-    "haw": { name: "Hawaii", flag: "🌺", yCode: "haw" },
-    "uni": { name: "United Kingdom", flag: "🇬🇧", yCode: "uni" },
-    "arg": { name: "Argentina", flag: "🇦🇷", yCode: "arg" },
-    "swi": { name: "Switzerland", flag: "🇨🇭", yCode: "swi" },
-    "jap": { name: "Japan", flag: "🇯🇵", yCode: "jap" },
-    "chi": { name: "China", flag: "🇨🇳", yCode: "chi" },
-    "uae": { name: "UAE", flag: "🇦🇪", yCode: "uae" },
-    "sou": { name: "South Africa", flag: "🇿🇦", yCode: "sou" }
+const FLIGHT_PROFILES = {
+    "mex": { standard: 26, airstrip: 18, name: "Mexico", flag: "🇲🇽", yCode: "mex" },
+    "cay": { standard: 35, airstrip: 25, name: "Cayman Islands", flag: "🏝️", yCode: "cay" },
+    "can": { standard: 42, airstrip: 29, name: "Canada", flag: "🇨🇦", yCode: "can" },
+    "haw": { standard: 134, airstrip: 94, name: "Hawaii", flag: "🌺", yCode: "haw" },
+    "uni": { standard: 159, airstrip: 111, name: "United Kingdom", flag: "🇬🇧", yCode: "uni" },
+    "arg": { standard: 167, airstrip: 117, name: "Argentina", flag: "🇦🇷", yCode: "arg" },
+    "swi": { standard: 176, airstrip: 123, name: "Switzerland", flag: "🇨🇭", yCode: "swi" },
+    "jap": { standard: 226, airstrip: 158, name: "Japan", flag: "🇯🇵", yCode: "jap" },
+    "chi": { standard: 235, airstrip: 164, name: "China", flag: "🇨🇳", yCode: "chi" },
+    "uae": { standard: 272, airstrip: 190, name: "UAE", flag: "🇦🇪", yCode: "uae" },
+    "sou": { standard: 299, airstrip: 209, name: "South Africa", flag: "🇿🇦", yCode: "sou" }
 };
 
+function formatFlightDuration(mins) {
+    const h = Math.floor(mins / 60);
+    const m = Math.round(mins % 60);
+    if (h > 0) return `${h}h ${m > 0 ? m + 'm' : ''}`.trim();
+    return `${m}m`;
+}
+
 function resolveYataCountry(input) {
-    if (!input || typeof input !== 'string') return YATA_COUNTRIES["sou"];
+    if (!input || typeof input !== 'string') return FLIGHT_PROFILES["sou"];
     const c = input.toLowerCase().trim().replace(/[-_]/g, " ");
 
-    if (c.includes("south") || c.includes("africa") || c === "sa" || c === "sou" || c === "za") return YATA_COUNTRIES["sou"];
-    if (c.includes("mex") || c === "mexico") return YATA_COUNTRIES["mex"];
-    if (c.includes("cayman") || c === "cay") return YATA_COUNTRIES["cay"];
-    if (c.includes("can") || c === "canada") return YATA_COUNTRIES["can"];
-    if (c.includes("haw") || c === "hawaii") return YATA_COUNTRIES["haw"];
-    if (c.includes("uk") || c.includes("united kingdom") || c.includes("london") || c.includes("britain") || c === "uni") return YATA_COUNTRIES["uni"];
-    if (c.includes("arg") || c === "argentina") return YATA_COUNTRIES["arg"];
-    if (c.includes("swi") || c.includes("switz") || c === "switzerland") return YATA_COUNTRIES["swi"];
-    if (c.includes("jap") || c === "japan") return YATA_COUNTRIES["jap"];
-    if (c.includes("chi") || c === "china") return YATA_COUNTRIES["chi"];
-    if (c.includes("uae") || c.includes("dubai")) return YATA_COUNTRIES["uae"];
+    if (c.includes("south") || c.includes("africa") || c === "sa" || c === "sou" || c === "za") return FLIGHT_PROFILES["sou"];
+    if (c.includes("mex") || c === "mexico") return FLIGHT_PROFILES["mex"];
+    if (c.includes("cayman") || c === "cay") return FLIGHT_PROFILES["cay"];
+    if (c.includes("can") || c === "canada") return FLIGHT_PROFILES["can"];
+    if (c.includes("haw") || c === "hawaii") return FLIGHT_PROFILES["haw"];
+    if (c.includes("uk") || c.includes("united kingdom") || c.includes("london") || c.includes("britain") || c === "uni") return FLIGHT_PROFILES["uni"];
+    if (c.includes("arg") || c === "argentina") return FLIGHT_PROFILES["arg"];
+    if (c.includes("swi") || c.includes("switz") || c === "switzerland") return FLIGHT_PROFILES["swi"];
+    if (c.includes("jap") || c === "japan") return FLIGHT_PROFILES["jap"];
+    if (c.includes("chi") || c === "china") return FLIGHT_PROFILES["chi"];
+    if (c.includes("uae") || c.includes("dubai")) return FLIGHT_PROFILES["uae"];
 
-    return YATA_COUNTRIES["sou"];
+    return FLIGHT_PROFILES["sou"];
+}
+
+function getItemBurnRate(cCode, item) {
+    const key = `${cCode}_${item.id}`;
+    const tracked = stockVelocityTracker[key];
+    if (tracked && tracked.burnRatePerMin && tracked.burnRatePerMin >= 1) {
+        return tracked.burnRatePerMin;
+    }
+    const name = (item.name || "").toLowerCase();
+    // High-demand plushies (rapid burn from overseas trading flights)
+    if (name.includes("jaguar plushie")) return 26;
+    if (name.includes("lion plushie")) return 22;
+    if (name.includes("wolverine plushie")) return 20;
+    if (name.includes("nessie plushie")) return 20;
+    if (name.includes("red fox plushie")) return 18;
+    if (name.includes("chamois plushie")) return 18;
+    if (name.includes("monkey plushie")) return 18;
+    if (name.includes("panda plushie")) return 16;
+    if (name.includes("camel plushie")) return 16;
+    if (name.includes("stingray plushie")) return 15;
+    if (name.includes("kitten plushie")) return 12;
+    if (name.includes("plushie")) return 15;
+
+    // High-demand flowers
+    if (name.includes("african violet")) return 20;
+    if (name.includes("dahlia")) return 18;
+    if (name.includes("cherry blossom")) return 16;
+    if (name.includes("edelweiss")) return 15;
+    if (name.includes("tribulus")) return 15;
+    if (name.includes("crocus")) return 15;
+    if (name.includes("heather")) return 14;
+    if (name.includes("peony")) return 14;
+    if (name.includes("banana orchid")) return 14;
+    if (name.includes("ceibo")) return 12;
+    if (name.includes("flower") || name.includes("orchid")) return 12;
+
+    // Drugs
+    if (name.includes("xanax")) return 15;
+    if (name.includes("smoke grenade")) return 4;
+    if (name.includes("lsd") || name.includes("opium") || name.includes("shrooms") || name.includes("pcp")) return 4;
+
+    return 1.2; // Default low-demand items (armor/weapons)
 }
 
 async function buildStocksEmbed(countryInput, apiKey) {
@@ -7567,8 +7659,8 @@ async function buildStocksEmbed(countryInput, apiKey) {
 
         if (countryStocks.length === 0) {
             return {
-                title: `${target.flag} ${target.name} — Overseas Stock`,
-                description: `No live stock data currently available on YATA for **${target.name}**.\n\nCheck back shortly or view directly on [YATA Travel](https://yata.yt/bazaar/abroad/).`,
+                title: `${target.flag} ${target.name} — Flight Stock Forecast`,
+                description: `No live stock data currently reported on YATA for **${target.name}**.\n\nCheck back shortly or view live on [YATA Travel](https://yata.yt/bazaar/abroad/).`,
                 color: 0x58a6ff,
                 fields: [
                     { name: "🔗 Travel Tools", value: `[Open Travel Calculator](https://spider-verse.net/travel.html) • [Live YATA Abroad](https://yata.yt/bazaar/abroad/)`, inline: false }
@@ -7577,7 +7669,10 @@ async function buildStocksEmbed(countryInput, apiKey) {
             };
         }
 
-        // Prioritize: Plushies & Flowers and high-demand items (Xanax)
+        const flightMins = target.airstrip; // Baseline calculations on Airstrip (Private Jet)
+        const landingDate = new Date(Date.now() + flightMins * 60000);
+        const landingTimeStr = landingDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) + ' TCT';
+
         const isPriorityItem = (name = "") => {
             const n = name.toLowerCase();
             return n.includes("plushie") || n.includes("violet") || n.includes("flower") || n.includes("xanax") || 
@@ -7586,38 +7681,107 @@ async function buildStocksEmbed(countryInput, apiKey) {
                    n.includes("tribulus");
         };
 
-        const sorted = [...countryStocks].sort((a, b) => {
-            const aPrio = isPriorityItem(a.name) ? 1 : 0;
-            const bPrio = isPriorityItem(b.name) ? 1 : 0;
-            if (aPrio !== bPrio) return bPrio - aPrio;
+        // Calculate arrival forecast for each item
+        const processed = countryStocks.map(s => {
+            const qty = s.quantity || 0;
+            const burnRate = getItemBurnRate(target.yCode, s);
+            const estBurnedDuringFlight = Math.round(burnRate * flightMins);
+            const estStockAtLanding = Math.max(0, qty - estBurnedDuringFlight);
+
+            const key = `${target.yCode}_${s.id}`;
+            const tracked = stockVelocityTracker[key];
+            const isRecentlyRestocked = tracked?.lastRestockTs && (Date.now() - tracked.lastRestockTs < 7200000);
+            const restockMinsAgo = isRecentlyRestocked ? Math.round((Date.now() - tracked.lastRestockTs) / 60000) : 0;
+
+            let chanceBadge = "🟢";
+            let chanceLabel = "HIGH CHANCE (SAFE)";
+            let forecastDetail = `Est. ~${estStockAtLanding.toLocaleString()} left when you land`;
+
+            if (qty === 0) {
+                chanceBadge = "⚪";
+                chanceLabel = "OUT OF STOCK";
+                forecastDetail = "0 in stock now (needs unannounced restock)";
+            } else if (estStockAtLanding <= 0) {
+                const minsToDeplete = Math.max(1, Math.round(qty / burnRate));
+                chanceBadge = "🔴";
+                chanceLabel = "HIGH RISK (WILL RUN OUT)";
+                forecastDetail = `Runs out in ~${formatFlightDuration(minsToDeplete)} (Flight is ${formatFlightDuration(flightMins)})`;
+            } else if (estStockAtLanding < 350) {
+                chanceBadge = "🟡";
+                chanceLabel = "MODERATE RISK";
+                forecastDetail = `Tight! Est. only ~${estStockAtLanding.toLocaleString()} left at touchdown`;
+            }
+
+            if (isRecentlyRestocked) {
+                forecastDetail += ` · 🔄 Restocked ${restockMinsAgo}m ago`;
+            }
+
+            return {
+                ...s,
+                burnRate,
+                estStockAtLanding,
+                chanceBadge,
+                chanceLabel,
+                forecastDetail,
+                isPriority: isPriorityItem(s.name)
+            };
+        });
+
+        // Sort: Priority items (Plushies/Flowers/Xanax) first, then items that will have stock at landing, then by available quantity
+        processed.sort((a, b) => {
+            if (a.isPriority !== b.isPriority) return a.isPriority ? -1 : 1;
+            if ((a.estStockAtLanding > 0) !== (b.estStockAtLanding > 0)) {
+                return (a.estStockAtLanding > 0) ? -1 : 1;
+            }
             if ((a.quantity > 0) !== (b.quantity > 0)) {
-                return (b.quantity > 0) ? -1 : 1;
+                return (a.quantity > 0) ? -1 : 1;
             }
             return (b.quantity || 0) - (a.quantity || 0);
         });
 
-        const lines = sorted.slice(0, 12).map(s => {
-            const qty = s.quantity || 0;
-            const stockIcon = qty > 500 ? '🟢' : (qty > 50 ? '🟡' : (qty > 0 ? '🟠' : '🔴'));
+        const lines = processed.slice(0, 10).map(s => {
             const costStr = s.cost ? ` · $${s.cost.toLocaleString()}` : '';
-            return `${stockIcon} **${s.name}**: **${qty.toLocaleString()}** in stock${costStr}`;
+            return `${s.chanceBadge} **${s.name}**: **${(s.quantity || 0).toLocaleString()}** now${costStr}\n   ↳ **${s.chanceLabel}** · ${s.forecastDetail} *(Burn: ~${s.burnRate}/m)*`;
         });
+
+        // Determine pilot verdict
+        const safeItems = processed.filter(p => p.isPriority && p.estStockAtLanding >= 350);
+        const riskyItems = processed.filter(p => p.isPriority && p.quantity > 0 && p.estStockAtLanding <= 0);
+        let verdict = "";
+        if (safeItems.length > 0) {
+            verdict = `💡 **Pilot Verdict:** **${safeItems[0].name}** is your safest profit pick for this flight.`;
+            if (riskyItems.length > 0) {
+                verdict += ` ⚠️ Avoid **${riskyItems[0].name}** — will likely sell out before you land.`;
+            }
+        } else if (riskyItems.length > 0) {
+            verdict = `⚠️ **Pilot Alert:** High risk of top plushies/flowers selling out before touchdown. Consider checking another destination or waiting for a restock.`;
+        } else {
+            verdict = `ℹ️ **Pilot Info:** Stocks are currently lean. Monitor [YATA](https://yata.yt/bazaar/abroad/) for incoming restocks.`;
+        }
 
         const cacheNote = isFromCache ? ` • (Cached ${Math.round((Date.now() - lastYataFetchTime) / 1000)}s ago)` : '';
 
+        const description = [
+            `✈️ **Flight Time:** **${formatFlightDuration(target.airstrip)}** *(Private Jet)* · **${formatFlightDuration(target.standard)}** *(Standard)*`,
+            `🎯 **Arrival Time:** **~${landingTimeStr}** *(touchdown in ${formatFlightDuration(target.airstrip)})*`,
+            `${verdict}`,
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+            ...lines
+        ].join('\n');
+
         return {
-            title: `${target.flag} ${target.name} — Overseas Stock`,
-            description: lines.join("\n"),
-            color: 0x00cec9,
+            title: `${target.flag} ${target.name} — Flight Stock & Arrival Forecast`,
+            description: description,
+            color: safeItems.length > 0 ? 0x2ed573 : (riskyItems.length > 0 ? 0xffa502 : 0x00cec9),
             fields: [
-                { name: "🔗 Travel Calculator", value: `[Open Travel Calculator](https://spider-verse.net/travel.html) • [YATA Live Abroad](https://yata.yt/bazaar/abroad/)`, inline: false }
+                { name: "🔗 Travel Calculator", value: `[Open Travel Calculator](https://spider-verse.net/travel.html) • [Live YATA Abroad](https://yata.yt/bazaar/abroad/)`, inline: false }
             ],
-            footer: { text: `Foreign Stock • YATA${cacheNote} • Spider-Verse Intel` },
+            footer: { text: `Arrival Forecast • YATA Velocity Model${cacheNote} • Spider-Verse Intel` },
             timestamp: new Date().toISOString()
         };
     } catch(e) {
         return {
-            title: `${target.flag} ${target.name} — Overseas Stock`,
+            title: `${target.flag} ${target.name} — Flight Stock Forecast`,
             description: `⚠️ YATA stock feed is currently slow or busy.\n\nYou can view real-time stocks directly on [YATA Travel Abroad](https://yata.yt/bazaar/abroad/) or use the [Spider-Verse Travel Calculator](https://spider-verse.net/travel.html).`,
             color: 0xffa502,
             footer: { text: `Foreign Stock • Spider-Verse Intel` }
