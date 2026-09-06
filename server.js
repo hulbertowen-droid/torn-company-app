@@ -10977,7 +10977,21 @@ async function registerSlashCommands(token, guildId = null) {
 
         // 12. Economy & Utilities Standalone
         new SlashCommandBuilder().setName('stocks').setDescription('Quick check overseas plushie and flower stocks')
-            .addStringOption(opt => opt.setName('country').setDescription('Country name (optional)')).toJSON(),
+            .addStringOption(opt => opt.setName('country').setDescription('Select country').setRequired(true)
+                .addChoices(
+                    { name: '🇲🇽 Mexico', value: 'Mexico' },
+                    { name: '🏝️ Cayman Islands', value: 'Cayman Islands' },
+                    { name: '🇨🇦 Canada', value: 'Canada' },
+                    { name: '🌺 Hawaii', value: 'Hawaii' },
+                    { name: '🇬🇧 United Kingdom', value: 'United Kingdom' },
+                    { name: '🇦🇷 Argentina', value: 'Argentina' },
+                    { name: '🇨🇭 Switzerland', value: 'Switzerland' },
+                    { name: '🇯🇵 Japan', value: 'Japan' },
+                    { name: '🇨🇳 China', value: 'China' },
+                    { name: '🇦🇪 UAE', value: 'UAE' },
+                    { name: '🇿🇦 South Africa', value: 'South Africa' }
+                )
+            ).toJSON(),
         new SlashCommandBuilder().setName('donator').setDescription('Check player Torn donator and subscriber status')
             .addStringOption(opt => opt.setName('player').setDescription('Player name or ID (optional)')).toJSON(),
 
