@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Torn Elimination Target Hunter (1-Click Snipe)
+// @name         Torn Elimination Target Hunter
 // @namespace    https://spider-verse.net/
-// @version      1.4.2
-// @description  1-Click instant snipe button for Elimination. Automatically finds beatable enemies (not hosp, not flying, beatable FF tier) and redirects straight into their attack screen.
+// @version      2.0.0
+// @description  1-click snipe button for Torn Elimination. Finds beatable enemies that are NOT in hospital and NOT flying. No fallbacks, elimination-only.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=torn.com

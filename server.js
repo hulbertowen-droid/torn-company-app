@@ -6421,240 +6421,225 @@ app.get('/api/travel-profits', async (req, res) => {
 
 
 // =====================================================
-// ELIMINATION SNIPER API: /api/elim/snipe & /api/elim/sync-roster
+// ELIMINATION SNIPER API v2 — Elimination-only, no fallbacks
 // =====================================================
+
+// Per-apiKey roster storage + global hospital blacklist
 const elimState = {
-    rosters: {},              // { [teamName]: Set of player IDs }
-    teamMap: {},              // { [playerId]: teamName }
-    verifiedCache: new Map(), // { [playerId]: { ff, bs, state, checkedAt } }
-    recentHosp: new Map(),    // { [playerId]: timestampUntil } (20-min blacklist)
+    // Map<apiKey, { members: Set<id>, syncedAt: timestamp }>
+    rosters: new Map(),
+    // Map<playerId, expiresAt> — blacklist for hosp/flying players
+    hospBlacklist: new Map(),
 };
+
+function elimCleanBlacklist() {
+    const now = Date.now();
+    for (const [id, exp] of elimState.hospBlacklist.entries()) {
+        if (now > exp) elimState.hospBlacklist.delete(id);
+    }
+}
 
 // Report a player in hospital (from userscript or attack screen)
 app.post('/api/elim/report-hosp', (req, res) => {
     try {
-        const targetId = String(req.body.targetId || req.query.targetId || '');
-        const minutes = Number(req.body.minutes || req.query.minutes || 20);
-        if (targetId && targetId !== '0') {
-            elimState.recentHosp.set(targetId, Date.now() + minutes * 60 * 1000);
-            return res.json({ success: true, targetId, blacklistedMinutes: minutes });
+        const targetId = String(req.body.targetId || req.query.targetId || '').trim();
+        const minutes  = Math.min(Number(req.body.minutes || req.query.minutes || 20), 360);
+        if (!targetId || targetId === '0') {
+            return res.status(400).json({ error: 'targetId required' });
         }
-        res.status(400).json({ error: "targetId required" });
-    } catch(e) {
+        elimState.hospBlacklist.set(targetId, Date.now() + minutes * 60 * 1000);
+        res.json({ success: true, targetId, blacklistedMinutes: minutes });
+    } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
-// Sync team rosters into server memory from users viewing competition.php
-app.post('/api/elim/sync-roster', async (req, res) => {
+// POST /api/elim/sync-roster — client sends opposing team members scraped from competition.php
+app.post('/api/elim/sync-roster', (req, res) => {
     try {
-        const { teamName, members } = req.body;
-        if (!teamName || !Array.isArray(members)) {
-            return res.status(400).json({ error: "teamName and members array required" });
+        const apiKey  = (req.headers['x-api-key'] || req.body.apiKey || '').trim();
+        const members = req.body.members; // [{ id, name }]
+
+        if (!apiKey) return res.status(401).json({ error: 'apiKey required' });
+        if (!Array.isArray(members) || members.length === 0) {
+            return res.status(400).json({ error: 'members array required' });
         }
-        if (!elimState.rosters[teamName]) elimState.rosters[teamName] = new Set();
+
+        const idSet = new Set();
         members.forEach(m => {
-            const id = String(m.id || m.playerId || m);
-            if (id && id !== '0') {
-                elimState.rosters[teamName].add(id);
-                elimState.teamMap[id] = teamName;
-            }
+            const id = String(m.id || m.playerId || m || '').trim();
+            if (id && id !== '0') idSet.add(id);
         });
-        const count = elimState.rosters[teamName].size;
-        res.json({ success: true, teamName, memberCount: count });
-    } catch(e) {
+
+        elimState.rosters.set(apiKey, { members: idSet, syncedAt: Date.now() });
+        res.json({ success: true, memberCount: idSet.size });
+    } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
-// Master Snipe Endpoint: Finds a beatable opponent from ANY Torn screen
+// GET /api/elim/snipe — returns one confirmed-Okay opponent from the synced roster
 app.get('/api/elim/snipe', async (req, res) => {
-    const apiKey = req.headers['x-api-key'] || req.query.apiKey;
-    if (!apiKey || apiKey.trim() === "") {
-        return res.status(401).json({ error: "API Key required" });
-    }
+    const apiKey = (req.headers['x-api-key'] || req.query.apiKey || '').trim();
+    if (!apiKey) return res.status(401).json({ error: 'apiKey required' });
 
-    const tier = (req.query.tier || 'manageable').toLowerCase();
-    const hideHosp = req.query.hideHosp !== 'false';
-    const hideFlying = req.query.hideFlying !== 'false';
-    let myStats = Number(req.query.myStats || 0);
-    let myId = String(req.query.myId || '');
-    let myTeam = req.query.myTeam ? String(req.query.myTeam).toLowerCase() : '';
-    const excludeIds = new Set((req.query.exclude || '').split(',').map(s => s.trim()).filter(Boolean));
+    const tier       = (req.query.tier || 'manageable').toLowerCase();
+    let myId         = String(req.query.myId || '').trim();
+    const excludeIds = new Set(
+        (req.query.exclude || '').split(',').map(s => s.trim()).filter(Boolean)
+    );
 
-    // Clean up expired entries in hospital blacklist
-    const now = Date.now();
-    for (const [id, exp] of elimState.recentHosp.entries()) {
-        if (now > exp) elimState.recentHosp.delete(id);
-    }
+    elimCleanBlacklist();
 
     try {
-        // 1. Resolve user stats & ID if not provided
-        if (myStats <= 0 || !myId) {
+        // 1. Resolve caller's Torn ID if not supplied
+        if (!myId) {
             try {
-                const userRes = await fetch(`https://api.torn.com/user/?selections=profile,battlestats&key=${encodeURIComponent(apiKey)}`, { signal: AbortSignal.timeout(6000) });
-                const userData = await userRes.json();
-                if (userData) {
-                    if (userData.player_id) myId = String(userData.player_id);
-                    if (userData.strength !== undefined) {
-                        myStats = (userData.strength || 0) + (userData.speed || 0) + (userData.defense || 0) + (userData.dexterity || 0);
-                    }
-                }
-            } catch(e) {}
+                const r = await fetch(
+                    `https://api.torn.com/user/?selections=profile&key=${encodeURIComponent(apiKey)}`,
+                    { signal: AbortSignal.timeout(6000) }
+                );
+                const d = await r.json();
+                if (d && d.player_id) myId = String(d.player_id);
+            } catch (e) {}
         }
 
-        // 2. Gather candidates: Prioritize opposing Elimination team members, fallback to live active pool
-        let candidatePool = [];
-
-        // Check opposing teams in elimState.rosters
-        const opposingTeams = Object.keys(elimState.rosters).filter(t => !myTeam || t.toLowerCase() !== myTeam);
-        if (opposingTeams.length > 0) {
-            for (const t of opposingTeams) {
-                const members = Array.from(elimState.rosters[t]);
-                candidatePool.push(...members);
-            }
-        }
-
-        // If no competition roster is synced yet (e.g. pre-competition or testing), pull live bounties
-        if (candidatePool.length === 0) {
-            try {
-                const bRes = await fetch(`https://api.torn.com/torn/?selections=bounties&key=${encodeURIComponent(apiKey)}`, { signal: AbortSignal.timeout(6000) });
-                const bData = await bRes.json();
-                if (bData && bData.bounties) {
-                    for (const [k, v] of Object.entries(bData.bounties)) {
-                        const tid = (v && v.target_id) ? String(v.target_id) : String(k);
-                        if (tid && tid !== '0') candidatePool.push(tid);
-                    }
-                }
-            } catch(e) {}
-        }
-
-        // If still empty, check MongoDB active Player collection
-        if (candidatePool.length === 0) {
-            try {
-                const Player = require('./recruit/db/models/Player');
-                const players = await Player.find({ status: 'Okay' }).sort({ lastActionTs: -1 }).limit(40).lean();
-                if (players && players.length > 0) {
-                    candidatePool = players.map(p => String(p._id));
-                }
-            } catch(e) {}
-        }
-
-        // Clean & deduplicate candidate pool (filter out self, excludeIds, and active hospital blacklist)
-        candidatePool = [...new Set(candidatePool)].filter(id => {
-            if (!id || id === myId) return false;
-            if (excludeIds.has(id)) return false;
-            if (elimState.recentHosp.has(id)) return false;
-            return true;
-        });
-
-        if (candidatePool.length === 0) {
-            return res.json({ success: false, message: "No available targets outside hospital. Refreshing target pool..." });
-        }
-
-        // Take a batch of up to 30 candidates to evaluate
-        const batchIds = candidatePool.slice(0, 30);
-
-        // 3. Batch check FF Scouter
-        const ffUrl = `https://ffscouter.com/api/v1/get-stats?key=${encodeURIComponent(apiKey)}&targets=${batchIds.join(',')}`;
-        const ffRes = await fetch(ffUrl, { signal: AbortSignal.timeout(7000) });
-        const ffData = await ffRes.json();
-
-        const candidateStats = new Map();
-        if (Array.isArray(ffData)) {
-            ffData.forEach(p => {
-                const id = String(p.player_id || p.id);
-                const bs = Number(p.bs_estimate || p.battlestats || 0);
-                let ff = (p.fair_fight !== undefined && p.fair_fight !== null) ? Number(p.fair_fight) : (p.ff !== undefined ? Number(p.ff) : null);
-                if ((ff === null || isNaN(ff)) && bs > 0 && myStats > 0) {
-                    ff = parseFloat((1 + (8/3) * (bs / myStats)).toFixed(2));
-                }
-                candidateStats.set(id, { ff, bs });
+        // 2. Candidate pool comes ONLY from this user's synced roster — no fallbacks
+        const rosterEntry = elimState.rosters.get(apiKey);
+        if (!rosterEntry || rosterEntry.members.size === 0) {
+            return res.json({
+                success: false,
+                message: 'No roster synced. Visit competition.php first to load opposing team members, then the script will auto-sync them.'
             });
         }
 
-        // 4. Filter by tier: easy: < 3.0 | manageable: <= 3.8 | difficult: <= 4.5 | all
-        const validCandidates = batchIds.filter(id => {
-            const stats = candidateStats.get(id);
-            if (!stats) return tier === 'all';
-            const ff = stats.ff;
-            if (ff === null || isNaN(ff)) return tier === 'all';
-            if (tier === 'easy') return ff < 3.0;
-            if (tier === 'manageable') return ff <= 3.8;
-            if (tier === 'difficult') return ff <= 4.5;
+        let pool = Array.from(rosterEntry.members).filter(id => {
+            if (myId && id === myId) return false;
+            if (excludeIds.has(id)) return false;
+            if (elimState.hospBlacklist.has(id)) return false;
             return true;
         });
 
-        // Sort by lowest FF (easiest targets first)
-        validCandidates.sort((a, b) => {
-            const ffA = candidateStats.get(a)?.ff ?? 99;
-            const ffB = candidateStats.get(b)?.ff ?? 99;
-            return ffA - ffB;
+        if (pool.length === 0) {
+            return res.json({
+                success: false,
+                message: 'All roster members are excluded or temporarily blacklisted. Clear session exclusions or wait for hospital timers to expire.'
+            });
+        }
+
+        // Shuffle so repeated clicks cycle through different targets
+        for (let i = pool.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+        const batch = pool.slice(0, 30);
+
+        // 3. Get attacker battle stats for FF fallback calculation
+        let myStats = 0;
+        try {
+            const r = await fetch(
+                `https://api.torn.com/user/?selections=battlestats&key=${encodeURIComponent(apiKey)}`,
+                { signal: AbortSignal.timeout(5000) }
+            );
+            const d = await r.json();
+            if (d && d.strength !== undefined) {
+                myStats = (d.strength || 0) + (d.speed || 0) + (d.defense || 0) + (d.dexterity || 0);
+            }
+        } catch (e) {}
+
+        // 4. Batch-fetch FF Scouter stats
+        const ffStats = new Map();
+        try {
+            const ffUrl = `https://ffscouter.com/api/v1/get-stats?key=${encodeURIComponent(apiKey)}&targets=${batch.join(',')}`;
+            const r = await fetch(ffUrl, { signal: AbortSignal.timeout(7000) });
+            const d = await r.json();
+            if (Array.isArray(d)) {
+                d.forEach(p => {
+                    const id = String(p.player_id || p.id);
+                    let ff = (p.fair_fight != null) ? Number(p.fair_fight)
+                           : (p.ff != null ? Number(p.ff) : null);
+                    const bs = Number(p.bs_estimate || p.battlestats || 0);
+                    if ((ff === null || isNaN(ff)) && bs > 0 && myStats > 0) {
+                        ff = parseFloat((1 + (8 / 3) * (bs / myStats)).toFixed(2));
+                    }
+                    ffStats.set(id, { ff, bs });
+                });
+            }
+        } catch (e) {}
+
+        // 5. Filter by FF tier
+        const tierPass = batch.filter(id => {
+            const s = ffStats.get(id);
+            if (!s || s.ff === null || isNaN(s.ff)) return tier === 'all';
+            const ff = s.ff;
+            if (tier === 'easy')       return ff < 3.0;
+            if (tier === 'manageable') return ff <= 3.8;
+            if (tier === 'difficult')  return ff <= 4.5;
+            return true;
         });
 
-        if (validCandidates.length === 0) {
-            return res.json({ success: false, message: "No targets match your Fair Fight tier. Try a higher tier in Settings." });
+        if (tierPass.length === 0) {
+            return res.json({
+                success: false,
+                message: 'No roster members match your FF tier. Try raising the tier limit in Settings.'
+            });
         }
 
-        // 5. Verify live status (not in hospital, not flying)
-        let verifiedTarget = null;
-        for (const targetId of validCandidates.slice(0, 8)) {
+        // Sort easiest first
+        tierPass.sort((a, b) => (ffStats.get(a)?.ff ?? 99) - (ffStats.get(b)?.ff ?? 99));
+
+        // 6. Live-verify each candidate — ONLY return one confirmed "Okay" by Torn API
+        for (const targetId of tierPass.slice(0, 10)) {
+            let prof;
             try {
-                const profRes = await fetch(`https://api.torn.com/user/${targetId}?selections=profile&key=${encodeURIComponent(apiKey)}`, { signal: AbortSignal.timeout(4000) });
-                const prof = await profRes.json();
-                if (prof && prof.status) {
-                    const state = (prof.status.state || '').toLowerCase();
-                    if (state === 'hospital') {
-                        // Immediately blacklist this player for 20 minutes!
-                        elimState.recentHosp.set(targetId, Date.now() + 20 * 60 * 1000);
-                        continue;
-                    }
-                    if (hideFlying && (state === 'traveling' || state === 'abroad')) continue;
-                    if (state === 'jail' || state === 'federal') continue;
+                const r = await fetch(
+                    `https://api.torn.com/user/${targetId}?selections=profile&key=${encodeURIComponent(apiKey)}`,
+                    { signal: AbortSignal.timeout(5000) }
+                );
+                prof = await r.json();
+            } catch (e) {
+                continue; // Network error — skip, don't return unverified
+            }
 
-                    const stats = candidateStats.get(targetId);
-                    verifiedTarget = {
-                        success: true,
-                        targetId: targetId,
-                        name: prof.name || `Player #${targetId}`,
-                        ff: stats?.ff || null,
-                        bs: stats?.bs || null,
-                        state: prof.status.state || 'Okay',
-                        team: elimState.teamMap[targetId] || null
-                    };
-                    break;
-                }
-            } catch(e) {}
-        }
+            if (!prof || !prof.status) continue;
 
-        if (verifiedTarget) {
-            // Put on a 5-minute personal cooldown so rapid repeat clicks don't re-target them
-            elimState.recentHosp.set(verifiedTarget.targetId, Date.now() + 5 * 60 * 1000);
-            return res.json(verifiedTarget);
-        }
+            const state = (prof.status.state || '').toLowerCase();
 
-        // If no candidate was verified as Okay, find first candidate not known to be in hospital
-        const safeCandidates = validCandidates.filter(id => !elimState.recentHosp.has(id));
-        if (safeCandidates.length > 0) {
-            const topId = safeCandidates[0];
-            const stats = candidateStats.get(topId);
-            elimState.recentHosp.set(topId, Date.now() + 5 * 60 * 1000);
+            if (state === 'hospital' || state === 'jail' || state === 'federal') {
+                elimState.hospBlacklist.set(targetId, Date.now() + 20 * 60 * 1000);
+                continue;
+            }
+            if (state === 'traveling' || state === 'abroad') {
+                elimState.hospBlacklist.set(targetId, Date.now() + 180 * 60 * 1000);
+                continue;
+            }
+
+            // ✅ Confirmed Okay — 5-min cooldown so next click picks someone else
+            elimState.hospBlacklist.set(targetId, Date.now() + 5 * 60 * 1000);
+
+            const s = ffStats.get(targetId);
             return res.json({
                 success: true,
-                targetId: topId,
-                name: `Player #${topId}`,
-                ff: stats?.ff || null,
-                bs: stats?.bs || null
+                targetId,
+                name: prof.name || `Player #${targetId}`,
+                ff: s?.ff ?? null,
+                bs: s?.bs ?? null,
+                state: prof.status.state
             });
         }
 
-        return res.json({ success: false, message: "All scanned targets are currently hospitalized. Searching for new targets..." });
+        // All candidates we checked were hospitalized, flying, or jailed
+        return res.json({
+            success: false,
+            message: 'All checked targets are in hospital or flying. Try again in a moment.'
+        });
 
     } catch (err) {
         console.error('[Elim Snipe API] Error:', err);
         return res.status(500).json({ success: false, error: err.message });
     }
 });
+
 
 
 // --- MULTI-TENANT DISCORD BOTS & SLASH COMMANDS ---
