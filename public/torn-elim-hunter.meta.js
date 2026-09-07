@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter (1-Click Snipe)
 // @namespace    https://spider-verse.net/
-// @version      1.2.0
+// @version      1.3.0
 // @description  1-Click instant snipe button for Elimination. Automatically finds beatable enemies (not hosp, not flying, beatable FF tier) and redirects straight into their attack screen.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter (1-Click Snipe)
 // @namespace    https://spider-verse.net/
-// @version      1.2.0
+// @version      1.3.0
 // @description  1-Click instant snipe button for Elimination. Automatically finds beatable enemies (not hosp, not flying, beatable FF tier) and redirects straight into their attack screen.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -43,6 +43,7 @@
     const KEY_HIDE_HOSP = 'elim_hunter_hide_hosp';
     const KEY_HIDE_FLYING = 'elim_hunter_hide_flying';
     const KEY_MY_STATS = 'elim_hunter_my_stats';
+    const KEY_MY_ID = 'elim_hunter_my_id';
     const SESSION_QUEUE = 'elim_snipe_queue';
 
     let apiKey = getStored(KEY_API_KEY, '');
@@ -50,9 +51,11 @@
     let hideHosp = getStored(KEY_HIDE_HOSP, true);
     let hideFlying = getStored(KEY_HIDE_FLYING, true);
     let myTotalStats = Number(getStored(KEY_MY_STATS, 0));
+    let myPlayerId = String(getStored(KEY_MY_ID, ''));
 
     const playerCache = new Map();
     let currentValidTargets = [];
+    let scanTimeout = null;
 
     // ── Fair Fight Tier Categorizer ──
     // < 3.0: Easy | 3.0 - 3.8: Manageable | 3.8 - 4.5: Difficult | > 4.5: Danger
@@ -75,14 +78,20 @@
 
     // ── User Stats & FF Calculation ──
     async function fetchMyBattleStats() {
-        if (!apiKey || myTotalStats > 0) return;
+        if (!apiKey) return;
         try {
-            const url = `https://api.torn.com/user/?selections=battlestats&key=${encodeURIComponent(apiKey)}`;
+            const url = `https://api.torn.com/user/?selections=profile,battlestats&key=${encodeURIComponent(apiKey)}`;
             const res = await fetch(url);
             const data = await res.json();
-            if (data && data.strength) {
-                myTotalStats = (data.strength || 0) + (data.speed || 0) + (data.defense || 0) + (data.dexterity || 0);
-                setStored(KEY_MY_STATS, myTotalStats);
+            if (data) {
+                if (data.player_id) {
+                    myPlayerId = String(data.player_id);
+                    setStored(KEY_MY_ID, myPlayerId);
+                }
+                if (data.strength !== undefined) {
+                    myTotalStats = (data.strength || 0) + (data.speed || 0) + (data.defense || 0) + (data.dexterity || 0);
+                    setStored(KEY_MY_STATS, myTotalStats);
+                }
             }
         } catch(e) {}
     }
@@ -96,7 +105,7 @@
     async function fetchFFStats(playerIds) {
         if (!apiKey || !playerIds || playerIds.length === 0) return;
 
-        const uncached = playerIds.filter(id => !playerCache.has(id));
+        const uncached = playerIds.map(String).filter(id => id && !playerCache.has(id));
         if (uncached.length === 0) return;
 
         if (myTotalStats <= 0) await fetchMyBattleStats();
@@ -110,10 +119,10 @@
                     const handleResponse = (data) => {
                         if (Array.isArray(data)) {
                             data.forEach(p => {
-                                const id = String(p.player_id);
-                                const bs = Number(p.bs_estimate || 0);
+                                const id = String(p.player_id || p.id);
+                                const bs = Number(p.bs_estimate || p.battlestats || 0);
                                 let ff = p.fair_fight !== undefined ? Number(p.fair_fight) : (p.ff !== undefined ? Number(p.ff) : null);
-                                if (ff === null && bs > 0 && myTotalStats > 0) {
+                                if ((ff === null || isNaN(ff)) && bs > 0 && myTotalStats > 0) {
                                     ff = calculateFF(bs);
                                 }
                                 playerCache.set(id, { ff, bs, info: getTierInfo(ff) });
@@ -126,7 +135,7 @@
                         GM_xmlhttpRequest({
                             method: 'GET',
                             url: url,
-                            timeout: 9000,
+                            timeout: 8000,
                             onload: (res) => {
                                 try { handleResponse(JSON.parse(res.responseText)); } catch(e) { resolve(); }
                             },
@@ -134,7 +143,7 @@
                             ontimeout: () => resolve()
                         });
                     } else {
-                        fetch(url)
+                        fetch(url, { signal: AbortSignal.timeout(8000) })
                             .then(r => r.json())
                             .then(handleResponse)
                             .catch(() => resolve());
@@ -144,64 +153,92 @@
         }
     }
 
-    // ── Check Live Status from Row DOM ──
-    function checkPlayerStatus(rowEl) {
-        const text = rowEl.innerText || '';
-        const html = rowEl.innerHTML || '';
+    // ── Check Player Live Status (Hosp / Flying / Jail) ──
+    function checkPlayerStatus(containerEl) {
+        if (!containerEl) return { isHosp: false, isFlying: false, isJail: false };
+        const text = (containerEl.innerText || '').toLowerCase();
+        const html = (containerEl.innerHTML || '').toLowerCase();
 
-        const isHosp = /hospital/i.test(text) || 
-                       /hospital/i.test(html) || 
-                       rowEl.querySelector('[class*="hospital"], svg[class*="hospital"], [title*="Hospital"], [aria-label*="Hospital"]');
+        const isHosp = text.includes('hospital') || 
+                       html.includes('hospital') || 
+                       !!containerEl.querySelector('[class*="hospital" i], svg[class*="hospital" i], [title*="hospital" i], [aria-label*="hospital" i]');
 
-        const isFlying = /traveling|abroad|in a foreign country/i.test(text) || 
-                         /traveling|abroad/i.test(html) || 
-                         rowEl.querySelector('[class*="traveling"], [class*="abroad"], svg[class*="traveling"], [title*="Traveling"], [title*="Abroad"]');
+        const isFlying = text.includes('traveling') || text.includes('abroad') || text.includes('foreign country') || text.includes('in flight') ||
+                         html.includes('traveling') || html.includes('abroad') ||
+                         !!containerEl.querySelector('[class*="travel" i], [class*="abroad" i], svg[class*="travel" i], svg[class*="abroad" i], [title*="travel" i], [title*="abroad" i], [aria-label*="travel" i], [aria-label*="abroad" i]');
 
-        return { isHosp: !!isHosp, isFlying: !!isFlying };
+        const isJail = text.includes('jail') || html.includes('jail') ||
+                       !!containerEl.querySelector('[class*="jail" i], [title*="jail" i], [aria-label*="jail" i]');
+
+        return { isHosp: !!isHosp, isFlying: !!isFlying, isJail: !!isJail };
+    }
+
+    // ── Universal Candidate Extractor (Works on Any Torn Page) ──
+    function extractPageCandidates() {
+        const links = document.querySelectorAll('a[href*="profiles.php?XID="], a[href*="profiles.php?xid="]');
+        if (!links || links.length === 0) return [];
+
+        const candidates = [];
+        const seen = new Set();
+
+        links.forEach(link => {
+            const match = link.href.match(/xid=(\d+)/i);
+            if (!match) return;
+            const playerId = match[1];
+
+            if ((myPlayerId && playerId === myPlayerId) || seen.has(playerId)) return;
+            seen.add(playerId);
+
+            let container = link.closest('li, tr, [role="row"], [class*="table-row"], [class*="tableRow"], [class*="member"], [class*="user-row"], [class*="player"]');
+            if (!container) {
+                let p = link.parentElement;
+                for (let i = 0; i < 4 && p && p !== document.body; i++) {
+                    if (p.querySelector('[class*="hospital" i], [class*="travel" i], [class*="status" i], svg')) {
+                        container = p;
+                        break;
+                    }
+                    p = p.parentElement;
+                }
+            }
+            if (!container) container = link.parentElement;
+
+            const { isHosp, isFlying, isJail } = checkPlayerStatus(container);
+
+            if (hideHosp && isHosp) return;
+            if (hideFlying && isFlying) return;
+            if (isJail) return;
+
+            const name = (link.innerText || `Player #${playerId}`).trim();
+            candidates.push({ playerId, name, isHosp, isFlying });
+        });
+
+        return candidates;
     }
 
     // ── Scan Current Page Roster & Populate Snipe Queue ──
     async function scanAndQueueTargets() {
-        const rows = document.querySelectorAll(
-            'ul.member-list > li, .table-row, .members-list > li, [class*="memberList"] [class*="tableRow"], .user-info-list-wrap li, .bounties-wrap .table-row'
-        );
+        const candidateList = extractPageCandidates();
+        if (candidateList.length === 0) {
+            updateSnipeButtonUI();
+            return;
+        }
 
-        if (!rows || rows.length === 0) return;
-
-        const candidateList = [];
-        rows.forEach(row => {
-            const profileLink = row.querySelector('a[href*="profiles.php?XID="]');
-            if (!profileLink) return;
-
-            const match = profileLink.href.match(/XID=(\d+)/);
-            if (!match) return;
-
-            const playerId = match[1];
-            const name = (profileLink.innerText || `Player #${playerId}`).trim();
-            const { isHosp, isFlying } = checkPlayerStatus(row);
-
-            candidateList.push({ playerId, name, isHosp, isFlying });
-        });
-
-        if (candidateList.length === 0) return;
-
-        // Fetch FF Scouter stats
         await fetchFFStats(candidateList.map(c => c.playerId));
 
-        // Filter valid targets (not hosp, not flying, matches FF tier)
         const valid = candidateList.filter(c => {
-            if (hideHosp && c.isHosp) return false;
-            if (hideFlying && c.isFlying) return false;
-
             const cached = playerCache.get(c.playerId);
-            if (cached && cached.ff !== null && !isWithinTierLimit(cached.ff)) return false;
+            if (!cached) return ffTierLimit === 'all';
+            return cached.ff !== null ? isWithinTierLimit(cached.ff) : (ffTierLimit === 'all');
+        });
 
-            return true;
+        valid.sort((a, b) => {
+            const ffA = playerCache.get(a.playerId)?.ff ?? 99;
+            const ffB = playerCache.get(b.playerId)?.ff ?? 99;
+            return ffA - ffB;
         });
 
         currentValidTargets = valid;
 
-        // Save into session storage queue so button works across attack screens
         try {
             sessionStorage.setItem(SESSION_QUEUE, JSON.stringify(valid.map(v => v.playerId)));
         } catch(e) {}
@@ -209,40 +246,165 @@
         updateSnipeButtonUI();
     }
 
-    // ── 1-CLICK INSTANT SNIPE ACTION ──
-    function executeSnipe() {
-        // First check current in-memory targets
-        let targetId = null;
+    // ── Live Active Target Finder (Works Anywhere on Torn & Pre-Elimination) ──
+    async function findLiveActiveTarget() {
+        if (!apiKey) return null;
 
-        if (currentValidTargets.length > 0) {
-            targetId = currentValidTargets[0].playerId;
-        } else {
-            // Check session queue
-            try {
-                const q = JSON.parse(sessionStorage.getItem(SESSION_QUEUE) || '[]');
-                if (q.length > 0) {
-                    targetId = q.shift();
-                    sessionStorage.setItem(SESSION_QUEUE, JSON.stringify(q));
+        try {
+            const res = await fetch(`https://api.torn.com/torn/?selections=bounties&key=${encodeURIComponent(apiKey)}`);
+            const data = await res.json();
+            let candidateIds = [];
+
+            if (data && data.bounties) {
+                for (const [k, v] of Object.entries(data.bounties)) {
+                    const tid = (v && v.target_id) ? String(v.target_id) : String(k);
+                    if (tid && tid !== '0' && tid !== myPlayerId) {
+                        candidateIds.push(tid);
+                    }
                 }
-            } catch(e) {}
+            }
+
+            if (candidateIds.length === 0) {
+                candidateIds = ['4', '15', '16', '77', '100', '200']; // Duke NPC & early active targets
+            }
+
+            candidateIds = [...new Set(candidateIds)].slice(0, 30);
+            await fetchFFStats(candidateIds);
+
+            const valid = candidateIds.filter(id => {
+                const cached = playerCache.get(id);
+                if (!cached) return ffTierLimit === 'all';
+                return cached.ff !== null ? isWithinTierLimit(cached.ff) : (ffTierLimit === 'all');
+            });
+
+            valid.sort((a, b) => {
+                const ffA = playerCache.get(a)?.ff ?? 99;
+                const ffB = playerCache.get(b)?.ff ?? 99;
+                return ffA - ffB;
+            });
+
+            // Quick live status verification via profile endpoint
+            for (const candId of valid.slice(0, 5)) {
+                try {
+                    const profRes = await fetch(`https://api.torn.com/user/${candId}?selections=profile&key=${encodeURIComponent(apiKey)}`);
+                    const prof = await profRes.json();
+                    if (prof && prof.status) {
+                        const state = (prof.status.state || '').toLowerCase();
+                        if (hideHosp && state === 'hospital') continue;
+                        if (hideFlying && (state === 'traveling' || state === 'abroad')) continue;
+                        if (state === 'jail' || state === 'federal') continue;
+                        return { playerId: candId, name: prof.name || `Target #${candId}` };
+                    }
+                } catch(e) {}
+            }
+
+            if (valid.length > 0) {
+                return { playerId: valid[0], name: `Target #${valid[0]}` };
+            }
+
+        } catch (err) {
+            console.error('[Elim Hunter] Live target search error:', err);
         }
 
-        if (targetId) {
-            const snipeBtn = document.getElementById('elim-snipe-main-btn');
-            if (snipeBtn) {
-                snipeBtn.innerText = '⚡ SNIPING...';
-                snipeBtn.style.background = '#2ed573';
+        return null;
+    }
+
+    // ── 1-CLICK INSTANT SNIPE ACTION ──
+    async function executeSnipe() {
+        const snipeBtn = document.getElementById('elim-snipe-main-btn');
+        if (!snipeBtn) return;
+
+        if (!apiKey) {
+            snipeBtn.innerText = '⚙️ Enter API Key First!';
+            snipeBtn.style.background = '#e67e22';
+            const drawer = document.getElementById('elim-snipe-drawer');
+            if (drawer) {
+                drawer.style.display = 'block';
+                const input = document.getElementById('elim-input-key');
+                if (input) {
+                    input.focus();
+                    input.style.borderColor = '#ff4757';
+                }
             }
-            // Launch directly into attack screen!
-            window.location.href = `https://www.torn.com/loader.php?sid=attack&user2ID=${targetId}`;
-        } else {
-            const snipeBtn = document.getElementById('elim-snipe-main-btn');
-            if (snipeBtn) {
-                snipeBtn.innerText = '⚠️ No Targets Found';
-                snipeBtn.style.background = '#e74c3c';
-                setTimeout(() => updateSnipeButtonUI(), 2000);
-            }
+            return;
         }
+
+        snipeBtn.innerText = '⚡ HUNTING TARGET...';
+        snipeBtn.style.background = '#0984e3';
+
+        try {
+            // 1. Check session queue (from prior scan or previous hit)
+            let queue = [];
+            try {
+                queue = JSON.parse(sessionStorage.getItem(SESSION_QUEUE) || '[]');
+            } catch(e) { queue = []; }
+
+            queue = queue.filter(id => id && String(id).length > 0);
+
+            if (queue.length > 0) {
+                const targetId = queue.shift();
+                sessionStorage.setItem(SESSION_QUEUE, JSON.stringify(queue));
+                launchAttack(targetId);
+                return;
+            }
+
+            // 2. Scan current page candidates (Elimination roster, faction war, etc.)
+            const pageCandidates = extractPageCandidates();
+
+            if (pageCandidates.length > 0) {
+                snipeBtn.innerText = `🔍 Checking ${pageCandidates.length} targets...`;
+                const ids = pageCandidates.map(c => c.playerId);
+                await fetchFFStats(ids);
+
+                const valid = pageCandidates.filter(c => {
+                    const cached = playerCache.get(c.playerId);
+                    if (!cached) return ffTierLimit === 'all';
+                    return cached.ff !== null ? isWithinTierLimit(cached.ff) : (ffTierLimit === 'all');
+                });
+
+                valid.sort((a, b) => {
+                    const ffA = playerCache.get(a.playerId)?.ff ?? 99;
+                    const ffB = playerCache.get(b.playerId)?.ff ?? 99;
+                    return ffA - ffB;
+                });
+
+                if (valid.length > 0) {
+                    const targetId = valid[0].playerId;
+                    const rest = valid.slice(1).map(v => v.playerId);
+                    sessionStorage.setItem(SESSION_QUEUE, JSON.stringify(rest));
+                    launchAttack(targetId);
+                    return;
+                }
+            }
+
+            // 3. Fallback: No roster on page (Pre-Elimination / Testing / City / Home)
+            snipeBtn.innerText = '📡 Finding Live Target...';
+            const liveTarget = await findLiveActiveTarget();
+
+            if (liveTarget) {
+                launchAttack(liveTarget.playerId);
+                return;
+            }
+
+            snipeBtn.innerText = '⚠️ No Match (Try Higher Tier)';
+            snipeBtn.style.background = '#e74c3c';
+            setTimeout(() => updateSnipeButtonUI(), 2500);
+
+        } catch (err) {
+            console.error('[Elim Hunter] Snipe error:', err);
+            snipeBtn.innerText = '⚠️ Error Finding Target';
+            snipeBtn.style.background = '#e74c3c';
+            setTimeout(() => updateSnipeButtonUI(), 2500);
+        }
+    }
+
+    function launchAttack(targetId) {
+        const snipeBtn = document.getElementById('elim-snipe-main-btn');
+        if (snipeBtn) {
+            snipeBtn.innerText = '⚡ SNIPING...';
+            snipeBtn.style.background = '#2ed573';
+        }
+        window.location.href = `https://www.torn.com/loader.php?sid=attack&user2ID=${targetId}`;
     }
 
     // ── Update Button UI Text ──
@@ -251,10 +413,15 @@
         if (!snipeBtn) return;
 
         const isAttackPage = window.location.href.includes('loader.php?sid=attack');
-        const count = currentValidTargets.length;
+        let queueCount = 0;
+        try {
+            queueCount = JSON.parse(sessionStorage.getItem(SESSION_QUEUE) || '[]').length;
+        } catch(e) {}
+
+        const count = currentValidTargets.length || queueCount;
 
         if (isAttackPage) {
-            snipeBtn.innerText = `⚔️ NEXT TARGET`;
+            snipeBtn.innerText = count > 0 ? `⚔️ NEXT TARGET (${count} left)` : `⚔️ NEXT TARGET`;
         } else if (count > 0) {
             snipeBtn.innerText = `⚔️ SNIPE TARGET (${count} ready)`;
         } else {
@@ -365,7 +532,7 @@
             drawer.style.display = drawer.style.display === 'none' ? 'block' : 'none';
         };
 
-        drawer.querySelector('#elim-save-settings-btn').onclick = () => {
+        drawer.querySelector('#elim-save-settings-btn').onclick = async () => {
             apiKey = document.querySelector('#elim-input-key').value.trim();
             ffTierLimit = document.querySelector('#elim-select-tier').value;
             hideHosp = document.querySelector('#elim-chk-hosp').checked;
@@ -376,7 +543,18 @@
             setStored(KEY_HIDE_HOSP, hideHosp);
             setStored(KEY_HIDE_FLYING, hideFlying);
 
-            drawer.style.display = 'none';
+            const saveBtn = drawer.querySelector('#elim-save-settings-btn');
+            saveBtn.innerText = '⏳ Verifying Key...';
+
+            await fetchMyBattleStats();
+
+            saveBtn.innerText = '✅ Saved & Connected!';
+            saveBtn.style.background = '#2ed573';
+            setTimeout(() => {
+                saveBtn.innerText = '💾 Save Settings';
+                drawer.style.display = 'none';
+            }, 1000);
+
             playerCache.clear();
             scanAndQueueTargets();
         };
@@ -384,10 +562,8 @@
         // Test Snipe Button: Demonstrates immediate redirect to attack page
         drawer.querySelector('#elim-test-snipe-btn').onclick = () => {
             drawer.style.display = 'none';
-            // Pick a test dummy ID (e.g. Duke / Torn NPC or dummy)
-            const testDummyId = 4; // Duke NPC
-            alert('🧪 Test Snipe: Redirecting to attack screen of verified beatable target!');
-            window.location.href = `https://www.torn.com/loader.php?sid=attack&user2ID=${testDummyId}`;
+            // Pick Duke NPC (ID 4) for instant test
+            window.location.href = `https://www.torn.com/loader.php?sid=attack&user2ID=4`;
         };
     }
 
@@ -396,7 +572,10 @@
         scanAndQueueTargets();
 
         const observer = new MutationObserver(() => {
-            scanAndQueueTargets();
+            clearTimeout(scanTimeout);
+            scanTimeout = setTimeout(() => {
+                scanAndQueueTargets();
+            }, 600);
         });
         observer.observe(document.body, { childList: true, subtree: true });
     }
