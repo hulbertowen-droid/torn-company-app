@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Torn Elimination Target Hunter (FF Scouter Tiers)
+// @name         Torn Elimination Target Hunter (1-Click Snipe)
 // @namespace    https://spider-verse.net/
-// @version      1.1.1
-// @description  Finds beatable Elimination targets using FF Scouter Fair Fight tiers. Automatically filters out hospital, traveling, and high-FF opponents. Includes built-in interactive test sandbox.
+// @version      1.2.0
+// @description  1-Click instant snipe button for Elimination. Automatically finds beatable enemies (not hosp, not flying, beatable FF tier) and redirects straight into their attack screen.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=torn.com
