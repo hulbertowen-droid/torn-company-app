@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter (1-Click Snipe)
 // @namespace    https://spider-verse.net/
-// @version      1.4.1
+// @version      1.4.2
 // @description  1-Click instant snipe button for Elimination. Automatically finds beatable enemies (not hosp, not flying, beatable FF tier) and redirects straight into their attack screen.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -45,6 +45,7 @@
     const KEY_HIDE_FLYING = 'elim_hunter_hide_flying';
     const KEY_MY_STATS = 'elim_hunter_my_stats';
     const KEY_MY_ID = 'elim_hunter_my_id';
+    const KEY_ATTACK_HISTORY = 'elim_attack_history';
     const SESSION_QUEUE = 'elim_snipe_queue';
 
     let apiKey = getStored(KEY_API_KEY, '');
@@ -57,6 +58,41 @@
     const playerCache = new Map();
     let currentValidTargets = [];
     let scanTimeout = null;
+
+    // ── Attack History & Cooldown Tracker (Prevents Re-Attacking Hospitalized Targets) ──
+    function getAttackHistory() {
+        try {
+            const raw = JSON.parse(localStorage.getItem(KEY_ATTACK_HISTORY) || '{}');
+            const now = Date.now();
+            const valid = {};
+            for (const [id, exp] of Object.entries(raw)) {
+                if (now < exp) valid[id] = exp;
+            }
+            localStorage.setItem(KEY_ATTACK_HISTORY, JSON.stringify(valid));
+            return valid;
+        } catch(e) { return {}; }
+    }
+
+    function addAttackHistory(targetId, minutes = 20) {
+        if (!targetId || targetId === '0') return;
+        try {
+            const history = getAttackHistory();
+            history[String(targetId)] = Date.now() + minutes * 60 * 1000;
+            localStorage.setItem(KEY_ATTACK_HISTORY, JSON.stringify(history));
+
+            // Inform server backend to blacklist target across all users
+            fetch('https://spider-verse.net/api/elim/report-hosp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetId: String(targetId), minutes })
+            }).catch(() => {});
+        } catch(e) {}
+    }
+
+    function getCurrentPageAttackingId() {
+        const m = window.location.href.match(/user2ID=(\d+)/i);
+        return m ? m[1] : null;
+    }
 
     // ── Fair Fight Tier Categorizer ──
     // < 3.0: Easy | 3.0 - 3.8: Manageable | 3.8 - 4.5: Difficult | > 4.5: Danger
@@ -375,8 +411,18 @@
                 return;
             }
 
-            // 2. PRIMARY: Ask the website backend (spider-verse.net) to find the best beatable live target!
-            let targetId = null;
+            // Collect exclusions (recently attacked players + whoever is on the current screen!)
+            const currentAttackingId = getCurrentPageAttackingId();
+            if (currentAttackingId) {
+                // The user is on this person's attack screen right now or just hospitalized them
+                addAttackHistory(currentAttackingId, 25);
+            }
+
+            const history = getAttackHistory();
+            const excludeList = Object.keys(history);
+            if (currentAttackingId && !excludeList.includes(currentAttackingId)) {
+                excludeList.push(currentAttackingId);
+            }
 
             try {
                 const queryParams = new URLSearchParams({
@@ -385,7 +431,8 @@
                     hideHosp: hideHosp ? 'true' : 'false',
                     hideFlying: hideFlying ? 'true' : 'false',
                     myStats: myTotalStats ? String(myTotalStats) : '',
-                    myId: myPlayerId ? String(myPlayerId) : ''
+                    myId: myPlayerId ? String(myPlayerId) : '',
+                    exclude: excludeList.join(',')
                 });
 
                 const res = await fetch(`https://spider-verse.net/api/elim/snipe?${queryParams.toString()}`, {
@@ -395,6 +442,8 @@
 
                 if (data && data.success && data.targetId) {
                     targetId = data.targetId;
+                    // Add to cooldown history for 10 minutes so we don't immediately re-target
+                    addAttackHistory(targetId, 10);
                 } else if (data && data.message) {
                     snipeBtn.innerText = `⚠️ ${data.message}`;
                     snipeBtn.style.background = '#e74c3c';
@@ -625,16 +674,38 @@
         };
     }
 
+    // ── Live Attack Screen Detector (Detects Hospitalized Target in Real-Time) ──
+    function checkCurrentAttackScreenStatus() {
+        const currentId = getCurrentPageAttackingId();
+        if (!currentId) return;
+
+        const bodyText = (document.body.innerText || '').toLowerCase();
+        if (bodyText.includes('currently in hospital') || 
+            bodyText.includes('cannot be attacked') ||
+            bodyText.includes('hospitalized') ||
+            bodyText.includes('left them in the street') ||
+            bodyText.includes('mugged')) {
+            addAttackHistory(currentId, 25);
+            const snipeBtn = document.getElementById('elim-snipe-main-btn');
+            if (snipeBtn) {
+                snipeBtn.innerText = '⚔️ NEXT TARGET (In Hosp)';
+                snipeBtn.style.background = '#e67e22';
+            }
+        }
+    }
+
     function init() {
         createSnipeWidget();
         scanAndQueueTargets();
         autoSyncCompetitionRosters();
+        checkCurrentAttackScreenStatus();
 
         const observer = new MutationObserver(() => {
             clearTimeout(scanTimeout);
             scanTimeout = setTimeout(() => {
                 scanAndQueueTargets();
                 autoSyncCompetitionRosters();
+                checkCurrentAttackScreenStatus();
             }, 600);
         });
         observer.observe(document.body, { childList: true, subtree: true });

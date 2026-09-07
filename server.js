@@ -6427,7 +6427,23 @@ const elimState = {
     rosters: {},              // { [teamName]: Set of player IDs }
     teamMap: {},              // { [playerId]: teamName }
     verifiedCache: new Map(), // { [playerId]: { ff, bs, state, checkedAt } }
+    recentHosp: new Map(),    // { [playerId]: timestampUntil } (20-min blacklist)
 };
+
+// Report a player in hospital (from userscript or attack screen)
+app.post('/api/elim/report-hosp', (req, res) => {
+    try {
+        const targetId = String(req.body.targetId || req.query.targetId || '');
+        const minutes = Number(req.body.minutes || req.query.minutes || 20);
+        if (targetId && targetId !== '0') {
+            elimState.recentHosp.set(targetId, Date.now() + minutes * 60 * 1000);
+            return res.json({ success: true, targetId, blacklistedMinutes: minutes });
+        }
+        res.status(400).json({ error: "targetId required" });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 
 // Sync team rosters into server memory from users viewing competition.php
 app.post('/api/elim/sync-roster', async (req, res) => {
@@ -6465,6 +6481,12 @@ app.get('/api/elim/snipe', async (req, res) => {
     let myId = String(req.query.myId || '');
     let myTeam = req.query.myTeam ? String(req.query.myTeam).toLowerCase() : '';
     const excludeIds = new Set((req.query.exclude || '').split(',').map(s => s.trim()).filter(Boolean));
+
+    // Clean up expired entries in hospital blacklist
+    const now = Date.now();
+    for (const [id, exp] of elimState.recentHosp.entries()) {
+        if (now > exp) elimState.recentHosp.delete(id);
+    }
 
     try {
         // 1. Resolve user stats & ID if not provided
@@ -6518,11 +6540,16 @@ app.get('/api/elim/snipe', async (req, res) => {
             } catch(e) {}
         }
 
-        // Clean & deduplicate candidate pool
-        candidatePool = [...new Set(candidatePool)].filter(id => id && id !== myId && !excludeIds.has(id));
+        // Clean & deduplicate candidate pool (filter out self, excludeIds, and active hospital blacklist)
+        candidatePool = [...new Set(candidatePool)].filter(id => {
+            if (!id || id === myId) return false;
+            if (excludeIds.has(id)) return false;
+            if (elimState.recentHosp.has(id)) return false;
+            return true;
+        });
 
         if (candidatePool.length === 0) {
-            return res.json({ success: false, message: "No candidates found in pool. Try again in a moment." });
+            return res.json({ success: false, message: "No available targets outside hospital. Refreshing target pool..." });
         }
 
         // Take a batch of up to 30 candidates to evaluate
@@ -6570,18 +6597,23 @@ app.get('/api/elim/snipe', async (req, res) => {
         }
 
         // 5. Verify live status (not in hospital, not flying)
-        for (const targetId of validCandidates.slice(0, 5)) {
+        let verifiedTarget = null;
+        for (const targetId of validCandidates.slice(0, 8)) {
             try {
-                const profRes = await fetch(`https://api.torn.com/user/${targetId}?selections=profile&key=${encodeURIComponent(apiKey)}`, { signal: AbortSignal.timeout(5000) });
+                const profRes = await fetch(`https://api.torn.com/user/${targetId}?selections=profile&key=${encodeURIComponent(apiKey)}`, { signal: AbortSignal.timeout(4000) });
                 const prof = await profRes.json();
                 if (prof && prof.status) {
                     const state = (prof.status.state || '').toLowerCase();
-                    if (hideHosp && state === 'hospital') continue;
+                    if (state === 'hospital') {
+                        // Immediately blacklist this player for 20 minutes!
+                        elimState.recentHosp.set(targetId, Date.now() + 20 * 60 * 1000);
+                        continue;
+                    }
                     if (hideFlying && (state === 'traveling' || state === 'abroad')) continue;
                     if (state === 'jail' || state === 'federal') continue;
 
                     const stats = candidateStats.get(targetId);
-                    return res.json({
+                    verifiedTarget = {
                         success: true,
                         targetId: targetId,
                         name: prof.name || `Player #${targetId}`,
@@ -6589,21 +6621,34 @@ app.get('/api/elim/snipe', async (req, res) => {
                         bs: stats?.bs || null,
                         state: prof.status.state || 'Okay',
                         team: elimState.teamMap[targetId] || null
-                    });
+                    };
+                    break;
                 }
             } catch(e) {}
         }
 
-        // If live check timed out, return the top FF Scouter candidate
-        const topId = validCandidates[0];
-        const stats = candidateStats.get(topId);
-        return res.json({
-            success: true,
-            targetId: topId,
-            name: `Player #${topId}`,
-            ff: stats?.ff || null,
-            bs: stats?.bs || null
-        });
+        if (verifiedTarget) {
+            // Put on a 5-minute personal cooldown so rapid repeat clicks don't re-target them
+            elimState.recentHosp.set(verifiedTarget.targetId, Date.now() + 5 * 60 * 1000);
+            return res.json(verifiedTarget);
+        }
+
+        // If no candidate was verified as Okay, find first candidate not known to be in hospital
+        const safeCandidates = validCandidates.filter(id => !elimState.recentHosp.has(id));
+        if (safeCandidates.length > 0) {
+            const topId = safeCandidates[0];
+            const stats = candidateStats.get(topId);
+            elimState.recentHosp.set(topId, Date.now() + 5 * 60 * 1000);
+            return res.json({
+                success: true,
+                targetId: topId,
+                name: `Player #${topId}`,
+                ff: stats?.ff || null,
+                bs: stats?.bs || null
+            });
+        }
+
+        return res.json({ success: false, message: "All scanned targets are currently hospitalized. Searching for new targets..." });
 
     } catch (err) {
         console.error('[Elim Snipe API] Error:', err);
