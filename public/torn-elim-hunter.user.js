@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter (FF Scouter Tiers)
 // @namespace    https://spider-verse.net/
-// @version      1.1.0
-// @description  Finds beatable Elimination targets using FF Scouter Fair Fight tiers. Automatically filters out hospital, traveling, and high-FF opponents. Includes built-in test sandbox.
+// @version      1.1.1
+// @description  Finds beatable Elimination targets using FF Scouter Fair Fight tiers. Automatically filters out hospital, traveling, and high-FF opponents. Includes built-in interactive test sandbox.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=torn.com
@@ -12,7 +12,7 @@
 // @connect      ffscouter.com
 // @connect      api.torn.com
 // @run-at       document-idle
-// @updateURL    https://spider-verse.net/torn-elim-hunter.user.js
+// @updateURL    https://spider-verse.net/torn-elim-hunter.meta.js
 // @downloadURL  https://spider-verse.net/torn-elim-hunter.user.js
 // ==/UserScript==
 
@@ -69,7 +69,7 @@
     }
 
     function isWithinTierLimit(ff) {
-        if (!ff || isNaN(ff)) return true; // keep if unknown so user can decide
+        if (!ff || isNaN(ff)) return true;
         if (ffTierLimit === 'all') return true;
         if (ffTierLimit === 'easy') return ff < 3.0;
         if (ffTierLimit === 'manageable') return ff <= 3.8;
@@ -85,7 +85,7 @@
         return num.toLocaleString();
     }
 
-    // ── Auto-fetch User's Own Battle Stats (To ensure 100% accurate FF calculation) ──
+    // ── Auto-fetch User's Own Battle Stats ──
     async function fetchMyBattleStats() {
         if (!apiKey || myTotalStats > 0) return;
         try {
@@ -95,19 +95,14 @@
             if (data && data.strength) {
                 myTotalStats = (data.strength || 0) + (data.speed || 0) + (data.defense || 0) + (data.dexterity || 0);
                 setStored(KEY_MY_STATS, myTotalStats);
-                console.log('[ElimHunter] Loaded user battle stats:', myTotalStats);
             }
         } catch(e) {}
     }
 
-    // ── Calculate FF Score from stats if FFScouter only returns bs_estimate ──
     function calculateFF(defenderStats) {
         if (!defenderStats || !myTotalStats || myTotalStats <= 0) return null;
         const ratio = defenderStats / myTotalStats;
-        // Torn Fair Fight formula: 1 + (8/3) * ratio, capped between 1.0 and 3.0 officially,
-        // but FF Scouter extends up to 4.5+ to indicate scale above you.
-        const ff = parseFloat((1 + (8/3) * ratio).toFixed(2));
-        return ff;
+        return parseFloat((1 + (8/3) * ratio).toFixed(2));
     }
 
     // ── Batch Fetch from FF Scouter using User's Key ──
@@ -117,7 +112,6 @@
         const uncached = playerIds.filter(id => !playerCache.has(id));
         if (uncached.length === 0) return;
 
-        // Ensure we have user stats for fallback FF calculation
         if (myTotalStats <= 0) await fetchMyBattleStats();
 
         for (let i = 0; i < uncached.length; i += 30) {
@@ -179,11 +173,10 @@
         return { isHosp: !!isHosp, isFlying: !!isFlying };
     }
 
-    // ── Main Scan and Filter ──
+    // ── Main Scan and Filter for Real Torn Pages ──
     async function scanAndFilter() {
-        // Collect rows across Elimination competition, Factions, Bounties, and Mock Sandbox
         const rows = document.querySelectorAll(
-            'ul.member-list > li, .table-row, .members-list > li, [class*="memberList"] [class*="tableRow"], .user-info-list-wrap li, .bounties-wrap .table-row, .elim-mock-row'
+            'ul.member-list > li, .table-row, .members-list > li, [class*="memberList"] [class*="tableRow"], .user-info-list-wrap li, .bounties-wrap .table-row'
         );
 
         if (!rows || rows.length === 0) return;
@@ -203,7 +196,6 @@
 
         if (targets.length === 0) return;
 
-        // Fetch FF Scouter data
         await fetchFFStats(targets.map(t => t.playerId));
 
         let visibleCount = 0;
@@ -229,7 +221,6 @@
                 tierHidden++;
             }
 
-            // Inject or update FF Badge
             let badge = row.querySelector('.elim-ff-badge');
             if (!badge) {
                 badge = document.createElement('span');
@@ -251,7 +242,6 @@
                 badge.style.border = '1px solid #57606f';
             }
 
-            // Inject Quick Attack Button
             let attackBtn = row.querySelector('.elim-quick-attack');
             if (!attackBtn) {
                 attackBtn = document.createElement('a');
@@ -271,7 +261,6 @@
             }
         });
 
-        // Update HUD counter
         const counter = document.getElementById('elim-hud-counter');
         if (counter) {
             counter.innerHTML = `<span style="color:#2ed573; font-weight:bold; font-size:12px;">${visibleCount} Targets Available</span> ` +
@@ -279,89 +268,238 @@
         }
     }
 
-    // ── Built-in Simulation Sandbox (Allows Instant Testing Right Now on ANY Torn Page) ──
-    function toggleSandboxRoster() {
-        let sandbox = document.getElementById('elim-sandbox-container');
-        if (sandbox) {
-            sandbox.remove();
-            scanAndFilter();
-            return;
-        }
+    // ── MOCK DATA FOR INSTANT SANDBOX TESTING ──
+    const MOCK_OPPONENTS = [
+        { id: 99901, name: 'Target_Easy_1', status: 'Okay', ff: 1.8, note: 'Weak opponent' },
+        { id: 99902, name: 'Target_Easy_2', status: 'Okay', ff: 2.4, note: 'Low stat target' },
+        { id: 99903, name: 'Target_Manageable_1', status: 'Okay', ff: 3.2, note: 'Even fair fight' },
+        { id: 99904, name: 'Target_Manageable_2', status: 'Okay', ff: 3.6, note: 'Manageable match' },
+        { id: 99905, name: 'Target_Difficult_1', status: 'Okay', ff: 4.1, note: 'Tough enemy' },
+        { id: 99906, name: 'Target_Danger_Beast', status: 'Okay', ff: 5.4, note: 'Outmatches you' },
+        { id: 99907, name: 'Target_In_Hospital_1', status: 'Hospital (18m)', ff: 2.2, note: 'Currently hosp' },
+        { id: 99908, name: 'Target_In_Hospital_2', status: 'Hospital (55m)', ff: 3.1, note: 'Currently hosp' },
+        { id: 99909, name: 'Target_Flying_Mexico', status: 'Traveling to Mexico', ff: 1.9, note: 'In flight' },
+        { id: 99910, name: 'Target_Abroad_Switz', status: 'In Switzerland', ff: 2.7, note: 'Abroad overseas' }
+    ];
 
-        sandbox = document.createElement('div');
-        sandbox.id = 'elim-sandbox-container';
-        sandbox.style.cssText = `
-            margin: 15px auto;
-            max-width: 780px;
-            background: #191c24;
-            border: 2px solid #ff4757;
-            border-radius: 8px;
-            padding: 12px;
-            color: #fff;
-            font-family: sans-serif;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.8);
-            position: relative;
-            z-index: 99999;
-        `;
+    // Seed mock data into playerCache
+    MOCK_OPPONENTS.forEach(p => {
+        playerCache.set(String(p.id), { ff: p.ff, bs: 1000000, info: getTierInfo(p.ff) });
+    });
 
-        sandbox.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #2f3542; padding-bottom:8px; margin-bottom:10px;">
-                <span style="font-weight:bold; color:#ff4757;">🧪 Elimination Test Sandbox (Simulated Opposing Team)</span>
-                <button id="elim-close-sandbox" style="background:#2f3542; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">Close Sandbox</button>
-            </div>
-            <div style="font-size:11px; color:#a4b0be; margin-bottom:10px;">
-                This simulated roster mimics live Elimination opponents with different statuses and FF tiers to test your filters immediately.
-            </div>
-            <div id="elim-sandbox-list" style="display:flex; flex-direction:column; gap:6px;"></div>
-        `;
+    // ── Render Sandbox Modal (Opens Centered on Mobile & Desktop) ──
+    function renderSandboxModal() {
+        const modal = document.getElementById('elim-sandbox-modal');
+        if (!modal) return;
 
-        // Pre-populate mock players with known mock FF stats
-        const mockPlayers = [
-            { id: 99901, name: 'Target_Easy_1', status: 'Okay', ff: 1.8, bs: 2500000 },
-            { id: 99902, name: 'Target_Easy_2', status: 'Okay', ff: 2.4, bs: 8000000 },
-            { id: 99903, name: 'Target_Manageable_1', status: 'Okay', ff: 3.2, bs: 18000000 },
-            { id: 99904, name: 'Target_Manageable_2', status: 'Okay', ff: 3.6, bs: 32000000 },
-            { id: 99905, name: 'Target_Difficult_1', status: 'Okay', ff: 4.1, bs: 75000000 },
-            { id: 99906, name: 'Target_Danger_Beast', status: 'Okay', ff: 5.4, bs: 350000000 },
-            { id: 99907, name: 'Target_In_Hospital_1', status: 'Hospital (24m)', ff: 2.1, bs: 5000000 },
-            { id: 99908, name: 'Target_In_Hospital_2', status: 'Hospital (1h 12m)', ff: 3.1, bs: 15000000 },
-            { id: 99909, name: 'Target_Flying_Mexico', status: 'Traveling to Mexico', ff: 2.0, bs: 4000000 },
-            { id: 99910, name: 'Target_Abroad_Switz', status: 'In a foreign country', ff: 2.8, bs: 12000000 }
-        ];
+        const list = modal.querySelector('#elim-modal-list');
+        list.innerHTML = '';
 
-        // Seed mock player cache
-        mockPlayers.forEach(p => {
-            playerCache.set(String(p.id), { ff: p.ff, bs: p.bs, info: getTierInfo(p.ff) });
-        });
+        let readyCount = 0;
+        let hiddenCount = 0;
 
-        const list = sandbox.querySelector('#elim-sandbox-list');
-        mockPlayers.forEach(p => {
+        MOCK_OPPONENTS.forEach(p => {
             const isHosp = p.status.includes('Hospital');
-            const isFly = p.status.includes('Traveling') || p.status.includes('foreign');
-            const statusColor = isHosp ? '#ff4757' : (isFly ? '#70a1ff' : '#2ed573');
+            const isFly = p.status.includes('Traveling') || p.status.includes('Switzerland') || p.status.includes('Abroad');
+            const tierInfo = getTierInfo(p.ff);
+
+            let isFiltered = false;
+            let filterReason = '';
+
+            if (hideHosp && isHosp) {
+                isFiltered = true;
+                filterReason = 'Hospitalized';
+            } else if (hideFlying && isFly) {
+                isFiltered = true;
+                filterReason = 'Flying / Abroad';
+            } else if (!isWithinTierLimit(p.ff)) {
+                isFiltered = true;
+                filterReason = `FF ${p.ff.toFixed(1)} exceeds limit`;
+            }
+
+            if (isFiltered) {
+                hiddenCount++;
+            } else {
+                readyCount++;
+            }
 
             const row = document.createElement('div');
-            row.className = 'elim-mock-row';
-            row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:#21252f; padding:8px 10px; border-radius:6px; border:1px solid #2f3542;';
+            row.style.cssText = `
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                background: ${isFiltered ? '#15181f' : '#222734'};
+                border: 1px solid ${isFiltered ? '#2c313d' : '#3d4455'};
+                opacity: ${isFiltered ? '0.45' : '1'};
+                padding: 8px 12px;
+                border-radius: 6px;
+                transition: all 0.2s ease;
+            `;
+
+            const statusColor = isHosp ? '#ff4757' : (isFly ? '#70a1ff' : '#2ed573');
+            const filterBadge = isFiltered ? `<span style="font-size:10px; background:#ff4757; color:#fff; padding:1px 5px; border-radius:3px; margin-left:6px;">🚫 ${filterReason}</span>` : '';
+
             row.innerHTML = `
                 <div>
-                    <a href="/profiles.php?XID=${p.id}" style="color:#70a1ff; font-weight:bold; text-decoration:none;">${p.name}</a>
-                    <span style="font-size:10px; color:${statusColor}; margin-left:8px;">[${p.status}]</span>
+                    <div style="font-weight:bold; font-size:12px; color:#fff;">
+                        ${p.name}
+                        ${filterBadge}
+                    </div>
+                    <div style="font-size:11px; margin-top:2px;">
+                        <span style="color:${statusColor}; font-weight:600;">[${p.status}]</span>
+                        <span style="display:inline-block; font-size:10px; font-weight:bold; padding:1px 6px; border-radius:4px; margin-left:6px; background:${tierInfo.bg}; color:${tierInfo.color}; border:1px solid ${tierInfo.color};">
+                            🎯 FF ${p.ff.toFixed(1)} · ${tierInfo.label}
+                        </span>
+                    </div>
+                </div>
+                <div>
+                    ${isFiltered ? 
+                        `<span style="font-size:11px; color:#747d8c; font-style:italic;">Filtered</span>` : 
+                        `<a href="/loader.php?sid=attack&user2ID=${p.id}" target="_blank" style="background:#ff4757; color:#fff; font-size:11px; font-weight:800; padding:4px 10px; border-radius:4px; text-decoration:none;">⚔️ HIT</a>`
+                    }
                 </div>
             `;
             list.appendChild(row);
         });
 
-        // Insert sandbox at the top of content
-        const mainContent = document.querySelector('#mainContainer, .content-wrapper, body');
-        if (mainContent) mainContent.insertBefore(sandbox, mainContent.firstChild);
+        // Update modal summary banner
+        const summary = modal.querySelector('#elim-modal-summary');
+        if (summary) {
+            summary.innerHTML = `
+                <span style="color:#2ed573; font-weight:bold;">✅ ${readyCount} Targets Ready to Hit</span>
+                <span style="color:#747d8c; margin-left:8px;">(${hiddenCount} Filtered Out)</span>
+            `;
+        }
+    }
 
-        sandbox.querySelector('#elim-close-sandbox').onclick = () => {
-            sandbox.remove();
+    // ── Toggle Sandbox Modal Window ──
+    function toggleSandboxRoster() {
+        let backdrop = document.getElementById('elim-sandbox-backdrop');
+        let modal = document.getElementById('elim-sandbox-modal');
+        const spawnBtn = document.getElementById('elim-sandbox-btn');
+
+        if (modal) {
+            modal.remove();
+            if (backdrop) backdrop.remove();
+            if (spawnBtn) {
+                spawnBtn.innerText = '🧪 Spawn Test Elimination Roster';
+                spawnBtn.style.background = '#3742fa';
+            }
+            return;
+        }
+
+        // Change button style
+        if (spawnBtn) {
+            spawnBtn.innerText = '❌ Close Test Roster';
+            spawnBtn.style.background = '#ff4757';
+        }
+
+        // Backdrop
+        backdrop = document.createElement('div');
+        backdrop.id = 'elim-sandbox-backdrop';
+        backdrop.style.cssText = `
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.75);
+            z-index: 99999998;
+        `;
+        backdrop.onclick = toggleSandboxRoster;
+        document.body.appendChild(backdrop);
+
+        // Modal
+        modal = document.createElement('div');
+        modal.id = 'elim-sandbox-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 92vw;
+            max-width: 620px;
+            max-height: 85vh;
+            background: #181b22;
+            border: 2px solid #ff4757;
+            border-radius: 12px;
+            box-shadow: 0 12px 36px rgba(0,0,0,0.9);
+            z-index: 99999999;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: #f1f2f6;
+        `;
+
+        modal.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; background:#202532; padding:12px 16px; border-bottom:1px solid #2f3542;">
+                <div>
+                    <div style="font-weight:bold; font-size:14px; color:#ff4757;">🧪 Elimination Team Target Simulator</div>
+                    <div style="font-size:11px; color:#a4b0be; margin-top:2px;">Simulated opposing team with live filter controls</div>
+                </div>
+                <button id="elim-modal-close-btn" style="background:#2f3542; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-weight:bold;">✕</button>
+            </div>
+
+            <!-- Live Filter Controls Inside Modal -->
+            <div style="background:#1c202b; padding:10px 16px; border-bottom:1px solid #2f3542; display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between;">
+                <div style="display:flex; gap:12px; font-size:11px;">
+                    <label style="cursor:pointer; display:flex; align-items:center; gap:4px;">
+                        <input type="checkbox" id="elim-modal-hosp" ${hideHosp ? 'checked' : ''}> Hide Hosp
+                    </label>
+                    <label style="cursor:pointer; display:flex; align-items:center; gap:4px;">
+                        <input type="checkbox" id="elim-modal-fly" ${hideFlying ? 'checked' : ''}> Hide Flying
+                    </label>
+                </div>
+                <div style="display:flex; align-items:center; gap:6px; font-size:11px;">
+                    <span>FF Tier:</span>
+                    <select id="elim-modal-tier" style="background:#2f3542; border:1px solid #57606f; color:#fff; padding:3px 6px; border-radius:4px; font-size:11px;">
+                        <option value="easy" ${ffTierLimit === 'easy' ? 'selected' : ''}>🟢 Easy (< 3.0)</option>
+                        <option value="manageable" ${ffTierLimit === 'manageable' ? 'selected' : ''}>🟡 Easy & Manageable (≤ 3.8)</option>
+                        <option value="difficult" ${ffTierLimit === 'difficult' ? 'selected' : ''}>🟠 Up to Difficult (≤ 4.5)</option>
+                        <option value="all" ${ffTierLimit === 'all' ? 'selected' : ''}>⚪ All Tiers</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="elim-modal-summary" style="padding:8px 16px; background:#161921; font-size:11px; border-bottom:1px solid #242936;"></div>
+
+            <!-- Scrollable Target List -->
+            <div id="elim-modal-list" style="padding:12px 16px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; flex:1;"></div>
+        `;
+
+        document.body.appendChild(modal);
+
+        modal.querySelector('#elim-modal-close-btn').onclick = toggleSandboxRoster;
+
+        // Interactive Filter Controls inside Modal
+        const hospCheck = modal.querySelector('#elim-modal-hosp');
+        const flyCheck = modal.querySelector('#elim-modal-fly');
+        const tierSelect = modal.querySelector('#elim-modal-tier');
+
+        const updateFilters = () => {
+            hideHosp = hospCheck.checked;
+            hideFlying = flyCheck.checked;
+            ffTierLimit = tierSelect.value;
+
+            setStored(KEY_HIDE_HOSP, hideHosp);
+            setStored(KEY_HIDE_FLYING, hideFlying);
+            setStored(KEY_FF_TIER, ffTierLimit);
+
+            // Sync HUD inputs
+            const hudHosp = document.getElementById('elim-cfg-hosp');
+            const hudFly = document.getElementById('elim-cfg-fly');
+            const hudTier = document.getElementById('elim-cfg-tier');
+            if (hudHosp) hudHosp.checked = hideHosp;
+            if (hudFly) hudFly.checked = hideFlying;
+            if (hudTier) hudTier.value = ffTierLimit;
+
+            renderSandboxModal();
             scanAndFilter();
         };
 
-        scanAndFilter();
+        hospCheck.onchange = updateFilters;
+        flyCheck.onchange = updateFilters;
+        tierSelect.onchange = updateFilters;
+
+        renderSandboxModal();
     }
 
     // ── Floating HUD ──
@@ -393,7 +531,7 @@
                 <span id="elim-hud-toggle" style="font-size:11px; color:#70a1ff; cursor:pointer; padding:2px 4px;">⚙️ Settings</span>
             </div>
             <div id="elim-hud-counter" style="margin-bottom:6px; font-size:11px;">Scanning targets...</div>
-            <button id="elim-sandbox-btn" style="width:100%; background:#3742fa; color:#fff; border:none; padding:5px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px; margin-bottom:6px;">🧪 Spawn Test Elimination Roster</button>
+            <button id="elim-sandbox-btn" style="width:100%; background:#3742fa; color:#fff; border:none; padding:6px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px; margin-bottom:6px;">🧪 Spawn Test Elimination Roster</button>
             <div id="elim-hud-settings" style="display:none; border-top:1px solid #2f3542; padding-top:8px; margin-top:6px;">
                 <label style="display:block; margin-bottom:6px; font-size:11px;">Torn API Key (Connected to FF Scouter):
                     <input type="password" id="elim-cfg-key" value="${apiKey}" placeholder="Paste API Key" style="width:100%; box-sizing:border-box; background:#2f3542; border:1px solid #57606f; color:#fff; padding:4px 6px; border-radius:4px; font-size:11px; margin-top:3px;">
