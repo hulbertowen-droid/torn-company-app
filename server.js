@@ -6420,6 +6420,198 @@ app.get('/api/travel-profits', async (req, res) => {
 });
 
 
+// =====================================================
+// ELIMINATION SNIPER API: /api/elim/snipe & /api/elim/sync-roster
+// =====================================================
+const elimState = {
+    rosters: {},              // { [teamName]: Set of player IDs }
+    teamMap: {},              // { [playerId]: teamName }
+    verifiedCache: new Map(), // { [playerId]: { ff, bs, state, checkedAt } }
+};
+
+// Sync team rosters into server memory from users viewing competition.php
+app.post('/api/elim/sync-roster', async (req, res) => {
+    try {
+        const { teamName, members } = req.body;
+        if (!teamName || !Array.isArray(members)) {
+            return res.status(400).json({ error: "teamName and members array required" });
+        }
+        if (!elimState.rosters[teamName]) elimState.rosters[teamName] = new Set();
+        members.forEach(m => {
+            const id = String(m.id || m.playerId || m);
+            if (id && id !== '0') {
+                elimState.rosters[teamName].add(id);
+                elimState.teamMap[id] = teamName;
+            }
+        });
+        const count = elimState.rosters[teamName].size;
+        res.json({ success: true, teamName, memberCount: count });
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Master Snipe Endpoint: Finds a beatable opponent from ANY Torn screen
+app.get('/api/elim/snipe', async (req, res) => {
+    const apiKey = req.headers['x-api-key'] || req.query.apiKey;
+    if (!apiKey || apiKey.trim() === "") {
+        return res.status(401).json({ error: "API Key required" });
+    }
+
+    const tier = (req.query.tier || 'manageable').toLowerCase();
+    const hideHosp = req.query.hideHosp !== 'false';
+    const hideFlying = req.query.hideFlying !== 'false';
+    let myStats = Number(req.query.myStats || 0);
+    let myId = String(req.query.myId || '');
+    let myTeam = req.query.myTeam ? String(req.query.myTeam).toLowerCase() : '';
+    const excludeIds = new Set((req.query.exclude || '').split(',').map(s => s.trim()).filter(Boolean));
+
+    try {
+        // 1. Resolve user stats & ID if not provided
+        if (myStats <= 0 || !myId) {
+            try {
+                const userRes = await fetch(`https://api.torn.com/user/?selections=profile,battlestats&key=${encodeURIComponent(apiKey)}`, { signal: AbortSignal.timeout(6000) });
+                const userData = await userRes.json();
+                if (userData) {
+                    if (userData.player_id) myId = String(userData.player_id);
+                    if (userData.strength !== undefined) {
+                        myStats = (userData.strength || 0) + (userData.speed || 0) + (userData.defense || 0) + (userData.dexterity || 0);
+                    }
+                }
+            } catch(e) {}
+        }
+
+        // 2. Gather candidates: Prioritize opposing Elimination team members, fallback to live active pool
+        let candidatePool = [];
+
+        // Check opposing teams in elimState.rosters
+        const opposingTeams = Object.keys(elimState.rosters).filter(t => !myTeam || t.toLowerCase() !== myTeam);
+        if (opposingTeams.length > 0) {
+            for (const t of opposingTeams) {
+                const members = Array.from(elimState.rosters[t]);
+                candidatePool.push(...members);
+            }
+        }
+
+        // If no competition roster is synced yet (e.g. pre-competition or testing), pull live bounties
+        if (candidatePool.length === 0) {
+            try {
+                const bRes = await fetch(`https://api.torn.com/torn/?selections=bounties&key=${encodeURIComponent(apiKey)}`, { signal: AbortSignal.timeout(6000) });
+                const bData = await bRes.json();
+                if (bData && bData.bounties) {
+                    for (const [k, v] of Object.entries(bData.bounties)) {
+                        const tid = (v && v.target_id) ? String(v.target_id) : String(k);
+                        if (tid && tid !== '0') candidatePool.push(tid);
+                    }
+                }
+            } catch(e) {}
+        }
+
+        // If still empty, check MongoDB active Player collection
+        if (candidatePool.length === 0) {
+            try {
+                const Player = require('./recruit/db/models/Player');
+                const players = await Player.find({ status: 'Okay' }).sort({ lastActionTs: -1 }).limit(40).lean();
+                if (players && players.length > 0) {
+                    candidatePool = players.map(p => String(p._id));
+                }
+            } catch(e) {}
+        }
+
+        // Clean & deduplicate candidate pool
+        candidatePool = [...new Set(candidatePool)].filter(id => id && id !== myId && !excludeIds.has(id));
+
+        if (candidatePool.length === 0) {
+            return res.json({ success: false, message: "No candidates found in pool. Try again in a moment." });
+        }
+
+        // Take a batch of up to 30 candidates to evaluate
+        const batchIds = candidatePool.slice(0, 30);
+
+        // 3. Batch check FF Scouter
+        const ffUrl = `https://ffscouter.com/api/v1/get-stats?key=${encodeURIComponent(apiKey)}&targets=${batchIds.join(',')}`;
+        const ffRes = await fetch(ffUrl, { signal: AbortSignal.timeout(7000) });
+        const ffData = await ffRes.json();
+
+        const candidateStats = new Map();
+        if (Array.isArray(ffData)) {
+            ffData.forEach(p => {
+                const id = String(p.player_id || p.id);
+                const bs = Number(p.bs_estimate || p.battlestats || 0);
+                let ff = (p.fair_fight !== undefined && p.fair_fight !== null) ? Number(p.fair_fight) : (p.ff !== undefined ? Number(p.ff) : null);
+                if ((ff === null || isNaN(ff)) && bs > 0 && myStats > 0) {
+                    ff = parseFloat((1 + (8/3) * (bs / myStats)).toFixed(2));
+                }
+                candidateStats.set(id, { ff, bs });
+            });
+        }
+
+        // 4. Filter by tier: easy: < 3.0 | manageable: <= 3.8 | difficult: <= 4.5 | all
+        const validCandidates = batchIds.filter(id => {
+            const stats = candidateStats.get(id);
+            if (!stats) return tier === 'all';
+            const ff = stats.ff;
+            if (ff === null || isNaN(ff)) return tier === 'all';
+            if (tier === 'easy') return ff < 3.0;
+            if (tier === 'manageable') return ff <= 3.8;
+            if (tier === 'difficult') return ff <= 4.5;
+            return true;
+        });
+
+        // Sort by lowest FF (easiest targets first)
+        validCandidates.sort((a, b) => {
+            const ffA = candidateStats.get(a)?.ff ?? 99;
+            const ffB = candidateStats.get(b)?.ff ?? 99;
+            return ffA - ffB;
+        });
+
+        if (validCandidates.length === 0) {
+            return res.json({ success: false, message: "No targets match your Fair Fight tier. Try a higher tier in Settings." });
+        }
+
+        // 5. Verify live status (not in hospital, not flying)
+        for (const targetId of validCandidates.slice(0, 5)) {
+            try {
+                const profRes = await fetch(`https://api.torn.com/user/${targetId}?selections=profile&key=${encodeURIComponent(apiKey)}`, { signal: AbortSignal.timeout(5000) });
+                const prof = await profRes.json();
+                if (prof && prof.status) {
+                    const state = (prof.status.state || '').toLowerCase();
+                    if (hideHosp && state === 'hospital') continue;
+                    if (hideFlying && (state === 'traveling' || state === 'abroad')) continue;
+                    if (state === 'jail' || state === 'federal') continue;
+
+                    const stats = candidateStats.get(targetId);
+                    return res.json({
+                        success: true,
+                        targetId: targetId,
+                        name: prof.name || `Player #${targetId}`,
+                        ff: stats?.ff || null,
+                        bs: stats?.bs || null,
+                        state: prof.status.state || 'Okay',
+                        team: elimState.teamMap[targetId] || null
+                    });
+                }
+            } catch(e) {}
+        }
+
+        // If live check timed out, return the top FF Scouter candidate
+        const topId = validCandidates[0];
+        const stats = candidateStats.get(topId);
+        return res.json({
+            success: true,
+            targetId: topId,
+            name: `Player #${topId}`,
+            ff: stats?.ff || null,
+            bs: stats?.bs || null
+        });
+
+    } catch (err) {
+        console.error('[Elim Snipe API] Error:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+
 // --- MULTI-TENANT DISCORD BOTS & SLASH COMMANDS ---
 const { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, InteractionType, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 let activeDiscordBots = {}; 

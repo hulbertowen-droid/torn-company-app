@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter (1-Click Snipe)
 // @namespace    https://spider-verse.net/
-// @version      1.3.0
+// @version      1.4.0
 // @description  1-Click instant snipe button for Elimination. Automatically finds beatable enemies (not hosp, not flying, beatable FF tier) and redirects straight into their attack screen.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -9,6 +9,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @connect      spider-verse.net
 // @connect      ffscouter.com
 // @connect      api.torn.com
 // @run-at       document-idle
@@ -309,7 +310,33 @@
         return null;
     }
 
-    // ── 1-CLICK INSTANT SNIPE ACTION ──
+    // ── Auto-Sync Competition Rosters to Website Backend ──
+    function autoSyncCompetitionRosters() {
+        if (!window.location.href.includes('competition.php')) return;
+
+        const profileLinks = document.querySelectorAll('a[href*="profiles.php?XID="], a[href*="profiles.php?xid="]');
+        if (!profileLinks || profileLinks.length === 0) return;
+
+        const members = [];
+        const seen = new Set();
+        profileLinks.forEach(link => {
+            const m = link.href.match(/xid=(\d+)/i);
+            if (m && !seen.has(m[1]) && m[1] !== myPlayerId) {
+                seen.add(m[1]);
+                members.push({ id: m[1], name: (link.innerText || '').trim() });
+            }
+        });
+
+        if (members.length > 0) {
+            fetch('https://spider-verse.net/api/elim/sync-roster', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ teamName: 'elim_competition_pool', members })
+            }).catch(() => {});
+        }
+    }
+
+    // ── 1-CLICK INSTANT SNIPE ACTION (Connected to Website Backend) ──
     async function executeSnipe() {
         const snipeBtn = document.getElementById('elim-snipe-main-btn');
         if (!snipeBtn) return;
@@ -333,7 +360,7 @@
         snipeBtn.style.background = '#0984e3';
 
         try {
-            // 1. Check session queue (from prior scan or previous hit)
+            // 1. Pop from session queue if chaining multiple attacks
             let queue = [];
             try {
                 queue = JSON.parse(sessionStorage.getItem(SESSION_QUEUE) || '[]');
@@ -348,41 +375,72 @@
                 return;
             }
 
-            // 2. Scan current page candidates (Elimination roster, faction war, etc.)
-            const pageCandidates = extractPageCandidates();
+            // 2. PRIMARY: Ask the website backend (spider-verse.net) to find the best beatable live target!
+            let targetId = null;
 
-            if (pageCandidates.length > 0) {
-                snipeBtn.innerText = `🔍 Checking ${pageCandidates.length} targets...`;
-                const ids = pageCandidates.map(c => c.playerId);
-                await fetchFFStats(ids);
-
-                const valid = pageCandidates.filter(c => {
-                    const cached = playerCache.get(c.playerId);
-                    if (!cached) return ffTierLimit === 'all';
-                    return cached.ff !== null ? isWithinTierLimit(cached.ff) : (ffTierLimit === 'all');
+            try {
+                const queryParams = new URLSearchParams({
+                    apiKey: apiKey,
+                    tier: ffTierLimit,
+                    hideHosp: hideHosp ? 'true' : 'false',
+                    hideFlying: hideFlying ? 'true' : 'false',
+                    myStats: myTotalStats ? String(myTotalStats) : '',
+                    myId: myPlayerId ? String(myPlayerId) : ''
                 });
 
-                valid.sort((a, b) => {
-                    const ffA = playerCache.get(a.playerId)?.ff ?? 99;
-                    const ffB = playerCache.get(b.playerId)?.ff ?? 99;
-                    return ffA - ffB;
+                const res = await fetch(`https://spider-verse.net/api/elim/snipe?${queryParams.toString()}`, {
+                    signal: AbortSignal.timeout(8000)
                 });
+                const data = await res.json();
 
-                if (valid.length > 0) {
-                    const targetId = valid[0].playerId;
-                    const rest = valid.slice(1).map(v => v.playerId);
-                    sessionStorage.setItem(SESSION_QUEUE, JSON.stringify(rest));
-                    launchAttack(targetId);
+                if (data && data.success && data.targetId) {
+                    targetId = data.targetId;
+                } else if (data && data.message) {
+                    snipeBtn.innerText = `⚠️ ${data.message}`;
+                    snipeBtn.style.background = '#e74c3c';
+                    setTimeout(() => updateSnipeButtonUI(), 3000);
                     return;
+                }
+            } catch (backendErr) {
+                console.warn('[Elim Hunter] Server fetch timed out or unavailable, using local fallback:', backendErr);
+            }
+
+            // 3. Fallback: If backend was unreachable, scan current page candidates
+            if (!targetId) {
+                const pageCandidates = extractPageCandidates();
+                if (pageCandidates.length > 0) {
+                    snipeBtn.innerText = `🔍 Checking ${pageCandidates.length} targets...`;
+                    const ids = pageCandidates.map(c => c.playerId);
+                    await fetchFFStats(ids);
+
+                    const valid = pageCandidates.filter(c => {
+                        const cached = playerCache.get(c.playerId);
+                        if (!cached) return ffTierLimit === 'all';
+                        return cached.ff !== null ? isWithinTierLimit(cached.ff) : (ffTierLimit === 'all');
+                    });
+
+                    valid.sort((a, b) => {
+                        const ffA = playerCache.get(a.playerId)?.ff ?? 99;
+                        const ffB = playerCache.get(b.playerId)?.ff ?? 99;
+                        return ffA - ffB;
+                    });
+
+                    if (valid.length > 0) {
+                        targetId = valid[0].playerId;
+                        const rest = valid.slice(1).map(v => v.playerId);
+                        sessionStorage.setItem(SESSION_QUEUE, JSON.stringify(rest));
+                    }
                 }
             }
 
-            // 3. Fallback: No roster on page (Pre-Elimination / Testing / City / Home)
-            snipeBtn.innerText = '📡 Finding Live Target...';
-            const liveTarget = await findLiveActiveTarget();
+            // 4. Emergency fallback: Query live bounties
+            if (!targetId) {
+                const liveTarget = await findLiveActiveTarget();
+                if (liveTarget) targetId = liveTarget.playerId;
+            }
 
-            if (liveTarget) {
-                launchAttack(liveTarget.playerId);
+            if (targetId) {
+                launchAttack(targetId);
                 return;
             }
 
@@ -570,11 +628,13 @@
     function init() {
         createSnipeWidget();
         scanAndQueueTargets();
+        autoSyncCompetitionRosters();
 
         const observer = new MutationObserver(() => {
             clearTimeout(scanTimeout);
             scanTimeout = setTimeout(() => {
                 scanAndQueueTargets();
+                autoSyncCompetitionRosters();
             }, 600);
         });
         observer.observe(document.body, { childList: true, subtree: true });
