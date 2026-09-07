@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter
 // @namespace    https://spider-verse.net/
-// @version      2.0.0
+// @version      2.1.0
 // @description  1-click snipe button for Torn Elimination. Finds beatable enemies that are NOT in hospital and NOT flying. No fallbacks, elimination-only.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
