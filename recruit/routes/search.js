@@ -238,7 +238,7 @@ function formatPlayer(p) {
         refreshedAt: p.refreshedAt,
         profileUrl: `https://www.torn.com/profiles.php?XID=${p._id}`,
         messageUrl: `https://www.torn.com/messages.php?action=send&XID=${p._id}`,
-        attackUrl: `https://www.torn.com/loader.php?sid=attack&user2ID=${p._id}`,
+        attackUrl: `https://www.torn.com/page.php?sid=attack&user2ID=${p._id}`,
     };
 }
 

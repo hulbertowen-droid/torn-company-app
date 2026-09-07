@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter (1-Click Snipe)
 // @namespace    https://spider-verse.net/
-// @version      1.4.0
+// @version      1.4.1
 // @description  1-Click instant snipe button for Elimination. Automatically finds beatable enemies (not hosp, not flying, beatable FF tier) and redirects straight into their attack screen.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -462,7 +462,7 @@
             snipeBtn.innerText = '⚡ SNIPING...';
             snipeBtn.style.background = '#2ed573';
         }
-        window.location.href = `https://www.torn.com/loader.php?sid=attack&user2ID=${targetId}`;
+        window.location.href = `https://www.torn.com/page.php?sid=attack&user2ID=${targetId}`;
     }
 
     // ── Update Button UI Text ──
@@ -470,7 +470,7 @@
         const snipeBtn = document.getElementById('elim-snipe-main-btn');
         if (!snipeBtn) return;
 
-        const isAttackPage = window.location.href.includes('loader.php?sid=attack');
+        const isAttackPage = window.location.href.includes('page.php?sid=attack') || window.location.href.includes('loader.php?sid=attack');
         let queueCount = 0;
         try {
             queueCount = JSON.parse(sessionStorage.getItem(SESSION_QUEUE) || '[]').length;
@@ -621,7 +621,7 @@
         drawer.querySelector('#elim-test-snipe-btn').onclick = () => {
             drawer.style.display = 'none';
             // Pick Duke NPC (ID 4) for instant test
-            window.location.href = `https://www.torn.com/loader.php?sid=attack&user2ID=4`;
+            window.location.href = `https://www.torn.com/page.php?sid=attack&user2ID=4`;
         };
     }
 

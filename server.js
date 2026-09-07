@@ -1580,7 +1580,7 @@ setInterval(async () => {
                             targetId: attackerId,
                             fields: [{ name: "Attacker Est. Stats", value: statStr, inline: true }],
                             links: [
-                                { label: "⚔️ Attack Back", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${attackerId}` },
+                                { label: "⚔️ Attack Back", url: `https://www.torn.com/page.php?sid=attack&user2ID=${attackerId}` },
                                 { label: "👤 Profile", url: `https://www.torn.com/profiles.php?XID=${attackerId}` }
                             ]
                         }, pingStr);
@@ -2343,7 +2343,7 @@ setInterval(async () => {
                                 color: 3069299, 
                                 targetId: id,
                                 links: [
-                                    { label: "⚔️ Attack", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` },
+                                    { label: "⚔️ Attack", url: `https://www.torn.com/page.php?sid=attack&user2ID=${id}` },
                                     { label: "👤 Profile", url: `https://www.torn.com/profiles.php?XID=${id}` }
                                 ] 
                             });
@@ -2359,7 +2359,7 @@ setInterval(async () => {
                                 color: 5809919, 
                                 targetId: id,
                                 links: [
-                                    { label: "⚔️ Attack", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` },
+                                    { label: "⚔️ Attack", url: `https://www.torn.com/page.php?sid=attack&user2ID=${id}` },
                                     { label: "👤 Profile", url: `https://www.torn.com/profiles.php?XID=${id}` }
                                 ] 
                             });
@@ -2390,7 +2390,7 @@ setInterval(async () => {
                                         { name: "Suggested Fighter", value: bestMatchName ? `**${bestMatchName}** — matched by stats` : "No match found", inline: false }
                                     ],
                                     links: [
-                                        { label: "⚔️ Attack", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` },
+                                        { label: "⚔️ Attack", url: `https://www.torn.com/page.php?sid=attack&user2ID=${id}` },
                                         { label: "👤 Profile", url: `https://www.torn.com/profiles.php?XID=${id}` }
                                     ]
                                 }, pingStr);
@@ -2402,7 +2402,7 @@ setInterval(async () => {
                                     color: 16753922, 
                                     targetId: id,
                                     links: [
-                                        { label: "⚔️ Attack", url: `https://www.torn.com/loader.php?sid=attack&user2ID=${id}` },
+                                        { label: "⚔️ Attack", url: `https://www.torn.com/page.php?sid=attack&user2ID=${id}` },
                                         { label: "👤 Profile", url: `https://www.torn.com/profiles.php?XID=${id}` }
                                     ] 
                                 });
@@ -3143,7 +3143,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
                 { name: "Suggested Fighter", value: "You — matched by stats", inline: false }
             ],
             links: [
-                { label: "⚔️ Attack", url: `https://www.torn.com/loader.php?sid=attack&user2ID=999999` },
+                { label: "⚔️ Attack", url: `https://www.torn.com/page.php?sid=attack&user2ID=999999` },
                 { label: "👤 Profile", url: `https://www.torn.com/profiles.php?XID=999999` }
             ],
             footer: { text: "Owen's Faction Tools • Alert Test" },
@@ -7116,7 +7116,7 @@ async function buildCountryStatusEmbed(country, apiKey) {
             fields.push({
                 name: `🎯 ${enemyName} — In ${country} (${enemyTravel.inCountry.length})`,
                 value: enemyTravel.inCountry.slice(0, 15).map(m =>
-                    `**${m.name}** [${m.id}]${m.onlineStr} • [⚔️ Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${m.id}) • [Profile](https://www.torn.com/profiles.php?XID=${m.id})`
+                    `**${m.name}** [${m.id}]${m.onlineStr} • [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id}) • [Profile](https://www.torn.com/profiles.php?XID=${m.id})`
                 ).join("\n"),
                 inline: false
             });
@@ -7125,7 +7125,7 @@ async function buildCountryStatusEmbed(country, apiKey) {
             fields.push({
                 name: `✈️ ${enemyName} — Flying TO ${country} (${enemyTravel.flyingTo.length})`,
                 value: enemyTravel.flyingTo.slice(0, 15).map(m =>
-                    `**${m.name}** [${m.id}] — ${m.landingStr || "ETA unknown"} • [⚔️ Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${m.id})`
+                    `**${m.name}** [${m.id}] — ${m.landingStr || "ETA unknown"} • [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})`
                 ).join("\n"),
                 inline: false
             });
@@ -7134,7 +7134,7 @@ async function buildCountryStatusEmbed(country, apiKey) {
             fields.push({
                 name: `🔄 ${enemyName} — Flying BACK from ${country} (${enemyTravel.flyingBack.length})`,
                 value: enemyTravel.flyingBack.slice(0, 15).map(m =>
-                    `**${m.name}** [${m.id}] — ${m.landingStr || "ETA unknown"} • [⚔️ Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${m.id})`
+                    `**${m.name}** [${m.id}] — ${m.landingStr || "ETA unknown"} • [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})`
                 ).join("\n"),
                 inline: false
             });
@@ -7411,7 +7411,7 @@ async function buildTargetsEmbed(apiKey) {
                 : `~**${formatStatNumber(estimateStatsFromLevel(m.level))}** *(Est)*`;
             const claimTag = claims[m.id] ? ` *(🎯 Claimed: ${claims[m.id].playerName})*` : '';
             const name = getPlayerName(m.id, m.name);
-            return `${idx + 1}. ${onlineDot} [**${name}**](https://www.torn.com/loader.php?sid=attack&user2ID=${m.id}) — ${statsStr} • [⚔️ Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${m.id})${claimTag}`;
+            return `${idx + 1}. ${onlineDot} [**${name}**](https://www.torn.com/page.php?sid=attack&user2ID=${m.id}) — ${statsStr} • [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})${claimTag}`;
         });
 
         return {
@@ -7454,7 +7454,7 @@ async function buildSpyEmbed(targetQuery, apiKey) {
             title: `🔍 ${playerName} — No Stats on Record`,
             description: `No spy data found in FF Scouter or the database for **${playerName}**.\n\n` +
                          `• Add a manual spy via the [Live Warboard](https://spider-verse.net) → Inspect this player.\n` +
-                         `• [⚔️ Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${targetId}) • [👤 Profile](https://www.torn.com/profiles.php?XID=${targetId})`,
+                         `• [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${targetId}) • [👤 Profile](https://www.torn.com/profiles.php?XID=${targetId})`,
             color: 0xffa502,
             footer: { text: "Battle Stats Database" }
         };
@@ -7475,7 +7475,7 @@ async function buildSpyEmbed(targetQuery, apiKey) {
             { name: "🛡️ Defense", value: defVal, inline: true },
             { name: "⚡ Speed", value: spdVal, inline: true },
             { name: "🤸 Dexterity", value: dexVal, inline: true },
-            { name: "🔗 Links", value: `[⚔️ Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${targetId}) • [👤 Profile](https://www.torn.com/profiles.php?XID=${targetId})`, inline: false }
+            { name: "🔗 Links", value: `[⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${targetId}) • [👤 Profile](https://www.torn.com/profiles.php?XID=${targetId})`, inline: false }
         ],
         footer: { text: "Battle Stats Database • FF Scouter" }
     };
@@ -7602,7 +7602,7 @@ async function buildProfileEmbed(playerQuery, apiKey) {
                          `**Revivable**: ${reviveStr} • **Awards**: ${awards}\n`,
             color: data.status?.state === 'Hospital' ? 0xff4757 : (data.status?.state === 'Traveling' ? 0x58a6ff : 0x2ed573),
             fields: [
-                { name: "🔗 Links", value: `[👤 Profile](https://www.torn.com/profiles.php?XID=${data.player_id}) • [⚔️ Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${data.player_id}) • [🎯 Place Bounty](https://www.torn.com/bounties.php?p=add&XID=${data.player_id}&amount=150000)`, inline: false }
+                { name: "🔗 Links", value: `[👤 Profile](https://www.torn.com/profiles.php?XID=${data.player_id}) • [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${data.player_id}) • [🎯 Place Bounty](https://www.torn.com/bounties.php?p=add&XID=${data.player_id}&amount=150000)`, inline: false }
             ],
             footer: { text: "Player Profile" }
         };
@@ -8405,7 +8405,7 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
             const stateBadge = m.state === 'Hospital' ? ' 🏥' : (m.state === 'Traveling' || m.state === 'Abroad' ? ' ✈️' : '');
             
             if (isEnemy) {
-                return `${numBadge} ${statusDot}[**${m.name}**](https://www.torn.com/profiles.php?XID=${m.id}) (Lvl ${m.level}) ➔ **${m.statsFormatted}**${stateBadge} • [⚔️ Attack](https://www.torn.com/loader.php?sid=attack&user2ID=${m.id})`;
+                return `${numBadge} ${statusDot}[**${m.name}**](https://www.torn.com/profiles.php?XID=${m.id}) (Lvl ${m.level}) ➔ **${m.statsFormatted}**${stateBadge} • [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})`;
             } else {
                 return `${numBadge} ${statusDot}[**${m.name}**](https://www.torn.com/profiles.php?XID=${m.id}) (Lvl ${m.level}) ➔ **${m.statsFormatted}**${stateBadge}`;
             }
@@ -11876,7 +11876,7 @@ function setupSlashBotEvents(bot, token) {
                 fState.claims[targetId] = { playerName: claimerName, time: now, discordId: interaction.user.id };
                 claims[targetId] = { playerName: claimerName, time: now, discordId: interaction.user.id };
 
-                const attackLink = `https://www.torn.com/loader.php?sid=attack&user2ID=${targetId}`;
+                const attackLink = `https://www.torn.com/page.php?sid=attack&user2ID=${targetId}`;
                 return interaction.reply({
                     embeds: [{
                         title: `🎯 Target [${targetId}] Claimed!`,
@@ -12167,7 +12167,7 @@ function setupSlashBotEvents(bot, token) {
             const targetId = (interaction.options.getString('target') || '').trim().replace(/[^0-9]/g, "");
             if (!targetId) return interaction.reply({ content: "⚠️ Please provide a numeric Torn Player ID.", ephemeral: true });
             claims[targetId] = { playerName: interaction.user.username, time: Date.now() };
-            const attackLink = `https://www.torn.com/loader.php?sid=attack&user2ID=${targetId}`;
+            const attackLink = `https://www.torn.com/page.php?sid=attack&user2ID=${targetId}`;
             return interaction.reply({
                 embeds: [{
                     title: `🎯 Target Claimed: [${targetId}]`,
@@ -12195,7 +12195,7 @@ function setupSlashBotEvents(bot, token) {
             const note = interaction.options.getString('note') || 'Backup needed immediately!';
             if (!targetId) return interaction.reply({ content: "⚠️ Please provide a numeric Torn Player ID.", ephemeral: true });
             backups[targetId] = { playerName: interaction.user.username, time: Date.now() };
-            const attackLink = `https://www.torn.com/loader.php?sid=attack&user2ID=${targetId}`;
+            const attackLink = `https://www.torn.com/page.php?sid=attack&user2ID=${targetId}`;
             return interaction.reply({
                 content: `🚨 **EMERGENCY BACKUP REQUESTED!**`,
                 embeds: [{
