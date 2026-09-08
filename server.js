@@ -9306,16 +9306,23 @@ function buildBankRequestEmbed(req) {
         color = 0x2ed573;
         titlePrefix = '✅';
         let fulfillerStr = "";
+        let fulfillerDisplay = null;
         if (req.fulfilledBy) {
             fulfillerStr = `by <@${req.fulfilledBy}>`;
+            fulfillerDisplay = `<@${req.fulfilledBy}>`;
         } else if (req.fulfillerName && req.fulfillerName !== 'Banker') {
-            fulfillerStr = `by **@${req.fulfillerName}**`;
+            const idPart = req.fulfillerId ? ` [${req.fulfillerId}]` : '';
+            const linkPart = req.fulfillerId 
+                ? `[**${req.fulfillerName}**${idPart}](https://www.torn.com/profiles.php?XID=${req.fulfillerId})`
+                : `**${req.fulfillerName}**`;
+            fulfillerStr = `by ${linkPart} *(via Torn Logs)*`;
+            fulfillerDisplay = linkPart;
         } else {
             fulfillerStr = `via Torn Faction Logs`;
         }
         const timeRef = req.fulfilledAt || req.verifiedAt || req.timestamp || Date.now();
         statusLine = `✅ **Fulfilled** ${fulfillerStr} — <t:${Math.floor(timeRef / 1000)}:R>`;
-        footerText = `Fulfilled · F.R.I.D.A.Y Vault Banking`;
+        footerText = `Fulfilled ${req.fulfillerName ? `by ${req.fulfillerName} · ` : ''}F.R.I.D.A.Y Vault Banking`;
     } else if (req.status === 'cancelled') {
         color = 0x57606f;
         titlePrefix = '❌';
@@ -9342,6 +9349,24 @@ function buildBankRequestEmbed(req) {
             inline: true
         }
     ];
+
+    if (req.status === 'fulfilled') {
+        let val = null;
+        if (req.fulfilledBy) {
+            val = `<@${req.fulfilledBy}>`;
+        } else if (req.fulfillerName && req.fulfillerName !== 'Banker') {
+            val = req.fulfillerId 
+                ? `[**${req.fulfillerName} [${req.fulfillerId}]**](https://www.torn.com/profiles.php?XID=${req.fulfillerId})`
+                : `**${req.fulfillerName}**`;
+        }
+        if (val) {
+            fields.push({
+                name: '🏦 Fulfilled By',
+                value: val,
+                inline: true
+            });
+        }
+    }
 
     if (req.remainingBalance !== undefined && req.remainingBalance >= 0) {
         fields.push({
@@ -9631,12 +9656,42 @@ async function checkFactionLogForPayment(req, apiKey) {
                 if (req.balanceBefore !== undefined && req.balanceBefore > 0) {
                     const expectedMax = req.balanceBefore - requiredAmount;
                     if (currentBal <= expectedMax) {
+                        let bankerFromNews = null;
+                        let bankerIdFromNews = null;
+                        if (newsResult.status === 'fulfilled' && newsResult.value && !newsResult.value.error) {
+                            const allItems = [
+                                ...Object.values(newsResult.value.fundsnews || {}),
+                                ...Object.values(newsResult.value.mainnews || {})
+                            ];
+                            for (const entry of allItems) {
+                                if (!entry || !entry.news) continue;
+                                const raw = String(entry.news);
+                                if (raw.toLowerCase().includes(targetId) || (targetName && raw.toLowerCase().includes(targetName))) {
+                                    const pLinks = [];
+                                    const re = /<a[^>]*XID\s*=\s*(\d+)[^>]*>([^<]+)<\/a>/gi;
+                                    let m;
+                                    while ((m = re.exec(raw)) !== null) {
+                                        pLinks.push({ id: m[1], name: m[2].trim() });
+                                    }
+                                    if (pLinks.length > 0) {
+                                        const other = pLinks.find(p => p.id !== targetId);
+                                        if (other) {
+                                            bankerFromNews = other.name;
+                                            bankerIdFromNews = other.id;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         return {
                             verified: true,
                             source: "donations_drop",
                             currentBal,
                             balanceBefore: req.balanceBefore,
-                            detail: `Vault balance dropped from $${req.balanceBefore.toLocaleString()} to $${currentBal.toLocaleString()}`
+                            detail: `Vault balance dropped from $${req.balanceBefore.toLocaleString()} to $${currentBal.toLocaleString()}`,
+                            bankerName: bankerFromNews,
+                            bankerId: bankerIdFromNews
                         };
                     }
                 }
@@ -9696,16 +9751,33 @@ async function checkFactionLogForPayment(req, apiKey) {
 
                     if (isGiveAction) {
                         let bankerFromLog = null;
-                        const giverMatch = newsRaw.match(/<a[^>]*href=[^>]*XID=(\d+)[^>]*>([^<]+)<\/a>\s*(?:gave|transferred|sent|paid)/i);
-                        if (giverMatch) {
-                            bankerFromLog = giverMatch[2];
+                        let bankerIdFromLog = null;
+                        const playerLinks = [];
+                        const linkRegex = /<a[^>]*XID\s*=\s*(\d+)[^>]*>([^<]+)<\/a>/gi;
+                        let m;
+                        while ((m = linkRegex.exec(newsRaw)) !== null) {
+                            playerLinks.push({ id: m[1], name: m[2].trim() });
+                        }
+                        if (playerLinks.length > 0) {
+                            const other = playerLinks.find(p => p.id !== targetId);
+                            if (other) {
+                                bankerFromLog = other.name;
+                                bankerIdFromLog = other.id;
+                            } else {
+                                bankerFromLog = playerLinks[0].name;
+                                bankerIdFromLog = playerLinks[0].id;
+                            }
+                        } else {
+                            const giverMatch = newsRaw.match(/([A-Za-z0-9_\-]+)\s*(?:gave|transferred|sent|paid)/i);
+                            if (giverMatch) bankerFromLog = giverMatch[1];
                         }
 
                         return {
                             verified: true,
                             source: "news",
                             entry: newsRaw,
-                            bankerName: bankerFromLog
+                            bankerName: bankerFromLog,
+                            bankerId: bankerIdFromLog
                         };
                     }
                 }
@@ -9880,10 +9952,28 @@ async function autoCheckActiveBankRequests() {
                     if (!isGiveAction) continue;
 
                     let bankerName = null;
-                    const giverMatch = newsRaw.match(/<a[^>]*href=[^>]*XID=(\d+)[^>]*>([^<]+)<\/a>\s*(?:gave|transferred|sent|paid)/i);
-                    if (giverMatch) bankerName = giverMatch[2];
+                    let bankerId = null;
+                    const playerLinks = [];
+                    const linkRegex = /<a[^>]*XID\s*=\s*(\d+)[^>]*>([^<]+)<\/a>/gi;
+                    let m;
+                    while ((m = linkRegex.exec(newsRaw)) !== null) {
+                        playerLinks.push({ id: m[1], name: m[2].trim() });
+                    }
+                    if (playerLinks.length > 0) {
+                        const other = playerLinks.find(p => p.id !== tId);
+                        if (other) {
+                            bankerName = other.name;
+                            bankerId = other.id;
+                        } else {
+                            bankerName = playerLinks[0].name;
+                            bankerId = playerLinks[0].id;
+                        }
+                    } else {
+                        const giverMatch = newsRaw.match(/([A-Za-z0-9_\-]+)\s*(?:gave|transferred|sent|paid)/i);
+                        if (giverMatch) bankerName = giverMatch[1];
+                    }
 
-                    relevantNews.push({ entry, newsLower, newsRaw, bankerName, ts: entry.timestamp });
+                    relevantNews.push({ entry, newsLower, newsRaw, bankerName, bankerId, ts: entry.timestamp });
                 }
             }
 
@@ -9899,6 +9989,14 @@ async function autoCheckActiveBankRequests() {
                         r.status = 'fulfilled';
                         r.verifiedAt = Date.now();
                         if (!r.fulfilledAt) r.fulfilledAt = Date.now();
+                        const logMatch = relevantNews.find(n => !usedNewsEntries.has(n.entry));
+                        if (logMatch) {
+                            usedNewsEntries.add(logMatch.entry);
+                            if (!r.fulfillerName && logMatch.bankerName) {
+                                r.fulfillerName = logMatch.bankerName;
+                                r.fulfillerId = logMatch.bankerId;
+                            }
+                        }
                         fulfilledToNotify.push(r);
                     }
                 } else if (totalPaidOut > 0) {
@@ -9909,6 +10007,14 @@ async function autoCheckActiveBankRequests() {
                         exactReq.status = 'fulfilled';
                         exactReq.verifiedAt = Date.now();
                         if (!exactReq.fulfilledAt) exactReq.fulfilledAt = Date.now();
+                        const logMatch = relevantNews.find(n => !usedNewsEntries.has(n.entry));
+                        if (logMatch) {
+                            usedNewsEntries.add(logMatch.entry);
+                            if (!exactReq.fulfillerName && logMatch.bankerName) {
+                                exactReq.fulfillerName = logMatch.bankerName;
+                                exactReq.fulfillerId = logMatch.bankerId;
+                            }
+                        }
                         fulfilledToNotify.push(exactReq);
 
                         // For all remaining unfulfilled requests of this user, update balanceBefore to currentBal
@@ -9926,6 +10032,14 @@ async function autoCheckActiveBankRequests() {
                                 r.status = 'fulfilled';
                                 r.verifiedAt = Date.now();
                                 if (!r.fulfilledAt) r.fulfilledAt = Date.now();
+                                const logMatch = relevantNews.find(n => !usedNewsEntries.has(n.entry));
+                                if (logMatch) {
+                                    usedNewsEntries.add(logMatch.entry);
+                                    if (!r.fulfillerName && logMatch.bankerName) {
+                                        r.fulfillerName = logMatch.bankerName;
+                                        r.fulfillerId = logMatch.bankerId;
+                                    }
+                                }
                                 remainingPaid -= amt;
                                 fulfilledToNotify.push(r);
                             } else {
@@ -9964,6 +10078,7 @@ async function autoCheckActiveBankRequests() {
                     if (!r.fulfilledAt) r.fulfilledAt = Date.now();
                     if (!r.fulfillerName && matchingLog.bankerName) {
                         r.fulfillerName = matchingLog.bankerName;
+                        r.fulfillerId = matchingLog.bankerId;
                     }
                     fulfilledToNotify.push(r);
 
@@ -10814,7 +10929,7 @@ async function applyGuildMemberRole(guild, guildMember, botMember, roleId, actio
     if (!botMember) {
         return { success: false, reason: 'Could not resolve bot member in server' };
     }
-    if (!botMember.permissions?.has?.('ManageRoles')) {
+    if (!botMember.permissions?.has?.('ManageRoles') && !botMember.permissions?.has?.('Administrator')) {
         return { success: false, reason: 'Bot lacks "Manage Roles" permission in server' };
     }
 
@@ -10874,20 +10989,23 @@ async function executeVerifyMember(memberOrUser, guild, arg3, arg4) {
     // Guaranteed resolution of a real GuildMember instance (Discord.js v14)
     let guildMember = null;
     try {
-        guildMember = await guild.members.fetch(discordUserId).catch(() => null);
+        guildMember = await guild.members.fetch({ user: discordUserId, force: true }).catch(() => null);
     } catch(e) {}
+    if (!guildMember && memberOrUser && memberOrUser.roles) {
+        guildMember = memberOrUser;
+    }
     if (!guildMember && guild.members?.cache) {
         guildMember = guild.members.cache.get(discordUserId);
     }
 
-    // Resolve bot member and fetch roles cache if needed
+    // Resolve bot member and fetch all roles cache unconditionally
     let botMember = guild.members.me;
     if (!botMember) {
         try { botMember = await guild.members.fetchMe().catch(() => null); } catch(e) {}
     }
-    if (guild.roles.cache.size < 3) {
-        try { await guild.roles.fetch().catch(() => null); } catch(e) {}
-    }
+    try {
+        await guild.roles.fetch().catch(() => null);
+    } catch(e) {}
 
     let tornUser = null;
     let verifiedViaGlobalLink = false;
@@ -11012,43 +11130,83 @@ async function executeVerifyMember(memberOrUser, guild, arg3, arg4) {
     const rolesAdded = [];
     const roleWarnings = [];
 
+    // Helper to find role ID with robust fuzzy matching
+    const findGuildRole = (configuredId, matchers) => {
+        if (configuredId && guild.roles.cache.has(configuredId)) return configuredId;
+        for (const m of matchers) {
+            const found = guild.roles.cache.find(r => m(r.name.toLowerCase()));
+            if (found) return found.id;
+        }
+        return configuredId || null;
+    };
+
     // 1. Verified Role
-    const verifiedRoleId = discordConfig.verifiedRoleId ||
-        guild.roles.cache.find(r => r.name.toLowerCase() === 'verified')?.id;
+    const verifiedRoleId = findGuildRole(discordConfig.verifiedRoleId, [
+        n => n === 'verified',
+        n => n === 'verified member',
+        n => n.includes('verified'),
+        n => n === 'member',
+        n => n === 'members'
+    ]);
     if (verifiedRoleId) {
         const res = await applyGuildMemberRole(guild, guildMember, botMember, verifiedRoleId, 'add', 'Tornium Verified');
-        if (res.success && res.action === 'added') rolesAdded.push(`<@&${verifiedRoleId}>`);
-        else if (res.hierarchyError) roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${verifiedRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
+        if (res.success && (res.action === 'added' || res.action === 'already_had')) {
+            rolesAdded.push(`<@&${verifiedRoleId}>`);
+        } else if (res.hierarchyError) {
+            roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${verifiedRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
+        } else if (res.error) {
+            roleWarnings.push(`⚠️ **Role Error:** Could not assign <@&${verifiedRoleId}>: ${res.error}`);
+        }
     }
 
     // 2. Faction Member Role (Spider-Verse 52355)
     if (isOurFaction) {
-        const factionRoleId = discordConfig.factionRoleId ||
-            guild.roles.cache.find(r => r.name.toLowerCase().includes('spider-verse') || r.name.toLowerCase() === 'member')?.id;
+        const factionRoleId = findGuildRole(discordConfig.factionRoleId, [
+            n => n.includes('spider-verse'),
+            n => n.includes('spider verse'),
+            n => n.includes('spiderverse'),
+            n => n.includes('spdr'),
+            n => n === 'faction member',
+            n => n === 'faction'
+        ]);
         if (factionRoleId) {
             const res = await applyGuildMemberRole(guild, guildMember, botMember, factionRoleId, 'add', 'Faction Member (52355)');
-            if (res.success && res.action === 'added') rolesAdded.push(`<@&${factionRoleId}>`);
-            else if (res.hierarchyError) roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${factionRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
+            if (res.success && (res.action === 'added' || res.action === 'already_had')) {
+                rolesAdded.push(`<@&${factionRoleId}>`);
+            } else if (res.hierarchyError) {
+                roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${factionRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
+            } else if (res.error) {
+                roleWarnings.push(`⚠️ **Role Error:** Could not assign <@&${factionRoleId}>: ${res.error}`);
+            }
         }
 
         // 3. Faction Leader Role
         if (isLeader && discordConfig.leaderRoleId) {
             const res = await applyGuildMemberRole(guild, guildMember, botMember, discordConfig.leaderRoleId, 'add', 'Faction Leader / Co-Leader');
-            if (res.success && res.action === 'added') rolesAdded.push(`<@&${discordConfig.leaderRoleId}> (👑 Leadership)`);
-            else if (res.hierarchyError) roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${discordConfig.leaderRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
+            if (res.success && (res.action === 'added' || res.action === 'already_had')) {
+                rolesAdded.push(`<@&${discordConfig.leaderRoleId}> (👑 Leadership)`);
+            } else if (res.hierarchyError) {
+                roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${discordConfig.leaderRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
+            }
         }
 
         // 4. Faction Banker Role
         if (isBanker && discordConfig.bankerRoleId) {
             const res = await applyGuildMemberRole(guild, guildMember, botMember, discordConfig.bankerRoleId, 'add', 'Faction Banker / Vault Controller');
-            if (res.success && res.action === 'added') rolesAdded.push(`<@&${discordConfig.bankerRoleId}> (🏦 Banker)`);
-            else if (res.hierarchyError) roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${discordConfig.bankerRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
+            if (res.success && (res.action === 'added' || res.action === 'already_had')) {
+                rolesAdded.push(`<@&${discordConfig.bankerRoleId}> (🏦 Banker)`);
+            } else if (res.hierarchyError) {
+                roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${discordConfig.bankerRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
+            }
         }
     }
 
     // 5. Remove Unverified Quarantine Role
-    const unverifiedRoleId = discordConfig.unverifiedRoleId ||
-        guild.roles.cache.find(r => r.name.toLowerCase() === 'unverified')?.id;
+    const unverifiedRoleId = findGuildRole(discordConfig.unverifiedRoleId, [
+        n => n === 'unverified',
+        n => n.includes('unverified'),
+        n => n === 'quarantine'
+    ]);
     if (unverifiedRoleId) {
         await applyGuildMemberRole(guild, guildMember, botMember, unverifiedRoleId, 'remove', 'Verified on Torn');
     }
@@ -11117,23 +11275,44 @@ async function executeVerifyAll(guild, apiKey) {
     if (!botMember) {
         try { botMember = await guild.members.fetchMe().catch(() => null); } catch(e) {}
     }
-    if (guild.roles.cache.size < 3) {
-        try { await guild.roles.fetch().catch(() => null); } catch(e) {}
-    }
+    try { await guild.roles.fetch().catch(() => null); } catch(e) {}
 
     let updatedCount = 0;
     let alreadySynced = 0;
     let unmatchedCount = 0;
     const globalRoleWarnings = new Set();
 
-    const verifiedRoleId = discordConfig.verifiedRoleId ||
-        guild.roles.cache.find(r => r.name.toLowerCase() === 'verified')?.id;
+    const findGuildRole = (configuredId, matchers) => {
+        if (configuredId && guild.roles.cache.has(configuredId)) return configuredId;
+        for (const m of matchers) {
+            const found = guild.roles.cache.find(r => m(r.name.toLowerCase()));
+            if (found) return found.id;
+        }
+        return configuredId || null;
+    };
 
-    const factionRoleId = discordConfig.factionRoleId ||
-        guild.roles.cache.find(r => r.name.toLowerCase().includes('spider-verse') || r.name.toLowerCase() === 'member')?.id;
+    const verifiedRoleId = findGuildRole(discordConfig.verifiedRoleId, [
+        n => n === 'verified',
+        n => n === 'verified member',
+        n => n.includes('verified'),
+        n => n === 'member',
+        n => n === 'members'
+    ]);
 
-    const unverifiedRoleId = discordConfig.unverifiedRoleId ||
-        guild.roles.cache.find(r => r.name.toLowerCase() === 'unverified')?.id;
+    const factionRoleId = findGuildRole(discordConfig.factionRoleId, [
+        n => n.includes('spider-verse'),
+        n => n.includes('spider verse'),
+        n => n.includes('spiderverse'),
+        n => n.includes('spdr'),
+        n => n === 'faction member',
+        n => n === 'faction'
+    ]);
+
+    const unverifiedRoleId = findGuildRole(discordConfig.unverifiedRoleId, [
+        n => n === 'unverified',
+        n => n.includes('unverified'),
+        n => n === 'quarantine'
+    ]);
 
     for (const [gmId, gm] of guildMembers) {
         if (gm.user.bot) continue;
@@ -11234,8 +11413,41 @@ async function handleGuildMemberAdd(member) {
     const guild = member.guild;
     const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
     const verificationChannelId = discordConfig.verificationChannelId;
-    const unverifiedRoleId = discordConfig.unverifiedRoleId || guild.roles.cache.find(r => r.name.toLowerCase() === 'unverified')?.id;
-    const verifiedRoleId = discordConfig.verifiedRoleId || guild.roles.cache.find(r => r.name.toLowerCase() === 'verified')?.id;
+
+    // Pre-fetch all roles so cache is always warm
+    try { await guild.roles.fetch().catch(() => null); } catch(e) {}
+
+    const findGuildRole = (configuredId, matchers) => {
+        if (configuredId && guild.roles.cache.has(configuredId)) return configuredId;
+        for (const m of matchers) {
+            const found = guild.roles.cache.find(r => m(r.name.toLowerCase()));
+            if (found) return found.id;
+        }
+        return configuredId || null;
+    };
+
+    const verifiedRoleId = findGuildRole(discordConfig.verifiedRoleId, [
+        n => n === 'verified',
+        n => n === 'verified member',
+        n => n.includes('verified'),
+        n => n === 'member',
+        n => n === 'members'
+    ]);
+
+    const factionRoleId = findGuildRole(discordConfig.factionRoleId, [
+        n => n.includes('spider-verse'),
+        n => n.includes('spider verse'),
+        n => n.includes('spiderverse'),
+        n => n.includes('spdr'),
+        n => n === 'faction member',
+        n => n === 'faction'
+    ]);
+
+    const unverifiedRoleId = findGuildRole(discordConfig.unverifiedRoleId, [
+        n => n === 'unverified',
+        n => n.includes('unverified'),
+        n => n === 'quarantine'
+    ]);
 
     console.log(`[Verification-on-Join] New member joined ${guild.name}: ${member.user.tag} (${member.id})`);
 
@@ -11254,12 +11466,67 @@ async function handleGuildMemberAdd(member) {
     if (verifyResult && verifyResult.success) {
         console.log(`[Verification-on-Join] Auto-verified ${member.user.tag} as ${verifyResult.playerName} [${verifyResult.playerId}]`);
 
+        // Guarantee direct role application on the member object
+        const rolesGrantedList = [];
+        if (verifiedRoleId) {
+            try {
+                if (!member.roles.cache.has(verifiedRoleId)) {
+                    await member.roles.add(verifiedRoleId, 'Verification-on-Join Direct');
+                    console.log(`[Verification-on-Join] Added Verified role ${verifiedRoleId} to ${member.user.tag}`);
+                }
+                rolesGrantedList.push(`<@&${verifiedRoleId}>`);
+            } catch(err) {
+                console.error(`[Verification-on-Join] Failed to add Verified role to ${member.user.tag}:`, err.message);
+                verifyResult.roleWarnings = verifyResult.roleWarnings || [];
+                if (err.message.includes('Missing Permissions')) {
+                    verifyResult.roleWarnings.push(`⚠️ **Hierarchy Alert:** F.R.I.D.A.Y role is lower than <@&${verifiedRoleId}>. In Server Settings ➔ Roles, drag F.R.I.D.A.Y above it!`);
+                } else {
+                    verifyResult.roleWarnings.push(`⚠️ **Role Error:** ${err.message}`);
+                }
+            }
+        }
+
+        if (verifyResult.isOurFaction && factionRoleId) {
+            try {
+                if (!member.roles.cache.has(factionRoleId)) {
+                    await member.roles.add(factionRoleId, 'Faction Member Verification-on-Join Direct');
+                    console.log(`[Verification-on-Join] Added Faction role ${factionRoleId} to ${member.user.tag}`);
+                }
+                rolesGrantedList.push(`<@&${factionRoleId}>`);
+            } catch(err) {
+                console.error(`[Verification-on-Join] Failed to add Faction role to ${member.user.tag}:`, err.message);
+            }
+        }
+
+        // Remove quarantine/unverified role if present
+        if (unverifiedRoleId) {
+            try {
+                if (member.roles.cache.has(unverifiedRoleId)) {
+                    await member.roles.remove(unverifiedRoleId, 'Auto-verified on join');
+                }
+            } catch(e) {}
+        }
+
+        const allRolesGranted = [
+            ...(verifyResult.rolesAdded || []),
+            ...rolesGrantedList
+        ].filter((v, i, a) => a.indexOf(v) === i);
+
+        const rolesDisplay = allRolesGranted.length > 0 
+            ? allRolesGranted.join(', ') 
+            : (verifiedRoleId ? `<@&${verifiedRoleId}>` : 'Verified Member');
+
+        let warningNotice = '';
+        if (verifyResult.roleWarnings && verifyResult.roleWarnings.length > 0) {
+            warningNotice = `\n\n${verifyResult.roleWarnings.join('\n')}`;
+        }
+
         const welcomeEmbed = {
             title: `🎉 Welcome to ${guild.name}!`,
             description: `✅ <@${member.id}> has been automatically verified as **[${verifyResult.playerName} [${verifyResult.playerId}]](https://www.torn.com/profiles.php?XID=${verifyResult.playerId})**!\n\n` +
                          `🏷️ **Nickname set to:** \`${verifyResult.playerName} [${verifyResult.playerId}]\`\n` +
-                         `🎖️ **Roles Granted:** ${verifyResult.rolesAdded?.join(', ') || (verifiedRoleId ? `<@&${verifiedRoleId}>` : 'Verified Member')}\n\n` +
-                         `Welcome to the faction! All channels are now unlocked for you.`,
+                         `🎖️ **Roles Granted:** ${rolesDisplay}\n\n` +
+                         `Welcome to the faction! All channels are now unlocked for you.${warningNotice}`,
             color: 0x2ed573,
             footer: { text: "F.R.I.D.A.Y • Verification-on-Join Sentinel" },
             timestamp: new Date().toISOString()
