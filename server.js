@@ -8488,7 +8488,8 @@ async function buildBazaarEmbed(itemQuery, apiKey) {
 async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
     if (!apiKey) return { title: "📊 Faction Battle Stats", description: "⚠️ No Torn API key configured.", color: 0xff4757 };
     try {
-        let isEnemy = (factionChoice !== 'friendly' && factionChoice !== 'our');
+        const choice = String(factionChoice || '').toLowerCase().trim();
+        let isEnemy = (choice !== 'friendly' && choice !== 'our' && choice !== 'ours' && !choice.includes('friendly') && !choice.includes('our'));
 
         const ourRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
         const ourData = await ourRes.json();
@@ -12772,7 +12773,7 @@ function setupSlashBotEvents(bot, token) {
                 } else if (subcommand === 'mvp') {
                     embed = await buildTopHittersEmbed(apiKey);
                 } else if (subcommand === 'stats') {
-                    const side = interaction.options.getString('side') || 'enemy';
+                    const side = interaction.options.getString('side') || interaction.options.getString('faction') || 'enemy';
                     embed = await buildFactionStatsRosterEmbed(side, apiKey);
                 } else if (subcommand === 'bounties') {
                     embed = await buildWarBountiesEmbed(apiKey);
@@ -12837,7 +12838,7 @@ function setupSlashBotEvents(bot, token) {
             } else if (cmd === 'top' || cmd === 'mvp') {
                 embed = await buildTopHittersEmbed(apiKey);
             } else if (cmd === 'stats' || cmd === 'enemystats' || cmd === 'ourstats') {
-                const factionChoice = interaction.options.getString('faction') || (cmd === 'ourstats' ? 'friendly' : 'enemy');
+                const factionChoice = interaction.options.getString('side') || interaction.options.getString('faction') || (cmd === 'ourstats' ? 'friendly' : 'enemy');
                 embed = await buildFactionStatsRosterEmbed(factionChoice, apiKey);
             } else if (cmd === 'bounties' || cmd === 'bounty') {
                 embed = await buildWarBountiesEmbed(apiKey);
