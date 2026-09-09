@@ -5954,47 +5954,27 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
         contents: [{ role: 'user', parts: [{ text: convoPrompt }] }],
         systemInstruction: {
             parts: [{ text: FRIDAY_RESPONDER_SYSTEM_PROMPT }]
-        },
-        generationConfig: {
-            maxOutputTokens: 150,
-            temperature: 0.8
-        },
-        safetySettings: [
-            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
-        ]
+        }
     };
-
-    const smartFallbacks = [
-        "Haha you got me, fair play.",
-        "Lmao alright, you got me there.",
-        "Fair enough, caught me slipping.",
-        "Bro really had me going for a second 💀",
-        "Haha well played."
-    ];
-    const getRandomFallback = () => smartFallbacks[Math.floor(Math.random() * smartFallbacks.length)];
 
     try {
         const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
-            signal: AbortSignal.timeout(9000)
+            signal: AbortSignal.timeout(10000)
         });
         const data = await resp.json();
         if (data.error) {
             console.warn("[Gemini API] Response error:", data.error.message);
-            return getRandomFallback();
+            return "";
         }
         const candidate = data.candidates?.[0];
-        const reply = candidate?.content?.parts?.[0]?.text?.trim();
-        if (reply && reply.length > 0) return reply;
-        return getRandomFallback();
+        const reply = candidate?.content?.parts?.[0]?.text?.trim() || "";
+        return reply;
     } catch(err) {
         console.warn("[Gemini API] Generation timeout or error:", err.message);
-        return getRandomFallback();
+        return "";
     }
 }
 
@@ -12259,9 +12239,6 @@ function setupSlashBotEvents(bot, token) {
 
     // ── Conversational AI State Management ──
     const channelConvoState = new Map();
-    // Active 1-on-1 dialogue sessions: Key `${channelId}:${userId}` -> timestamp
-    // Allows user to chat naturally with Friday for up to 3 minutes without repeating @mention
-    const activeUserConversations = new Map();
 
     function stripBotMentions(content) {
         if (!content) return "";
@@ -12272,10 +12249,7 @@ function setupSlashBotEvents(bot, token) {
         if (bot.user?.username) {
             clean = clean.replace(new RegExp(`@${bot.user.username}\\b`, 'gi'), '');
         }
-        // Also strip common greeting prefixes if addressing by name
-        clean = clean.replace(/^hi\s+friday\b/i, '')
-                     .replace(/^hey\s+friday\b/i, '')
-                     .replace(/^friday\b/i, '');
+        clean = clean.replace(/^(?:hey|hi|yo)?\s*friday\b/i, '');
         return clean.replace(/^[\s,:!-]+/, '').replace(/[\s]+$/, '').trim();
     }
 
@@ -12297,7 +12271,7 @@ function setupSlashBotEvents(bot, token) {
                     const elapsed = Date.now() - state.firstQueuedAt;
                     if (elapsed < 20000) {
                         clearTimeout(state.timer);
-                        state.timer = setTimeout(() => executeChannelConvoDispatch(typing.channelId), 3500);
+                        state.timer = setTimeout(() => executeChannelConvoDispatch(typing.channelId), 3000);
                     }
                 }
             }
@@ -12310,6 +12284,14 @@ function setupSlashBotEvents(bot, token) {
         const state = channelConvoState.get(channelId);
         if (!state) return;
         if (!state.messages || state.messages.length === 0) {
+            channelConvoState.delete(channelId);
+            return;
+        }
+
+        // If channel is not in activeConversationChannels, and none of the messages are a direct trigger, abort
+        const isConvoChannel = activeConversationChannels.has(channelId);
+        const hasDirectTrigger = state.messages.some(m => m.isMention);
+        if (!isConvoChannel && !hasDirectTrigger) {
             channelConvoState.delete(channelId);
             return;
         }
@@ -12353,13 +12335,12 @@ function setupSlashBotEvents(bot, token) {
 
             // Append the buffered messages to the conversation transcript
             for (const b of batch) {
-                convoLines.push(`${b.authorName}: ${b.text || '(pinged Friday)'}`);
+                convoLines.push(`${b.authorName}: ${b.text || '(addressed Friday)'}`);
             }
 
             const primaryAuthor = batch[batch.length - 1].authorName;
-            const primaryAuthorId = batch[batch.length - 1].authorId;
             const combinedTexts = batch.map(b => b.text).filter(Boolean);
-            const userSpeech = combinedTexts.join('\n') || "(pinged Friday)";
+            const userSpeech = combinedTexts.join('\n') || "(addressed Friday)";
 
             // Check if any message in the batch had a reply reference
             let replyContext = null;
@@ -12381,42 +12362,31 @@ function setupSlashBotEvents(bot, token) {
                 console.warn("[Conversation] generateChatResponse error:", genErr.message);
             }
 
-            if (!aiReply || !aiReply.trim()) {
-                const smartFallbacks = [
-                    "Haha you got me, fair play.",
-                    "Lmao alright, you got me there.",
-                    "Fair enough, caught me slipping.",
-                    "Bro really had me going for a second 💀",
-                    "Haha well played."
-                ];
-                aiReply = smartFallbacks[Math.floor(Math.random() * smartFallbacks.length)];
+            if (aiReply && aiReply.trim()) {
+                await latestMsg.reply({
+                    content: aiReply.trim(),
+                    allowedMentions: { repliedUser: false }
+                }).catch(async () => {
+                    if (channel && channel.send) {
+                        await channel.send({ content: aiReply.trim() }).catch(() => {});
+                    }
+                });
+            } else if (batch.some(b => b.isMention)) {
+                // Only send a polite notice if the user explicitly pinged/addressed Friday
+                await latestMsg.reply({
+                    content: "⚠️ My cognitive link had a hiccup. Give me another shout in a second.",
+                    allowedMentions: { repliedUser: false }
+                }).catch(() => {});
             }
-
-            // Keep user's 1-on-1 dialogue session active for 3 minutes
-            if (primaryAuthorId) {
-                activeUserConversations.set(`${channelId}:${primaryAuthorId}`, Date.now());
-            }
-
-            await latestMsg.reply({
-                content: aiReply.trim(),
-                allowedMentions: { repliedUser: false }
-            }).catch(async () => {
-                if (channel && channel.send) {
-                    await channel.send({ content: aiReply.trim() }).catch(() => {});
-                }
-            });
 
         } catch(err) {
             console.error(`[Conversation] Error replying in channel ${channelId}:`, err.message);
-            const fallbackReply = "Haha you got me, fair play.";
-            await latestMsg.reply({
-                content: fallbackReply,
-                allowedMentions: { repliedUser: false }
-            }).catch(async () => {
-                if (channel && channel.send) {
-                    await channel.send({ content: fallbackReply }).catch(() => {});
-                }
-            });
+            if (batch.some(b => b.isMention)) {
+                await latestMsg.reply({
+                    content: "⚠️ My neural link had a brief hiccup. Give me another shout in a second.",
+                    allowedMentions: { repliedUser: false }
+                }).catch(() => {});
+            }
         } finally {
             state.isReplying = false;
             if (state.messages && state.messages.length > 0) {
@@ -12448,19 +12418,13 @@ function setupSlashBotEvents(bot, token) {
         // Ignore commands starting with ! or / so we don't interfere with prefix commands
         if (msg.content.startsWith('!') || msg.content.startsWith('/')) return;
 
-        // Check active 1-on-1 dialogue window (3 minutes)
-        const convoKey = `${msg.channelId}:${msg.author.id}`;
-        const lastConvoTime = activeUserConversations.get(convoKey);
-        const isFollowupConvo = lastConvoTime && (Date.now() - lastConvoTime < 180000);
+        // 1. Direct mention (@F.R.I.D.A.Y or <@ID>)
+        const isBotMentioned = msg.mentions?.has?.(bot.user) || (bot.user && new RegExp(`<@!?${bot.user.id}>`).test(msg.content));
+        
+        // 2. Addressed directly at the start of message (e.g. "Friday, ...", "Hey Friday, ...", "Hi Friday")
+        const isAddressedToFriday = /^(?:hey|hi|yo)?\s*friday\b/i.test(msg.content.trim());
 
-        // Check if addressed by name or ping
-        const isAddressedByName = /\bfriday\b/i.test(msg.content);
-        const isMentioned = msg.mentions?.has?.(bot.user) || (bot.user && new RegExp(`<@!?${bot.user.id}>`).test(msg.content)) || isAddressedByName;
-        const isConvoChannel = activeConversationChannels.has(msg.channelId);
-
-        // If bot notifications are emergency muted, ignore unprompted channel chatter
-        if (global.isNotificationsKilled && !isMentioned) return;
-
+        // 3. Replying directly to a message sent by Friday
         let isReplyingToFriday = false;
         let refInfo = null;
 
@@ -12479,19 +12443,20 @@ function setupSlashBotEvents(bot, token) {
             } catch(e) {}
         }
 
-        const shouldRespond = isMentioned || isReplyingToFriday || isConvoChannel || isFollowupConvo;
+        // 4. Channel has /conversation mode enabled
+        const isConvoChannel = activeConversationChannels.has(msg.channelId);
+
+        const isDirectTrigger = isBotMentioned || isAddressedToFriday || isReplyingToFriday;
+        const shouldRespond = isDirectTrigger || isConvoChannel;
+
+        // CRITICAL: If not explicitly addressed and channel is NOT in conversation mode, DO NOT RESPOND!
         if (!shouldRespond) return;
 
-        const cleanText = stripBotMentions(msg.cleanContent || msg.content || "");
-        if (!cleanText && !isMentioned && !isReplyingToFriday) return;
+        // If bot notifications are emergency muted, ignore unprompted channel chatter
+        if (global.isNotificationsKilled && !isDirectTrigger) return;
 
-        // Check if user is saying goodbye to end the active dialogue session
-        const lowerClean = cleanText.toLowerCase();
-        if (lowerClean === 'bye' || lowerClean === 'cya' || lowerClean === 'goodnight' || lowerClean === 'stop' || lowerClean === 'shut up') {
-            activeUserConversations.delete(convoKey);
-        } else {
-            activeUserConversations.set(convoKey, Date.now());
-        }
+        const cleanText = stripBotMentions(msg.cleanContent || msg.content || "");
+        if (!cleanText && !isDirectTrigger) return;
 
         let state = channelConvoState.get(msg.channelId);
         if (!state) {
@@ -12517,16 +12482,15 @@ function setupSlashBotEvents(bot, token) {
             authorName: msg.member?.displayName || msg.author?.username || "Member",
             authorId: msg.author.id,
             text: cleanText,
-            isMention: isMentioned || isReplyingToFriday,
+            isMention: isDirectTrigger,
             reference: refInfo,
             msgObj: msg,
             timestamp: Date.now()
         });
 
-        // Debounce: wait for author/typing to settle before dispatching response
+        // Debounce: wait 2500ms for author/typing to settle before dispatching response
         if (!state.isReplying) {
             if (state.timer) clearTimeout(state.timer);
-            // Default pause of 2500ms so conversation feels natural and snappy
             const delay = 2500;
             state.timer = setTimeout(() => executeChannelConvoDispatch(msg.channelId), delay);
         }
@@ -13027,6 +12991,12 @@ function setupSlashBotEvents(bot, token) {
                 activeConversationChannels.delete(chanId);
                 discordConfig.conversationChannels = Array.from(activeConversationChannels);
                 saveDiscordConfig();
+
+                // Cancel and purge any pending timer or queued messages for this channel immediately
+                const pending = channelConvoState.get(chanId);
+                if (pending?.timer) clearTimeout(pending.timer);
+                channelConvoState.delete(chanId);
+
                 const embed = UI.warning(
                     "🛑 Conversational Mode Deactivated",
                     `**F.R.I.D.A.Y** will no longer automatically chime in on messages in <#${chanId}>.\n\n` +
