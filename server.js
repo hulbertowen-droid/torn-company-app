@@ -10949,25 +10949,24 @@ async function applyGuildMemberRole(guild, guildMember, botMember, roleId, actio
     }
 
     // 4. Perform Add or Remove
+    // NOTE: We intentionally skip the cache.has() check because button-interaction members
+    // can have stale role caches. Discord's API is idempotent — adding an existing role is a no-op.
     try {
-        const hasRole = guildMember.roles?.cache ? guildMember.roles.cache.has(role.id) : false;
         if (action === 'add') {
-            if (!hasRole) {
-                await guildMember.roles.add(role.id, reason || 'F.R.I.D.A.Y Verification Sync');
-                console.log(`[Discord Roles] Added role "${role.name}" (${role.id}) to ${guildMember.user?.tag || guildMember.id}`);
-                return { success: true, action: 'added', role };
-            }
-            return { success: true, action: 'already_had', role };
+            await guildMember.roles.add(role.id, reason || 'F.R.I.D.A.Y Verification Sync');
+            console.log(`[Discord Roles] ✅ Added role "${role.name}" (${role.id}) to ${guildMember.user?.tag || guildMember.id}`);
+            return { success: true, action: 'added', role };
         } else if (action === 'remove') {
+            const hasRole = guildMember.roles?.cache ? guildMember.roles.cache.has(role.id) : true;
             if (hasRole) {
                 await guildMember.roles.remove(role.id, reason || 'F.R.I.D.A.Y Verification Sync');
-                console.log(`[Discord Roles] Removed role "${role.name}" (${role.id}) from ${guildMember.user?.tag || guildMember.id}`);
+                console.log(`[Discord Roles] ✅ Removed role "${role.name}" (${role.id}) from ${guildMember.user?.tag || guildMember.id}`);
                 return { success: true, action: 'removed', role };
             }
             return { success: true, action: 'already_lacked', role };
         }
     } catch(err) {
-        console.error(`[Discord Roles] Failed to ${action} role "${role.name}" (${role.id}) for ${guildMember.id}:`, err.message);
+        console.error(`[Discord Roles] ❌ Failed to ${action} role "${role.name}" (${role.id}) for ${guildMember.id}: ${err.message}`);
         return { success: false, error: err.message, roleName: role.name, roleId: role.id };
     }
     return { success: false, reason: 'Unknown state' };
@@ -10990,13 +10989,25 @@ async function executeVerifyMember(memberOrUser, guild, arg3, arg4) {
     let guildMember = null;
     try {
         guildMember = await guild.members.fetch({ user: discordUserId, force: true }).catch(() => null);
-    } catch(e) {}
+    } catch(e) { console.warn(`[Verify] guild.members.fetch threw:`, e.message); }
     if (!guildMember && memberOrUser && memberOrUser.roles) {
         guildMember = memberOrUser;
+        console.log(`[Verify] Using interaction.member directly as guildMember for ${discordUserId}`);
     }
     if (!guildMember && guild.members?.cache) {
         guildMember = guild.members.cache.get(discordUserId);
+        if (guildMember) console.log(`[Verify] Resolved guildMember from cache for ${discordUserId}`);
     }
+    if (!guildMember) {
+        console.error(`[Verify] CRITICAL: Could not resolve GuildMember for Discord ID ${discordUserId} in guild ${guild.id}. Role assignment will be skipped.`);
+        return {
+            success: false,
+            title: '🛡️ Verification Failed',
+            description: `⚠️ F.R.I.D.A.Y could not resolve your Discord server membership. Please try again in a few seconds, or ask an admin to run \`/verifyall\`.`,
+            color: 0xff4757
+        };
+    }
+    console.log(`[Verify] GuildMember resolved: ${guildMember.user?.tag || discordUserId}, roles cached: ${guildMember.roles?.cache?.size ?? 'unknown'}`);
 
     // Resolve bot member and fetch all roles cache unconditionally
     let botMember = guild.members.me;
@@ -11006,6 +11017,9 @@ async function executeVerifyMember(memberOrUser, guild, arg3, arg4) {
     try {
         await guild.roles.fetch().catch(() => null);
     } catch(e) {}
+    console.log(`[Verify] Bot member resolved: ${botMember ? botMember.user?.tag : 'NULL'}, highest role: ${botMember?.roles?.highest?.name || 'unknown'} (pos ${botMember?.roles?.highest?.position ?? '?'})`);
+    console.log(`[Verify] discordConfig roles — verified: "${discordConfig.verifiedRoleId}", faction: "${discordConfig.factionRoleId}", unverified: "${discordConfig.unverifiedRoleId}"`);
+    console.log(`[Verify] Guild roles available: ${guild.roles.cache.map(r => `"${r.name}"(${r.id})`).join(', ')}`);
 
     let tornUser = null;
     let verifiedViaGlobalLink = false;
