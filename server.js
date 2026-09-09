@@ -5954,21 +5954,48 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
         contents: [{ role: 'user', parts: [{ text: convoPrompt }] }],
         systemInstruction: {
             parts: [{ text: FRIDAY_RESPONDER_SYSTEM_PROMPT }]
-        }
+        },
+        generationConfig: {
+            maxOutputTokens: 150,
+            temperature: 0.8
+        },
+        safetySettings: [
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+        ]
     };
 
-    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-    });
-    const data = await resp.json();
-    if (data.error) {
-        throw new Error(data.error.message || "AI chat generation failed.");
+    const smartFallbacks = [
+        "Haha you got me, fair play.",
+        "Lmao alright, you got me there.",
+        "Fair enough, caught me slipping.",
+        "Bro really had me going for a second 💀",
+        "Haha well played."
+    ];
+    const getRandomFallback = () => smartFallbacks[Math.floor(Math.random() * smartFallbacks.length)];
+
+    try {
+        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(9000)
+        });
+        const data = await resp.json();
+        if (data.error) {
+            console.warn("[Gemini API] Response error:", data.error.message);
+            return getRandomFallback();
+        }
+        const candidate = data.candidates?.[0];
+        const reply = candidate?.content?.parts?.[0]?.text?.trim();
+        if (reply && reply.length > 0) return reply;
+        return getRandomFallback();
+    } catch(err) {
+        console.warn("[Gemini API] Generation timeout or error:", err.message);
+        return getRandomFallback();
     }
-    const candidate = data.candidates?.[0];
-    const reply = candidate?.content?.parts?.[0]?.text?.trim() || "What's good?";
-    return reply;
 }
 
 app.post('/api/ai/chat', async (req, res) => {
@@ -12230,8 +12257,11 @@ function setupSlashBotEvents(bot, token) {
         }
     });
 
-    // ── Conversational AI Debounce & Anti-Interruption State ──
+    // ── Conversational AI State Management ──
     const channelConvoState = new Map();
+    // Active 1-on-1 dialogue sessions: Key `${channelId}:${userId}` -> timestamp
+    // Allows user to chat naturally with Friday for up to 3 minutes without repeating @mention
+    const activeUserConversations = new Map();
 
     function stripBotMentions(content) {
         if (!content) return "";
@@ -12242,25 +12272,32 @@ function setupSlashBotEvents(bot, token) {
         if (bot.user?.username) {
             clean = clean.replace(new RegExp(`@${bot.user.username}\\b`, 'gi'), '');
         }
+        // Also strip common greeting prefixes if addressing by name
+        clean = clean.replace(/^hi\s+friday\b/i, '')
+                     .replace(/^hey\s+friday\b/i, '')
+                     .replace(/^friday\b/i, '');
         return clean.replace(/^[\s,:!-]+/, '').replace(/[\s]+$/, '').trim();
     }
 
     bot.on(Events.TypingStart, async (typing) => {
         try {
             if (!typing || !typing.channelId) return;
-            if (typing.userId === bot.user?.id) return; // Don't track own typing
+            const typerId = typing.userId || typing.user?.id;
+            if (!typerId || typerId === bot.user?.id) return; // Don't track own typing
 
             const state = channelConvoState.get(typing.channelId);
             if (state) {
                 state.lastTypingAt = Date.now();
-                // If we have a pending dispatch timer and Friday is not currently sending, extend the timer
-                // so Friday does not interrupt the person while they are typing!
+                if (!state.typingUsers) state.typingUsers = new Map();
+                state.typingUsers.set(typerId, Date.now());
+
+                // If Friday has scheduled a reply and isn't actively generating right now,
+                // pause and extend so she does not interrupt the member while they type!
                 if (state.timer && !state.isReplying) {
                     const elapsed = Date.now() - state.firstQueuedAt;
                     if (elapsed < 20000) {
                         clearTimeout(state.timer);
-                        state.timer = setTimeout(() => executeChannelConvoDispatch(typing.channelId), 4000);
-                        console.log(`[Conversation] Typing detected from <@${typing.userId}> in ${typing.channelId}. Pausing response to avoid interruption.`);
+                        state.timer = setTimeout(() => executeChannelConvoDispatch(typing.channelId), 3500);
                     }
                 }
             }
@@ -12272,16 +12309,20 @@ function setupSlashBotEvents(bot, token) {
     async function executeChannelConvoDispatch(channelId) {
         const state = channelConvoState.get(channelId);
         if (!state) return;
-        if (state.messages.length === 0) {
+        if (!state.messages || state.messages.length === 0) {
             channelConvoState.delete(channelId);
             return;
         }
 
-        // Check if user is actively typing right now (< 2.5s ago) and under max wait time (20s)
-        const timeSinceTyping = Date.now() - state.lastTypingAt;
-        const totalElapsed = Date.now() - state.firstQueuedAt;
-        if (timeSinceTyping < 2500 && totalElapsed < 20000) {
-            state.timer = setTimeout(() => executeChannelConvoDispatch(channelId), 3000);
+        // Check if any other user is STILL actively typing who hasn't sent their message yet
+        if (!state.typingUsers) state.typingUsers = new Map();
+        const now = Date.now();
+        const activeTypers = Array.from(state.typingUsers.entries())
+            .filter(([uid, ts]) => uid !== bot.user?.id && (now - ts < 3000));
+        const totalElapsed = now - state.firstQueuedAt;
+
+        if (activeTypers.length > 0 && totalElapsed < 20000) {
+            state.timer = setTimeout(() => executeChannelConvoDispatch(channelId), 2500);
             return;
         }
 
@@ -12316,6 +12357,7 @@ function setupSlashBotEvents(bot, token) {
             }
 
             const primaryAuthor = batch[batch.length - 1].authorName;
+            const primaryAuthorId = batch[batch.length - 1].authorId;
             const combinedTexts = batch.map(b => b.text).filter(Boolean);
             const userSpeech = combinedTexts.join('\n') || "(pinged Friday)";
 
@@ -12332,31 +12374,54 @@ function setupSlashBotEvents(bot, token) {
                 }
             }
 
-            const aiReply = await generateChatResponse(convoLines, "", primaryAuthor, replyContext);
-
-            if (aiReply && aiReply.trim()) {
-                await latestMsg.reply({
-                    content: aiReply.trim(),
-                    allowedMentions: { repliedUser: false }
-                }).catch(async () => {
-                    if (channel && channel.send) {
-                        await channel.send({ content: aiReply.trim() }).catch(() => {});
-                    }
-                });
+            let aiReply = "";
+            try {
+                aiReply = await generateChatResponse(convoLines, "", primaryAuthor, replyContext);
+            } catch(genErr) {
+                console.warn("[Conversation] generateChatResponse error:", genErr.message);
             }
+
+            if (!aiReply || !aiReply.trim()) {
+                const smartFallbacks = [
+                    "Haha you got me, fair play.",
+                    "Lmao alright, you got me there.",
+                    "Fair enough, caught me slipping.",
+                    "Bro really had me going for a second 💀",
+                    "Haha well played."
+                ];
+                aiReply = smartFallbacks[Math.floor(Math.random() * smartFallbacks.length)];
+            }
+
+            // Keep user's 1-on-1 dialogue session active for 3 minutes
+            if (primaryAuthorId) {
+                activeUserConversations.set(`${channelId}:${primaryAuthorId}`, Date.now());
+            }
+
+            await latestMsg.reply({
+                content: aiReply.trim(),
+                allowedMentions: { repliedUser: false }
+            }).catch(async () => {
+                if (channel && channel.send) {
+                    await channel.send({ content: aiReply.trim() }).catch(() => {});
+                }
+            });
+
         } catch(err) {
             console.error(`[Conversation] Error replying in channel ${channelId}:`, err.message);
-            if (batch.some(b => b.isMention)) {
-                await latestMsg.reply({
-                    content: "⚠️ My neural link had a brief hiccup. Give me another shout in a second.",
-                    allowedMentions: { repliedUser: false }
-                }).catch(() => {});
-            }
+            const fallbackReply = "Haha you got me, fair play.";
+            await latestMsg.reply({
+                content: fallbackReply,
+                allowedMentions: { repliedUser: false }
+            }).catch(async () => {
+                if (channel && channel.send) {
+                    await channel.send({ content: fallbackReply }).catch(() => {});
+                }
+            });
         } finally {
             state.isReplying = false;
-            if (state.messages.length > 0) {
+            if (state.messages && state.messages.length > 0) {
                 state.firstQueuedAt = Date.now();
-                state.timer = setTimeout(() => executeChannelConvoDispatch(channelId), 3000);
+                state.timer = setTimeout(() => executeChannelConvoDispatch(channelId), 2500);
             } else {
                 channelConvoState.delete(channelId);
             }
@@ -12383,8 +12448,14 @@ function setupSlashBotEvents(bot, token) {
         // Ignore commands starting with ! or / so we don't interfere with prefix commands
         if (msg.content.startsWith('!') || msg.content.startsWith('/')) return;
 
-        // Check if message is addressed to Friday or in an active conversation channel
-        const isMentioned = msg.mentions?.has?.(bot.user) || (bot.user && new RegExp(`<@!?${bot.user.id}>`).test(msg.content));
+        // Check active 1-on-1 dialogue window (3 minutes)
+        const convoKey = `${msg.channelId}:${msg.author.id}`;
+        const lastConvoTime = activeUserConversations.get(convoKey);
+        const isFollowupConvo = lastConvoTime && (Date.now() - lastConvoTime < 180000);
+
+        // Check if addressed by name or ping
+        const isAddressedByName = /\bfriday\b/i.test(msg.content);
+        const isMentioned = msg.mentions?.has?.(bot.user) || (bot.user && new RegExp(`<@!?${bot.user.id}>`).test(msg.content)) || isAddressedByName;
         const isConvoChannel = activeConversationChannels.has(msg.channelId);
 
         // If bot notifications are emergency muted, ignore unprompted channel chatter
@@ -12408,23 +12479,37 @@ function setupSlashBotEvents(bot, token) {
             } catch(e) {}
         }
 
-        const shouldRespond = isMentioned || isReplyingToFriday || isConvoChannel;
+        const shouldRespond = isMentioned || isReplyingToFriday || isConvoChannel || isFollowupConvo;
         if (!shouldRespond) return;
 
         const cleanText = stripBotMentions(msg.cleanContent || msg.content || "");
         if (!cleanText && !isMentioned && !isReplyingToFriday) return;
+
+        // Check if user is saying goodbye to end the active dialogue session
+        const lowerClean = cleanText.toLowerCase();
+        if (lowerClean === 'bye' || lowerClean === 'cya' || lowerClean === 'goodnight' || lowerClean === 'stop' || lowerClean === 'shut up') {
+            activeUserConversations.delete(convoKey);
+        } else {
+            activeUserConversations.set(convoKey, Date.now());
+        }
 
         let state = channelConvoState.get(msg.channelId);
         if (!state) {
             state = {
                 timer: null,
                 messages: [],
+                typingUsers: new Map(),
                 lastTypingAt: 0,
                 firstQueuedAt: Date.now(),
                 isReplying: false,
                 channel: msg.channel
             };
             channelConvoState.set(msg.channelId, state);
+        }
+
+        // Since this user just sent their message, clear their active typing status
+        if (state.typingUsers) {
+            state.typingUsers.delete(msg.author.id);
         }
 
         state.messages.push({
@@ -12441,7 +12526,8 @@ function setupSlashBotEvents(bot, token) {
         // Debounce: wait for author/typing to settle before dispatching response
         if (!state.isReplying) {
             if (state.timer) clearTimeout(state.timer);
-            const delay = (Date.now() - state.lastTypingAt < 4000) ? 4500 : 3500;
+            // Default pause of 2500ms so conversation feels natural and snappy
+            const delay = 2500;
             state.timer = setTimeout(() => executeChannelConvoDispatch(msg.channelId), delay);
         }
     });
