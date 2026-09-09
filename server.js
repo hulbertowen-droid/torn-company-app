@@ -9401,7 +9401,7 @@ function buildBankRequestEmbed(req) {
         color = UI.COLORS.WARNING;
         titlePrefix = '🔄';
         const payerMention = req.fulfilledBy ? `<@${req.fulfilledBy}>` : `@${req.fulfillerName || 'Banker'}`;
-        statusLine = `🔄 **Verifying payment** — ${payerMention} clicked "Give Cash" <t:${Math.floor((req.fulfilledAt || req.timestamp) / 1000)}:R>\nChecking faction logs... auto-confirms within 3 minutes.`;
+        statusLine = `🔄 **Payment in progress by ${payerMention}** (clicked "Give Cash" <t:${Math.floor((req.fulfilledAt || req.timestamp) / 1000)}:R>)\nChecking faction transfer logs... auto-confirms when sent in Torn.`;
     } else if (req.status === 'fulfilled') {
         color = UI.COLORS.SUCCESS;
         titlePrefix = '✅';
@@ -9446,6 +9446,14 @@ function buildBankRequestEmbed(req) {
             inline: true
         }
     ];
+
+    if (req.status === 'verifying' && (req.fulfilledBy || req.fulfillerName)) {
+        fields.push({
+            name: '🏦 Fulfilling Banker',
+            value: req.fulfilledBy ? `<@${req.fulfilledBy}>` : `@${req.fulfillerName}`,
+            inline: true
+        });
+    }
 
     if (req.status === 'fulfilled') {
         let val = null;
@@ -9509,41 +9517,53 @@ function buildBankRequestButtons(req) {
     const amtFmt = Number(req.amount).toLocaleString();
 
     if (req.status === 'pending') {
-        // Only 2 buttons: Give Cash (direct link to Torn vault) and Cancel
+        // Open request — anyone eligible can click "Give Cash" or "Cancel Request"
         return [{ type: 1, components: [
             {
                 type: 2,
-                style: 5, // Link — opens pre-filled Torn faction vault page
-                label: `💸 Give Cash in Torn ($${amtFmt})`,
-                url: vaultUrl
+                style: 3, // Green (Success) - interactive button to claim/give cash
+                custom_id: `bank_pay_${req.id}`,
+                label: `💸 Give Cash ($${amtFmt})`
             },
             {
                 type: 2,
-                style: 4, // Red
+                style: 4, // Red (Danger) - cancels the entire request
                 custom_id: `bank_cancel_${req.id}`,
-                label: '❌ Cancel'
+                label: '❌ Cancel Request'
             }
         ]}];
     } else if (req.status === 'verifying') {
+        // A banker clicked "Give Cash"
+        // 1. Give Cash is locked for everyone else (disabled button showing who claimed it)
+        // 2. Direct link to Torn faction vault pre-filled
+        // 3. Cancel Fulfillment (Unclaim) button in Grey (releases the fulfillment back to pending)
+        // 4. Cancel Request button in Red (cancels the entire withdrawal request)
+        const fulfillerLabel = req.fulfillerName ? `@${req.fulfillerName}` : 'Banker';
         return [{ type: 1, components: [
             {
                 type: 2,
-                style: 2, // Grey disabled — status indicator
-                custom_id: `verifying_display_${req.id}`,
-                label: `⏳ Verifying payment...`,
+                style: 2, // Grey (Secondary) - disabled indicator so no one else can click Give Cash
+                custom_id: `bank_claimed_${req.id}`,
+                label: `🔒 In Progress by ${fulfillerLabel}`,
                 disabled: true
             },
             {
                 type: 2,
-                style: 5, // Link — open Torn vault if they haven't paid yet
-                label: '💸 Give Cash in Torn',
+                style: 5, // Link — opens Torn faction vault directly
+                label: `💸 Open Vault in Torn ($${amtFmt})`,
                 url: vaultUrl
             },
             {
                 type: 2,
-                style: 4, // Red — revert if they mis-clicked
-                custom_id: `bank_revert_${req.id}`,
-                label: '↩️ Revert'
+                style: 2, // Grey (Secondary) — Cancel Fulfillment only (release claim)
+                custom_id: `bank_unclaim_${req.id}`,
+                label: '↩️ Cancel Fulfillment (Unclaim)'
+            },
+            {
+                type: 2,
+                style: 4, // Red (Danger) — Cancel entire Request
+                custom_id: `bank_cancel_${req.id}`,
+                label: '❌ Cancel Request'
             }
         ]}];
     } else {
@@ -10616,10 +10636,16 @@ async function executeFulfillRequest(reqId, interaction) {
         }
     }
 
+    // Prevent anyone else from claiming if already in progress by another banker
+    if (req.status === 'verifying' && req.fulfilledBy && req.fulfilledBy !== interaction.user.id) {
+        return { success: false, message: `⚠️ <@${req.fulfilledBy}> has already clicked Give Cash for this request and is currently fulfilling it!` };
+    }
+
     const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+    const amtFmt = Number(req.amount).toLocaleString();
+    const prefilledUrl = getPreFilledVaultUrl(req.tornId, req.amount);
 
     // Set fulfilledBy & fulfilledAt BEFORE checking logs so the log cutoff is accurate
-    // (the banker clicks Fulfill, then we look back in logs — we need this timestamp)
     req.fulfilledBy = interaction.user.id;
     req.fulfillerName = interaction.user.username;
     req.fulfilledAt = Date.now();
@@ -10657,7 +10683,7 @@ async function executeFulfillRequest(reqId, interaction) {
         };
     }
 
-    // Not verified yet — transition to verifying state, start background poller
+    // Not verified yet — transition to verifying state, update public message immediately
     req.status = 'verifying';
     saveBankRequests();
 
@@ -10678,14 +10704,69 @@ async function executeFulfillRequest(reqId, interaction) {
     // Start background poller (5 minutes)
     verifyBankPayment(req, apiKey, interaction.client).catch(() => {});
 
-    const prefilledUrl = getPreFilledVaultUrl(req.tornId, req.amount);
     return {
         success: true,
         verified: false,
-        message: `⏳ **Payment not detected in Torn faction logs yet.**\n\n` +
-                 `• If you haven't given the cash yet, please go give it in Torn now: [💸 Open Pre-filled Vault](${prefilledUrl})\n` +
+        message: `💸 **You claimed Vault Request #${req.id} ($${amtFmt}) for ${req.tornName || req.userName}!**\n\n` +
+                 `1. Click here to open the Torn Vault with pre-filled recipient and amount:\n` +
+                 `👉 **[💸 Open Pre-filled Vault in Torn ($${amtFmt})](${prefilledUrl})**\n\n` +
+                 `2. Complete the cash transfer in Torn.\n\n` +
                  `• The bot is watching faction logs and will **automatically mark this fulfilled** once Torn registers the transfer (up to 5 minutes).\n` +
-                 `• If no payment appears after 5 minutes, it will revert to pending.`
+                 `• If you need to cancel this fulfillment, click **"↩️ Cancel Fulfillment (Unclaim)"** on the message to release it for another banker.`
+    };
+}
+
+async function executeUnclaimFulfillment(reqId, interaction) {
+    const req = bankRequests[reqId];
+    if (!req) {
+        return { success: false, message: "⚠️ Bank request not found or expired." };
+    }
+
+    if (req.status !== 'verifying') {
+        if (req.status === 'pending') {
+            return { success: false, message: `⚠️ Request **#${reqId}** is already open and not currently claimed.` };
+        } else {
+            return { success: false, message: `⚠️ Request **#${reqId}** cannot be unclaimed because it is already **${req.status}**.` };
+        }
+    }
+
+    const isClaimer = (interaction.user.id === req.fulfilledBy);
+    const isBankerOrAdmin = (!discordConfig.bankerRoleId) ||
+        (interaction.member?.roles?.cache?.has(discordConfig.bankerRoleId)) ||
+        (interaction.member?.permissions?.has?.('Administrator'));
+
+    if (!isClaimer && !isBankerOrAdmin) {
+        return { 
+            success: false, 
+            message: `⚠️ Only <@${req.fulfilledBy}> (who clicked Give Cash) or a banker/admin can cancel this fulfillment.` 
+        };
+    }
+
+    req.status = 'pending';
+    req.fulfilledBy = null;
+    req.fulfillerName = null;
+    req.fulfilledAt = null;
+    saveBankRequests();
+
+    if (req.channelId && req.messageId) {
+        try {
+            const targetChan = interaction.client.channels.cache.get(req.channelId)
+                || await interaction.client.channels.fetch(req.channelId).catch(() => null);
+            if (targetChan) {
+                const targetMsg = await targetChan.messages.fetch(req.messageId).catch(() => null);
+                if (targetMsg) {
+                    await targetMsg.edit({
+                        embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
+                        components: buildBankRequestButtons(req)
+                    }).catch(() => {});
+                }
+            }
+        } catch(e) {}
+    }
+
+    return { 
+        success: true, 
+        message: `↩️ **Fulfillment cancelled.** You stepped down from Request **#${reqId}**. It is now released and open for any banker to fulfill.` 
     };
 }
 
@@ -10696,13 +10777,14 @@ async function executeCancelRequest(reqId, interaction) {
     }
 
     const isRequester = (interaction.user.id === req.userId);
-    const isBankerOrAdmin = (discordConfig.bankerRoleId && interaction.member?.roles?.cache?.has(discordConfig.bankerRoleId)) ||
-                            interaction.member?.permissions?.has?.('Administrator');
+    const isBankerOrAdmin = (!discordConfig.bankerRoleId) ||
+        (interaction.member?.roles?.cache?.has(discordConfig.bankerRoleId)) ||
+        (interaction.member?.permissions?.has?.('Administrator'));
     if (!isRequester && !isBankerOrAdmin) {
-        return { success: false, message: `⚠️ Only <@${req.userId}> or a banker/admin can cancel this request.` };
+        return { success: false, message: `⚠️ Only <@${req.userId}> (the requester) or a banker/admin can cancel this request.` };
     }
 
-    if (req.status !== 'pending') {
+    if (req.status !== 'pending' && req.status !== 'verifying') {
         return { success: false, message: `⚠️ Request **#${reqId}** is already ${req.status}.` };
     }
 
@@ -10731,7 +10813,7 @@ async function executeCancelRequest(reqId, interaction) {
         } catch(e) {}
     }
 
-    return { success: true, message: `✅ Request **#${reqId}** has been cancelled.` };
+    return { success: true, message: `❌ **Request #${reqId} has been cancelled (voided).** The withdrawal request is closed.` };
 }
 
 async function buildVaultBalanceEmbed(apiKey, targetQuery = null, requestingUser = null) {
@@ -12730,40 +12812,31 @@ function setupSlashBotEvents(bot, token) {
                 return interaction.editReply({ content: res.message }).catch(() => {});
             }
 
-            // ── Bank: Revert to Pending ──
-            if (customId.startsWith('bank_revert_')) {
-                const reqId = customId.replace('bank_revert_', '').trim();
-                const req = bankRequests[reqId];
-                if (!req) return interaction.reply({ content: '⚠️ Request not found.', ephemeral: true }).catch(() => {});
-
-                const isBankerOrAdmin = !discordConfig.bankerRoleId ||
-                    interaction.member?.roles?.cache?.has(discordConfig.bankerRoleId) ||
-                    interaction.member?.permissions?.has?.('Administrator');
-                if (!isBankerOrAdmin) return interaction.reply({ content: `⚠️ Only bankers can revert payments.`, ephemeral: true }).catch(() => {});
-
-                req.status = 'pending';
-                req.fulfilledBy = null;
-                req.fulfillerName = null;
-                req.fulfilledAt = null;
-                saveBankRequests();
-
-                if (req.channelId && req.messageId) {
-                    try {
-                        const chan = interaction.client.channels.cache.get(req.channelId)
-                            || await interaction.client.channels.fetch(req.channelId).catch(() => null);
-                        const msg = chan && await chan.messages.fetch(req.messageId).catch(() => null);
-                        if (msg) await msg.edit({ embeds: [sanitizeEmbed(buildBankRequestEmbed(req))], components: buildBankRequestButtons(req) }).catch(() => {});
-                    } catch(e) {}
-                }
-                return interaction.reply({ content: `↩️ Request **#${reqId}** has been reverted to pending.`, ephemeral: true }).catch(() => {});
+            // ── Bank: Cancel Fulfillment (Unclaim / Revert) ──
+            if (customId.startsWith('bank_unclaim_') || customId.startsWith('bank_revert_')) {
+                const reqId = customId.replace('bank_unclaim_', '').replace('bank_revert_', '').trim();
+                await interaction.deferReply({ ephemeral: true });
+                const res = await executeUnclaimFulfillment(reqId, interaction);
+                return interaction.editReply({ content: res.message }).catch(() => {});
             }
 
-            // ── Bank Request Cancel ──
+            // ── Bank: Clicked In-Progress Button Indicator ──
+            if (customId.startsWith('bank_claimed_') || customId.startsWith('verifying_display_')) {
+                const reqId = customId.replace('bank_claimed_', '').replace('verifying_display_', '').trim();
+                const req = bankRequests[reqId];
+                const bankerText = req?.fulfillerName ? `<@${req.fulfilledBy}>` : 'another banker';
+                return interaction.reply({
+                    content: `🔒 **Vault Request #${reqId} is currently in progress by ${bankerText}.**\n\nThey have clicked "Give Cash" and are completing the transfer in Torn.`,
+                    ephemeral: true
+                }).catch(() => {});
+            }
 
+            // ── Bank Request Cancel (Entire Request Void) ──
             if (customId.startsWith('bank_cancel_')) {
                 const reqId = customId.replace('bank_cancel_', '').trim();
+                await interaction.deferReply({ ephemeral: true });
                 const res = await executeCancelRequest(reqId, interaction);
-                return interaction.reply({ content: res.message, ephemeral: true }).catch(() => {});
+                return interaction.editReply({ content: res.message }).catch(() => {});
             }
 
             // ── Giveaway: Enter / Leave ──
