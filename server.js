@@ -22,6 +22,7 @@ require('dotenv').config();
 // Centralized embed builders, colors, formatters, and button helpers.
 // All user-facing Discord responses should use UI.success(), UI.error(), etc.
 const UI = require('./friday-ui');
+const userKeys = require('./user-keys');
 
 
 // Hardcoded MongoDB URI to bypass Render settings
@@ -220,12 +221,21 @@ async function loadConfigFromMongo() {
                 lastGoodWarboardPayload = saved.lastWarboardPayload;
                 console.log(`[Mongo] Restored lastGoodWarboardPayload (${lastGoodWarboardPayload.friendly?.length || 0} members) from MongoDB Atlas.`);
             }
+            if (saved.userApiKeys) {
+                userKeys.importEncryptedFromMongo(saved.userApiKeys);
+            }
             console.log('[Mongo] Restored master configurations from MongoDB Atlas.');
             
             if (discordConfig.apiKey) {
                 try {
                     const { addKey } = require('./recruit/lib/apiKeyPool');
                     addKey(discordConfig.apiKey, discordConfig.factionId || 0, null);
+                } catch(e) {}
+            }
+            const primaryOwnerKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || "";
+            if (primaryOwnerKey) {
+                try {
+                    userKeys.syncOwnerDetails(primaryOwnerKey, discordConfig.personalDiscordId);
                 } catch(e) {}
             }
 
@@ -669,6 +679,7 @@ function saveToMongo() {
                         warFlightArchive,
                         warAuditArchive,
                         lastWarboardPayload: lastGoodWarboardPayload,
+                        userApiKeys: userKeys.exportEncryptedForMongo(),
                         updatedAt: new Date()
                     }
                 },
@@ -677,6 +688,7 @@ function saveToMongo() {
         }
     }, 2000);
 }
+userKeys.setMongoSaveCallback(saveToMongo);
 
 function saveDiscordConfig() { fs.writeFileSync('discord_config.json', JSON.stringify(discordConfig)); saveToMongo(); }
 function saveMarketConfig() { fs.writeFileSync('market_config.json', JSON.stringify(marketConfig)); saveToMongo(); }
@@ -2793,6 +2805,9 @@ app.post('/api/save-discord-config', async (req, res) => {
                     saveApiPool();
                 }
             }
+        } catch(e) {}
+        try {
+            userKeys.syncOwnerDetails(discordConfig.apiKey, discordConfig.personalDiscordId);
         } catch(e) {}
     }
     saveDiscordConfig(); 
@@ -5932,15 +5947,35 @@ Your job is to jump into the conversation naturally — like an experienced, cle
 - RW (Ranked War): Faction-vs-faction ranked battle.
 - Mugged: Being attacked and losing money while traveling.`;
 
-async function generateChatResponse(convoLines = [], hint = "", invokerName = "", replyContext = null) {
+async function generateChatResponse(convoLines = [], hint = "", invokerName = "", replyContext = null, userAccountData = null, detectedIntent = null) {
     const key = getGeminiApiKey();
     if (!key) {
+        if (userAccountData) {
+            return userKeys.formatDeterministicStatsReply(userAccountData, invokerName, detectedIntent);
+        }
         throw new Error("Gemini API key is not configured.");
     }
 
     let convoPrompt = "";
     if (invokerName) {
         convoPrompt += `Member speaking / pinging you: ${invokerName}\n\n`;
+    }
+
+    // ── Verified Real-Time Live Torn Account Data Injection ──
+    if (userAccountData) {
+        convoPrompt += `═══ VERIFIED REAL-TIME TORN ACCOUNT DATA FOR ${invokerName} ═══\n`;
+        convoPrompt += `Player: ${userAccountData.playerName} [ID: ${userAccountData.playerId}]\n`;
+        convoPrompt += `Energy: ${userAccountData.energy.current}/${userAccountData.energy.maximum} (${userAccountData.energy.isFull ? 'FULL' : `${userAccountData.energy.maximum - userAccountData.energy.current} below max, full in about ${userAccountData.energy.fulltimeMinutes}m`})\n`;
+        convoPrompt += `Nerve: ${userAccountData.nerve.current}/${userAccountData.nerve.maximum} (${userAccountData.nerve.isFull ? 'FULL' : `full in about ${userAccountData.nerve.fulltimeMinutes}m`})\n`;
+        convoPrompt += `Happy: ${userAccountData.happy.current}/${userAccountData.happy.maximum}\n`;
+        convoPrompt += `Life: ${userAccountData.life.current}/${userAccountData.life.maximum}\n`;
+        convoPrompt += `Drug Cooldown: ${userAccountData.cooldowns.drug > 0 ? `${userAccountData.cooldowns.drugMinutes}m remaining` : 'None / Ready'}\n`;
+        convoPrompt += `Booster Cooldown: ${userAccountData.cooldowns.booster > 0 ? `${userAccountData.cooldowns.boosterMinutes}m remaining` : 'None / Ready'}\n`;
+        convoPrompt += `Medical Cooldown: ${userAccountData.cooldowns.medical > 0 ? `${userAccountData.cooldowns.medicalMinutes}m remaining` : 'None / Ready'}\n`;
+        convoPrompt += `Travel: ${userAccountData.travel.isTraveling ? `In flight to ${userAccountData.travel.destination} (${userAccountData.travel.timeLeftMinutes}m left)` : `In ${userAccountData.travel.destination || 'Torn'}`}\n`;
+        convoPrompt += `Status: ${userAccountData.status.state} (${userAccountData.status.description})\n`;
+        convoPrompt += `═══════════════════════════════════════════════════════════════\n`;
+        convoPrompt += `MANDATORY ACCURACY MANDATE: When answering questions about their energy, nerve, or account, YOU MUST STATE THE EXACT REAL-TIME NUMBERS (e.g. ${userAccountData.energy.current}/${userAccountData.energy.maximum} energy) accurately without guessing. Deliver the answer with your signature dry wit, playful banter, or deadpan humor.\n\n`;
     }
 
     if (replyContext && replyContext.text) {
@@ -5986,13 +6021,22 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
         const data = await resp.json();
         if (data.error) {
             console.warn("[Gemini API] Response error:", data.error.message);
+            if (userAccountData) {
+                return userKeys.formatDeterministicStatsReply(userAccountData, invokerName, detectedIntent);
+            }
             return "";
         }
         const candidate = data.candidates?.[0];
         const reply = candidate?.content?.parts?.[0]?.text?.trim() || "";
+        if (!reply && userAccountData) {
+            return userKeys.formatDeterministicStatsReply(userAccountData, invokerName, detectedIntent);
+        }
         return reply;
     } catch(err) {
         console.warn("[Gemini API] Generation timeout or error:", err.message);
+        if (userAccountData) {
+            return userKeys.formatDeterministicStatsReply(userAccountData, invokerName, detectedIntent);
+        }
         return "";
     }
 }
@@ -12247,7 +12291,14 @@ async function registerSlashCommands(token, guildId = null) {
                     { name: '🛑 Stop Conversation Mode', value: 'stop' },
                     { name: '📊 Check Status', value: 'status' }
                 )
-            ).toJSON()
+            ).toJSON(),
+
+        // 18. Personal Account Vitals & Secure API Key Linking
+        new SlashCommandBuilder().setName('energy').setDescription('Check your live energy, nerve, bars, and cooldowns (uses linked Limited API key)').toJSON(),
+        new SlashCommandBuilder().setName('bars').setDescription('Check your live energy, nerve, bars, and cooldowns (alias of /energy)').toJSON(),
+        new SlashCommandBuilder().setName('linkkey').setDescription('Privately link your Torn Limited Access API key to F.R.I.D.A.Y')
+            .addStringOption(opt => opt.setName('key').setDescription('16-character Limited Access API Key').setRequired(true)).toJSON(),
+        new SlashCommandBuilder().setName('unlinkkey').setDescription('Unlink and permanently delete your stored Torn API key from F.R.I.D.A.Y').toJSON()
     ];
 
     const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : [])
@@ -12440,6 +12491,8 @@ function setupSlashBotEvents(bot, token) {
             }
 
             const primaryAuthor = batch[batch.length - 1].authorName;
+            const primaryAuthorId = batch[batch.length - 1].authorId;
+            const authorUsername = latestMsg?.author?.username || "";
             const combinedTexts = batch.map(b => b.text).filter(Boolean);
             const userSpeech = combinedTexts.join('\n') || "(addressed Friday)";
 
@@ -12456,11 +12509,53 @@ function setupSlashBotEvents(bot, token) {
                 }
             }
 
+            // ── Live Personal Account Stats Handling ──
+            const accountIntent = userKeys.detectUserAccountIntent(userSpeech);
+            let userAccountData = null;
+
+            if (accountIntent) {
+                const primaryKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || (apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
+                const resolved = userKeys.resolveUserApiKey(primaryAuthorId, primaryAuthor, authorUsername, primaryKey);
+
+                if (!resolved) {
+                    // User does NOT have an API key linked and is not the owner!
+                    const linkEmbed = UI.warning(
+                        '🔑 Torn Limited API Key Required',
+                        `Hey **${primaryAuthor}**, to check your live personal energy, nerve, cooldowns, or account stats, I need your Torn **Limited Access API Key**.\n\n` +
+                        `🔒 **Zero Public Exposure:** Your key is entered in a private Discord popup, encrypted with **military-grade AES-256-GCM**, and stored securely. F.R.I.D.A.Y only accesses it when you ask for your stats.\n\n` +
+                        `Click **Link Limited Key** below to enter it privately:`
+                    );
+
+                    const actionRow = UI.actionRow(
+                        UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑'),
+                        UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')
+                    );
+
+                    await latestMsg.reply({
+                        embeds: [sanitizeEmbed(linkEmbed)],
+                        components: [actionRow],
+                        allowedMentions: { repliedUser: false }
+                    }).catch(async () => {
+                        if (channel && channel.send) {
+                            await channel.send({ embeds: [sanitizeEmbed(linkEmbed)], components: [actionRow] }).catch(() => {});
+                        }
+                    });
+                    return;
+                }
+
+                // User HAS an API key or is the owner! Fetch real-time live stats!
+                userAccountData = await userKeys.fetchUserLiveStats(resolved.key);
+            }
+
             let aiReply = "";
             try {
-                aiReply = await generateChatResponse(convoLines, "", primaryAuthor, replyContext);
+                aiReply = await generateChatResponse(convoLines, "", primaryAuthor, replyContext, userAccountData, accountIntent);
             } catch(genErr) {
                 console.warn("[Conversation] generateChatResponse error:", genErr.message);
+            }
+
+            if ((!aiReply || !aiReply.trim()) && userAccountData) {
+                aiReply = userKeys.formatDeterministicStatsReply(userAccountData, primaryAuthor, accountIntent);
             }
 
             if (aiReply && aiReply.trim()) {
@@ -12644,6 +12739,40 @@ function setupSlashBotEvents(bot, token) {
                 }
                 return await interaction.editReply(replyPayload);
             }
+
+            if (interaction.customId === 'modal_link_user_api_key') {
+                await interaction.deferReply({ ephemeral: true });
+                const inputKey = (interaction.fields.getTextInputValue('user_api_key_input') || '').trim();
+                const res = await userKeys.linkUserApiKey(interaction.user.id, inputKey);
+
+                if (!res.success) {
+                    return await interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.error(
+                            'Linking Failed',
+                            `⚠️ **Could not link API key:** ${res.error}\n\nPlease verify your key at [Torn Preferences](https://www.torn.com/preferences.php#tab=api) and ensure it has **Limited Access**.`
+                        ))]
+                    });
+                }
+
+                const successEmbed = UI.success(
+                    '🔑 Limited API Key Securely Linked!',
+                    `Welcome, **${res.playerName} [${res.playerId}]**!\n\n` +
+                    `🔒 Your Limited Access API key has been encrypted with **military-grade AES-256-GCM** and safely saved.\n\n` +
+                    `F.R.I.D.A.Y can now check your live stats! Ask anywhere in chat (e.g. *@F.R.I.D.A.Y how much e do I have?* or *what are my cooldowns?*) or use \`/energy\`!`
+                );
+
+                if (res.bars) {
+                    const b = res.bars;
+                    successEmbed.fields = [
+                        { name: '⚡ Energy', value: `${b.energy?.current ?? 0}/${b.energy?.maximum ?? 100}`, inline: true },
+                        { name: '💉 Nerve', value: `${b.nerve?.current ?? 0}/${b.nerve?.maximum ?? 15}`, inline: true },
+                        { name: '😊 Happy', value: `${b.happy?.current ?? 0}/${b.happy?.maximum ?? 100}`, inline: true },
+                        { name: '❤️ Life', value: `${b.life?.current ?? 0}/${b.life?.maximum ?? 100}`, inline: true }
+                    ];
+                }
+
+                return await interaction.editReply({ embeds: [sanitizeEmbed(successEmbed)] });
+            }
         }
 
         // ── Amount Autocomplete for /withdraw ──
@@ -12722,6 +12851,25 @@ function setupSlashBotEvents(bot, token) {
         // ── Interactive Button Click Handler ──
         if (interaction.isButton()) {
             const customId = interaction.customId || '';
+
+            // ── Link User API Key Button (Opens private Discord Modal) ──
+            if (customId === 'btn_link_user_api_key') {
+                const modal = new ModalBuilder()
+                    .setCustomId('modal_link_user_api_key')
+                    .setTitle('Link Torn Limited API Key');
+
+                const keyInput = new TextInputBuilder()
+                    .setCustomId('user_api_key_input')
+                    .setLabel('Enter Your Limited Access API Key')
+                    .setStyle(TextInputStyle.Short)
+                    .setPlaceholder('16-character Torn API key')
+                    .setMinLength(16)
+                    .setMaxLength(16)
+                    .setRequired(true);
+
+                modal.addComponents(new ActionRowBuilder().addComponents(keyInput));
+                return await interaction.showModal(modal);
+            }
 
             // ── Instant 1-Click Verification (Official Torn Discord Flow) ──
             if (customId === 'btn_verify_now' || customId === 'btn_verify_open_modal') {
@@ -12958,6 +13106,110 @@ function setupSlashBotEvents(bot, token) {
         }
 
         const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+
+        // ── Personal Live Energy, Bars & Cooldowns ──
+        if (cmd === 'energy' || cmd === 'bars') {
+            await interaction.deferReply({ ephemeral: true });
+            const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
+            const primaryKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || (apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
+            const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username, primaryKey);
+
+            if (!resolved) {
+                const linkEmbed = UI.warning(
+                    '🔑 Torn Limited API Key Required',
+                    `Hey **${invokerName}**, to check your live personal energy, nerve, cooldowns, or bars, you need to link your Torn **Limited Access API Key**.\n\n` +
+                    `🔒 **Private & Secure:** Your key is encrypted with **military-grade AES-256-GCM** and only accessed when you check your stats.\n\n` +
+                    `Click **Link Limited Key** below:`
+                );
+                const actionRow = UI.actionRow(
+                    UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑'),
+                    UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')
+                );
+                return await interaction.editReply({ embeds: [sanitizeEmbed(linkEmbed)], components: [actionRow] });
+            }
+
+            const stats = await userKeys.fetchUserLiveStats(resolved.key);
+            if (!stats) {
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.error('Fetch Failed', '⚠️ Could not retrieve live account data from Torn API. Please try again in a moment.'))]
+                });
+            }
+
+            const e = stats.energy;
+            const n = stats.nerve;
+            const h = stats.happy;
+            const l = stats.life;
+            const c = stats.cooldowns;
+
+            const energyField = `${e.current}/${e.maximum}${e.isFull ? ' *(Full)*' : ` *(+${e.maximum - e.current} in ~${e.fulltimeMinutes}m)*`}`;
+            const nerveField = `${n.current}/${n.maximum}${n.isFull ? ' *(Full)*' : ` *(full in ~${n.fulltimeMinutes}m)*`}`;
+            const drugField = c.drug > 0 ? `💊 ${c.drugMinutes}m` : '💊 Ready';
+            const boosterField = c.booster > 0 ? `🍬 ${c.boosterMinutes}m` : '🍬 Ready';
+            const medField = c.medical > 0 ? `💉 ${c.medicalMinutes}m` : '💉 Ready';
+
+            const embed = UI.info(
+                `⚡ Real-Time Account Vitals: ${stats.playerName} [${stats.playerId}]`,
+                `Live status: **${stats.status.state}** (${stats.status.description})${stats.travel.isTraveling ? ` • ✈️ Flying to **${stats.travel.destination}** (${stats.travel.timeLeftMinutes}m left)` : ` • 📍 In **${stats.travel.destination}**`}`,
+                [
+                    { name: '⚡ Energy', value: energyField, inline: true },
+                    { name: '💉 Nerve', value: nerveField, inline: true },
+                    { name: '😊 Happy', value: `${h.current}/${h.maximum}`, inline: true },
+                    { name: '❤️ Life', value: `${l.current}/${l.maximum}`, inline: true },
+                    { name: '⏱️ Cooldowns', value: `${drugField} | ${boosterField} | ${medField}`, inline: false }
+                ]
+            );
+
+            return await interaction.editReply({ embeds: [sanitizeEmbed(embed)] });
+        }
+
+        // ── Link Limited API Key Slash Command ──
+        if (cmd === 'linkkey') {
+            await interaction.deferReply({ ephemeral: true });
+            const inputKey = (interaction.options.getString('key') || '').trim();
+            const res = await userKeys.linkUserApiKey(interaction.user.id, inputKey);
+
+            if (!res.success) {
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.error(
+                        'Linking Failed',
+                        `⚠️ **Could not link API key:** ${res.error}\n\nPlease verify your key at [Torn Preferences](https://www.torn.com/preferences.php#tab=api) and ensure it has **Limited Access**.`
+                    ))]
+                });
+            }
+
+            const successEmbed = UI.success(
+                '🔑 Limited API Key Securely Linked!',
+                `Welcome, **${res.playerName} [${res.playerId}]**!\n\n` +
+                `🔒 Your Limited Access API key has been encrypted with **AES-256-GCM** and saved in secure storage.\n\n` +
+                `F.R.I.D.A.Y can now look up your live stats! Ask in chat (e.g. *@F.R.I.D.A.Y how much e do I have?*) or use \`/energy\`!`
+            );
+            if (res.bars) {
+                const b = res.bars;
+                successEmbed.fields = [
+                    { name: '⚡ Energy', value: `${b.energy?.current ?? 0}/${b.energy?.maximum ?? 100}`, inline: true },
+                    { name: '💉 Nerve', value: `${b.nerve?.current ?? 0}/${b.nerve?.maximum ?? 15}`, inline: true },
+                    { name: '😊 Happy', value: `${b.happy?.current ?? 0}/${b.happy?.maximum ?? 100}`, inline: true },
+                    { name: '❤️ Life', value: `${b.life?.current ?? 0}/${b.life?.maximum ?? 100}`, inline: true }
+                ];
+            }
+            return await interaction.editReply({ embeds: [sanitizeEmbed(successEmbed)] });
+        }
+
+        // ── Unlink API Key Slash Command ──
+        if (cmd === 'unlinkkey') {
+            const deleted = userKeys.unlinkUserApiKey(interaction.user.id);
+            if (deleted) {
+                return await interaction.reply({
+                    embeds: [sanitizeEmbed(UI.success('Key Unlinked', '🔒 Your stored API key has been permanently deleted from F.R.I.D.A.Y storage.'))],
+                    ephemeral: true
+                });
+            } else {
+                return await interaction.reply({
+                    embeds: [sanitizeEmbed(UI.info('No Key Found', 'You do not have a linked API key stored.'))],
+                    ephemeral: true
+                });
+            }
+        }
 
         // ── Tactical Torn AI Oracle (F.R.I.D.A.Y - Private Ephemeral) ──
         if (cmd === 'ask') {

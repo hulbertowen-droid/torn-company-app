@@ -2594,6 +2594,34 @@
                             </div>
                             <div class="cmd-card-desc">Interactive giveaway with live countdown & auto winners.</div>
                         </div>
+                        <div class="cmd-card on" id="cmd-card-energy">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>⚡</span><code>/energy</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="energy" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Check live energy, nerve, happy, life & cooldowns.</div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-bars">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>📊</span><code>/bars</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="bars" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Alias for /energy: full personal account vitals check.</div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-linkkey">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>🔑</span><code>/linkkey</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="linkkey" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Privately link Torn Limited API key via AES-256-GCM.</div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-unlinkkey">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>🗑️</span><code>/unlinkkey</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="unlinkkey" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Permanently delete stored API key from vault.</div>
+                        </div>
                     </div>
                 </div>
 
