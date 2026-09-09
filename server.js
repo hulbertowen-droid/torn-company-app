@@ -59,6 +59,7 @@ let discordConfig = {
     factionRoleId: "",
     leaderRoleId: "",
     autoVerifyOnJoin: true,
+    conversationChannels: [],
     disabledCommands: []
 };
 let companyConfig = { apiKey: "", companyId: "", globalChannelId: "", threshold: 0, alertedItems: {} };
@@ -610,6 +611,7 @@ bankRequestCounter = 1000;
 try { if (fs.existsSync('subscriptions.json')) subscriptions = JSON.parse(fs.readFileSync('subscriptions.json')); } catch (e) {}
 try { if (fs.existsSync('discord_config.json')) discordConfig = { ...discordConfig, ...JSON.parse(fs.readFileSync('discord_config.json')) }; } catch(e) {}
 global.isNotificationsKilled = !!discordConfig.notificationsKilled;
+let activeConversationChannels = new Set(Array.isArray(discordConfig.conversationChannels) ? discordConfig.conversationChannels : []);
 try { if (fs.existsSync('market_config.json')) marketConfig = { ...marketConfig, ...JSON.parse(fs.readFileSync('market_config.json')) }; } catch(e) {}
 try { if (fs.existsSync('oc_config.json')) ocConfig = { ...ocConfig, ...JSON.parse(fs.readFileSync('oc_config.json')) }; } catch(e) {}
 
@@ -5890,9 +5892,14 @@ Your ONLY job is to read the recent chat and jump into the conversation naturall
    - Chill / casual chat → keep it relaxed and human.
 
 5. WHO TO ADDRESS:
-   - You are told who used the /respond command (the invoker). That person is the one "calling you in" to the chat.
-   - React to the CONVERSATION CONTENT, not necessarily to any single person unless it's natural.
+   - You are told who spoke or pinged you (the invoker/speaker).
+   - React to the CONVERSATION CONTENT naturally.
    - Don't force-address people by name unless the conversation clearly warrants it.
+
+6. REPLIES AND CONTEXT CONTINUATIONS:
+   - When a user is replying to another message in chat:
+     * If the user's message is an incomplete thought, reaction, question, agreement, or short follow-up (e.g. "why?", "no way", "is that true?", "fr?", "same", "lmao", "who did that?"): do NOT respond in isolation! Respond directly to the substance of the PREVIOUS MESSAGE they are replying to in light of their reaction.
+     * If the user's message is an independent standalone statement or question on its own new topic, address their statement or question directly.
 
 ═══ TORN CITY KNOWLEDGE (USE ONLY WHEN RELEVANT) ═══
 
@@ -5909,7 +5916,7 @@ Your ONLY job is to read the recent chat and jump into the conversation naturall
 - RW (Ranked War): Faction-vs-faction ranked battle.
 - Mugged: Being attacked and losing money while traveling.`;
 
-async function generateChatResponse(convoLines = [], hint = "", invokerName = "") {
+async function generateChatResponse(convoLines = [], hint = "", invokerName = "", replyContext = null) {
     const key = getGeminiApiKey();
     if (!key) {
         throw new Error("Gemini API key is not configured.");
@@ -5917,7 +5924,17 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
 
     let convoPrompt = "";
     if (invokerName) {
-        convoPrompt += `The /respond command was used by: ${invokerName} (they are "calling you in" to the conversation)\n\n`;
+        convoPrompt += `Member speaking / pinging you: ${invokerName}\n\n`;
+    }
+
+    if (replyContext && replyContext.text) {
+        convoPrompt += `═══ MESSAGE BEING REPLIED TO ═══\n`;
+        convoPrompt += `Original Author: ${replyContext.author || "Member"}\n`;
+        convoPrompt += `Original Message: "${replyContext.text}"\n`;
+        if (replyContext.replyText) {
+            convoPrompt += `User's Reply: "${replyContext.replyText}"\n`;
+        }
+        convoPrompt += `Instruction: If the user's reply is not its own standalone question or statement (e.g. it is a reaction, question about the parent message, or incomplete thought), respond directly to the substance of the original message above in light of their reply. Otherwise address their statement directly.\n═════════════════════════════════\n\n`;
     }
 
     convoPrompt += "Recent conversation in the Discord channel:\n";
@@ -12111,7 +12128,18 @@ async function registerSlashCommands(token, guildId = null) {
         // 16. Natural Chat Wingman / Conversation Responder
         new SlashCommandBuilder().setName('respond').setDescription('F.R.I.D.A.Y reads recent chat vibes and responds naturally like a person in conversation')
             .addStringOption(opt => opt.setName('hint').setDescription('Optional angle or thought to chime in with').setRequired(false))
-            .toJSON()
+            .toJSON(),
+
+        // 17. Continuous Conversational Mode
+        new SlashCommandBuilder().setName('conversation').setDescription('Toggle continuous conversational AI mode in this channel')
+            .addStringOption(opt => opt.setName('action').setDescription('Action: start, stop, or status')
+                .setRequired(false)
+                .addChoices(
+                    { name: '🟢 Start Conversation Mode', value: 'start' },
+                    { name: '🛑 Stop Conversation Mode', value: 'stop' },
+                    { name: '📊 Check Status', value: 'status' }
+                )
+            ).toJSON()
     ];
 
     const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : [])
@@ -12202,6 +12230,139 @@ function setupSlashBotEvents(bot, token) {
         }
     });
 
+    // ── Conversational AI Debounce & Anti-Interruption State ──
+    const channelConvoState = new Map();
+
+    function stripBotMentions(content) {
+        if (!content) return "";
+        let clean = content;
+        if (bot.user?.id) {
+            clean = clean.replace(new RegExp(`<@!?${bot.user.id}>`, 'g'), '');
+        }
+        if (bot.user?.username) {
+            clean = clean.replace(new RegExp(`@${bot.user.username}\\b`, 'gi'), '');
+        }
+        return clean.replace(/^[\s,:!-]+/, '').replace(/[\s]+$/, '').trim();
+    }
+
+    bot.on(Events.TypingStart, async (typing) => {
+        try {
+            if (!typing || !typing.channelId) return;
+            if (typing.userId === bot.user?.id) return; // Don't track own typing
+
+            const state = channelConvoState.get(typing.channelId);
+            if (state) {
+                state.lastTypingAt = Date.now();
+                // If we have a pending dispatch timer and Friday is not currently sending, extend the timer
+                // so Friday does not interrupt the person while they are typing!
+                if (state.timer && !state.isReplying) {
+                    const elapsed = Date.now() - state.firstQueuedAt;
+                    if (elapsed < 20000) {
+                        clearTimeout(state.timer);
+                        state.timer = setTimeout(() => executeChannelConvoDispatch(typing.channelId), 4000);
+                        console.log(`[Conversation] Typing detected from <@${typing.userId}> in ${typing.channelId}. Pausing response to avoid interruption.`);
+                    }
+                }
+            }
+        } catch(err) {
+            console.warn("[Slash Bot] TypingStart error:", err.message);
+        }
+    });
+
+    async function executeChannelConvoDispatch(channelId) {
+        const state = channelConvoState.get(channelId);
+        if (!state) return;
+        if (state.messages.length === 0) {
+            channelConvoState.delete(channelId);
+            return;
+        }
+
+        // Check if user is actively typing right now (< 2.5s ago) and under max wait time (20s)
+        const timeSinceTyping = Date.now() - state.lastTypingAt;
+        const totalElapsed = Date.now() - state.firstQueuedAt;
+        if (timeSinceTyping < 2500 && totalElapsed < 20000) {
+            state.timer = setTimeout(() => executeChannelConvoDispatch(channelId), 3000);
+            return;
+        }
+
+        state.isReplying = true;
+        const batch = state.messages.splice(0, state.messages.length);
+        const latestMsg = batch[batch.length - 1].msgObj;
+        const channel = latestMsg?.channel || state.channel;
+
+        try {
+            if (channel && channel.sendTyping) {
+                await channel.sendTyping().catch(() => {});
+            }
+
+            // Gather recent channel conversation transcript (excluding current batch)
+            const convoLines = [];
+            if (channel && channel.messages) {
+                const fetched = await channel.messages.fetch({ limit: 15, before: batch[0].id }).catch(() => null);
+                if (fetched && fetched.size > 0) {
+                    const sorted = Array.from(fetched.values()).reverse();
+                    for (const m of sorted) {
+                        if (m.author?.bot && m.author?.id !== bot.user?.id) continue;
+                        const authorName = m.member?.displayName || m.author?.username || "Member";
+                        const text = (m.cleanContent || m.content || "").trim();
+                        if (text) convoLines.push(`${authorName}: ${text}`);
+                    }
+                }
+            }
+
+            // Append the buffered messages to the conversation transcript
+            for (const b of batch) {
+                convoLines.push(`${b.authorName}: ${b.text || '(pinged Friday)'}`);
+            }
+
+            const primaryAuthor = batch[batch.length - 1].authorName;
+            const combinedTexts = batch.map(b => b.text).filter(Boolean);
+            const userSpeech = combinedTexts.join('\n') || "(pinged Friday)";
+
+            // Check if any message in the batch had a reply reference
+            let replyContext = null;
+            for (let i = batch.length - 1; i >= 0; i--) {
+                if (batch[i].reference) {
+                    replyContext = {
+                        author: batch[i].reference.authorName,
+                        text: batch[i].reference.text,
+                        replyText: userSpeech
+                    };
+                    break;
+                }
+            }
+
+            const aiReply = await generateChatResponse(convoLines, "", primaryAuthor, replyContext);
+
+            if (aiReply && aiReply.trim()) {
+                await latestMsg.reply({
+                    content: aiReply.trim(),
+                    allowedMentions: { repliedUser: false }
+                }).catch(async () => {
+                    if (channel && channel.send) {
+                        await channel.send({ content: aiReply.trim() }).catch(() => {});
+                    }
+                });
+            }
+        } catch(err) {
+            console.error(`[Conversation] Error replying in channel ${channelId}:`, err.message);
+            if (batch.some(b => b.isMention)) {
+                await latestMsg.reply({
+                    content: "⚠️ My neural link had a brief hiccup. Give me another shout in a second.",
+                    allowedMentions: { repliedUser: false }
+                }).catch(() => {});
+            }
+        } finally {
+            state.isReplying = false;
+            if (state.messages.length > 0) {
+                state.firstQueuedAt = Date.now();
+                state.timer = setTimeout(() => executeChannelConvoDispatch(channelId), 3000);
+            } else {
+                channelConvoState.delete(channelId);
+            }
+        }
+    }
+
     bot.on(Events.MessageCreate, async (msg) => {
         if (msg.author?.bot) return;
         const text = (msg.content || '').trim().toLowerCase();
@@ -12217,6 +12378,71 @@ function setupSlashBotEvents(bot, token) {
             const actor = msg.author?.username || "Admin";
             const embed = handleLiveCommand(actor);
             return msg.reply({ embeds: [sanitizeEmbed(embed)] }).catch(() => {});
+        }
+
+        // Ignore commands starting with ! or / so we don't interfere with prefix commands
+        if (msg.content.startsWith('!') || msg.content.startsWith('/')) return;
+
+        // Check if message is addressed to Friday or in an active conversation channel
+        const isMentioned = msg.mentions?.has?.(bot.user) || (bot.user && new RegExp(`<@!?${bot.user.id}>`).test(msg.content));
+        const isConvoChannel = activeConversationChannels.has(msg.channelId);
+
+        // If bot notifications are emergency muted, ignore unprompted channel chatter
+        if (global.isNotificationsKilled && !isMentioned) return;
+
+        let isReplyingToFriday = false;
+        let refInfo = null;
+
+        if (msg.reference && msg.reference.messageId) {
+            try {
+                const parentMsg = await msg.channel.messages.fetch(msg.reference.messageId).catch(() => null);
+                if (parentMsg) {
+                    if (parentMsg.author?.id === bot.user?.id) {
+                        isReplyingToFriday = true;
+                    }
+                    refInfo = {
+                        authorName: parentMsg.member?.displayName || parentMsg.author?.username || "Member",
+                        text: (parentMsg.cleanContent || parentMsg.content || "").trim()
+                    };
+                }
+            } catch(e) {}
+        }
+
+        const shouldRespond = isMentioned || isReplyingToFriday || isConvoChannel;
+        if (!shouldRespond) return;
+
+        const cleanText = stripBotMentions(msg.cleanContent || msg.content || "");
+        if (!cleanText && !isMentioned && !isReplyingToFriday) return;
+
+        let state = channelConvoState.get(msg.channelId);
+        if (!state) {
+            state = {
+                timer: null,
+                messages: [],
+                lastTypingAt: 0,
+                firstQueuedAt: Date.now(),
+                isReplying: false,
+                channel: msg.channel
+            };
+            channelConvoState.set(msg.channelId, state);
+        }
+
+        state.messages.push({
+            id: msg.id,
+            authorName: msg.member?.displayName || msg.author?.username || "Member",
+            authorId: msg.author.id,
+            text: cleanText,
+            isMention: isMentioned || isReplyingToFriday,
+            reference: refInfo,
+            msgObj: msg,
+            timestamp: Date.now()
+        });
+
+        // Debounce: wait for author/typing to settle before dispatching response
+        if (!state.isReplying) {
+            if (state.timer) clearTimeout(state.timer);
+            const delay = (Date.now() - state.lastTypingAt < 4000) ? 4500 : 3500;
+            state.timer = setTimeout(() => executeChannelConvoDispatch(msg.channelId), delay);
         }
     });
 
@@ -12680,6 +12906,47 @@ function setupSlashBotEvents(bot, token) {
                 return await interaction.editReply({
                     content: `⚠️ **F.R.I.D.A.Y couldn't join chat:** ${err.message}`
                 });
+            }
+        }
+
+        // ── Continuous Conversational Mode (/conversation) ──
+        if (cmd === 'conversation') {
+            const action = interaction.options.getString('action');
+            const chanId = interaction.channelId;
+
+            if (action === 'status') {
+                const isEnabled = activeConversationChannels.has(chanId);
+                const embed = isEnabled 
+                    ? UI.success("🟢 Conversational Mode: Active", `**F.R.I.D.A.Y** is actively listening and participating in <#${chanId}>.\n\n• Type normally and Friday will chime in.\n• Anti-interruption engine waits while members are typing.\n• Incomplete thoughts and replies reference parent context.\n\n*Use \`/conversation action:stop\` to deactivate.*`)
+                    : UI.neutral("⚪ Conversational Mode: Inactive", `**F.R.I.D.A.Y** is currently inactive in <#${chanId}>.\n\n*Use \`/conversation action:start\` or \`/conversation\` to activate.*`);
+                return interaction.reply({ embeds: [sanitizeEmbed(embed)], ephemeral: true });
+            }
+
+            const shouldEnable = action === 'start' ? true : (action === 'stop' ? false : !activeConversationChannels.has(chanId));
+
+            if (shouldEnable) {
+                activeConversationChannels.add(chanId);
+                discordConfig.conversationChannels = Array.from(activeConversationChannels);
+                saveDiscordConfig();
+                const embed = UI.brand(
+                    "🟢 Conversational Mode Activated",
+                    `**F.R.I.D.A.Y** is now actively listening in <#${chanId}>!\n\n` +
+                    `• **Natural Chat:** Friday participates casually in conversations.\n` +
+                    `• **Anti-Interruption:** If someone is typing, Friday waits patiently until the thought is finished.\n` +
+                    `• **Context Aware:** Incomplete thoughts or replies reference what you're replying to.\n\n` +
+                    `*To stop conversational mode, use \`/conversation action:stop\` or \`/conversation\`.*`
+                );
+                return interaction.reply({ embeds: [sanitizeEmbed(embed)] });
+            } else {
+                activeConversationChannels.delete(chanId);
+                discordConfig.conversationChannels = Array.from(activeConversationChannels);
+                saveDiscordConfig();
+                const embed = UI.warning(
+                    "🛑 Conversational Mode Deactivated",
+                    `**F.R.I.D.A.Y** will no longer automatically chime in on messages in <#${chanId}>.\n\n` +
+                    `*You can still mention <@${bot.user?.id || 'F.R.I.D.A.Y'}> anytime to talk to her!*`
+                );
+                return interaction.reply({ embeds: [sanitizeEmbed(embed)] });
             }
         }
 
@@ -13262,7 +13529,8 @@ async function startSlashCommandBot(token) {
                 GatewayIntentBits.Guilds,
                 GatewayIntentBits.GuildMessages,
                 GatewayIntentBits.GuildMembers,
-                GatewayIntentBits.MessageContent
+                GatewayIntentBits.MessageContent,
+                GatewayIntentBits.GuildMessageTyping
             ]
         });
 
@@ -13275,7 +13543,11 @@ async function startSlashCommandBot(token) {
                 console.warn("[Slash Bot] Privileged GuildMembers intent disallowed in Developer Portal. Falling back to standard intents...");
                 try { slashCommandBot.destroy(); } catch(e) {}
                 slashCommandBot = new Client({
-                    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages]
+                    intents: [
+                        GatewayIntentBits.Guilds,
+                        GatewayIntentBits.GuildMessages,
+                        GatewayIntentBits.GuildMessageTyping
+                    ]
                 });
                 setupSlashBotEvents(slashCommandBot, token);
                 await slashCommandBot.login(token);
