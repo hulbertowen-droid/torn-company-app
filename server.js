@@ -6110,7 +6110,7 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
             return tornKnowledge.formatDeterministicTornAnswer(cleanSpeech, userAccountData, invokerName);
         }
         if (userAccountData && detectedIntent) {
-            return userKeys.formatDeterministicStatsReply(userAccountData, invokerName, detectedIntent);
+            return userKeys.formatDeterministicStatsReply(userAccountData, invokerName, detectedIntent, cleanSpeech);
         }
         const casual = tornKnowledge.formatDeterministicCasualReply(cleanSpeech, invokerName);
         if (casual) return casual;
@@ -6132,16 +6132,50 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
     // ── Verified Real-Time Live Torn Account Data Injection ──
     if (userAccountData) {
         convoPrompt += `═══ VERIFIED REAL-TIME TORN ACCOUNT DATA FOR ${invokerName} ═══\n`;
-        convoPrompt += `Player: ${userAccountData.playerName} [ID: ${userAccountData.playerId}]\n`;
-        convoPrompt += `Energy: ${userAccountData.energy.current}/${userAccountData.energy.maximum} (${userAccountData.energy.isFull ? 'FULL' : `${userAccountData.energy.maximum - userAccountData.energy.current} below max, full in about ${userAccountData.energy.fulltimeMinutes}m`})\n`;
-        convoPrompt += `Nerve: ${userAccountData.nerve.current}/${userAccountData.nerve.maximum} (${userAccountData.nerve.isFull ? 'FULL' : `full in about ${userAccountData.nerve.fulltimeMinutes}m`})\n`;
-        convoPrompt += `Happy: ${userAccountData.happy.current}/${userAccountData.happy.maximum}\n`;
-        convoPrompt += `Life: ${userAccountData.life.current}/${userAccountData.life.maximum}\n`;
-        convoPrompt += `Drug Cooldown: ${userAccountData.cooldowns.drug > 0 ? `${userAccountData.cooldowns.drugMinutes}m remaining` : 'None / Ready'}\n`;
-        convoPrompt += `Booster Cooldown: ${userAccountData.cooldowns.booster > 0 ? `${userAccountData.cooldowns.boosterMinutes}m remaining` : 'None / Ready'}\n`;
-        convoPrompt += `Medical Cooldown: ${userAccountData.cooldowns.medical > 0 ? `${userAccountData.cooldowns.medicalMinutes}m remaining` : 'None / Ready'}\n`;
-        convoPrompt += `Travel: ${userAccountData.travel.isTraveling ? `In flight to ${userAccountData.travel.destination} (${userAccountData.travel.timeLeftMinutes}m left)` : `In ${userAccountData.travel.destination || 'Torn'}`}\n`;
-        convoPrompt += `Status: ${userAccountData.status.state} (${userAccountData.status.description})\n`;
+        convoPrompt += `Player: ${userAccountData.playerName} [ID: ${userAccountData.playerId}] | Level: ${userAccountData.level || 1} | Rank: ${userAccountData.rank || 'Citizen'} | Age: ${userAccountData.age || 0} days\n`;
+        convoPrompt += `Bars: Energy ${userAccountData.energy.current}/${userAccountData.energy.maximum} (${userAccountData.energy.isFull ? 'FULL' : `${userAccountData.energy.maximum - userAccountData.energy.current} below max, full in ~${userAccountData.energy.fulltimeMinutes}m`}) | Nerve ${userAccountData.nerve.current}/${userAccountData.nerve.maximum} (${userAccountData.nerve.isFull ? 'FULL' : `full in ~${userAccountData.nerve.fulltimeMinutes}m`}) | Happy ${userAccountData.happy.current}/${userAccountData.happy.maximum} | Life ${userAccountData.life.current}/${userAccountData.life.maximum}\n`;
+        convoPrompt += `Cooldowns: Drug: ${userAccountData.cooldowns.drug > 0 ? `${userAccountData.cooldowns.drugMinutes}m left` : 'Ready'} | Booster: ${userAccountData.cooldowns.booster > 0 ? `${userAccountData.cooldowns.boosterMinutes}m left` : 'Ready'} | Med: ${userAccountData.cooldowns.medical > 0 ? `${userAccountData.cooldowns.medicalMinutes}m left` : 'Ready'}\n`;
+        convoPrompt += `Location: ${userAccountData.travel.isTraveling ? `Flying to ${userAccountData.travel.destination} (${userAccountData.travel.timeLeftMinutes}m left)` : (userAccountData.travel.destination || 'Torn City')} | Status: ${userAccountData.status.state} (${userAccountData.status.description})\n`;
+
+        if (userAccountData.merits && Object.keys(userAccountData.merits).length > 0) {
+            const activeMerits = Object.entries(userAccountData.merits)
+                .filter(([, v]) => v > 0)
+                .map(([k, v]) => `${k}: ${v}`);
+            convoPrompt += `Allocated Merits: ${activeMerits.join(', ')}\n`;
+        }
+
+        if (userAccountData.battlestats && userAccountData.battlestats.total > 0) {
+            const bs = userAccountData.battlestats;
+            convoPrompt += `Battle Stats: Strength: ${bs.strength.toLocaleString()} | Defense: ${bs.defense.toLocaleString()} | Speed: ${bs.speed.toLocaleString()} | Dexterity: ${bs.dexterity.toLocaleString()} | Total: ${bs.total.toLocaleString()}\n`;
+        }
+
+        if (userAccountData.workstats) {
+            const ws = userAccountData.workstats;
+            const j = userAccountData.job || {};
+            convoPrompt += `Work Stats: Manual Labor: ${ws.manual_labor.toLocaleString()} | Intelligence: ${ws.intelligence.toLocaleString()} | Endurance: ${ws.endurance.toLocaleString()} (Job: ${j.position || 'Employee'} at ${j.company_name || 'Torn Company'})\n`;
+        }
+
+        if (userAccountData.money) {
+            const m = userAccountData.money;
+            convoPrompt += `Finances: Cash on Hand: $${(m.money_onhand || 0).toLocaleString()} | Vault: $${(m.vault_amount || 0).toLocaleString()} | Points: ${(m.points || 0).toLocaleString()}\n`;
+        }
+
+        if (userAccountData.refills) {
+            const r = userAccountData.refills;
+            convoPrompt += `Refills: Energy Refill: ${r.energy_refill_used ? 'USED today' : 'READY / AVAILABLE'} | Nerve Refill: ${r.nerve_refill_used ? 'USED today' : 'READY / AVAILABLE'}\n`;
+        }
+
+        if (userAccountData.education) {
+            const ed = userAccountData.education;
+            convoPrompt += `Education: ${ed.current_course > 0 ? `Active Course #${ed.current_course} (${ed.time_left_formatted} left)` : 'No active course'} | Completed: ${ed.completed_courses} courses\n`;
+        }
+
+        if (userAccountData.personalstats) {
+            const ps = userAccountData.personalstats;
+            convoPrompt += `Personal Stats Highlights: Xanax Taken: ${ps.xantaken || 0} | Overdoses: ${ps.overdosed || 0} | Attacks Won: ${(ps.attackswon || 0).toLocaleString()} | Defends Won: ${(ps.defendswon || 0).toLocaleString()}\n`;
+        }
+
+        convoPrompt += `CRITICAL INSTRUCTION: You have direct, real-time access to the user's verified Torn City API data feed above. If the user asks about their merits, battle stats, energy, cooldowns, money, job, education, or anything about their character, answer directly and factually using this exact data. NEVER tell them to check their own stats or that you cannot see them.\n`;
         convoPrompt += `═══════════════════════════════════════════════════════════════\n\n`;
     }
 
@@ -6191,7 +6225,7 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
         return tornKnowledge.formatDeterministicTornAnswer(cleanSpeech, userAccountData, invokerName);
     }
     if (userAccountData && detectedIntent) {
-        return userKeys.formatDeterministicStatsReply(userAccountData, invokerName, detectedIntent);
+        return userKeys.formatDeterministicStatsReply(userAccountData, invokerName, detectedIntent, cleanSpeech);
     }
     const casual = tornKnowledge.formatDeterministicCasualReply(cleanSpeech, invokerName);
     if (casual) return casual;
@@ -12782,45 +12816,45 @@ function setupSlashBotEvents(bot, token) {
             }
 
             // ── Live Personal Account Stats & Torn Gameplay Intelligence ──
+            const primaryKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || (apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
+            if (primaryKey) {
+                tornKnowledge.fetchFactionPerks(primaryKey).catch(() => {});
+            }
+            const resolved = userKeys.resolveUserApiKey(primaryAuthorId, primaryAuthor, authorUsername, primaryKey);
+
             const accountIntent = userKeys.detectUserAccountIntent(userSpeech);
             const tornGameplayIntent = tornKnowledge.detectTornGameplayIntent(userSpeech);
+            const isAccountInquiry = Boolean(accountIntent || /\b(?:my|i|me|mine|stats?|merits?|energy|nerve|happy|cooldowns?|battlestats?|workstats?|vault|money|cash|refills?|crimes?|xanax|overdoses?|education|job)\b/i.test(userSpeech));
+
             let userAccountData = null;
 
-            if (accountIntent || tornGameplayIntent) {
-                const primaryKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || (apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
-                if (primaryKey) {
-                    tornKnowledge.fetchFactionPerks(primaryKey).catch(() => {});
-                }
-                const resolved = userKeys.resolveUserApiKey(primaryAuthorId, primaryAuthor, authorUsername, primaryKey);
+            if (resolved && (isAccountInquiry || tornGameplayIntent)) {
+                // User HAS an API key or is the owner! Fetch real-time live stats!
+                userAccountData = await userKeys.fetchUserLiveStats(resolved.key, userSpeech);
+            } else if (!resolved && accountIntent && !tornGameplayIntent) {
+                // User asked an account-specific stat (e.g. energy/bars/merits) but has no linked key
+                const linkEmbed = UI.warning(
+                    '🔑 Torn Limited API Key Required',
+                    `Hey **${primaryAuthor}**, to check your live personal merits, battle stats, energy, nerve, cooldowns, or account stats, I need your Torn **Limited Access API Key**.\n\n` +
+                    `🔒 **Zero Public Exposure:** Your key is entered in a private Discord popup, encrypted with **military-grade AES-256-GCM**, and stored securely. F.R.I.D.A.Y only accesses it when you ask for your stats.\n\n` +
+                    `Click **Link Limited Key** below to enter it privately:`
+                );
 
-                if (resolved) {
-                    // User HAS an API key or is the owner! Fetch real-time live stats!
-                    userAccountData = await userKeys.fetchUserLiveStats(resolved.key);
-                } else if (accountIntent && !tornGameplayIntent) {
-                    // User asked an account-specific stat (e.g. energy/bars) but has no linked key
-                    const linkEmbed = UI.warning(
-                        '🔑 Torn Limited API Key Required',
-                        `Hey **${primaryAuthor}**, to check your live personal energy, nerve, cooldowns, or account stats, I need your Torn **Limited Access API Key**.\n\n` +
-                        `🔒 **Zero Public Exposure:** Your key is entered in a private Discord popup, encrypted with **military-grade AES-256-GCM**, and stored securely. F.R.I.D.A.Y only accesses it when you ask for your stats.\n\n` +
-                        `Click **Link Limited Key** below to enter it privately:`
-                    );
+                const actionRow = UI.actionRow(
+                    UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑'),
+                    UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')
+                );
 
-                    const actionRow = UI.actionRow(
-                        UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑'),
-                        UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')
-                    );
-
-                    await latestMsg.reply({
-                        embeds: [sanitizeEmbed(linkEmbed)],
-                        components: [actionRow],
-                        allowedMentions: { repliedUser: false }
-                    }).catch(async () => {
-                        if (channel && channel.send) {
-                            await channel.send({ embeds: [sanitizeEmbed(linkEmbed)], components: [actionRow] }).catch(() => {});
-                        }
-                    });
-                    return;
-                }
+                await latestMsg.reply({
+                    embeds: [sanitizeEmbed(linkEmbed)],
+                    components: [actionRow],
+                    allowedMentions: { repliedUser: false }
+                }).catch(async () => {
+                    if (channel && channel.send) {
+                        await channel.send({ embeds: [sanitizeEmbed(linkEmbed)], components: [actionRow] }).catch(() => {});
+                    }
+                });
+                return;
             }
 
             const casualIntent = tornKnowledge.detectCasualIntent(userSpeech);
@@ -12838,7 +12872,7 @@ function setupSlashBotEvents(bot, token) {
                 if (tornGameplayIntent) {
                     aiReply = tornKnowledge.formatDeterministicTornAnswer(userSpeech, userAccountData, primaryAuthor);
                 } else if (userAccountData && accountIntent) {
-                    aiReply = userKeys.formatDeterministicStatsReply(userAccountData, primaryAuthor, accountIntent);
+                    aiReply = userKeys.formatDeterministicStatsReply(userAccountData, primaryAuthor, accountIntent, userSpeech);
                 } else if (tornKnowledge.detectCasualIntent(userSpeech)) {
                     aiReply = tornKnowledge.formatDeterministicCasualReply(userSpeech, primaryAuthor);
                 }
