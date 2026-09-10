@@ -199,7 +199,7 @@ async function syncOwnerDetails(primaryKey, personalDiscordId = '') {
  */
 async function linkUserApiKey(discordUserId, rawKey) {
     if (!discordUserId) return { success: false, error: 'Missing Discord User ID.' };
-    const cleanKey = String(rawKey || '').trim();
+    const cleanKey = String(rawKey || '').trim().replace(/['"\s]/g, '');
     if (!cleanKey || cleanKey.length < 16) {
         return { success: false, error: 'Invalid API key format. Torn API keys are 16 alphanumeric characters.' };
     }
@@ -277,9 +277,9 @@ function isOwnerUser(discordUserId, authorName = '', authorUsername = '', verifi
     if (ownerMeta.discordId && dId && dId === String(ownerMeta.discordId)) return true;
     if (verifiedPlayerId && Number(verifiedPlayerId) === Number(ownerMeta.tornId)) return true;
 
-    const nameClean = (authorName || '').toLowerCase();
-    const userClean = (authorUsername || '').toLowerCase();
-    if (nameClean.includes('owen') || userClean.includes('owen')) return true;
+    const nameClean = (authorName || '').toLowerCase().trim();
+    const userClean = (authorUsername || '').toLowerCase().trim();
+    if (nameClean === 'owen777' || userClean === 'owen777' || nameClean === 'owen' || userClean === 'owen') return true;
 
     return false;
 }

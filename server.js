@@ -5987,7 +5987,7 @@ app.post('/api/ai/save-key', async (req, res) => {
     }
 });
 
-async function askTornAI(message, history = []) {
+async function askTornAI(message, history = [], userAccountData = null, invokerName = "") {
     if (!message || typeof message !== 'string' || !message.trim()) {
         throw new Error("Message is required.");
     }
@@ -5998,10 +5998,56 @@ async function askTornAI(message, history = []) {
     }
 
     const key = getGeminiApiKey();
-    const tornIntel = tornKnowledge.buildTornKnowledgeContext(message);
+    const tornIntel = tornKnowledge.buildTornKnowledgeContext(message, userAccountData, invokerName);
+
+    // Build real-time account context if provided
+    let accountContext = "";
+    if (userAccountData) {
+        accountContext += `═══ VERIFIED REAL-TIME TORN ACCOUNT DATA FOR ${userAccountData.playerName || invokerName} ═══\n`;
+        accountContext += `Player: ${userAccountData.playerName} [ID: ${userAccountData.playerId}] | Level: ${userAccountData.level || 1} | Rank: ${userAccountData.rank || 'Citizen'} | Age: ${userAccountData.age || 0} days\n`;
+        accountContext += `Bars: Energy ${userAccountData.energy.current}/${userAccountData.energy.maximum} (${userAccountData.energy.isFull ? 'FULL' : `${userAccountData.energy.maximum - userAccountData.energy.current} below max, full in ~${userAccountData.energy.fulltimeMinutes}m`}) | Nerve ${userAccountData.nerve.current}/${userAccountData.nerve.maximum} (${userAccountData.nerve.isFull ? 'FULL' : `full in ~${userAccountData.nerve.fulltimeMinutes}m`}) | Happy ${userAccountData.happy.current}/${userAccountData.happy.maximum} | Life ${userAccountData.life.current}/${userAccountData.life.maximum}\n`;
+        accountContext += `Cooldowns: Drug: ${userAccountData.cooldowns.drug > 0 ? `${userAccountData.cooldowns.drugMinutes}m left` : 'Ready'} | Booster: ${userAccountData.cooldowns.booster > 0 ? `${userAccountData.cooldowns.boosterMinutes}m left` : 'Ready'} | Med: ${userAccountData.cooldowns.medical > 0 ? `${userAccountData.cooldowns.medicalMinutes}m left` : 'Ready'}\n`;
+        accountContext += `Location: ${userAccountData.travel.isTraveling ? `Flying to ${userAccountData.travel.destination}` : (userAccountData.travel.destination || 'Torn City')} | Status: ${userAccountData.status.state} (${userAccountData.status.description})\n`;
+
+        if (userAccountData.merits && Object.keys(userAccountData.merits).length > 0) {
+            const activeMerits = Object.entries(userAccountData.merits).filter(([, v]) => v > 0).map(([k, v]) => `${k}: ${v}`);
+            accountContext += `Allocated Merits: ${activeMerits.join(', ')}\n`;
+        }
+        if (userAccountData.battlestats && userAccountData.battlestats.total > 0) {
+            const bs = userAccountData.battlestats;
+            accountContext += `Battle Stats: Strength: ${bs.strength.toLocaleString()} | Defense: ${bs.defense.toLocaleString()} | Speed: ${bs.speed.toLocaleString()} | Dexterity: ${bs.dexterity.toLocaleString()} | Total: ${bs.total.toLocaleString()}\n`;
+        }
+        if (userAccountData.workstats) {
+            const ws = userAccountData.workstats;
+            accountContext += `Work Stats: Manual Labor: ${ws.manual_labor.toLocaleString()} | Intelligence: ${ws.intelligence.toLocaleString()} | Endurance: ${ws.endurance.toLocaleString()}\n`;
+        }
+        if (userAccountData.money) {
+            const m = userAccountData.money;
+            accountContext += `Finances: Cash on Hand: $${(m.money_onhand || 0).toLocaleString()} | Vault: $${(m.vault_amount || 0).toLocaleString()} | Points: ${(m.points || 0).toLocaleString()}\n`;
+        }
+        if (userAccountData.refills) {
+            const r = userAccountData.refills;
+            accountContext += `Refills: Energy Refill: ${r.energy_refill_used ? 'USED today' : 'READY / AVAILABLE'} | Nerve Refill: ${r.nerve_refill_used ? 'USED today' : 'READY / AVAILABLE'}\n`;
+        }
+        if (userAccountData.education) {
+            const ed = userAccountData.education;
+            accountContext += `Education: ${ed.current_course > 0 ? `Active Course #${ed.current_course} (${ed.time_left_formatted} left)` : 'No active course'} | Completed: ${ed.completed_courses} courses\n`;
+        }
+        if (userAccountData.personalstats) {
+            const ps = userAccountData.personalstats;
+            accountContext += `Personal Stats Highlights: Xanax Taken: ${ps.xantaken || 0} | Overdoses: ${ps.overdosed || 0} | Attacks Won: ${(ps.attackswon || 0).toLocaleString()}\n`;
+        }
+        accountContext += `CRITICAL INSTRUCTION: You have direct, real-time access to the user's verified Torn City API data feed above. Answer factually using this exact data. NEVER tell them to check their own stats.\n═══════════════════════════════════════════════════════════════\n\n`;
+    }
+
+    const accountIntent = userKeys.detectUserAccountIntent(message);
 
     if (!key) {
-        const detReply = tornKnowledge.formatDeterministicTornAnswer(message);
+        if (userAccountData && accountIntent) {
+            const detStats = userKeys.formatDeterministicStatsReply(userAccountData, invokerName || userAccountData.playerName, accountIntent, message);
+            if (detStats) return { reply: detStats, sources: [] };
+        }
+        const detReply = tornKnowledge.formatDeterministicTornAnswer(message, userAccountData, invokerName);
         if (detReply) return { reply: detReply, sources: [] };
         throw new Error("Gemini API key is not configured. Please paste your Google AI Studio key in the dashboard or ai-sandbox.");
     }
@@ -6017,7 +6063,7 @@ async function askTornAI(message, history = []) {
             }
         }
     }
-    contents.push({ role: 'user', parts: [{ text: `${tornIntel}\n\nUser Question: ${message.trim()}` }] });
+    contents.push({ role: 'user', parts: [{ text: `${accountContext}${tornIntel}\n\nUser Question: ${message.trim()}` }] });
 
     const payload = {
         contents,
@@ -6036,7 +6082,11 @@ async function askTornAI(message, history = []) {
 
     if (!result.success) {
         // Grounded deterministic fallback
-        const detReply = tornKnowledge.formatDeterministicTornAnswer(message);
+        if (userAccountData && accountIntent) {
+            const detStats = userKeys.formatDeterministicStatsReply(userAccountData, invokerName || userAccountData.playerName, accountIntent, message);
+            if (detStats) return { reply: detStats, sources: [] };
+        }
+        const detReply = tornKnowledge.formatDeterministicTornAnswer(message, userAccountData, invokerName);
         if (detReply) {
             return { reply: detReply, sources: [] };
         }
@@ -12535,6 +12585,7 @@ async function registerSlashCommands(token, guildId = null) {
         // 18. Personal Account Vitals & Secure API Key Linking
         new SlashCommandBuilder().setName('energy').setDescription('Check your live energy, nerve, bars, and cooldowns (uses linked Limited API key)').toJSON(),
         new SlashCommandBuilder().setName('bars').setDescription('Check your live energy, nerve, bars, and cooldowns (alias of /energy)').toJSON(),
+        new SlashCommandBuilder().setName('merits').setDescription('Check your live allocated Torn merits and upgrades (uses linked Limited API key)').toJSON(),
         new SlashCommandBuilder().setName('linkkey').setDescription('Privately link your Torn Limited Access API key to F.R.I.D.A.Y')
             .addStringOption(opt => opt.setName('key').setDescription('16-character Limited Access API Key').setRequired(true)).toJSON(),
         new SlashCommandBuilder().setName('unlinkkey').setDescription('Unlink and permanently delete your stored Torn API key from F.R.I.D.A.Y').toJSON()
@@ -12781,8 +12832,9 @@ function setupSlashBotEvents(bot, token) {
             const primaryAuthor = batch[batch.length - 1].authorName;
             const primaryAuthorId = batch[batch.length - 1].authorId;
             const authorUsername = latestMsg?.author?.username || "";
-            const combinedTexts = batch.map(b => b.text).filter(Boolean);
-            const userSpeech = combinedTexts.join('\n') || "(addressed Friday)";
+            const authorBatch = batch.filter(b => b.authorId === primaryAuthorId);
+            const authorTexts = authorBatch.map(b => b.text).filter(Boolean);
+            const userSpeech = (authorTexts.length > 0 ? authorTexts.join('\n') : batch.map(b => b.text).filter(Boolean).join('\n')) || "(addressed Friday)";
 
             // ── In-Chat Reset / Forget Command Detection ──
             const cleanSpeechLower = userSpeech.toLowerCase().trim();
@@ -13507,6 +13559,50 @@ function setupSlashBotEvents(bot, token) {
             return await interaction.editReply({ embeds: [sanitizeEmbed(embed)] });
         }
 
+        // ── Personal Live Merits Slash Command ──
+        if (cmd === 'merits') {
+            await interaction.deferReply({ ephemeral: true });
+            const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
+            const primaryKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || (apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
+            const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username, primaryKey);
+
+            if (!resolved) {
+                const linkEmbed = UI.warning(
+                    '🔑 Torn Limited API Key Required',
+                    `Hey **${invokerName}**, to check your live allocated merits, you need to link your Torn **Limited Access API Key**.\n\n` +
+                    `🔒 **Private & Secure:** Your key is encrypted with **military-grade AES-256-GCM** and only accessed when you check your stats.\n\n` +
+                    `Click **Link Limited Key** below:`
+                );
+                const actionRow = UI.actionRow(
+                    UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑'),
+                    UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')
+                );
+                return await interaction.editReply({ embeds: [sanitizeEmbed(linkEmbed)], components: [actionRow] });
+            }
+
+            const stats = await userKeys.fetchUserLiveStats(resolved.key, 'merits');
+            if (!stats) {
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.error('Fetch Failed', '⚠️ Could not retrieve live account data from Torn API. Please try again in a moment.'))]
+                });
+            }
+
+            const meritsObj = stats.merits || {};
+            const activeMerits = Object.entries(meritsObj).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+            const totalUpgrades = activeMerits.reduce((acc, [, v]) => acc + v, 0);
+
+            const meritLines = activeMerits.map(([k, v]) => `• **${k}**: ${v} upgrade${v === 1 ? '' : 's'}`);
+            const meritDesc = meritLines.length > 0 
+                ? `Total upgrades allocated: **${totalUpgrades}** across **${activeMerits.length}** perks.\n\n${meritLines.join('\n')}`
+                : `You don't have any merit upgrades allocated yet.`;
+
+            const embed = UI.info(
+                `🏅 Live Allocated Merits: ${stats.playerName} [${stats.playerId}]`,
+                meritDesc
+            );
+            return await interaction.editReply({ embeds: [sanitizeEmbed(embed)] });
+        }
+
         // ── Link Limited API Key Slash Command ──
         if (cmd === 'linkkey') {
             await interaction.deferReply({ ephemeral: true });
@@ -13566,7 +13662,32 @@ function setupSlashBotEvents(bot, token) {
             await interaction.deferReply({ ephemeral: true });
 
             try {
-                const { reply, sources } = await askTornAI(question);
+                const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
+                const primaryKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || (apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
+                const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username, primaryKey);
+                const accountIntent = userKeys.detectUserAccountIntent(question);
+                const isAccountInquiry = Boolean(accountIntent || /\b(?:my|i|me|mine|stats?|merits?|energy|nerve|happy|cooldowns?|battlestats?|workstats?|vault|money|cash|refills?|crimes?|xanax|overdoses?|education|job)\b/i.test(question));
+
+                if (!resolved && isAccountInquiry) {
+                    const linkEmbed = UI.warning(
+                        '🔑 Torn Limited API Key Required',
+                        `Hey **${invokerName}**, to check your live personal merits, battle stats, energy, nerve, cooldowns, or account stats, I need your Torn **Limited Access API Key**.\n\n` +
+                        `🔒 **Private & Secure:** Your key is encrypted with **military-grade AES-256-GCM** and only accessed when you check your stats.\n\n` +
+                        `Click **Link Limited Key** below:`
+                    );
+                    const actionRow = UI.actionRow(
+                        UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑'),
+                        UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')
+                    );
+                    return await interaction.editReply({ embeds: [sanitizeEmbed(linkEmbed)], components: [actionRow] });
+                }
+
+                let userAccountData = null;
+                if (resolved && isAccountInquiry) {
+                    userAccountData = await userKeys.fetchUserLiveStats(resolved.key, question);
+                }
+
+                const { reply, sources } = await askTornAI(question, [], userAccountData, invokerName);
 
                 // Ensure reply fits within Discord embed description limit (4096 chars)
                 const desc = reply.length > 4000 ? reply.slice(0, 3990) + "\n\n*(response truncated)*" : reply;
@@ -13658,7 +13779,17 @@ function setupSlashBotEvents(bot, token) {
                     }
                 }
 
-                const aiReply = await generateChatResponse(convoLines, hint, invokerName, null, null, null, hint);
+                const primaryKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || (apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
+                const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username, primaryKey);
+                const accountIntent = userKeys.detectUserAccountIntent(hint);
+                const isAccountInquiry = Boolean(accountIntent || /\b(?:my|i|me|mine|stats?|merits?|energy|nerve|happy|cooldowns?|battlestats?|workstats?|vault|money|cash|refills?|crimes?|xanax|overdoses?|education|job)\b/i.test(hint));
+
+                let userAccountData = null;
+                if (resolved && isAccountInquiry) {
+                    userAccountData = await userKeys.fetchUserLiveStats(resolved.key, hint);
+                }
+
+                const aiReply = await generateChatResponse(convoLines, hint, invokerName, null, userAccountData, accountIntent, hint);
 
                 return await interaction.editReply({
                     content: aiReply
