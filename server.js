@@ -23,6 +23,7 @@ require('dotenv').config();
 // All user-facing Discord responses should use UI.success(), UI.error(), etc.
 const UI = require('./friday-ui');
 const userKeys = require('./user-keys');
+const tornKnowledge = require('./torn-knowledge');
 
 
 // Hardcoded MongoDB URI to bypass Render settings
@@ -595,6 +596,9 @@ async function getTornItemInfo(itemId, apiKey) {
     if (!itemId) return { name: "Required Item", type: "Utility" };
     const numId = Number(itemId);
     if (KNOWN_OC_ITEMS[numId]) return KNOWN_OC_ITEMS[numId];
+    if (tornKnowledge && tornKnowledge.TORN_ITEMS_DB && tornKnowledge.TORN_ITEMS_DB[numId]) {
+        return tornKnowledge.TORN_ITEMS_DB[numId];
+    }
     if (tornItemsCache && (Date.now() - tornItemsCacheTime < 24 * 3600 * 1000)) {
         if (tornItemsCache[numId]) return tornItemsCache[numId];
     }
@@ -5779,12 +5783,57 @@ function getGeminiApiKey() {
     return (discordConfig && discordConfig.geminiApiKey) || process.env.GEMINI_API_KEY || "";
 }
 
+// ── Resilient Multi-Model Gemini Caller with High-Demand Rollover ────────────
+async function callGeminiWithFallback(payload, apiKey, options = {}) {
+    if (!apiKey) return { success: false, error: "Missing Gemini API key." };
+    const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    let lastError = null;
+
+    for (const model of models) {
+        for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    signal: AbortSignal.timeout(options.timeout || 10000)
+                });
+                const data = await res.json();
+                if (data.error) {
+                    const errMsg = data.error.message || '';
+                    const isHighDemand = errMsg.includes('high demand') || data.error.code === 503 || data.error.code === 429;
+                    if (isHighDemand && attempt === 0) {
+                        await new Promise(r => setTimeout(r, 600));
+                        continue; // Quick retry once on same model
+                    }
+                    lastError = new Error(`[${model}] ${errMsg}`);
+                    console.warn(`[Gemini API] ${model} unavailable (${errMsg}). Rolling over to next model...`);
+                    break; // Roll over to next fallback model
+                }
+                if (data.candidates && data.candidates.length > 0) {
+                    return { success: true, data, modelUsed: model };
+                }
+            } catch (err) {
+                lastError = err;
+                if (attempt === 0) {
+                    await new Promise(r => setTimeout(r, 500));
+                    continue;
+                }
+                console.warn(`[Gemini API] ${model} error: ${err.message}. Rolling over...`);
+                break;
+            }
+        }
+    }
+    return { success: false, error: lastError ? lastError.message : 'All Gemini models unavailable.' };
+}
+
 app.get('/api/ai/status', (req, res) => {
     const key = getGeminiApiKey();
     res.json({
         configured: !!key,
         keyPreview: key ? `${key.slice(0, 6)}...${key.slice(-4)}` : "",
-        model: "gemini-2.5-flash"
+        model: "gemini-2.5-flash (with auto-fallback to gemini-2.0-flash & gemini-1.5-flash)"
     });
 });
 
@@ -5795,20 +5844,14 @@ app.post('/api/ai/save-key', async (req, res) => {
     }
     const cleanKey = apiKey.trim();
     try {
-        const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${cleanKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: "ping" }] }]
-            })
-        });
-        const testData = await testRes.json();
-        if (testData.error) {
-            return res.status(400).json({ success: false, error: testData.error.message || "API key rejected by Google." });
+        const testPayload = { contents: [{ parts: [{ text: "ping" }] }] };
+        const testResult = await callGeminiWithFallback(testPayload, cleanKey, { timeout: 6000 });
+        if (!testResult.success) {
+            return res.status(400).json({ success: false, error: testResult.error || "API key rejected by Google." });
         }
         discordConfig.geminiApiKey = cleanKey;
         saveDiscordConfig();
-        res.json({ success: true });
+        res.json({ success: true, modelTested: testResult.modelUsed });
     } catch(err) {
         res.status(500).json({ success: false, error: "Connection error: " + err.message });
     }
@@ -5820,7 +5863,11 @@ async function askTornAI(message, history = []) {
     }
 
     const key = getGeminiApiKey();
+    const tornIntel = tornKnowledge.buildTornKnowledgeContext(message);
+
     if (!key) {
+        const detReply = tornKnowledge.formatDeterministicTornAnswer(message);
+        if (detReply) return { reply: detReply, sources: [] };
         throw new Error("Gemini API key is not configured. Please paste your Google AI Studio key in the dashboard or ai-sandbox.");
     }
 
@@ -5835,36 +5882,33 @@ async function askTornAI(message, history = []) {
             }
         }
     }
-    contents.push({ role: 'user', parts: [{ text: message.trim() }] });
+    contents.push({ role: 'user', parts: [{ text: `${tornIntel}\n\nUser Question: ${message.trim()}` }] });
 
-    const callGemini = async (useSearch = true) => {
-        const payload = {
-            contents,
-            systemInstruction: {
-                parts: [{ text: FRIDAY_TORN_SYSTEM_PROMPT }]
-            }
-        };
-        if (useSearch) {
-            payload.tools = [{ googleSearch: {} }];
-        }
-        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        return await resp.json();
+    const payload = {
+        contents,
+        systemInstruction: {
+            parts: [{ text: FRIDAY_TORN_SYSTEM_PROMPT }]
+        },
+        tools: [{ googleSearch: {} }]
     };
 
-    let gData = await callGemini(true);
-    if (gData.error && !gData.candidates) {
-        gData = await callGemini(false);
+    let result = await callGeminiWithFallback(payload, key, { timeout: 12000 });
+    if (!result.success) {
+        // Retry without web search tool (search tool can trigger quota/503 errors)
+        delete payload.tools;
+        result = await callGeminiWithFallback(payload, key, { timeout: 10000 });
     }
 
-    if (gData.error) {
-        throw new Error(gData.error.message || "AI generation failed.");
+    if (!result.success) {
+        // Grounded deterministic fallback
+        const detReply = tornKnowledge.formatDeterministicTornAnswer(message);
+        if (detReply) {
+            return { reply: detReply, sources: [] };
+        }
+        throw new Error(result.error || "AI generation failed.");
     }
 
-    const candidate = gData.candidates?.[0];
+    const candidate = result.data.candidates?.[0];
     const reply = candidate?.content?.parts?.[0]?.text || "I was unable to generate a response. Please try rephrasing your question.";
 
     const sources = [];
@@ -5885,71 +5929,50 @@ async function askTornAI(message, history = []) {
 }
 
 // ─── F.R.I.D.A.Y Natural Conversation Responder ──────────────────────────────
-const FRIDAY_RESPONDER_SYSTEM_PROMPT = `You are F.R.I.D.A.Y, a sharp, witty faction member hanging out in the Spider-Verse Torn City Discord server.
-Your job is to jump into the conversation naturally — like an experienced, clever teammate with a great sense of humor.
+const FRIDAY_RESPONDER_SYSTEM_PROMPT = `You are F.R.I.D.A.Y, a sharp, witty, highly knowledgeable Torn City faction member hanging out in the Spider-Verse Discord server.
+Your job is to jump into the conversation naturally — like an experienced, clever teammate with authentic Torn City expertise and a great sense of humor.
 
 ═══ PERSONALITY: FUNNY, WITTY, BUT NOT OVER-THE-TOP ═══
-
 • HUMOR STYLE (DRY WIT & PLAYFUL BANTER):
   - You have a dry, deadpan, slightly sarcastic sense of humor.
   - You're clever and quick-witted, like Tony Stark's F.R.I.D.A.Y. mixed with an authentic Torn City veteran.
-  - You appreciate the absurdity of Torn City: bad RNG, sudden overdoses, hospital stays, chain scares, getting mugged overseas for pocket change, and faction chaos.
   - You drop sharp observations, dry reality checks, or light roasts that make people smirk.
+  - BREVITY IS WIT: 1 to 3 sentences. Keep it punchy, conversational, and direct.
 
-• THE "NOT OVER-FUNNY" RULES (CRITICAL):
-  - NO CLOWNING OR TRY-HARD JOKES: Never tell cheesy setup/punchline jokes, knock-knock jokes, puns, or goofy riddles.
-  - NEVER LAUGH AT YOUR OWN JOKES: Do not type "hahaha", "lol", "lmao", or spam laughing emojis. Keep a cool, unbothered, deadpan delivery. A rare skull 💀 or dry smirk 😏 when someone genuinely walked into a roast is fine, but let your words do the work.
-  - DON'T FORCE A JOKE: If the moment doesn't call for comedy, don't force it. Chill chat should feel chill, game advice should feel helpful, and sympathy should feel real with maybe just a subtle dry touch.
-  - PLAYFUL RIBBING & COMEBACKS: If someone teases or roasts you, hit back with an effortless, unbothered one-liner. If a teammate whines about Torn luck or makes a goofy mistake, give them some affectionate ribbing.
-  - BREVITY IS WIT: 1 to 2 sentences max. A short, dry zinger lands 100x better than a long-winded setup.
+═══ CRITICAL TORN CITY KNOWLEDGE & ANTI-HALLUCINATION MANDATES ═══
+1. NEVER "CORRECT" VALID TORN TERMINOLOGY OR ITEMS:
+   - When a user says a Torn item name (e.g. "chocolate truffles", "tootsie rolls", "jawbreaker", "edvd"), NEVER claim they meant a different item (e.g. NEVER say "Chocolate boxes, Owen" or substitute an item).
+   - "Chocolate truffles" IS Bag of Chocolate Truffles (ID 529, Candy, +100 Happy, 30m booster cooldown).
+   - Differentiate similarly named items:
+     * Bag of Chocolate Truffles (+100 Happy, 30m CD) is NOT Box of Chocolate Bars (+25 Happy) or Big Box of Chocolate Bars (+35 Happy).
+     * Bag of Candy Kisses (+50 Happy) is NOT Bag of Chocolate Kisses (+25 Happy).
 
-═══ CRITICAL OPERATIONAL RULES ═══
+2. NEVER INVENT FIXED NUMBERS — ALWAYS USE TORN MECHANICS & CALCULATIONS:
+   - Never say "You need 5" or guess an arbitrary number for a jump or gameplay mechanic.
+   - For Happy Jumps with Candies (e.g. Bag of Chocolate Truffles, Tootsie Rolls):
+     * Candies cost 30 minutes of booster cooldown each.
+     * In a standard 24h booster cooldown limit: a player consumes EXACTLY 48 candies (48 × 30m = 1,440m = 24 hours).
+     * In a 48h booster cooldown limit (with faction Toleration perk): a player consumes EXACTLY 96 candies (96 × 30m = 2,880m = 48 hours).
+     * Our faction perk (+50% Voracity) boosts candy Happy (e.g. Bag of Chocolate Truffles gives 150 Happy each instead of 100).
+     * With Ecstasy, total Happy is DOUBLED! (e.g. 48 truffles = +7,200 Happy from candy + ~5,025 PI base = 12,225 pre-Ecstasy -> 24,450 Happy after Ecstasy).
+     * For eDVD jumps: each eDVD costs 6 hours cooldown, so 4 eDVDs = 24h (or 5 eDVDs with faction perks) yielding ~30k-35k Happy.
 
-1. NEVER INVENT ANYTHING:
-   - ONLY react to what was actually said in the transcript. Do NOT invent words, events, topics, or game terms that were not mentioned.
-   - If someone was talking about food or their day, do NOT randomly bring up Torn wars or Xanax out of nowhere. Stick tightly to the actual topic.
+3. ACCOUNT-AWARE INTEL:
+   - When the player's live account data is provided in the prompt, reference their actual numbers (energy, happy, property, cooldowns).
+   - If information is unverified, state what is known and clarify rather than guessing.
 
-2. SHORT — 1 TO 2 SENTENCES MAX:
-   - Discord texting style. Quick, snappy, natural.
-   - No bullet points, no headers, no essays, no formal sign-offs.
+4. SOUND LIKE A REAL HUMAN IN DISCORD:
+   - Quick, snappy, natural. No robotic corporate boilerplate ("As an AI...", "Hope this helps!"). Just deliver the answer with confidence and dry wit.`;
 
-3. SOUND LIKE A REAL HUMAN IN DISCORD:
-   - NEVER say: "As an AI...", "I noticed that...", "That's interesting!", "Great point!", "Hope that helps!", or anything robotic/corporate.
-   - Never introduce yourself or say "Hi, I'm Friday". Just dive straight into the conversation.
-
-4. READ THE ROOM:
-   - Banter / Roasting → Match the energy. Sharp, playful, witty comeback.
-   - Bad Luck (OD, hospital, mugged, failed OC) → Dry sympathetic roast (e.g. "Look on the bright side: free hospital bed").
-   - Bragging / Cockiness → Bring them back down to earth with a dry reality check.
-   - Genuine Game Questions → Deliver the answer accurately and cleanly, with a touch of confident swagger.
-   - Chill / Casual Chat → Relaxed, authentic, low-key.
-
-5. WHO TO ADDRESS:
-   - React to the conversation naturally. Don't force-mention names unless it makes the banter land better.
-
-6. REPLIES AND CONTEXT CONTINUATIONS:
-   - When a user is replying to another message in chat:
-     * If the user's message is an incomplete thought, reaction, question, agreement, or short follow-up (e.g. "why?", "no way", "is that true?", "fr?", "same", "who did that?"): respond directly to the substance of the PREVIOUS MESSAGE they are replying to in light of their reaction.
-     * If the user's message is an independent standalone statement or question on its own new topic, address their statement or question directly.
-
-═══ TORN CITY KNOWLEDGE (USE ONLY WHEN RELEVANT) ═══
-
-- OD (Overdose): Taking too many drugs (Xanax, Speed, Ecstasy etc.) causes an overdose. You get hospitalized for up to 72 hours and your energy/nerve are wiped.
-- Switzerland (Switz): The rehab location in Torn. When you OD or have high addiction, you fly to Switzerland to clear it. Costs money and time traveling there.
-- "Flying to Switz" = going to Switzerland to get rehab/clear drug addiction.
-- Xanax: Most common drug. Gives energy. 3–4 stacked = high gains but OD risk.
-- Happy Jump: Stacking drugs + candy boosters to massively increase gym training stats.
-- Hospital: Players can get hospitalized from attacks, overdoses, or other events.
-- Revive: Other players can revive you out of hospital.
-- Chain: Faction attack chain for respect. Must keep hitting targets before the timer runs out.
-- OC (Organized Crime): Faction crime missions requiring multiple members.
-- CPR (Crime Pass Rate): Your success rate on OC missions.
-- RW (Ranked War): Faction-vs-faction ranked battle.
-- Mugged: Being attacked and losing money while traveling.`;
-
-async function generateChatResponse(convoLines = [], hint = "", invokerName = "", replyContext = null, userAccountData = null, detectedIntent = null) {
+async function generateChatResponse(convoLines = [], hint = "", invokerName = "", replyContext = null, userAccountData = null, detectedIntent = null, userSpeech = "") {
     const key = getGeminiApiKey();
+    const cleanSpeech = userSpeech || hint || (convoLines && convoLines.length > 0 ? convoLines[convoLines.length - 1] : "");
+
+    // If no Gemini key is available, use deterministic fallback
     if (!key) {
+        if (tornKnowledge.detectTornGameplayIntent(cleanSpeech)) {
+            return tornKnowledge.formatDeterministicTornAnswer(cleanSpeech, userAccountData, invokerName);
+        }
         if (userAccountData) {
             return userKeys.formatDeterministicStatsReply(userAccountData, invokerName, detectedIntent);
         }
@@ -5960,6 +5983,10 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
     if (invokerName) {
         convoPrompt += `Member speaking / pinging you: ${invokerName}\n\n`;
     }
+
+    // ── Verified Ground-Truth Torn City Intelligence Injection ──
+    const tornIntel = tornKnowledge.buildTornKnowledgeContext(cleanSpeech, userAccountData, invokerName);
+    convoPrompt += tornIntel;
 
     // ── Verified Real-Time Live Torn Account Data Injection ──
     if (userAccountData) {
@@ -5974,8 +6001,7 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
         convoPrompt += `Medical Cooldown: ${userAccountData.cooldowns.medical > 0 ? `${userAccountData.cooldowns.medicalMinutes}m remaining` : 'None / Ready'}\n`;
         convoPrompt += `Travel: ${userAccountData.travel.isTraveling ? `In flight to ${userAccountData.travel.destination} (${userAccountData.travel.timeLeftMinutes}m left)` : `In ${userAccountData.travel.destination || 'Torn'}`}\n`;
         convoPrompt += `Status: ${userAccountData.status.state} (${userAccountData.status.description})\n`;
-        convoPrompt += `═══════════════════════════════════════════════════════════════\n`;
-        convoPrompt += `MANDATORY ACCURACY MANDATE: When answering questions about their energy, nerve, or account, YOU MUST STATE THE EXACT REAL-TIME NUMBERS (e.g. ${userAccountData.energy.current}/${userAccountData.energy.maximum} energy) accurately without guessing. Deliver the answer with your signature dry wit, playful banter, or deadpan humor.\n\n`;
+        convoPrompt += `═══════════════════════════════════════════════════════════════\n\n`;
     }
 
     if (replyContext && replyContext.text) {
@@ -5985,7 +6011,7 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
         if (replyContext.replyText) {
             convoPrompt += `User's Reply: "${replyContext.replyText}"\n`;
         }
-        convoPrompt += `Instruction: If the user's reply is not its own standalone question or statement (e.g. it is a reaction, question about the parent message, or incomplete thought), respond directly to the substance of the original message above in light of their reply. Otherwise address their statement directly.\n═════════════════════════════════\n\n`;
+        convoPrompt += `═════════════════════════════════\n\n`;
     }
 
     convoPrompt += "Recent conversation in the Discord channel:\n";
@@ -5999,7 +6025,7 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
         convoPrompt += `\nExtra direction from member: "${hint.trim()}"\n`;
     }
 
-    convoPrompt += "\nNow respond in 1-2 sentences ONLY based on what was actually said above. Deliver with your signature dry wit and funny banter, but keep it natural and not over-the-top. Do not invent topics that weren't mentioned:";
+    convoPrompt += "\nNow respond in 1-3 sentences based strictly on the verified facts above. Deliver with your signature dry wit and playful banter, but ensure all game facts, item names, and calculated numbers are 100% accurate. Do not invent unverified numbers:";
 
     const payload = {
         contents: [{ role: 'user', parts: [{ text: convoPrompt }] }],
@@ -6007,38 +6033,25 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
             parts: [{ text: FRIDAY_RESPONDER_SYSTEM_PROMPT }]
         },
         generationConfig: {
-            temperature: 0.9
+            temperature: 0.7
         }
     };
 
-    try {
-        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-            signal: AbortSignal.timeout(10000)
-        });
-        const data = await resp.json();
-        if (data.error) {
-            console.warn("[Gemini API] Response error:", data.error.message);
-            if (userAccountData) {
-                return userKeys.formatDeterministicStatsReply(userAccountData, invokerName, detectedIntent);
-            }
-            return "";
-        }
-        const candidate = data.candidates?.[0];
+    const result = await callGeminiWithFallback(payload, key, { timeout: 10000 });
+    if (result.success) {
+        const candidate = result.data.candidates?.[0];
         const reply = candidate?.content?.parts?.[0]?.text?.trim() || "";
-        if (!reply && userAccountData) {
-            return userKeys.formatDeterministicStatsReply(userAccountData, invokerName, detectedIntent);
-        }
-        return reply;
-    } catch(err) {
-        console.warn("[Gemini API] Generation timeout or error:", err.message);
-        if (userAccountData) {
-            return userKeys.formatDeterministicStatsReply(userAccountData, invokerName, detectedIntent);
-        }
-        return "";
+        if (reply) return reply;
     }
+
+    // Grounded Fallback: If Gemini is down or high-demand
+    if (tornKnowledge.detectTornGameplayIntent(cleanSpeech)) {
+        return tornKnowledge.formatDeterministicTornAnswer(cleanSpeech, userAccountData, invokerName);
+    }
+    if (userAccountData) {
+        return userKeys.formatDeterministicStatsReply(userAccountData, invokerName, detectedIntent);
+    }
+    return "";
 }
 
 app.post('/api/ai/chat', async (req, res) => {
@@ -12556,16 +12569,20 @@ function setupSlashBotEvents(bot, token) {
                 }
             }
 
-            // ── Live Personal Account Stats Handling ──
+            // ── Live Personal Account Stats & Torn Gameplay Intelligence ──
             const accountIntent = userKeys.detectUserAccountIntent(userSpeech);
+            const tornGameplayIntent = tornKnowledge.detectTornGameplayIntent(userSpeech);
             let userAccountData = null;
 
-            if (accountIntent) {
+            if (accountIntent || tornGameplayIntent) {
                 const primaryKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || (apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
                 const resolved = userKeys.resolveUserApiKey(primaryAuthorId, primaryAuthor, authorUsername, primaryKey);
 
-                if (!resolved) {
-                    // User does NOT have an API key linked and is not the owner!
+                if (resolved) {
+                    // User HAS an API key or is the owner! Fetch real-time live stats!
+                    userAccountData = await userKeys.fetchUserLiveStats(resolved.key);
+                } else if (accountIntent && !tornGameplayIntent) {
+                    // User asked an account-specific stat (e.g. energy/bars) but has no linked key
                     const linkEmbed = UI.warning(
                         '🔑 Torn Limited API Key Required',
                         `Hey **${primaryAuthor}**, to check your live personal energy, nerve, cooldowns, or account stats, I need your Torn **Limited Access API Key**.\n\n` +
@@ -12589,20 +12606,21 @@ function setupSlashBotEvents(bot, token) {
                     });
                     return;
                 }
-
-                // User HAS an API key or is the owner! Fetch real-time live stats!
-                userAccountData = await userKeys.fetchUserLiveStats(resolved.key);
             }
 
             let aiReply = "";
             try {
-                aiReply = await generateChatResponse(convoLines, "", primaryAuthor, replyContext, userAccountData, accountIntent);
+                aiReply = await generateChatResponse(convoLines, "", primaryAuthor, replyContext, userAccountData, accountIntent, userSpeech);
             } catch(genErr) {
                 console.warn("[Conversation] generateChatResponse error:", genErr.message);
             }
 
-            if ((!aiReply || !aiReply.trim()) && userAccountData) {
-                aiReply = userKeys.formatDeterministicStatsReply(userAccountData, primaryAuthor, accountIntent);
+            if ((!aiReply || !aiReply.trim())) {
+                if (tornGameplayIntent) {
+                    aiReply = tornKnowledge.formatDeterministicTornAnswer(userSpeech, userAccountData, primaryAuthor);
+                } else if (userAccountData && accountIntent) {
+                    aiReply = userKeys.formatDeterministicStatsReply(userAccountData, primaryAuthor, accountIntent);
+                }
             }
 
             if (aiReply && aiReply.trim()) {
@@ -13359,7 +13377,7 @@ function setupSlashBotEvents(bot, token) {
                     }
                 }
 
-                const aiReply = await generateChatResponse(convoLines, hint, invokerName);
+                const aiReply = await generateChatResponse(convoLines, hint, invokerName, null, null, null, hint);
 
                 return await interaction.editReply({
                     content: aiReply

@@ -497,14 +497,26 @@ function detectUserAccountIntent(text) {
     const isHospital = /\b(?:am\s+i\s+in\s+hosp(?:ital)?|how\s+long\s+am\s+i\s+in\s+hosp(?:ital)?|my\s+status)\b/i.test(clean);
     if (isHospital) return 'hospital';
 
+    // 9. Happy Jumps & Candies
+    const isJump = /\b(?:happy\s+jump|candy\s+jump|choco\s+jump|edvd\s+jump|jumping|jump)\b/i.test(clean) ||
+                   (/\b(?:how\s+many|can\s+i|should\s+i)\b/i.test(clean) && /\b(?:candies|candy|truffles?|tootsies?|edvds?|jawbreakers?)\b/i.test(clean));
+    if (isJump) return 'jump';
+
     return null;
 }
 
 /**
  * Format a deterministic witty response if Gemini is offline or slow.
  */
-function formatDeterministicStatsReply(stats, invokerName, intent) {
+function formatDeterministicStatsReply(stats, invokerName, intent, rawQuery = "") {
     if (!stats) return `⚠️ I couldn't reach the Torn satellite for your stats right now, ${invokerName}. Try again in a second.`;
+
+    if (intent === 'jump') {
+        try {
+            const tornKnowledge = require('./torn-knowledge');
+            return tornKnowledge.formatDeterministicTornAnswer(rawQuery || 'happy jump', stats, invokerName);
+        } catch(e) {}
+    }
 
     if (intent === 'energy') {
         if (stats.energy.isFull) {
