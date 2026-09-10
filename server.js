@@ -237,6 +237,7 @@ async function loadConfigFromMongo() {
             if (primaryOwnerKey) {
                 try {
                     userKeys.syncOwnerDetails(primaryOwnerKey, discordConfig.personalDiscordId);
+                    tornKnowledge.fetchFactionPerks(primaryOwnerKey).catch(() => {});
                 } catch(e) {}
             }
 
@@ -655,6 +656,12 @@ try { if (fs.existsSync('spy_db.json')) spyDatabase = JSON.parse(fs.readFileSync
 try { if (fs.existsSync('user_tracking.json')) userTracking = JSON.parse(fs.readFileSync('user_tracking.json')); } catch(e) {}
 try { if (fs.existsSync('api_pool.json')) apiPoolConfig = JSON.parse(fs.readFileSync('api_pool.json')); } catch(e) {}
 try { if (fs.existsSync('company_config.json')) companyConfig = { ...companyConfig, ...JSON.parse(fs.readFileSync('company_config.json')) }; } catch(e) {}
+try {
+    const startupKey = (discordConfig && discordConfig.apiKey) || process.env.TORN_API_KEY || (apiPoolConfig && apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
+    if (startupKey) {
+        tornKnowledge.fetchFactionPerks(startupKey).catch(() => {});
+    }
+} catch(e) {}
 
 let mongoSaveTimeout = null;
 function saveToMongo() {
@@ -5860,6 +5867,11 @@ app.post('/api/ai/save-key', async (req, res) => {
 async function askTornAI(message, history = []) {
     if (!message || typeof message !== 'string' || !message.trim()) {
         throw new Error("Message is required.");
+    }
+
+    const primaryKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || (apiPoolConfig && apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
+    if (primaryKey) {
+        tornKnowledge.fetchFactionPerks(primaryKey).catch(() => {});
     }
 
     const key = getGeminiApiKey();
@@ -12576,6 +12588,9 @@ function setupSlashBotEvents(bot, token) {
 
             if (accountIntent || tornGameplayIntent) {
                 const primaryKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || (apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
+                if (primaryKey) {
+                    tornKnowledge.fetchFactionPerks(primaryKey).catch(() => {});
+                }
                 const resolved = userKeys.resolveUserApiKey(primaryAuthorId, primaryAuthor, authorUsername, primaryKey);
 
                 if (resolved) {

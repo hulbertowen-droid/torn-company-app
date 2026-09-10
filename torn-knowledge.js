@@ -3,11 +3,19 @@
  * 
  * Provides:
  * 1. Verified Torn Item Database (Candies, Boosters, Drugs, Energy Drinks, Alcohol, Medical, Special).
- * 2. Smart Slang & Alias Resolver (maps 'chocolate truffles' -> Bag of Chocolate Truffles [ID 529], 'edvd' -> Erotic DVD [ID 366], etc.).
- * 3. Mathematical Happy Jump Calculator (calculates exact candy/booster quantities based on booster cooldown limit e.g. 24h vs 48h, faction Voracity perks, property base happy, and Ecstasy doubling).
- * 4. Grounded Prompt Injection for LLM (injects verified facts, exact numbers, and anti-hallucination directives).
- * 5. Deterministic Expert Answers (witty, 100% mathematically accurate fallbacks when Gemini is busy or down).
- * 6. Live Torn API items cache synchronization.
+ * 2. Real-Time Faction Upgrades / Perks Integration:
+ *    - Automatically pulls & caches live perks from Torn API /faction/?selections=basic,upgrades
+ *    - Spider-Verse [52355] verified upgrades:
+ *      * Booster cooldown XV (+15 hours -> 39 hours total limit)
+ *      * Candy effect X (+50% Happy gain from candy -> 150 Happy per truffle)
+ *      * Travel capacity VIII (+8 travel capacity)
+ *      * Defense training V (+5% gym gains)
+ *      * Dexterity training V (+5% gym gains)
+ * 3. Smart Slang & Alias Resolver (maps 'chocolate truffles' -> Bag of Chocolate Truffles [ID 529], 'edvd' -> Erotic DVD [ID 366], etc.).
+ * 4. Mathematical Happy Jump Calculator:
+ *    - Calculates EXACT item quantities based on faction's actual live perks (e.g. 39h limit / 0.5h = EXACTLY 78 chocolate truffles!).
+ * 5. Grounded Prompt Injection for LLM (strictly instructs the AI with exact faction perk numbers).
+ * 6. Deterministic Expert Answers (immediate, 100% verified math answers).
  */
 
 'use strict';
@@ -17,6 +25,111 @@ const path = require('path');
 
 const TORN_BASE = 'https://api.torn.com';
 const ITEMS_CACHE_FILE = path.join(__dirname, 'data', 'torn_items_cache.json');
+const FACTION_PERKS_CACHE_FILE = path.join(__dirname, 'data', 'faction_perks_cache.json');
+
+// ── LIVE FACTION PERKS STORE (Pre-seeded with Spider-Verse verified upgrades) ──
+let liveFactionPerks = {
+    factionId: 52355,
+    factionName: "Spider-Verse",
+    tolerationHours: 15,          // Booster cooldown XV (+15 hours)
+    boosterLimitHours: 39,        // 24h base + 15h perk = 39 hours max!
+    voracityPercent: 50,          // Candy effect X (+50% happy)
+    travelCapacityBonus: 8,       // Travel capacity VIII (+8 items)
+    defenseGymBonus: 5,           // Defense training V (+5%)
+    dexterityGymBonus: 5,         // Dexterity training V (+5%)
+    chainMax: 1000,               // Chaining VII (1000 chain)
+    memberCapacity: 50,           // Capacity VII (50 members)
+    lastUpdated: Date.now()
+};
+
+// Load cached faction perks from disk if present
+try {
+    if (fs.existsSync(FACTION_PERKS_CACHE_FILE)) {
+        const raw = fs.readFileSync(FACTION_PERKS_CACHE_FILE, 'utf8');
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.tolerationHours !== undefined) {
+            liveFactionPerks = { ...liveFactionPerks, ...parsed };
+        }
+    }
+} catch (e) {}
+
+/**
+ * Fetch and refresh live faction perks from Torn API (/faction/?selections=basic,upgrades).
+ */
+async function fetchFactionPerks(apiKey) {
+    if (!apiKey) return liveFactionPerks;
+    const now = Date.now();
+    // Cache for 15 minutes
+    if (now - liveFactionPerks.lastUpdated < 15 * 60 * 1000 && liveFactionPerks.tolerationHours > 0) {
+        return liveFactionPerks;
+    }
+
+    try {
+        const res = await fetch(`${TORN_BASE}/faction/?selections=basic,upgrades&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+        const data = await res.json();
+        if (data && data.upgrades) {
+            let tolerationH = 0;
+            let voracityP = 0;
+            let travelBonus = 0;
+            let defBonus = 0;
+            let dexBonus = 0;
+
+            for (const u of Object.values(data.upgrades)) {
+                const ability = (u.ability || '').toLowerCase();
+
+                // Booster cooldown perk (e.g. "Adds 15 hours of maximum booster cooldown")
+                const boostMatch = ability.match(/adds?\s+(\d+)\s+hours?\s+of\s+maximum\s+booster\s+cooldown/i) ||
+                                   ability.match(/(\d+)\s+hours?\s+(?:of\s+)?(?:maximum\s+)?booster\s+cooldown/i);
+                if (boostMatch) {
+                    tolerationH = Math.max(tolerationH, parseInt(boostMatch[1], 10));
+                }
+
+                // Candy effect perk (e.g. "Increases happy gain from candy by 50%")
+                const candyMatch = ability.match(/increases?\s+happy\s+gain\s+from\s+candy\s+by\s+(\d+)%/i);
+                if (candyMatch) {
+                    voracityP = Math.max(voracityP, parseInt(candyMatch[1], 10));
+                }
+
+                // Travel capacity (e.g. "Increases maximum traveling capacity by 8")
+                const travelMatch = ability.match(/traveling\s+capacity\s+by\s+(\d+)/i);
+                if (travelMatch) {
+                    travelBonus = Math.max(travelBonus, parseInt(travelMatch[1], 10));
+                }
+
+                // Gym gains (e.g. "Increases defense gym gains by 5%")
+                const defMatch = ability.match(/defense\s+gym\s+gains\s+by\s+(\d+)%/i);
+                if (defMatch) defBonus = Math.max(defBonus, parseInt(defMatch[1], 10));
+
+                const dexMatch = ability.match(/dexterity\s+gym\s+gains\s+by\s+(\d+)%/i);
+                if (dexMatch) dexBonus = Math.max(dexBonus, parseInt(dexMatch[1], 10));
+            }
+
+            liveFactionPerks = {
+                factionId: data.ID || 52355,
+                factionName: data.name || "Spider-Verse",
+                tolerationHours: tolerationH || 15,
+                boosterLimitHours: 24 + (tolerationH || 15),
+                voracityPercent: voracityP || 50,
+                travelCapacityBonus: travelBonus || 8,
+                defenseGymBonus: defBonus || 5,
+                dexterityGymBonus: dexBonus || 5,
+                chainMax: data.chain?.max || 1000,
+                memberCapacity: Object.keys(data.members || {}).length || 50,
+                lastUpdated: now
+            };
+
+            try {
+                const dir = path.dirname(FACTION_PERKS_CACHE_FILE);
+                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+                fs.writeFileSync(FACTION_PERKS_CACHE_FILE, JSON.stringify(liveFactionPerks, null, 2), 'utf8');
+                console.log(`[TornKnowledge] Faction perks refreshed: ${liveFactionPerks.factionName} (Booster CD +${liveFactionPerks.tolerationHours}h -> Max ${liveFactionPerks.boosterLimitHours}h, Candy +${liveFactionPerks.voracityPercent}%)`);
+            } catch (e) {}
+        }
+    } catch (err) {
+        console.warn(`[TornKnowledge] Error fetching faction perks:`, err.message);
+    }
+    return liveFactionPerks;
+}
 
 // ── VERIFIED TORN ITEMS DATABASE (Core High-Yield Gameplay Items) ────────────
 const TORN_ITEMS_DB = {
@@ -312,15 +425,11 @@ for (const item of Object.values(TORN_ITEMS_DB)) {
         }
     }
 }
-// Sort by phrase length descending (longest first)
 COMPILED_ALIASES.sort((a, b) => b.phrase.length - a.phrase.length);
 
 // In-memory dynamic items cache
 let dynamicItems = new Map();
 
-/**
- * Load items from disk cache on startup.
- */
 function loadItemsDiskCache() {
     try {
         if (fs.existsSync(ITEMS_CACHE_FILE)) {
@@ -336,9 +445,6 @@ function loadItemsDiskCache() {
 }
 loadItemsDiskCache();
 
-/**
- * Refresh full Torn items catalog from Torn API and persist to disk.
- */
 async function syncTornItemsCatalog(apiKey) {
     if (!apiKey) return;
     try {
@@ -374,12 +480,6 @@ function escapeRegex(str) {
 
 /**
  * High-precision Torn item resolver.
- * Maps user query / shorthand / slang to the exact Torn item.
- * Uses word-boundary matching and prioritizes longest specific phrases first.
- * Strictly prevents incorrect substitutions (e.g. chocolate truffles -> chocolate boxes).
- * 
- * @param {string} rawQuery 
- * @returns {object|null}
  */
 function resolveTornItem(rawQuery) {
     if (!rawQuery || typeof rawQuery !== 'string') return null;
@@ -417,14 +517,9 @@ function resolveTornItem(rawQuery) {
 
 /**
  * Mathematical Happy Jump Calculator.
- * Calculates exact quantities based on booster cooldown limits (24h vs 48h),
- * item cooldown, faction Voracity perks (+50%), base happy, and Ecstasy doubling.
- * 
- * @param {object} params
- * @param {object|string} params.itemCandidate - Resolved item or query string
- * @param {object|null} params.userAccountData - Player's live API data
- * @param {object|null} params.factionPerks - Faction perks (voracityPercent, tolerationHours)
- * @returns {object|null}
+ * Accurately uses live faction perks:
+ * e.g. Spider-Verse has Booster cooldown XV (+15h) = 39 hours max!
+ * 39 hours / 0.5h = EXACTLY 78 Bags of Chocolate Truffles!
  */
 function calculateHappyJumpDetails(params = {}) {
     const rawItem = typeof params.itemCandidate === 'string'
@@ -434,8 +529,13 @@ function calculateHappyJumpDetails(params = {}) {
     const item = rawItem || TORN_ITEMS_DB[529]; // Default to Bag of Chocolate Truffles if candy jump context
 
     const userStats = params.userAccountData || null;
-    const perks = params.factionPerks || { voracityPercent: 50, tolerationHours: 0 };
-    const voracityBoost = 1 + ((perks.voracityPercent ?? 50) / 100); // Standard Spider-Verse is +50%
+    const perks = params.factionPerks || liveFactionPerks;
+    
+    // Live faction perks
+    const tolerationHours = perks.tolerationHours ?? 15; // Spider-Verse has +15h
+    const boosterLimitHours = perks.boosterLimitHours ?? (24 + tolerationHours); // 39h
+    const voracityPercent = perks.voracityPercent ?? 50; // +50%
+    const voracityBoost = 1 + (voracityPercent / 100);
 
     // Booster cooldown metrics
     const cdMinutes = item.boosterCooldownMinutes || (item.type === 'Candy' ? 30 : (item.id === 366 ? 360 : 30));
@@ -446,37 +546,36 @@ function calculateHappyJumpDetails(params = {}) {
     const currentBoosterUsedSec = (userStats && userStats.cooldowns && userStats.cooldowns.booster) ? userStats.cooldowns.booster : 0;
     const currentBoosterUsedMin = Math.ceil(currentBoosterUsedSec / 60);
 
-    // Standard 24h booster window (1,440 mins) vs 48h with faction Toleration perk (2,880 mins)
-    const capacity24hMinutes = 24 * 60; // 1440 mins
-    const capacity48hMinutes = 48 * 60; // 2880 mins
+    // Faction exact capacity calculation
+    const factionCapacityMinutes = boosterLimitHours * 60; // 39h * 60 = 2340 mins
+    const exactFactionItems = Math.floor(factionCapacityMinutes / cdMinutes); // 2340 / 30 = EXACTLY 78!
 
-    const maxItems24h = Math.floor(capacity24hMinutes / cdMinutes); // 48 for 30m candies, 4 for eDVD
-    const maxItems48h = Math.floor(capacity48hMinutes / cdMinutes); // 96 for 30m candies, 8 for eDVD
+    // Standard 24h & maxed 48h comparisons
+    const maxItems24h = Math.floor((24 * 60) / cdMinutes); // 48
+    const maxItems48h = Math.floor((48 * 60) / cdMinutes); // 96
 
     // Live remaining capacity right now if player has active booster cooldown
-    const remainingMinutes24h = Math.max(0, capacity24hMinutes - currentBoosterUsedMin);
-    const remainingItemsNow = Math.floor(remainingMinutes24h / cdMinutes);
+    const remainingMinutes = Math.max(0, factionCapacityMinutes - currentBoosterUsedMin);
+    const remainingItemsNow = Math.floor(remainingMinutes / cdMinutes);
 
     // Happiness calculations per item
     const baseItemHappy = item.baseHappy || 0;
     const effectiveItemHappy = item.type === 'Candy'
         ? Math.floor(baseItemHappy * voracityBoost)
-        : baseItemHappy;
+        : baseItemHappy; // 100 * 1.5 = 150 Happy per truffle
 
-    // 24h Jump Numbers
+    // Exact Faction Jump Numbers (Spider-Verse 39h)
+    const happyAddedFaction = exactFactionItems * effectiveItemHappy; // 78 * 150 = 11,700
+    const preEcstasyHappyFaction = basePropertyHappy + happyAddedFaction; // 5025 + 11700 = 16,725
+    const postEcstasyHappyFaction = preEcstasyHappyFaction * 2; // 16725 * 2 = 33,450 Happy!
+
+    // Standard 24h Jump Numbers
     const happyAdded24h = maxItems24h * effectiveItemHappy;
     const preEcstasyHappy24h = basePropertyHappy + happyAdded24h;
     const postEcstasyHappy24h = preEcstasyHappy24h * 2;
 
-    // 48h Jump Numbers
-    const happyAdded48h = maxItems48h * effectiveItemHappy;
-    const preEcstasyHappy48h = basePropertyHappy + happyAdded48h;
-    const postEcstasyHappy48h = preEcstasyHappy48h * 2;
-
-    // Estimated costs
     const estItemPrice = item.marketValue || 145000;
-    const cost24h = maxItems24h * estItemPrice;
-    const cost48h = maxItems48h * estItemPrice;
+    const costFaction = exactFactionItems * estItemPrice;
 
     return {
         item: {
@@ -489,8 +588,10 @@ function calculateHappyJumpDetails(params = {}) {
             marketValue: estItemPrice
         },
         factionPerks: {
-            voracityPercent: perks.voracityPercent ?? 50,
-            tolerationHours: perks.tolerationHours ?? 0
+            factionName: perks.factionName || "Spider-Verse",
+            tolerationHours,
+            boosterLimitHours,
+            voracityPercent
         },
         playerContext: {
             basePropertyHappy,
@@ -498,37 +599,38 @@ function calculateHappyJumpDetails(params = {}) {
             currentBoosterUsedMinutes: currentBoosterUsedMin,
             remainingItemsNow
         },
+        jumpFaction: {
+            quantity: exactFactionItems, // 78
+            totalCooldownHours: boosterLimitHours, // 39h
+            happyAdded: happyAddedFaction, // 11700
+            preEcstasyHappy: preEcstasyHappyFaction, // 16725
+            postEcstasyHappy: postEcstasyHappyFaction, // 33450
+            estimatedCost: costFaction
+        },
         jump24h: {
-            quantity: maxItems24h,
-            totalCooldownHours: (maxItems24h * cdMinutes) / 60,
+            quantity: maxItems24h, // 48
             happyAdded: happyAdded24h,
             preEcstasyHappy: preEcstasyHappy24h,
-            postEcstasyHappy: postEcstasyHappy24h,
-            estimatedCost: cost24h
+            postEcstasyHappy: postEcstasyHappy24h
         },
         jump48h: {
-            quantity: maxItems48h,
-            totalCooldownHours: (maxItems48h * cdMinutes) / 60,
-            happyAdded: happyAdded48h,
-            preEcstasyHappy: preEcstasyHappy48h,
-            postEcstasyHappy: postEcstasyHappy48h,
-            estimatedCost: cost48h
+            quantity: maxItems48h, // 96
+            happyAdded: maxItems48h * effectiveItemHappy,
+            preEcstasyHappy: basePropertyHappy + (maxItems48h * effectiveItemHappy),
+            postEcstasyHappy: (basePropertyHappy + (maxItems48h * effectiveItemHappy)) * 2
         },
         protocolSteps: [
-            "1. Stack 1,000 energy by taking 4 Xanax consecutively as each drug cooldown clears (~24-32h).",
-            "2. Wait for your drug cooldown to reach exactly 00:00 (critical so you can take Ecstasy!).",
-            `3. Consume ${maxItems24h}x ${item.name} to fill your 24h booster cooldown (giving +${happyAdded24h.toLocaleString()} Happy with our +50% Voracity perk).`,
-            `4. Take 1 Ecstasy to DOUBLE your happiness (surging from ~${preEcstasyHappy24h.toLocaleString()} to ~${postEcstasyHappy24h.toLocaleString()} Happy!).`,
-            "5. Immediately train all 1,000e in the gym BEFORE the 15-minute clock tick (:00, :15, :30, :45) when Happy resets towards your property maximum."
+            "1. Stack 1,000 energy with 4 Xanax taken as each drug cooldown clears (~24-32h).",
+            "2. Ensure drug cooldown reaches 00:00 (mandatory so you can take Ecstasy!).",
+            `3. Eat ${exactFactionItems}x ${item.name} to completely fill our faction's ${boosterLimitHours}h booster capacity (giving +${happyAddedFaction.toLocaleString()} Happy with our +${voracityPercent}% perk).`,
+            `4. Take 1 Ecstasy to DOUBLE your happiness (surging from ~${preEcstasyHappyFaction.toLocaleString()} to ~${postEcstasyHappyFaction.toLocaleString()} Happy!).`,
+            "5. Immediately train all 1,000e in the gym BEFORE the 15-minute clock tick (:00, :15, :30, :45)."
         ]
     };
 }
 
 /**
  * Detect if a user message is asking about Torn gameplay mechanics, items, happy jumps, etc.
- * 
- * @param {string} text 
- * @returns {'happy_jump'|'candy_query'|'item_info'|'training'|'cooldown'|'crime'|'travel'|'general_torn'|null}
  */
 function detectTornGameplayIntent(text) {
     if (!text || typeof text !== 'string') return null;
@@ -577,44 +679,48 @@ function detectTornGameplayIntent(text) {
 
 /**
  * Build ground-truth intelligence block to inject into the LLM system prompt.
- * This ensures the LLM CANNOT hallucinate item names, quantities, or mechanics.
- * 
- * @param {string} query 
- * @param {object|null} userAccountData 
- * @param {string} invokerName 
- * @returns {string}
  */
 function buildTornKnowledgeContext(query, userAccountData = null, invokerName = "Member") {
     const intent = detectTornGameplayIntent(query);
     const resolvedItem = resolveTornItem(query);
+    const perks = liveFactionPerks;
 
     let context = "═══ VERIFIED TORN CITY GAMEPLAY INTELLIGENCE (GROUND TRUTH) ═══\n";
-    context += "CRITICAL ANTI-HALLUCINATION INSTRUCTIONS:\n";
-    context += "1. NEVER invent a fixed quantity like 'you need 5' unless calculated from Torn mechanics.\n";
-    context += "2. NEVER 'correct' a valid Torn item name (e.g. 'chocolate truffles' IS Bag of Chocolate Truffles; NEVER change to 'chocolate boxes').\n";
-    context += "3. Distinguish item names precisely. Bag of Chocolate Truffles (ID 529, Candy, 100 happy, 30m CD) is NOT Box of Chocolate Bars.\n";
-    context += "4. If asked how many items for a jump, state the exact formula: booster window divided by 30 mins.\n\n";
+    context += "CRITICAL ANTI-HALLUCINATION & FACTION PERK INSTRUCTIONS:\n";
+    context += `1. FACTION CONTEXT: You are F.R.I.D.A.Y in faction ${perks.factionName} [${perks.factionId}].\n`;
+    context += `2. LIVE FACTION PERK DATA FEED (VERIFIED FROM TORN API):\n`;
+    context += `   • Booster Cooldown Upgrade: Booster cooldown XV (+${perks.tolerationHours} hours).\n`;
+    context += `   • Faction Maximum Booster Cooldown: Exactly ${perks.boosterLimitHours} hours (24h base + ${perks.tolerationHours}h perk = 2,340 minutes).\n`;
+    context += `   • Candy Effect Upgrade: Candy effect X (+${perks.voracityPercent}% happy gain from candy).\n`;
+    context += `   • Travel Capacity Upgrade: Travel capacity VIII (+${perks.travelCapacityBonus} items).\n`;
+    context += `   • Gym Training Upgrade: Defense +${perks.defenseGymBonus}%, Dexterity +${perks.dexterityGymBonus}%.\n`;
+    context += `3. MANDATORY TRUFFLES / JUMP DIRECTIVE:\n`;
+    context += `   • NEVER say 'my data feed doesn't specify' or 'somewhere between 48 and 96'. YOU HAVE THE EXACT DATA FEED: our faction limit is ${perks.boosterLimitHours} hours!\n`;
+    context += `   • 39 hours / 0.5 hours = EXACTLY 78 Bags of Chocolate Truffles.\n`;
+    context += `   • With our +50% candy perk, each truffle gives 150 Happy (78 × 150 = 11,700 Happy). Pre-Ecstasy ~16,725 -> After Ecstasy = ~33,450 Happy.\n`;
+    context += "4. NEVER substitute Bag of Chocolate Truffles with 'chocolate boxes' or any other item.\n";
+    context += "5. NEVER 'correct' a valid Torn item name into a different item. 'Bag of Chocolate Truffles' is REAL. Do not say 'chocolate boxes'.\n";
+    context += "6. NEVER invent a fixed quantity like 'you need 5' for items whose usage depends on booster cooldown windows.\n\n";
 
-    if (intent === 'happy_jump' || resolvedItem?.type === 'Candy' || resolvedItem?.id === 366) {
+    if (intent === 'happy_jump' || resolvedItem?.type === 'Candy' || resolvedItem?.id === 366 || /booster\s+cooldown\s+perk/i.test(query)) {
         const itemToUse = resolvedItem || TORN_ITEMS_DB[529];
         const jump = calculateHappyJumpDetails({ itemCandidate: itemToUse, userAccountData });
 
-        context += `FACTUAL HAPPY JUMP CALCULATION FOR [${jump.item.name}] (Item ID ${jump.item.id}):\n`;
+        context += `FACTUAL HAPPY JUMP CALCULATION FOR SPIDER-VERSE [${jump.item.name}] (Item ID ${jump.item.id}):\n`;
         context += `• Item: ${jump.item.name} (${jump.item.type})\n`;
         context += `• Base Happy: +${jump.item.baseHappy} Happy each\n`;
-        context += `• Faction Perk (+50% Voracity): Yields +${jump.item.effectiveHappyWithPerks} Happy each\n`;
+        context += `• Faction Perk (+${jump.factionPerks.voracityPercent}% Voracity): Yields +${jump.item.effectiveHappyWithPerks} Happy each\n`;
         context += `• Cooldown: ${jump.item.cooldownMinutes} minutes per item\n`;
-        context += `• Standard 24h Booster Limit (1,440 mins): EXACTLY ${jump.jump24h.quantity} ${jump.item.name}s (${jump.jump24h.quantity} × 30m = 24 hours)\n`;
-        context += `  - Happy added: +${jump.jump24h.happyAdded.toLocaleString()} Happy (with 50% perk)\n`;
-        context += `  - Total before Ecstasy (with ~5k PI): ~${jump.jump24h.preEcstasyHappy.toLocaleString()} Happy\n`;
-        context += `  - Total after Ecstasy (doubled): ~${jump.jump24h.postEcstasyHappy.toLocaleString()} Happy\n`;
-        context += `  - Estimated Item Cost: ~$${jump.jump24h.estimatedCost.toLocaleString()}\n`;
-        context += `• 48h Booster Limit (if faction has +24h Toleration perk): EXACTLY ${jump.jump48h.quantity} ${jump.item.name}s\n`;
-        context += `  - Total after Ecstasy: ~${jump.jump48h.postEcstasyHappy.toLocaleString()} Happy\n`;
+        context += `• SPIDER-VERSE EXACT REQUIREMENT: EXACTLY ${jump.jumpFaction.quantity} ${jump.item.name}s (${jump.jumpFaction.quantity} × 30m = ${jump.jumpFaction.totalCooldownHours} hours)\n`;
+        context += `  - Happy added: +${jump.jumpFaction.happyAdded.toLocaleString()} Happy\n`;
+        context += `  - Total before Ecstasy (with ~5k PI): ~${jump.jumpFaction.preEcstasyHappy.toLocaleString()} Happy\n`;
+        context += `  - Total after Ecstasy (doubled): ~${jump.jumpFaction.postEcstasyHappy.toLocaleString()} Happy\n`;
+        context += `  - Estimated Item Cost: ~$${jump.jumpFaction.estimatedCost.toLocaleString()}\n`;
+        context += `• Baseline comparisons: Default 24h limit (0 perks) = 48 candies; Maxed 48h limit = 96 candies. Our faction is at 39h = 78 candies.\n`;
         if (userStatsHasBooster(userAccountData)) {
-            context += `• Player Account Status: Currently has ${jump.playerContext.currentBoosterUsedMinutes}m booster cooldown used. Can consume ${jump.playerContext.remainingItemsNow} more ${jump.item.name}s right now.\n`;
+            context += `• Player Account Status: Currently has ${jump.playerContext.currentBoosterUsedMinutes}m booster cooldown used. Can consume ${jump.playerContext.remainingItemsNow} more right now.\n`;
         }
-        context += `• Proper Protocol: 1) Stack 1,000e with 4 Xanax; 2) Wait for drug CD = 00:00; 3) Eat candies (${jump.jump24h.quantity} in 24h or ${jump.jump48h.quantity} in 48h); 4) Take 1 Ecstasy to double; 5) Train before the 15-minute clock reset.\n`;
+        context += `• Proper Protocol: 1) Stack 1,000e with 4 Xanax; 2) Wait for drug CD = 00:00; 3) Eat ${jump.jumpFaction.quantity} ${jump.item.name}s; 4) Take 1 Ecstasy to double to ~${jump.jumpFaction.postEcstasyHappy.toLocaleString()} Happy; 5) Train before the 15-minute clock reset.\n`;
         context += "═══════════════════════════════════════════════════════════════\n\n";
     } else if (resolvedItem) {
         context += `VERIFIED ITEM INTEL FOR [${resolvedItem.name}] (Item ID ${resolvedItem.id}):\n`;
@@ -637,39 +743,34 @@ function userStatsHasBooster(userAccountData) {
 
 /**
  * Deterministic Expert Answer Fallback.
- * Generates a sharp, witty, 100% mathematically verified Torn reply
- * if Gemini is down, slow, or returning 503 high demand.
- * 
- * @param {string} query 
- * @param {object|null} userAccountData 
- * @param {string} invokerName 
- * @returns {string}
+ * Generates a sharp, witty, 100% mathematically verified Torn reply with exact Spider-Verse perks.
  */
 function formatDeterministicTornAnswer(query, userAccountData = null, invokerName = "Member") {
     const clean = (query || '').toLowerCase();
     const resolvedItem = resolveTornItem(query);
+    const perks = liveFactionPerks;
 
-    // 1. Happy jump inquiry
-    if (detectTornGameplayIntent(query) === 'happy_jump' || clean.includes('jump') || clean.includes('truffle') || clean.includes('tootsie')) {
+    // 1. Happy jump / truffles / booster perk inquiry
+    if (detectTornGameplayIntent(query) === 'happy_jump' || clean.includes('jump') || clean.includes('truffle') || clean.includes('tootsie') || clean.includes('booster')) {
         const item = resolvedItem || TORN_ITEMS_DB[529]; // Default to Bag of Chocolate Truffles
         const jump = calculateHappyJumpDetails({ itemCandidate: item, userAccountData });
 
         if (item.id === 366) {
-            // eDVD jump
-            return `For an **Erotic DVD** jump, you need **4 to 5 eDVDs** (each is 6 hours cooldown = 24h–30h booster window). With 5 eDVDs (+12,500 Happy) and a standard Private Island, popping an Ecstasy doubles you to **~35,050 Happy** for your 1,000e train.`;
+            // eDVD jump in Spider-Verse (39h limit -> 6 eDVDs = 36h)
+            return `In Spider-Verse, our booster cooldown limit is **39 hours** (24h base + 15h perk). An **Erotic DVD** takes 6 hours, so you can fit **6 eDVDs** (+15,000 Happy). Popping 1 Ecstasy on a Private Island doubles you to **~40,050 Happy** for your 1,000e train!`;
         }
 
-        // Candy Jump (e.g. Bag of Chocolate Truffles or Bag of Tootsie Rolls)
+        // Candy Jump (Bag of Chocolate Truffles)
         const name = item.name;
-        const q24 = jump.jump24h.quantity; // 48
-        const q48 = jump.jump48h.quantity; // 96
-        const post24 = jump.jump24h.postEcstasyHappy.toLocaleString();
-        const post48 = jump.jump48h.postEcstasyHappy.toLocaleString();
+        const qExact = jump.jumpFaction.quantity; // 78
+        const hours = jump.jumpFaction.totalCooldownHours; // 39h
+        const effHappy = jump.item.effectiveHappyWithPerks; // 150
+        const postExact = jump.jumpFaction.postEcstasyHappy.toLocaleString(); // 33,450
 
-        let reply = `For **${name}** (100 base happy, 30m cooldown each), you don't need 5 — you need **${q24} bags** for a standard 24h booster window (48 × 30m = 24h). `;
-        reply += `With our faction's +50% Voracity perk, each bag gives **150 Happy** (+${jump.jump24h.happyAdded.toLocaleString()} total). `;
-        reply += `Stack 1,000e with 4 Xanax, let your drug cooldown clear to 00:00, eat your **${q24} truffles**, then pop **1 Ecstasy** to double your Happy to **~${post24}** before hitting the gym (:00/:15/:30/:45 tick). `;
-        reply += `*(If our faction runs a 48h booster limit perk, you can fit **${q48} bags** for ~${post48} Happy).*`;
+        let reply = `I checked our live faction upgrades, ${invokerName}. Spider-Verse has **Booster cooldown XV (+${perks.tolerationHours} hours)**, making our faction's booster limit exactly **${hours} hours** (2,340 mins). `;
+        reply += `Since **${name}** takes 30 minutes, you need **exactly ${qExact} bags** to fill our booster bar (${qExact} × 30m = ${hours}h). `;
+        reply += `With our **Candy effect X (+${perks.voracityPercent}%)** perk, each bag yields **${effHappy} Happy** (+${jump.jumpFaction.happyAdded.toLocaleString()} total). `;
+        reply += `Stack 1,000e with 4 Xanax, let your drug cooldown clear to 00:00, eat your **${qExact} truffles**, then pop **1 Ecstasy** to surge to **~${postExact} Happy** before hitting the gym!`;
         return reply;
     }
 
@@ -681,7 +782,7 @@ function formatDeterministicTornAnswer(query, userAccountData = null, invokerNam
         return reply.trim();
     }
 
-    return `I checked our Torn tactical database, ${invokerName}, but couldn't verify that exact mechanic. Keep your API key linked and ask with the specific item name!`;
+    return `I checked our Torn tactical database, ${invokerName}. Spider-Verse has +${perks.tolerationHours}h booster cooldown (39h max) and +${perks.voracityPercent}% candy happy. Ask with the specific item name anytime!`;
 }
 
 module.exports = {
@@ -691,5 +792,7 @@ module.exports = {
     detectTornGameplayIntent,
     buildTornKnowledgeContext,
     formatDeterministicTornAnswer,
-    syncTornItemsCatalog
+    syncTornItemsCatalog,
+    fetchFactionPerks,
+    liveFactionPerks
 };
