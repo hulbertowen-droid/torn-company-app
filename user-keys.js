@@ -206,6 +206,7 @@ async function linkUserApiKey(discordUserId, rawKey) {
 
     try {
         // Query profile and bars to verify permissions
+        // NOTE: Torn API v1 returns energy/nerve/happy/life at the TOP level, not inside data.bars
         const res = await fetch(`${TORN_BASE}/user/?selections=profile,bars&key=${cleanKey}`, { signal: AbortSignal.timeout(8000) });
         const data = await res.json();
 
@@ -217,7 +218,7 @@ async function linkUserApiKey(discordUserId, rawKey) {
             return { success: false, error: `Torn API error [${errCode}]: ${errMsg}` };
         }
 
-        if (!data.player_id || !data.bars) {
+        if (!data.player_id || !data.energy) {
             return { success: false, error: 'Key permissions insufficient. Please ensure the key has Limited Access.' };
         }
 
@@ -236,11 +237,19 @@ async function linkUserApiKey(discordUserId, rawKey) {
 
         console.log(`[UserKeys] Successfully encrypted and linked key for ${data.name} [${data.player_id}] (Discord ${discordUserId})`);
 
+        // Build bars object from top-level fields for display after linking
+        const bars = {
+            energy: data.energy,
+            nerve: data.nerve,
+            happy: data.happy,
+            life: data.life
+        };
+
         return {
             success: true,
             playerName: data.name,
             playerId: data.player_id,
-            bars: data.bars
+            bars
         };
     } catch (err) {
         return { success: false, error: `Connection error verifying key: ${err.message}` };
@@ -341,31 +350,36 @@ async function fetchUserLiveStats(apiKey) {
             return null;
         }
 
-        const b = raw.bars || {};
-        const c = raw.cooldowns || {};
-        const t = raw.travel || {};
+        // NOTE: Torn API v1 returns bars (energy/nerve/happy/life) at the TOP-LEVEL of the response,
+        // NOT inside a raw.bars wrapper. raw.bars is always undefined.
+        const e = raw.energy || {};   // { current, maximum, increment, interval, ticktime, fulltime }
+        const n = raw.nerve || {};
+        const h = raw.happy || {};
+        const lf = raw.life || {};
+        const c = raw.cooldowns || {}; // { drug: seconds, medical: seconds, booster: seconds }
+        const t = raw.travel || {};   // { destination, time_left, departed, landed }
         const p = raw.status || {};
 
         // Parse energy
-        const energyCur = b.energy?.current ?? 0;
-        const energyMax = b.energy?.maximum ?? 100;
-        const energyFullSec = b.energy?.fulltime ?? 0;
+        const energyCur = e.current ?? 0;
+        const energyMax = e.maximum ?? 100;
+        const energyFullSec = e.fulltime ?? 0;
         const energyFullMin = Math.ceil(energyFullSec / 60);
-        const isEnergyFull = energyCur >= energyMax;
+        const isEnergyFull = energyFullSec === 0 && energyCur >= energyMax;
 
         // Parse nerve
-        const nerveCur = b.nerve?.current ?? 0;
-        const nerveMax = b.nerve?.maximum ?? 15;
-        const nerveFullSec = b.nerve?.fulltime ?? 0;
+        const nerveCur = n.current ?? 0;
+        const nerveMax = n.maximum ?? 15;
+        const nerveFullSec = n.fulltime ?? 0;
         const nerveFullMin = Math.ceil(nerveFullSec / 60);
 
         // Parse happy & life
-        const happyCur = b.happy?.current ?? 0;
-        const happyMax = b.happy?.maximum ?? 100;
-        const lifeCur = b.life?.current ?? 0;
-        const lifeMax = b.life?.maximum ?? 100;
+        const happyCur = h.current ?? 0;
+        const happyMax = h.maximum ?? 100;
+        const lifeCur = lf.current ?? 0;
+        const lifeMax = lf.maximum ?? 100;
 
-        // Cooldowns
+        // Cooldowns (in seconds)
         const drugSec = c.drug ?? 0;
         const boosterSec = c.booster ?? 0;
         const medSec = c.medical ?? 0;
