@@ -166,6 +166,10 @@ async function loadConfigFromMongo() {
                 if (discordConfig.bankingChannelId && (discordConfig.bankingChannelId.includes('.') || /[a-zA-Z]/.test(discordConfig.bankingChannelId))) {
                     discordConfig.bankingChannelId = "";
                 }
+                if (Array.isArray(discordConfig.conversationChannels)) {
+                    activeConversationChannels = new Set(discordConfig.conversationChannels);
+                    console.log(`[Mongo] Restored ${activeConversationChannels.size} active conversation channel(s):`, Array.from(activeConversationChannels));
+                }
             }
             if (saved.companyConfig) companyConfig = { ...companyConfig, ...saved.companyConfig };
             if (saved.ocConfig) ocConfig = { ...ocConfig, ...saved.ocConfig };
@@ -5961,13 +5965,13 @@ Your job is to jump into the conversation naturally — like an experienced, cle
 
 2. NEVER INVENT FIXED NUMBERS — ALWAYS USE TORN MECHANICS & CALCULATIONS:
    - Never say "You need 5" or guess an arbitrary number for a jump or gameplay mechanic.
-   - For Happy Jumps with Candies (e.g. Bag of Chocolate Truffles, Tootsie Rolls):
+   - For Happy Jumps with Candies in Spider-Verse (e.g. Bag of Chocolate Truffles):
      * Candies cost 30 minutes of booster cooldown each.
-     * In a standard 24h booster cooldown limit: a player consumes EXACTLY 48 candies (48 × 30m = 1,440m = 24 hours).
-     * In a 48h booster cooldown limit (with faction Toleration perk): a player consumes EXACTLY 96 candies (96 × 30m = 2,880m = 48 hours).
-     * Our faction perk (+50% Voracity) boosts candy Happy (e.g. Bag of Chocolate Truffles gives 150 Happy each instead of 100).
-     * With Ecstasy, total Happy is DOUBLED! (e.g. 48 truffles = +7,200 Happy from candy + ~5,025 PI base = 12,225 pre-Ecstasy -> 24,450 Happy after Ecstasy).
-     * For eDVD jumps: each eDVD costs 6 hours cooldown, so 4 eDVDs = 24h (or 5 eDVDs with faction perks) yielding ~30k-35k Happy.
+     * Spider-Verse has Booster cooldown XV (+15h), making our booster limit EXACTLY 39 hours (2,340 minutes).
+     * 2,340m / 30m = EXACTLY 78 Bags of Chocolate Truffles! (Baseline comparisons: 24h default = 48 candies; 48h maxed = 96 candies).
+     * Our faction perk (+50% Voracity) boosts candy Happy from 100 to 150 Happy per truffle (78 × 150 = 11,700 Happy).
+     * With Ecstasy, total Happy doubles from ~16,725 to ~33,450 Happy!
+     * For eDVD jumps in Spider-Verse: 39h limit allows 6 eDVDs (36h CD) yielding ~40k Happy.
 
 3. ACCOUNT-AWARE INTEL:
    - When the player's live account data is provided in the prompt, reference their actual numbers (energy, happy, property, cooldowns).
@@ -12420,13 +12424,22 @@ async function registerSlashCommands(token, guildId = null) {
 // Start the Discord gateway bot for slash command interactions
 let slashCommandBot = null;
 let slashBotStarted = false;
+let isStartingSlashBot = false;
 
 function setupSlashBotEvents(bot, token) {
     bot.on('error', (err) => {
+        if (err?.code === 10062 || err?.message?.includes('Unknown interaction')) {
+            console.warn('[Slash Bot] Non-fatal: Interaction token expired or acknowledged (10062).');
+            return;
+        }
         console.warn('[Slash Bot] Discord Client Error (resilient):', err?.message || err);
     });
     bot.on('shardError', (err) => {
         console.warn('[Slash Bot] Discord Shard Error (resilient):', err?.message || err);
+    });
+    bot.on(Events.ShardDisconnect, () => {
+        console.warn('[Slash Bot] Gateway shard disconnected. Awaiting automatic reconnect...');
+        slashBotStarted = false;
     });
 
     bot.once(Events.ClientReady, async (c) => {
@@ -12513,7 +12526,9 @@ function setupSlashBotEvents(bot, token) {
         }
 
         // If channel is not in activeConversationChannels, and none of the messages are a direct trigger, abort
-        const isConvoChannel = activeConversationChannels.has(channelId);
+        let channel = state.messages[0]?.msgObj?.channel || state.channel;
+        const isConvoChannel = activeConversationChannels.has(channelId) ||
+                               Boolean(channel?.parentId && activeConversationChannels.has(channel.parentId));
         const hasDirectTrigger = state.messages.some(m => m.isMention);
         if (!isConvoChannel && !hasDirectTrigger) {
             channelConvoState.delete(channelId);
@@ -12535,7 +12550,7 @@ function setupSlashBotEvents(bot, token) {
         state.isReplying = true;
         const batch = state.messages.splice(0, state.messages.length);
         const latestMsg = batch[batch.length - 1].msgObj;
-        const channel = latestMsg?.channel || state.channel;
+        channel = latestMsg?.channel || channel;
 
         try {
             if (channel && channel.sendTyping) {
@@ -12647,12 +12662,25 @@ function setupSlashBotEvents(bot, token) {
                         await channel.send({ content: aiReply.trim() }).catch(() => {});
                     }
                 });
-            } else if (batch.some(b => b.isMention)) {
-                // Only send a polite notice if the user explicitly pinged/addressed Friday
-                await latestMsg.reply({
-                    content: "⚠️ My cognitive link had a hiccup. Give me another shout in a second.",
-                    allowedMentions: { repliedUser: false }
-                }).catch(() => {});
+            } else if (batch.some(b => b.isMention) || isConvoChannel) {
+                // If it's a direct mention or conversation mode is active, try deterministic fallback
+                const fallbackReply = tornKnowledge.formatDeterministicTornAnswer(userSpeech, userAccountData, primaryAuthor);
+                if (fallbackReply) {
+                    await latestMsg.reply({
+                        content: fallbackReply.trim(),
+                        allowedMentions: { repliedUser: false }
+                    }).catch(async () => {
+                        if (channel && channel.send) {
+                            await channel.send({ content: fallbackReply.trim() }).catch(() => {});
+                        }
+                    });
+                } else if (batch.some(b => b.isMention)) {
+                    // Only send a polite notice if the user explicitly pinged/addressed Friday
+                    await latestMsg.reply({
+                        content: "⚠️ My cognitive link had a hiccup. Give me another shout in a second.",
+                        allowedMentions: { repliedUser: false }
+                    }).catch(() => {});
+                }
             }
 
         } catch(err) {
@@ -12719,8 +12747,9 @@ function setupSlashBotEvents(bot, token) {
             } catch(e) {}
         }
 
-        // 4. Channel has /conversation mode enabled
-        const isConvoChannel = activeConversationChannels.has(msg.channelId);
+        // 4. Channel has /conversation mode enabled (including threads under active channels)
+        const isConvoChannel = activeConversationChannels.has(msg.channelId) ||
+                               Boolean(msg.channel?.parentId && activeConversationChannels.has(msg.channel.parentId));
 
         const isDirectTrigger = isBotMentioned || isAddressedToFriday || isReplyingToFriday;
         const shouldRespond = isDirectTrigger || isConvoChannel;
@@ -13035,35 +13064,37 @@ function setupSlashBotEvents(bot, token) {
             // ── Bank: Verify & Fulfill ──
             if (customId.startsWith('bank_pay_')) {
                 const reqId = customId.replace('bank_pay_', '').trim();
+                await interaction.deferUpdate().catch(() => {});
                 const res = await executeFulfillRequest(reqId, interaction);
                 if (!res.success) {
-                    return interaction.reply({ content: res.message, ephemeral: true }).catch(() => {});
+                    return interaction.followUp({ content: res.message, ephemeral: true }).catch(() => {});
                 }
                 const updatedReq = bankRequests[reqId];
                 if (updatedReq) {
-                    return interaction.update({
+                    return interaction.editReply({
                         embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
                         components: buildBankRequestButtons(updatedReq)
                     }).catch(() => {});
                 }
-                return interaction.deferUpdate().catch(() => {});
+                return;
             }
 
             // ── Bank: Cancel Fulfillment (Unclaim / Revert) ──
             if (customId.startsWith('bank_unclaim_') || customId.startsWith('bank_revert_')) {
                 const reqId = customId.replace('bank_unclaim_', '').replace('bank_revert_', '').trim();
+                await interaction.deferUpdate().catch(() => {});
                 const res = await executeUnclaimFulfillment(reqId, interaction);
                 if (!res.success) {
-                    return interaction.reply({ content: res.message, ephemeral: true }).catch(() => {});
+                    return interaction.followUp({ content: res.message, ephemeral: true }).catch(() => {});
                 }
                 const updatedReq = bankRequests[reqId];
                 if (updatedReq) {
-                    return interaction.update({
+                    return interaction.editReply({
                         embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
                         components: buildBankRequestButtons(updatedReq)
                     }).catch(() => {});
                 }
-                return interaction.deferUpdate().catch(() => {});
+                return;
             }
 
             // ── Bank: Clicked In-Progress Button Indicator ──
@@ -13407,47 +13438,57 @@ function setupSlashBotEvents(bot, token) {
         // ── Continuous Conversational Mode (/conversation) ──
         if (cmd === 'conversation') {
             const action = interaction.options.getString('action');
-            const chanId = interaction.channelId;
+            const isStatus = action === 'status';
+            await interaction.deferReply({ ephemeral: isStatus }).catch(() => {});
 
-            if (action === 'status') {
-                const isEnabled = activeConversationChannels.has(chanId);
-                const embed = isEnabled 
-                    ? UI.success("🟢 Conversational Mode: Active", `**F.R.I.D.A.Y** is actively listening and participating in <#${chanId}>.\n\n• Type normally and Friday will chime in.\n• Anti-interruption engine waits while members are typing.\n• Incomplete thoughts and replies reference parent context.\n\n*Use \`/conversation action:stop\` to deactivate.*`)
-                    : UI.neutral("⚪ Conversational Mode: Inactive", `**F.R.I.D.A.Y** is currently inactive in <#${chanId}>.\n\n*Use \`/conversation action:start\` or \`/conversation\` to activate.*`);
-                return interaction.reply({ embeds: [sanitizeEmbed(embed)], ephemeral: true });
-            }
+            try {
+                const chanId = interaction.channelId;
 
-            const shouldEnable = action === 'start' ? true : (action === 'stop' ? false : !activeConversationChannels.has(chanId));
+                if (isStatus) {
+                    const isEnabled = activeConversationChannels.has(chanId);
+                    const embed = isEnabled 
+                        ? UI.success("🟢 Conversational Mode: Active", `**F.R.I.D.A.Y** is actively listening and participating in <#${chanId}>.\n\n• Type normally and Friday will chime in.\n• Anti-interruption engine waits while members are typing.\n• Incomplete thoughts and replies reference parent context.\n\n*Use \`/conversation action:stop\` to deactivate.*`)
+                        : UI.neutral("⚪ Conversational Mode: Inactive", `**F.R.I.D.A.Y** is currently inactive in <#${chanId}>.\n\n*Use \`/conversation action:start\` to activate.*`);
+                    return await interaction.editReply({ embeds: [sanitizeEmbed(embed)] });
+                }
 
-            if (shouldEnable) {
-                activeConversationChannels.add(chanId);
-                discordConfig.conversationChannels = Array.from(activeConversationChannels);
-                saveDiscordConfig();
-                const embed = UI.brand(
-                    "🟢 Conversational Mode Activated",
-                    `**F.R.I.D.A.Y** is now actively listening in <#${chanId}>!\n\n` +
-                    `• **Natural Chat:** Friday participates casually in conversations.\n` +
-                    `• **Anti-Interruption:** If someone is typing, Friday waits patiently until the thought is finished.\n` +
-                    `• **Context Aware:** Incomplete thoughts or replies reference what you're replying to.\n\n` +
-                    `*To stop conversational mode, use \`/conversation action:stop\` or \`/conversation\`.*`
-                );
-                return interaction.reply({ embeds: [sanitizeEmbed(embed)] });
-            } else {
-                activeConversationChannels.delete(chanId);
-                discordConfig.conversationChannels = Array.from(activeConversationChannels);
-                saveDiscordConfig();
+                const shouldEnable = action === 'start' ? true : (action === 'stop' ? false : !activeConversationChannels.has(chanId));
 
-                // Cancel and purge any pending timer or queued messages for this channel immediately
-                const pending = channelConvoState.get(chanId);
-                if (pending?.timer) clearTimeout(pending.timer);
-                channelConvoState.delete(chanId);
+                if (shouldEnable) {
+                    activeConversationChannels.add(chanId);
+                    discordConfig.conversationChannels = Array.from(activeConversationChannels);
+                    saveDiscordConfig();
+                    const embed = UI.brand(
+                        "🟢 Conversational Mode Activated",
+                        `**F.R.I.D.A.Y** is now actively listening in <#${chanId}>!\n\n` +
+                        `• **Natural Chat:** Friday participates casually in conversations.\n` +
+                        `• **Anti-Interruption:** If someone is typing, Friday waits patiently until the thought is finished.\n` +
+                        `• **Context Aware:** Incomplete thoughts or replies reference what you're replying to.\n\n` +
+                        `*To stop conversational mode, use \`/conversation action:stop\` or \`/conversation\`.*`
+                    );
+                    return await interaction.editReply({ embeds: [sanitizeEmbed(embed)] });
+                } else {
+                    activeConversationChannels.delete(chanId);
+                    discordConfig.conversationChannels = Array.from(activeConversationChannels);
+                    saveDiscordConfig();
 
-                const embed = UI.warning(
-                    "🛑 Conversational Mode Deactivated",
-                    `**F.R.I.D.A.Y** will no longer automatically chime in on messages in <#${chanId}>.\n\n` +
-                    `*You can still mention <@${bot.user?.id || 'F.R.I.D.A.Y'}> anytime to talk to her!*`
-                );
-                return interaction.reply({ embeds: [sanitizeEmbed(embed)] });
+                    // Cancel and purge any pending timer or queued messages for this channel immediately
+                    const pending = channelConvoState.get(chanId);
+                    if (pending?.timer) clearTimeout(pending.timer);
+                    channelConvoState.delete(chanId);
+
+                    const embed = UI.warning(
+                        "🛑 Conversational Mode Deactivated",
+                        `**F.R.I.D.A.Y** will no longer automatically chime in on messages in <#${chanId}>.\n\n` +
+                        `*You can still mention <@${bot.user?.id || 'F.R.I.D.A.Y'}> anytime to talk to her!*`
+                    );
+                    return await interaction.editReply({ embeds: [sanitizeEmbed(embed)] });
+                }
+            } catch(convoErr) {
+                console.error("[Slash Bot] Error in /conversation handler:", convoErr.message);
+                return await interaction.editReply({
+                    content: `⚠️ Failed to update conversation mode: ${convoErr.message}`
+                }).catch(() => {});
             }
         }
 
@@ -14008,20 +14049,20 @@ function setupSlashBotEvents(bot, token) {
             }
         }
     });
-
-    bot.on('error', (e) => {
-        console.error("[Slash Bot] Client error:", e.message);
-        slashBotStarted = false;
-    });
 }
 
 async function startSlashCommandBot(token) {
-    if (slashBotStarted && slashCommandBot?.isReady?.()) return;
-    slashBotStarted = false;
+    if (!token || typeof token !== 'string' || token.trim().length < 20) return;
+    const cleanToken = token.trim();
 
+    if (isStartingSlashBot) return;
+    if (slashBotStarted && slashCommandBot?.isReady?.()) return;
+
+    isStartingSlashBot = true;
     try {
         if (slashCommandBot) {
             try { slashCommandBot.destroy(); } catch(e) {}
+            slashCommandBot = null;
         }
 
         // Try initializing with GuildMembers & MessageContent intent for full member auditing & /respond chat reading
@@ -14035,10 +14076,10 @@ async function startSlashCommandBot(token) {
             ]
         });
 
-        setupSlashBotEvents(slashCommandBot, token);
+        setupSlashBotEvents(slashCommandBot, cleanToken);
 
         try {
-            await slashCommandBot.login(token);
+            await slashCommandBot.login(cleanToken);
         } catch(loginErr) {
             if (loginErr.code === 'DisallowedIntents' || (loginErr.message && loginErr.message.toLowerCase().includes('disallowed intents'))) {
                 console.warn("[Slash Bot] Privileged GuildMembers intent disallowed in Developer Portal. Falling back to standard intents...");
@@ -14050,8 +14091,8 @@ async function startSlashCommandBot(token) {
                         GatewayIntentBits.GuildMessageTyping
                     ]
                 });
-                setupSlashBotEvents(slashCommandBot, token);
-                await slashCommandBot.login(token);
+                setupSlashBotEvents(slashCommandBot, cleanToken);
+                await slashCommandBot.login(cleanToken);
             } else {
                 throw loginErr;
             }
@@ -14059,6 +14100,8 @@ async function startSlashCommandBot(token) {
     } catch (e) {
         console.error("[Slash Bot] Failed to start:", e.message);
         slashBotStarted = false;
+    } finally {
+        isStartingSlashBot = false;
     }
 }
 
