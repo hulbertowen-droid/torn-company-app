@@ -5960,13 +5960,14 @@ async function callOpenRouterFallback(systemPrompt, userPrompt, history = [], op
     const orKey = getOpenRouterApiKey();
     if (!orKey) return { success: false, error: "Missing OpenRouter API key." };
 
-    // Diverse pool of free models on OpenRouter
+    // Diverse pool of verified active free models on OpenRouter
     const candidateModels = [
-        'meta-llama/llama-3.3-70b-instruct:free',
-        'meta-llama/llama-3.1-8b-instruct:free',
-        'google/gemma-2-9b-it:free',
-        'qwen/qwen-2.5-72b-instruct:free',
-        'mistralai/mistral-7b-instruct:free'
+        'nvidia/nemotron-3-ultra-550b-a55b:free',
+        'nex-agi/nex-n2.5-pro:free',
+        'nex-agi/nex-n2.5-mini:free',
+        'nvidia/nemotron-3-super-120b-a12b:free',
+        'cohere/north-mini-code:free',
+        'openrouter/free'
     ];
 
     const messages = [];
@@ -6005,11 +6006,13 @@ async function callOpenRouterFallback(systemPrompt, userPrompt, history = [], op
             });
 
             const data = await res.json();
-            if (data.choices && data.choices[0]?.message?.content) {
-                console.log(`[OpenRouter API] Failover success using free model: ${model}`);
+            const choice = data.choices?.[0]?.message;
+            const replyText = (choice?.content || choice?.reasoning || '').trim();
+            if (replyText) {
+                console.log(`[OpenRouter API] Failover success using verified free model: ${model}`);
                 return {
                     success: true,
-                    text: data.choices[0].message.content,
+                    text: replyText,
                     modelUsed: `openrouter/${model}`
                 };
             }
