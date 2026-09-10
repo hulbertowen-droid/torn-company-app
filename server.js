@@ -62,7 +62,9 @@ let discordConfig = {
     leaderRoleId: "",
     autoVerifyOnJoin: true,
     conversationChannels: [],
-    disabledCommands: []
+    disabledCommands: [],
+    geminiApiKeys: [],
+    geminiApiKey: ""
 };
 let companyConfig = { apiKey: "", companyId: "", globalChannelId: "", threshold: 0, alertedItems: {} };
 let marketConfig = { globalChannelId: "", autoDefense: false, sniperTargets: [] };
@@ -5842,11 +5844,11 @@ async function callGeminiWithFallback(payload, specificKey = null, options = {})
 
     // Order by standard production stability and generous quota availability
     const candidateModels = [
-        'gemini-2.0-flash',       // Primary standard production model (1,500 RPD, 15 RPM)
-        'gemini-2.0-flash-lite',  // High-throughput fast model (up to 30 RPM)
-        'gemini-1.5-flash',       // Stable fallback (separate quota pool)
-        'gemini-1.5-flash-8b',    // Lightweight fallback
-        'gemini-2.5-flash'        // Experimental preview
+        'gemini-flash-latest',       // Google's official production Flash model (always active)
+        'gemini-flash-lite-latest',  // High-throughput fast model
+        'gemini-2.5-flash-lite',     // Standard flash-lite
+        'gemini-3.6-flash',          // Next-gen flash
+        'gemini-2.5-flash'           // Preview flash
     ];
 
     const now = Date.now();
@@ -5945,8 +5947,8 @@ app.get('/api/ai/status', (req, res) => {
         configured: keys.length > 0,
         poolSize: keys.length,
         activeKeys: activeCount,
-        keysPreview: keys.map(k => `${k.slice(0, 6)}...${k.slice(-4)}`),
-        model: "gemini-2.0-flash (with multi-key pool rotation & auto-rollover)"
+        keysPreview: keys.map(k => `${k.slice(0, 8)}...${k.slice(-4)}`),
+        model: "gemini-flash-latest (with 3-key pool rotation & auto-rollover)"
     });
 });
 
