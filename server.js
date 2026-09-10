@@ -170,6 +170,11 @@ async function loadConfigFromMongo() {
                 }
                 if (Array.isArray(discordConfig.conversationChannels)) {
                     activeConversationChannels = new Set(discordConfig.conversationChannels);
+                    for (const chan of activeConversationChannels) {
+                        if (!convoSessionStartTimestamps.has(chan)) {
+                            convoSessionStartTimestamps.set(chan, Date.now());
+                        }
+                    }
                     console.log(`[Mongo] Restored ${activeConversationChannels.size} active conversation channel(s):`, Array.from(activeConversationChannels));
                 }
             }
@@ -633,6 +638,10 @@ try { if (fs.existsSync('subscriptions.json')) subscriptions = JSON.parse(fs.rea
 try { if (fs.existsSync('discord_config.json')) discordConfig = { ...discordConfig, ...JSON.parse(fs.readFileSync('discord_config.json')) }; } catch(e) {}
 global.isNotificationsKilled = !!discordConfig.notificationsKilled;
 let activeConversationChannels = new Set(Array.isArray(discordConfig.conversationChannels) ? discordConfig.conversationChannels : []);
+const convoSessionStartTimestamps = new Map();
+for (const chan of activeConversationChannels) {
+    convoSessionStartTimestamps.set(chan, Date.now());
+}
 try { if (fs.existsSync('market_config.json')) marketConfig = { ...marketConfig, ...JSON.parse(fs.readFileSync('market_config.json')) }; } catch(e) {}
 try { if (fs.existsSync('oc_config.json')) ocConfig = { ...ocConfig, ...JSON.parse(fs.readFileSync('oc_config.json')) }; } catch(e) {}
 
@@ -6065,6 +6074,12 @@ Your job is to jump into the conversation naturally — like an experienced, cle
   - You drop sharp observations, dry reality checks, or light roasts that make people smirk.
   - BREVITY IS WIT: 1 to 3 sentences. Keep it punchy, conversational, and direct.
 
+═══ CONVERSATION RELEVANCE & FOCUS ═══
+• RESPOND TO THE IMMEDIATE MESSAGE:
+  - Focus strictly on what the member is saying RIGHT NOW.
+  - Do NOT bring up past conversations, previous jump discussions, or old topics unless the user explicitly asks you about them.
+  - When someone greets you (e.g. "hi friday", "hey", "sup"), greet them back warmly with witty banter — do NOT recite game mechanics, numbers, or perks unprompted.
+
 ═══ CRITICAL TORN CITY KNOWLEDGE & ANTI-HALLUCINATION MANDATES ═══
 1. NEVER "CORRECT" VALID TORN TERMINOLOGY OR ITEMS:
    - When a user says a Torn item name (e.g. "chocolate truffles", "tootsie rolls", "jawbreaker", "edvd"), NEVER claim they meant a different item (e.g. NEVER say "Chocolate boxes, Owen" or substitute an item).
@@ -6073,15 +6088,10 @@ Your job is to jump into the conversation naturally — like an experienced, cle
      * Bag of Chocolate Truffles (+100 Happy, 30m CD) is NOT Box of Chocolate Bars (+25 Happy) or Big Box of Chocolate Bars (+35 Happy).
      * Bag of Candy Kisses (+50 Happy) is NOT Bag of Chocolate Kisses (+25 Happy).
 
-2. NEVER INVENT FIXED NUMBERS — ALWAYS USE TORN MECHANICS & CALCULATIONS:
-   - Never say "You need 5" or guess an arbitrary number for a jump or gameplay mechanic.
-   - For Happy Jumps with Candies in Spider-Verse (e.g. Bag of Chocolate Truffles):
-     * Candies cost 30 minutes of booster cooldown each.
-     * Spider-Verse has Booster cooldown XV (+15h), making our booster limit EXACTLY 39 hours (2,340 minutes).
-     * 2,340m / 30m = EXACTLY 78 Bags of Chocolate Truffles! (Baseline comparisons: 24h default = 48 candies; 48h maxed = 96 candies).
-     * Our faction perk (+50% Voracity) boosts candy Happy from 100 to 150 Happy per truffle (78 × 150 = 11,700 Happy).
-     * With Ecstasy, total Happy doubles from ~16,725 to ~33,450 Happy!
-     * For eDVD jumps in Spider-Verse: 39h limit allows 6 eDVDs (36h CD) yielding ~40k Happy.
+2. GROUNDED IN PROVIDED INTEL ONLY:
+   - Base all Torn City game mechanics, item stats, and faction perk calculations strictly on the verified intel provided in the prompt context.
+   - Never guess arbitrary numbers, never hallucinate mechanics, and never invent fixed quantities.
+   - If no gameplay intel was provided in the prompt, the user is chatting casually — keep your response conversational, lighthearted, and witty.
 
 3. ACCOUNT-AWARE INTEL:
    - When the player's live account data is provided in the prompt, reference their actual numbers (energy, happy, property, cooldowns).
@@ -6145,18 +6155,19 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
         convoPrompt += `═════════════════════════════════\n\n`;
     }
 
+    const isCasualGreeting = tornKnowledge.detectCasualIntent(cleanSpeech) === 'greeting';
     convoPrompt += "Recent conversation in the Discord channel:\n";
-    if (!convoLines || convoLines.length === 0) {
-        convoPrompt += "(The channel was quiet — someone just pinged you)\n";
+    if (!convoLines || convoLines.length === 0 || isCasualGreeting) {
+        convoPrompt += "(The channel was quiet — someone just greeted or addressed you)\n";
     } else {
-        convoPrompt += convoLines.slice(-15).join('\n') + "\n";
+        convoPrompt += convoLines.slice(-8).join('\n') + "\n";
     }
 
     if (hint && hint.trim()) {
         convoPrompt += `\nExtra direction from member: "${hint.trim()}"\n`;
     }
 
-    convoPrompt += "\nNow respond naturally in 1-3 sentences to the latest message. If the user is asking about Torn gameplay or mechanics, adhere strictly to the verified facts above and do not guess or hallucinate. If the user is greeting you or chatting casually, respond warmly with your signature dry wit and banter without reciting unprompted game statistics:";
+    convoPrompt += "\nNow respond naturally in 1-3 sentences to the latest message. If the user is asking about Torn gameplay or mechanics, adhere strictly to the verified facts above and do not guess or hallucinate. If the user is greeting you or chatting casually, respond warmly with your signature dry wit and banter without reciting unprompted game statistics or referencing prior conversations:";
 
     const payload = {
         contents: [{ role: 'user', parts: [{ text: convoPrompt }] }],
@@ -12482,6 +12493,7 @@ async function registerSlashCommands(token, guildId = null) {
                 .addChoices(
                     { name: '🟢 Start Conversation Mode', value: 'start' },
                     { name: '🛑 Stop Conversation Mode', value: 'stop' },
+                    { name: '🧹 Reset / Clear Memory', value: 'reset' },
                     { name: '📊 Check Status', value: 'status' }
                 )
             ).toJSON(),
@@ -12676,19 +12688,53 @@ function setupSlashBotEvents(bot, token) {
 
             // Gather recent channel conversation transcript (excluding current batch)
             const convoLines = [];
-            if (channel && channel.messages) {
-                const fetched = await channel.messages.fetch({ limit: 15, before: batch[0].id }).catch(() => null);
+            const sessionStart = convoSessionStartTimestamps.get(channelId) || 0;
+            const now = Date.now();
+            const MAX_CONVO_AGE_MS = 3 * 60 * 1000; // 3 minutes max lookback for active chatter
+            const MAX_GAP_MS = 3 * 60 * 1000;       // 3-minute gap indicates a brand new conversation
+
+            // Only fetch channel history if in an active conversation mode channel
+            if (isConvoChannel && channel && channel.messages) {
+                const fetched = await channel.messages.fetch({ limit: 12, before: batch[0].id }).catch(() => null);
                 if (fetched && fetched.size > 0) {
                     const sorted = Array.from(fetched.values()).reverse();
-                    const now = Date.now();
+                    const batchStartTs = batch[0]?.timestamp || now;
+                    let candidateMessages = [];
+
                     for (const m of sorted) {
-                        // Only include recent messages from the last 20 minutes to prevent old conversation leakage
-                        const ageMs = now - (m.createdTimestamp || 0);
-                        if (ageMs > 20 * 60 * 1000) continue;
+                        const mTs = m.createdTimestamp || 0;
+                        // 1. HARD CUTOFF: Never include messages from before conversation mode was enabled/reset
+                        if (sessionStart && mTs < sessionStart) continue;
+                        // 2. HARD CUTOFF: Never include messages older than 3 minutes
+                        if (batchStartTs - mTs > MAX_CONVO_AGE_MS) continue;
                         if (m.author?.bot && m.author?.id !== bot.user?.id) continue;
-                        const authorName = m.member?.displayName || m.author?.username || "Member";
                         const text = (m.cleanContent || m.content || "").trim();
-                        if (text) convoLines.push(`${authorName}: ${text}`);
+                        if (!text) continue;
+                        candidateMessages.push({
+                            ts: mTs,
+                            author: m.member?.displayName || m.author?.username || "Member",
+                            text
+                        });
+                    }
+
+                    // 3. GAP PRUNING: If there was an idle pause (> 3 minutes) between any messages, prune everything before the gap
+                    let lastTs = null;
+                    let activeStream = [];
+                    for (const cMsg of candidateMessages) {
+                        if (lastTs !== null && (cMsg.ts - lastTs > MAX_GAP_MS)) {
+                            activeStream = [];
+                        }
+                        activeStream.push(cMsg);
+                        lastTs = cMsg.ts;
+                    }
+
+                    // Also check gap between the last historical message and the current batch
+                    if (activeStream.length > 0 && lastTs !== null && (batchStartTs - lastTs > MAX_GAP_MS)) {
+                        activeStream = [];
+                    }
+
+                    for (const vm of activeStream) {
+                        convoLines.push(`${vm.author}: ${vm.text}`);
                     }
                 }
             }
@@ -12703,6 +12749,24 @@ function setupSlashBotEvents(bot, token) {
             const authorUsername = latestMsg?.author?.username || "";
             const combinedTexts = batch.map(b => b.text).filter(Boolean);
             const userSpeech = combinedTexts.join('\n') || "(addressed Friday)";
+
+            // ── In-Chat Reset / Forget Command Detection ──
+            const cleanSpeechLower = userSpeech.toLowerCase().trim();
+            const isResetRequest = /^(?:please\s+)?(?:reset|clear|forget\s+(?:that|everything|past|all)|new\s+(?:topic|conversation|chat)|change\s+(?:the\s+)?topic|stop\s+talking\s+about\s+(?:past\s+stuff|that|old\s+stuff)|clean\s+slate|fresh\s+start)\b/i.test(cleanSpeechLower);
+
+            if (isResetRequest) {
+                convoSessionStartTimestamps.set(channelId, Date.now());
+                const clearReply = `Understood, **${primaryAuthor}**! Conversation memory cleared for this channel. Clean slate — what's on your mind?`;
+                await latestMsg.reply({
+                    content: clearReply,
+                    allowedMentions: { repliedUser: false }
+                }).catch(async () => {
+                    if (channel && channel.send) {
+                        await channel.send({ content: clearReply }).catch(() => {});
+                    }
+                });
+                return;
+            }
 
             // Check if any message in the batch had a reply reference
             let replyContext = null;
@@ -12759,9 +12823,13 @@ function setupSlashBotEvents(bot, token) {
                 }
             }
 
+            const casualIntent = tornKnowledge.detectCasualIntent(userSpeech);
+            const isCasualGreeting = casualIntent === 'greeting';
+            const promptConvoLines = isCasualGreeting ? [] : convoLines;
+
             let aiReply = "";
             try {
-                aiReply = await generateChatResponse(convoLines, "", primaryAuthor, replyContext, userAccountData, accountIntent, userSpeech);
+                aiReply = await generateChatResponse(promptConvoLines, "", primaryAuthor, replyContext, userAccountData, accountIntent, userSpeech);
             } catch(genErr) {
                 console.warn("[Conversation] generateChatResponse error:", genErr.message);
             }
@@ -13518,21 +13586,40 @@ function setupSlashBotEvents(bot, token) {
 
             try {
                 const convoLines = [];
+                const chanId = interaction.channelId;
+                const sessionStart = convoSessionStartTimestamps.get(chanId) || 0;
+                const MAX_CONVO_AGE_MS = 3 * 60 * 1000;
+                const MAX_GAP_MS = 3 * 60 * 1000;
+
                 if (interaction.channel && interaction.channel.messages) {
-                    const fetched = await interaction.channel.messages.fetch({ limit: 20 }).catch(() => null);
+                    const fetched = await interaction.channel.messages.fetch({ limit: 12 }).catch(() => null);
                     if (fetched && fetched.size > 0) {
                         const sorted = Array.from(fetched.values())
                             .filter(m => m.id !== interaction.id && !m.interaction)
                             .reverse();
                         const now = Date.now();
+                        let candidateMessages = [];
                         for (const m of sorted) {
-                            const ageMs = now - (m.createdTimestamp || 0);
-                            if (ageMs > 20 * 60 * 1000) continue;
+                            const mTs = m.createdTimestamp || 0;
+                            if (sessionStart && mTs < sessionStart) continue;
+                            if (now - mTs > MAX_CONVO_AGE_MS) continue;
                             const authorName = m.member?.displayName || m.author?.username || "Member";
                             const text = (m.cleanContent || m.content || "").trim();
-                            if (text) {
-                                convoLines.push(`${authorName}: ${text}`);
+                            if (text) candidateMessages.push({ ts: mTs, author: authorName, text });
+                        }
+
+                        let lastTs = null;
+                        let activeStream = [];
+                        for (const cMsg of candidateMessages) {
+                            if (lastTs !== null && (cMsg.ts - lastTs > MAX_GAP_MS)) {
+                                activeStream = [];
                             }
+                            activeStream.push(cMsg);
+                            lastTs = cMsg.ts;
+                        }
+
+                        for (const vm of activeStream) {
+                            convoLines.push(`${vm.author}: ${vm.text}`);
                         }
                     }
                 }
@@ -13566,15 +13653,36 @@ function setupSlashBotEvents(bot, token) {
                     return await interaction.editReply({ embeds: [sanitizeEmbed(embed)] });
                 }
 
+                if (action === 'reset' || action === 'clear') {
+                    convoSessionStartTimestamps.set(chanId, Date.now());
+                    const pending = channelConvoState.get(chanId);
+                    if (pending?.timer) clearTimeout(pending.timer);
+                    channelConvoState.delete(chanId);
+
+                    const embed = UI.success(
+                        "🧹 Conversation Memory Reset",
+                        `**F.R.I.D.A.Y** has wiped all past conversation memory in <#${chanId}>.\n\n` +
+                        `• All previous topics, messages, and discussion context have been forgotten.\n` +
+                        `• Friday is ready with a 100% fresh clean slate!`
+                    );
+                    return await interaction.editReply({ embeds: [sanitizeEmbed(embed)] });
+                }
+
                 const shouldEnable = action === 'start' ? true : (action === 'stop' ? false : !activeConversationChannels.has(chanId));
 
                 if (shouldEnable) {
                     activeConversationChannels.add(chanId);
+                    convoSessionStartTimestamps.set(chanId, Date.now());
+                    const pending = channelConvoState.get(chanId);
+                    if (pending?.timer) clearTimeout(pending.timer);
+                    channelConvoState.delete(chanId);
+
                     discordConfig.conversationChannels = Array.from(activeConversationChannels);
                     saveDiscordConfig();
                     const embed = UI.brand(
                         "🟢 Conversational Mode Activated",
                         `**F.R.I.D.A.Y** is now actively listening in <#${chanId}>!\n\n` +
+                        `• **Fresh Session:** Previous chat history has been cleared for a clean slate.\n` +
                         `• **Natural Chat:** Friday participates casually in conversations.\n` +
                         `• **Anti-Interruption:** If someone is typing, Friday waits patiently until the thought is finished.\n` +
                         `• **Context Aware:** Incomplete thoughts or replies reference what you're replying to.\n\n` +
@@ -13583,6 +13691,7 @@ function setupSlashBotEvents(bot, token) {
                     return await interaction.editReply({ embeds: [sanitizeEmbed(embed)] });
                 } else {
                     activeConversationChannels.delete(chanId);
+                    convoSessionStartTimestamps.delete(chanId);
                     discordConfig.conversationChannels = Array.from(activeConversationChannels);
                     saveDiscordConfig();
 
