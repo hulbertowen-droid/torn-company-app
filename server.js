@@ -64,7 +64,8 @@ let discordConfig = {
     conversationChannels: [],
     disabledCommands: [],
     geminiApiKeys: [],
-    geminiApiKey: ""
+    geminiApiKey: "",
+    openrouterApiKey: ""
 };
 let companyConfig = { apiKey: "", companyId: "", globalChannelId: "", threshold: 0, alertedItems: {} };
 let marketConfig = { globalChannelId: "", autoDefense: false, sniperTargets: [] };
@@ -5947,18 +5948,136 @@ async function callGeminiWithFallback(payload, specificKey = null, options = {})
     return { success: false, error: lastError ? lastError.message : 'All Gemini keys and models unavailable.' };
 }
 
+// ── OpenRouter Failover Caller (Free-Tier Uncapped Models) ──────────────────────
+function getOpenRouterApiKey() {
+    if (discordConfig && typeof discordConfig.openrouterApiKey === 'string' && discordConfig.openrouterApiKey.trim()) {
+        return discordConfig.openrouterApiKey.trim();
+    }
+    return (process.env.OPENROUTER_API_KEY || "").trim();
+}
+
+async function callOpenRouterFallback(systemPrompt, userPrompt, history = [], options = {}) {
+    const orKey = getOpenRouterApiKey();
+    if (!orKey) return { success: false, error: "Missing OpenRouter API key." };
+
+    // Diverse pool of free models on OpenRouter
+    const candidateModels = [
+        'meta-llama/llama-3.3-70b-instruct:free',
+        'meta-llama/llama-3.1-8b-instruct:free',
+        'google/gemma-2-9b-it:free',
+        'qwen/qwen-2.5-72b-instruct:free',
+        'mistralai/mistral-7b-instruct:free'
+    ];
+
+    const messages = [];
+    if (systemPrompt) {
+        messages.push({ role: 'system', content: systemPrompt });
+    }
+    if (Array.isArray(history)) {
+        for (const h of history.slice(-6)) {
+            if (h.role && (h.text || h.content)) {
+                messages.push({
+                    role: h.role === 'model' ? 'assistant' : 'user',
+                    content: String(h.text || h.content)
+                });
+            }
+        }
+    }
+    messages.push({ role: 'user', content: userPrompt });
+
+    for (const model of candidateModels) {
+        try {
+            const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${orKey}`,
+                    'HTTP-Referer': 'https://spider-verse.net',
+                    'X-Title': 'FRIDAY Torn Security Sentinel',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model,
+                    messages,
+                    temperature: 0.7,
+                    max_tokens: 800
+                }),
+                signal: AbortSignal.timeout(options.timeout || 12000)
+            });
+
+            const data = await res.json();
+            if (data.choices && data.choices[0]?.message?.content) {
+                console.log(`[OpenRouter API] Failover success using free model: ${model}`);
+                return {
+                    success: true,
+                    text: data.choices[0].message.content,
+                    modelUsed: `openrouter/${model}`
+                };
+            }
+            if (data.error) {
+                console.warn(`[OpenRouter API] Model ${model} returned error:`, data.error.message || data.error);
+            }
+        } catch (err) {
+            console.warn(`[OpenRouter API] Error connecting to ${model}:`, err.message);
+        }
+    }
+
+    return { success: false, error: "All OpenRouter free models exhausted or unavailable." };
+}
+
 app.get('/api/ai/status', (req, res) => {
     const keys = getGeminiApiKeys();
     const now = Date.now();
     const activeCount = keys.filter(k => !keyQuotaCooldowns.has(k) || now > keyQuotaCooldowns.get(k)).length;
+    const orKey = getOpenRouterApiKey();
 
     res.json({
-        configured: keys.length > 0,
-        poolSize: keys.length,
-        activeKeys: activeCount,
-        keysPreview: keys.map(k => `${k.slice(0, 8)}...${k.slice(-4)}`),
-        model: "gemini-flash-latest (with 3-key pool rotation & auto-rollover)"
+        configured: keys.length > 0 || Boolean(orKey),
+        geminiPoolSize: keys.length,
+        geminiActiveKeys: activeCount,
+        openRouterConfigured: Boolean(orKey),
+        openRouterPreview: orKey ? `${orKey.slice(0, 8)}...${orKey.slice(-4)}` : null,
+        primaryProvider: keys.length > 0 ? "Gemini (3-Key Pool)" : "OpenRouter",
+        fallbackProvider: orKey ? "OpenRouter (Free Multi-Model Pool)" : "Deterministic Offline Engine",
+        model: "gemini-flash-latest (primary) with OpenRouter free failover (secondary)"
     });
+});
+
+app.post('/api/ai/save-openrouter-key', async (req, res) => {
+    const { apiKey } = req.body;
+    const cleanKey = String(apiKey || '').trim();
+    if (!cleanKey || cleanKey.length < 10) {
+        return res.status(400).json({ success: false, error: "Please provide a valid OpenRouter API key (starts with sk-or-...)." });
+    }
+
+    try {
+        const testRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${cleanKey}`,
+                'HTTP-Referer': 'https://spider-verse.net',
+                'X-Title': 'FRIDAY Torn Security Sentinel',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: 'meta-llama/llama-3.1-8b-instruct:free',
+                messages: [{ role: 'user', content: 'ping' }],
+                max_tokens: 10
+            }),
+            signal: AbortSignal.timeout(8000)
+        });
+
+        const data = await testRes.json();
+        if (data.error) {
+            return res.status(400).json({ success: false, error: data.error.message || 'Key rejected by OpenRouter.' });
+        }
+
+        discordConfig.openrouterApiKey = cleanKey;
+        saveDiscordConfig();
+        console.log(`[OpenRouter API] Successfully linked and verified OpenRouter key (${cleanKey.slice(0, 8)}...)`);
+        res.json({ success: true, message: "OpenRouter backup key verified and saved to MongoDB Atlas!" });
+    } catch(err) {
+        res.status(500).json({ success: false, error: "OpenRouter connection test failed: " + err.message });
+    }
 });
 
 app.post('/api/ai/save-key', async (req, res) => {
@@ -6042,42 +6161,59 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
 
     const accountIntent = userKeys.detectUserAccountIntent(message);
 
-    if (!key) {
+    const orKey = getOpenRouterApiKey();
+    if (!key && !orKey) {
         if (userAccountData && accountIntent) {
             const detStats = userKeys.formatDeterministicStatsReply(userAccountData, invokerName || userAccountData.playerName, accountIntent, message);
             if (detStats) return { reply: detStats, sources: [] };
         }
         const detReply = tornKnowledge.formatDeterministicTornAnswer(message, userAccountData, invokerName);
         if (detReply) return { reply: detReply, sources: [] };
-        throw new Error("Gemini API key is not configured. Please paste your Google AI Studio key in the dashboard or ai-sandbox.");
+        throw new Error("Neither Gemini nor OpenRouter API key is configured. Please paste a key in the dashboard or chat.");
     }
 
-    const contents = [];
-    if (Array.isArray(history)) {
-        for (const h of history.slice(-10)) {
-            if (h.role && h.text) {
-                contents.push({
-                    role: h.role === 'user' ? 'user' : 'model',
-                    parts: [{ text: String(h.text) }]
-                });
+    let result = { success: false };
+    if (key) {
+        const contents = [];
+        if (Array.isArray(history)) {
+            for (const h of history.slice(-10)) {
+                if (h.role && h.text) {
+                    contents.push({
+                        role: h.role === 'user' ? 'user' : 'model',
+                        parts: [{ text: String(h.text) }]
+                    });
+                }
             }
         }
+        contents.push({ role: 'user', parts: [{ text: `${accountContext}${tornIntel}\n\nUser Question: ${message.trim()}` }] });
+
+        const payload = {
+            contents,
+            systemInstruction: {
+                parts: [{ text: FRIDAY_TORN_SYSTEM_PROMPT }]
+            },
+            tools: [{ googleSearch: {} }]
+        };
+
+        result = await callGeminiWithFallback(payload, null, { timeout: 12000 });
+        if (!result.success) {
+            // Retry without web search tool (search tool can trigger quota/503 errors)
+            delete payload.tools;
+            result = await callGeminiWithFallback(payload, null, { timeout: 10000 });
+        }
     }
-    contents.push({ role: 'user', parts: [{ text: `${accountContext}${tornIntel}\n\nUser Question: ${message.trim()}` }] });
 
-    const payload = {
-        contents,
-        systemInstruction: {
-            parts: [{ text: FRIDAY_TORN_SYSTEM_PROMPT }]
-        },
-        tools: [{ googleSearch: {} }]
-    };
-
-    let result = await callGeminiWithFallback(payload, null, { timeout: 12000 });
-    if (!result.success) {
-        // Retry without web search tool (search tool can trigger quota/503 errors)
-        delete payload.tools;
-        result = await callGeminiWithFallback(payload, null, { timeout: 10000 });
+    if (!result.success && orKey) {
+        // Failover to OpenRouter
+        const userPrompt = `${accountContext}${tornIntel}\n\nUser Question: ${message.trim()}`;
+        const orResult = await callOpenRouterFallback(FRIDAY_TORN_SYSTEM_PROMPT, userPrompt, history);
+        if (orResult.success && orResult.text) {
+            return {
+                reply: orResult.text.trim(),
+                sources: [],
+                modelUsed: orResult.modelUsed
+            };
+        }
     }
 
     if (!result.success) {
@@ -6090,7 +6226,7 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
         if (detReply) {
             return { reply: detReply, sources: [] };
         }
-        throw new Error(result.error || "AI generation failed.");
+        throw new Error(result.error || "AI generation failed across all providers.");
     }
 
     const candidate = result.data.candidates?.[0];
@@ -6152,10 +6288,11 @@ Your job is to jump into the conversation naturally — like an experienced, cle
 
 async function generateChatResponse(convoLines = [], hint = "", invokerName = "", replyContext = null, userAccountData = null, detectedIntent = null, userSpeech = "") {
     const key = getGeminiApiKey();
+    const orKey = getOpenRouterApiKey();
     const cleanSpeech = userSpeech || hint || (convoLines && convoLines.length > 0 ? convoLines[convoLines.length - 1] : "");
 
-    // If no Gemini key is available, use deterministic fallback
-    if (!key) {
+    // If neither Gemini nor OpenRouter key is available, use deterministic fallback
+    if (!key && !orKey) {
         if (tornKnowledge.detectTornGameplayIntent(cleanSpeech)) {
             return tornKnowledge.formatDeterministicTornAnswer(cleanSpeech, userAccountData, invokerName);
         }
@@ -6253,24 +6390,35 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
 
     convoPrompt += "\nNow respond naturally in 1-3 sentences to the latest message. If the user is asking about Torn gameplay or mechanics, adhere strictly to the verified facts above and do not guess or hallucinate. If the user is greeting you or chatting casually, respond warmly with your signature dry wit and banter without reciting unprompted game statistics or referencing prior conversations:";
 
-    const payload = {
-        contents: [{ role: 'user', parts: [{ text: convoPrompt }] }],
-        systemInstruction: {
-            parts: [{ text: FRIDAY_RESPONDER_SYSTEM_PROMPT }]
-        },
-        generationConfig: {
-            temperature: 0.7
-        }
-    };
+    // 1. Primary AI Provider: Google Gemini Multi-Key Pool
+    if (key) {
+        const payload = {
+            contents: [{ role: 'user', parts: [{ text: convoPrompt }] }],
+            systemInstruction: {
+                parts: [{ text: FRIDAY_RESPONDER_SYSTEM_PROMPT }]
+            },
+            generationConfig: {
+                temperature: 0.7
+            }
+        };
 
-    const result = await callGeminiWithFallback(payload, null, { timeout: 10000 });
-    if (result.success) {
-        const candidate = result.data.candidates?.[0];
-        const reply = candidate?.content?.parts?.[0]?.text?.trim() || "";
-        if (reply) return reply;
+        const result = await callGeminiWithFallback(payload, null, { timeout: 10000 });
+        if (result.success) {
+            const candidate = result.data.candidates?.[0];
+            const reply = candidate?.content?.parts?.[0]?.text?.trim() || "";
+            if (reply) return reply;
+        }
     }
 
-    // Grounded Fallback: If Gemini is down or high-demand
+    // 2. Secondary AI Failover Provider: OpenRouter (Free Multi-Model Pool)
+    if (orKey) {
+        const orResult = await callOpenRouterFallback(FRIDAY_RESPONDER_SYSTEM_PROMPT, convoPrompt);
+        if (orResult.success && orResult.text) {
+            return orResult.text.trim();
+        }
+    }
+
+    // 3. Tertiary Grounded Deterministic Fallback: Offline Rules Engine
     if (tornKnowledge.detectTornGameplayIntent(cleanSpeech)) {
         return tornKnowledge.formatDeterministicTornAnswer(cleanSpeech, userAccountData, invokerName);
     }
@@ -12588,7 +12736,9 @@ async function registerSlashCommands(token, guildId = null) {
         new SlashCommandBuilder().setName('merits').setDescription('Check your live allocated Torn merits and upgrades (uses linked Limited API key)').toJSON(),
         new SlashCommandBuilder().setName('linkkey').setDescription('Privately link your Torn Limited Access API key to F.R.I.D.A.Y')
             .addStringOption(opt => opt.setName('key').setDescription('16-character Limited Access API Key').setRequired(true)).toJSON(),
-        new SlashCommandBuilder().setName('unlinkkey').setDescription('Unlink and permanently delete your stored Torn API key from F.R.I.D.A.Y').toJSON()
+        new SlashCommandBuilder().setName('unlinkkey').setDescription('Unlink and permanently delete your stored Torn API key from F.R.I.D.A.Y').toJSON(),
+        new SlashCommandBuilder().setName('openrouter').setDescription('Admin: Set OpenRouter backup API key for unlimited AI failover')
+            .addStringOption(opt => opt.setName('key').setDescription('OpenRouter API key (sk-or-...)').setRequired(true)).toJSON()
     ];
 
     const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : [])
@@ -13648,6 +13798,65 @@ function setupSlashBotEvents(bot, token) {
                 return await interaction.reply({
                     embeds: [sanitizeEmbed(UI.info('No Key Found', 'You do not have a linked API key stored.'))],
                     ephemeral: true
+                });
+            }
+        }
+
+        // ── Set OpenRouter Backup Key Slash Command (Admin/Owner) ──
+        if (cmd === 'openrouter') {
+            await interaction.deferReply({ ephemeral: true });
+            const isAdmin = interaction.member?.permissions?.has?.('Administrator') ||
+                            userKeys.isOwnerUser(interaction.user.id, interaction.member?.displayName, interaction.user.username);
+            if (!isAdmin) {
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.error('Admin Only', 'Only the bot administrator can configure AI backup keys.'))]
+                });
+            }
+
+            const inputKey = (interaction.options.getString('key') || '').trim();
+            if (!inputKey || inputKey.length < 10) {
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.error('Invalid Key', 'Please provide a valid OpenRouter API key starting with `sk-or-...`'))]
+                });
+            }
+
+            try {
+                const testRes = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${inputKey}`,
+                        'HTTP-Referer': 'https://spider-verse.net',
+                        'X-Title': 'FRIDAY Torn Security Sentinel',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: 'meta-llama/llama-3.1-8b-instruct:free',
+                        messages: [{ role: 'user', content: 'ping' }],
+                        max_tokens: 10
+                    }),
+                    signal: AbortSignal.timeout(8000)
+                });
+                const data = await testRes.json();
+                if (data.error) {
+                    return await interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.error('Key Rejected', `OpenRouter rejected this key: ${data.error.message || 'Unknown error'}`))]
+                    });
+                }
+
+                discordConfig.openrouterApiKey = inputKey;
+                saveDiscordConfig();
+
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.success(
+                        '🌐 OpenRouter Failover Configured!',
+                        `OpenRouter API key verified and stored safely.\n\n` +
+                        `• When your Google Gemini keys exhaust their daily quota, F.R.I.D.A.Y will automatically fail over to OpenRouter free models (\`meta-llama/llama-3.3-70b\`, \`gemma-2-9b\`, \`qwen-2.5-72b\`).\n` +
+                        `• Friday's AI chat will **never go offline again**!`
+                    ))]
+                });
+            } catch (err) {
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.error('Connection Failed', `Failed to verify with OpenRouter: ${err.message}`))]
                 });
             }
         }
