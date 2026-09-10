@@ -681,9 +681,18 @@ function detectTornGameplayIntent(text) {
  * Build ground-truth intelligence block to inject into the LLM system prompt.
  */
 function buildTornKnowledgeContext(query, userAccountData = null, invokerName = "Member") {
+    const clean = (query || '').toLowerCase();
     const intent = detectTornGameplayIntent(query);
     const resolvedItem = resolveTornItem(query);
     const perks = liveFactionPerks;
+
+    const isTornQuery = intent || resolvedItem || 
+        /\b(?:jump|truffle|candy|candies|edvd|xanax|booster|energy|nerve|cooldown|rehab|switz|torn|perk|upgrade|faction|spider-verse)\b/i.test(clean);
+
+    if (!isTornQuery) {
+        // For casual banter, greetings, and normal Discord chatter: DO NOT inject unprompted happy jump or booster numbers!
+        return `═══ IDENTITY & FACTION CONTEXT ═══\nYou are F.R.I.D.A.Y, the sharp, witty tactical assistant for faction ${perks.factionName} [${perks.factionId}]. Banter naturally with members, use dry humor, and keep conversation flowing.\n═══════════════════════════════════\n\n`;
+    }
 
     let context = "═══ VERIFIED TORN CITY GAMEPLAY INTELLIGENCE (GROUND TRUTH) ═══\n";
     context += "CRITICAL ANTI-HALLUCINATION & FACTION PERK INSTRUCTIONS:\n";
@@ -742,6 +751,84 @@ function userStatsHasBooster(userAccountData) {
 }
 
 /**
+ * Detect casual greetings, status checks, pleasantries, or banter directed at Friday.
+ */
+function detectCasualIntent(text) {
+    if (!text || typeof text !== 'string') return null;
+    const clean = text.toLowerCase().trim();
+
+    // If addressed to someone else specifically: "hey guys", "hey all", "hey everyone", "hey team", "hey dude", "hey man"
+    if (/\b(?:hey|hi|hello)\s+(?:guys|everyone|all|team|folks|dude|man|bro|somebody|anybody)\b/i.test(clean)) {
+        return null;
+    }
+
+    // 1. Direct Greetings: "hi friday", "hey friday", "hello friday", or standalone short greetings ("hi", "hello", "hey", "sup", "yo", "good morning")
+    if (/^(?:hi|hello|hey|yo|howdy|sup|good\s+(?:morning|afternoon|evening))\s*(?:friday|fri|bot)?[\.!\?]*$/i.test(clean) ||
+        /\b(?:hi|hello|hey|yo|howdy|sup)\s+friday\b/i.test(clean)) {
+        return 'greeting';
+    }
+
+    // 2. Status / Check-in: "how are you friday", "how's it going friday", "what's up friday", or short standalone
+    if (/^(?:how\s+are\s+you|how\s+it\s+going|how's\s+it\s+going|what's\s+up|wassup|you\s+there)\s*(?:friday|fri)?[\.!\?]*$/i.test(clean) ||
+        /\b(?:how\s+are\s+you|how's\s+it\s+going|what's\s+up)\s+friday\b/i.test(clean)) {
+        return 'checkin';
+    }
+
+    // 3. Thanks / Appreciation directed at Friday
+    if (/^(?:thank\s+you|thanks|thx|ty|appreciate\s+it)\s*(?:friday|fri)?[\.!\?]*$/i.test(clean) ||
+        /\b(?:thank\s+you|thanks)\s+friday\b/i.test(clean)) {
+        return 'thanks';
+    }
+
+    // 4. Role / Identity: "who are you", "what can you do"
+    if (/\b(?:who\s+are\s+you|what\s+are\s+you|what\s+can\s+you\s+do)\b/i.test(clean)) {
+        return 'identity';
+    }
+
+    // 5. Bye / Farewell
+    if (/^(?:bye|goodbye|cya|see\s+ya|good\s+night|gn)\s*(?:friday|fri)?[\.!\?]*$/i.test(clean)) {
+        return 'farewell';
+    }
+
+    return null;
+}
+
+/**
+ * Return a sharp, natural, in-character Friday casual reply.
+ */
+function formatDeterministicCasualReply(text, invokerName = "Member") {
+    const intent = detectCasualIntent(text);
+    if (!intent) return null;
+
+    const name = invokerName || "Member";
+    switch (intent) {
+        case 'greeting': {
+            const greetings = [
+                `Hey ${name}. All systems nominal and watching over Spider-Verse. What's going on?`,
+                `At your service, ${name}. Ready when you are.`,
+                `Hey ${name}! How's the grind treating you today?`,
+                `Good to see you, ${name}. Standing by for tactical inquiries, gym advice, or casual banter.`
+            ];
+            return greetings[Math.floor(Math.random() * greetings.length)];
+        }
+        case 'checkin': {
+            return `Running at 100% tactical efficiency and keeping Spider-Verse in check. How are you holding up, ${name}?`;
+        }
+        case 'thanks': {
+            return `Anytime, ${name}. Stay sharp out there.`;
+        }
+        case 'identity': {
+            return `I'm F.R.I.D.A.Y — tactical AI for Spider-Verse. I track war targets, calculate optimal happy jumps, monitor energy/cooldowns, and keep our faction running smoothly.`;
+        }
+        case 'farewell': {
+            return `Catch you later, ${name}. Keep your cooldowns rolling.`;
+        }
+        default:
+            return null;
+    }
+}
+
+/**
  * Deterministic Expert Answer Fallback.
  * Generates a sharp, witty, 100% mathematically verified Torn reply with exact Spider-Verse perks.
  */
@@ -751,7 +838,7 @@ function formatDeterministicTornAnswer(query, userAccountData = null, invokerNam
     const perks = liveFactionPerks;
 
     // 1. Happy jump / truffles / booster perk inquiry
-    if (detectTornGameplayIntent(query) === 'happy_jump' || clean.includes('jump') || clean.includes('truffle') || clean.includes('tootsie') || clean.includes('booster')) {
+    if (detectTornGameplayIntent(query) === 'happy_jump' || clean.includes('jump') || clean.includes('truffle') || clean.includes('tootsie') || (clean.includes('booster') && (clean.includes('cd') || clean.includes('cooldown') || clean.includes('perk') || clean.includes('limit')))) {
         const item = resolvedItem || TORN_ITEMS_DB[529]; // Default to Bag of Chocolate Truffles
         const jump = calculateHappyJumpDetails({ itemCandidate: item, userAccountData });
 
@@ -782,7 +869,13 @@ function formatDeterministicTornAnswer(query, userAccountData = null, invokerNam
         return reply.trim();
     }
 
-    return `I checked our Torn tactical database, ${invokerName}. Spider-Verse has +${perks.tolerationHours}h booster cooldown (39h max) and +${perks.voracityPercent}% candy happy. Ask with the specific item name anytime!`;
+    // 3. Faction upgrades / perks query
+    if (clean.includes('perk') || clean.includes('upgrade') || clean.includes('faction bonus')) {
+        return `Spider-Verse [${perks.factionId}] upgrades: Booster cooldown XV (+${perks.tolerationHours}h -> ${perks.boosterLimitHours}h max), Candy effect X (+${perks.voracityPercent}%), Travel capacity VIII (+${perks.travelCapacityBonus} items), and +5% Defense/Dexterity gym perks.`;
+    }
+
+    // Never return unprompted Torn stats if not a Torn inquiry
+    return null;
 }
 
 module.exports = {
@@ -790,6 +883,8 @@ module.exports = {
     resolveTornItem,
     calculateHappyJumpDetails,
     detectTornGameplayIntent,
+    detectCasualIntent,
+    formatDeterministicCasualReply,
     buildTornKnowledgeContext,
     formatDeterministicTornAnswer,
     syncTornItemsCatalog,

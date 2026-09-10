@@ -5791,7 +5791,12 @@ SPIDER-VERSE FACTION OPERATIONAL DIRECTIVES (Trained Knowledge):
 `;
 
 function getGeminiApiKey() {
-    return (discordConfig && discordConfig.geminiApiKey) || process.env.GEMINI_API_KEY || "";
+    return (discordConfig && discordConfig.geminiApiKey) || 
+           process.env.GEMINI_API_KEY || 
+           process.env.GOOGLE_API_KEY || 
+           process.env.GOOGLE_AI_API_KEY || 
+           process.env.GEMINI_KEY || 
+           "";
 }
 
 // ── Resilient Multi-Model Gemini Caller with High-Demand Rollover ────────────
@@ -5989,10 +5994,15 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
         if (tornKnowledge.detectTornGameplayIntent(cleanSpeech)) {
             return tornKnowledge.formatDeterministicTornAnswer(cleanSpeech, userAccountData, invokerName);
         }
-        if (userAccountData) {
+        if (userAccountData && detectedIntent) {
             return userKeys.formatDeterministicStatsReply(userAccountData, invokerName, detectedIntent);
         }
-        throw new Error("Gemini API key is not configured.");
+        const casual = tornKnowledge.formatDeterministicCasualReply(cleanSpeech, invokerName);
+        if (casual) return casual;
+        if (cleanSpeech.toLowerCase().includes('friday') || hint) {
+            return `Hey ${invokerName || "there"}! I'm listening. What's on your mind?`;
+        }
+        return "";
     }
 
     let convoPrompt = "";
@@ -6041,7 +6051,7 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
         convoPrompt += `\nExtra direction from member: "${hint.trim()}"\n`;
     }
 
-    convoPrompt += "\nNow respond in 1-3 sentences based strictly on the verified facts above. Deliver with your signature dry wit and playful banter, but ensure all game facts, item names, and calculated numbers are 100% accurate. Do not invent unverified numbers:";
+    convoPrompt += "\nNow respond naturally in 1-3 sentences to the latest message. If the user is asking about Torn gameplay or mechanics, adhere strictly to the verified facts above and do not guess or hallucinate. If the user is greeting you or chatting casually, respond warmly with your signature dry wit and banter without reciting unprompted game statistics:";
 
     const payload = {
         contents: [{ role: 'user', parts: [{ text: convoPrompt }] }],
@@ -6064,9 +6074,11 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
     if (tornKnowledge.detectTornGameplayIntent(cleanSpeech)) {
         return tornKnowledge.formatDeterministicTornAnswer(cleanSpeech, userAccountData, invokerName);
     }
-    if (userAccountData) {
+    if (userAccountData && detectedIntent) {
         return userKeys.formatDeterministicStatsReply(userAccountData, invokerName, detectedIntent);
     }
+    const casual = tornKnowledge.formatDeterministicCasualReply(cleanSpeech, invokerName);
+    if (casual) return casual;
     return "";
 }
 
@@ -12563,7 +12575,11 @@ function setupSlashBotEvents(bot, token) {
                 const fetched = await channel.messages.fetch({ limit: 15, before: batch[0].id }).catch(() => null);
                 if (fetched && fetched.size > 0) {
                     const sorted = Array.from(fetched.values()).reverse();
+                    const now = Date.now();
                     for (const m of sorted) {
+                        // Only include recent messages from the last 20 minutes to prevent old conversation leakage
+                        const ageMs = now - (m.createdTimestamp || 0);
+                        if (ageMs > 20 * 60 * 1000) continue;
                         if (m.author?.bot && m.author?.id !== bot.user?.id) continue;
                         const authorName = m.member?.displayName || m.author?.username || "Member";
                         const text = (m.cleanContent || m.content || "").trim();
@@ -12650,6 +12666,8 @@ function setupSlashBotEvents(bot, token) {
                     aiReply = tornKnowledge.formatDeterministicTornAnswer(userSpeech, userAccountData, primaryAuthor);
                 } else if (userAccountData && accountIntent) {
                     aiReply = userKeys.formatDeterministicStatsReply(userAccountData, primaryAuthor, accountIntent);
+                } else if (tornKnowledge.detectCasualIntent(userSpeech)) {
+                    aiReply = tornKnowledge.formatDeterministicCasualReply(userSpeech, primaryAuthor);
                 }
             }
 
@@ -12662,25 +12680,13 @@ function setupSlashBotEvents(bot, token) {
                         await channel.send({ content: aiReply.trim() }).catch(() => {});
                     }
                 });
-            } else if (batch.some(b => b.isMention) || isConvoChannel) {
-                // If it's a direct mention or conversation mode is active, try deterministic fallback
-                const fallbackReply = tornKnowledge.formatDeterministicTornAnswer(userSpeech, userAccountData, primaryAuthor);
-                if (fallbackReply) {
-                    await latestMsg.reply({
-                        content: fallbackReply.trim(),
-                        allowedMentions: { repliedUser: false }
-                    }).catch(async () => {
-                        if (channel && channel.send) {
-                            await channel.send({ content: fallbackReply.trim() }).catch(() => {});
-                        }
-                    });
-                } else if (batch.some(b => b.isMention)) {
-                    // Only send a polite notice if the user explicitly pinged/addressed Friday
-                    await latestMsg.reply({
-                        content: "⚠️ My cognitive link had a hiccup. Give me another shout in a second.",
-                        allowedMentions: { repliedUser: false }
-                    }).catch(() => {});
-                }
+            } else if (batch.some(b => b.isMention)) {
+                // If explicitly @mentioned or addressed by name, give a friendly in-character greeting
+                const friendlyGreeting = `Hey ${primaryAuthor}! I'm listening. What's on your mind?`;
+                await latestMsg.reply({
+                    content: friendlyGreeting,
+                    allowedMentions: { repliedUser: false }
+                }).catch(() => {});
             }
 
         } catch(err) {
@@ -13413,7 +13419,10 @@ function setupSlashBotEvents(bot, token) {
                         const sorted = Array.from(fetched.values())
                             .filter(m => m.id !== interaction.id && !m.interaction)
                             .reverse();
+                        const now = Date.now();
                         for (const m of sorted) {
+                            const ageMs = now - (m.createdTimestamp || 0);
+                            if (ageMs > 20 * 60 * 1000) continue;
                             const authorName = m.member?.displayName || m.author?.username || "Member";
                             const text = (m.cleanContent || m.content || "").trim();
                             if (text) {
