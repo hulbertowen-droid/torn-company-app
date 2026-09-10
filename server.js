@@ -9559,15 +9559,17 @@ function getPreFilledVaultUrl(tornId, amount) {
 function buildBankRequestButtons(req) {
     const vaultUrl = getPreFilledVaultUrl(req.tornId, req.amount);
     const amtFmt = Number(req.amount).toLocaleString();
+    const appBaseUrl = process.env.APP_URL || 'https://spider-verse.net';
+    const payUrl = `${appBaseUrl}/api/bank/pay/${req.id}`;
 
     if (req.status === 'pending') {
-        // Open request — anyone eligible can click "Give Cash" or "Cancel Request"
+        // Open request — clicking "Give Cash" brings banker straight to prefilled Torn vault with zero extra steps!
         return [{ type: 1, components: [
             {
                 type: 2,
-                style: 3, // Green (Success) - interactive button to claim/give cash
-                custom_id: `bank_pay_${req.id}`,
-                label: `💸 Give Cash ($${amtFmt})`
+                style: 5, // Link button — 1-click opens Torn directly with recipient & amount pre-filled!
+                label: `💸 Give Cash ($${amtFmt})`,
+                url: payUrl
             },
             {
                 type: 2,
@@ -10859,6 +10861,51 @@ async function executeCancelRequest(reqId, interaction) {
 
     return { success: true, message: `❌ **Request #${reqId} has been cancelled (voided).** The withdrawal request is closed.` };
 }
+
+// ── 1-Click Direct Torn Vault Fulfillment Redirect ──────────────────────────
+app.get('/api/bank/pay/:id', async (req, res) => {
+    const reqId = String(req.params.id || '').trim();
+    const bankReq = bankRequests[reqId];
+    if (!bankReq) {
+        return res.redirect('https://www.torn.com/factions.php');
+    }
+
+    if (bankReq.status === 'fulfilled' || bankReq.status === 'cancelled') {
+        return res.redirect('https://www.torn.com/factions.php');
+    }
+
+    const prefilledUrl = getPreFilledVaultUrl(bankReq.tornId, bankReq.amount);
+
+    if (bankReq.status === 'pending') {
+        bankReq.status = 'verifying';
+        bankReq.fulfilledAt = Date.now();
+        saveBankRequests();
+
+        if (bankReq.channelId && bankReq.messageId && slashCommandBot?.isReady?.()) {
+            try {
+                const targetChan = slashCommandBot.channels.cache.get(bankReq.channelId)
+                    || await slashCommandBot.channels.fetch(bankReq.channelId).catch(() => null);
+                if (targetChan) {
+                    const targetMsg = await targetChan.messages.fetch(bankReq.messageId).catch(() => null);
+                    if (targetMsg) {
+                        await targetMsg.edit({
+                            embeds: [sanitizeEmbed(buildBankRequestEmbed(bankReq))],
+                            components: buildBankRequestButtons(bankReq)
+                        }).catch(() => {});
+                    }
+                }
+            } catch(e) {}
+        }
+
+        const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+        const botInstance = slashCommandBot?.isReady?.() ? slashCommandBot : null;
+        if (apiKey && botInstance) {
+            verifyBankPayment(bankReq, apiKey, botInstance).catch(() => {});
+        }
+    }
+
+    return res.redirect(302, prefilledUrl);
+});
 
 async function buildVaultBalanceEmbed(apiKey, targetQuery = null, requestingUser = null) {
     if (!apiKey) {
@@ -12955,36 +13002,57 @@ function setupSlashBotEvents(bot, token) {
             // ── Bank: Verify & Fulfill ──
             if (customId.startsWith('bank_pay_')) {
                 const reqId = customId.replace('bank_pay_', '').trim();
-                await interaction.deferReply({ ephemeral: true });
                 const res = await executeFulfillRequest(reqId, interaction);
-                return interaction.editReply({ content: res.message }).catch(() => {});
+                if (!res.success) {
+                    return interaction.reply({ content: res.message, ephemeral: true }).catch(() => {});
+                }
+                const updatedReq = bankRequests[reqId];
+                if (updatedReq) {
+                    return interaction.update({
+                        embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
+                        components: buildBankRequestButtons(updatedReq)
+                    }).catch(() => {});
+                }
+                return interaction.deferUpdate().catch(() => {});
             }
 
             // ── Bank: Cancel Fulfillment (Unclaim / Revert) ──
             if (customId.startsWith('bank_unclaim_') || customId.startsWith('bank_revert_')) {
                 const reqId = customId.replace('bank_unclaim_', '').replace('bank_revert_', '').trim();
-                await interaction.deferReply({ ephemeral: true });
                 const res = await executeUnclaimFulfillment(reqId, interaction);
-                return interaction.editReply({ content: res.message }).catch(() => {});
+                if (!res.success) {
+                    return interaction.reply({ content: res.message, ephemeral: true }).catch(() => {});
+                }
+                const updatedReq = bankRequests[reqId];
+                if (updatedReq) {
+                    return interaction.update({
+                        embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
+                        components: buildBankRequestButtons(updatedReq)
+                    }).catch(() => {});
+                }
+                return interaction.deferUpdate().catch(() => {});
             }
 
             // ── Bank: Clicked In-Progress Button Indicator ──
             if (customId.startsWith('bank_claimed_') || customId.startsWith('verifying_display_')) {
-                const reqId = customId.replace('bank_claimed_', '').replace('verifying_display_', '').trim();
-                const req = bankRequests[reqId];
-                const bankerText = req?.fulfillerName ? `<@${req.fulfilledBy}>` : 'another banker';
-                return interaction.reply({
-                    content: `🔒 **Vault Request #${reqId} is currently in progress by ${bankerText}.**\n\nThey have clicked "Give Cash" and are completing the transfer in Torn.`,
-                    ephemeral: true
-                }).catch(() => {});
+                return interaction.deferUpdate().catch(() => {});
             }
 
             // ── Bank Request Cancel (Entire Request Void) ──
             if (customId.startsWith('bank_cancel_')) {
                 const reqId = customId.replace('bank_cancel_', '').trim();
-                await interaction.deferReply({ ephemeral: true });
                 const res = await executeCancelRequest(reqId, interaction);
-                return interaction.editReply({ content: res.message }).catch(() => {});
+                if (!res.success) {
+                    return interaction.reply({ content: res.message, ephemeral: true }).catch(() => {});
+                }
+                const updatedReq = bankRequests[reqId];
+                if (updatedReq) {
+                    return interaction.update({
+                        embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
+                        components: buildBankRequestButtons(updatedReq)
+                    }).catch(() => {});
+                }
+                return interaction.deferUpdate().catch(() => {});
             }
 
             // ── Giveaway: Enter / Leave ──
