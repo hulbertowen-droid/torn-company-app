@@ -5799,13 +5799,33 @@ function getGeminiApiKey() {
            "";
 }
 
-// ── Resilient Multi-Model Gemini Caller with High-Demand Rollover ────────────
+// ── Resilient Multi-Model Gemini Caller with High-Demand & Quota Rollover ────
+const modelQuotaCooldowns = new Map();
+
 async function callGeminiWithFallback(payload, apiKey, options = {}) {
     if (!apiKey) return { success: false, error: "Missing Gemini API key." };
-    const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+
+    // Order by standard production stability and generous quota availability
+    const candidateModels = [
+        'gemini-2.0-flash',       // Primary standard production model (1,500 RPD, 15 RPM)
+        'gemini-2.0-flash-lite',  // High-throughput fast model
+        'gemini-1.5-flash',       // Stable fallback (separate quota pool)
+        'gemini-1.5-flash-8b',    // Lightweight fallback
+        'gemini-2.5-flash'        // Experimental preview
+    ];
+
+    const now = Date.now();
+    // Filter out models currently in a quota exhaustion cooldown (5 minutes)
+    const models = candidateModels.filter(m => {
+        const cd = modelQuotaCooldowns.get(m);
+        return !cd || now > cd;
+    });
+
+    // If all models were on cooldown, reset and try candidate list
+    const activeModels = models.length > 0 ? models : candidateModels;
     let lastError = null;
 
-    for (const model of models) {
+    for (const model of activeModels) {
         for (let attempt = 0; attempt < 2; attempt++) {
             try {
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -5818,14 +5838,25 @@ async function callGeminiWithFallback(payload, apiKey, options = {}) {
                 const data = await res.json();
                 if (data.error) {
                     const errMsg = data.error.message || '';
-                    const isHighDemand = errMsg.includes('high demand') || data.error.code === 503 || data.error.code === 429;
-                    if (isHighDemand && attempt === 0) {
-                        await new Promise(r => setTimeout(r, 600));
-                        continue; // Quick retry once on same model
+                    const isQuota = errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('rate') || data.error.code === 429;
+                    const isHighDemand = (errMsg.toLowerCase().includes('high demand') || data.error.code === 503) && !isQuota;
+
+                    if (isQuota) {
+                        // Mark this model on a 5-minute cooldown so we don't spam it
+                        modelQuotaCooldowns.set(model, Date.now() + 5 * 60 * 1000);
+                        console.warn(`[Gemini API] ${model} quota exhausted. Temporarily cooling down for 5m and rolling over...`);
+                        lastError = new Error(`[${model}] ${errMsg}`);
+                        break; // Never retry on quota exhaustion — roll over immediately
                     }
+
+                    if (isHighDemand && attempt === 0) {
+                        await new Promise(r => setTimeout(r, 500));
+                        continue; // Quick retry once on transient 503 high demand
+                    }
+
                     lastError = new Error(`[${model}] ${errMsg}`);
                     console.warn(`[Gemini API] ${model} unavailable (${errMsg}). Rolling over to next model...`);
-                    break; // Roll over to next fallback model
+                    break;
                 }
                 if (data.candidates && data.candidates.length > 0) {
                     return { success: true, data, modelUsed: model };
@@ -5836,7 +5867,7 @@ async function callGeminiWithFallback(payload, apiKey, options = {}) {
                     await new Promise(r => setTimeout(r, 500));
                     continue;
                 }
-                console.warn(`[Gemini API] ${model} error: ${err.message}. Rolling over...`);
+                console.warn(`[Gemini API] ${model} connection error: ${err.message}. Rolling over...`);
                 break;
             }
         }
@@ -5849,7 +5880,7 @@ app.get('/api/ai/status', (req, res) => {
     res.json({
         configured: !!key,
         keyPreview: key ? `${key.slice(0, 6)}...${key.slice(-4)}` : "",
-        model: "gemini-2.5-flash (with auto-fallback to gemini-2.0-flash & gemini-1.5-flash)"
+        model: "gemini-2.0-flash (with auto-rollover to flash-lite, 1.5-flash & 1.5-8b)"
     });
 });
 
