@@ -5790,115 +5790,187 @@ SPIDER-VERSE FACTION OPERATIONAL DIRECTIVES (Trained Knowledge):
   * 3. 99k Jump: Advanced jump using 4–5 eDVDs + 1 Ecstasy + 1,000e for stats under 400k-800k.
 `;
 
-function getGeminiApiKey() {
-    return (discordConfig && discordConfig.geminiApiKey) || 
-           process.env.GEMINI_API_KEY || 
-           process.env.GOOGLE_API_KEY || 
-           process.env.GOOGLE_AI_API_KEY || 
-           process.env.GEMINI_KEY || 
-           "";
+function getGeminiApiKeys() {
+    const keys = [];
+    if (discordConfig) {
+        if (Array.isArray(discordConfig.geminiApiKeys)) {
+            keys.push(...discordConfig.geminiApiKeys);
+        }
+        if (typeof discordConfig.geminiApiKey === 'string') {
+            keys.push(...discordConfig.geminiApiKey.split(/[,;\n\s]+/));
+        }
+    }
+    const envSources = [
+        process.env.GEMINI_API_KEYS,
+        process.env.GEMINI_API_KEY,
+        process.env.GOOGLE_API_KEY,
+        process.env.GOOGLE_AI_API_KEY,
+        process.env.GEMINI_KEY
+    ];
+    for (const src of envSources) {
+        if (typeof src === 'string') {
+            keys.push(...src.split(/[,;\n\s]+/));
+        }
+    }
+
+    const cleaned = [];
+    const seen = new Set();
+    for (let k of keys) {
+        if (!k) continue;
+        k = k.trim();
+        if (k.length >= 15 && !seen.has(k)) {
+            seen.add(k);
+            cleaned.push(k);
+        }
+    }
+    return cleaned;
 }
 
-// ── Resilient Multi-Model Gemini Caller with High-Demand & Quota Rollover ────
-const modelQuotaCooldowns = new Map();
+function getGeminiApiKey() {
+    const keys = getGeminiApiKeys();
+    return keys[0] || "";
+}
 
-async function callGeminiWithFallback(payload, apiKey, options = {}) {
-    if (!apiKey) return { success: false, error: "Missing Gemini API key." };
+// ── Resilient Multi-Key & Multi-Model Gemini Caller with High-Demand & Quota Rollover ────
+const modelQuotaCooldowns = new Map();
+const keyQuotaCooldowns = new Map();
+let geminiKeyRoundRobin = 0;
+
+async function callGeminiWithFallback(payload, specificKey = null, options = {}) {
+    const allKeys = specificKey ? [specificKey] : getGeminiApiKeys();
+    if (allKeys.length === 0) return { success: false, error: "Missing Gemini API key." };
 
     // Order by standard production stability and generous quota availability
     const candidateModels = [
         'gemini-2.0-flash',       // Primary standard production model (1,500 RPD, 15 RPM)
-        'gemini-2.0-flash-lite',  // High-throughput fast model
+        'gemini-2.0-flash-lite',  // High-throughput fast model (up to 30 RPM)
         'gemini-1.5-flash',       // Stable fallback (separate quota pool)
         'gemini-1.5-flash-8b',    // Lightweight fallback
         'gemini-2.5-flash'        // Experimental preview
     ];
 
     const now = Date.now();
-    // Filter out models currently in a quota exhaustion cooldown (5 minutes)
-    const models = candidateModels.filter(m => {
+
+    // Prioritize keys that are not on quota cooldown (5 minutes)
+    const activeKeys = allKeys.filter(k => {
+        const cd = keyQuotaCooldowns.get(k);
+        return !cd || now > cd;
+    });
+    const poolToUse = activeKeys.length > 0 ? activeKeys : allKeys;
+
+    // Distribute calls evenly across available keys
+    geminiKeyRoundRobin = (geminiKeyRoundRobin + 1) % poolToUse.length;
+    const orderedKeys = [];
+    for (let i = 0; i < poolToUse.length; i++) {
+        orderedKeys.push(poolToUse[(geminiKeyRoundRobin + i) % poolToUse.length]);
+    }
+
+    // Filter out models currently in a quota exhaustion cooldown
+    const modelsToTry = candidateModels.filter(m => {
         const cd = modelQuotaCooldowns.get(m);
         return !cd || now > cd;
     });
+    const activeModels = modelsToTry.length > 0 ? modelsToTry : candidateModels;
 
-    // If all models were on cooldown, reset and try candidate list
-    const activeModels = models.length > 0 ? models : candidateModels;
     let lastError = null;
 
-    for (const model of activeModels) {
-        for (let attempt = 0; attempt < 2; attempt++) {
-            try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-                const res = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload),
-                    signal: AbortSignal.timeout(options.timeout || 10000)
-                });
-                const data = await res.json();
-                if (data.error) {
-                    const errMsg = data.error.message || '';
-                    const isQuota = errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('rate') || data.error.code === 429;
-                    const isHighDemand = (errMsg.toLowerCase().includes('high demand') || data.error.code === 503) && !isQuota;
+    // 1. Try each key in the rotation pool
+    for (const key of orderedKeys) {
+        const keyPreview = `${key.slice(0, 5)}...${key.slice(-4)}`;
 
-                    if (isQuota) {
-                        // Mark this model on a 5-minute cooldown so we don't spam it
-                        modelQuotaCooldowns.set(model, Date.now() + 5 * 60 * 1000);
-                        console.warn(`[Gemini API] ${model} quota exhausted. Temporarily cooling down for 5m and rolling over...`);
-                        lastError = new Error(`[${model}] ${errMsg}`);
-                        break; // Never retry on quota exhaustion — roll over immediately
+        // 2. Try each model in sequence for this key
+        for (const model of activeModels) {
+            for (let attempt = 0; attempt < 2; attempt++) {
+                try {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                        signal: AbortSignal.timeout(options.timeout || 10000)
+                    });
+                    const data = await res.json();
+                    if (data.error) {
+                        const errMsg = data.error.message || '';
+                        const isQuota = errMsg.toLowerCase().includes('quota') || errMsg.toLowerCase().includes('rate') || data.error.code === 429;
+                        const isHighDemand = (errMsg.toLowerCase().includes('high demand') || data.error.code === 503) && !isQuota;
+
+                        if (isQuota) {
+                            // Cooldown this specific key for 5m and immediately roll over to the NEXT KEY in the pool
+                            keyQuotaCooldowns.set(key, Date.now() + 5 * 60 * 1000);
+                            console.warn(`[Gemini API] Key [${keyPreview}] hit quota limit for ${model}. Cooldown for 5m and rolling over to next key...`);
+                            lastError = new Error(`[Key ${keyPreview} / ${model}] ${errMsg}`);
+                            break; // Skip remaining models for this key; move to next key!
+                        }
+
+                        if (isHighDemand && attempt === 0) {
+                            await new Promise(r => setTimeout(r, 500));
+                            continue; // Quick retry once on transient 503 high demand
+                        }
+
+                        lastError = new Error(`[Key ${keyPreview} / ${model}] ${errMsg}`);
+                        console.warn(`[Gemini API] ${model} unavailable (${errMsg}). Rolling over to next model...`);
+                        break;
                     }
-
-                    if (isHighDemand && attempt === 0) {
+                    if (data.candidates && data.candidates.length > 0) {
+                        return { success: true, data, modelUsed: model, keyUsed: keyPreview };
+                    }
+                } catch (err) {
+                    lastError = err;
+                    if (attempt === 0) {
                         await new Promise(r => setTimeout(r, 500));
-                        continue; // Quick retry once on transient 503 high demand
+                        continue;
                     }
-
-                    lastError = new Error(`[${model}] ${errMsg}`);
-                    console.warn(`[Gemini API] ${model} unavailable (${errMsg}). Rolling over to next model...`);
+                    console.warn(`[Gemini API] Key [${keyPreview}] / ${model} connection error: ${err.message}. Rolling over...`);
                     break;
                 }
-                if (data.candidates && data.candidates.length > 0) {
-                    return { success: true, data, modelUsed: model };
-                }
-            } catch (err) {
-                lastError = err;
-                if (attempt === 0) {
-                    await new Promise(r => setTimeout(r, 500));
-                    continue;
-                }
-                console.warn(`[Gemini API] ${model} connection error: ${err.message}. Rolling over...`);
-                break;
+            }
+
+            // If the key was put on quota cooldown, don't try other models with this same broken key
+            if (keyQuotaCooldowns.has(key) && Date.now() < keyQuotaCooldowns.get(key)) {
+                break; // Jump to next key in the pool
             }
         }
     }
-    return { success: false, error: lastError ? lastError.message : 'All Gemini models unavailable.' };
+
+    return { success: false, error: lastError ? lastError.message : 'All Gemini keys and models unavailable.' };
 }
 
 app.get('/api/ai/status', (req, res) => {
-    const key = getGeminiApiKey();
+    const keys = getGeminiApiKeys();
+    const now = Date.now();
+    const activeCount = keys.filter(k => !keyQuotaCooldowns.has(k) || now > keyQuotaCooldowns.get(k)).length;
+
     res.json({
-        configured: !!key,
-        keyPreview: key ? `${key.slice(0, 6)}...${key.slice(-4)}` : "",
-        model: "gemini-2.0-flash (with auto-rollover to flash-lite, 1.5-flash & 1.5-8b)"
+        configured: keys.length > 0,
+        poolSize: keys.length,
+        activeKeys: activeCount,
+        keysPreview: keys.map(k => `${k.slice(0, 6)}...${k.slice(-4)}`),
+        model: "gemini-2.0-flash (with multi-key pool rotation & auto-rollover)"
     });
 });
 
 app.post('/api/ai/save-key', async (req, res) => {
-    const { apiKey } = req.body;
-    if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length < 15) {
-        return res.status(400).json({ success: false, error: "Invalid API key format." });
+    const { apiKey, apiKeys } = req.body;
+    const inputKeys = [];
+    if (Array.isArray(apiKeys)) inputKeys.push(...apiKeys);
+    if (typeof apiKey === 'string') inputKeys.push(...apiKey.split(/[,;\n\s]+/));
+
+    const validKeys = inputKeys.map(k => k.trim()).filter(k => k.length >= 15);
+    if (validKeys.length === 0) {
+        return res.status(400).json({ success: false, error: "Please provide at least one valid Google AI Studio API key (starts with AIzaSy...)." });
     }
-    const cleanKey = apiKey.trim();
+
     try {
         const testPayload = { contents: [{ parts: [{ text: "ping" }] }] };
-        const testResult = await callGeminiWithFallback(testPayload, cleanKey, { timeout: 6000 });
+        const testResult = await callGeminiWithFallback(testPayload, validKeys[0], { timeout: 6000 });
         if (!testResult.success) {
             return res.status(400).json({ success: false, error: testResult.error || "API key rejected by Google." });
         }
-        discordConfig.geminiApiKey = cleanKey;
+        discordConfig.geminiApiKey = validKeys.join(', ');
+        discordConfig.geminiApiKeys = validKeys;
         saveDiscordConfig();
-        res.json({ success: true, modelTested: testResult.modelUsed });
+        res.json({ success: true, count: validKeys.length, modelTested: testResult.modelUsed });
     } catch(err) {
         res.status(500).json({ success: false, error: "Connection error: " + err.message });
     }
@@ -5944,11 +6016,11 @@ async function askTornAI(message, history = []) {
         tools: [{ googleSearch: {} }]
     };
 
-    let result = await callGeminiWithFallback(payload, key, { timeout: 12000 });
+    let result = await callGeminiWithFallback(payload, null, { timeout: 12000 });
     if (!result.success) {
         // Retry without web search tool (search tool can trigger quota/503 errors)
         delete payload.tools;
-        result = await callGeminiWithFallback(payload, key, { timeout: 10000 });
+        result = await callGeminiWithFallback(payload, null, { timeout: 10000 });
     }
 
     if (!result.success) {
@@ -6094,7 +6166,7 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
         }
     };
 
-    const result = await callGeminiWithFallback(payload, key, { timeout: 10000 });
+    const result = await callGeminiWithFallback(payload, null, { timeout: 10000 });
     if (result.success) {
         const candidate = result.data.candidates?.[0];
         const reply = candidate?.content?.parts?.[0]?.text?.trim() || "";
