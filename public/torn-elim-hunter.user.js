@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter
 // @namespace    https://spider-verse.net/
-// @version      2.1.0
-// @description  1-click snipe button for Torn Elimination. Finds beatable enemies that are NOT in hospital and NOT flying. No fallbacks, elimination-only.
+// @version      2.2.0
+// @description  Autonomous 1-click snipe button for Torn Elimination. Finds beatable enemies that are NOT in hospital and NOT flying from ANY page.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=torn.com
@@ -21,14 +21,15 @@
     'use strict';
 
     // ── Constants ──────────────────────────────────────────────────
-    const BACKEND   = 'https://spider-verse.net';
-    const KEY_API   = 'elimv2_api_key';
-    const KEY_TIER  = 'elimv2_ff_tier';    // easy | manageable | difficult | all
-    const SESS_EXCL = 'elimv2_exclude';    // comma-separated IDs excluded this session
-    const SESS_MYID = 'elimv2_my_id';
+    const BACKEND       = 'https://spider-verse.net';
+    const KEY_API       = 'elimv2_api_key';
+    const KEY_TIER      = 'elimv2_ff_tier';       // easy | manageable | difficult | all
+    const KEY_AUTOLAUNCH= 'elimv2_auto_launch';   // true | false
+    const SESS_EXCL     = 'elimv2_exclude';       // comma-separated IDs excluded this session
+    const SESS_MYID     = 'elimv2_my_id';
+    const SESS_BGSYNC   = 'elimv2_bg_synced';
 
     // Max IDs to keep in the exclude list — prevents unbounded URL growth
-    // (BUG D fix) — keep only the 80 most-recently-excluded IDs
     const MAX_EXCLUDE = 80;
 
     // ── Storage ────────────────────────────────────────────────────
@@ -51,7 +52,6 @@
     }
 
     // ── Session exclude list ───────────────────────────────────────
-    // (BUG D fix) trimmed to MAX_EXCLUDE entries
     function getExclude() {
         try { return (sessionStorage.getItem(SESS_EXCL) || '').split(',').filter(Boolean); }
         catch (e) { return []; }
@@ -62,16 +62,16 @@
         let list = getExclude();
         const sid = String(id);
         if (!list.includes(sid)) list.push(sid);
-        // Keep only the last MAX_EXCLUDE entries
         if (list.length > MAX_EXCLUDE) list = list.slice(list.length - MAX_EXCLUDE);
         try { sessionStorage.setItem(SESS_EXCL, list.join(',')); } catch (e) {}
     }
 
     // ── State ──────────────────────────────────────────────────────
-    let apiKey = load(KEY_API, '');
-    let ffTier = load(KEY_TIER, 'manageable');
-    let myId   = '';
-    let busy   = false;
+    let apiKey     = load(KEY_API, '');
+    let ffTier     = load(KEY_TIER, 'manageable');
+    let autoLaunch = load(KEY_AUTOLAUNCH, false);
+    let myId       = '';
+    let busy       = false;
 
     // ── Resolve my own Torn ID once ───────────────────────────────
     async function resolveMyId() {
@@ -116,20 +116,7 @@
     }
 
     // ── Auto-sync competition page rosters to backend ──────────────
-    // (BUG A fix) — We now ask the Torn API which team the current user is on,
-    // then only sync profile links that are NOT on that same team section.
-    // Since we cannot reliably tell which DOM section belongs to which team,
-    // we send ALL found profile links plus our own team members list to the server,
-    // which will exclude our own faction from targeting.
-    // The server's self-exclusion (myId filter) handles the user themselves.
-    // We additionally pass our own faction members via a separate call so the server
-    // can filter them out.
-    //
-    // PRACTICAL APPROACH: We tell the user to navigate to the OPPOSING team's tab
-    // on competition.php and sync from there. We detect which "team tab" context
-    // the user is in via the page title/header and only send those members.
-    // As a safety net, we also resolve our own faction members and exclude them.
-    let rosterSyncDone = false; // (BUG G fix pattern) prevent repeated syncs
+    let rosterSyncDone = false;
 
     function syncRosterIfOnCompetitionPage() {
         if (!window.location.href.includes('competition.php')) return;
@@ -155,10 +142,6 @@
 
             rosterSyncDone = true;
 
-            // Send all scraped members; server is responsible for knowing the user's
-            // own faction via the Torn API faction endpoint to exclude teammates.
-            // We also send our own Torn ID (selfId) and the API key so the server
-            // can resolve our faction and strip them from the pool server-side.
             gmFetch(`${BACKEND}/api/elim/sync-roster`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
@@ -167,11 +150,40 @@
                 try {
                     const d = JSON.parse(raw);
                     if (d && d.memberCount !== undefined) {
-                        showToast(`✅ Synced ${d.memberCount} targets to server`);
+                        showToast(`✅ Synced ${d.memberCount} competitors to pool`);
                     }
                 } catch (e) {}
             }).catch(() => {});
         });
+    }
+
+    // ── Background silent sync of competition page ─────────────────
+    function silentBgSync() {
+        if (!apiKey) return;
+        if (window.location.href.includes('competition.php')) return;
+        if (sessionStorage.getItem(SESS_BGSYNC)) return;
+
+        sessionStorage.setItem(SESS_BGSYNC, '1');
+        gmFetch('https://www.torn.com/competition.php').then(html => {
+            if (!html) return;
+            const idMatches = html.matchAll(/profiles\.php\?XID=(\d+)/gi);
+            const seen = new Set();
+            const members = [];
+            for (const match of idMatches) {
+                const id = match[1];
+                if (!seen.has(id) && id !== myId) {
+                    seen.add(id);
+                    members.push({ id, name: '' });
+                }
+            }
+            if (members.length > 0) {
+                gmFetch(`${BACKEND}/api/elim/sync-roster`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+                    body: JSON.stringify({ apiKey, members, myId })
+                }).catch(() => {});
+            }
+        }).catch(() => {});
     }
 
     // Show a brief non-intrusive toast notification
@@ -191,7 +203,6 @@
     }
 
     // ── Detect if current attack page target is in hospital ────────
-    // (BUG G fix) — use a one-shot flag per URL so DOM mutations don't re-trigger
     let hospCheckUrl = '';
     let hospCheckDone = false;
 
@@ -200,7 +211,6 @@
         if (!m) return;
         const targetId = m[1];
 
-        // Only run once per attack URL
         if (window.location.href === hospCheckUrl && hospCheckDone) return;
         hospCheckUrl = window.location.href;
         hospCheckDone = false;
@@ -278,7 +288,13 @@
 
             if (data && data.success && data.targetId) {
                 addExclude(data.targetId);
-                launchAttack(data.targetId);
+                setButtonState('idle');
+
+                if (autoLaunch) {
+                    launchAttack(data.targetId);
+                } else {
+                    renderTargetCard(data);
+                }
             } else {
                 const msg = (data && data.message) ? data.message : 'No targets available';
                 setButtonState('error', msg);
@@ -295,7 +311,104 @@
         window.location.href = `https://www.torn.com/page.php?sid=attack&user2ID=${targetId}`;
     }
 
+    // ── Target Card Display ───────────────────────────────────────
+    let cardEl = null;
+
+    function renderTargetCard(data) {
+        if (!cardEl) {
+            cardEl = document.createElement('div');
+            cardEl.id = 'elim-target-card';
+            cardEl.style.cssText = `
+                background: #1a1d27;
+                border: 2px solid #e74c3c;
+                border-radius: 10px;
+                padding: 12px 14px;
+                width: 300px;
+                color: #ecf0f1;
+                font-size: 12px;
+                box-shadow: 0 10px 32px rgba(0,0,0,0.85);
+                text-align: left;
+                display: none;
+                margin-bottom: 4px;
+            `;
+            if (wrapEl && rowEl) {
+                wrapEl.insertBefore(cardEl, rowEl);
+            }
+        }
+
+        // Hide settings if open
+        if (drawerEl) {
+            drawerEl.style.display = 'none';
+            drawerOpen = false;
+        }
+
+        const whyList = (Array.isArray(data.why) && data.why.length > 0)
+            ? data.why.map(w => `<li style="margin-bottom:3px;">${w}</li>`).join('')
+            : '<li>Confirmed available in Torn City</li><li>Optimal battle stats ratio</li>';
+
+        cardEl.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #3d4455; padding-bottom:7px; margin-bottom:8px;">
+                <span style="font-weight:900; font-size:12.5px; color:#e74c3c; display:flex; align-items:center; gap:5px;">
+                    🎯 Best Elimination Target
+                </span>
+                <span id="ev2-card-close" style="cursor:pointer; color:#95a5a6; font-size:13px; font-weight:bold; padding:0 3px;" title="Close">✖</span>
+            </div>
+            <div style="margin-bottom:8px; font-size:12px;">
+                <span style="color:#7f8c8d; font-size:10px; text-transform:uppercase; letter-spacing:0.5px;">Player:</span><br>
+                <a href="https://www.torn.com/profiles.php?XID=${data.targetId}" target="_blank" style="color:#3498db; font-weight:800; text-decoration:none; font-size:14px;">
+                    ${data.name} [${data.targetId}]
+                </a>
+                <span style="color:#bdc3c7; font-size:11px; margin-left:4px;">(Lvl ${data.level})</span>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:8px; font-size:11px;">
+                <div style="background:#262b38; padding:5px 7px; border-radius:4px; border:1px solid #3d4455;">
+                    <div style="color:#7f8c8d; font-size:9px; text-transform:uppercase;">Status</div>
+                    <div style="color:#2ecc71; font-weight:700;">🟢 ${data.status || 'Available'}</div>
+                </div>
+                <div style="background:#262b38; padding:5px 7px; border-radius:4px; border:1px solid #3d4455;">
+                    <div style="color:#7f8c8d; font-size:9px; text-transform:uppercase;">Travel</div>
+                    <div style="color:#f1c40f; font-weight:700;">📍 ${data.travel || 'In Torn City'}</div>
+                </div>
+                <div style="background:#262b38; padding:5px 7px; border-radius:4px; border:1px solid #3d4455;">
+                    <div style="color:#7f8c8d; font-size:9px; text-transform:uppercase;">Battle Strength</div>
+                    <div style="color:#ecf0f1; font-weight:700;">~${data.targetBSHuman || 'Unknown'} <span style="font-size:9.5px; color:#95a5a6;">(${data.difficulty || 'Manageable'})</span></div>
+                </div>
+                <div style="background:#262b38; padding:5px 7px; border-radius:4px; border:1px solid #3d4455;">
+                    <div style="color:#7f8c8d; font-size:9px; text-transform:uppercase;">Risk / Score</div>
+                    <div><span style="color:#e67e22; font-weight:700;">${data.risk || 'Low'}</span> &bull; <span style="color:#2ecc71; font-weight:900;">${data.score || 90}/100</span></div>
+                </div>
+            </div>
+            <div style="margin-bottom:10px; background:#1e2230; padding:7px 9px; border-radius:6px; border:1px solid #2d3243;">
+                <div style="font-weight:700; color:#e74c3c; font-size:10.5px; margin-bottom:3px;">Why this target?</div>
+                <ul style="margin:0; padding-left:15px; font-size:10px; color:#bdc3c7; line-height:1.4;">
+                    ${whyList}
+                </ul>
+            </div>
+            <div style="display:flex; gap:6px;">
+                <button id="ev2-card-attack" style="flex:2; padding:7px 10px; background:#27ae60; color:#fff; border:none; border-radius:5px; font-weight:900; font-size:12px; cursor:pointer; box-shadow:0 3px 10px rgba(39,174,96,0.4); display:flex; align-items:center; justify-content:center; gap:4px;">
+                    ⚔️ ATTACK NOW
+                </button>
+                <button id="ev2-card-next" style="flex:1; padding:7px 8px; background:#34495e; color:#ecf0f1; border:1px solid #4a5568; border-radius:5px; font-weight:700; font-size:11px; cursor:pointer;">
+                    ⏭️ Next
+                </button>
+            </div>
+        `;
+
+        cardEl.style.display = 'block';
+
+        const closeBtn = document.getElementById('ev2-card-close');
+        if (closeBtn) closeBtn.onclick = () => { cardEl.style.display = 'none'; };
+
+        const attackBtn = document.getElementById('ev2-card-attack');
+        if (attackBtn) attackBtn.onclick = () => { launchAttack(data.targetId); };
+
+        const nextBtn = document.getElementById('ev2-card-next');
+        if (nextBtn) nextBtn.onclick = () => { executeSnipe(); };
+    }
+
     // ── Button UI ─────────────────────────────────────────────────
+    let wrapEl    = null;
+    let rowEl     = null;
     let btnEl     = null;
     let errorTimer = null;
 
@@ -352,15 +465,16 @@
         if (drawerEl) {
             drawerEl.style.display = 'block';
             drawerOpen = true;
+            if (cardEl) cardEl.style.display = 'none';
         }
     }
 
     function buildWidget() {
         if (document.getElementById('elimv2-widget')) return;
 
-        const wrap = document.createElement('div');
-        wrap.id = 'elimv2-widget';
-        wrap.style.cssText = `
+        wrapEl = document.createElement('div');
+        wrapEl.id = 'elimv2-widget';
+        wrapEl.style.cssText = `
             position: fixed;
             bottom: 16px;
             right: 16px;
@@ -380,14 +494,18 @@
             border: 2px solid #e74c3c;
             border-radius: 10px;
             padding: 14px;
-            width: 280px;
+            width: 290px;
             color: #ecf0f1;
             font-size: 12px;
             box-shadow: 0 8px 30px rgba(0,0,0,0.8);
+            margin-bottom: 4px;
         `;
 
         drawerEl.innerHTML = `
-            <div style="font-weight:800; color:#e74c3c; margin-bottom:10px; font-size:13px;">🎯 Elim Hunter Settings</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <div style="font-weight:800; color:#e74c3c; font-size:13px;">🎯 Elim Hunter Settings</div>
+                <span id="ev2-settings-close" style="cursor:pointer; color:#95a5a6; font-size:13px; font-weight:bold;" title="Close">✖</span>
+            </div>
             <label style="display:block; margin-bottom:8px;">
                 Torn API Key (connected to FF Scouter):
                 <input type="password" id="ev2-key" value="${apiKey.replace(/"/g, '&quot;')}"
@@ -395,7 +513,7 @@
                     style="width:100%; box-sizing:border-box; margin-top:3px; padding:5px 7px;
                     background:#262b38; border:1px solid #3d4455; color:#fff; border-radius:5px; font-size:11px;">
             </label>
-            <label style="display:block; margin-bottom:10px;">
+            <label style="display:block; margin-bottom:8px;">
                 Fair Fight Tier Limit:
                 <select id="ev2-tier" style="width:100%; box-sizing:border-box; margin-top:3px; padding:5px 7px;
                     background:#262b38; border:1px solid #3d4455; color:#fff; border-radius:5px; font-size:11px;">
@@ -405,23 +523,29 @@
                     <option value="all" ${ffTier==='all'?'selected':''}>⚪ All Tiers</option>
                 </select>
             </label>
-            <div style="background:#1e2230; border:1px solid #3d4455; border-radius:5px; padding:8px; margin-bottom:8px; font-size:10px; color:#95a5a6; line-height:1.5;">
-                ⚠️ <b>Before using:</b> Go to <b>competition.php</b>, navigate to an <b>enemy team's tab</b>, then come back — the script will auto-sync those members as targets.
+            <label style="display:flex; align-items:center; gap:8px; margin-bottom:10px; cursor:pointer; font-size:11px; color:#bdc3c7;">
+                <input type="checkbox" id="ev2-autolaunch" ${autoLaunch ? 'checked' : ''} style="cursor:pointer;">
+                <span>⚡ Auto-launch attack page directly</span>
+            </label>
+            <div style="background:#1e2230; border:1px solid #3d4455; border-radius:5px; padding:8px; margin-bottom:8px; font-size:10px; color:#bdc3c7; line-height:1.4;">
+                ✨ <b>Autonomous Targeting:</b> Finds and ranks viable targets from any Torn page. Visiting competition.php adds fresh competitors to the shared pool.
             </div>
             <button id="ev2-save" style="width:100%; padding:7px; background:#27ae60; color:#fff; border:none;
                 border-radius:5px; font-weight:800; cursor:pointer; font-size:12px; margin-bottom:6px;">💾 Save</button>
+            <button id="ev2-open-comp" style="width:100%; padding:6px; background:#2980b9; color:#fff; border:none;
+                border-radius:5px; font-weight:700; cursor:pointer; font-size:11px; margin-bottom:6px;">🏆 Open Competition Page</button>
             <button id="ev2-clearsess" style="width:100%; padding:5px; background:#2c3e50; color:#bdc3c7; border:1px solid #3d4455;
                 border-radius:5px; cursor:pointer; font-size:10px; margin-bottom:4px;">🗑️ Clear Session Exclusions</button>
             <button id="ev2-clearroster" style="width:100%; padding:5px; background:#2c3e50; color:#bdc3c7; border:1px solid #3d4455;
-                border-radius:5px; cursor:pointer; font-size:10px;">🔄 Re-sync Roster (visit competition.php first)</button>
+                border-radius:5px; cursor:pointer; font-size:10px;">🔄 Re-sync Roster (visit competition.php)</button>
             <div style="margin-top:8px; color:#7f8c8d; font-size:10px;">
-                v2.1.0 — Elimination only
+                v2.2.0 — Autonomous Elimination Target Finder
             </div>
         `;
 
         // Row: snipe button + cog
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex; gap:6px; align-items:center;';
+        rowEl = document.createElement('div');
+        rowEl.style.cssText = 'display:flex; gap:6px; align-items:center;';
 
         btnEl = document.createElement('button');
         btnEl.id = 'ev2-snipe-btn';
@@ -462,25 +586,37 @@
         cogBtn.onclick = () => {
             drawerOpen = !drawerOpen;
             drawerEl.style.display = drawerOpen ? 'block' : 'none';
+            if (drawerOpen && cardEl) cardEl.style.display = 'none';
         };
 
-        row.appendChild(btnEl);
-        row.appendChild(cogBtn);
-        wrap.appendChild(drawerEl);
-        wrap.appendChild(row);
-        document.body.appendChild(wrap);
+        rowEl.appendChild(btnEl);
+        rowEl.appendChild(cogBtn);
+        wrapEl.appendChild(drawerEl);
+        wrapEl.appendChild(rowEl);
+        document.body.appendChild(wrapEl);
 
-        // Settings save
+        // Settings events
+        document.getElementById('ev2-settings-close').onclick = () => {
+            drawerEl.style.display = 'none';
+            drawerOpen = false;
+        };
+
+        document.getElementById('ev2-open-comp').onclick = () => {
+            window.location.href = 'https://www.torn.com/competition.php';
+        };
+
         document.getElementById('ev2-save').onclick = async () => {
-            const keyInput  = document.getElementById('ev2-key').value.trim();
-            const tierInput = document.getElementById('ev2-tier').value;
+            const keyInput   = document.getElementById('ev2-key').value.trim();
+            const tierInput  = document.getElementById('ev2-tier').value;
+            const launchInput= document.getElementById('ev2-autolaunch').checked;
 
             apiKey = keyInput;
             ffTier = tierInput;
-            save(KEY_API,  apiKey);
+            autoLaunch = launchInput;
+            save(KEY_API, apiKey);
             save(KEY_TIER, ffTier);
+            save(KEY_AUTOLAUNCH, autoLaunch);
 
-            // Clear cached ID so it re-resolves with new key
             myId = '';
             sessionStorage.removeItem(SESS_MYID);
 
@@ -495,7 +631,6 @@
             }, 1500);
         };
 
-        // Clear session exclusions
         document.getElementById('ev2-clearsess').onclick = () => {
             try { sessionStorage.removeItem(SESS_EXCL); } catch (e) {}
             const btn = document.getElementById('ev2-clearsess');
@@ -503,12 +638,11 @@
             setTimeout(() => { btn.textContent = '🗑️ Clear Session Exclusions'; }, 1500);
         };
 
-        // Force re-sync roster (clear the done flag so next page nav re-fires)
         document.getElementById('ev2-clearroster').onclick = () => {
             rosterSyncDone = false;
             const btn = document.getElementById('ev2-clearroster');
             btn.textContent = '✅ Ready — visit competition.php';
-            setTimeout(() => { btn.textContent = '🔄 Re-sync Roster (visit competition.php first)'; }, 2000);
+            setTimeout(() => { btn.textContent = '🔄 Re-sync Roster (visit competition.php)'; }, 2000);
         };
 
         setButtonState('idle');
@@ -524,12 +658,12 @@
             const newUrl = window.location.href;
             if (newUrl !== lastUrl) {
                 lastUrl = newUrl;
-                // Reset hosp-check state on navigation
                 hospCheckDone = false;
             }
             setButtonState('idle');
             syncRosterIfOnCompetitionPage();
             checkAttackScreenForHosp();
+            silentBgSync();
         }, 800);
     }
 
@@ -538,6 +672,7 @@
         buildWidget();
         syncRosterIfOnCompetitionPage();
         checkAttackScreenForHosp();
+        silentBgSync();
 
         const obs = new MutationObserver(onPageChange);
         obs.observe(document.body, { childList: true, subtree: true });

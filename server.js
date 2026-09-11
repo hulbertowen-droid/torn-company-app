@@ -6938,18 +6938,62 @@ app.get('/api/travel-profits', async (req, res) => {
 // ELIMINATION SNIPER API v2 — Elimination-only, no fallbacks
 // =====================================================
 
-// Per-apiKey roster storage + global hospital blacklist
+// =====================================================
+// ELIMINATION SNIPER API v3 — Autonomous Dynamic Target Finder
+// =====================================================
+
+function formatElimStat(num) {
+    if (!num || isNaN(num) || num <= 0) return "0";
+    if (num >= 1e12) return (num / 1e12).toFixed(2) + "T";
+    if (num >= 1e9) return (num / 1e9).toFixed(2) + "B";
+    if (num >= 1e6) return (num / 1e6).toFixed(2) + "M";
+    if (num >= 1e3) return (num / 1e3).toFixed(1) + "k";
+    return String(Math.round(num));
+}
+
+// Per-apiKey roster storage + global hospital blacklist + candidate pool
 const elimState = {
     // Map<apiKey, { members: Set<id>, syncedAt: timestamp }>
     rosters: new Map(),
+    // Shared persistent pool in memory
+    globalPool: new Set(),
     // Map<playerId, expiresAt> — blacklist for hosp/flying players
     hospBlacklist: new Map(),
+    // Map<apiKey, Map<playerId, expiresAt>> — per-user 5m served cooldowns
+    servedCooldowns: new Map()
 };
 
 function elimCleanBlacklist() {
     const now = Date.now();
     for (const [id, exp] of elimState.hospBlacklist.entries()) {
         if (now > exp) elimState.hospBlacklist.delete(id);
+    }
+}
+
+// Add and persist discovered competitors into memory and MongoDB
+async function elimAddCandidates(ids, teamName = null) {
+    if (!ids || ids.length === 0) return;
+    const cleanIds = [];
+    for (const rawId of ids) {
+        const idStr = String(rawId || '').trim();
+        const numId = parseInt(idStr, 10);
+        if (!isNaN(numId) && numId > 0) {
+            elimState.globalPool.add(String(numId));
+            cleanIds.push(numId);
+        }
+    }
+    if (cleanIds.length > 0 && mongoose.connection.readyState === 1) {
+        try {
+            const col = mongoose.connection.db.collection('elim_candidates');
+            const ops = cleanIds.map(id => ({
+                updateOne: {
+                    filter: { _id: id },
+                    update: { $set: { _id: id, team: teamName, updatedAt: new Date() } },
+                    upsert: true
+                }
+            }));
+            await col.bulkWrite(ops, { ordered: false }).catch(() => {});
+        } catch (e) {}
     }
 }
 
@@ -6968,10 +7012,7 @@ app.post('/api/elim/report-hosp', (req, res) => {
     }
 });
 
-
 // POST /api/elim/sync-roster — client sends members scraped from competition.php
-// BUG A FIX: We now resolve the attacker's own faction members and strip them
-// from the pool so you can never be sent to attack a teammate.
 app.post('/api/elim/sync-roster', async (req, res) => {
     try {
         const apiKey  = (req.headers['x-api-key'] || req.body.apiKey || '').trim();
@@ -6983,19 +7024,17 @@ app.post('/api/elim/sync-roster', async (req, res) => {
             return res.status(400).json({ error: 'members array required' });
         }
 
-        // Build raw set of all IDs scraped from the competition page
+        // Build raw set of all IDs scraped from competition
         const rawIds = new Set();
         members.forEach(m => {
             const id = String(m.id || m.playerId || m || '').trim();
             if (id && id !== '0') rawIds.add(id);
         });
 
-        // Resolve the attacker's own faction members via Torn API so we can exclude them
-        // (BUG A: competition page includes YOUR OWN team — we must strip them)
+        // Resolve attacker's own faction members to exclude teammates
         const ownFactionIds = new Set();
         if (myId) ownFactionIds.add(myId);
         try {
-            // Fetch attacker's faction member list
             const fRes = await fetch(
                 `https://api.torn.com/user/?selections=profile&key=${encodeURIComponent(apiKey)}`,
                 { signal: AbortSignal.timeout(5000) }
@@ -7012,146 +7051,198 @@ app.post('/api/elim/sync-roster', async (req, res) => {
                     Object.keys(mData.members).forEach(mid => ownFactionIds.add(String(mid)));
                 }
             }
-        } catch (e) {
-            // If faction lookup fails, we at minimum have myId excluded
-        }
+        } catch (e) {}
 
-        // Strip own faction from the pool — ONLY enemies remain
         const idSet = new Set();
         rawIds.forEach(id => {
             if (!ownFactionIds.has(id)) idSet.add(id);
         });
 
-        if (idSet.size === 0) {
-            return res.json({
-                success: false,
-                message: 'After removing your own faction, no opposing team members remain. Make sure you navigate to an enemy team tab on competition.php before syncing.'
-            });
-        }
-
-        // Store per-apiKey roster (BUG B: isolated per attacker so cooldowns don't cross)
+        // Store per-apiKey roster
         const existing = elimState.rosters.get(apiKey);
         const mergedSet = new Set([...(existing ? existing.members : []), ...idSet]);
         elimState.rosters.set(apiKey, { members: mergedSet, syncedAt: Date.now() });
 
-        res.json({ success: true, memberCount: idSet.size, totalInPool: mergedSet.size, ownFactionStripped: ownFactionIds.size - 1 });
+        // Add to global persistent pool so all future queries benefit
+        elimAddCandidates(Array.from(idSet)).catch(() => {});
+
+        res.json({ success: true, memberCount: idSet.size, totalInPool: mergedSet.size });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
-// GET /api/elim/snipe — returns one confirmed-Okay opponent from the synced roster
+// GET /api/elim/snipe — Autonomous Elimination Target Finder with 0-100 scoring & live verification
 app.get('/api/elim/snipe', async (req, res) => {
     const apiKey = (req.headers['x-api-key'] || req.query.apiKey || '').trim();
     if (!apiKey) return res.status(401).json({ error: 'apiKey required' });
 
-    const tier       = (req.query.tier || 'manageable').toLowerCase();
-    let myId         = String(req.query.myId || '').trim();
+    const tier = (req.query.tier || 'manageable').toLowerCase();
+    let myId   = String(req.query.myId || '').trim();
     const excludeIds = new Set(
         (req.query.exclude || '').split(',').map(s => s.trim()).filter(Boolean)
     );
 
     elimCleanBlacklist();
 
-    // BUG B FIX: Per-apiKey cooldown map instead of global hospBlacklist
-    // hospBlacklist is global by playerId. We isolate the "5-min served" cooldown
-    // per-apiKey so User A's target cooldown doesn't block User B.
-    // The global hospBlacklist still holds hospital/flying blacklists which are
-    // valid globally (if someone is in hospital, they're in hospital for everyone).
     if (!elimState.servedCooldowns) {
-        elimState.servedCooldowns = new Map(); // Map<apiKey, Map<playerId, expiresAt>>
+        elimState.servedCooldowns = new Map();
     }
     let myServed = elimState.servedCooldowns.get(apiKey);
     if (!myServed) {
         myServed = new Map();
         elimState.servedCooldowns.set(apiKey, myServed);
     }
-    // Clean expired per-user cooldowns
     const now = Date.now();
     for (const [id, exp] of myServed.entries()) {
         if (now > exp) myServed.delete(id);
     }
 
     try {
-        // 1. Resolve caller's Torn ID if not supplied
-        if (!myId) {
-            try {
-                const r = await fetch(
-                    `https://api.torn.com/user/?selections=profile&key=${encodeURIComponent(apiKey)}`,
-                    { signal: AbortSignal.timeout(6000) }
-                );
-                const d = await r.json();
-                if (d && d.player_id) myId = String(d.player_id);
-            } catch (e) {}
-        }
+        // ── 1. Dynamically resolve attacker's profile, live battle stats, and team ──
+        let myStats = 0;
+        let attackerName = "Attacker";
+        let attackerStats = { strength: 0, speed: 0, defense: 0, dexterity: 0, total: 0 };
+        let myTeam = "";
+        const ownFactionIds = new Set();
 
-        // 2. Candidate pool ONLY from this user's synced roster
+        try {
+            const userRes = await fetch(
+                `https://api.torn.com/user/?selections=profile,battlestats&key=${encodeURIComponent(apiKey)}`,
+                { signal: AbortSignal.timeout(6000) }
+            );
+            const userData = await userRes.json();
+            if (userData && !userData.error) {
+                if (userData.player_id) myId = String(userData.player_id);
+                if (userData.name) attackerName = userData.name;
+                if (userData.competition && userData.competition.name === 'Elimination') {
+                    myTeam = userData.competition.team || "";
+                }
+                if (typeof userData.strength === 'number') {
+                    attackerStats.strength = userData.strength || 0;
+                    attackerStats.speed = userData.speed || 0;
+                    attackerStats.defense = userData.defense || 0;
+                    attackerStats.dexterity = userData.dexterity || 0;
+                    attackerStats.total = userData.total || (attackerStats.strength + attackerStats.speed + attackerStats.defense + attackerStats.dexterity);
+                    myStats = attackerStats.total;
+                }
+                // Resolve own faction to prevent attacking teammates
+                if (userData.faction && userData.faction.faction_id) {
+                    const fId = userData.faction.faction_id;
+                    try {
+                        const fRes = await fetch(
+                            `https://api.torn.com/faction/${fId}?selections=basic&key=${encodeURIComponent(apiKey)}`,
+                            { signal: AbortSignal.timeout(4000) }
+                        );
+                        const fData = await fRes.json();
+                        if (fData && fData.members) {
+                            Object.keys(fData.members).forEach(mid => ownFactionIds.add(String(mid)));
+                        }
+                    } catch (fe) {}
+                }
+            }
+        } catch (ue) {}
+
+        if (myId) ownFactionIds.add(myId);
+
+        // ── 2. Assemble candidate pool autonomously without requiring page sync ──
+        const candidateSet = new Set();
+
+        // Source A: Synced roster for this specific key
         const rosterEntry = elimState.rosters.get(apiKey);
-        if (!rosterEntry || rosterEntry.members.size === 0) {
-            return res.json({
-                success: false,
-                message: 'No roster synced. Visit competition.php, navigate to an enemy team tab, then the button will auto-sync them.'
-            });
+        if (rosterEntry && rosterEntry.members) {
+            for (const id of rosterEntry.members) candidateSet.add(id);
         }
 
-        let pool = Array.from(rosterEntry.members).filter(id => {
-            if (myId && id === myId) return false;       // Never attack yourself
-            if (excludeIds.has(id)) return false;         // Client-side session exclusion
-            if (elimState.hospBlacklist.has(id)) return false; // Globally hospitalized/flying
-            if (myServed.has(id)) return false;           // Recently served to THIS user
+        // Source B: Global in-memory pool (past syncs & cross-user discoveries)
+        if (elimState.globalPool) {
+            for (const id of elimState.globalPool) candidateSet.add(id);
+        }
+
+        // Source C: MongoDB elim_candidates and active Player collection
+        if (candidateSet.size < 60 && mongoose.connection.readyState === 1) {
+            try {
+                const elimCol = mongoose.connection.db.collection('elim_candidates');
+                const elimDocs = await elimCol.find({}).limit(400).toArray();
+                for (const d of elimDocs) candidateSet.add(String(d._id));
+
+                const playerCol = mongoose.connection.db.collection('players');
+                const playerDocs = await playerCol.find({ status: 'Okay' }).sort({ lastActionTs: -1 }).limit(100).toArray();
+                for (const d of playerDocs) candidateSet.add(String(d._id));
+            } catch (dbErr) {}
+        }
+
+        // Source D: Torn Competition Official Endpoint (Captains & Vice-Captains of 12 Teams)
+        if (candidateSet.size < 40) {
+            try {
+                const compRes = await fetch(
+                    `https://api.torn.com/torn/?selections=competition&key=${encodeURIComponent(apiKey)}`,
+                    { signal: AbortSignal.timeout(5000) }
+                );
+                const compData = await compRes.json();
+                if (compData && compData.competition && Array.isArray(compData.competition.teams)) {
+                    const foundCaptains = [];
+                    for (const t of compData.competition.teams) {
+                        if (myTeam && t.name && t.name.toLowerCase() === myTeam.toLowerCase()) continue;
+                        if (t.captain) {
+                            candidateSet.add(String(t.captain));
+                            foundCaptains.push(t.captain);
+                        }
+                        if (Array.isArray(t.vice_captains)) {
+                            t.vice_captains.forEach(vc => {
+                                candidateSet.add(String(vc));
+                                foundCaptains.push(vc);
+                            });
+                        }
+                    }
+                    elimAddCandidates(foundCaptains).catch(() => {});
+                }
+            } catch (ce) {}
+        }
+
+        // Filter out self, teammates, session exclusions, and known blacklists
+        let pool = Array.from(candidateSet).filter(id => {
+            if (!id || id === '0') return false;
+            if (myId && id === myId) return false;                  // Never attack yourself
+            if (ownFactionIds.has(id)) return false;                // Protect faction teammates
+            if (excludeIds.has(id)) return false;                   // Session exclusion
+            if (elimState.hospBlacklist.has(id)) return false;       // Hospitalized / traveling / jailed
+            if (myServed.has(id)) return false;                     // Recently served to this user (5m cooldown)
             return true;
         });
 
         if (pool.length === 0) {
             return res.json({
                 success: false,
-                message: 'All roster members are excluded or on cooldown. Clear session exclusions or wait a few minutes.'
+                message: 'All scanned candidates are currently on cooldown or in hospital. Please wait a moment or clear session exclusions.'
             });
         }
 
-        // Shuffle so repeated clicks cycle through different targets
+        // Shuffle so repeat clicks explore different candidates
         for (let i = pool.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [pool[i], pool[j]] = [pool[j], pool[i]];
         }
-        const batch = pool.slice(0, 30);
+        const batch = pool.slice(0, 35);
 
-        // 3. Get attacker's battle stats for FF fallback calculation only
-        //    (FF Scouter returns fair_fight already calibrated to the attacker's key)
-        let myStats = 0;
-        try {
-            const r = await fetch(
-                `https://api.torn.com/user/?selections=battlestats&key=${encodeURIComponent(apiKey)}`,
-                { signal: AbortSignal.timeout(5000) }
-            );
-            const d = await r.json();
-            // Torn API returns strength, speed, defense, dexterity individually
-            if (d && typeof d.strength === 'number') {
-                myStats = (d.strength || 0) + (d.speed || 0) + (d.defense || 0) + (d.dexterity || 0);
-            }
-        } catch (e) {}
+        // ── 3. Batch query FF Scouter for live Fair Fight & Battle Stat estimates ──
+        const ffStats = new Map();
+        let ffScouterFailed = false;
 
-        // 4. Batch-fetch FF Scouter stats
-        //    FF Scouter's fair_fight field is already relative to the attacker whose key is used.
-        //    We use bs_estimate only as a fallback to calculate ff ourselves if fair_fight is absent.
-        const ffStats = new Map(); // Map<playerId_string, { ff: number|null, bs: number }>
-        let ffSouterFailed = false;
         try {
             const ffUrl = `https://ffscouter.com/api/v1/get-stats?key=${encodeURIComponent(apiKey)}&targets=${batch.join(',')}`;
             const r = await fetch(ffUrl, { signal: AbortSignal.timeout(7000) });
             if (!r.ok) {
-                ffSouterFailed = true;
+                ffScouterFailed = true;
             } else {
                 const d = await r.json();
                 if (Array.isArray(d)) {
                     d.forEach(p => {
-                        // Validate that the returned object has a player_id that we actually requested
                         const rawId = p.player_id || p.id;
-                        if (!rawId) return; // Skip entries with no ID — BUG: ID mismatch guard
+                        if (!rawId) return;
                         const id = String(rawId);
-                        if (!batch.includes(id)) return; // Only accept IDs we asked for
+                        if (!batch.includes(id)) return;
 
-                        // Extract fair_fight — null if truly absent, NOT defaulted to 0
                         let ff = null;
                         if (p.fair_fight != null && !isNaN(Number(p.fair_fight))) {
                             ff = Number(p.fair_fight);
@@ -7159,138 +7250,226 @@ app.get('/api/elim/snipe', async (req, res) => {
                             ff = Number(p.ff);
                         }
 
-                        // Extract bs_estimate — only use for fallback FF calculation
                         const bs = (p.bs_estimate != null && !isNaN(Number(p.bs_estimate)))
-                            ? Number(p.bs_estimate) : 0;
+                            ? Number(p.bs_estimate) : (Number(p.battlestats) || 0);
 
-                        // Fallback FF from bs_estimate only if:
-                        // (a) fair_fight was not provided by FF Scouter, AND
-                        // (b) we have a valid bs_estimate, AND
-                        // (c) we know our own stats
-                        // Formula: FF = 1 + (8/3) * (targetStats / attackerStats)
+                        // Fallback FF calculation: FF = 1 + (8/3) * (Target BS / Attacker BS)
                         if (ff === null && bs > 0 && myStats > 0) {
                             ff = parseFloat((1 + (8 / 3) * (bs / myStats)).toFixed(2));
                         }
 
-                        // Only store if we have at least some data — don't store { ff: null, bs: 0 }
-                        // as that would look like "no data" and might cause filtering issues
                         if (ff !== null || bs > 0) {
-                            ffStats.set(id, { ff, bs });
+                            ffStats.set(id, { ff, bs, distribution: p.distribution });
                         }
-                        // If ff is still null and bs is 0, we intentionally don't store —
-                        // the player will be treated as "no FF data" and excluded from non-'all' tiers
                     });
                 } else {
-                    ffSouterFailed = true;
+                    ffScouterFailed = true;
                 }
             }
-        } catch (e) {
-            ffSouterFailed = true;
+        } catch (ffe) {
+            ffScouterFailed = true;
         }
 
-        // If FF Scouter completely failed AND tier isn't 'all', we cannot evaluate anyone
-        if (ffSouterFailed && tier !== 'all') {
-            return res.json({
-                success: false,
-                message: 'FF Scouter is unavailable. Switch to "All Tiers" in Settings to attack without FF filtering, or try again shortly.'
-            });
-        }
-
-        // 5. Filter by FF tier
-        //    Players with no FF data are EXCLUDED from all tiers except 'all'
-        //    This prevents a player with missing data from appearing as if they're a good match
+        // ── 4. Filter candidates by realistic hittability against current user's stats ──
         const tierPass = batch.filter(id => {
             const s = ffStats.get(id);
-
-            // No FF Scouter data at all for this player
             if (!s || s.ff === null || isNaN(s.ff)) {
-                return tier === 'all'; // Only include unknowns when user explicitly wants everyone
+                return tier === 'all';
             }
 
             const ff = s.ff;
-            if (tier === 'easy')       return ff < 3.0;
-            if (tier === 'manageable') return ff <= 3.8;
-            if (tier === 'difficult')  return ff <= 4.5;
+            const bs = s.bs || 0;
+            const ratio = (myStats > 0 && bs > 0) ? (bs / myStats) : (ff ? (ff - 1) * (3 / 8) : 1);
+
+            if (tier === 'easy') {
+                return ff < 3.0 && ratio <= 0.85;
+            }
+            if (tier === 'manageable') {
+                return ff <= 3.8 && ratio <= 1.25;
+            }
+            if (tier === 'difficult') {
+                return ff <= 4.5 && ratio <= 1.65;
+            }
             return true; // 'all'
         });
 
         if (tierPass.length === 0) {
             return res.json({
                 success: false,
-                message: ffSouterFailed
-                    ? 'FF Scouter unavailable and no cached data. Try "All Tiers" or wait.'
-                    : 'No roster members have a Fair Fight score within your tier. Try raising the tier in Settings.'
+                message: ffScouterFailed
+                    ? 'FF Scouter is temporarily unavailable. Try "All Tiers" in Settings or wait a moment.'
+                    : `No candidates matched your Fair Fight tier (${tier}) against your current stats (~${formatElimStat(myStats)}). Try raising tier in Settings.`
             });
         }
 
-        // Sort by FF ascending (easiest/best matchup for this attacker first)
-        // Players with no FF data sort last (ff = null → 99 sentinel)
-        tierPass.sort((a, b) => {
-            const ffA = ffStats.get(a)?.ff ?? 99;
-            const ffB = ffStats.get(b)?.ff ?? 99;
-            return ffA - ffB;
-        });
+        // ── 5. Target Scoring System (0 to 100 ranking) ──
+        const scoredCandidates = [];
+        for (const targetId of tierPass) {
+            const s = ffStats.get(targetId) || { ff: null, bs: 0 };
+            const targetBS = s.bs || 0;
+            const ratio = (myStats > 0 && targetBS > 0) ? (targetBS / myStats) : (s.ff ? (s.ff - 1) * (3 / 8) : 1.0);
+            const ff = s.ff != null ? s.ff : parseFloat((1 + (8 / 3) * ratio).toFixed(2));
 
-        // 6. Live-verify each candidate — ONLY return one with state === 'okay' (case-insensitive)
-        //    BUG F FIX: Use an explicit allowlist. Only 'okay' is attackable.
-        //    ANY other state (hospital, jail, federal, traveling, abroad, dead, eliminated,
-        //    or any unknown future state) must be skipped.
-        const OKAY_STATE = 'okay';
+            let baseScore = 50;
+            let difficulty = "Manageable";
+            let risk = "Medium";
 
-        for (const targetId of tierPass.slice(0, 10)) {
+            // Optimal elimination range: 0.4x - 0.85x user stats (safe win, high competition points)
+            if (ratio >= 0.35 && ratio <= 0.85) {
+                baseScore = 95 - Math.round(Math.abs(ratio - 0.65) * 20);
+                difficulty = "Comfortably Hittable";
+                risk = "Low";
+            } else if (ratio < 0.35) {
+                baseScore = 80 + Math.round(ratio * 25);
+                difficulty = "Very Easy";
+                risk = "Very Low";
+            } else if (ratio > 0.85 && ratio <= 1.15) {
+                baseScore = 86 - Math.round((ratio - 0.85) * 25);
+                difficulty = "Competitive / Even";
+                risk = "Medium";
+            } else if (ratio > 1.15 && ratio <= 1.45) {
+                baseScore = 68 - Math.round((ratio - 1.15) * 30);
+                difficulty = "Borderline";
+                risk = "Medium / High";
+            } else if (ratio > 1.45 && ratio <= 1.80) {
+                baseScore = 48 - Math.round((ratio - 1.45) * 35);
+                difficulty = "Challenging / Risky";
+                risk = "High";
+            } else {
+                baseScore = 20;
+                difficulty = "Too Strong";
+                risk = "Extreme";
+            }
+
+            const score = Math.min(99, Math.max(15, baseScore));
+
+            scoredCandidates.push({
+                id: targetId,
+                ff,
+                bs: targetBS,
+                ratio,
+                score,
+                difficulty,
+                risk
+            });
+        }
+
+        // Sort descending by score: highest-ranking, most viable candidate tried first
+        scoredCandidates.sort((a, b) => b.score - a.score);
+
+        // ── 6. Live Status Verification (Exclude Hospital, Flying, Jail) ──
+        let chosenTarget = null;
+        let checkedCount = 0;
+        let hospCount = 0;
+        let flyCount = 0;
+
+        for (const cand of scoredCandidates.slice(0, 12)) {
+            checkedCount++;
             let prof;
             try {
                 const r = await fetch(
-                    `https://api.torn.com/user/${targetId}?selections=profile&key=${encodeURIComponent(apiKey)}`,
+                    `https://api.torn.com/user/${cand.id}?selections=profile&key=${encodeURIComponent(apiKey)}`,
                     { signal: AbortSignal.timeout(5000) }
                 );
                 prof = await r.json();
             } catch (e) {
-                // Network error — don't return this player unverified, skip them
                 continue;
             }
 
-            // Torn API error response (e.g. invalid player ID, rate limit)
             if (!prof || prof.error || !prof.status) continue;
 
-            const rawState  = prof.status.state || '';
-            const state     = rawState.toLowerCase();
+            const rawState = prof.status.state || '';
+            const state = rawState.toLowerCase();
 
-            // Only 'okay' is attackable — everything else is a skip
-            if (state !== OKAY_STATE) {
-                // Determine blacklist duration based on state
-                if (state === 'hospital' || state === 'jail' || state === 'federal') {
-                    elimState.hospBlacklist.set(targetId, Date.now() + 20 * 60 * 1000);
-                } else if (state === 'traveling' || state === 'abroad') {
-                    // Flying: blacklist for 3 hours (typical minimum flight time)
-                    elimState.hospBlacklist.set(targetId, Date.now() + 180 * 60 * 1000);
-                } else {
-                    // Unknown/unexpected state (dead, eliminated, etc.)
-                    // Blacklist for 30 minutes so we don't hammer API on this player
-                    elimState.hospBlacklist.set(targetId, Date.now() + 30 * 60 * 1000);
-                }
+            // A. Hospital check
+            if (state === 'hospital') {
+                hospCount++;
+                const durationMins = prof.status.until ? Math.max(5, Math.ceil((prof.status.until * 1000 - Date.now()) / 60000)) : 20;
+                elimState.hospBlacklist.set(cand.id, Date.now() + durationMins * 60 * 1000);
                 continue;
             }
 
-            // ✅ Player is confirmed Okay by Torn API
-            // Apply per-user 5-min served cooldown (BUG B fix — not global)
-            myServed.set(targetId, Date.now() + 5 * 60 * 1000);
+            // B. Flying / Traveling / Abroad check
+            if (state === 'traveling' || state === 'abroad') {
+                flyCount++;
+                const durationMins = prof.status.until ? Math.max(15, Math.ceil((prof.status.until * 1000 - Date.now()) / 60000)) : 120;
+                elimState.hospBlacklist.set(cand.id, Date.now() + durationMins * 60 * 1000);
+                continue;
+            }
 
-            const s = ffStats.get(targetId);
-            return res.json({
+            // Jail / Federal check
+            if (state === 'jail' || state === 'federal') {
+                elimState.hospBlacklist.set(cand.id, Date.now() + 30 * 60 * 1000);
+                continue;
+            }
+
+            // Only state === 'okay' is attackable
+            if (state !== 'okay') {
+                elimState.hospBlacklist.set(cand.id, Date.now() + 20 * 60 * 1000);
+                continue;
+            }
+
+            // Confirmed Okay — apply 5-minute per-user served cooldown
+            myServed.set(cand.id, Date.now() + 5 * 60 * 1000);
+
+            const targetBSHuman = cand.bs > 0 ? formatElimStat(cand.bs) : 'Unknown';
+            const attackerBSHuman = myStats > 0 ? formatElimStat(myStats) : 'Unknown';
+
+            let bsBullet = "Fair Fight score indicates a favorable target matchup";
+            if (cand.bs > 0) {
+                if (cand.ratio <= 0.85) {
+                    bsBullet = `Battle stats (~${targetBSHuman}) are comfortably within your realistic attacking range (${attackerBSHuman})`;
+                } else if (cand.ratio <= 1.25) {
+                    bsBullet = `Battle stats (~${targetBSHuman}) provide an even, competitive matchup against your ${attackerBSHuman}`;
+                } else if (cand.ratio <= 1.65) {
+                    bsBullet = `Battle stats (~${targetBSHuman}) are challenging but potentially hittable against your ${attackerBSHuman}`;
+                } else {
+                    bsBullet = `Target battle stats (~${targetBSHuman}) exceed standard range (${attackerBSHuman}) — caution advised`;
+                }
+            }
+
+            const why = [
+                "Available to attack (confirmed Okay in Torn City)",
+                "Not hospitalized",
+                "Not traveling or overseas",
+                bsBullet,
+                `Scored ${cand.score}/100 (${cand.difficulty}) — ranked best among ${scoredCandidates.length} evaluated candidates`
+            ];
+
+            chosenTarget = {
                 success: true,
-                targetId,
-                name: prof.name || `Player #${targetId}`,
-                ff: (s && s.ff !== null) ? s.ff : null,
-                bs: (s && s.bs > 0) ? s.bs : null,
-                state: rawState   // Return the original capitalized state from Torn
+                targetId: cand.id,
+                name: prof.name || `Player #${cand.id}`,
+                level: prof.level || 1,
+                status: "Available (Okay)",
+                travel: "In Torn City (Not flying)",
+                targetBS: cand.bs,
+                targetBSHuman,
+                attackerBS: myStats,
+                attackerBSHuman,
+                ff: cand.ff,
+                difficulty: cand.difficulty,
+                risk: cand.risk,
+                score: cand.score,
+                why
+            };
+            break;
+        }
+
+        if (chosenTarget) {
+            return res.json(chosenTarget);
+        }
+
+        if (hospCount + flyCount === checkedCount && checkedCount > 0) {
+            return res.json({
+                success: false,
+                message: `All ${checkedCount} evaluated targets are currently in hospital (${hospCount}) or flying (${flyCount}). Retrying with fresh targets...`
             });
         }
 
-        // All candidates we checked were unavailable
         return res.json({
             success: false,
-            message: 'All checked targets are unavailable (hospital/flying/eliminated). Try again in a moment.'
+            message: 'No available targets passed live verification. Please try again in a few seconds.'
         });
 
     } catch (err) {
