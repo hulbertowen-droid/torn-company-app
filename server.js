@@ -6951,15 +6951,15 @@ function formatElimStat(num) {
     return String(Math.round(num));
 }
 
-// Per-apiKey roster storage + global hospital blacklist + candidate pool
+// Multi-user roster storage + global hospital blacklist + shared candidate pool
 const elimState = {
-    // Map<apiKey, { members: Set<id>, syncedAt: timestamp }>
+    // Map<userKeyId, { members: Set<id>, syncedAt: timestamp }>
     rosters: new Map(),
     // Shared persistent pool in memory
     globalPool: new Set(),
     // Map<playerId, expiresAt> — blacklist for hosp/flying players
     hospBlacklist: new Map(),
-    // Map<apiKey, Map<playerId, expiresAt>> — per-user 5m served cooldowns
+    // Map<userKeyId, Map<playerId, expiresAt>> — per-user 5m served cooldowns
     servedCooldowns: new Map()
 };
 
@@ -7012,14 +7012,31 @@ app.post('/api/elim/report-hosp', (req, res) => {
     }
 });
 
-// POST /api/elim/sync-roster — client sends members scraped from competition.php
+// // POST /api/elim/sync-roster — client sends members scraped from competition.php
 app.post('/api/elim/sync-roster', async (req, res) => {
     try {
-        const apiKey  = (req.headers['x-api-key'] || req.body.apiKey || '').trim();
+        let apiKey    = (req.headers['x-api-key'] || req.body.apiKey || '').trim();
+        const tornId  = (req.headers['x-torn-id'] || req.body.tornId || '').trim();
+        const discordId = (req.headers['x-discord-id'] || req.body.discordId || '').trim();
         const members = req.body.members; // [{ id, name }]
-        const myId    = String(req.body.myId || '').trim();
+        const myId    = String(req.body.myId || tornId || '').trim();
 
-        if (!apiKey) return res.status(401).json({ error: 'apiKey required' });
+        if (!apiKey && tornId) {
+            const resolved = userKeys.resolveUserApiKeyByTornId(tornId);
+            if (resolved) apiKey = resolved.key;
+        }
+        if (!apiKey && discordId) {
+            const resolved = userKeys.resolveUserApiKey(discordId);
+            if (resolved) apiKey = resolved.key;
+        }
+
+        if (!apiKey) {
+            return res.status(401).json({
+                error: 'apiKey required',
+                code: 'ACCOUNT_NOT_CONNECTED',
+                message: 'Please link your Torn Limited API key to sync competition rosters.'
+            });
+        }
         if (!Array.isArray(members) || members.length === 0) {
             return res.status(400).json({ error: 'members array required' });
         }
@@ -7058,423 +7075,526 @@ app.post('/api/elim/sync-roster', async (req, res) => {
             if (!ownFactionIds.has(id)) idSet.add(id);
         });
 
-        // Store per-apiKey roster
-        const existing = elimState.rosters.get(apiKey);
+        // Store per-user roster (keyed by user ID, not raw API key)
+        const userKeyId = tornId ? `torn:${tornId}` : (discordId ? `discord:${discordId}` : `key:${crypto.createHash('sha256').update(apiKey).digest('hex').slice(0, 16)}`);
+        const existing = elimState.rosters.get(userKeyId);
         const mergedSet = new Set([...(existing ? existing.members : []), ...idSet]);
-        elimState.rosters.set(apiKey, { members: mergedSet, syncedAt: Date.now() });
+        elimState.rosters.set(userKeyId, { members: mergedSet, syncedAt: Date.now() });
 
         // Add to global persistent pool so all future queries benefit
         elimAddCandidates(Array.from(idSet)).catch(() => {});
 
         res.json({ success: true, memberCount: idSet.size, totalInPool: mergedSet.size });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        res.status(500).json({ error: userKeys.sanitizeErrorMessage(e.message) });
     }
 });
 
-// GET /api/elim/snipe — Autonomous Elimination Target Finder with 0-100 scoring & live verification
-app.get('/api/elim/snipe', async (req, res) => {
-    const apiKey = (req.headers['x-api-key'] || req.query.apiKey || '').trim();
-    if (!apiKey) return res.status(401).json({ error: 'apiKey required' });
-
-    const tier = (req.query.tier || 'manageable').toLowerCase();
-    let myId   = String(req.query.myId || '').trim();
-    const excludeIds = new Set(
-        (req.query.exclude || '').split(',').map(s => s.trim()).filter(Boolean)
-    );
+/**
+ * Reusable Core Engine: Autonomous Elimination Target Finder
+ * Evaluates live hittability tailored to the requesting user's actual battle stats.
+ * 
+ * @param {object} opts
+ * @param {string} opts.apiKey - Requesting user's live Torn Limited API key
+ * @param {string} opts.userId - User identifier (Discord ID or Torn ID) for isolated cooldowns
+ * @param {string} opts.tier - 'easy' | 'manageable' | 'difficult' | 'all'
+ * @param {Set|Array|string} opts.excludeIds - IDs to exclude from this lookup
+ * @returns {Promise<object>}
+ */
+async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'manageable', excludeIds = new Set() }) {
+    if (!apiKey) {
+        return {
+            success: false,
+            code: 'ACCOUNT_NOT_CONNECTED',
+            message: 'Torn Account Not Connected. Please link your Torn Limited API key to find targets tailored to your battle stats.'
+        };
+    }
 
     elimCleanBlacklist();
 
+    // Isolated per-user served cooldowns (5-minute window per target per user)
+    const userKeyId = String(userId || crypto.createHash('sha256').update(apiKey).digest('hex').slice(0, 16));
     if (!elimState.servedCooldowns) {
         elimState.servedCooldowns = new Map();
     }
-    let myServed = elimState.servedCooldowns.get(apiKey);
+    let myServed = elimState.servedCooldowns.get(userKeyId);
     if (!myServed) {
         myServed = new Map();
-        elimState.servedCooldowns.set(apiKey, myServed);
+        elimState.servedCooldowns.set(userKeyId, myServed);
     }
     const now = Date.now();
     for (const [id, exp] of myServed.entries()) {
         if (now > exp) myServed.delete(id);
     }
 
+    const cleanTier = String(tier || 'manageable').toLowerCase().trim();
+    const excludeSet = excludeIds instanceof Set
+        ? excludeIds
+        : new Set(Array.isArray(excludeIds) ? excludeIds : String(excludeIds).split(',').map(s => s.trim()).filter(Boolean));
+
+    // ── 1. Dynamically resolve requesting user's profile, live battle stats, and team ──
+    let myId = '';
+    let myStats = 0;
+    let attackerName = "Attacker";
+    let attackerStats = { strength: 0, speed: 0, defense: 0, dexterity: 0, total: 0 };
+    let myTeam = "";
+    const ownFactionIds = new Set();
+
     try {
-        // ── 1. Dynamically resolve attacker's profile, live battle stats, and team ──
-        let myStats = 0;
-        let attackerName = "Attacker";
-        let attackerStats = { strength: 0, speed: 0, defense: 0, dexterity: 0, total: 0 };
-        let myTeam = "";
-        const ownFactionIds = new Set();
-
-        try {
-            const userRes = await fetch(
-                `https://api.torn.com/user/?selections=profile,battlestats&key=${encodeURIComponent(apiKey)}`,
-                { signal: AbortSignal.timeout(6000) }
-            );
-            const userData = await userRes.json();
-            if (userData && !userData.error) {
-                if (userData.player_id) myId = String(userData.player_id);
-                if (userData.name) attackerName = userData.name;
-                if (userData.competition && userData.competition.name === 'Elimination') {
-                    myTeam = userData.competition.team || "";
-                }
-                if (typeof userData.strength === 'number') {
-                    attackerStats.strength = userData.strength || 0;
-                    attackerStats.speed = userData.speed || 0;
-                    attackerStats.defense = userData.defense || 0;
-                    attackerStats.dexterity = userData.dexterity || 0;
-                    attackerStats.total = userData.total || (attackerStats.strength + attackerStats.speed + attackerStats.defense + attackerStats.dexterity);
-                    myStats = attackerStats.total;
-                }
-                // Resolve own faction to prevent attacking teammates
-                if (userData.faction && userData.faction.faction_id) {
-                    const fId = userData.faction.faction_id;
-                    try {
-                        const fRes = await fetch(
-                            `https://api.torn.com/faction/${fId}?selections=basic&key=${encodeURIComponent(apiKey)}`,
-                            { signal: AbortSignal.timeout(4000) }
-                        );
-                        const fData = await fRes.json();
-                        if (fData && fData.members) {
-                            Object.keys(fData.members).forEach(mid => ownFactionIds.add(String(mid)));
-                        }
-                    } catch (fe) {}
-                }
+        const userRes = await fetch(
+            `https://api.torn.com/user/?selections=profile,battlestats&key=${encodeURIComponent(apiKey)}`,
+            { signal: AbortSignal.timeout(6000) }
+        );
+        const userData = await userRes.json();
+        if (userData && !userData.error) {
+            if (userData.player_id) myId = String(userData.player_id);
+            if (userData.name) attackerName = userData.name;
+            if (userData.competition && userData.competition.name === 'Elimination') {
+                myTeam = userData.competition.team || "";
             }
-        } catch (ue) {}
-
-        if (myId) ownFactionIds.add(myId);
-
-        // ── 2. Assemble candidate pool autonomously without requiring page sync ──
-        const candidateSet = new Set();
-
-        // Source A: Synced roster for this specific key
-        const rosterEntry = elimState.rosters.get(apiKey);
-        if (rosterEntry && rosterEntry.members) {
-            for (const id of rosterEntry.members) candidateSet.add(id);
-        }
-
-        // Source B: Global in-memory pool (past syncs & cross-user discoveries)
-        if (elimState.globalPool) {
-            for (const id of elimState.globalPool) candidateSet.add(id);
-        }
-
-        // Source C: MongoDB elim_candidates and active Player collection
-        if (candidateSet.size < 60 && mongoose.connection.readyState === 1) {
-            try {
-                const elimCol = mongoose.connection.db.collection('elim_candidates');
-                const elimDocs = await elimCol.find({}).limit(400).toArray();
-                for (const d of elimDocs) candidateSet.add(String(d._id));
-
-                const playerCol = mongoose.connection.db.collection('players');
-                const playerDocs = await playerCol.find({ status: 'Okay' }).sort({ lastActionTs: -1 }).limit(100).toArray();
-                for (const d of playerDocs) candidateSet.add(String(d._id));
-            } catch (dbErr) {}
-        }
-
-        // Source D: Torn Competition Official Endpoint (Captains & Vice-Captains of 12 Teams)
-        if (candidateSet.size < 40) {
-            try {
-                const compRes = await fetch(
-                    `https://api.torn.com/torn/?selections=competition&key=${encodeURIComponent(apiKey)}`,
-                    { signal: AbortSignal.timeout(5000) }
-                );
-                const compData = await compRes.json();
-                if (compData && compData.competition && Array.isArray(compData.competition.teams)) {
-                    const foundCaptains = [];
-                    for (const t of compData.competition.teams) {
-                        if (myTeam && t.name && t.name.toLowerCase() === myTeam.toLowerCase()) continue;
-                        if (t.captain) {
-                            candidateSet.add(String(t.captain));
-                            foundCaptains.push(t.captain);
-                        }
-                        if (Array.isArray(t.vice_captains)) {
-                            t.vice_captains.forEach(vc => {
-                                candidateSet.add(String(vc));
-                                foundCaptains.push(vc);
-                            });
-                        }
+            if (typeof userData.strength === 'number') {
+                attackerStats.strength = userData.strength || 0;
+                attackerStats.speed = userData.speed || 0;
+                attackerStats.defense = userData.defense || 0;
+                attackerStats.dexterity = userData.dexterity || 0;
+                attackerStats.total = userData.total || (attackerStats.strength + attackerStats.speed + attackerStats.defense + attackerStats.dexterity);
+                myStats = attackerStats.total;
+            }
+            // Resolve own faction to prevent targeting teammates
+            if (userData.faction && userData.faction.faction_id) {
+                const fId = userData.faction.faction_id;
+                try {
+                    const fRes = await fetch(
+                        `https://api.torn.com/faction/${fId}?selections=basic&key=${encodeURIComponent(apiKey)}`,
+                        { signal: AbortSignal.timeout(4000) }
+                    );
+                    const fData = await fRes.json();
+                    if (fData && fData.members) {
+                        Object.keys(fData.members).forEach(mid => ownFactionIds.add(String(mid)));
                     }
-                    elimAddCandidates(foundCaptains).catch(() => {});
-                }
-            } catch (ce) {}
-        }
-
-        // Filter out self, teammates, session exclusions, and known blacklists
-        let pool = Array.from(candidateSet).filter(id => {
-            if (!id || id === '0') return false;
-            if (myId && id === myId) return false;                  // Never attack yourself
-            if (ownFactionIds.has(id)) return false;                // Protect faction teammates
-            if (excludeIds.has(id)) return false;                   // Session exclusion
-            if (elimState.hospBlacklist.has(id)) return false;       // Hospitalized / traveling / jailed
-            if (myServed.has(id)) return false;                     // Recently served to this user (5m cooldown)
-            return true;
-        });
-
-        if (pool.length === 0) {
-            return res.json({
+                } catch (fe) {}
+            }
+        } else if (userData && userData.error) {
+            return {
                 success: false,
-                message: 'All scanned candidates are currently on cooldown or in hospital. Please wait a moment or clear session exclusions.'
-            });
-        }
-
-        // Shuffle so repeat clicks explore different candidates
-        for (let i = pool.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [pool[i], pool[j]] = [pool[j], pool[i]];
-        }
-        const batch = pool.slice(0, 35);
-
-        // ── 3. Batch query FF Scouter for live Fair Fight & Battle Stat estimates ──
-        const ffStats = new Map();
-        let ffScouterFailed = false;
-
-        try {
-            const ffUrl = `https://ffscouter.com/api/v1/get-stats?key=${encodeURIComponent(apiKey)}&targets=${batch.join(',')}`;
-            const r = await fetch(ffUrl, { signal: AbortSignal.timeout(7000) });
-            if (!r.ok) {
-                ffScouterFailed = true;
-            } else {
-                const d = await r.json();
-                if (Array.isArray(d)) {
-                    d.forEach(p => {
-                        const rawId = p.player_id || p.id;
-                        if (!rawId) return;
-                        const id = String(rawId);
-                        if (!batch.includes(id)) return;
-
-                        let ff = null;
-                        if (p.fair_fight != null && !isNaN(Number(p.fair_fight))) {
-                            ff = Number(p.fair_fight);
-                        } else if (p.ff != null && !isNaN(Number(p.ff))) {
-                            ff = Number(p.ff);
-                        }
-
-                        const bs = (p.bs_estimate != null && !isNaN(Number(p.bs_estimate)))
-                            ? Number(p.bs_estimate) : (Number(p.battlestats) || 0);
-
-                        // Fallback FF calculation: FF = 1 + (8/3) * (Target BS / Attacker BS)
-                        if (ff === null && bs > 0 && myStats > 0) {
-                            ff = parseFloat((1 + (8 / 3) * (bs / myStats)).toFixed(2));
-                        }
-
-                        if (ff !== null || bs > 0) {
-                            ffStats.set(id, { ff, bs, distribution: p.distribution });
-                        }
-                    });
-                } else {
-                    ffScouterFailed = true;
-                }
-            }
-        } catch (ffe) {
-            ffScouterFailed = true;
-        }
-
-        // ── 4. Filter candidates by realistic hittability against current user's stats ──
-        const tierPass = batch.filter(id => {
-            const s = ffStats.get(id);
-            if (!s || s.ff === null || isNaN(s.ff)) {
-                return tier === 'all';
-            }
-
-            const ff = s.ff;
-            const bs = s.bs || 0;
-            const ratio = (myStats > 0 && bs > 0) ? (bs / myStats) : (ff ? (ff - 1) * (3 / 8) : 1);
-
-            if (tier === 'easy') {
-                return ff < 3.0 && ratio <= 0.85;
-            }
-            if (tier === 'manageable') {
-                return ff <= 3.8 && ratio <= 1.25;
-            }
-            if (tier === 'difficult') {
-                return ff <= 4.5 && ratio <= 1.65;
-            }
-            return true; // 'all'
-        });
-
-        if (tierPass.length === 0) {
-            return res.json({
-                success: false,
-                message: ffScouterFailed
-                    ? 'FF Scouter is temporarily unavailable. Try "All Tiers" in Settings or wait a moment.'
-                    : `No candidates matched your Fair Fight tier (${tier}) against your current stats (~${formatElimStat(myStats)}). Try raising tier in Settings.`
-            });
-        }
-
-        // ── 5. Target Scoring System (0 to 100 ranking) ──
-        const scoredCandidates = [];
-        for (const targetId of tierPass) {
-            const s = ffStats.get(targetId) || { ff: null, bs: 0 };
-            const targetBS = s.bs || 0;
-            const ratio = (myStats > 0 && targetBS > 0) ? (targetBS / myStats) : (s.ff ? (s.ff - 1) * (3 / 8) : 1.0);
-            const ff = s.ff != null ? s.ff : parseFloat((1 + (8 / 3) * ratio).toFixed(2));
-
-            let baseScore = 50;
-            let difficulty = "Manageable";
-            let risk = "Medium";
-
-            // Optimal elimination range: 0.4x - 0.85x user stats (safe win, high competition points)
-            if (ratio >= 0.35 && ratio <= 0.85) {
-                baseScore = 95 - Math.round(Math.abs(ratio - 0.65) * 20);
-                difficulty = "Comfortably Hittable";
-                risk = "Low";
-            } else if (ratio < 0.35) {
-                baseScore = 80 + Math.round(ratio * 25);
-                difficulty = "Very Easy";
-                risk = "Very Low";
-            } else if (ratio > 0.85 && ratio <= 1.15) {
-                baseScore = 86 - Math.round((ratio - 0.85) * 25);
-                difficulty = "Competitive / Even";
-                risk = "Medium";
-            } else if (ratio > 1.15 && ratio <= 1.45) {
-                baseScore = 68 - Math.round((ratio - 1.15) * 30);
-                difficulty = "Borderline";
-                risk = "Medium / High";
-            } else if (ratio > 1.45 && ratio <= 1.80) {
-                baseScore = 48 - Math.round((ratio - 1.45) * 35);
-                difficulty = "Challenging / Risky";
-                risk = "High";
-            } else {
-                baseScore = 20;
-                difficulty = "Too Strong";
-                risk = "Extreme";
-            }
-
-            const score = Math.min(99, Math.max(15, baseScore));
-
-            scoredCandidates.push({
-                id: targetId,
-                ff,
-                bs: targetBS,
-                ratio,
-                score,
-                difficulty,
-                risk
-            });
-        }
-
-        // Sort descending by score: highest-ranking, most viable candidate tried first
-        scoredCandidates.sort((a, b) => b.score - a.score);
-
-        // ── 6. Live Status Verification (Exclude Hospital, Flying, Jail) ──
-        let chosenTarget = null;
-        let checkedCount = 0;
-        let hospCount = 0;
-        let flyCount = 0;
-
-        for (const cand of scoredCandidates.slice(0, 12)) {
-            checkedCount++;
-            let prof;
-            try {
-                const r = await fetch(
-                    `https://api.torn.com/user/${cand.id}?selections=profile&key=${encodeURIComponent(apiKey)}`,
-                    { signal: AbortSignal.timeout(5000) }
-                );
-                prof = await r.json();
-            } catch (e) {
-                continue;
-            }
-
-            if (!prof || prof.error || !prof.status) continue;
-
-            const rawState = prof.status.state || '';
-            const state = rawState.toLowerCase();
-
-            // A. Hospital check
-            if (state === 'hospital') {
-                hospCount++;
-                const durationMins = prof.status.until ? Math.max(5, Math.ceil((prof.status.until * 1000 - Date.now()) / 60000)) : 20;
-                elimState.hospBlacklist.set(cand.id, Date.now() + durationMins * 60 * 1000);
-                continue;
-            }
-
-            // B. Flying / Traveling / Abroad check
-            if (state === 'traveling' || state === 'abroad') {
-                flyCount++;
-                const durationMins = prof.status.until ? Math.max(15, Math.ceil((prof.status.until * 1000 - Date.now()) / 60000)) : 120;
-                elimState.hospBlacklist.set(cand.id, Date.now() + durationMins * 60 * 1000);
-                continue;
-            }
-
-            // Jail / Federal check
-            if (state === 'jail' || state === 'federal') {
-                elimState.hospBlacklist.set(cand.id, Date.now() + 30 * 60 * 1000);
-                continue;
-            }
-
-            // Only state === 'okay' is attackable
-            if (state !== 'okay') {
-                elimState.hospBlacklist.set(cand.id, Date.now() + 20 * 60 * 1000);
-                continue;
-            }
-
-            // Confirmed Okay — apply 5-minute per-user served cooldown
-            myServed.set(cand.id, Date.now() + 5 * 60 * 1000);
-
-            const targetBSHuman = cand.bs > 0 ? formatElimStat(cand.bs) : 'Unknown';
-            const attackerBSHuman = myStats > 0 ? formatElimStat(myStats) : 'Unknown';
-
-            let bsBullet = "Fair Fight score indicates a favorable target matchup";
-            if (cand.bs > 0) {
-                if (cand.ratio <= 0.85) {
-                    bsBullet = `Battle stats (~${targetBSHuman}) are comfortably within your realistic attacking range (${attackerBSHuman})`;
-                } else if (cand.ratio <= 1.25) {
-                    bsBullet = `Battle stats (~${targetBSHuman}) provide an even, competitive matchup against your ${attackerBSHuman}`;
-                } else if (cand.ratio <= 1.65) {
-                    bsBullet = `Battle stats (~${targetBSHuman}) are challenging but potentially hittable against your ${attackerBSHuman}`;
-                } else {
-                    bsBullet = `Target battle stats (~${targetBSHuman}) exceed standard range (${attackerBSHuman}) — caution advised`;
-                }
-            }
-
-            const why = [
-                "Available to attack (confirmed Okay in Torn City)",
-                "Not hospitalized",
-                "Not traveling or overseas",
-                bsBullet,
-                `Scored ${cand.score}/100 (${cand.difficulty}) — ranked best among ${scoredCandidates.length} evaluated candidates`
-            ];
-
-            chosenTarget = {
-                success: true,
-                targetId: cand.id,
-                name: prof.name || `Player #${cand.id}`,
-                level: prof.level || 1,
-                status: "Available (Okay)",
-                travel: "In Torn City (Not flying)",
-                targetBS: cand.bs,
-                targetBSHuman,
-                attackerBS: myStats,
-                attackerBSHuman,
-                ff: cand.ff,
-                difficulty: cand.difficulty,
-                risk: cand.risk,
-                score: cand.score,
-                why
+                code: 'API_ERROR',
+                message: userKeys.sanitizeErrorMessage(`Torn API authentication error [${userData.error.code}]: ${userData.error.error}`)
             };
-            break;
+        }
+    } catch (ue) {
+        return {
+            success: false,
+            code: 'NETWORK_ERROR',
+            message: 'Unable to reach Torn API to verify attacker profile. Please try again shortly.'
+        };
+    }
+
+    if (myId) ownFactionIds.add(myId);
+
+    // ── 2. Assemble candidate pool autonomously without requiring manual roster sync ──
+    const candidateSet = new Set();
+
+    // Source A: Synced roster for this specific user
+    const rosterEntry = elimState.rosters.get(userKeyId);
+    if (rosterEntry && rosterEntry.members) {
+        for (const id of rosterEntry.members) candidateSet.add(id);
+    }
+
+    // Source B: Global shared pool (cross-user verified discoveries)
+    if (elimState.globalPool) {
+        for (const id of elimState.globalPool) candidateSet.add(id);
+    }
+
+    // Source C: MongoDB elim_candidates and active Player collection
+    if (candidateSet.size < 60 && mongoose.connection.readyState === 1) {
+        try {
+            const elimCol = mongoose.connection.db.collection('elim_candidates');
+            const elimDocs = await elimCol.find({}).limit(400).toArray();
+            for (const d of elimDocs) candidateSet.add(String(d._id));
+
+            const playerCol = mongoose.connection.db.collection('players');
+            const playerDocs = await playerCol.find({ status: 'Okay' }).sort({ lastActionTs: -1 }).limit(100).toArray();
+            for (const d of playerDocs) candidateSet.add(String(d._id));
+        } catch (dbErr) {}
+    }
+
+    // Source D: Torn Competition Official Endpoint (Captains & Vice-Captains of 12 Teams)
+    if (candidateSet.size < 40) {
+        try {
+            const compRes = await fetch(
+                `https://api.torn.com/torn/?selections=competition&key=${encodeURIComponent(apiKey)}`,
+                { signal: AbortSignal.timeout(5000) }
+            );
+            const compData = await compRes.json();
+            if (compData && compData.competition && Array.isArray(compData.competition.teams)) {
+                const foundCaptains = [];
+                for (const t of compData.competition.teams) {
+                    if (myTeam && t.name && t.name.toLowerCase() === myTeam.toLowerCase()) continue;
+                    if (t.captain) {
+                        candidateSet.add(String(t.captain));
+                        foundCaptains.push(t.captain);
+                    }
+                    if (Array.isArray(t.vice_captains)) {
+                        t.vice_captains.forEach(vc => {
+                            candidateSet.add(String(vc));
+                            foundCaptains.push(vc);
+                        });
+                    }
+                }
+                elimAddCandidates(foundCaptains).catch(() => {});
+            }
+        } catch (ce) {}
+    }
+
+    // Filter out self, teammates, session exclusions, and known blacklists
+    let pool = Array.from(candidateSet).filter(id => {
+        if (!id || id === '0') return false;
+        if (myId && id === myId) return false;                  // Never attack yourself
+        if (ownFactionIds.has(id)) return false;                // Protect faction teammates
+        if (excludeSet.has(id)) return false;                   // Session / explicit exclusion
+        if (elimState.hospBlacklist.has(id)) return false;       // Hospitalized / traveling / jailed
+        if (myServed.has(id)) return false;                     // Recently served to THIS user (5m cooldown)
+        return true;
+    });
+
+    if (pool.length === 0) {
+        return {
+            success: false,
+            message: 'All scanned candidates are currently on cooldown or in hospital. Please wait a moment or clear session exclusions.'
+        };
+    }
+
+    // Shuffle so repeat requests explore different candidates
+    for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    const batch = pool.slice(0, 35);
+
+    // ── 3. Batch query FF Scouter for live Fair Fight & Battle Stat estimates ──
+    const ffStats = new Map();
+    let ffScouterFailed = false;
+
+    try {
+        const ffUrl = `https://ffscouter.com/api/v1/get-stats?key=${encodeURIComponent(apiKey)}&targets=${batch.join(',')}`;
+        const r = await fetch(ffUrl, { signal: AbortSignal.timeout(7000) });
+        if (!r.ok) {
+            ffScouterFailed = true;
+        } else {
+            const d = await r.json();
+            if (Array.isArray(d)) {
+                d.forEach(p => {
+                    const rawId = p.player_id || p.id;
+                    if (!rawId) return;
+                    const id = String(rawId);
+                    if (!batch.includes(id)) return;
+
+                    let ff = null;
+                    if (p.fair_fight != null && !isNaN(Number(p.fair_fight))) {
+                        ff = Number(p.fair_fight);
+                    } else if (p.ff != null && !isNaN(Number(p.ff))) {
+                        ff = Number(p.ff);
+                    }
+
+                    const bs = (p.bs_estimate != null && !isNaN(Number(p.bs_estimate)))
+                        ? Number(p.bs_estimate) : (Number(p.battlestats) || 0);
+
+                    // Fallback FF calculation: FF = 1 + (8/3) * (Target BS / Attacker BS)
+                    if (ff === null && bs > 0 && myStats > 0) {
+                        ff = parseFloat((1 + (8 / 3) * (bs / myStats)).toFixed(2));
+                    }
+
+                    if (ff !== null || bs > 0) {
+                        ffStats.set(id, { ff, bs, distribution: p.distribution });
+                    }
+                });
+            } else {
+                ffScouterFailed = true;
+            }
+        }
+    } catch (ffe) {
+        ffScouterFailed = true;
+    }
+
+    // ── 4. Filter candidates by realistic hittability against requesting user's live stats ──
+    const tierPass = batch.filter(id => {
+        const s = ffStats.get(id);
+        if (!s || s.ff === null || isNaN(s.ff)) {
+            return cleanTier === 'all';
         }
 
-        if (chosenTarget) {
-            return res.json(chosenTarget);
+        const ff = s.ff;
+        const bs = s.bs || 0;
+        const ratio = (myStats > 0 && bs > 0) ? (bs / myStats) : (ff ? (ff - 1) * (3 / 8) : 1);
+
+        if (cleanTier === 'easy') {
+            return ff < 3.0 && ratio <= 0.85;
+        }
+        if (cleanTier === 'manageable') {
+            return ff <= 3.8 && ratio <= 1.25;
+        }
+        if (cleanTier === 'difficult') {
+            return ff <= 4.5 && ratio <= 1.65;
+        }
+        return true; // 'all'
+    });
+
+    if (tierPass.length === 0) {
+        return {
+            success: false,
+            message: ffScouterFailed
+                ? 'FF Scouter is temporarily unavailable. Try "All Tiers" in Settings or wait a moment.'
+                : `No candidates matched your Fair Fight tier (${cleanTier}) against your current stats (~${formatElimStat(myStats)}). Try raising tier in Settings.`
+        };
+    }
+
+    // ── 5. Target Scoring System (0 to 100 ranking) ──
+    const scoredCandidates = [];
+    for (const targetId of tierPass) {
+        const s = ffStats.get(targetId) || { ff: null, bs: 0 };
+        const targetBS = s.bs || 0;
+        const ratio = (myStats > 0 && targetBS > 0) ? (targetBS / myStats) : (s.ff ? (s.ff - 1) * (3 / 8) : 1.0);
+        const ff = s.ff != null ? s.ff : parseFloat((1 + (8 / 3) * ratio).toFixed(2));
+
+        let baseScore = 50;
+        let difficulty = "Manageable";
+        let risk = "Medium";
+
+        // Optimal elimination range: 0.35x - 0.85x user stats (safe win, high competition points)
+        if (ratio >= 0.35 && ratio <= 0.85) {
+            baseScore = 95 - Math.round(Math.abs(ratio - 0.65) * 20);
+            difficulty = "Comfortably Hittable";
+            risk = "Low";
+        } else if (ratio < 0.35) {
+            baseScore = 80 + Math.round(ratio * 25);
+            difficulty = "Very Easy";
+            risk = "Very Low";
+        } else if (ratio > 0.85 && ratio <= 1.15) {
+            baseScore = 86 - Math.round((ratio - 0.85) * 25);
+            difficulty = "Competitive / Even";
+            risk = "Medium";
+        } else if (ratio > 1.15 && ratio <= 1.45) {
+            baseScore = 68 - Math.round((ratio - 1.15) * 30);
+            difficulty = "Borderline";
+            risk = "Medium / High";
+        } else if (ratio > 1.45 && ratio <= 1.80) {
+            baseScore = 48 - Math.round((ratio - 1.45) * 35);
+            difficulty = "Challenging / Risky";
+            risk = "High";
+        } else {
+            baseScore = 20;
+            difficulty = "Too Strong";
+            risk = "Extreme";
         }
 
-        if (hospCount + flyCount === checkedCount && checkedCount > 0) {
-            return res.json({
+        const score = Math.min(99, Math.max(15, baseScore));
+
+        scoredCandidates.push({
+            id: targetId,
+            ff,
+            bs: targetBS,
+            ratio,
+            score,
+            difficulty,
+            risk
+        });
+    }
+
+    // Sort descending by score: highest-ranking, most viable candidate tried first
+    scoredCandidates.sort((a, b) => b.score - a.score);
+
+    // ── 6. Live Status Verification (Exclude Hospital, Flying, Jail) ──
+    let chosenTarget = null;
+    let checkedCount = 0;
+    let hospCount = 0;
+    let flyCount = 0;
+
+    for (const cand of scoredCandidates.slice(0, 12)) {
+        checkedCount++;
+        let prof;
+        try {
+            const r = await fetch(
+                `https://api.torn.com/user/${cand.id}?selections=profile&key=${encodeURIComponent(apiKey)}`,
+                { signal: AbortSignal.timeout(5000) }
+            );
+            prof = await r.json();
+        } catch (e) {
+            continue;
+        }
+
+        if (!prof || prof.error || !prof.status) continue;
+
+        const rawState = prof.status.state || '';
+        const state = rawState.toLowerCase();
+
+        // A. Hospital check
+        if (state === 'hospital') {
+            hospCount++;
+            const durationMins = prof.status.until ? Math.max(5, Math.ceil((prof.status.until * 1000 - Date.now()) / 60000)) : 20;
+            elimState.hospBlacklist.set(cand.id, Date.now() + durationMins * 60 * 1000);
+            continue;
+        }
+
+        // B. Flying / Traveling / Abroad check
+        if (state === 'traveling' || state === 'abroad') {
+            flyCount++;
+            const durationMins = prof.status.until ? Math.max(15, Math.ceil((prof.status.until * 1000 - Date.now()) / 60000)) : 120;
+            elimState.hospBlacklist.set(cand.id, Date.now() + durationMins * 60 * 1000);
+            continue;
+        }
+
+        // Jail / Federal check
+        if (state === 'jail' || state === 'federal') {
+            elimState.hospBlacklist.set(cand.id, Date.now() + 30 * 60 * 1000);
+            continue;
+        }
+
+        // Only state === 'okay' is attackable
+        if (state !== 'okay') {
+            elimState.hospBlacklist.set(cand.id, Date.now() + 20 * 60 * 1000);
+            continue;
+        }
+
+        // Confirmed Okay — apply 5-minute per-user served cooldown
+        myServed.set(cand.id, Date.now() + 5 * 60 * 1000);
+
+        const targetBSHuman = cand.bs > 0 ? formatElimStat(cand.bs) : 'Unknown';
+        const attackerBSHuman = myStats > 0 ? formatElimStat(myStats) : 'Unknown';
+
+        let bsBullet = "Fair Fight score indicates a favorable target matchup";
+        if (cand.bs > 0) {
+            if (cand.ratio <= 0.85) {
+                bsBullet = `Battle stats (~${targetBSHuman}) are comfortably within your realistic attacking range (${attackerBSHuman})`;
+            } else if (cand.ratio <= 1.25) {
+                bsBullet = `Battle stats (~${targetBSHuman}) provide an even, competitive matchup against your ${attackerBSHuman}`;
+            } else if (cand.ratio <= 1.65) {
+                bsBullet = `Battle stats (~${targetBSHuman}) are challenging but potentially hittable against your ${attackerBSHuman}`;
+            } else {
+                bsBullet = `Target battle stats (~${targetBSHuman}) exceed standard range (${attackerBSHuman}) — caution advised`;
+            }
+        }
+
+        const why = [
+            "Available to attack (confirmed Okay in Torn City)",
+            "Not hospitalized",
+            "Not traveling or overseas",
+            bsBullet,
+            `Scored ${cand.score}/100 (${cand.difficulty}) — ranked best among ${scoredCandidates.length} evaluated candidates`
+        ];
+
+        chosenTarget = {
+            success: true,
+            targetId: cand.id,
+            name: prof.name || `Player #${cand.id}`,
+            level: prof.level || 1,
+            status: "Available (Okay)",
+            travel: "In Torn City (Not flying)",
+            targetBS: cand.bs,
+            targetBSHuman,
+            attackerBS: myStats,
+            attackerBSHuman,
+            ff: cand.ff,
+            difficulty: cand.difficulty,
+            risk: cand.risk,
+            score: cand.score,
+            why
+        };
+        break;
+    }
+
+    if (chosenTarget) {
+        return chosenTarget;
+    }
+
+    if (hospCount + flyCount === checkedCount && checkedCount > 0) {
+        return {
+            success: false,
+            message: `All ${checkedCount} evaluated targets are currently in hospital (${hospCount}) or flying (${flyCount}). Retrying with fresh targets...`
+        };
+    }
+
+    return {
+        success: false,
+        message: 'No available targets passed live verification. Please try again in a few seconds.'
+    };
+}
+
+// GET /api/elim/snipe — Multi-user Elimination Target Finder endpoint
+app.get('/api/elim/snipe', async (req, res) => {
+    try {
+        let apiKey = (req.headers['x-api-key'] || req.query.apiKey || '').trim();
+        const tornId = (req.headers['x-torn-id'] || req.query.tornId || req.query.myId || '').trim();
+        const discordId = (req.headers['x-discord-id'] || req.query.discordId || '').trim();
+
+        let resolvedUser = null;
+        if (!apiKey && tornId) {
+            resolvedUser = userKeys.resolveUserApiKeyByTornId(tornId);
+            if (resolvedUser) apiKey = resolvedUser.key;
+        }
+        if (!apiKey && discordId) {
+            resolvedUser = userKeys.resolveUserApiKey(discordId);
+            if (resolvedUser) apiKey = resolvedUser.key;
+        }
+
+        if (!apiKey) {
+            return res.status(401).json({
                 success: false,
-                message: `All ${checkedCount} evaluated targets are currently in hospital (${hospCount}) or flying (${flyCount}). Retrying with fresh targets...`
+                code: 'ACCOUNT_NOT_CONNECTED',
+                message: 'Torn Account Not Connected. Please link your Torn Limited API key to find targets tailored to your battle stats.'
             });
+        }
+
+        const tier = (req.query.tier || 'manageable').toLowerCase();
+        const excludeIds = new Set(
+            (req.query.exclude || '').split(',').map(s => s.trim()).filter(Boolean)
+        );
+        const userId = tornId || discordId || (resolvedUser ? String(resolvedUser.playerId) : '') || '';
+
+        const result = await findElimSnipeTargetForUser({ apiKey, userId, tier, excludeIds });
+        return res.json(result);
+    } catch (err) {
+        console.error('[Elim Snipe API] Error:', userKeys.sanitizeErrorMessage(err.message));
+        return res.status(500).json({ success: false, error: userKeys.sanitizeErrorMessage(err.message) });
+    }
+});
+
+// GET /api/user/status — Check if a Torn player ID or Discord ID has a linked API key
+app.get('/api/user/status', (req, res) => {
+    try {
+        const identifier = (req.headers['x-torn-id'] || req.query.tornId || req.headers['x-discord-id'] || req.query.discordId || '').trim();
+        if (!identifier) {
+            return res.json({ connected: false, message: 'No identifier provided' });
+        }
+        const status = userKeys.getUserAccountStatus(identifier);
+        return res.json(status);
+    } catch (e) {
+        return res.status(500).json({ error: userKeys.sanitizeErrorMessage(e.message) });
+    }
+});
+
+// POST /api/user/link-key — Securely link an API key from Web UI or Userscript
+app.post('/api/user/link-key', async (req, res) => {
+    try {
+        const rawKey = (req.body.apiKey || req.headers['x-api-key'] || '').trim();
+        const tornId = (req.body.tornId || req.headers['x-torn-id'] || '').trim();
+        const discordId = (req.body.discordId || req.headers['x-discord-id'] || '').trim();
+
+        if (!rawKey) {
+            return res.status(400).json({ success: false, error: 'apiKey is required' });
+        }
+
+        const result = await userKeys.linkUserApiKeyByTornId(tornId, rawKey, discordId);
+        if (!result.success) {
+            return res.status(400).json(result);
         }
 
         return res.json({
-            success: false,
-            message: 'No available targets passed live verification. Please try again in a few seconds.'
+            success: true,
+            playerName: result.playerName,
+            playerId: result.playerId
         });
-
-    } catch (err) {
-        console.error('[Elim Snipe API] Error:', err);
-        return res.status(500).json({ success: false, error: err.message });
+    } catch (e) {
+        return res.status(500).json({ success: false, error: userKeys.sanitizeErrorMessage(e.message) });
     }
 });
 
@@ -12920,7 +13040,27 @@ async function registerSlashCommands(token, guildId = null) {
             .addStringOption(opt => opt.setName('key').setDescription('16-character Limited Access API Key').setRequired(true)).toJSON(),
         new SlashCommandBuilder().setName('unlinkkey').setDescription('Unlink and permanently delete your stored Torn API key from F.R.I.D.A.Y').toJSON(),
         new SlashCommandBuilder().setName('openrouter').setDescription('Admin: Set OpenRouter backup API key for unlimited AI failover')
-            .addStringOption(opt => opt.setName('key').setDescription('OpenRouter API key (sk-or-...)').setRequired(true)).toJSON()
+            .addStringOption(opt => opt.setName('key').setDescription('OpenRouter API key (sk-or-...)').setRequired(true)).toJSON(),
+
+        // 19. Autonomous Elimination Target Hunter
+        new SlashCommandBuilder().setName('snipe').setDescription('Autonomous Elimination Target Hunter: find beatable enemies not in hosp/traveling')
+            .addStringOption(opt => opt.setName('tier').setDescription('Difficulty tier (default: manageable)')
+                .addChoices(
+                    { name: '🟢 Easy (< 0.85x BS)', value: 'easy' },
+                    { name: '🟡 Manageable (<= 1.25x BS)', value: 'manageable' },
+                    { name: '🔴 Difficult (<= 1.65x BS)', value: 'difficult' },
+                    { name: '⚡ All Tiers (Unrestricted)', value: 'all' }
+                )
+            ).toJSON(),
+        new SlashCommandBuilder().setName('elim').setDescription('Autonomous Elimination Target Hunter (alias of /snipe)')
+            .addStringOption(opt => opt.setName('tier').setDescription('Difficulty tier (default: manageable)')
+                .addChoices(
+                    { name: '🟢 Easy (< 0.85x BS)', value: 'easy' },
+                    { name: '🟡 Manageable (<= 1.25x BS)', value: 'manageable' },
+                    { name: '🔴 Difficult (<= 1.65x BS)', value: 'difficult' },
+                    { name: '⚡ All Tiers (Unrestricted)', value: 'all' }
+                )
+            ).toJSON()
     ];
 
     const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : [])
@@ -13200,11 +13340,11 @@ function setupSlashBotEvents(bot, token) {
             }
 
             // ── Live Personal Account Stats & Torn Gameplay Intelligence ──
-            const primaryKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || (apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
-            if (primaryKey) {
-                tornKnowledge.fetchFactionPerks(primaryKey).catch(() => {});
+            const perksKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || (apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
+            if (perksKey) {
+                tornKnowledge.fetchFactionPerks(perksKey).catch(() => {});
             }
-            const resolved = userKeys.resolveUserApiKey(primaryAuthorId, primaryAuthor, authorUsername, primaryKey);
+            const resolved = userKeys.resolveUserApiKey(primaryAuthorId, primaryAuthor, authorUsername);
 
             const accountIntent = userKeys.detectUserAccountIntent(userSpeech);
             const tornGameplayIntent = tornKnowledge.detectTornGameplayIntent(userSpeech);
@@ -13815,6 +13955,77 @@ function setupSlashBotEvents(bot, token) {
                 return interaction.reply({ content: `🎲 New winner <@${newWinner}> picked and announced!`, ephemeral: true }).catch(() => {});
             }
 
+            // ── Elimination Target Hunter: Next Target Button ──
+            if (customId.startsWith('btn_snipe_next_')) {
+                const parts = customId.split('_'); // ['btn', 'snipe', 'next', ownerId, lastTargetId, tier]
+                const ownerUserId = parts[3] || '';
+                const lastTargetId = parts[4] || '';
+                const tier = parts[5] || 'manageable';
+
+                if (interaction.user.id !== ownerUserId) {
+                    return interaction.reply({
+                        content: `⚠️ This target session belongs to <@${ownerUserId}>. Run \`/snipe\` to find targets tailored to your own stats!`,
+                        ephemeral: true
+                    }).catch(() => {});
+                }
+
+                await interaction.deferUpdate().catch(() => {});
+
+                const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
+                const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username);
+                if (!resolved) {
+                    return interaction.followUp({
+                        content: '⚠️ Please link your Torn Limited API key first with `/linkkey`.',
+                        ephemeral: true
+                    }).catch(() => {});
+                }
+
+                const excludeIds = new Set();
+                if (lastTargetId) excludeIds.add(lastTargetId);
+
+                const result = await findElimSnipeTargetForUser({
+                    apiKey: resolved.key,
+                    userId: interaction.user.id,
+                    tier,
+                    excludeIds
+                });
+
+                if (!result || !result.success || !result.targetId) {
+                    return interaction.followUp({
+                        embeds: [sanitizeEmbed(UI.warning(
+                            '🎯 Target Finder Notice',
+                            result?.message || 'No additional candidates available right now. Please try again shortly.'
+                        ))],
+                        ephemeral: true
+                    }).catch(() => {});
+                }
+
+                const whyList = (Array.isArray(result.why) && result.why.length > 0)
+                    ? result.why.map(w => `• ${w}`).join('\n')
+                    : '• Confirmed available in Torn City\n• Optimal battle stats ratio';
+
+                const embed = {
+                    title: `🎯 Best Elimination Target: ${result.name} [${result.targetId}]`,
+                    description: `Autonomous match evaluated against your live stats (**~${result.attackerBSHuman}** BS).\n\n` +
+                        `**Player:** [**${result.name} [${result.targetId}]**](https://www.torn.com/profiles.php?XID=${result.targetId}) (Level ${result.level})\n` +
+                        `**Status:** 🟢 ${result.status} • 📍 ${result.travel}\n` +
+                        `**Battle Stats:** ~${result.targetBSHuman} (${result.difficulty})\n` +
+                        `**Fair Fight / Risk:** FF: ${result.ff ?? 'N/A'} • Risk: ${result.risk} • Match Score: **${result.score}/100**\n\n` +
+                        `**Why this target?**\n${whyList}`,
+                    color: UI.COLORS.BRAND,
+                    footer: UI.FOOTER,
+                    timestamp: new Date().toISOString()
+                };
+
+                const attackUrl = `https://www.torn.com/page.php?sid=attack&user2ID=${result.targetId}`;
+                const actionRow = UI.actionRow(
+                    UI.linkBtn(attackUrl, '⚔️ ATTACK NOW', '⚔️'),
+                    UI.secondaryBtn(`btn_snipe_next_${interaction.user.id}_${result.targetId}_${tier}`, '⏭️ Next Target', '⏭️')
+                );
+
+                return interaction.editReply({ embeds: [sanitizeEmbed(embed)], components: [actionRow] }).catch(() => {});
+            }
+
             return;
         }
 
@@ -13836,12 +14047,74 @@ function setupSlashBotEvents(bot, token) {
 
         const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
 
+        // ── Autonomous Elimination Target Hunter (/snipe, /elim) ──
+        if (cmd === 'snipe' || cmd === 'elim') {
+            await interaction.deferReply({ ephemeral: true });
+            const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
+            const tier = (interaction.options.getString('tier') || 'manageable').toLowerCase();
+
+            // Require requesting user's own linked Torn API key (strict multi-user isolation)
+            const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username);
+            if (!resolved) {
+                const linkEmbed = UI.warning(
+                    '🔑 Torn Account Not Connected',
+                    `Hey **${invokerName}**, to find Elimination targets tailored to your battle stats, you need to link your Torn **Limited Access API Key**.\n\n` +
+                    `🔒 **Zero Public Exposure:** Your key is entered in a private Discord popup, encrypted with **military-grade AES-256-GCM**, and stored securely. F.R.I.D.A.Y only accesses it to calculate your battle strength and check target hittability.\n\n` +
+                    `Click **Link Limited Key** below:`
+                );
+                const actionRow = UI.actionRow(
+                    UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑'),
+                    UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')
+                );
+                return await interaction.editReply({ embeds: [sanitizeEmbed(linkEmbed)], components: [actionRow] });
+            }
+
+            const result = await findElimSnipeTargetForUser({
+                apiKey: resolved.key,
+                userId: interaction.user.id,
+                tier
+            });
+
+            if (!result || !result.success || !result.targetId) {
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.warning(
+                        '🎯 Target Finder Notice',
+                        result?.message || 'No candidates available right now matching your criteria. Please try again shortly or adjust tier in settings.'
+                    ))]
+                });
+            }
+
+            const whyList = (Array.isArray(result.why) && result.why.length > 0)
+                ? result.why.map(w => `• ${w}`).join('\n')
+                : '• Confirmed available in Torn City\n• Optimal battle stats ratio';
+
+            const embed = {
+                title: `🎯 Best Elimination Target: ${result.name} [${result.targetId}]`,
+                description: `Autonomous match evaluated against your live stats (**~${result.attackerBSHuman}** BS).\n\n` +
+                    `**Player:** [**${result.name} [${result.targetId}]**](https://www.torn.com/profiles.php?XID=${result.targetId}) (Level ${result.level})\n` +
+                    `**Status:** 🟢 ${result.status} • 📍 ${result.travel}\n` +
+                    `**Battle Stats:** ~${result.targetBSHuman} (${result.difficulty})\n` +
+                    `**Fair Fight / Risk:** FF: ${result.ff ?? 'N/A'} • Risk: ${result.risk} • Match Score: **${result.score}/100**\n\n` +
+                    `**Why this target?**\n${whyList}`,
+                color: UI.COLORS.BRAND,
+                footer: UI.FOOTER,
+                timestamp: new Date().toISOString()
+            };
+
+            const attackUrl = `https://www.torn.com/page.php?sid=attack&user2ID=${result.targetId}`;
+            const actionRow = UI.actionRow(
+                UI.linkBtn(attackUrl, '⚔️ ATTACK NOW', '⚔️'),
+                UI.secondaryBtn(`btn_snipe_next_${interaction.user.id}_${result.targetId}_${tier}`, '⏭️ Next Target', '⏭️')
+            );
+
+            return await interaction.editReply({ embeds: [sanitizeEmbed(embed)], components: [actionRow] });
+        }
+
         // ── Personal Live Energy, Bars & Cooldowns ──
         if (cmd === 'energy' || cmd === 'bars') {
             await interaction.deferReply({ ephemeral: true });
             const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
-            const primaryKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || (apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
-            const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username, primaryKey);
+            const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username);
 
             if (!resolved) {
                 const linkEmbed = UI.warning(
@@ -13895,8 +14168,7 @@ function setupSlashBotEvents(bot, token) {
         if (cmd === 'merits') {
             await interaction.deferReply({ ephemeral: true });
             const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
-            const primaryKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || (apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
-            const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username, primaryKey);
+            const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username);
 
             if (!resolved) {
                 const linkEmbed = UI.warning(
@@ -14054,8 +14326,7 @@ function setupSlashBotEvents(bot, token) {
 
             try {
                 const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
-                const primaryKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || (apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
-                const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username, primaryKey);
+                const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username);
                 const accountIntent = userKeys.detectUserAccountIntent(question);
                 const isAccountInquiry = Boolean(accountIntent || /\b(?:my|i|me|mine|stats?|merits?|energy|nerve|happy|cooldowns?|battlestats?|workstats?|vault|money|cash|refills?|crimes?|xanax|overdoses?|education|job)\b/i.test(question));
 
@@ -14170,8 +14441,7 @@ function setupSlashBotEvents(bot, token) {
                     }
                 }
 
-                const primaryKey = discordConfig.apiKey || ADMIN_API_KEY || TORN_API_KEY || (apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
-                const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username, primaryKey);
+                const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username);
                 const accountIntent = userKeys.detectUserAccountIntent(hint);
                 const isAccountInquiry = Boolean(accountIntent || /\b(?:my|i|me|mine|stats?|merits?|energy|nerve|happy|cooldowns?|battlestats?|workstats?|vault|money|cash|refills?|crimes?|xanax|overdoses?|education|job)\b/i.test(hint));
 

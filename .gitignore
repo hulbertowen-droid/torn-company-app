@@ -8,3 +8,5 @@ yarn-debug.log*
 yarn-error.log*
 *.log
 data/war_flight_archive.json
+data/user_api_keys.json
+scratch/

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter
 // @namespace    https://spider-verse.net/
-// @version      2.2.0
+// @version      2.3.0
 // @description  Autonomous 1-click snipe button for Torn Elimination. Finds beatable enemies that are NOT in hospital and NOT flying from ANY page.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -73,11 +73,38 @@
     let myId       = '';
     let busy       = false;
 
-    // ── Resolve my own Torn ID once ───────────────────────────────
+    // ── Get My Torn ID directly from page DOM/cookies ───────────────
+    function getMyTornIdFromPage() {
+        try {
+            const m = document.cookie.match(/(?:^|;\s*)uid=(\d+)/);
+            if (m && m[1]) return m[1];
+        } catch (e) {}
+        try {
+            const el = document.querySelector('a[href*="profiles.php?XID="], a[href*="profiles.php?xid="]');
+            if (el) {
+                const m = el.href.match(/xid=(\d+)/i);
+                if (m && m[1]) return m[1];
+            }
+        } catch (e) {}
+        try {
+            if (window.userID) return String(window.userID);
+            if (window.user && window.user.id) return String(window.user.id);
+        } catch (e) {}
+        return '';
+    }
+
+    // ── Resolve my own Torn ID ─────────────────────────────────────
     async function resolveMyId() {
         if (myId) return myId;
         myId = sessionStorage.getItem(SESS_MYID) || '';
         if (myId) return myId;
+
+        myId = getMyTornIdFromPage();
+        if (myId) {
+            sessionStorage.setItem(SESS_MYID, myId);
+            return myId;
+        }
+
         if (!apiKey) return '';
         try {
             const r = await gmFetch(`https://api.torn.com/user/?selections=profile&key=${encodeURIComponent(apiKey)}`);
@@ -238,28 +265,54 @@
     }
 
     function reportHospToServer(targetId) {
-        if (!targetId || !apiKey) return;
+        if (!targetId) return;
+        const headers = { 'Content-Type': 'application/json' };
+        if (apiKey) headers['x-api-key'] = apiKey;
+        if (myId) headers['x-torn-id'] = myId;
         gmFetch(`${BACKEND}/api/elim/report-hosp`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ targetId: String(targetId), apiKey })
+            headers,
+            body: JSON.stringify({ targetId: String(targetId), apiKey, myId })
         }).catch(() => {});
     }
 
     // ── Core snipe logic ──────────────────────────────────────────
     async function executeSnipe() {
         if (busy) return;
-        if (!apiKey) {
-            openSettings();
-            setButtonState('needkey');
-            return;
-        }
 
         busy = true;
         setButtonState('hunting');
 
         try {
             await resolveMyId();
+
+            // Check if account is connected locally or on backend
+            if (!apiKey) {
+                if (myId) {
+                    try {
+                        const stRaw = await gmFetch(`${BACKEND}/api/user/status`, {
+                            headers: { 'x-torn-id': myId }
+                        });
+                        const st = JSON.parse(stRaw);
+                        if (!st || !st.connected) {
+                            renderNotConnectedCard();
+                            setButtonState('needkey');
+                            busy = false;
+                            return;
+                        }
+                    } catch (e) {
+                        renderNotConnectedCard();
+                        setButtonState('needkey');
+                        busy = false;
+                        return;
+                    }
+                } else {
+                    renderNotConnectedCard();
+                    setButtonState('needkey');
+                    busy = false;
+                    return;
+                }
+            }
 
             // Build exclude list — current page target + session history
             const exclude = getExclude();
@@ -270,18 +323,30 @@
             }
 
             const params = new URLSearchParams({
-                apiKey,
                 tier: ffTier,
                 exclude: exclude.join(','),
                 myId: myId || ''
             });
 
+            const reqHeaders = {};
+            if (apiKey) reqHeaders['x-api-key'] = apiKey;
+            if (myId) reqHeaders['x-torn-id'] = myId;
+
             let data;
             try {
-                const raw = await gmFetch(`${BACKEND}/api/elim/snipe?${params.toString()}`);
+                const raw = await gmFetch(`${BACKEND}/api/elim/snipe?${params.toString()}`, {
+                    headers: reqHeaders
+                });
                 data = JSON.parse(raw);
             } catch (netErr) {
                 setButtonState('error', 'Server unreachable');
+                busy = false;
+                return;
+            }
+
+            if (data && (data.code === 'ACCOUNT_NOT_CONNECTED' || data.error === 'apiKey required')) {
+                renderNotConnectedCard();
+                setButtonState('needkey');
                 busy = false;
                 return;
             }
@@ -309,6 +374,108 @@
     function launchAttack(targetId) {
         setButtonState('launching');
         window.location.href = `https://www.torn.com/page.php?sid=attack&user2ID=${targetId}`;
+    }
+
+    // ── Torn Account Not Connected Card Display ───────────────────
+    function renderNotConnectedCard() {
+        if (!cardEl) {
+            cardEl = document.createElement('div');
+            cardEl.id = 'elim-target-card';
+            cardEl.style.cssText = `
+                background: #1a1d27;
+                border: 2px solid #e74c3c;
+                border-radius: 10px;
+                padding: 14px;
+                width: 310px;
+                color: #ecf0f1;
+                font-size: 12px;
+                box-shadow: 0 10px 32px rgba(0,0,0,0.85);
+                text-align: left;
+                display: none;
+                margin-bottom: 4px;
+            `;
+            if (wrapEl && rowEl) {
+                wrapEl.insertBefore(cardEl, rowEl);
+            }
+        }
+
+        if (drawerEl) {
+            drawerEl.style.display = 'none';
+            drawerOpen = false;
+        }
+
+        cardEl.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #3d4455; padding-bottom:7px; margin-bottom:10px;">
+                <span style="font-weight:900; font-size:13px; color:#e74c3c; display:flex; align-items:center; gap:5px;">
+                    🔑 Connect Torn Account
+                </span>
+                <span id="ev2-card-close" style="cursor:pointer; color:#95a5a6; font-size:13px; font-weight:bold;" title="Close">✖</span>
+            </div>
+            <div style="font-size:11.5px; color:#bdc3c7; line-height:1.45; margin-bottom:10px;">
+                To evaluate targets tailored to your battle strength and verify hittability, please connect your Torn Limited API Key.
+            </div>
+            <div style="margin-bottom:10px;">
+                <input type="password" id="ev2-quick-key" placeholder="Paste 16-character Limited Key"
+                    style="width:100%; box-sizing:border-box; padding:7px 9px; background:#262b38; border:1px solid #3d4455; color:#fff; border-radius:5px; font-size:11px;">
+            </div>
+            <div style="display:flex; gap:6px; margin-bottom:10px;">
+                <button id="ev2-quick-connect" style="flex:2; padding:7px 10px; background:#27ae60; color:#fff; border:none; border-radius:5px; font-weight:900; font-size:11.5px; cursor:pointer;">
+                    ⚡ Connect &amp; Snipe
+                </button>
+                <a href="https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2" target="_blank"
+                    style="flex:1; padding:7px 8px; background:#2980b9; color:#fff; text-decoration:none; border-radius:5px; font-weight:700; font-size:11px; text-align:center; display:flex; align-items:center; justify-content:center;">
+                    🌐 Get Key
+                </a>
+            </div>
+            <div style="font-size:10px; color:#7f8c8d; text-align:center;">
+                🔒 Encrypted with military-grade AES-256-GCM. Never shared.
+            </div>
+        `;
+
+        cardEl.style.display = 'block';
+
+        const closeBtn = document.getElementById('ev2-card-close');
+        if (closeBtn) closeBtn.onclick = () => { cardEl.style.display = 'none'; };
+
+        const connBtn = document.getElementById('ev2-quick-connect');
+        if (connBtn) {
+            connBtn.onclick = async () => {
+                const input = (document.getElementById('ev2-quick-key')?.value || '').trim();
+                if (!input || input.length < 16) {
+                    showToast('⚠️ Please enter a valid 16-character Torn API key');
+                    return;
+                }
+                connBtn.disabled = true;
+                connBtn.textContent = '⏳ Linking...';
+                try {
+                    const linkResRaw = await gmFetch(`${BACKEND}/api/user/link-key`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ apiKey: input, tornId: myId })
+                    });
+                    const linkRes = JSON.parse(linkResRaw);
+                    if (linkRes.success) {
+                        apiKey = input;
+                        save(KEY_API, apiKey);
+                        if (linkRes.playerId) {
+                            myId = String(linkRes.playerId);
+                            sessionStorage.setItem(SESS_MYID, myId);
+                        }
+                        showToast(`✅ Linked as ${linkRes.playerName || 'Player'}!`);
+                        cardEl.style.display = 'none';
+                        executeSnipe();
+                    } else {
+                        showToast(`⚠️ ${linkRes.error || 'Failed to link key'}`);
+                        connBtn.disabled = false;
+                        connBtn.textContent = '⚡ Connect & Snipe';
+                    }
+                } catch (e) {
+                    showToast('⚠️ Connection error linking key');
+                    connBtn.disabled = false;
+                    connBtn.textContent = '⚡ Connect & Snipe';
+                }
+            };
+        }
     }
 
     // ── Target Card Display ───────────────────────────────────────
@@ -539,7 +706,7 @@
             <button id="ev2-clearroster" style="width:100%; padding:5px; background:#2c3e50; color:#bdc3c7; border:1px solid #3d4455;
                 border-radius:5px; cursor:pointer; font-size:10px;">🔄 Re-sync Roster (visit competition.php)</button>
             <div style="margin-top:8px; color:#7f8c8d; font-size:10px;">
-                v2.2.0 — Autonomous Elimination Target Finder
+                v2.3.0 — Autonomous Elimination Target Finder
             </div>
         `;
 
@@ -623,7 +790,17 @@
             const saveBtn = document.getElementById('ev2-save');
             saveBtn.textContent = '⏳ Verifying...';
             await resolveMyId();
-            saveBtn.textContent = myId ? '✅ Saved!' : '⚠️ Check API Key';
+
+            if (apiKey && apiKey.length >= 16) {
+                // Sync key securely to backend AES-256 vault
+                gmFetch(`${BACKEND}/api/user/link-key`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiKey, tornId: myId })
+                }).catch(() => {});
+            }
+
+            saveBtn.textContent = myId ? '✅ Saved!' : (apiKey ? '⚠️ Check Key' : '✅ Settings Saved');
             setTimeout(() => {
                 saveBtn.textContent = '💾 Save';
                 drawerEl.style.display = 'none';

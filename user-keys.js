@@ -36,11 +36,11 @@ const userKeysStore = new Map();
 const userStatsCache = new Map();
 const STATS_CACHE_TTL_MS = 10000; // 10 seconds cache
 
-// Owner metadata cached from primary API key
-let ownerMeta = {
-    tornId: 3776908, // Owen777's verified Torn ID
-    playerName: 'Owen777',
-    discordId: ''
+// Administrator metadata (set dynamically only if explicitly configured)
+let adminMeta = {
+    tornId: null,
+    playerName: null,
+    discordId: process.env.ADMIN_DISCORD_ID || process.env.OWNER_DISCORD_ID || ''
 };
 
 // Callback to trigger mongo save when available
@@ -172,7 +172,7 @@ function importEncryptedFromMongo(saved) {
 }
 
 /**
- * Configure and cache owner details (from primary API key).
+ * Configure and cache admin details (from primary API key if configured).
  */
 async function syncOwnerDetails(primaryKey, personalDiscordId = '') {
     if (!primaryKey) return;
@@ -180,13 +180,13 @@ async function syncOwnerDetails(primaryKey, personalDiscordId = '') {
         const res = await fetch(`${TORN_BASE}/user/?selections=profile,discord&key=${primaryKey}`, { signal: AbortSignal.timeout(6000) });
         const data = await res.json();
         if (data && !data.error && data.player_id) {
-            ownerMeta.tornId = data.player_id;
-            ownerMeta.playerName = data.name || 'Owen777';
-            ownerMeta.discordId = data.discord?.discordID || personalDiscordId || ownerMeta.discordId;
-            console.log(`[UserKeys] Owner synced: ${ownerMeta.playerName} [${ownerMeta.tornId}], Discord ID: ${ownerMeta.discordId || 'none'}`);
+            adminMeta.tornId = data.player_id;
+            adminMeta.playerName = data.name || 'Admin';
+            adminMeta.discordId = data.discord?.discordID || personalDiscordId || adminMeta.discordId;
+            console.log(`[UserKeys] Admin synced: ${adminMeta.playerName} [${adminMeta.tornId}], Discord ID: ${adminMeta.discordId || 'none'}`);
         }
     } catch (err) {
-        console.warn(`[UserKeys] Error syncing owner details:`, err.message);
+        console.warn(`[UserKeys] Error syncing admin details:`, err.message);
     }
 }
 
@@ -206,7 +206,6 @@ async function linkUserApiKey(discordUserId, rawKey) {
 
     try {
         // Query profile and bars to verify permissions
-        // NOTE: Torn API v1 returns energy/nerve/happy/life at the TOP level, not inside data.bars
         const res = await fetch(`${TORN_BASE}/user/?selections=profile,bars&key=${cleanKey}`, { signal: AbortSignal.timeout(8000) });
         const data = await res.json();
 
@@ -237,7 +236,6 @@ async function linkUserApiKey(discordUserId, rawKey) {
 
         console.log(`[UserKeys] Successfully encrypted and linked key for ${data.name} [${data.player_id}] (Discord ${discordUserId})`);
 
-        // Build bars object from top-level fields for display after linking
         const bars = {
             energy: data.energy,
             nerve: data.nerve,
@@ -257,7 +255,65 @@ async function linkUserApiKey(discordUserId, rawKey) {
 }
 
 /**
- * Unlink and permanently delete a user's API key.
+ * Link an API key directly by Torn Player ID (e.g. from Web / Userscript).
+ * 
+ * @param {string|number} tornId
+ * @param {string} rawKey
+ * @param {string|null} discordUserId
+ * @returns {Promise<{success: boolean, error?: string, playerName?: string, playerId?: number}>}
+ */
+async function linkUserApiKeyByTornId(tornId, rawKey, discordUserId = null) {
+    const cleanKey = String(rawKey || '').trim().replace(/['"\s]/g, '');
+    if (!cleanKey || cleanKey.length < 16) {
+        return { success: false, error: 'Invalid API key format. Torn API keys are 16 alphanumeric characters.' };
+    }
+
+    try {
+        const res = await fetch(`${TORN_BASE}/user/?selections=profile,bars&key=${cleanKey}`, { signal: AbortSignal.timeout(8000) });
+        const data = await res.json();
+
+        if (data.error) {
+            const errCode = data.error.code;
+            const errMsg = data.error.error || 'Unknown Torn API error';
+            if (errCode === 2) return { success: false, error: 'Incorrect or invalid API key.' };
+            if (errCode === 7) return { success: false, error: 'Access level too low. Key must have at least Limited Access.' };
+            return { success: false, error: `Torn API error [${errCode}]: ${errMsg}` };
+        }
+
+        if (!data.player_id) {
+            return { success: false, error: 'Key permissions insufficient. Please ensure the key has Limited Access.' };
+        }
+
+        if (tornId && Number(tornId) !== Number(data.player_id)) {
+            return { success: false, error: `Key belongs to ${data.name} [${data.player_id}], not player [${tornId}].` };
+        }
+
+        const encrypted = encryptKey(cleanKey);
+        const record = {
+            tornId: data.player_id,
+            playerName: data.name,
+            ciphertext: encrypted.ciphertext,
+            iv: encrypted.iv,
+            tag: encrypted.tag,
+            linkedAt: Date.now()
+        };
+
+        const storeKey = discordUserId ? String(discordUserId) : `torn:${data.player_id}`;
+        userKeysStore.set(storeKey, record);
+        saveKeysToDisk();
+
+        return {
+            success: true,
+            playerName: data.name,
+            playerId: data.player_id
+        };
+    } catch (err) {
+        return { success: false, error: `Connection error verifying key: ${err.message}` };
+    }
+}
+
+/**
+ * Unlink and permanently delete a user's API key by Discord ID.
  */
 function unlinkUserApiKey(discordUserId) {
     if (!discordUserId) return false;
@@ -270,22 +326,36 @@ function unlinkUserApiKey(discordUserId) {
 }
 
 /**
- * Check if a user is the bot owner (Owen).
+ * Unlink and permanently delete a user's API key by Torn ID.
+ */
+function unlinkUserApiKeyByTornId(tornId) {
+    if (!tornId) return false;
+    const num = Number(tornId);
+    let deleted = false;
+    if (userKeysStore.delete(`torn:${num}`)) deleted = true;
+    for (const [k, rec] of userKeysStore.entries()) {
+        if (rec && Number(rec.tornId) === num) {
+            userKeysStore.delete(k);
+            deleted = true;
+        }
+    }
+    if (deleted) saveKeysToDisk();
+    return deleted;
+}
+
+/**
+ * Check if a user is the bot administrator.
  */
 function isOwnerUser(discordUserId, authorName = '', authorUsername = '', verifiedPlayerId = null) {
     const dId = String(discordUserId || '');
-    if (ownerMeta.discordId && dId && dId === String(ownerMeta.discordId)) return true;
-    if (verifiedPlayerId && Number(verifiedPlayerId) === Number(ownerMeta.tornId)) return true;
-
-    const nameClean = (authorName || '').toLowerCase().trim();
-    const userClean = (authorUsername || '').toLowerCase().trim();
-    if (nameClean === 'owen777' || userClean === 'owen777' || nameClean === 'owen' || userClean === 'owen') return true;
-
+    if (adminMeta.discordId && dId && dId === String(adminMeta.discordId)) return true;
+    if (adminMeta.tornId && verifiedPlayerId && Number(verifiedPlayerId) === Number(adminMeta.tornId)) return true;
     return false;
 }
 
 /**
- * Resolve an active API key for a user (either from their secure vault, or master owner key).
+ * Resolve an active API key for a user (specifically from their own secure vault).
+ * NEVER falls back to another user's or administrator's account for target finding or stats.
  * 
  * @param {string} discordUserId 
  * @param {string} authorName 
@@ -297,7 +367,7 @@ function isOwnerUser(discordUserId, authorName = '', authorUsername = '', verifi
 function resolveUserApiKey(discordUserId, authorName = '', authorUsername = '', primaryOwnerKey = '', verifiedPlayerId = null) {
     const dId = String(discordUserId || '');
 
-    // 1. Check user's encrypted vault
+    // 1. Check user's encrypted vault by Discord ID
     if (userKeysStore.has(dId)) {
         const record = userKeysStore.get(dId);
         const decrypted = decryptKey(record);
@@ -311,17 +381,87 @@ function resolveUserApiKey(discordUserId, authorName = '', authorUsername = '', 
         }
     }
 
-    // 2. Check if user is the bot owner (Owen)
+    // 2. Check if user is the explicit bot administrator with an admin key
     if (primaryOwnerKey && isOwnerUser(dId, authorName, authorUsername, verifiedPlayerId)) {
         return {
             key: primaryOwnerKey,
-            playerName: ownerMeta.playerName || 'Owen777',
-            playerId: ownerMeta.tornId || 2658824,
+            playerName: adminMeta.playerName || 'Admin',
+            playerId: adminMeta.tornId || 0,
             isOwner: true
         };
     }
 
     return null;
+}
+
+/**
+ * Resolve an active API key for a user by their Torn Player ID (e.g. from Web / Userscript).
+ * 
+ * @param {string|number} tornId
+ * @returns {{ key: string, playerName: string, playerId: number, isOwner: boolean } | null}
+ */
+function resolveUserApiKeyByTornId(tornId) {
+    if (!tornId) return null;
+    const targetId = Number(tornId);
+    if (isNaN(targetId) || targetId <= 0) return null;
+
+    // Check direct key torn:<id>
+    const directKey = `torn:${targetId}`;
+    if (userKeysStore.has(directKey)) {
+        const rec = userKeysStore.get(directKey);
+        const dec = decryptKey(rec);
+        if (dec) return { key: dec, playerName: rec.playerName, playerId: rec.tornId, isOwner: false };
+    }
+
+    // Check all records for matching tornId
+    for (const [key, rec] of userKeysStore.entries()) {
+        if (rec && Number(rec.tornId) === targetId) {
+            const dec = decryptKey(rec);
+            if (dec) return { key: dec, playerName: rec.playerName, playerId: rec.tornId, isOwner: false };
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Get public account linking status for a user without exposing any secrets.
+ * 
+ * @param {string|number} identifier (Discord ID or Torn ID)
+ * @returns {{ connected: boolean, playerName?: string, playerId?: number, linkedAt?: number }}
+ */
+function getUserAccountStatus(identifier) {
+    if (!identifier) return { connected: false };
+    const str = String(identifier).trim();
+
+    if (userKeysStore.has(str)) {
+        const rec = userKeysStore.get(str);
+        return { connected: true, playerName: rec.playerName, playerId: rec.tornId, linkedAt: rec.linkedAt };
+    }
+
+    const num = Number(str);
+    if (!isNaN(num) && num > 0) {
+        const direct = userKeysStore.get(`torn:${num}`);
+        if (direct) return { connected: true, playerName: direct.playerName, playerId: direct.tornId, linkedAt: direct.linkedAt };
+        for (const [k, rec] of userKeysStore.entries()) {
+            if (rec && Number(rec.tornId) === num) {
+                return { connected: true, playerName: rec.playerName, playerId: rec.tornId, linkedAt: rec.linkedAt };
+            }
+        }
+    }
+
+    return { connected: false };
+}
+
+/**
+ * Sanitize error messages and logs to prevent credential leakage.
+ */
+function sanitizeErrorMessage(msg) {
+    if (!msg || typeof msg !== 'string') return '';
+    return msg
+        .replace(/(key[=:\s]+)[a-zA-Z0-9]{16}/gi, '$1[REDACTED_KEY]')
+        .replace(/(sk-or-v1-)[a-zA-Z0-9]{64}/gi, '$1[REDACTED_KEY]')
+        .replace(/\b[a-zA-Z0-9]{16}\b/g, '[REDACTED_KEY]');
 }
 
 /**
@@ -350,7 +490,7 @@ async function fetchUserLiveStats(apiKey, userQuery = "") {
     if (needsProperties) selections += ',properties';
     if (needsAttacks) selections += ',attacks';
 
-    const cacheKey = `${apiKey}_${selections}`;
+    const cacheKey = crypto.createHash('sha256').update(`${apiKey}_${selections}`).digest('hex');
     const now = Date.now();
     if (userStatsCache.has(cacheKey)) {
         const cached = userStatsCache.get(cacheKey);
@@ -365,7 +505,7 @@ async function fetchUserLiveStats(apiKey, userQuery = "") {
         const raw = await res.json();
 
         if (raw.error || !raw.player_id) {
-            console.warn(`[UserKeys] Error fetching live stats:`, raw.error);
+            console.warn(`[UserKeys] Error fetching live stats:`, sanitizeErrorMessage(JSON.stringify(raw.error)));
             return null;
         }
 
@@ -774,8 +914,13 @@ module.exports = {
     encryptKey,
     decryptKey,
     linkUserApiKey,
+    linkUserApiKeyByTornId,
     unlinkUserApiKey,
+    unlinkUserApiKeyByTornId,
     resolveUserApiKey,
+    resolveUserApiKeyByTornId,
+    getUserAccountStatus,
+    sanitizeErrorMessage,
     fetchUserLiveStats,
     detectUserAccountIntent,
     formatDeterministicStatsReply,
