@@ -5852,18 +5852,17 @@ async function callGeminiWithFallback(payload, specificKey = null, options = {})
     const allKeys = specificKey ? [specificKey] : getGeminiApiKeys();
     if (allKeys.length === 0) return { success: false, error: "Missing Gemini API key." };
 
-    // Order by standard production stability and generous quota availability
+    // Order by verified active availability & high quota throughput
+    // Note: gemini-flash-lite-latest & gemini-2.5-flash have distinct quota pools from gemini-flash-latest
     const candidateModels = [
-        'gemini-flash-latest',       // Google's official production Flash model (always active)
-        'gemini-flash-lite-latest',  // High-throughput fast model
-        'gemini-2.5-flash-lite',     // Standard flash-lite
-        'gemini-3.6-flash',          // Next-gen flash
-        'gemini-2.5-flash'           // Preview flash
+        'gemini-flash-lite-latest',  // High throughput, separate quota, verified 200 OK
+        'gemini-2.5-flash',          // Fast flash preview, separate quota, verified 200 OK
+        'gemini-flash-latest'        // Official production Flash (quota can be tight on free tier)
     ];
 
     const now = Date.now();
 
-    // Prioritize keys that are not on quota cooldown (5 minutes)
+    // Prioritize keys that are not on quota cooldown (3 minutes)
     const activeKeys = allKeys.filter(k => {
         const cd = keyQuotaCooldowns.get(k);
         return !cd || now > cd;
@@ -5889,6 +5888,7 @@ async function callGeminiWithFallback(payload, specificKey = null, options = {})
     // 1. Try each key in the rotation pool
     for (const key of orderedKeys) {
         const keyPreview = `${key.slice(0, 5)}...${key.slice(-4)}`;
+        let keySucceeded = false;
 
         // 2. Try each model in sequence for this key
         for (const model of activeModels) {
@@ -5899,7 +5899,7 @@ async function callGeminiWithFallback(payload, specificKey = null, options = {})
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload),
-                        signal: AbortSignal.timeout(options.timeout || 10000)
+                        signal: AbortSignal.timeout(options.timeout || 8000)
                     });
                     const data = await res.json();
                     if (data.error) {
@@ -5908,40 +5908,41 @@ async function callGeminiWithFallback(payload, specificKey = null, options = {})
                         const isHighDemand = (errMsg.toLowerCase().includes('high demand') || data.error.code === 503) && !isQuota;
 
                         if (isQuota) {
-                            // Cooldown this specific key for 5m and immediately roll over to the NEXT KEY in the pool
-                            keyQuotaCooldowns.set(key, Date.now() + 5 * 60 * 1000);
-                            console.warn(`[Gemini API] Key [${keyPreview}] hit quota limit for ${model}. Cooldown for 5m and rolling over to next key...`);
+                            // Cooldown this specific model for 3m, but CONTINUE to next model on THIS SAME KEY!
+                            modelQuotaCooldowns.set(model, Date.now() + 3 * 60 * 1000);
+                            console.warn(`[Gemini API] Key [${keyPreview}] hit quota limit for ${model}. Trying next model on this key...`);
                             lastError = new Error(`[Key ${keyPreview} / ${model}] ${errMsg}`);
-                            break; // Skip remaining models for this key; move to next key!
+                            break; // break attempt loop, try next model on this key
                         }
 
                         if (isHighDemand && attempt === 0) {
-                            await new Promise(r => setTimeout(r, 500));
+                            await new Promise(r => setTimeout(r, 400));
                             continue; // Quick retry once on transient 503 high demand
                         }
 
                         lastError = new Error(`[Key ${keyPreview} / ${model}] ${errMsg}`);
-                        console.warn(`[Gemini API] ${model} unavailable (${errMsg}). Rolling over to next model...`);
+                        console.warn(`[Gemini API] ${model} unavailable (${errMsg}). Trying next model...`);
                         break;
                     }
                     if (data.candidates && data.candidates.length > 0) {
+                        keySucceeded = true;
                         return { success: true, data, modelUsed: model, keyUsed: keyPreview };
                     }
                 } catch (err) {
                     lastError = err;
                     if (attempt === 0) {
-                        await new Promise(r => setTimeout(r, 500));
+                        await new Promise(r => setTimeout(r, 400));
                         continue;
                     }
-                    console.warn(`[Gemini API] Key [${keyPreview}] / ${model} connection error: ${err.message}. Rolling over...`);
+                    console.warn(`[Gemini API] Key [${keyPreview}] / ${model} connection error: ${err.message}. Trying next model...`);
                     break;
                 }
             }
+        }
 
-            // If the key was put on quota cooldown, don't try other models with this same broken key
-            if (keyQuotaCooldowns.has(key) && Date.now() < keyQuotaCooldowns.get(key)) {
-                break; // Jump to next key in the pool
-            }
+        // If key failed on all candidate models, set a brief cooldown for this key
+        if (!keySucceeded) {
+            keyQuotaCooldowns.set(key, Date.now() + 2 * 60 * 1000);
         }
     }
 
@@ -5953,20 +5954,22 @@ function getOpenRouterApiKey() {
     if (discordConfig && typeof discordConfig.openrouterApiKey === 'string' && discordConfig.openrouterApiKey.trim()) {
         return discordConfig.openrouterApiKey.trim();
     }
-    return (process.env.OPENROUTER_API_KEY || "").trim();
+    if (process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.trim()) {
+        return process.env.OPENROUTER_API_KEY.trim();
+    }
+    return "";
 }
 
 async function callOpenRouterFallback(systemPrompt, userPrompt, history = [], options = {}) {
     const orKey = getOpenRouterApiKey();
     if (!orKey) return { success: false, error: "Missing OpenRouter API key." };
 
-    // Diverse pool of verified active free models on OpenRouter
+    // Diverse pool of verified active free models on OpenRouter (fastest first)
     const candidateModels = [
-        'nvidia/nemotron-3-ultra-550b-a55b:free',
-        'nex-agi/nex-n2.5-pro:free',
         'nex-agi/nex-n2.5-mini:free',
-        'nvidia/nemotron-3-super-120b-a12b:free',
-        'cohere/north-mini-code:free',
+        'inclusionai/ling-3.0-flash-vl:free',
+        'liquid/lfm-2.5-2.6b:free',
+        'nex-agi/nex-n2.5-pro:free',
         'openrouter/free'
     ];
 
@@ -6002,7 +6005,7 @@ async function callOpenRouterFallback(systemPrompt, userPrompt, history = [], op
                     temperature: 0.7,
                     max_tokens: 800
                 }),
-                signal: AbortSignal.timeout(options.timeout || 12000)
+                signal: AbortSignal.timeout(options.timeout || 6000)
             });
 
             const data = await res.json();
@@ -6430,7 +6433,10 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
     }
     const casual = tornKnowledge.formatDeterministicCasualReply(cleanSpeech, invokerName);
     if (casual) return casual;
-    return "";
+    if (cleanSpeech && cleanSpeech.length > 20) {
+        return `I hear you, **${invokerName || "teammate"}**! My language network had a brief stutter. Ask me again or ping me with your Torn questions.`;
+    }
+    return `Hey ${invokerName || "there"}! I'm listening. What's on your mind?`;
 }
 
 app.post('/api/ai/chat', async (req, res) => {
@@ -13559,7 +13565,9 @@ function setupSlashBotEvents(bot, token) {
                 });
             } else if (batch.some(b => b.isMention)) {
                 // If explicitly @mentioned or addressed by name, give a friendly in-character greeting
-                const friendlyGreeting = `Hey ${primaryAuthor}! I'm listening. What's on your mind?`;
+                const friendlyGreeting = (userSpeech && userSpeech.length > 20)
+                    ? `I hear you, **${primaryAuthor}**! My neural link had a brief hiccup while processing that. Give me a shout again in a second!`
+                    : `Hey ${primaryAuthor}! I'm listening. What's on your mind?`;
                 await latestMsg.reply({
                     content: friendlyGreeting,
                     allowedMentions: { repliedUser: false }
@@ -14618,9 +14626,10 @@ function setupSlashBotEvents(bot, token) {
                 }
 
                 const aiReply = await generateChatResponse(convoLines, hint, invokerName, null, userAccountData, accountIntent, hint);
+                const safeReply = (aiReply || "").trim() || `Hey **${invokerName}**! I've joined the chat. What's on your mind?`;
 
                 return await interaction.editReply({
-                    content: aiReply
+                    content: safeReply
                 });
             } catch(err) {
                 return await interaction.editReply({

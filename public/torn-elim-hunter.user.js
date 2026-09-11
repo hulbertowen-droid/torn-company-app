@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter
 // @namespace    https://spider-verse.net/
-// @version      2.4.0
+// @version      2.4.1
 // @description  Autonomous 1-click snipe button for Torn Elimination. Finds beatable enemies that are NOT in hospital and NOT flying from ANY page.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -725,16 +725,26 @@
 
         wrapEl = document.createElement('div');
         wrapEl.id = 'elimv2-widget';
+
+        // Retrieve saved custom coordinates or default to comfortably floating ABOVE the bottom chat dock
+        const savedLeft = localStorage.getItem('elim_widget_pos_x');
+        const savedTop  = localStorage.getItem('elim_widget_pos_y');
+
+        let positionStyles = 'bottom: 62px; right: 18px;';
+        if (savedLeft !== null && savedTop !== null) {
+            positionStyles = `left: ${savedLeft}px; top: ${savedTop}px;`;
+        }
+
         wrapEl.style.cssText = `
             position: fixed;
-            bottom: 16px;
-            right: 16px;
+            ${positionStyles}
             z-index: 2147483647;
             display: flex;
             flex-direction: column;
             align-items: flex-end;
             gap: 6px;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            user-select: none;
         `;
 
         // Settings drawer
@@ -779,24 +789,46 @@
                 <span>⚡ Auto-launch attack page directly</span>
             </label>
             <div style="background:#1e2230; border:1px solid #3d4455; border-radius:5px; padding:8px; margin-bottom:8px; font-size:10px; color:#bdc3c7; line-height:1.4;">
-                ✨ <b>Autonomous Targeting:</b> Finds and ranks viable targets from any Torn page. Visiting competition.php adds fresh competitors to the shared pool.
+                ✨ <b>Autonomous Targeting:</b> Drag anywhere with ⠿ grip so it never blocks chat. Click — to minimize to a tiny button.
             </div>
             <button id="ev2-save" style="width:100%; padding:7px; background:#27ae60; color:#fff; border:none;
                 border-radius:5px; font-weight:800; cursor:pointer; font-size:12px; margin-bottom:6px;">💾 Save</button>
             <button id="ev2-open-comp" style="width:100%; padding:6px; background:#2980b9; color:#fff; border:none;
                 border-radius:5px; font-weight:700; cursor:pointer; font-size:11px; margin-bottom:6px;">🏆 Open Competition Page</button>
+            <button id="ev2-resetpos" style="width:100%; padding:5px; background:#34495e; color:#ecf0f1; border:1px solid #4a5568;
+                border-radius:5px; cursor:pointer; font-size:10px; margin-bottom:4px;">📍 Reset Position to Above Chat</button>
             <button id="ev2-clearsess" style="width:100%; padding:5px; background:#2c3e50; color:#bdc3c7; border:1px solid #3d4455;
                 border-radius:5px; cursor:pointer; font-size:10px; margin-bottom:4px;">🗑️ Clear Session Exclusions</button>
             <button id="ev2-clearroster" style="width:100%; padding:5px; background:#2c3e50; color:#bdc3c7; border:1px solid #3d4455;
                 border-radius:5px; cursor:pointer; font-size:10px;">🔄 Re-sync Roster (visit competition.php)</button>
             <div style="margin-top:8px; color:#7f8c8d; font-size:10px;">
-                v2.3.0 — Autonomous Elimination Target Finder
+                v2.4.1 — Autonomous Elimination Target Finder
             </div>
         `;
 
-        // Row: snipe button + cog
+        // Row: drag grip + snipe button + cog + minimize
         rowEl = document.createElement('div');
-        rowEl.style.cssText = 'display:flex; gap:6px; align-items:center;';
+        rowEl.id = 'ev2-main-row';
+        rowEl.style.cssText = 'display:flex; gap:5px; align-items:center;';
+
+        // Drag handle grip
+        const dragHandle = document.createElement('div');
+        dragHandle.id = 'ev2-drag-handle';
+        dragHandle.textContent = '⠿';
+        dragHandle.title = 'Hold & drag anywhere on screen';
+        dragHandle.style.cssText = `
+            cursor: grab;
+            padding: 6px 4px;
+            color: #7f8c8d;
+            font-size: 16px;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.15s;
+        `;
+        dragHandle.onmouseover = () => { dragHandle.style.color = '#fff'; };
+        dragHandle.onmouseout  = () => { dragHandle.style.color = '#7f8c8d'; };
 
         btnEl = document.createElement('button');
         btnEl.id = 'ev2-snipe-btn';
@@ -840,9 +872,145 @@
             if (drawerOpen && cardEl) cardEl.style.display = 'none';
         };
 
+        const minBtn = document.createElement('button');
+        minBtn.textContent = '—';
+        minBtn.title = 'Minimize widget (keeps chats clear)';
+        minBtn.style.cssText = `
+            background: #1a1d27;
+            border: 1px solid #3d4455;
+            color: #95a5a6;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s, color 0.15s;
+        `;
+        minBtn.onmouseover = () => { minBtn.style.background = '#2c3e50'; minBtn.style.color = '#fff'; };
+        minBtn.onmouseout  = () => { minBtn.style.background = '#1a1d27'; minBtn.style.color = '#95a5a6'; };
+
+        const miniEl = document.createElement('div');
+        miniEl.id = 'ev2-mini-pill';
+        miniEl.textContent = '⚔️';
+        miniEl.title = 'Click to expand Torn Elim Hunter';
+        miniEl.style.cssText = `
+            display: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #e74c3c;
+            border: 2px solid #fff;
+            color: #fff;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.15s;
+        `;
+        miniEl.onmouseover = () => { miniEl.style.transform = 'scale(1.1)'; };
+        miniEl.onmouseout  = () => { miniEl.style.transform = 'scale(1)'; };
+
+        minBtn.onclick = () => {
+            rowEl.style.display = 'none';
+            if (drawerEl) drawerEl.style.display = 'none';
+            if (cardEl) cardEl.style.display = 'none';
+            miniEl.style.display = 'flex';
+            localStorage.setItem('elim_widget_minimized', 'true');
+        };
+
+        miniEl.onclick = () => {
+            miniEl.style.display = 'none';
+            rowEl.style.display = 'flex';
+            localStorage.setItem('elim_widget_minimized', 'false');
+        };
+
+        if (localStorage.getItem('elim_widget_minimized') === 'true') {
+            rowEl.style.display = 'none';
+            miniEl.style.display = 'flex';
+        }
+
+        // ── Drag & Drop implementation ──
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let initialLeft = 0;
+        let initialTop = 0;
+
+        function startDrag(e) {
+            isDragging = true;
+            dragHandle.style.cursor = 'grabbing';
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            dragStartX = clientX;
+            dragStartY = clientY;
+
+            const rect = wrapEl.getBoundingClientRect();
+            initialLeft = rect.left;
+            initialTop = rect.top;
+
+            wrapEl.style.left = `${initialLeft}px`;
+            wrapEl.style.top = `${initialTop}px`;
+            wrapEl.style.bottom = 'auto';
+            wrapEl.style.right = 'auto';
+
+            document.addEventListener('mousemove', onDrag);
+            document.addEventListener('mouseup', stopDrag);
+            document.addEventListener('touchmove', onDrag, { passive: false });
+            document.addEventListener('touchend', stopDrag);
+        }
+
+        function onDrag(e) {
+            if (!isDragging) return;
+            if (e.cancelable) e.preventDefault();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            const deltaX = clientX - dragStartX;
+            const deltaY = clientY - dragStartY;
+
+            let newLeft = initialLeft + deltaX;
+            let newTop = initialTop + deltaY;
+
+            const maxLeft = window.innerWidth - wrapEl.offsetWidth - 10;
+            const maxTop = window.innerHeight - wrapEl.offsetHeight - 10;
+            newLeft = Math.max(10, Math.min(newLeft, maxLeft));
+            newTop = Math.max(10, Math.min(newTop, maxTop));
+
+            wrapEl.style.left = `${newLeft}px`;
+            wrapEl.style.top = `${newTop}px`;
+        }
+
+        function stopDrag() {
+            if (!isDragging) return;
+            isDragging = false;
+            dragHandle.style.cursor = 'grab';
+
+            document.removeEventListener('mousemove', onDrag);
+            document.removeEventListener('mouseup', stopDrag);
+            document.removeEventListener('touchmove', onDrag);
+            document.removeEventListener('touchend', stopDrag);
+
+            const rect = wrapEl.getBoundingClientRect();
+            localStorage.setItem('elim_widget_pos_x', Math.round(rect.left));
+            localStorage.setItem('elim_widget_pos_y', Math.round(rect.top));
+        }
+
+        dragHandle.addEventListener('mousedown', startDrag);
+        dragHandle.addEventListener('touchstart', startDrag, { passive: false });
+
+        rowEl.appendChild(dragHandle);
         rowEl.appendChild(btnEl);
         rowEl.appendChild(cogBtn);
+        rowEl.appendChild(minBtn);
         wrapEl.appendChild(drawerEl);
+        wrapEl.appendChild(miniEl);
         wrapEl.appendChild(rowEl);
         document.body.appendChild(wrapEl);
 
@@ -854,6 +1022,16 @@
 
         document.getElementById('ev2-open-comp').onclick = () => {
             window.location.href = 'https://www.torn.com/competition.php';
+        };
+
+        document.getElementById('ev2-resetpos').onclick = () => {
+            localStorage.removeItem('elim_widget_pos_x');
+            localStorage.removeItem('elim_widget_pos_y');
+            wrapEl.style.left = 'auto';
+            wrapEl.style.top = 'auto';
+            wrapEl.style.bottom = '62px';
+            wrapEl.style.right = '18px';
+            showToast('📍 Position reset to above chat dock');
         };
 
         document.getElementById('ev2-save').onclick = async () => {
