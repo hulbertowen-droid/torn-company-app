@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter
 // @namespace    https://spider-verse.net/
-// @version      2.3.0
+// @version      2.4.0
 // @description  Autonomous 1-click snipe button for Torn Elimination. Finds beatable enemies that are NOT in hospital and NOT flying from ANY page.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -142,13 +142,37 @@
         });
     }
 
-    // ── Auto-sync competition page rosters to backend ──────────────
+    // ── Auto-sync competition page rosters to backend (Elimination only) ──
     let rosterSyncDone = false;
 
     function syncRosterIfOnCompetitionPage() {
         if (!window.location.href.includes('competition.php')) return;
         if (!apiKey) return;
         if (rosterSyncDone) return;
+
+        // Verify that this is the Elimination competition view
+        const pageText = (document.body ? document.body.innerText || '' : '').toLowerCase();
+        if (!pageText.includes('elimination')) return;
+
+        // Try to identify the active opposing team name from tab or header
+        let teamName = '';
+        const activeTabEl = document.querySelector('.active-tab, .ui-tabs-active, .tab-active, [class*="teamTitle"], [class*="teamName"], .team-info h4, .team-name');
+        if (activeTabEl) {
+            teamName = (activeTabEl.innerText || activeTabEl.textContent || '').trim();
+        }
+        if (!teamName) {
+            const h4s = Array.from(document.querySelectorAll('h4, h3, h2, .title'));
+            for (const h of h4s) {
+                const t = (h.innerText || '').trim();
+                if (t && !t.toLowerCase().includes('competition') && !t.toLowerCase().includes('elimination') && t.length < 35) {
+                    teamName = t;
+                    break;
+                }
+            }
+        }
+
+        // If team name could not be identified, do not sync arbitrary members
+        if (!teamName) return;
 
         const links = document.querySelectorAll('a[href*="profiles.php?XID="], a[href*="profiles.php?xid="]');
         if (!links || links.length === 0) return;
@@ -172,45 +196,19 @@
             gmFetch(`${BACKEND}/api/elim/sync-roster`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
-                body: JSON.stringify({ apiKey, members, myId: selfId })
+                body: JSON.stringify({ apiKey, members, teamName, myId: selfId })
             }).then(raw => {
                 try {
                     const d = JSON.parse(raw);
-                    if (d && d.memberCount !== undefined) {
-                        showToast(`✅ Synced ${d.memberCount} competitors to pool`);
+                    if (d && d.success && d.memberCount !== undefined) {
+                        showToast(`✅ Synced ${d.memberCount} competitors from team "${teamName}"`);
+                    } else if (d && d.code === 'NOT_IN_ELIMINATION') {
+                        // User not enrolled in Elimination
+                        setButtonState('not_in_elim');
                     }
                 } catch (e) {}
             }).catch(() => {});
         });
-    }
-
-    // ── Background silent sync of competition page ─────────────────
-    function silentBgSync() {
-        if (!apiKey) return;
-        if (window.location.href.includes('competition.php')) return;
-        if (sessionStorage.getItem(SESS_BGSYNC)) return;
-
-        sessionStorage.setItem(SESS_BGSYNC, '1');
-        gmFetch('https://www.torn.com/competition.php').then(html => {
-            if (!html) return;
-            const idMatches = html.matchAll(/profiles\.php\?XID=(\d+)/gi);
-            const seen = new Set();
-            const members = [];
-            for (const match of idMatches) {
-                const id = match[1];
-                if (!seen.has(id) && id !== myId) {
-                    seen.add(id);
-                    members.push({ id, name: '' });
-                }
-            }
-            if (members.length > 0) {
-                gmFetch(`${BACKEND}/api/elim/sync-roster`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
-                    body: JSON.stringify({ apiKey, members, myId })
-                }).catch(() => {});
-            }
-        }).catch(() => {});
     }
 
     // Show a brief non-intrusive toast notification
@@ -351,12 +349,20 @@
                 return;
             }
 
+            if (data && (data.code === 'NOT_IN_ELIMINATION' || data.code === 'USER_ELIMINATED')) {
+                try { sessionStorage.removeItem(SESS_EXCL); } catch (e) {}
+                renderNotInElimCard(data.message);
+                setButtonState('not_in_elim');
+                busy = false;
+                return;
+            }
+
             if (data && data.success && data.targetId) {
                 addExclude(data.targetId);
-                setButtonState('idle');
+                setButtonState('idle', null, data.targetCount);
 
                 if (autoLaunch) {
-                    launchAttack(data.targetId);
+                    launchAttack(data.targetId, data.provenance);
                 } else {
                     renderTargetCard(data);
                 }
@@ -371,7 +377,13 @@
         }
     }
 
-    function launchAttack(targetId) {
+    function launchAttack(targetId, provenance) {
+        // HARD PROVENANCE GUARD: Block attack if target cannot be proven as an active Elimination opponent
+        if (!provenance || provenance.source !== 'torn_elimination' || !provenance.isValidOpponent) {
+            showToast('🚫 Attack blocked: Target is not a verified Elimination opponent');
+            setButtonState('error', 'Unverified target rejected');
+            return;
+        }
         setButtonState('launching');
         window.location.href = `https://www.torn.com/page.php?sid=attack&user2ID=${targetId}`;
     }
@@ -478,6 +490,65 @@
         }
     }
 
+    // ── Not In Elimination Card Display ──────────────────────────
+    function renderNotInElimCard(customMsg) {
+        if (!cardEl) {
+            cardEl = document.createElement('div');
+            cardEl.id = 'elim-target-card';
+            cardEl.style.cssText = `
+                background: #1a1d27;
+                border: 2px solid #57606f;
+                border-radius: 10px;
+                padding: 14px;
+                width: 310px;
+                color: #ecf0f1;
+                font-size: 12px;
+                box-shadow: 0 10px 32px rgba(0,0,0,0.85);
+                text-align: left;
+                display: none;
+                margin-bottom: 4px;
+            `;
+            if (wrapEl && rowEl) {
+                wrapEl.insertBefore(cardEl, rowEl);
+            }
+        }
+
+        if (drawerEl) {
+            drawerEl.style.display = 'none';
+            drawerOpen = false;
+        }
+
+        const info = customMsg || 'No active Elimination competition found for your account. Target finding is disabled until you are enrolled on an active tournament team.';
+
+        cardEl.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #3d4455; padding-bottom:7px; margin-bottom:10px;">
+                <span style="font-weight:900; font-size:13px; color:#e67e22; display:flex; align-items:center; gap:5px;">
+                    🛑 Not Enrolled in Elimination
+                </span>
+                <span id="ev2-card-close" style="cursor:pointer; color:#95a5a6; font-size:13px; font-weight:bold;" title="Close">✖</span>
+            </div>
+            <div style="font-size:11.5px; color:#bdc3c7; line-height:1.45; margin-bottom:12px;">
+                ${info}
+            </div>
+            <div style="background:#1e2230; border:1px solid #3d4455; border-radius:6px; padding:8px; margin-bottom:12px; font-size:10.5px; color:#95a5a6; line-height:1.4;">
+                🔒 <b>Zero Non-Elimination Targets:</b> To protect against attacking faction members or non-event players, target finding is strictly restricted to active tournament participants.
+            </div>
+            <div style="display:flex; gap:6px;">
+                <button id="ev2-comp-link" style="width:100%; padding:7px 10px; background:#2980b9; color:#fff; border:none; border-radius:5px; font-weight:700; font-size:11.5px; cursor:pointer;">
+                    🏆 View Competition Page
+                </button>
+            </div>
+        `;
+
+        cardEl.style.display = 'block';
+
+        const closeBtn = document.getElementById('ev2-card-close');
+        if (closeBtn) closeBtn.onclick = () => { cardEl.style.display = 'none'; };
+
+        const compBtn = document.getElementById('ev2-comp-link');
+        if (compBtn) compBtn.onclick = () => { window.location.href = 'https://www.torn.com/competition.php'; };
+    }
+
     // ── Target Card Display ───────────────────────────────────────
     let cardEl = null;
 
@@ -513,6 +584,8 @@
             ? data.why.map(w => `<li style="margin-bottom:3px;">${w}</li>`).join('')
             : '<li>Confirmed available in Torn City</li><li>Optimal battle stats ratio</li>';
 
+        const targetTeam = data.team || (data.provenance && data.provenance.targetTeam) || 'Opponent';
+
         cardEl.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #3d4455; padding-bottom:7px; margin-bottom:8px;">
                 <span style="font-weight:900; font-size:12.5px; color:#e74c3c; display:flex; align-items:center; gap:5px;">
@@ -526,6 +599,7 @@
                     ${data.name} [${data.targetId}]
                 </a>
                 <span style="color:#bdc3c7; font-size:11px; margin-left:4px;">(Lvl ${data.level})</span>
+                <div style="margin-top:2px; font-size:10.5px; color:#e67e22; font-weight:700;">⚔️ Team: ${targetTeam}</div>
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:8px; font-size:11px;">
                 <div style="background:#262b38; padding:5px 7px; border-radius:4px; border:1px solid #3d4455;">
@@ -567,7 +641,7 @@
         if (closeBtn) closeBtn.onclick = () => { cardEl.style.display = 'none'; };
 
         const attackBtn = document.getElementById('ev2-card-attack');
-        if (attackBtn) attackBtn.onclick = () => { launchAttack(data.targetId); };
+        if (attackBtn) attackBtn.onclick = () => { launchAttack(data.targetId, data.provenance); };
 
         const nextBtn = document.getElementById('ev2-card-next');
         if (nextBtn) nextBtn.onclick = () => { executeSnipe(); };
@@ -579,7 +653,7 @@
     let btnEl     = null;
     let errorTimer = null;
 
-    function setButtonState(state, msg) {
+    function setButtonState(state, msg, count) {
         if (!btnEl) return;
         clearTimeout(errorTimer);
 
@@ -587,9 +661,19 @@
 
         switch (state) {
             case 'idle':
-                btnEl.textContent = isAttackPage ? '⚔️ NEXT TARGET' : '⚔️ SNIPE TARGET';
+                if (count !== undefined && count !== null && count > 0) {
+                    btnEl.textContent = isAttackPage ? `⚔️ NEXT TARGET (${count} left)` : `⚔️ SNIPE TARGET (${count} ready)`;
+                } else {
+                    btnEl.textContent = isAttackPage ? '⚔️ NEXT TARGET' : '⚔️ SNIPE TARGET';
+                }
                 btnEl.style.background = '#e74c3c';
                 btnEl.style.opacity = '1';
+                btnEl.disabled = false;
+                break;
+            case 'not_in_elim':
+                btnEl.textContent = '🛑 ELIM: Not Enrolled';
+                btnEl.style.background = '#4b5563';
+                btnEl.style.opacity = '0.9';
                 btnEl.disabled = false;
                 break;
             case 'needkey':
@@ -599,7 +683,7 @@
                 errorTimer = setTimeout(() => setButtonState('idle'), 3000);
                 break;
             case 'hunting':
-                btnEl.textContent = '⏳ Hunting...';
+                btnEl.textContent = '⏳ Analyzing Opponents...';
                 btnEl.style.background = '#2980b9';
                 btnEl.style.opacity = '0.85';
                 btnEl.disabled = true;
@@ -840,7 +924,6 @@
             setButtonState('idle');
             syncRosterIfOnCompetitionPage();
             checkAttackScreenForHosp();
-            silentBgSync();
         }, 800);
     }
 
@@ -849,7 +932,6 @@
         buildWidget();
         syncRosterIfOnCompetitionPage();
         checkAttackScreenForHosp();
-        silentBgSync();
 
         const obs = new MutationObserver(onPageChange);
         obs.observe(document.body, { childList: true, subtree: true });
