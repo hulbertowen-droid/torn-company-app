@@ -1,3 +1,5 @@
+<!DOCTYPE html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,12 +10,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/global.css">
+    <link rel="stylesheet" href="/global.css?v=3.2.0">
     
     <!-- Scripts & Auth -->
-    <script src="/auth-gate.js"></script>
-    <script src="/global_settings.js"></script>
-    <script src="/global-topbar.js"></script>
+    <script src="/auth-gate.js?v=3.2.0"></script>
+    <script src="/global_settings.js?v=3.2.0"></script>
+    <script src="/global-topbar.js?v=3.2.0"></script>
 
     <style>
     /* ─── Page-Specific War Payout Styling ─── */
@@ -336,61 +338,69 @@
 </head>
 <body>
     <!-- SIDEBAR -->
-    <nav class="sidebar" id="app-sidebar">
-        <div class="sidebar-brand">
-            <div class="brand-badge">
-                <div class="brand-avatar">🕷️</div>
-                <div class="brand-info">
-                    <span class="brand-title">SPIDER-VERSE</span>
-                    <span class="brand-subtitle">Operations Hub</span>
-                </div>
+        <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">
+                <span class="brand-icon">🕷️</span>
+                <span class="brand-text">Spider-Verse</span>
             </div>
-            <button class="sidebar-toggle-btn" onclick="toggleSidebar()" aria-label="Toggle Sidebar">☰</button>
+            <div class="sidebar-actions">
+                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌗</button>
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar">☰</button>
+            </div>
         </div>
-
-        <div class="nav-scroller">
-            <div class="nav-section-label">Command & Tactical</div>
+        <div class="nav-items">
+            <div class="nav-section-title">Live Operations</div>
             <a href="/" class="nav-link"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
             <a href="/chain.html" class="nav-link"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
             <a href="/payout.html" class="nav-link active"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
-            <a href="/dashboard.html" class="nav-link"><span class="nav-icon">🛡️</span> <span class="nav-text">Flight & Sentinel</span></a>
-
-            <div class="nav-section-label">Faction & People</div>
-            <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Roster Intel</span></a>
+            <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Faction Roster</span></a>
             <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
-            <a href="/recruit/" class="nav-link"><span class="nav-icon">🎯</span> <span class="nav-text">Headhunter</span></a>
 
-            <div class="nav-section-label">Economy & Trading</div>
-            <a href="/travel.html" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Travel Desk</span></a>
-            <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market Sniper</span></a>
+            <div class="nav-section-title">Tactical Desk</div>
+            <a href="/dashboard.html" class="nav-link"><span class="nav-icon">🛡️</span> <span class="nav-text">Flight & Sentinel</span></a>
+            <a href="/travel.html" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Travel Profit Desk</span></a>
+            <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market & Bazaar</span></a>
             <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
             <a href="/gamble.html" class="nav-link"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
+            <a href="/recruit/" class="nav-link"><span class="nav-icon">🎯</span> <span class="nav-text">Recruit Engine</span></a>
 
-            <div class="nav-section-label">Intelligence & Alerts</div>
-            <a href="/discord.html" class="nav-link"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
+            <div class="nav-section-title">Intelligence & Alerts</div>
             <a href="/ai-sandbox.html" class="nav-link"><span class="nav-icon">🤖</span> <span class="nav-text">F.R.I.D.A.Y. Intel</span></a>
-            <a onclick="openSettings()" class="nav-link" style="cursor: pointer;"><span class="nav-icon">⚙️</span> <span class="nav-text">System Config</span></a>
+            <a href="/discord.html" class="nav-link"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
+            <a onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" class="nav-link" style="cursor:pointer; margin-top:4px;"><span class="nav-icon">⚙️</span> <span class="nav-text">Settings</span></a>
+        </div>
+        <div class="sidebar-footer" id="sidebar-user-footer">
+            <div class="sidebar-user-chip" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" style="cursor:pointer;" title="Account & API Settings">
+                <div class="sidebar-user-avatar" id="nav-user-avatar">🕷️</div>
+                <div class="sidebar-user-info">
+                    <span class="sidebar-user-name" id="nav-user-name">Tactical Operative</span>
+                    <span class="sidebar-user-faction" id="nav-user-sub">Spider-Verse [52355]</span>
+                </div>
+                <span style="color:var(--text-tertiary); font-size:0.9em;">⚙️</span>
+            </div>
         </div>
     </nav>
 
     <!-- MAIN CONTENT WRAPPER -->
     <div class="main-wrapper">
-        <header class="app-topbar">
+                <header class="app-topbar">
             <div class="topbar-left">
-                <div class="page-breadcrumb">
-                    <span class="breadcrumb-sub">OPERATIONS</span>
-                    <span class="breadcrumb-sep">/</span>
-                    <span class="breadcrumb-current">WAR PAYOUTS</span>
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;">☰</button>
+                <div class="topbar-crumb">
+                    <span>OPERATIONS</span> / <strong style="color:var(--text-primary);">WAR PAYOUTS</strong>
                 </div>
             </div>
             <div class="topbar-right">
-                <div class="topbar-clock" id="topbar-tct-clock">--:--:-- TCT</div>
-                <div class="topbar-pill"><span class="pill-indicator"></span><span id="topbar-status-text">CALCULATOR</span></div>
-                <div class="topbar-user" id="topbar-user-pill">
-                    <span class="user-status-dot"></span>
-                    <span class="user-name-label" id="topbar-user-name">Authenticated</span>
+                <div class="tct-clock-chip" title="Torn City Time (TCT)">
+                    <span class="tct-label">TCT</span>
+                    <span id="global-tct-clock">--:--:--</span>
                 </div>
-                <button class="topbar-btn" onclick="openSettings()" title="Settings">⚙️</button>
+                <div class="telemetry-chip live-ws" id="global-ws-badge" title="Data Feed Status">
+                    <span class="pulse-indicator"></span>
+                    <span id="global-ws-status">LIVE WS</span>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" title="Settings" style="padding:4px 8px;">⚙️</button>
             </div>
         </header>
 
@@ -607,9 +617,7 @@
             </div>
         </main>
     </div>
-</body>
-</html>
-<script>
+    <script>
         const myKey = localStorage.getItem('warboard_apikey') || '';
         let rawMembers = [];
         let totalCacheVal = 0;
@@ -898,3 +906,5 @@
             });
         }
     </script>
+</body>
+</html>

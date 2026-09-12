@@ -393,14 +393,17 @@ app.post('/api/sync-recruits-now', async (req, res) => {
 });
 
 app.use(express.static('public', {
-    maxAge: '1h',
+    maxAge: 0,
     setHeaders: (res, path) => {
         if (path.endsWith('.html')) {
             res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
             res.setHeader('Pragma', 'no-cache');
             res.setHeader('Expires', '0');
+        } else if (path.endsWith('.css') || path.endsWith('.js')) {
+            res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
         } else {
-            res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+            res.setHeader('Cache-Control', 'public, max-age=86400');
         }
     }
 })); 

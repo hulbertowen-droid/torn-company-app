@@ -13,8 +13,14 @@
         const s = String(now.getUTCSeconds()).padStart(2, '0');
         const timeStr = `${h}:${m}:${s}`;
         
-        const clockEls = document.querySelectorAll('#global-tct-clock, .tct-clock-val');
-        clockEls.forEach(el => { el.textContent = timeStr; });
+        const clockEls = document.querySelectorAll('#global-tct-clock, #topbar-tct-clock, .tct-clock-val, .topbar-clock');
+        clockEls.forEach(el => {
+            if (el.id === 'topbar-tct-clock' || el.classList.contains('topbar-clock')) {
+                el.textContent = `${timeStr} TCT`;
+            } else {
+                el.textContent = timeStr;
+            }
+        });
     }
     setInterval(tickTCT, 1000);
     tickTCT();
@@ -42,9 +48,9 @@
         }
 
         if (user) {
-            const nameEls = document.querySelectorAll('#nav-user-name, .topbar-user-name');
+            const nameEls = document.querySelectorAll('#nav-user-name, .topbar-user-name, #topbar-user-name, .user-name-label');
             const subEls = document.querySelectorAll('#nav-user-sub, .topbar-user-sub');
-            const avatarEls = document.querySelectorAll('#nav-user-avatar, .topbar-user-avatar');
+            const avatarEls = document.querySelectorAll('#nav-user-avatar, .topbar-user-avatar, .brand-avatar');
 
             nameEls.forEach(el => { el.textContent = user.playerName || 'Operative'; });
             subEls.forEach(el => {
@@ -52,7 +58,9 @@
                 el.textContent = fac;
             });
             avatarEls.forEach(el => {
-                if (user.playerName) el.textContent = user.playerName.charAt(0).toUpperCase();
+                if (user.playerName && !el.textContent.includes('🕷️')) {
+                    el.textContent = user.playerName.charAt(0).toUpperCase();
+                }
             });
         }
     }
