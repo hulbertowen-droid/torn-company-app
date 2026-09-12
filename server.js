@@ -7199,10 +7199,13 @@ app.post('/api/elim/report-hosp', (req, res) => {
 app.post('/api/elim/sync-roster', async (req, res) => {
     try {
         let apiKey      = (req.headers['x-api-key'] || req.body.apiKey || '').trim();
-        const tornId    = (req.headers['x-torn-id'] || req.body.tornId || '').trim();
+        // The userscript sends the resolved Torn ID as `myId`; treat it as the
+        // account ID as well so this roster is retrieved by the same key during
+        // later /api/elim/snipe requests.
+        const tornId    = (req.headers['x-torn-id'] || req.body.tornId || req.body.myId || '').trim();
         const discordId = (req.headers['x-discord-id'] || req.body.discordId || '').trim();
         const members   = req.body.members; // [{ id, name }]
-        const teamName  = String(req.body.teamName || req.body.team || '').trim();
+        const teamName  = String(req.body.teamName || req.body.team || '').replace(/\s*\(\s*\d+[^)]*\)/g, '').trim();
         const myId      = String(req.body.myId || tornId || '').trim();
 
         if (!apiKey && tornId) {
@@ -7212,6 +7215,13 @@ app.post('/api/elim/sync-roster', async (req, res) => {
         if (!apiKey && discordId) {
             const resolved = userKeys.resolveUserApiKey(discordId);
             if (resolved) apiKey = resolved.key;
+        }
+        if (!apiKey && req.headers['x-session-token']) {
+            const sess = sessionManager.getSession(req.headers['x-session-token']);
+            if (sess && sess.playerId) {
+                const resolved = userKeys.resolveUserApiKeyByTornId(sess.playerId);
+                if (resolved) apiKey = resolved.key;
+            }
         }
 
         if (!apiKey) {
@@ -7250,7 +7260,7 @@ app.post('/api/elim/sync-roster', async (req, res) => {
                     message: 'Cannot sync roster: Your account is not currently participating in an active Elimination tournament.'
                 });
             }
-            userTeam = String(uData.competition.team || uData.competition.team_name || '').trim();
+            userTeam = String(uData.competition.team || uData.competition.team_name || '').replace(/\s*\(\s*\d+[^)]*\)/g, '').trim();
             if (uData.competition.id) compId = String(uData.competition.id);
 
             // Faction members protection
@@ -7288,20 +7298,27 @@ app.post('/api/elim/sync-roster', async (req, res) => {
             }
         });
 
-        // Store in per-user roster
+        // Store in per-user and shared roster pool
         const userKeyId = tornId ? `torn:${tornId}` : (discordId ? `discord:${discordId}` : `key:${crypto.createHash('sha256').update(apiKey).digest('hex').slice(0, 16)}`);
-        const existing = elimState.rosters.get(userKeyId);
+        const existing = elimState.rosters.get(userKeyId) || (tornId ? elimState.rosters.get(String(tornId)) : null);
         const existingMembers = existing ? existing.members : [];
         const memberMap = new Map();
         existingMembers.forEach(em => memberMap.set(em.id, em));
         validCandidates.forEach(vc => memberMap.set(vc.id, vc));
         const mergedMembers = Array.from(memberMap.values());
 
-        elimState.rosters.set(userKeyId, {
+        const rosterData = {
             members: mergedMembers,
             teamName: userTeam,
+            opposingTeamName: teamName,
             syncedAt: Date.now()
-        });
+        };
+
+        elimState.rosters.set(userKeyId, rosterData);
+        if (tornId) {
+            elimState.rosters.set(String(tornId), rosterData);
+            elimState.rosters.set(`torn:${tornId}`, rosterData);
+        }
 
         // Persist to MongoDB with source: "torn_elimination"
         elimAddCandidates(validCandidates, compId).catch(() => {});
@@ -7423,7 +7440,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             };
         }
 
-        myTeam = userTeam;
+        myTeam = userTeam.replace(/\s*\(\s*\d+[^)]*\)/g, '').trim();
         if (comp.id) compId = String(comp.id);
 
         if (typeof userData.strength === 'number') {
@@ -7471,32 +7488,33 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             { signal: AbortSignal.timeout(5000) }
         );
         const compData = await compRes.json();
-        if (compData && compData.competition && Array.isArray(compData.competition.teams)) {
+        if (compData && compData.competition && compData.competition.teams) {
+            const rawTeams = compData.competition.teams;
+            const teamsList = Array.isArray(rawTeams) ? rawTeams : (typeof rawTeams === 'object' ? Object.values(rawTeams) : []);
             const discoveredCandidates = [];
-            for (const t of compData.competition.teams) {
-                const tName = String(t.name || '').trim();
+            for (const t of teamsList) {
+                if (!t) continue;
+                const tName = String(t.name || t.team_name || '').trim();
                 if (!tName || tName.toLowerCase() === myTeam.toLowerCase()) continue; // Skip own team
                 if (t.status === 'eliminated' || t.lives === 0) continue; // Skip eliminated team
 
                 if (t.captain) {
-                    const cid = String(t.captain);
+                    const cid = String(t.captain.id || t.captain);
                     candidateMeta.set(cid, { id: cid, team: tName, source: 'torn_elimination', competitionId: compId });
                     discoveredCandidates.push({ id: cid, team: tName });
                 }
-                if (Array.isArray(t.vice_captains)) {
-                    t.vice_captains.forEach(vc => {
-                        const cid = String(vc);
-                        candidateMeta.set(cid, { id: cid, team: tName, source: 'torn_elimination', competitionId: compId });
-                        discoveredCandidates.push({ id: cid, team: tName });
-                    });
-                }
-                if (Array.isArray(t.members)) {
-                    t.members.forEach(m => {
-                        const cid = String(m.id || m);
-                        candidateMeta.set(cid, { id: cid, team: tName, source: 'torn_elimination', competitionId: compId });
-                        discoveredCandidates.push({ id: cid, team: tName });
-                    });
-                }
+                const vcs = Array.isArray(t.vice_captains) ? t.vice_captains : (t.vice_captains && typeof t.vice_captains === 'object' ? Object.values(t.vice_captains) : []);
+                vcs.forEach(vc => {
+                    const cid = String(vc.id || vc);
+                    candidateMeta.set(cid, { id: cid, team: tName, source: 'torn_elimination', competitionId: compId });
+                    discoveredCandidates.push({ id: cid, team: tName });
+                });
+                const mems = Array.isArray(t.members) ? t.members : (t.members && typeof t.members === 'object' ? Object.values(t.members) : []);
+                mems.forEach(m => {
+                    const cid = String(m.id || m.playerId || m);
+                    candidateMeta.set(cid, { id: cid, team: tName, source: 'torn_elimination', competitionId: compId });
+                    discoveredCandidates.push({ id: cid, team: tName });
+                });
             }
             if (discoveredCandidates.length > 0) {
                 elimAddCandidates(discoveredCandidates, compId).catch(() => {});
@@ -7510,25 +7528,28 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             const elimCol = mongoose.connection.db.collection('elim_candidates');
             const docs = await elimCol.find({
                 source: 'torn_elimination',
-                team: { $exists: true, $nin: ['', myTeam] }
+                team: { $exists: true, $ne: '' }
             }).limit(500).toArray();
             for (const d of docs) {
-                const cid = String(d._id);
-                if (!candidateMeta.has(cid)) {
-                    candidateMeta.set(cid, { id: cid, team: d.team, source: 'torn_elimination', competitionId: d.competitionId || compId });
+                if (d.team && d.team.toLowerCase() !== myTeam.toLowerCase()) {
+                    const cid = String(d._id);
+                    if (!candidateMeta.has(cid)) {
+                        candidateMeta.set(cid, { id: cid, team: d.team, source: 'torn_elimination', competitionId: d.competitionId || compId });
+                    }
                 }
             }
         } catch (dbErr) {}
     }
 
-    // Source C: Per-user synced roster (only candidates with verified opposing team)
-    const userRoster = elimState.rosters.get(userKeyId);
-    if (userRoster && Array.isArray(userRoster.members)) {
-        for (const m of userRoster.members) {
-            if (m && m.team && m.team.toLowerCase() !== myTeam.toLowerCase()) {
-                const cid = String(m.id);
-                if (!candidateMeta.has(cid)) {
-                    candidateMeta.set(cid, { id: cid, team: m.team, source: 'torn_elimination', competitionId: compId });
+    // Source C: Synced rosters from memory (user's roster + all shared opposing rosters)
+    for (const [rKey, rData] of elimState.rosters.entries()) {
+        if (rData && Array.isArray(rData.members)) {
+            for (const m of rData.members) {
+                if (m && m.team && m.team.toLowerCase() !== myTeam.toLowerCase()) {
+                    const cid = String(m.id || m.playerId || m);
+                    if (!candidateMeta.has(cid)) {
+                        candidateMeta.set(cid, { id: cid, team: m.team, source: 'torn_elimination', competitionId: compId });
+                    }
                 }
             }
         }
@@ -7858,6 +7879,13 @@ app.get('/api/elim/snipe', async (req, res) => {
         if (!apiKey && discordId) {
             resolvedUser = userKeys.resolveUserApiKey(discordId);
             if (resolvedUser) apiKey = resolvedUser.key;
+        }
+        if (!apiKey && req.headers['x-session-token']) {
+            const sess = sessionManager.getSession(req.headers['x-session-token']);
+            if (sess && sess.playerId) {
+                resolvedUser = userKeys.resolveUserApiKeyByTornId(sess.playerId);
+                if (resolvedUser) apiKey = resolvedUser.key;
+            }
         }
 
         if (!apiKey) {

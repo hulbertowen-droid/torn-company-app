@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter
 // @namespace    https://spider-verse.net/
-// @version      2.4.1
+// @version      2.4.2
 // @description  Autonomous 1-click snipe button for Torn Elimination. Finds beatable enemies that are NOT in hospital and NOT flying from ANY page.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -12,6 +12,7 @@
 // @connect      spider-verse.net
 // @connect      ffscouter.com
 // @connect      api.torn.com
+// @connect      *
 // @run-at       document-idle
 // @updateURL    https://spider-verse.net/torn-elim-hunter.meta.js
 // @downloadURL  https://spider-verse.net/torn-elim-hunter.user.js
@@ -76,19 +77,21 @@
     // ── Get My Torn ID directly from page DOM/cookies ───────────────
     function getMyTornIdFromPage() {
         try {
+            if (window.userID) return String(window.userID);
+            if (window.user && window.user.id) return String(window.user.id);
+            if (window.user && window.user.player_id) return String(window.user.player_id);
+        } catch (e) {}
+        try {
             const m = document.cookie.match(/(?:^|;\s*)uid=(\d+)/);
             if (m && m[1]) return m[1];
         } catch (e) {}
         try {
-            const el = document.querySelector('a[href*="profiles.php?XID="], a[href*="profiles.php?xid="]');
-            if (el) {
-                const m = el.href.match(/xid=(\d+)/i);
+            // Restrict DOM extraction strictly to sidebar / user navigation to avoid matching target profiles on profiles.php or competition.php
+            const userLink = document.querySelector('#sidebarroot a[href*="profiles.php?XID="], .user-information a[href*="profiles.php?XID="], #barUser a[href*="profiles.php?XID="], [class*="menu-info_"] a[href*="profiles.php?XID="]');
+            if (userLink) {
+                const m = userLink.href.match(/xid=(\d+)/i);
                 if (m && m[1]) return m[1];
             }
-        } catch (e) {}
-        try {
-            if (window.userID) return String(window.userID);
-            if (window.user && window.user.id) return String(window.user.id);
         } catch (e) {}
         return '';
     }
@@ -143,36 +146,39 @@
     }
 
     // ── Auto-sync competition page rosters to backend (Elimination only) ──
-    let rosterSyncDone = false;
+    const syncedTeams = new Set();
 
     function syncRosterIfOnCompetitionPage() {
         if (!window.location.href.includes('competition.php')) return;
         if (!apiKey) return;
-        if (rosterSyncDone) return;
 
         // Verify that this is the Elimination competition view
         const pageText = (document.body ? document.body.innerText || '' : '').toLowerCase();
         if (!pageText.includes('elimination')) return;
 
         // Try to identify the active opposing team name from tab or header
-        let teamName = '';
+        let rawTeam = '';
         const activeTabEl = document.querySelector('.active-tab, .ui-tabs-active, .tab-active, [class*="teamTitle"], [class*="teamName"], .team-info h4, .team-name');
         if (activeTabEl) {
-            teamName = (activeTabEl.innerText || activeTabEl.textContent || '').trim();
+            rawTeam = (activeTabEl.innerText || activeTabEl.textContent || '').trim();
         }
-        if (!teamName) {
+        if (!rawTeam) {
             const h4s = Array.from(document.querySelectorAll('h4, h3, h2, .title'));
             for (const h of h4s) {
                 const t = (h.innerText || '').trim();
                 if (t && !t.toLowerCase().includes('competition') && !t.toLowerCase().includes('elimination') && t.length < 35) {
-                    teamName = t;
+                    rawTeam = t;
                     break;
                 }
             }
         }
 
-        // If team name could not be identified, do not sync arbitrary members
+        // Sanitize team name (strip lives/parentheticals, e.g. "Desert Eagles (142 lives)" -> "Desert Eagles")
+        const teamName = rawTeam.replace(/\s*\(\s*\d+[^)]*\)/g, '').trim();
         if (!teamName) return;
+
+        const teamKey = teamName.toLowerCase();
+        if (syncedTeams.has(teamKey)) return;
 
         const links = document.querySelectorAll('a[href*="profiles.php?XID="], a[href*="profiles.php?xid="]');
         if (!links || links.length === 0) return;
@@ -191,11 +197,12 @@
 
             if (members.length === 0) return;
 
-            rosterSyncDone = true;
+            // Mark as synced to prevent concurrent in-flight requests
+            syncedTeams.add(teamKey);
 
             gmFetch(`${BACKEND}/api/elim/sync-roster`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+                headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'x-torn-id': selfId },
                 body: JSON.stringify({ apiKey, members, teamName, myId: selfId })
             }).then(raw => {
                 try {
@@ -205,9 +212,14 @@
                     } else if (d && d.code === 'NOT_IN_ELIMINATION') {
                         // User not enrolled in Elimination
                         setButtonState('not_in_elim');
+                    } else if (d && d.error === 'CANNOT_SYNC_OWN_TEAM') {
+                        // User's own team — keep in syncedTeams to prevent re-attempts
                     }
                 } catch (e) {}
-            }).catch(() => {});
+            }).catch(() => {
+                // Allow retry on network failure
+                syncedTeams.delete(teamKey);
+            });
         });
     }
 
@@ -1078,10 +1090,11 @@
         };
 
         document.getElementById('ev2-clearroster').onclick = () => {
-            rosterSyncDone = false;
+            syncedTeams.clear();
             const btn = document.getElementById('ev2-clearroster');
-            btn.textContent = '✅ Ready — visit competition.php';
-            setTimeout(() => { btn.textContent = '🔄 Re-sync Roster (visit competition.php)'; }, 2000);
+            btn.textContent = '✅ Cleared — click any team tab';
+            setTimeout(() => { btn.textContent = '🔄 Re-sync Rosters (visit competition.php)'; }, 2000);
+            syncRosterIfOnCompetitionPage();
         };
 
         setButtonState('idle');
