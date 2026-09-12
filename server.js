@@ -25,6 +25,8 @@ const UI = require('./friday-ui');
 const userKeys = require('./user-keys');
 const tornKnowledge = require('./torn-knowledge');
 const sessionManager = require('./session-manager');
+const tornApiManager = require('./torn-api-manager');
+const warboardBroadcaster = require('./warboard-broadcaster');
 
 
 // Hardcoded MongoDB URI to bypass Render settings
@@ -726,7 +728,7 @@ function saveOcConfig() { fs.writeFileSync('oc_config.json', JSON.stringify(ocCo
 
 function saveSpyDb() { fs.writeFileSync('spy_db.json', JSON.stringify(spyDatabase)); saveToMongo(); }
 function saveTracking() { fs.writeFileSync('user_tracking.json', JSON.stringify(userTracking)); saveToMongo(); }
-function saveApiPool() { fs.writeFileSync('api_pool.json', JSON.stringify(apiPoolConfig)); saveToMongo(); }
+function saveApiPool() { fs.writeFileSync('api_pool.json', JSON.stringify(apiPoolConfig)); syncTornApiManagerKeys(); saveToMongo(); }
 function saveCompanyConfig() { fs.writeFileSync('company_config.json', JSON.stringify(companyConfig)); saveToMongo(); }
 
 // --- CENTRALIZED DISCORD RATE-LIMIT QUEUE ---
@@ -15819,6 +15821,21 @@ app.post('/api/turbo/stop', (req, res) => {
     if (global.turboInterval) clearInterval(global.turboInterval);
     if (global.turboTimeout) clearTimeout(global.turboTimeout);
     res.json({ success: true, msg: "Turbo stopped" });
+});
+
+// ── Real-Time Streaming & Admin Telemetry Endpoints ──
+app.get('/api/warboard/stream', (req, res) => {
+    warboardBroadcaster.handleSse(req, res);
+});
+
+app.get('/api/admin/api-metrics', (req, res) => {
+    const metrics = tornApiManager.getMetrics();
+    const broadcasterStats = warboardBroadcaster.getClientStats();
+    res.json({
+        success: true,
+        ...metrics,
+        broadcaster: broadcasterStats
+    });
 });
 
 const server = app.listen(PORT, '0.0.0.0', () => {

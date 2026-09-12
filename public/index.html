@@ -1244,6 +1244,97 @@ function startRefreshProgressBar(refreshMs) {
     }, 100);
 }
 
+
+// ─── Real-Time Push & Local Countdown Engine ──────────────────────────────────
+let liveWarboardWs = null;
+let isRealTimePushActive = false;
+
+function connectRealTimeStream() {
+    try {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws/warboard`;
+        liveWarboardWs = new WebSocket(wsUrl);
+
+        liveWarboardWs.onopen = () => {
+            console.log('[Warboard Real-Time] Connected to WebSocket stream');
+            isRealTimePushActive = true;
+            // Relax background HTTP polling when live push is connected
+            if (fetchTimer) clearInterval(fetchTimer);
+            fetchTimer = setInterval(() => { fetchWarboard(); }, 60000);
+        };
+
+        liveWarboardWs.onmessage = (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+                if (msg.type === 'warboard_update' && msg.data) {
+                    renderWarboardPayload(msg.data);
+                }
+            } catch(e) {}
+        };
+
+        liveWarboardWs.onclose = () => {
+            isRealTimePushActive = false;
+            console.warn('[Warboard Real-Time] Disconnected, activating HTTP polling');
+            startPolling();
+            setTimeout(connectRealTimeStream, 8000);
+        };
+
+        liveWarboardWs.onerror = () => {
+            if (liveWarboardWs) liveWarboardWs.close();
+        };
+    } catch(err) {
+        // Fall back to Server-Sent Events (SSE)
+        connectSseStream();
+    }
+}
+
+function connectSseStream() {
+    if (typeof EventSource !== 'undefined') {
+        try {
+            const es = new EventSource('/api/warboard/stream');
+            es.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === 'warboard_update' && msg.data) {
+                        renderWarboardPayload(msg.data);
+                    }
+                } catch(e) {}
+            };
+            es.onopen = () => {
+                isRealTimePushActive = true;
+                if (fetchTimer) clearInterval(fetchTimer);
+                fetchTimer = setInterval(() => { fetchWarboard(); }, 60000);
+            };
+            es.onerror = () => {
+                isRealTimePushActive = false;
+                startPolling();
+            };
+        } catch(e) {
+            startPolling();
+        }
+    } else {
+        startPolling();
+    }
+}
+
+// Local 1-second countdown ticker (Decrements hospital timers locally without API requests)
+setInterval(() => {
+    const now = Math.floor(Date.now() / 1000);
+    document.querySelectorAll('[data-until]').forEach(el => {
+        const until = parseInt(el.getAttribute('data-until'), 10);
+        if (until && until > 0) {
+            const diff = until - now;
+            if (diff > 0) {
+                const m = Math.floor(diff / 60);
+                const s = diff % 60;
+                el.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+            } else {
+                el.textContent = '0:00';
+            }
+        }
+    });
+}, 1000);
+
 function startPolling() {
     if (fetchTimer) clearInterval(fetchTimer);
     let refreshMs = Math.floor(60000 / cpm);
