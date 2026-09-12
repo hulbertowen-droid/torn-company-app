@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter
 // @namespace    https://spider-verse.net/
-// @version      2.4.2
+// @version      2.4.3
 // @description  Autonomous 1-click snipe button for Torn Elimination. Finds beatable enemies that are NOT in hospital and NOT flying from ANY page.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -147,10 +147,12 @@
 
     // ── Auto-sync competition page rosters to backend (Elimination only) ──
     const syncedTeams = new Set();
+    let rosterSyncInFlight = false;
 
     function syncRosterIfOnCompetitionPage() {
         if (!window.location.href.includes('competition.php')) return;
         if (!apiKey) return;
+        if (rosterSyncInFlight) return;
 
         // Verify that this is the Elimination competition view
         const pageText = (document.body ? document.body.innerText || '' : '').toLowerCase();
@@ -197,7 +199,7 @@
 
             if (members.length === 0) return;
 
-            // Mark as synced to prevent concurrent in-flight requests
+            rosterSyncInFlight = true;
             syncedTeams.add(teamKey);
 
             gmFetch(`${BACKEND}/api/elim/sync-roster`, {
@@ -217,9 +219,8 @@
                     }
                 } catch (e) {}
             }).catch(() => {
-                // Allow retry on network failure
                 syncedTeams.delete(teamKey);
-            });
+            }).finally(() => { rosterSyncInFlight = false; });
         });
     }
 
@@ -1091,6 +1092,7 @@
 
         document.getElementById('ev2-clearroster').onclick = () => {
             syncedTeams.clear();
+            rosterSyncInFlight = false;
             const btn = document.getElementById('ev2-clearroster');
             btn.textContent = '✅ Cleared — click any team tab';
             setTimeout(() => { btn.textContent = '🔄 Re-sync Rosters (visit competition.php)'; }, 2000);

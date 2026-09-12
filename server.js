@@ -7129,6 +7129,13 @@ function formatElimStat(num) {
     return String(Math.round(num));
 }
 
+function normalizeElimTeamName(teamName) {
+    return String(teamName || '')
+        .replace(/\s*\(\s*\d+(?:\s+(?:lives?|members?|players?))?\s*\)\s*$/i, '')
+        .trim()
+        .toLowerCase();
+}
+
 // Multi-user roster storage + global hospital blacklist
 const elimState = {
     // Map<userKeyId, { members: Array<{ id: string, team: string }>, syncedAt: number, teamName: string }>
@@ -7279,7 +7286,7 @@ app.post('/api/elim/sync-roster', async (req, res) => {
         }
 
         // HARD OPPONENT CHECK: Cannot sync your own team
-        if (userTeam && teamName.toLowerCase() === userTeam.toLowerCase()) {
+        if (userTeam && normalizeElimTeamName(teamName) === normalizeElimTeamName(userTeam)) {
             return res.status(400).json({
                 success: false,
                 error: 'CANNOT_SYNC_OWN_TEAM',
@@ -7301,7 +7308,8 @@ app.post('/api/elim/sync-roster', async (req, res) => {
         // Store in per-user and shared roster pool
         const userKeyId = tornId ? `torn:${tornId}` : (discordId ? `discord:${discordId}` : `key:${crypto.createHash('sha256').update(apiKey).digest('hex').slice(0, 16)}`);
         const existing = elimState.rosters.get(userKeyId) || (tornId ? elimState.rosters.get(String(tornId)) : null);
-        const existingMembers = existing ? existing.members : [];
+        // Never carry opponent IDs across separate tournament iterations
+        const existingMembers = (existing && existing.competitionId === compId) ? existing.members : [];
         const memberMap = new Map();
         existingMembers.forEach(em => memberMap.set(em.id, em));
         validCandidates.forEach(vc => memberMap.set(vc.id, vc));
@@ -7311,6 +7319,7 @@ app.post('/api/elim/sync-roster', async (req, res) => {
             members: mergedMembers,
             teamName: userTeam,
             opposingTeamName: teamName,
+            competitionId: compId,
             syncedAt: Date.now()
         };
 
@@ -7495,7 +7504,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             for (const t of teamsList) {
                 if (!t) continue;
                 const tName = String(t.name || t.team_name || '').trim();
-                if (!tName || tName.toLowerCase() === myTeam.toLowerCase()) continue; // Skip own team
+                if (!tName || normalizeElimTeamName(tName) === normalizeElimTeamName(myTeam)) continue; // Skip own team
                 if (t.status === 'eliminated' || t.lives === 0) continue; // Skip eliminated team
 
                 if (t.captain) {
@@ -7522,30 +7531,44 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         }
     } catch (ce) {}
 
-    // Source B: Verified opposing team rosters from MongoDB (EXCLUSIVELY source: 'torn_elimination')
+    // Source B: Verified opposing team rosters from MongoDB (EXCLUSIVELY source: 'torn_elimination' within active tournament)
     if (mongoose.connection.readyState === 1) {
         try {
             const elimCol = mongoose.connection.db.collection('elim_candidates');
             const docs = await elimCol.find({
                 source: 'torn_elimination',
-                team: { $exists: true, $ne: '' }
+                competitionId: compId,
+                updatedAt: { $gte: new Date(Date.now() - 36 * 60 * 60 * 1000) }
             }).limit(500).toArray();
             for (const d of docs) {
-                if (d.team && d.team.toLowerCase() !== myTeam.toLowerCase()) {
-                    const cid = String(d._id);
-                    if (!candidateMeta.has(cid)) {
-                        candidateMeta.set(cid, { id: cid, team: d.team, source: 'torn_elimination', competitionId: d.competitionId || compId });
-                    }
+                const cid = String(d._id);
+                if (normalizeElimTeamName(d.team) !== normalizeElimTeamName(myTeam) && !candidateMeta.has(cid)) {
+                    candidateMeta.set(cid, { id: cid, team: d.team, source: 'torn_elimination', competitionId: d.competitionId || compId });
                 }
             }
         } catch (dbErr) {}
     }
 
-    // Source C: Synced rosters from memory (user's roster + all shared opposing rosters)
+    // Source C: Synced rosters from memory (user's roster + shared tournament pool)
+    const userRoster = elimState.rosters.get(userKeyId) || (userId ? (elimState.rosters.get(String(userId)) || elimState.rosters.get(`torn:${userId}`)) : null);
+    if (userRoster && userRoster.competitionId === compId &&
+        Date.now() - userRoster.syncedAt <= 36 * 60 * 60 * 1000 &&
+        Array.isArray(userRoster.members)) {
+        for (const m of userRoster.members) {
+            if (m && m.team && normalizeElimTeamName(m.team) !== normalizeElimTeamName(myTeam)) {
+                const cid = String(m.id || m.playerId || m);
+                if (!candidateMeta.has(cid)) {
+                    candidateMeta.set(cid, { id: cid, team: m.team, source: 'torn_elimination', competitionId: compId });
+                }
+            }
+        }
+    }
     for (const [rKey, rData] of elimState.rosters.entries()) {
-        if (rData && Array.isArray(rData.members)) {
+        if (rData && rData.competitionId === compId &&
+            Date.now() - rData.syncedAt <= 36 * 60 * 60 * 1000 &&
+            Array.isArray(rData.members)) {
             for (const m of rData.members) {
-                if (m && m.team && m.team.toLowerCase() !== myTeam.toLowerCase()) {
+                if (m && m.team && normalizeElimTeamName(m.team) !== normalizeElimTeamName(myTeam)) {
                     const cid = String(m.id || m.playerId || m);
                     if (!candidateMeta.has(cid)) {
                         candidateMeta.set(cid, { id: cid, team: m.team, source: 'torn_elimination', competitionId: compId });
@@ -7564,7 +7587,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         if (!id || id === '0') return false;
         if (myId && id === myId) return false;                  // Never attack yourself
         if (ownFactionIds.has(id)) return false;                // Protect faction teammates
-        if (cand.team.toLowerCase() === myTeam.toLowerCase()) return false; // Protect elimination teammates
+        if (normalizeElimTeamName(cand.team) === normalizeElimTeamName(myTeam)) return false; // Protect elimination teammates
         if (cand.source !== 'torn_elimination') return false;   // Hard provenance verification
         if (excludeSet.has(id)) return false;                   // Session / explicit exclusion
         if (elimState.hospBlacklist.has(id)) return false;       // Hospitalized / traveling / jailed
