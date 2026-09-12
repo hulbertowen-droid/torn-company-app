@@ -3,110 +3,218 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-   <title>Bazaar Tracker | Torn Operations Hub</title>
+    <title>Market & Bazaar | Spider-Verse Command Center</title>
+    <meta name="description" content="Automated Torn City bazaar sniper, item price watcher, and real-time market discount scanner.">
+    
+    <!-- Fonts & Core Design System -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/global.css">
-    <style>
-
-        /* Sidebar Styling */
-        
-        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
-        h1 { text-align: center; color: var(--green); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
-        
-        .container { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 25px; }
-        .dash-card { background: var(--card); padding: 25px; border-radius: 16px; border: 1px solid #2f3542; }
-        .dash-card h2 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; font-size: 1.1em; letter-spacing: 1px;}
-        
-        /* Form & Input Styling */
-        .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; position: relative;}
-        .form-group label { font-size: 0.85em; color: var(--text-dim); font-weight: bold; text-transform: uppercase; }
-        .form-group input { padding: 12px 15px; border-radius: 6px; border: 1px solid #30363d; background: #0b0d13; color: white; font-size: 1.05em; width: 100%; box-sizing: border-box; transition: 0.2s;}
-        .form-group input:focus { outline: 1px solid var(--blue); border-color: var(--blue); box-shadow: 0 0 10px rgba(88,166,255,0.2); }
-        
-        /* Auto-Complete Dropdown (TornW3B Style) */
-        .dropdown-menu { display: none; position: absolute; top: 100%; left: 0; width: 100%; background: #11141d; border: 1px solid #30363d; border-radius: 8px; margin-top: 5px; max-height: 350px; overflow-y: auto; z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
-        .dropdown-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; cursor: pointer; border-bottom: 1px solid #1b202e; transition: 0.2s;}
-        .dropdown-item:hover { background: #1b202e; }
-        .dropdown-left { display: flex; align-items: center; gap: 12px; }
-        .item-icon { width: 35px; height: 35px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));}
-        .item-details { display: flex; flex-direction: column; }
-        .item-name { color: var(--text-main); font-weight: bold; font-size: 1em; }
-        .item-type { color: var(--text-dim); font-size: 0.8em; text-transform: capitalize;}
-        .item-market { color: var(--blue); font-weight: bold; font-size: 0.95em; text-align: right;}
-        
-        /* UI Grid/Flex Layouts */
-        .flex-row { display: flex; gap: 15px; align-items: flex-end; }
-        .flex-row .form-group { flex: 1; margin-bottom: 0; }
-        
-        .trigger-item { display: flex; align-items: center; justify-content: space-between; padding: 15px; background: #0b0d13; border: 1px solid #2f3542; border-radius: 8px; margin-bottom: 20px;}
-        .trigger-info { display: flex; flex-direction: column; gap: 4px; }
-        .trigger-title { font-weight: bold; color: var(--text-main); font-size: 1.1em; }
-        .trigger-desc { font-size: 0.85em; color: var(--text-dim); }
-        
-        /* Toggle Switch */
-        .switch { position: relative; display: inline-block; width: 46px; height: 22px; }
-        .switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #2f3542; transition: .3s; border-radius: 34px; }
-        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
-        input:checked + .slider { background-color: var(--green); }
-        input:checked + .slider:before { transform: translateX(24px); }
-
-        /* Buttons */
-        .btn { background: var(--blue); color: #000; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 0.9em; text-transform: uppercase; transition: 0.2s; white-space: nowrap;}
-        .btn:hover { background: #79c0ff; }
-        .btn-add { background: var(--green); display: flex; align-items: center; gap: 5px; }
-        .btn-add:hover { background: #26b361; }
-        .btn-remove { background: rgba(255, 71, 87, 0.15); color: var(--red); border: 1px solid var(--red); padding: 6px 12px; }
-        .btn-remove:hover { background: var(--red); color: white; }
-
-        /* Quick Tags */
-        .quick-tags { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
-        .tag { background: #1b202e; border: 1px solid #2f3542; color: var(--text-dim); padding: 6px 12px; border-radius: 20px; font-size: 0.8em; cursor: pointer; transition: 0.2s; font-weight: bold; }
-        .tag:hover { background: rgba(88, 166, 255, 0.15); color: var(--blue); border-color: var(--blue); }
-
-        /* Active Target List */
-        .target-list { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
-        .target-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; background: #0b0d13; border: 1px solid #2f3542; border-radius: 8px; border-left: 4px solid var(--red); transition: 0.2s; }
-        .target-item:hover { border-color: #57606f; border-left-color: var(--red); }
-        .target-name { color: var(--text-main); font-weight: bold; font-size: 1.1em; display: flex; align-items: center; gap: 10px;}
-        .target-id { color: var(--text-dim); font-size: 0.85em; background: #1b202e; padding: 2px 6px; border-radius: 4px; }
-        .target-price { color: var(--green); font-weight: bold; font-size: 1.1em; }
-        
-        #status-msg { text-align: center; font-weight: bold; font-size: 0.95em; margin-top: 15px; }
-
-        /* Selected Item Display */
-        #selected-item-display { display: none; background: rgba(88, 166, 255, 0.05); border: 1px solid var(--blue); padding: 10px 15px; border-radius: 8px; margin-bottom: 15px; align-items: center; justify-content: space-between; }
-    </style>
+    
+    <!-- Scripts & Auth -->
     <script src="/auth-gate.js"></script>
+    <script src="/global_settings.js"></script>
+    <script src="/global-topbar.js"></script>
+
+    <style>
+    /* ─── Page-Specific Bazaar & Market Styling ─── */
+    .dropdown-menu {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        width: 100%;
+        background: var(--bg-overlay);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-sm);
+        margin-top: 6px;
+        max-height: 340px;
+        overflow-y: auto;
+        z-index: 1000;
+        box-shadow: 0 12px 36px rgba(0,0,0,0.7);
+    }
+    .dropdown-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        cursor: pointer;
+        border-bottom: 1px solid var(--border-subtle);
+        transition: background var(--transition-fast);
+    }
+    .dropdown-item:hover {
+        background: var(--bg-hover);
+    }
+    .dropdown-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .item-icon {
+        width: 34px;
+        height: 34px;
+        object-fit: contain;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+    }
+    .item-details { display: flex; flex-direction: column; }
+    .item-name { color: var(--text-primary); font-weight: 700; font-size: 0.95em; }
+    .item-type { color: var(--text-tertiary); font-size: 0.78em; text-transform: capitalize; }
+    .item-market { color: var(--accent-cobalt); font-weight: 800; font-size: 0.92em; text-align: right; font-family: var(--font-mono); }
+
+    .flex-row { display: flex; gap: 14px; align-items: flex-end; }
+    .flex-row .form-group { flex: 1; margin-bottom: 0; }
+
+    .trigger-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        margin-bottom: 20px;
+    }
+    .trigger-info { display: flex; flex-direction: column; gap: 4px; }
+    .trigger-title { font-weight: 800; color: var(--text-primary); font-size: 1.05em; }
+    .trigger-desc { font-size: 0.82em; color: var(--text-tertiary); }
+
+    .quick-tags { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .tag {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        color: var(--text-secondary);
+        padding: 5px 12px;
+        border-radius: var(--radius-full);
+        font-size: 0.78em;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        font-weight: 700;
+        font-family: inherit;
+    }
+    .tag:hover {
+        background: var(--accent-cobalt-dim);
+        color: var(--accent-cobalt);
+        border-color: var(--accent-cobalt-border);
+    }
+
+    .target-list { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+    .target-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 18px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        border-left: 3px solid var(--accent-crimson);
+        transition: all var(--transition-fast);
+    }
+    .target-item:hover {
+        border-color: var(--border-strong);
+        border-left-color: var(--accent-crimson);
+        background: var(--bg-hover);
+    }
+    .target-name {
+        color: var(--text-primary);
+        font-weight: 700;
+        font-size: 1.05em;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .target-id {
+        color: var(--text-tertiary);
+        font-size: 0.8em;
+        background: rgba(255,255,255,0.05);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: var(--font-mono);
+    }
+    .target-price {
+        color: var(--accent-emerald);
+        font-weight: 900;
+        font-size: 1.1em;
+        font-family: var(--font-mono);
+    }
+
+    #status-msg { text-align: center; font-weight: 800; font-size: 0.9em; margin-top: 14px; }
+    #selected-item-display {
+        display: none;
+        background: var(--accent-cobalt-dim);
+        border: 1px solid var(--accent-cobalt-border);
+        padding: 10px 16px;
+        border-radius: var(--radius-sm);
+        margin-bottom: 16px;
+        align-items: center;
+        justify-content: space-between;
+    }
+    </style>
 </head>
 <body>
     <nav class="sidebar" id="app-sidebar">
         <div class="sidebar-header">
-           <div class="sidebar-logo">🕷️ Torn Operations</div>
-            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Theme" style="background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.2em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; margin-right: 10px;">🌗</button>
-            <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
-        </div>
-                                <div class="nav-items">
-            <a href="/" class="nav-link ">📡 <span class="nav-text">Live Warboard</span></a>
-            <a href="/chain.html" class="nav-link ">🔗 <span class="nav-text">Chain Watcher</span></a>
-            <a href="/payout.html" class="nav-link ">💰 <span class="nav-text">Payouts</span></a>
-            <a href="/dashboard.html" class="nav-link ">🛡️ <span class="nav-text">Dashboard</span></a>
-            <a href="/members.html" class="nav-link ">👥 <span class="nav-text">Members</span></a>
-            <a href="/recruit/" class="nav-link ">🎯 <span class="nav-text">Recruit Platform</span></a>
-            <a href="/travel.html" class="nav-link ">✈️ <span class="nav-text">Travel Calculator</span></a>
-            <a href="/bazaar.html" class="nav-link active">🛒 <span class="nav-text">Bazaar Watcher</span></a>
-            <a href="/discord.html" class="nav-link ">📢 <span class="nav-text">Discord Alerts</span></a>
-            <a href="/oc.html" class="nav-link ">💼 <span class="nav-text">OC Manager</span></a>
-            <a href="/ai-sandbox.html" class="nav-link ">🤖 <span class="nav-text">F.R.I.D.A.Y AI</span></a>
-            <div style="margin-top: auto; padding: 0 4px;">
-                <div style="height:1px; background:var(--border); margin: 10px 0;"></div>
-                <div style="font-size:0.65em; color:var(--text-dim); text-transform:uppercase; letter-spacing:2px; padding:0 8px 6px; font-weight:700;">Company</div>
+            <div class="sidebar-logo">
+                <span class="brand-icon">🕷️</span>
+                <span class="brand-text">Spider-Verse</span>
             </div>
-            <a href="/company.html" class="nav-link " style="background:rgba(0,206,201,0.08);border:1px solid rgba(0,206,201,0.25);color:var(--teal);">🏢 <span class="nav-text">Company Tools</span></a>
-            <div style="padding: 0 4px; margin-top:8px;"><div style="height:1px; background:var(--border);"></div></div>
-            <a href="/gamble.html" class="nav-link ">🎰 <span class="nav-text">Casino Tools</span></a>
-            <a onclick="openSettings()" class="nav-link" style="cursor:pointer; margin-top:6px;">⚙️ <span class="nav-text">Settings</span></a>
+            <div class="sidebar-actions">
+                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌗</button>
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar">☰</button>
+            </div>
+        </div>
+        <div class="nav-items">
+            <div class="nav-section-title">Live Operations</div>
+            <a href="/" class="nav-link"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
+            <a href="/chain.html" class="nav-link"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
+            <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
+            <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Faction Roster</span></a>
+            <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
+
+            <div class="nav-section-title">Tactical Desk</div>
+            <a href="/dashboard.html" class="nav-link"><span class="nav-icon">🛡️</span> <span class="nav-text">Flight & Sentinel</span></a>
+            <a href="/travel.html" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Travel Profit Desk</span></a>
+            <a href="/bazaar.html" class="nav-link active"><span class="nav-icon">🛒</span> <span class="nav-text">Market & Bazaar</span></a>
+            <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
+            <a href="/gamble.html" class="nav-link"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
+            <a href="/recruit/" class="nav-link"><span class="nav-icon">🎯</span> <span class="nav-text">Recruit Engine</span></a>
+
+            <div class="nav-section-title">Intelligence & Alerts</div>
+            <a href="/ai-sandbox.html" class="nav-link"><span class="nav-icon">🤖</span> <span class="nav-text">F.R.I.D.A.Y. Intel</span></a>
+            <a href="/discord.html" class="nav-link"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
+            <a onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" class="nav-link" style="cursor:pointer; margin-top:4px;"><span class="nav-icon">⚙️</span> <span class="nav-text">Settings</span></a>
+        </div>
+        <div class="sidebar-footer" id="sidebar-user-footer">
+            <div class="sidebar-user-chip" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" style="cursor:pointer;" title="Account & API Settings">
+                <div class="sidebar-user-avatar" id="nav-user-avatar">🕷️</div>
+                <div class="sidebar-user-info">
+                    <span class="sidebar-user-name" id="nav-user-name">Tactical Operative</span>
+                    <span class="sidebar-user-faction" id="nav-user-sub">Spider-Verse [52355]</span>
+                </div>
+                <span style="color:var(--text-tertiary); font-size:0.9em;">⚙️</span>
+            </div>
         </div>
     </nav>
+    <div class="main-wrapper">
+        <header class="app-topbar">
+            <div class="topbar-left">
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;">☰</button>
+                <div class="topbar-crumb">
+                    <span>TACTICAL DESK</span> / <strong style="color:var(--text-primary);">MARKET & BAZAAR</strong>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <div class="tct-clock-chip" title="Torn City Time (TCT)">
+                    <span class="tct-label">TCT</span>
+                    <span id="global-tct-clock">--:--:--</span>
+                </div>
+                <div class="telemetry-chip live-ws" id="global-ws-badge" title="Data Feed Status">
+                    <span class="pulse-indicator"></span>
+                    <span id="global-ws-status">LIVE WS</span>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" title="Settings" style="padding:4px 8px;">⚙️</button>
+            </div>
+        </header>
 
     <main class="main-content">
         <h1>Bazaar & Market Automator</h1>
@@ -193,6 +301,7 @@
 
         </div>
     </main>
+    </div>
 
 <script>
 let tornItemsDatabase = {};

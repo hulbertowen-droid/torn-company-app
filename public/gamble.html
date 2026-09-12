@@ -1,125 +1,139 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Casino Tools | Torn Operations Hub</title>
-<meta name="description" content="Advanced Torn casino odds calculator — Russian Roulette EV, Blackjack basic strategy, Poker pot odds, High-Low, Bookie arbitrage, Craps and Roulette house edge breakdowns.">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/global.css">
-<style>
-    /* ── Casino-specific accent ── */
-    :root { --casino: #a29bfe; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Casino Analytics | Spider-Verse Command Center</title>
+    <meta name="description" content="Advanced Torn casino odds calculator — Russian Roulette EV, Blackjack basic strategy, Poker pot odds, Bookie arbitrage, Craps and Roulette edge models.">
+    
+    <!-- Fonts & Core Design System -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/global.css">
+    
+    <!-- Scripts & Auth -->
+    <script src="/auth-gate.js"></script>
+    <script src="/global_settings.js"></script>
+    <script src="/global-topbar.js"></script>
 
-    /* ── Tab Navigation ── */
+    <style>
+    /* ─── Page-Specific Casino Analytics Styling ─── */
     .tab-bar {
         display: flex;
         gap: 6px;
         flex-wrap: wrap;
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 8px;
-        margin-bottom: 20px;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 6px;
+        margin-bottom: 22px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     }
     .tab-btn {
         padding: 8px 16px;
-        border-radius: 8px;
-        border: none;
+        border-radius: var(--radius-sm);
+        border: 1px solid transparent;
         background: transparent;
-        color: var(--text-dim);
-        font-size: 0.83em;
+        color: var(--text-secondary);
+        font-size: 0.82em;
         font-weight: 700;
-        font-family: 'Inter', system-ui, sans-serif;
+        font-family: inherit;
         cursor: pointer;
-        transition: 0.18s;
+        transition: all var(--transition-fast);
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 8px;
         white-space: nowrap;
     }
-    .tab-btn:hover { background: var(--item); color: var(--text-main); }
-    .tab-btn.active { background: rgba(162,155,254,0.12); color: var(--casino); border: 1px solid rgba(162,155,254,0.25); }
+    .tab-btn:hover { background: var(--bg-elevated); color: var(--text-primary); }
+    .tab-btn.active {
+        background: var(--accent-purple-dim);
+        color: var(--accent-purple);
+        border-color: rgba(139, 92, 246, 0.3);
+    }
 
-    /* ── Panels ── */
     .calc-panel { display: none; }
-    .calc-panel.active { display: block; }
-
-    .dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-    .dash-grid.single { grid-template-columns: 1fr; max-width: 640px; }
-    .span-full { grid-column: 1 / -1; }
+    .calc-panel.active { display: block; animation: fadeIn 0.2s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
     .calc-card {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
         overflow: hidden;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     }
     .calc-card-header {
         padding: 14px 20px;
-        border-bottom: 1px solid var(--border);
+        border-bottom: 1px solid var(--border-subtle);
         display: flex;
         align-items: center;
         gap: 10px;
+        background: rgba(255, 255, 255, 0.01);
     }
     .calc-card-title {
-        font-size: 0.85em;
-        font-weight: 700;
+        font-size: 0.88em;
+        font-weight: 800;
         text-transform: uppercase;
         letter-spacing: 0.8px;
-        color: var(--gold);
+        color: var(--accent-amber);
         margin: 0;
     }
     .calc-card-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
-    .calc-desc { color: var(--text-dim); font-size: 0.87em; line-height: 1.6; margin: 0; }
+    .calc-desc { color: var(--text-secondary); font-size: 0.88em; line-height: 1.6; margin: 0; }
 
-    /* ── Form fields ── */
-    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     .field-grid.single { grid-template-columns: 1fr; }
-    .field-group { display: flex; flex-direction: column; gap: 5px; }
-    .field-label { font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); }
+    .field-group { display: flex; flex-direction: column; gap: 6px; }
+    .field-label { font-size: 0.74em; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-tertiary); }
     .field-input, .field-select {
-        padding: 10px 13px;
-        border-radius: 8px;
-        border: 1px solid var(--border);
-        background: var(--bg);
-        color: var(--text-main);
+        padding: 10px 14px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-default);
+        background: var(--bg-elevated);
+        color: var(--text-primary);
         font-size: 0.92em;
-        font-family: 'Inter', system-ui, sans-serif;
-        transition: border-color 0.2s;
+        font-family: inherit;
+        transition: all var(--transition-fast);
         width: 100%;
+        box-sizing: border-box;
     }
-    .field-input:focus, .field-select:focus { outline: none; border-color: var(--casino); box-shadow: 0 0 0 3px rgba(162,155,254,0.12); }
+    .field-input:focus, .field-select:focus {
+        outline: none;
+        border-color: var(--accent-purple);
+        box-shadow: 0 0 0 3px var(--accent-purple-dim);
+    }
 
-    /* ── Action button ── */
     .btn-calc {
         padding: 11px 20px;
-        border-radius: 8px;
+        border-radius: var(--radius-sm);
         border: none;
-        font-weight: 700;
-        font-size: 0.92em;
-        font-family: 'Inter', system-ui, sans-serif;
+        font-weight: 800;
+        font-size: 0.88em;
+        font-family: inherit;
         cursor: pointer;
-        transition: 0.2s;
+        transition: all var(--transition-fast);
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 6px;
+        gap: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
     }
-    .btn-calc.purple { background: var(--casino); color: #0d1117; }
-    .btn-calc.purple:hover { background: #b8b0ff; box-shadow: 0 0 14px rgba(162,155,254,0.35); }
-    .btn-calc.blue { background: var(--blue); color: #0d1117; }
-    .btn-calc.blue:hover { background: #79c0ff; box-shadow: 0 0 14px rgba(88,166,255,0.35); }
-    .btn-calc.gold { background: var(--gold); color: #0d1117; }
-    .btn-calc.gold:hover { background: #ffb52e; box-shadow: 0 0 14px rgba(255,165,2,0.35); }
-    .btn-calc.teal { background: var(--teal); color: #0d1117; }
-    .btn-calc.teal:hover { background: #00e5e0; box-shadow: 0 0 14px rgba(0,206,201,0.35); }
+    .btn-calc.purple { background: var(--accent-purple); color: #ffffff; box-shadow: 0 2px 10px rgba(139, 92, 246, 0.3); }
+    .btn-calc.purple:hover { background: #9d74f7; transform: translateY(-1px); }
+    .btn-calc.blue { background: var(--accent-cobalt); color: #ffffff; }
+    .btn-calc.blue:hover { background: #4f94fc; }
+    .btn-calc.gold { background: var(--accent-amber); color: #000000; }
+    .btn-calc.gold:hover { background: #ffb82e; }
+    .btn-calc.teal { background: var(--accent-cyan); color: #000000; }
+    .btn-calc.teal:hover { background: #00e5e0; }
 
-    /* ── Result box ── */
     .result-box {
-        background: var(--bg);
-        border: 1px solid var(--border);
-        border-radius: 10px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-sm);
         overflow: hidden;
         display: none;
     }
@@ -128,101 +142,89 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 12px 16px;
-        border-bottom: 1px solid var(--item);
+        padding: 11px 16px;
+        border-bottom: 1px solid var(--border-subtle);
+        font-size: 0.88em;
     }
     .result-row:last-child { border-bottom: none; }
-    .res-label { font-size: 0.82em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-dim); }
-    .res-val { font-size: 1.05em; font-weight: 900; color: var(--text-main); }
-    .res-val.good { color: var(--green); }
-    .res-val.bad { color: var(--red); }
-    .res-val.warn { color: var(--gold); }
-    .res-val.info { color: var(--blue); }
+    .result-label { color: var(--text-secondary); font-size: 0.85em; font-weight: 600; }
+    .result-val { font-weight: 800; font-family: var(--font-mono); font-size: 0.95em; }
 
-    /* ── Big decision display ── */
-    .decision-box {
-        text-align: center;
-        padding: 20px;
-        border-radius: 10px;
-        border: 1px solid var(--border);
-        background: var(--bg);
-        display: none;
-    }
-    .decision-box.visible { display: block; }
-    .decision-label { font-size: 0.78em; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); margin-bottom: 8px; }
-    .decision-value { font-size: 3em; font-weight: 900; line-height: 1; text-transform: uppercase; transition: color 0.3s; }
-    .decision-sub { font-size: 0.82em; color: var(--text-dim); margin-top: 8px; }
-
-    /* ── Odds comparison ── */
-    .odds-compare {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-        padding: 16px;
-        border-radius: 10px;
-        background: var(--bg);
-        border: 1px solid var(--border);
-    }
-    .odds-block { text-align: center; padding: 10px; border-radius: 8px; border: 1px solid var(--border); }
-    .odds-block.winner { border-color: var(--green); background: rgba(46,213,115,0.05); }
-    .odds-block-label { font-size: 0.72em; font-weight: 700; text-transform: uppercase; color: var(--text-dim); margin-bottom: 4px; }
-    .odds-block-val { font-size: 1.6em; font-weight: 900; }
-
-    /* ── Static info table ── */
-    .info-table { border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
-    .info-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 12px 16px;
-        border-bottom: 1px solid var(--item);
-    }
+    .info-table { border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); overflow: hidden; }
+    .info-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--border-subtle); font-size: 0.86em; }
     .info-row:last-child { border-bottom: none; }
-    .info-row:hover { background: rgba(255,255,255,0.02); }
-    .info-label { font-size: 0.85em; font-weight: 600; color: var(--text-main); }
-    .info-edge { font-size: 0.85em; font-weight: 700; padding: 3px 10px; border-radius: 12px; }
-    .edge-good { background: rgba(46,213,115,0.1); color: var(--green); border: 1px solid rgba(46,213,115,0.2); }
-    .edge-ok { background: rgba(0,206,201,0.1); color: var(--teal); border: 1px solid rgba(0,206,201,0.2); }
-    .edge-warn { background: rgba(255,165,2,0.1); color: var(--gold); border: 1px solid rgba(255,165,2,0.2); }
-    .edge-bad { background: rgba(255,71,87,0.1); color: var(--red); border: 1px solid rgba(255,71,87,0.2); }
-
-    @media(max-width: 800px) {
-        .dash-grid { grid-template-columns: 1fr; }
-        .field-grid { grid-template-columns: 1fr; }
-        .tab-btn span.tab-label { display: none; }
-    }
-</style>
-    <script src="/auth-gate.js"></script>
+    .info-label { color: var(--text-secondary); font-weight: 600; }
+    .info-edge { font-weight: 800; font-family: var(--font-mono); font-size: 0.88em; }
+    .edge-good { color: var(--accent-emerald); }
+    .edge-ok { color: var(--accent-cobalt); }
+    .edge-warn { color: var(--accent-amber); }
+    .edge-bad { color: var(--accent-crimson); }
+    </style>
 </head>
 <body>
 <nav class="sidebar" id="app-sidebar">
-    <div class="sidebar-header">
-        <div class="sidebar-logo">🕷️ Torn Operations</div>
-        <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Theme" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:1.2em;display:flex;justify-content:center;align-items:center;width:35px;height:35px;border-radius:6px;transition:0.2s;margin-right:10px;">🌗</button>
-        <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
-    </div>
-                            <div class="nav-items">
-            <a href="/" class="nav-link ">📡 <span class="nav-text">Live Warboard</span></a>
-            <a href="/chain.html" class="nav-link ">🔗 <span class="nav-text">Chain Watcher</span></a>
-            <a href="/payout.html" class="nav-link ">💰 <span class="nav-text">Payouts</span></a>
-            <a href="/dashboard.html" class="nav-link ">🛡️ <span class="nav-text">Dashboard</span></a>
-            <a href="/members.html" class="nav-link ">👥 <span class="nav-text">Members</span></a>
-            <a href="/recruit/" class="nav-link ">🎯 <span class="nav-text">Recruit Platform</span></a>
-            <a href="/travel.html" class="nav-link ">✈️ <span class="nav-text">Travel Calculator</span></a>
-            <a href="/bazaar.html" class="nav-link ">🛒 <span class="nav-text">Bazaar Watcher</span></a>
-            <a href="/discord.html" class="nav-link ">📢 <span class="nav-text">Discord Alerts</span></a>
-            <a href="/oc.html" class="nav-link ">💼 <span class="nav-text">OC Manager</span></a>
-            <a href="/ai-sandbox.html" class="nav-link ">🤖 <span class="nav-text">F.R.I.D.A.Y AI</span></a>
-            <div style="margin-top: auto; padding: 0 4px;">
-                <div style="height:1px; background:var(--border); margin: 10px 0;"></div>
-                <div style="font-size:0.65em; color:var(--text-dim); text-transform:uppercase; letter-spacing:2px; padding:0 8px 6px; font-weight:700;">Company</div>
+        <div class="sidebar-header">
+            <div class="sidebar-logo">
+                <span class="brand-icon">🕷️</span>
+                <span class="brand-text">Spider-Verse</span>
             </div>
-            <a href="/company.html" class="nav-link " style="background:rgba(0,206,201,0.08);border:1px solid rgba(0,206,201,0.25);color:var(--teal);">🏢 <span class="nav-text">Company Tools</span></a>
-            <div style="padding: 0 4px; margin-top:8px;"><div style="height:1px; background:var(--border);"></div></div>
-            <a href="/gamble.html" class="nav-link active">🎰 <span class="nav-text">Casino Tools</span></a>
-            <a onclick="openSettings()" class="nav-link" style="cursor:pointer; margin-top:6px;">⚙️ <span class="nav-text">Settings</span></a>
+            <div class="sidebar-actions">
+                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌗</button>
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar">☰</button>
+            </div>
+        </div>
+        <div class="nav-items">
+            <div class="nav-section-title">Live Operations</div>
+            <a href="/" class="nav-link"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
+            <a href="/chain.html" class="nav-link"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
+            <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
+            <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Faction Roster</span></a>
+            <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
+
+            <div class="nav-section-title">Tactical Desk</div>
+            <a href="/dashboard.html" class="nav-link"><span class="nav-icon">🛡️</span> <span class="nav-text">Flight & Sentinel</span></a>
+            <a href="/travel.html" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Travel Profit Desk</span></a>
+            <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market & Bazaar</span></a>
+            <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
+            <a href="/gamble.html" class="nav-link active"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
+            <a href="/recruit/" class="nav-link"><span class="nav-icon">🎯</span> <span class="nav-text">Recruit Engine</span></a>
+
+            <div class="nav-section-title">Intelligence & Alerts</div>
+            <a href="/ai-sandbox.html" class="nav-link"><span class="nav-icon">🤖</span> <span class="nav-text">F.R.I.D.A.Y. Intel</span></a>
+            <a href="/discord.html" class="nav-link"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
+            <a onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" class="nav-link" style="cursor:pointer; margin-top:4px;"><span class="nav-icon">⚙️</span> <span class="nav-text">Settings</span></a>
+        </div>
+        <div class="sidebar-footer" id="sidebar-user-footer">
+            <div class="sidebar-user-chip" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" style="cursor:pointer;" title="Account & API Settings">
+                <div class="sidebar-user-avatar" id="nav-user-avatar">🕷️</div>
+                <div class="sidebar-user-info">
+                    <span class="sidebar-user-name" id="nav-user-name">Tactical Operative</span>
+                    <span class="sidebar-user-faction" id="nav-user-sub">Spider-Verse [52355]</span>
+                </div>
+                <span style="color:var(--text-tertiary); font-size:0.9em;">⚙️</span>
+            </div>
         </div>
     </nav>
+    <div class="main-wrapper">
+        <header class="app-topbar">
+            <div class="topbar-left">
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;">☰</button>
+                <div class="topbar-crumb">
+                    <span>TACTICAL DESK</span> / <strong style="color:var(--text-primary);">CASINO ANALYTICS</strong>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <div class="tct-clock-chip" title="Torn City Time (TCT)">
+                    <span class="tct-label">TCT</span>
+                    <span id="global-tct-clock">--:--:--</span>
+                </div>
+                <div class="telemetry-chip live-ws" id="global-ws-badge" title="Data Feed Status">
+                    <span class="pulse-indicator"></span>
+                    <span id="global-ws-status">LIVE WS</span>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" title="Settings" style="padding:4px 8px;">⚙️</button>
+            </div>
+        </header>
 
 <main class="main-content">
     <!-- Header -->
@@ -577,6 +579,7 @@
     </div>
 
 </main>
+    </div>
 
 <script>
 // ── Sidebar / Theme ────────────────────────────────────────────────────────

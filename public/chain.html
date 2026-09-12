@@ -3,158 +3,699 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Chain Tracker | Torn Operations Hub</title>
-    <link rel="stylesheet" href="/global.css">
-    <style>
-        
-        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; height: 100vh; box-sizing: border-box; }
-        h1 { text-align: center; color: var(--gold); text-transform: uppercase; letter-spacing: 3px; font-weight: 900; margin-bottom: 25px; }
-
-        .container { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 30px; }
-        
-        .dash-card { background: var(--card); border: 1px solid #2f3542; padding: 40px; border-radius: 12px; text-align: center; position: relative;}
-        .chain-title { color: var(--text-dim); font-size: 1.2em; text-transform: uppercase; letter-spacing: 2px; font-weight: bold; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 10px; }
-        
-        .badge-modifier { background: rgba(88, 166, 255, 0.15); color: var(--blue); padding: 4px 10px; border-radius: 6px; font-size: 0.75em; border: 1px solid var(--blue); font-weight: 900; }
-        
-        .chain-count { font-size: 5em; font-weight: 900; color: var(--blue); line-height: 1; text-shadow: 0 0 20px rgba(88,166,255,0.4); margin-bottom: 20px;}
-        
-        .progress-bar-bg { background: #0b0d13; border: 1px solid #2f3542; border-radius: 8px; height: 12px; width: 100%; max-width: 400px; margin: 0 auto 30px auto; overflow: hidden; position: relative; }
-        .progress-bar-fill { background: var(--blue); height: 100%; width: 0%; transition: width 0.5s ease-out; box-shadow: 0 0 10px rgba(88,166,255,0.5); }
-
-        .timer-box { background: #0b0d13; border: 2px solid #2f3542; padding: 20px; border-radius: 12px; max-width: 400px; margin: 0 auto; transition: 0.3s; }
-        .timer-title { color: var(--text-dim); text-transform: uppercase; font-weight: bold; letter-spacing: 1px; margin-bottom: 10px; }
-        .timer-time { font-size: 3.5em; font-weight: bold; font-family: monospace; color: var(--text-main); transition: color 0.3s; }
-        
-        .waiting-text { color: var(--text-dim); font-style: italic; margin-top: 20px; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; }
-
-        .ledger-card { background: var(--card); border: 1px solid #2f3542; padding: 30px; border-radius: 12px; }
-        .ledger-card h3 { margin-top: 0; color: var(--gold); border-bottom: 1px solid #2f3542; padding-bottom: 10px; text-transform: uppercase; display: flex; align-items: center; gap: 10px; }
-        
-        .ledger-grid { display: grid; grid-template-columns: 1fr 2fr 1.5fr 1.5fr; gap: 10px; color: var(--gold); font-weight: bold; font-size: 0.85em; text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #2f3542; padding-bottom: 10px; margin-bottom: 15px; }
-        .ledger-row { display: grid; grid-template-columns: 1fr 2fr 1.5fr 1.5fr; gap: 10px; padding: 12px 0; border-bottom: 1px solid #1b202e; font-size: 0.9em; align-items: center;}
-        .ledger-row:last-child { border-bottom: none; }
-        .milestone-badge { background: rgba(255, 165, 2, 0.15); color: var(--gold); padding: 4px 8px; border-radius: 4px; font-weight: bold; display: inline-block; text-align: center; border: 1px solid var(--gold); }
-
-        .danger .timer-box { border-color: var(--red); box-shadow: 0 0 20px rgba(255,71,87,0.2); }
-        .danger .timer-time { color: var(--red); animation: pulse 1s infinite; }
-
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+    <title>Chain Sentinel | Spider-Verse Command Center</title>
+    <meta name="description" content="Live Torn City chain monitor, lineup rotation engine, hit milestone ledger, and automated DIBS order sentinel.">
     
-        .queue-card { background: var(--card); border: 1px solid #2f3542; border-radius: 12px; margin-bottom: 30px; }
-        .queue-header { padding: 20px; border-bottom: 1px solid #2f3542; display: flex; justify-content: space-between; align-items: center; }
-        .queue-title { margin: 0; color: var(--gold); text-transform: uppercase; letter-spacing: 1px; font-size: 1.1em; display: flex; align-items: center; gap: 8px; font-weight: bold; }
-        
-        .queue-row { display: grid; grid-template-columns: 100px 1.5fr 1fr; gap: 15px; padding: 12px 20px; border-bottom: 1px solid #161b22; align-items: center; font-size: 0.9em; transition: 0.15s; }
-        .queue-row:hover { background: #0d1117; }
-        .queue-row:last-child { border-bottom: none; }
-        .queue-row-header { display: grid; grid-template-columns: 100px 1.5fr 1fr; gap: 15px; padding: 10px 20px; color: var(--text-dim); font-size: 0.75em; font-weight: 700; text-transform: uppercase; border-bottom: 1px solid #2f3542; }
-        
-        .timer-badge { background: #161b22; padding: 4px 8px; border-radius: 6px; font-family: monospace; font-size: 1.1em; font-weight: bold; border: 1px solid #30363d; text-align: center; }
-        .timer-badge.ready { background: rgba(46, 213, 115, 0.15); color: var(--green); border-color: rgba(46, 213, 115, 0.4); animation: pulseAlert 2s infinite; }
-        .timer-badge.soon { color: var(--gold); }
-        
-        .queue-profile { font-weight: 700; color: var(--text-main); text-decoration: none; font-size: 1.05em; display: inline-flex; align-items: center; gap: 8px; margin-bottom: 4px;}
-        .queue-profile:hover { color: var(--blue); }
-        .dibs-badge { background: rgba(255, 71, 87, 0.15); color: var(--red); padding: 4px 10px; border-radius: 6px; font-weight: 700; border: 1px solid rgba(255, 71, 87, 0.4); display: inline-flex; align-items: center; gap: 6px; }
-
-        .script-card { background: rgba(88, 166, 255, 0.05); border: 1px solid rgba(88, 166, 255, 0.2); border-radius: 12px; padding: 25px; margin-top: 30px; }
-        .script-card h3 { color: var(--blue); margin-top: 0; text-transform: uppercase; font-size: 1.1em; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;}
-        .script-steps { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .script-step { background: #0b0d13; padding: 15px; border-radius: 8px; border: 1px solid #2f3542; }
-        .script-step h4 { color: white; margin: 0 0 10px 0; border-bottom: 1px solid #2f3542; padding-bottom: 5px; }
-        .script-step ol { margin: 0; padding-left: 20px; color: var(--text-dim); font-size: 0.85em; line-height: 1.6; }
-        .script-step a { color: var(--blue); text-decoration: none; font-weight: bold; }
-        .script-step a:hover { text-decoration: underline; }
-        .btn-download { display: inline-block; background: var(--blue); color: #000; font-weight: bold; text-decoration: none; padding: 8px 16px; border-radius: 6px; margin-top: 15px; text-transform: uppercase; font-size: 0.85em; transition: 0.2s; }
-        .btn-download:hover { background: #79c0ff; transform: scale(1.02); }
-
-        @keyframes pulseAlert { 0% { opacity: 1; } 50% { opacity: 0.6; box-shadow: 0 0 10px rgba(46,213,115,0.4); } 100% { opacity: 1; } }
-        @media (max-width: 768px) { .script-steps { grid-template-columns: 1fr; } }
-
-        /* ── Chain Lineup ─────────────────────────────────────────────────── */
-        .lineup-card { background: var(--card); border: 1px solid #2f3542; border-radius: 12px; overflow: hidden; }
-        .lineup-header { padding: 18px 22px; border-bottom: 1px solid #2f3542; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
-        .lineup-title { margin: 0; color: var(--teal, #00cec9); text-transform: uppercase; letter-spacing: 1px; font-size: 1.1em; display: flex; align-items: center; gap: 8px; font-weight: bold; }
-        .lineup-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-        .lineup-btn { background: #161b22; border: 1px solid #30363d; color: var(--text-dim); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.8em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; transition: 0.15s; }
-        .lineup-btn:hover { border-color: var(--teal, #00cec9); color: var(--teal, #00cec9); }
-        .lineup-btn.danger:hover { border-color: var(--red); color: var(--red); }
-        .lineup-btn.active { background: rgba(0,206,201,0.12); border-color: var(--teal, #00cec9); color: var(--teal, #00cec9); }
-        .lineup-cycle-badge { background: rgba(0,206,201,0.1); border: 1px solid rgba(0,206,201,0.3); color: var(--teal,#00cec9); padding: 4px 10px; border-radius: 6px; font-size: 0.75em; font-weight: 700; }
-        .lineup-meta { padding: 10px 22px; background: rgba(0,206,201,0.04); border-bottom: 1px solid #2f3542; display: flex; align-items: center; gap: 10px; font-size: 0.82em; color: var(--text-dim); }
-        .lineup-list { list-style: none; margin: 0; padding: 0; }
-        .lineup-item { display: flex; align-items: center; gap: 12px; padding: 12px 22px; border-bottom: 1px solid #161b22; transition: background 0.15s; cursor: grab; position: relative; }
-        .lineup-item:last-child { border-bottom: none; }
-        .lineup-item:hover { background: #0d1117; }
-        .lineup-item.current { background: rgba(0,206,201,0.07); border-left: 3px solid var(--teal,#00cec9); animation: lineupPulse 2s ease-in-out infinite; }
-        .lineup-item.hit-done { opacity: 0.45; }
-        .lineup-item.dragging { opacity: 0.4; background: #0d1117; }
-        .lineup-item.drag-over { border-top: 2px solid var(--teal, #00cec9); }
-        @keyframes lineupPulse { 0%,100% { box-shadow: none; } 50% { box-shadow: inset 0 0 18px rgba(0,206,201,0.08); } }
-        .lineup-slot { width: 28px; text-align: center; font-weight: 900; font-size: 1em; color: var(--text-dim); flex-shrink: 0; }
-        .lineup-item.current .lineup-slot { color: var(--teal,#00cec9); font-size: 1.2em; }
-        .lineup-drag-handle { color: #3a4050; font-size: 1.1em; cursor: grab; flex-shrink: 0; user-select: none; }
-        .lineup-name { font-weight: 700; font-size: 0.98em; color: var(--text-main); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .lineup-item.current .lineup-name { color: var(--teal,#00cec9); }
-        .online-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
-        .online-dot.online { background: var(--green); box-shadow: 0 0 5px rgba(46,213,115,0.6); }
-        .online-dot.idle { background: var(--gold); }
-        .online-dot.offline { background: #444; }
-        .online-label { font-size: 0.75em; color: var(--text-dim); }
-        .hit-check { font-size: 1.1em; flex-shrink: 0; }
-        .lineup-remove-btn { background: none; border: none; color: #3a4050; font-size: 1em; cursor: pointer; padding: 4px 6px; border-radius: 4px; transition: 0.15s; flex-shrink: 0; }
-        .lineup-remove-btn:hover { color: var(--red); background: rgba(255,71,87,0.1); }
-        .lineup-skip-btn { background: none; border: 1px solid #2f3542; color: var(--text-dim); font-size: 0.7em; cursor: pointer; padding: 3px 8px; border-radius: 4px; transition: 0.15s; flex-shrink: 0; text-transform: uppercase; font-weight: 700; }
-        .lineup-skip-btn:hover { border-color: var(--gold); color: var(--gold); }
-        .lineup-add-row { padding: 14px 22px; border-top: 1px solid #2f3542; display: flex; gap: 8px; }
-        .lineup-add-input { flex: 1; background: #0b0d13; border: 1px solid #2f3542; color: var(--text-main); padding: 8px 12px; border-radius: 6px; font-size: 0.88em; outline: none; }
-        .lineup-add-input:focus { border-color: var(--teal,#00cec9); }
-        .lineup-add-btn { background: rgba(0,206,201,0.12); border: 1px solid rgba(0,206,201,0.35); color: var(--teal,#00cec9); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 700; font-size: 0.85em; transition: 0.15s; white-space: nowrap; }
-        .lineup-add-btn:hover { background: rgba(0,206,201,0.22); }
-        .lineup-suggest { position: absolute; left: 0; right: 0; top: 100%; margin-top: 4px; background: #161b22; border: 1px solid #2f3542; border-radius: 6px; z-index: 100; max-height: 240px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
-        .lineup-suggest-item { padding: 8px 12px; cursor: pointer; font-size: 0.88em; display: flex; align-items: center; gap: 8px; transition: 0.1s; }
-        .lineup-suggest-item:hover { background: #0d1117; color: var(--teal,#00cec9); }
-        .lineup-empty { text-align: center; color: var(--text-dim); padding: 28px; font-style: italic; font-size: 0.9em; }
-
-</style>
+    <!-- Fonts & Core Design System -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/global.css">
+    
+    <!-- Scripts & Auth -->
     <script src="/auth-gate.js"></script>
+    <script src="/global_settings.js"></script>
+    <script src="/global-topbar.js"></script>
+
+    <style>
+    /* ─── Page-Specific Chain Sentinel Styling ─── */
+    .chain-hero-card {
+        background: linear-gradient(145deg, rgba(18, 24, 36, 0.95), rgba(12, 16, 23, 0.98));
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        padding: 36px 28px;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+    }
+    .chain-hero-card::before {
+        content: '';
+        position: absolute;
+        top: -40%;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 500px;
+        height: 300px;
+        background: radial-gradient(ellipse, rgba(6, 182, 212, 0.08) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    .chain-title {
+        color: var(--text-secondary);
+        font-size: 0.9em;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        font-weight: 800;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+    }
+    .badge-modifier {
+        background: var(--accent-cobalt-dim);
+        color: var(--accent-cobalt);
+        padding: 3px 10px;
+        border-radius: var(--radius-sm);
+        font-size: 0.8em;
+        border: 1px solid var(--accent-cobalt-border);
+        font-weight: 900;
+        font-family: var(--font-mono);
+    }
+    .chain-count {
+        font-size: 4.8em;
+        font-weight: 900;
+        color: var(--text-primary);
+        line-height: 1;
+        font-family: var(--font-mono);
+        font-feature-settings: "tnum" 1;
+        letter-spacing: -2px;
+        margin-bottom: 20px;
+        text-shadow: 0 0 30px rgba(59, 130, 246, 0.2);
+    }
+    .progress-bar-bg {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-full);
+        height: 10px;
+        width: 100%;
+        max-width: 440px;
+        margin: 0 auto 28px auto;
+        overflow: hidden;
+        position: relative;
+    }
+    .progress-bar-fill {
+        background: linear-gradient(90deg, var(--accent-cobalt), var(--accent-cyan));
+        height: 100%;
+        width: 0%;
+        transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 0 12px rgba(6, 182, 212, 0.5);
+    }
+    .timer-box {
+        background: var(--bg-elevated);
+        border: 2px solid var(--border-default);
+        padding: 18px 24px;
+        border-radius: var(--radius-md);
+        max-width: 340px;
+        margin: 0 auto;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .timer-title {
+        color: var(--text-tertiary);
+        text-transform: uppercase;
+        font-weight: 800;
+        letter-spacing: 1px;
+        font-size: 0.74em;
+        margin-bottom: 6px;
+    }
+    .timer-time {
+        font-size: 3.4em;
+        font-weight: 900;
+        font-family: var(--font-mono);
+        font-feature-settings: "tnum" 1;
+        color: var(--text-primary);
+        line-height: 1;
+        transition: color 0.3s;
+    }
+    .waiting-text {
+        color: var(--text-tertiary);
+        font-style: italic;
+        margin-top: 18px;
+        font-size: 0.82em;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        font-weight: 700;
+    }
+    .danger .timer-box {
+        border-color: var(--accent-crimson);
+        box-shadow: 0 0 30px var(--accent-crimson-glow);
+        background: rgba(230, 57, 70, 0.08);
+    }
+    .danger .timer-time {
+        color: var(--accent-crimson);
+        animation: pulseHeartbeat 1s infinite;
+    }
+    @keyframes pulseHeartbeat {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.03); opacity: 0.8; }
+    }
+
+    /* Chain Lineup Styling */
+    .lineup-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        margin-top: 24px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    }
+    .lineup-header {
+        padding: 16px 22px;
+        border-bottom: 1px solid var(--border-subtle);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 12px;
+        background: rgba(255, 255, 255, 0.01);
+    }
+    .lineup-title {
+        margin: 0;
+        color: var(--accent-cyan);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-size: 1.05em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 800;
+    }
+    .lineup-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .lineup-btn {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        color: var(--text-secondary);
+        padding: 6px 12px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        font-size: 0.78em;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        transition: all var(--transition-fast);
+        font-family: inherit;
+    }
+    .lineup-btn:hover {
+        border-color: var(--accent-cyan);
+        color: var(--accent-cyan);
+        background: var(--bg-hover);
+    }
+    .lineup-btn.danger:hover {
+        border-color: var(--accent-crimson);
+        color: var(--accent-crimson);
+    }
+    .lineup-btn.active {
+        background: var(--accent-cyan-dim);
+        border-color: var(--accent-cyan-border);
+        color: var(--accent-cyan);
+    }
+    .lineup-cycle-badge {
+        background: var(--accent-cyan-dim);
+        border: 1px solid var(--accent-cyan-border);
+        color: var(--accent-cyan);
+        padding: 4px 10px;
+        border-radius: var(--radius-sm);
+        font-size: 0.76em;
+        font-weight: 800;
+        font-family: var(--font-mono);
+    }
+    .lineup-meta {
+        padding: 10px 22px;
+        background: rgba(6, 182, 212, 0.03);
+        border-bottom: 1px solid var(--border-subtle);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 0.82em;
+        color: var(--text-secondary);
+    }
+    .lineup-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+    .lineup-item {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 22px;
+        border-bottom: 1px solid var(--border-subtle);
+        transition: background var(--transition-fast);
+        cursor: grab;
+        position: relative;
+    }
+    .lineup-item:last-child {
+        border-bottom: none;
+    }
+    .lineup-item:hover {
+        background: var(--bg-hover);
+    }
+    .lineup-item.current {
+        background: var(--accent-cyan-dim);
+        border-left: 3px solid var(--accent-cyan);
+    }
+    .lineup-item.hit-done {
+        opacity: 0.45;
+    }
+    .lineup-item.dragging {
+        opacity: 0.4;
+        background: var(--bg-elevated);
+    }
+    .lineup-item.drag-over {
+        border-top: 2px solid var(--accent-cyan);
+    }
+    .lineup-slot {
+        width: 28px;
+        text-align: center;
+        font-weight: 900;
+        font-size: 1em;
+        color: var(--text-tertiary);
+        font-family: var(--font-mono);
+        flex-shrink: 0;
+    }
+    .lineup-item.current .lineup-slot {
+        color: var(--accent-cyan);
+        font-size: 1.15em;
+    }
+    .lineup-drag-handle {
+        color: var(--text-tertiary);
+        font-size: 1.1em;
+        cursor: grab;
+        flex-shrink: 0;
+        user-select: none;
+    }
+    .lineup-name {
+        font-weight: 700;
+        font-size: 0.95em;
+        color: var(--text-primary);
+        flex: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .lineup-item.current .lineup-name {
+        color: var(--accent-cyan);
+    }
+    .online-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        display: inline-block;
+    }
+    .online-dot.online {
+        background: var(--accent-emerald);
+        box-shadow: 0 0 6px var(--accent-emerald);
+    }
+    .online-dot.idle {
+        background: var(--accent-amber);
+    }
+    .online-dot.offline {
+        background: var(--text-tertiary);
+    }
+    .online-label {
+        font-size: 0.74em;
+        color: var(--text-tertiary);
+    }
+    .lineup-remove-btn {
+        background: none;
+        border: none;
+        color: var(--text-tertiary);
+        font-size: 1em;
+        cursor: pointer;
+        padding: 4px 6px;
+        border-radius: 4px;
+        transition: all var(--transition-fast);
+        flex-shrink: 0;
+    }
+    .lineup-remove-btn:hover {
+        color: var(--accent-crimson);
+        background: var(--accent-crimson-dim);
+    }
+    .lineup-skip-btn {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        color: var(--text-secondary);
+        font-size: 0.7em;
+        cursor: pointer;
+        padding: 3px 8px;
+        border-radius: 4px;
+        transition: all var(--transition-fast);
+        flex-shrink: 0;
+        text-transform: uppercase;
+        font-weight: 700;
+        font-family: inherit;
+    }
+    .lineup-skip-btn:hover {
+        border-color: var(--accent-amber);
+        color: var(--accent-amber);
+    }
+    .lineup-add-row {
+        padding: 14px 22px;
+        border-top: 1px solid var(--border-subtle);
+        display: flex;
+        gap: 8px;
+        background: rgba(255, 255, 255, 0.01);
+    }
+    .lineup-add-input {
+        flex: 1;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        color: var(--text-primary);
+        padding: 9px 14px;
+        border-radius: var(--radius-sm);
+        font-size: 0.88em;
+        outline: none;
+        font-family: inherit;
+    }
+    .lineup-add-input:focus {
+        border-color: var(--accent-cyan);
+        box-shadow: 0 0 0 3px var(--accent-cyan-dim);
+    }
+    .lineup-add-btn {
+        background: var(--accent-cyan-dim);
+        border: 1px solid var(--accent-cyan-border);
+        color: var(--accent-cyan);
+        padding: 8px 18px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        font-weight: 800;
+        font-size: 0.85em;
+        transition: all var(--transition-fast);
+        white-space: nowrap;
+        font-family: inherit;
+    }
+    .lineup-add-btn:hover {
+        background: var(--accent-cyan);
+        color: #000;
+    }
+    .lineup-suggest {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 100%;
+        margin-top: 4px;
+        background: var(--bg-overlay);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-sm);
+        z-index: 100;
+        max-height: 240px;
+        overflow-y: auto;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    }
+    .lineup-suggest-item {
+        padding: 10px 14px;
+        cursor: pointer;
+        font-size: 0.88em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: background var(--transition-fast);
+    }
+    .lineup-suggest-item:hover {
+        background: var(--bg-hover);
+        color: var(--accent-cyan);
+    }
+
+    /* Queue & Ledger Cards */
+    .queue-card, .ledger-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        margin-top: 24px;
+        overflow: hidden;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    }
+    .queue-header, .ledger-card h3 {
+        padding: 16px 22px;
+        border-bottom: 1px solid var(--border-subtle);
+        margin: 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: rgba(255, 255, 255, 0.01);
+    }
+    .queue-title, .ledger-card h3 {
+        color: var(--accent-amber);
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        font-size: 1.05em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 800;
+    }
+    .queue-row {
+        display: grid;
+        grid-template-columns: 110px 1.5fr 1fr;
+        gap: 14px;
+        padding: 12px 22px;
+        border-bottom: 1px solid var(--border-subtle);
+        align-items: center;
+        font-size: 0.88em;
+        transition: background var(--transition-fast);
+    }
+    .queue-row:hover {
+        background: var(--bg-hover);
+    }
+    .queue-row:last-child {
+        border-bottom: none;
+    }
+    .queue-row-header {
+        display: grid;
+        grid-template-columns: 110px 1.5fr 1fr;
+        gap: 14px;
+        padding: 10px 22px;
+        color: var(--text-secondary);
+        font-size: 0.72em;
+        font-weight: 800;
+        text-transform: uppercase;
+        background: var(--bg-elevated);
+        border-bottom: 1px solid var(--border-default);
+        letter-spacing: 0.8px;
+    }
+    .timer-badge {
+        background: var(--bg-elevated);
+        padding: 4px 10px;
+        border-radius: var(--radius-sm);
+        font-family: var(--font-mono);
+        font-size: 1.05em;
+        font-weight: 800;
+        border: 1px solid var(--border-subtle);
+        text-align: center;
+    }
+    .timer-badge.ready {
+        background: var(--accent-emerald-dim);
+        color: var(--accent-emerald);
+        border-color: var(--accent-emerald-border);
+        box-shadow: 0 0 10px var(--accent-emerald-glow);
+    }
+    .timer-badge.soon {
+        color: var(--accent-amber);
+    }
+    .queue-profile {
+        font-weight: 700;
+        color: var(--text-primary);
+        text-decoration: none;
+        font-size: 1em;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .queue-profile:hover {
+        color: var(--accent-cobalt);
+    }
+    .dibs-badge {
+        background: var(--accent-crimson-dim);
+        color: var(--accent-crimson);
+        padding: 4px 10px;
+        border-radius: var(--radius-sm);
+        font-weight: 800;
+        border: 1px solid var(--accent-crimson-border);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.82em;
+    }
+    .ledger-grid {
+        display: grid;
+        grid-template-columns: 1fr 2fr 1.5fr 1.5fr;
+        gap: 12px;
+        color: var(--text-secondary);
+        font-weight: 800;
+        font-size: 0.72em;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        background: var(--bg-elevated);
+        padding: 10px 22px;
+        border-bottom: 1px solid var(--border-default);
+    }
+    .ledger-row {
+        display: grid;
+        grid-template-columns: 1fr 2fr 1.5fr 1.5fr;
+        gap: 12px;
+        padding: 12px 22px;
+        border-bottom: 1px solid var(--border-subtle);
+        font-size: 0.88em;
+        align-items: center;
+    }
+    .ledger-row:hover {
+        background: var(--bg-hover);
+    }
+    .ledger-row:last-child {
+        border-bottom: none;
+    }
+    .milestone-badge {
+        background: var(--accent-amber-dim);
+        color: var(--accent-amber);
+        padding: 4px 10px;
+        border-radius: var(--radius-sm);
+        font-weight: 800;
+        display: inline-block;
+        text-align: center;
+        border: 1px solid var(--accent-amber-border);
+        font-family: var(--font-mono);
+        font-size: 0.82em;
+    }
+
+    /* DIBS Guide Setup Card */
+    .script-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 24px 28px;
+        margin-top: 28px;
+    }
+    .script-card h3 {
+        color: var(--accent-cobalt);
+        margin: 0 0 10px 0;
+        text-transform: uppercase;
+        font-size: 1.05em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 800;
+    }
+    .script-steps {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-top: 20px;
+    }
+    .script-step {
+        background: var(--bg-elevated);
+        padding: 18px 20px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-subtle);
+    }
+    .script-step h4 {
+        color: var(--text-primary);
+        margin: 0 0 10px 0;
+        border-bottom: 1px solid var(--border-subtle);
+        padding-bottom: 8px;
+        font-size: 0.92em;
+    }
+    .script-step ol {
+        margin: 0;
+        padding-left: 20px;
+        color: var(--text-secondary);
+        font-size: 0.86em;
+        line-height: 1.6;
+    }
+    .btn-download {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--accent-cobalt);
+        color: #ffffff;
+        font-weight: 800;
+        text-decoration: none;
+        padding: 10px 20px;
+        border-radius: var(--radius-sm);
+        margin-top: 14px;
+        text-transform: uppercase;
+        font-size: 0.84em;
+        transition: all var(--transition-fast);
+        box-shadow: 0 2px 10px var(--accent-cobalt-glow);
+    }
+    .btn-download:hover {
+        background: #4f94fc;
+        transform: translateY(-1px);
+    }
+    @media (max-width: 768px) {
+        .script-steps { grid-template-columns: 1fr; }
+        .chain-count { font-size: 3.5em; }
+        .timer-time { font-size: 2.8em; }
+    }
+    </style>
 </head>
 <body>
     <nav class="sidebar" id="app-sidebar">
         <div class="sidebar-header">
-            <div class="sidebar-logo">🕷️ Torn Operations</div>
-            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Theme" style="background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.2em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; margin-right: 10px;">🌗</button>
-            <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
-        </div>
-                                <div class="nav-items">
-            <a href="/" class="nav-link ">📡 <span class="nav-text">Live Warboard</span></a>
-            <a href="/chain.html" class="nav-link active">🔗 <span class="nav-text">Chain Watcher</span></a>
-            <a href="/payout.html" class="nav-link ">💰 <span class="nav-text">Payouts</span></a>
-            <a href="/dashboard.html" class="nav-link ">🛡️ <span class="nav-text">Dashboard</span></a>
-            <a href="/members.html" class="nav-link ">👥 <span class="nav-text">Members</span></a>
-            <a href="/recruit/" class="nav-link ">🎯 <span class="nav-text">Recruit Platform</span></a>
-            <a href="/travel.html" class="nav-link ">✈️ <span class="nav-text">Travel Calculator</span></a>
-            <a href="/bazaar.html" class="nav-link ">🛒 <span class="nav-text">Bazaar Watcher</span></a>
-            <a href="/discord.html" class="nav-link ">📢 <span class="nav-text">Discord Alerts</span></a>
-            <a href="/oc.html" class="nav-link ">💼 <span class="nav-text">OC Manager</span></a>
-            <a href="/ai-sandbox.html" class="nav-link ">🤖 <span class="nav-text">F.R.I.D.A.Y AI</span></a>
-            <div style="margin-top: auto; padding: 0 4px;">
-                <div style="height:1px; background:var(--border); margin: 10px 0;"></div>
-                <div style="font-size:0.65em; color:var(--text-dim); text-transform:uppercase; letter-spacing:2px; padding:0 8px 6px; font-weight:700;">Company</div>
+            <div class="sidebar-logo">
+                <span class="brand-icon">🕷️</span>
+                <span class="brand-text">Spider-Verse</span>
             </div>
-            <a href="/company.html" class="nav-link " style="background:rgba(0,206,201,0.08);border:1px solid rgba(0,206,201,0.25);color:var(--teal);">🏢 <span class="nav-text">Company Tools</span></a>
-            <div style="padding: 0 4px; margin-top:8px;"><div style="height:1px; background:var(--border);"></div></div>
-            <a href="/gamble.html" class="nav-link ">🎰 <span class="nav-text">Casino Tools</span></a>
-            <a onclick="openSettings()" class="nav-link" style="cursor:pointer; margin-top:6px;">⚙️ <span class="nav-text">Settings</span></a>
+            <div class="sidebar-actions">
+                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌗</button>
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar">☰</button>
+            </div>
+        </div>
+        <div class="nav-items">
+            <div class="nav-section-title">Live Operations</div>
+            <a href="/" class="nav-link"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
+            <a href="/chain.html" class="nav-link active"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
+            <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
+            <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Faction Roster</span></a>
+            <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
+
+            <div class="nav-section-title">Tactical Desk</div>
+            <a href="/dashboard.html" class="nav-link"><span class="nav-icon">🛡️</span> <span class="nav-text">Flight & Sentinel</span></a>
+            <a href="/travel.html" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Travel Profit Desk</span></a>
+            <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market & Bazaar</span></a>
+            <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
+            <a href="/gamble.html" class="nav-link"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
+            <a href="/recruit/" class="nav-link"><span class="nav-icon">🎯</span> <span class="nav-text">Recruit Engine</span></a>
+
+            <div class="nav-section-title">Intelligence & Alerts</div>
+            <a href="/ai-sandbox.html" class="nav-link"><span class="nav-icon">🤖</span> <span class="nav-text">F.R.I.D.A.Y. Intel</span></a>
+            <a href="/discord.html" class="nav-link"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
+            <a onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" class="nav-link" style="cursor:pointer; margin-top:4px;"><span class="nav-icon">⚙️</span> <span class="nav-text">Settings</span></a>
+        </div>
+        <div class="sidebar-footer" id="sidebar-user-footer">
+            <div class="sidebar-user-chip" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" style="cursor:pointer;" title="Account & API Settings">
+                <div class="sidebar-user-avatar" id="nav-user-avatar">🕷️</div>
+                <div class="sidebar-user-info">
+                    <span class="sidebar-user-name" id="nav-user-name">Tactical Operative</span>
+                    <span class="sidebar-user-faction" id="nav-user-sub">Spider-Verse [52355]</span>
+                </div>
+                <span style="color:var(--text-tertiary); font-size:0.9em;">⚙️</span>
+            </div>
         </div>
     </nav>
+    <div class="main-wrapper">
+        <header class="app-topbar">
+            <div class="topbar-left">
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;">☰</button>
+                <div class="topbar-crumb">
+                    <span>OPERATIONS</span> / <strong style="color:var(--text-primary);">CHAIN SENTINEL</strong>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <div class="tct-clock-chip" title="Torn City Time (TCT)">
+                    <span class="tct-label">TCT</span>
+                    <span id="global-tct-clock">--:--:--</span>
+                </div>
+                <div class="telemetry-chip live-ws" id="global-ws-badge" title="Data Feed Status">
+                    <span class="pulse-indicator"></span>
+                    <span id="global-ws-status">LIVE WS</span>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" title="Settings" style="padding:4px 8px;">⚙️</button>
+            </div>
+        </header>
 
     <main class="main-content">
         <h1>Live Chain Tracker</h1>
 
         <div class="container">
-            <div class="dash-card" id="chain-card">
+            <div class="chain-hero-card" id="chain-card">
                 <div class="chain-title">
                     Current Chain <span id="chain-modifier" class="badge-modifier">1.0x</span>
                 </div>
@@ -260,6 +801,7 @@
 
         </div>
     </main>
+    </div>
 
 <script>
 document.addEventListener("DOMContentLoaded", function() {

@@ -696,36 +696,66 @@
         }
     </style>
     <script src="/auth-gate.js"></script>
+    <script src="/global_settings.js"></script>
+    <script src="/global-topbar.js"></script>
 </head>
 <body>
     <nav class="sidebar" id="app-sidebar">
-        <div class="sidebar-header">
-            <div class="sidebar-logo">🕷️ Torn Operations</div>
-            <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Theme" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:1.2em;display:flex;justify-content:center;align-items:center;width:35px;height:35px;border-radius:6px;transition:0.2s;margin-right:10px;">🌗</button>
-            <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
-        </div>
-        <div class="nav-items">
-            <a href="/" class="nav-link ">📡 <span class="nav-text">Live Warboard</span></a>
-            <a href="/chain.html" class="nav-link ">🔗 <span class="nav-text">Chain Watcher</span></a>
-            <a href="/payout.html" class="nav-link ">💰 <span class="nav-text">Payouts</span></a>
-            <a href="/dashboard.html" class="nav-link ">🛡️ <span class="nav-text">Dashboard</span></a>
-            <a href="/members.html" class="nav-link ">👥 <span class="nav-text">Members</span></a>
-            <a href="/recruit/" class="nav-link ">🎯 <span class="nav-text">Recruit Platform</span></a>
-            <a href="/travel.html" class="nav-link ">✈️ <span class="nav-text">Travel Calculator</span></a>
-            <a href="/bazaar.html" class="nav-link ">🛒 <span class="nav-text">Bazaar Watcher</span></a>
-            <a href="/discord.html" class="nav-link ">📢 <span class="nav-text">Discord Alerts</span></a>
-            <a href="/oc.html" class="nav-link ">💼 <span class="nav-text">OC Manager</span></a>
-            <a href="/ai-sandbox.html" class="nav-link active" style="background: rgba(0,206,201,0.12); color: var(--teal); border: 1px solid rgba(0,206,201,0.3); border-radius: 8px;">🤖 <span class="nav-text">F.R.I.D.A.Y AI</span></a>
-            <div style="margin-top: auto; padding: 0 4px;">
-                <div style="height:1px; background:var(--border); margin: 10px 0;"></div>
-                <div style="font-size:0.65em; color:var(--text-dim); text-transform:uppercase; letter-spacing:2px; padding:0 8px 6px; font-weight:700;">Company</div>
+        <div class="sidebar-brand">
+            <div class="brand-badge">
+                <div class="brand-avatar">🕷️</div>
+                <div class="brand-info">
+                    <span class="brand-title">SPIDER-VERSE</span>
+                    <span class="brand-subtitle">Operations Hub</span>
+                </div>
             </div>
-            <a href="/company.html" class="nav-link " style="background:rgba(0,206,201,0.08);border:1px solid rgba(0,206,201,0.25);color:var(--teal);">🏢 <span class="nav-text">Company Tools</span></a>
-            <div style="padding: 0 4px; margin-top:8px;"><div style="height:1px; background:var(--border);"></div></div>
-            <a href="/gamble.html" class="nav-link ">🎰 <span class="nav-text">Casino Tools</span></a>
-            <a onclick="openSettings()" class="nav-link" style="cursor:pointer; margin-top:6px;">⚙️ <span class="nav-text">Settings</span></a>
+            <button class="sidebar-toggle-btn" onclick="toggleSidebar()" aria-label="Toggle Sidebar">☰</button>
+        </div>
+
+        <div class="nav-scroller">
+            <div class="nav-section-label">Command & Tactical</div>
+            <a href="/" class="nav-link"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
+            <a href="/chain.html" class="nav-link"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
+            <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
+            <a href="/dashboard.html" class="nav-link"><span class="nav-icon">🛡️</span> <span class="nav-text">Flight & Sentinel</span></a>
+
+            <div class="nav-section-label">Faction & People</div>
+            <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Roster Intel</span></a>
+            <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
+            <a href="/recruit/" class="nav-link"><span class="nav-icon">🎯</span> <span class="nav-text">Headhunter</span></a>
+
+            <div class="nav-section-label">Economy & Trading</div>
+            <a href="/travel.html" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Travel Desk</span></a>
+            <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market Sniper</span></a>
+            <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
+            <a href="/gamble.html" class="nav-link"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
+
+            <div class="nav-section-label">Intelligence & Alerts</div>
+            <a href="/discord.html" class="nav-link"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
+            <a href="/ai-sandbox.html" class="nav-link active"><span class="nav-icon">🤖</span> <span class="nav-text">F.R.I.D.A.Y. Intel</span></a>
+            <a onclick="openSettings()" class="nav-link" style="cursor: pointer;"><span class="nav-icon">⚙️</span> <span class="nav-text">System Config</span></a>
         </div>
     </nav>
+
+    <div class="main-wrapper">
+        <header class="app-topbar">
+            <div class="topbar-left">
+                <div class="page-breadcrumb">
+                    <span class="breadcrumb-sub">INTELLIGENCE & ALERTS</span>
+                    <span class="breadcrumb-sep">/</span>
+                    <span class="breadcrumb-current">F.R.I.D.A.Y. INTEL</span>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <div class="topbar-clock" id="topbar-tct-clock">--:--:-- TCT</div>
+                <div class="topbar-pill"><span class="pill-indicator"></span><span id="topbar-status-text">NEURAL SENTINEL</span></div>
+                <div class="topbar-user" id="topbar-user-pill">
+                    <span class="user-status-dot"></span>
+                    <span class="user-name-label" id="topbar-user-name">Authenticated</span>
+                </div>
+                <button class="topbar-btn" onclick="openSettings()" title="Settings">⚙️</button>
+            </div>
+        </header>
 
     <main class="main-content">
         <div class="page-header">
@@ -879,6 +909,7 @@
             </div>
         </div>
     </main>
+    </div>
 
     <script>
         // State

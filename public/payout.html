@@ -1,226 +1,431 @@
-﻿<!DOCTYPE html>
-<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>War Payout Calculator | Torn Operations Hub</title>
+    <title>War Payouts | Spider-Verse Command Center</title>
+    <meta name="description" content="Calculate and distribute Torn City ranked war payouts with automated multiplier weighting, surrender terms, score caps, and vault payment deep links.">
+    
+    <!-- Fonts & Core Design System -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/global.css">
-    <style>
-        :root {
-            --bg: #090a0f;
-            --card: #11141d;
-            --item: #1b202e;
-            --border: #2f3542;
-            --red: #ff4757;
-            --blue: #58a6ff;
-            --gold: #ffa502;
-            --green: #2ed573;
-            --teal: #00cec9;
-            --purple: #a29bfe;
-            --text-main: #f1f2f6;
-            --text-dim: #a1aab5;
-            --text-faint: #57606f;
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-
-        ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
-
-        /* ── SIDEBAR ── */
-
-        /* ── MAIN ── */
-        .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-
-        /* top bar */
-        .topbar { background: var(--card); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; align-items: center; gap: 16px; height: 56px; flex-shrink: 0; flex-wrap: wrap;}
-        .topbar-title { font-weight: 900; font-size: 1.1em; color: var(--text-main); flex: 1; min-width: 200px;}
-        .war-select { background: var(--item); border: 1px solid var(--border); color: var(--text-main); padding: 7px 12px; border-radius: 8px; font-family: inherit; font-size: 0.85em; cursor: pointer; }
-        .war-select:focus { outline: none; border-color: var(--red); }
-        .input-manual { background: var(--item); border: 1px solid var(--border); color: var(--text-main); padding: 7px 12px; border-radius: 8px; font-family: inherit; font-size: 0.85em; width: 180px; }
-        .input-manual:focus { outline: none; border-color: var(--red); }
-        .btn-load { background: var(--red); color: white; border: none; padding: 7px 18px; border-radius: 8px; font-weight: 700; font-size: 0.85em; cursor: pointer; transition: 0.2s; letter-spacing: 0.5px; }
-        .btn-load:hover { background: #e0404e; }
-
-        /* content area */
-        .content { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
-
-        /* summary strip */
-        .summary-strip { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
-        .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
-        .kpi-label { color: var(--text-faint); font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
-        .kpi-val { font-size: 1.25em; font-weight: 900; color: var(--text-main); }
-        .kpi-val.green { color: var(--green); }
-        .kpi-val.gold { color: var(--gold); }
-        .kpi-val.red { color: var(--red); }
-        .kpi-val.blue { color: var(--blue); }
-
-        /* two-col layout */
-        .two-col { display: grid; grid-template-columns: 380px 1fr; gap: 16px; align-items: start; }
-
-        /* cards */
-        .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
-        .card-title { font-size: 0.7em; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; color: var(--text-faint); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
-        .card-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-
-        /* field rows */
-        .field { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .field label { color: var(--text-dim); font-weight: 500; font-size: 0.9em; }
-        .money-input { display: flex; align-items: center; background: var(--item); border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
-        .money-input span { padding: 6px 10px; color: var(--text-faint); font-weight: 700; background: rgba(255,255,255,0.03); border-right: 1px solid var(--border); font-size: 0.9em; }
-        .money-input input { background: transparent; border: none; color: var(--text-main); padding: 6px 10px; width: 110px; text-align: right; font-weight: 700; font-family: inherit; font-size: 0.9em; outline: none; }
-        .money-input input:read-only { color: var(--text-faint); cursor: default; }
-        .money-input input[type=number]::-webkit-inner-spin-button { opacity: 0; }
-        .small-input { background: var(--item); border: 1px solid var(--border); border-radius: 7px; color: var(--text-main); padding: 6px 10px; width: 70px; text-align: right; font-weight: 700; font-family: inherit; font-size: 0.9em; outline: none; }
-        .small-input:focus { border-color: var(--blue); }
-        .small-input[type=number]::-webkit-inner-spin-button { opacity: 0; }
-
-        /* toggle rows */
-        .toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
-        .toggle-row:last-child { border-bottom: none; padding-bottom: 0; }
-        .toggle-row label { display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-weight: 500; cursor: pointer; user-select: none; }
-        .toggle-row label input[type=checkbox] { width: 14px; height: 14px; accent-color: var(--gold); cursor: pointer; }
-        .mult-badge { display: flex; align-items: center; gap: 6px; font-size: 0.8em; color: var(--text-faint); }
-        .mult-badge span { font-weight: 700; }
-
-        /* radio group */
-        .radio-group { display: flex; gap: 8px; }
-        .radio-pill { display: flex; align-items: center; gap: 6px; background: var(--item); border: 1px solid var(--border); border-radius: 20px; padding: 5px 14px; cursor: pointer; font-size: 0.85em; font-weight: 600; color: var(--text-dim); transition: all 0.15s; }
-        .radio-pill input { display: none; }
-        .radio-pill.selected { background: rgba(255,165,2,0.15); border-color: var(--gold); color: var(--gold); }
-
-        /* section divider */
-        .divider { display: flex; align-items: center; gap: 10px; margin: 12px 0 8px; }
-        .divider span { font-size: 0.7em; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: var(--text-faint); white-space: nowrap; }
-        .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-
-        /* pph display */
-        .pph-display { background: linear-gradient(135deg, rgba(46,213,115,0.08), rgba(46,213,115,0.03)); border: 1px solid rgba(46,213,115,0.25); border-radius: 10px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
-        .pph-display .lbl { font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-faint); }
-        .pph-display .val { font-size: 1.4em; font-weight: 900; color: var(--green); font-variant-numeric: tabular-nums; }
-
-        /* datetime input */
-        input[type=datetime-local] { background: var(--item); border: 1px solid var(--border); color: var(--text-main); padding: 7px 10px; border-radius: 7px; font-family: inherit; font-size: 0.85em; width: 100%; outline: none; }
-        input[type=datetime-local]:focus { border-color: var(--gold); }
-        input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
-
-        /* right col — table card */
-        .table-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-        .table-head-bar { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--border); }
-        .table-head-bar h3 { font-size: 0.75em; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; color: var(--text-faint); }
-        .btn-copy { background: var(--item); border: 1px solid var(--border); color: var(--text-dim); padding: 6px 14px; border-radius: 7px; font-weight: 700; font-size: 0.8em; cursor: pointer; transition: 0.15s; }
-        .btn-copy:hover { background: var(--border); color: var(--text-main); }
-
-        table { width: 100%; border-collapse: collapse; }
-        thead th { background: rgba(255,255,255,0.02); padding: 10px 14px; text-align: left; font-size: 0.7em; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-faint); border-bottom: 1px solid var(--border); white-space: nowrap; }
-        thead th:not(:first-child) { text-align: right; }
-        .btn-pay { background: rgba(46,213,115,0.1); border: 1px solid rgba(46,213,115,0.3); color: var(--green); padding: 5px 10px; border-radius: 6px; font-weight: 700; font-size: 0.8em; cursor: pointer; transition: 0.15s; }
-        .btn-pay:hover { background: var(--green); color: white; }
-        tbody td { padding: 11px 14px; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 0.9em; vertical-align: middle; }
-        tbody td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
-        tbody tr:last-child td { border-bottom: none; }
-        tbody tr:hover td { background: rgba(255,255,255,0.025); }
-        .td-name { font-weight: 700; color: var(--text-main); }
-        .td-hits { color: var(--blue); font-weight: 700; }
-        .td-ast { color: var(--purple); }
-        .td-out { color: var(--text-faint); }
-        .td-trm { color: var(--gold); }
-        .td-flt { color: #444; }
-        .td-adj { color: var(--gold); font-weight: 800; }
-        .td-pay { color: var(--green); font-weight: 900; font-size: 1em; }
-        .badge-zero { color: var(--border) !important; font-weight: 500 !important; }
-        .rank-1 .td-name::before { content: '🥇 '; }
-        .rank-2 .td-name::before { content: '🥈 '; }
-        .rank-3 .td-name::before { content: '🥉 '; }
-
-        /* empty state */
-        .empty { text-align: center; padding: 50px; color: var(--text-faint); }
-        .empty .icon { font-size: 2.5em; margin-bottom: 10px; }
-        .empty p { font-size: 0.9em; }
-
-        /* light mode */
-        body.light-mode { --bg: #f5f6fa; --card: #ffffff; --item: #f1f2f6; --border: #dcdde1; --text-main: #2f3640; --text-dim: #718093; --text-faint: #a4b0be; }
-
-        @media (max-width: 1100px) {
-            .two-col { grid-template-columns: 1fr; }
-            .summary-strip { grid-template-columns: 1fr 1fr; }
-        }
-        @media (max-width: 900px) {
-            .main { height: auto; overflow: visible; }
-            .content { overflow-y: visible; }
-            .topbar { height: auto; padding: 12px; }
-        }
-    </style>
+    
+    <!-- Scripts & Auth -->
     <script src="/auth-gate.js"></script>
+    <script src="/global_settings.js"></script>
+    <script src="/global-topbar.js"></script>
+
+    <style>
+    /* ─── Page-Specific War Payout Styling ─── */
+    .summary-strip {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+    .kpi-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 14px 18px;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+    .kpi-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 2px;
+        background: var(--border-subtle);
+    }
+    .kpi-card.kpi-green::before { background: var(--accent-emerald); }
+    .kpi-card.kpi-red::before { background: var(--accent-crimson); }
+    .kpi-card.kpi-blue::before { background: var(--accent-cobalt); }
+    .kpi-card.kpi-gold::before { background: var(--accent-amber); }
+
+    .kpi-label {
+        color: var(--text-muted);
+        font-size: 0.72em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 6px;
+    }
+    .kpi-val {
+        font-size: 1.4em;
+        font-weight: 900;
+        font-family: var(--font-mono);
+        color: var(--text-primary);
+        letter-spacing: -0.5px;
+    }
+    .kpi-val.green { color: var(--accent-emerald); }
+    .kpi-val.red { color: var(--accent-crimson); }
+    .kpi-val.blue { color: var(--accent-cobalt); }
+    .kpi-val.gold { color: var(--accent-amber); }
+
+    .two-col {
+        display: grid;
+        grid-template-columns: 390px 1fr;
+        gap: 20px;
+        align-items: start;
+    }
+
+    .payout-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 16px 18px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        margin-bottom: 16px;
+    }
+    .payout-card-title {
+        font-size: 0.72em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        color: var(--text-muted);
+        margin-bottom: 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .payout-card-title::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--border-subtle);
+    }
+
+    .field {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    .field label {
+        color: var(--text-secondary);
+        font-weight: 600;
+        font-size: 0.85em;
+    }
+
+    .money-input {
+        display: flex;
+        align-items: center;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+        transition: border-color var(--transition-fast);
+    }
+    .money-input:focus-within {
+        border-color: var(--accent-cobalt);
+    }
+    .money-input span {
+        padding: 6px 10px;
+        color: var(--text-muted);
+        font-weight: 700;
+        background: rgba(255, 255, 255, 0.03);
+        border-right: 1px solid var(--border-subtle);
+        font-size: 0.85em;
+        font-family: var(--font-mono);
+    }
+    .money-input input {
+        background: transparent;
+        border: none;
+        color: var(--text-primary);
+        padding: 6px 10px;
+        width: 120px;
+        text-align: right;
+        font-weight: 700;
+        font-family: var(--font-mono);
+        font-size: 0.88em;
+        outline: none;
+    }
+    .money-input input:read-only { color: var(--text-muted); cursor: default; }
+    .money-input input[type=number]::-webkit-inner-spin-button { opacity: 0; }
+
+    .small-input {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        color: var(--text-primary);
+        padding: 6px 10px;
+        width: 70px;
+        text-align: right;
+        font-weight: 700;
+        font-family: var(--font-mono);
+        font-size: 0.85em;
+        outline: none;
+        transition: border-color var(--transition-fast);
+    }
+    .small-input:focus { border-color: var(--accent-cobalt); }
+    .small-input[type=number]::-webkit-inner-spin-button { opacity: 0; }
+
+    .toggle-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 9px 0;
+        border-bottom: 1px solid var(--border-subtle);
+    }
+    .toggle-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .toggle-row label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-secondary);
+        font-weight: 500;
+        font-size: 0.85em;
+        cursor: pointer;
+        user-select: none;
+    }
+    .toggle-row label input[type=checkbox] {
+        width: 15px; height: 15px;
+        accent-color: var(--accent-amber);
+        cursor: pointer;
+    }
+    .mult-badge {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.82em;
+        color: var(--text-muted);
+    }
+    .mult-badge span { font-weight: 700; font-family: var(--font-mono); }
+
+    .radio-pill {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: 20px;
+        padding: 6px 14px;
+        cursor: pointer;
+        font-size: 0.82em;
+        font-weight: 700;
+        color: var(--text-secondary);
+        transition: all var(--transition-fast);
+    }
+    .radio-pill input { display: none; }
+    .radio-pill.selected {
+        background: var(--accent-amber-dim);
+        border-color: var(--accent-amber-border);
+        color: var(--accent-amber);
+    }
+
+    .divider {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 14px 0 10px;
+    }
+    .divider span {
+        font-size: 0.68em;
+        font-weight: 800;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        white-space: nowrap;
+    }
+    .divider::before, .divider::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--border-subtle);
+    }
+
+    .pph-display {
+        background: rgba(16, 185, 129, 0.06);
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        border-radius: var(--radius-sm);
+        padding: 12px 16px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 12px;
+    }
+    .pph-display .lbl {
+        font-size: 0.72em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--text-muted);
+    }
+    .pph-display .val {
+        font-size: 1.35em;
+        font-weight: 900;
+        color: var(--accent-emerald);
+        font-family: var(--font-mono);
+    }
+
+    input[type=datetime-local] {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+        padding: 7px 10px;
+        border-radius: var(--radius-sm);
+        font-family: var(--font-mono);
+        font-size: 0.82em;
+        width: 100%;
+        outline: none;
+    }
+    input[type=datetime-local]:focus { border-color: var(--accent-amber); }
+    input[type=datetime-local]::-webkit-calendar-picker-indicator { filter: invert(0.6); cursor: pointer; }
+
+    .table-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+    .table-head-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border-subtle);
+        background: rgba(255, 255, 255, 0.01);
+    }
+    .table-head-bar h3 {
+        font-size: 0.75em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        color: var(--text-muted);
+    }
+
+    .btn-pay {
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        color: var(--accent-emerald);
+        padding: 5px 12px;
+        border-radius: var(--radius-sm);
+        font-weight: 800;
+        font-size: 0.78em;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        font-family: inherit;
+    }
+    .btn-pay:hover {
+        background: var(--accent-emerald);
+        color: #000;
+        box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+    }
+
+    .td-name { font-weight: 700; color: var(--text-primary); }
+    .td-hits { color: var(--accent-cobalt); font-weight: 700; font-family: var(--font-mono); }
+    .td-ast { color: #a855f7; font-family: var(--font-mono); }
+    .td-out { color: var(--text-muted); font-family: var(--font-mono); }
+    .td-trm { color: var(--accent-amber); font-family: var(--font-mono); }
+    .td-flt { color: var(--text-muted); font-family: var(--font-mono); }
+    .td-adj { color: var(--accent-amber); font-weight: 800; font-family: var(--font-mono); }
+    .td-pay { color: var(--accent-emerald); font-weight: 900; font-size: 0.98em; font-family: var(--font-mono); }
+    .badge-zero { color: var(--text-muted) !important; opacity: 0.4; }
+    .rank-1 .td-name::before { content: '🥇 '; }
+    .rank-2 .td-name::before { content: '🥈 '; }
+    .rank-3 .td-name::before { content: '🥉 '; }
+
+    @media (max-width: 1100px) {
+        .two-col { grid-template-columns: 1fr; }
+        .summary-strip { grid-template-columns: repeat(2, 1fr); }
+    }
+    </style>
 </head>
 <body>
+    <!-- SIDEBAR -->
     <nav class="sidebar" id="app-sidebar">
-        <div class="sidebar-logo"><span>🕷️ Torn Operations</span> <button class="toggle-btn" onclick="toggleSidebar()">☰</button></div>
-                                <div class="nav-items">
-            <a href="/" class="nav-link ">📡 <span class="nav-text">Live Warboard</span></a>
-            <a href="/chain.html" class="nav-link ">🔗 <span class="nav-text">Chain Watcher</span></a>
-            <a href="/payout.html" class="nav-link active">💰 <span class="nav-text">Payouts</span></a>
-            <a href="/dashboard.html" class="nav-link ">🛡️ <span class="nav-text">Dashboard</span></a>
-            <a href="/members.html" class="nav-link ">👥 <span class="nav-text">Members</span></a>
-            <a href="/recruit/" class="nav-link ">🎯 <span class="nav-text">Recruit Platform</span></a>
-            <a href="/travel.html" class="nav-link ">✈️ <span class="nav-text">Travel Calculator</span></a>
-            <a href="/bazaar.html" class="nav-link ">🛒 <span class="nav-text">Bazaar Watcher</span></a>
-            <a href="/discord.html" class="nav-link ">📢 <span class="nav-text">Discord Alerts</span></a>
-            <a href="/oc.html" class="nav-link ">💼 <span class="nav-text">OC Manager</span></a>
-            <a href="/ai-sandbox.html" class="nav-link ">🤖 <span class="nav-text">F.R.I.D.A.Y AI</span></a>
-            <div style="margin-top: auto; padding: 0 4px;">
-                <div style="height:1px; background:var(--border); margin: 10px 0;"></div>
-                <div style="font-size:0.65em; color:var(--text-dim); text-transform:uppercase; letter-spacing:2px; padding:0 8px 6px; font-weight:700;">Company</div>
+        <div class="sidebar-brand">
+            <div class="brand-badge">
+                <div class="brand-avatar">🕷️</div>
+                <div class="brand-info">
+                    <span class="brand-title">SPIDER-VERSE</span>
+                    <span class="brand-subtitle">Operations Hub</span>
+                </div>
             </div>
-            <a href="/company.html" class="nav-link " style="background:rgba(0,206,201,0.08);border:1px solid rgba(0,206,201,0.25);color:var(--teal);">🏢 <span class="nav-text">Company Tools</span></a>
-            <div style="padding: 0 4px; margin-top:8px;"><div style="height:1px; background:var(--border);"></div></div>
-            <a href="/gamble.html" class="nav-link ">🎰 <span class="nav-text">Casino Tools</span></a>
-            <a onclick="openSettings()" class="nav-link" style="cursor:pointer; margin-top:6px;">⚙️ <span class="nav-text">Settings</span></a>
+            <button class="sidebar-toggle-btn" onclick="toggleSidebar()" aria-label="Toggle Sidebar">☰</button>
+        </div>
+
+        <div class="nav-scroller">
+            <div class="nav-section-label">Command & Tactical</div>
+            <a href="/" class="nav-link"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
+            <a href="/chain.html" class="nav-link"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
+            <a href="/payout.html" class="nav-link active"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
+            <a href="/dashboard.html" class="nav-link"><span class="nav-icon">🛡️</span> <span class="nav-text">Flight & Sentinel</span></a>
+
+            <div class="nav-section-label">Faction & People</div>
+            <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Roster Intel</span></a>
+            <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
+            <a href="/recruit/" class="nav-link"><span class="nav-icon">🎯</span> <span class="nav-text">Headhunter</span></a>
+
+            <div class="nav-section-label">Economy & Trading</div>
+            <a href="/travel.html" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Travel Desk</span></a>
+            <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market Sniper</span></a>
+            <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
+            <a href="/gamble.html" class="nav-link"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
+
+            <div class="nav-section-label">Intelligence & Alerts</div>
+            <a href="/discord.html" class="nav-link"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
+            <a href="/ai-sandbox.html" class="nav-link"><span class="nav-icon">🤖</span> <span class="nav-text">F.R.I.D.A.Y. Intel</span></a>
+            <a onclick="openSettings()" class="nav-link" style="cursor: pointer;"><span class="nav-icon">⚙️</span> <span class="nav-text">System Config</span></a>
         </div>
     </nav>
 
-    <div class="main">
-        <!-- TOP BAR -->
-        <div class="topbar">
-            <div class="topbar-title" id="war-title">💰 War Payout Calculator</div>
-        </div>
+    <!-- MAIN CONTENT WRAPPER -->
+    <div class="main-wrapper">
+        <header class="app-topbar">
+            <div class="topbar-left">
+                <div class="page-breadcrumb">
+                    <span class="breadcrumb-sub">OPERATIONS</span>
+                    <span class="breadcrumb-sep">/</span>
+                    <span class="breadcrumb-current">WAR PAYOUTS</span>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <div class="topbar-clock" id="topbar-tct-clock">--:--:-- TCT</div>
+                <div class="topbar-pill"><span class="pill-indicator"></span><span id="topbar-status-text">CALCULATOR</span></div>
+                <div class="topbar-user" id="topbar-user-pill">
+                    <span class="user-status-dot"></span>
+                    <span class="user-name-label" id="topbar-user-name">Authenticated</span>
+                </div>
+                <button class="topbar-btn" onclick="openSettings()" title="Settings">⚙️</button>
+            </div>
+        </header>
 
-        <div class="content">
-
-            <!-- FETCH BAR -->
-            <div style="background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
-                <div style="font-weight: 800; color: var(--gold); font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px;">Load Report:</div>
-                <select class="war-select" id="war-selector" style="flex:1; padding: 10px 14px; font-size: 1em;" onchange="if(this.value) fetchReport(this.value)">
+        <main class="main-content">
+            <!-- FETCH / LOAD REPORT BAR -->
+            <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 14px 18px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
+                <div style="font-weight: 800; color: var(--accent-amber); font-size: 0.82em; text-transform: uppercase; letter-spacing: 1px;">Load Report:</div>
+                <select class="select-input" id="war-selector" style="flex: 1; min-width: 200px; padding: 9px 12px; font-size: 0.9em; background: var(--bg-elevated);" onchange="if(this.value) fetchReport(this.value)">
                     <option value="">Select a past war...</option>
                 </select>
-                <div style="font-weight: 800; color: var(--text-faint); font-size: 0.8em;">OR</div>
-                <input class="input-manual" type="text" id="report-id" style="flex:1; padding: 10px 14px; font-size: 1em;" placeholder="Paste report ID (e.g. 123456)">
-                <button class="btn-load" style="padding: 10px 24px; font-size: 1em;" onclick="fetchReport()">Fetch Data</button>
+                <div style="font-weight: 800; color: var(--text-muted); font-size: 0.8em;">OR</div>
+                <input class="text-input" type="text" id="report-id" style="flex: 1; min-width: 200px; padding: 9px 12px; font-size: 0.9em; background: var(--bg-elevated);" placeholder="Paste report ID (e.g. 123456)">
+                <button class="btn btn-action" style="padding: 9px 22px; font-size: 0.88em;" onclick="fetchReport()">⚡ Fetch Data</button>
             </div>
 
             <!-- KPI STRIP -->
             <div class="summary-strip">
-                <div class="kpi">
+                <div class="kpi-card kpi-green">
                     <div class="kpi-label">Cache Value</div>
                     <div class="kpi-val green" id="kpi-cache">—</div>
                 </div>
-                <div class="kpi">
+                <div class="kpi-card kpi-red">
                     <div class="kpi-label">Total Deductions</div>
                     <div class="kpi-val red" id="kpi-deductions">—</div>
                 </div>
-                <div class="kpi">
+                <div class="kpi-card kpi-blue">
                     <div class="kpi-label">Member Pool</div>
                     <div class="kpi-val blue" id="kpi-pool">—</div>
                 </div>
-                <div class="kpi">
+                <div class="kpi-card kpi-gold">
                     <div class="kpi-label">Total Adj. Hits</div>
                     <div class="kpi-val gold" id="kpi-hits">—</div>
                 </div>
-                <div class="kpi">
-                    <div class="kpi-label">Pay Per Hit</div>
+                <div class="kpi-card kpi-green">
+                    <div class="kpi-label">Effective PPH</div>
                     <div class="kpi-val green" id="kpi-pph">—</div>
                 </div>
             </div>
@@ -230,8 +435,8 @@
                 <!-- LEFT: All controls -->
                 <div>
                     <!-- FINANCES -->
-                    <div class="card" style="margin-bottom:12px;">
-                        <div class="card-title">Finances</div>
+                    <div class="payout-card">
+                        <div class="payout-card-title">Finances & Deductions</div>
 
                         <div class="field">
                             <label>Cache Sales</label>
@@ -258,14 +463,14 @@
                             <div class="money-input"><span>$</span><input type="number" id="c-other" value="0" oninput="recalc()"></div>
                         </div>
                         <div class="field" style="margin-bottom:0;">
-                            <label style="color:var(--gold);">Manual Bonuses</label>
-                            <div class="money-input" style="border-color:rgba(255,165,2,0.3);"><span>$</span><input type="number" id="c-bonus" value="0" oninput="recalc()"></div>
+                            <label style="color:var(--accent-amber);">Manual Bonuses</label>
+                            <div class="money-input" style="border-color:var(--accent-amber-border);"><span>$</span><input type="number" id="c-bonus" value="0" oninput="recalc()"></div>
                         </div>
                     </div>
 
                     <!-- CALC MODE -->
-                    <div class="card" style="margin-bottom:12px;">
-                        <div class="card-title">Calculation Mode</div>
+                    <div class="payout-card">
+                        <div class="payout-card-title">Calculation Mode</div>
                         <div style="display:flex; gap:8px; margin-bottom:12px;">
                             <label class="radio-pill selected" id="pill-cut" onclick="setCalcMode('cut')">
                                 <input type="radio" name="calc-mode" value="cut" checked> Faction Cut %
@@ -289,10 +494,10 @@
                     </div>
 
                     <!-- SURRENDER / TERMED -->
-                    <div class="card" style="margin-bottom:12px;">
-                        <div class="card-title">Surrender & Terming</div>
+                    <div class="payout-card">
+                        <div class="payout-card-title">Surrender & Terming</div>
                         <div style="margin-bottom:10px;">
-                            <div style="font-size:0.8em; color:var(--text-faint); margin-bottom:6px;">Surrender Time (TCT/UTC) — hits after this are "termed"</div>
+                            <div style="font-size:0.78em; color:var(--text-muted); margin-bottom:6px;">Surrender Time (TCT/UTC) — hits after this are "termed"</div>
                             <input type="datetime-local" id="surrender-time" onchange="recalc()">
                         </div>
                         <div class="toggle-row">
@@ -300,21 +505,21 @@
                             <div class="mult-badge"><span>×</span><input class="small-input" type="number" id="inp-real-war" value="2.0" step="0.1" oninput="recalc()" style="width:55px;"></div>
                         </div>
                         <div class="divider"><span>Score Cap</span></div>
-                        <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer; color:var(--text-dim); font-size:0.85em;">
-                            <input type="checkbox" id="chk-cap" onchange="recalc()" style="accent-color:var(--gold);">
+                        <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer; color:var(--text-secondary); font-size:0.85em;">
+                            <input type="checkbox" id="chk-cap" onchange="recalc()" style="accent-color:var(--accent-amber);">
                             Stop paying after cumulative war score exceeds:
                         </label>
                         <div class="money-input" style="width:100%;">
                             <input type="number" id="inp-cap" placeholder="e.g. 50000" oninput="recalc()" style="width:100%; text-align:left;">
                         </div>
-                        <div style="margin-top:6px; font-size:0.75em; color:var(--text-faint); line-height:1.5;">
+                        <div style="margin-top:6px; font-size:0.75em; color:var(--text-muted); line-height:1.5;">
                             Hits are counted chronologically. The hit that pushes respect past the target still pays — nothing after it.
                         </div>
                     </div>
 
                     <!-- ADVANCED OPTIONS -->
-                    <div class="card" style="margin-bottom:12px;">
-                        <div class="card-title">Advanced Hit Options</div>
+                    <div class="payout-card">
+                        <div class="payout-card-title">Advanced Hit Multipliers</div>
                         <div class="toggle-row">
                             <label><input type="checkbox" id="chk-assists" onchange="recalc()"> Pay Assists</label>
                             <div class="mult-badge"><span>×</span><input class="small-input" type="number" id="m-assist" value="0.25" step="0.05" oninput="recalc()" style="width:55px;"></div>
@@ -331,38 +536,38 @@
                             <label><input type="checkbox" id="chk-out" onchange="recalc()"> Pay Outside Hits</label>
                             <div class="mult-badge"><span>×</span><input class="small-input" type="number" id="m-out" value="0.1" step="0.1" oninput="recalc()" style="width:55px;"></div>
                         </div>
-                        <div class="toggle-row" style="margin-top:8px; border-top:1px solid var(--border); padding-top:12px;">
+                        <div class="toggle-row" style="margin-top:8px; border-top:1px solid var(--border-subtle); padding-top:12px;">
                             <label><input type="checkbox" id="chk-ff" onchange="recalc()"> Filter Low Fair Fight Hits</label>
                             <div class="mult-badge">Min FF <input class="small-input" type="number" id="inp-ff-min" value="2.0" step="0.1" oninput="recalc()" style="width:55px;"></div>
                         </div>
                     </div>
 
                     <!-- THRESHOLDS -->
-                    <div class="card">
-                        <div class="card-title">Hit Thresholds</div>
+                    <div class="payout-card">
+                        <div class="payout-card-title">Hit Thresholds & Split</div>
                         <div class="toggle-row" style="margin-bottom:10px;">
-                            <label style="font-weight:700; color:var(--gold);"><input type="checkbox" id="chk-thresh" onchange="recalc()" style="accent-color:var(--gold);"> Enable Thresholds</label>
+                            <label style="font-weight:700; color:var(--accent-amber);"><input type="checkbox" id="chk-thresh" onchange="recalc()" style="accent-color:var(--accent-amber);"> Enable Thresholds</label>
                         </div>
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
                             <div>
-                                <div style="font-size:0.75em; color:var(--text-faint); margin-bottom:4px;">Min Hits (or $0)</div>
+                                <div style="font-size:0.75em; color:var(--text-muted); margin-bottom:4px;">Min Hits (or $0)</div>
                                 <input class="small-input" type="number" id="t-min" value="0" oninput="recalc()" style="width:100%;">
                             </div>
                             <div>
-                                <div style="font-size:0.75em; color:var(--text-faint); margin-bottom:4px;">Max Hits Cap</div>
+                                <div style="font-size:0.75em; color:var(--text-muted); margin-bottom:4px;">Max Hits Cap</div>
                                 <input class="small-input" type="number" id="t-max" value="50" oninput="recalc()" style="width:100%;">
                             </div>
                         </div>
-                        <div style="font-size:0.75em; color:var(--text-faint); margin-bottom:8px;">Include in threshold count:</div>
-                        <div style="display:flex; gap:12px;">
-                            <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.85em;"><input type="checkbox" id="inc-assist" onchange="recalc()" style="accent-color:var(--gold);"> Assists</label>
-                            <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.85em;"><input type="checkbox" id="inc-out" onchange="recalc()" style="accent-color:var(--gold);"> Outside</label>
-                            <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.85em;"><input type="checkbox" id="inc-term" onchange="recalc()" style="accent-color:var(--gold);"> Termed</label>
+                        <div style="font-size:0.75em; color:var(--text-muted); margin-bottom:8px;">Include in threshold count:</div>
+                        <div style="display:flex; gap:12px; flex-wrap: wrap;">
+                            <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.85em;"><input type="checkbox" id="inc-assist" onchange="recalc()" style="accent-color:var(--accent-amber);"> Assists</label>
+                            <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.85em;"><input type="checkbox" id="inc-out" onchange="recalc()" style="accent-color:var(--accent-amber);"> Outside</label>
+                            <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.85em;"><input type="checkbox" id="inc-term" onchange="recalc()" style="accent-color:var(--accent-amber);"> Termed</label>
                         </div>
                         <div class="divider" style="margin-top:14px;"><span>Payout Distribution</span></div>
                         <div style="display:flex; flex-direction:column; gap:8px;">
-                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85em; color:var(--text-dim);"><input type="radio" name="pay-mode" value="ratio" checked onchange="recalc()" style="accent-color:var(--gold);"> Ratio Based — proportional to adjusted hits</label>
-                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85em; color:var(--text-dim);"><input type="radio" name="pay-mode" value="equal" onchange="recalc()" style="accent-color:var(--gold);"> Equal Split — same payout for everyone who qualifies</label>
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85em; color:var(--text-secondary);"><input type="radio" name="pay-mode" value="ratio" checked onchange="recalc()" style="accent-color:var(--accent-amber);"> Ratio Based — proportional to adjusted hits</label>
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.85em; color:var(--text-secondary);"><input type="radio" name="pay-mode" value="equal" onchange="recalc()" style="accent-color:var(--accent-amber);"> Equal Split — same payout for everyone who qualifies</label>
                         </div>
                     </div>
                 </div>
@@ -370,31 +575,29 @@
                 <!-- RIGHT: Table -->
                 <div class="table-card">
                     <div class="table-head-bar">
-                        <h3>Member Breakdown</h3>
-                        <button class="btn-copy" onclick="copyPayouts()">📋 Copy Payouts</button>
+                        <h3>Member Compensation Ledger</h3>
+                        <button class="btn btn-action" style="padding: 6px 14px; font-size: 0.82em;" onclick="copyPayouts()">📋 Copy Payouts</button>
                     </div>
-                    <div style="overflow-x:auto;">
+                    <div class="table-wrap">
                         <table>
                             <thead>
                                 <tr>
                                     <th>Member</th>
-                                    <th>War</th>
-                                    <th>Assists</th>
-                                    <th>Outside</th>
-                                    <th>Termed</th>
-                                    <th>Filtered</th>
-                                    <th>Adj. Hits</th>
-                                    <th>Payout</th>
-                                    <th>Action</th>
+                                    <th style="text-align:right;">War</th>
+                                    <th style="text-align:right;">Assists</th>
+                                    <th style="text-align:right;">Outside</th>
+                                    <th style="text-align:right;">Termed</th>
+                                    <th style="text-align:right;">Filtered</th>
+                                    <th style="text-align:right;">Adj. Hits</th>
+                                    <th style="text-align:right;">Payout</th>
+                                    <th style="text-align:right;">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="tb-body">
                                 <tr>
-                                    <td colspan="9">
-                                        <div class="empty">
-                                            <div class="icon">⚔️</div>
-                                            <p>Load a war report to calculate payouts</p>
-                                        </div>
+                                    <td colspan="9" style="text-align:center; padding: 48px; color: var(--text-muted);">
+                                        <div style="font-size: 2.2em; margin-bottom: 8px;">⚔️</div>
+                                        <p style="font-weight: 600;">Load a war report above to calculate payouts</p>
                                     </td>
                                 </tr>
                             </tbody>
@@ -402,11 +605,11 @@
                     </div>
                 </div>
             </div>
-
-        </div>
+        </main>
     </div>
-
-    <script>
+</body>
+</html>
+<script>
         const myKey = localStorage.getItem('warboard_apikey') || '';
         let rawMembers = [];
         let totalCacheVal = 0;
@@ -695,5 +898,3 @@
             });
         }
     </script>
-</body>
-</html>
