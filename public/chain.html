@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Chain Tracker | Owen's Faction Tools</title>
+    <title>Live Chain Tracker | Torn Operations Hub</title>
     <link rel="stylesheet" href="/global.css">
     <style>
         
@@ -123,7 +123,7 @@
 <body>
     <nav class="sidebar" id="app-sidebar">
         <div class="sidebar-header">
-            <div class="sidebar-logo">Owen's Faction Tools</div>
+            <div class="sidebar-logo">🕷️ Torn Operations</div>
             <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Theme" style="background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.2em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; margin-right: 10px;">🌗</button>
             <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
         </div>
@@ -592,7 +592,7 @@ if (myKey) {
 // ══════════════════════════════════════════════════════════════════
 
 // ── State ─────────────────────────────────────────────────────────
-const LINEUP_KEY = localStorage.getItem('warboard_apikey') || '';
+const LINEUP_KEY = localStorage.getItem('warboard_apikey') || localStorage.getItem('sv_session_token') || '';
 let lineupMembers    = [];   // [{ name, id, hit, skipped }]
 let lineupCurrent    = 0;
 let lineupLoop       = true;

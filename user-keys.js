@@ -6,7 +6,7 @@
  * - Secure persistence across local disk (`data/user_api_keys.json`) and MongoDB Atlas (`AppConfig`).
  * - Real-time Torn API live stats fetcher (energy, nerve, happy, life, cooldowns, travel, status).
  * - High-speed in-memory caching to respect Torn API rate limits (100 req/min).
- * - Automatic owner account resolution (Owen777 / master key).
+ * - Multi-tenant account resolution & session-scoped API vault.
  * - Natural conversation intent detection for account-specific questions.
  */
 

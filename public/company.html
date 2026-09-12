@@ -390,7 +390,7 @@ function closeSettings() { document.getElementById('settings-modal').style.displ
 
 function saveKey() {
     myKey = document.getElementById('api-key-input').value.trim();
-    localStorage.setItem('warboard_apikey', myKey);
+    // warboard_apikey removed for security
     const config = { globalChannelId: document.getElementById('webhook-input').value.trim(), threshold: document.getElementById('threshold-input').value, apiKey: myKey };
     localStorage.setItem('master_company_config', JSON.stringify(config));
     fetch('/api/save-company-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
@@ -433,7 +433,7 @@ function formatTimeAgo(ts) {
 }
 
 async function loadCompanyData() {
-    if (!myKey) {
+    if (!myKey && !localStorage.getItem("sv_session_token")) {
         document.getElementById('loading-state').style.display = 'none';
         document.getElementById('alert-box').style.display = 'block';
         document.getElementById('alert-box').textContent = 'Please configure your API key in Settings.';

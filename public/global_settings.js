@@ -1,4 +1,3 @@
-
 const globalSettingsHTML = `
 <style>
 .global-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100000; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
@@ -9,14 +8,18 @@ const globalSettingsHTML = `
 .global-modal-content label { display: block; font-size: 0.85em; color: var(--text-dim, #a1aab5); font-weight: bold; margin-bottom: 5px; text-transform: uppercase; }
 .global-modal-content input { width: 100%; box-sizing: border-box; padding: 10px; border-radius: 6px; border: 1px solid var(--border, #30363d); background: #0b0d13; color: white; font-size: 1em; }
 .global-btn-save { background: var(--blue, #58a6ff); color: #000; border: none; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1em; text-transform: uppercase; }
+.global-status-box { padding: 10px 12px; background: rgba(0, 206, 201, 0.1); border: 1px solid rgba(0, 206, 201, 0.3); border-radius: 6px; font-size: 0.85em; margin-bottom: 15px; }
 </style>
 <div id="global-settings-modal" class="global-modal-overlay">
     <div class="global-modal-content" style="max-height: 90vh; overflow-y: auto;">
         <button class="global-close-btn" onclick="closeGlobalSettings()">&times;</button>
         <h2>Board Settings</h2>
+        <div id="gs-account-status" class="global-status-box">
+            <span>🔒 Account: </span><span id="gs-status-text">Checking...</span>
+        </div>
         <div>
-            <label for="gs-api-key">API Key (Requires "Limited" Access & Faction Permissions)</label>
-            <input type="password" id="gs-api-key" aria-label="Torn API Key" placeholder="Paste your Torn API Key here">
+            <label for="gs-api-key">Torn API Key (Update Key / Switch Account)</label>
+            <input type="password" id="gs-api-key" aria-label="Torn API Key" placeholder="Paste new Torn API Key to connect">
         </div>
         <div>
             <label for="gs-ff-key">FF Scouter Premium Key</label>
@@ -35,14 +38,14 @@ const globalSettingsHTML = `
             <input type="text" id="gs-my-name" aria-label="Your Name" placeholder="E.g. Agent">
         </div>
         <div>
-            <label for="gs-discord-webhook">Global Discord Webhook (Auto-Pastes Everywhere)</label>
-            <input type="text" id="gs-discord-webhook" aria-label="Discord Webhook URL" placeholder="Paste Discord Webhook URL here">
+            <label for="gs-discord-webhook">Global Discord Webhook</label>
+            <input type="text" id="gs-discord-webhook" aria-label="Discord Webhook URL" placeholder="Optional Discord Webhook URL">
         </div>
         <div>
             <label for="gs-api-cpm">API Calls Per Minute (Max 60)</label>
-            <input type="number" id="gs-api-cpm" aria-label="API Calls Per Minute" min="1" max="60" placeholder="e.g. 12 calls/min = 1 refresh every 5s">
+            <input type="number" id="gs-api-cpm" aria-label="API Calls Per Minute" min="1" max="60" placeholder="e.g. 12 calls/min">
         </div>
-        <button class="global-btn-save" onclick="saveGlobalSettings()">Save Settings</button>
+        <button class="global-btn-save" id="gs-btn-save" onclick="saveGlobalSettings()">Save Settings</button>
     </div>
 </div>
 `;
@@ -57,7 +60,7 @@ function injectGlobalSettings() {
 window.openGlobalSettings = async function() {
     injectGlobalSettings();
     document.getElementById('global-settings-modal').style.display = 'flex';
-    document.getElementById('gs-api-key').value = localStorage.getItem('warboard_apikey') || "";
+    document.getElementById('gs-api-key').value = "";
     document.getElementById('gs-ff-key').value = localStorage.getItem('warboard_ffkey') || "";
     document.getElementById('gs-ts-key').value = localStorage.getItem('warboard_tskey') || "";
     document.getElementById('gs-enemy-id').value = localStorage.getItem('warboard_enemyId') || "";
@@ -65,30 +68,32 @@ window.openGlobalSettings = async function() {
     document.getElementById('gs-discord-webhook').value = localStorage.getItem('warboard_discord') || "";
     document.getElementById('gs-api-cpm').value = localStorage.getItem('warboard_cpm') || "12";
 
-    if (!document.getElementById('gs-api-key').value) {
+    const statusText = document.getElementById('gs-status-text');
+    const token = localStorage.getItem('sv_session_token');
+    if (token) {
         try {
-            const res = await fetch('/api/master-config');
+            const res = await fetch('/api/auth/me');
             const data = await res.json();
-            if (data.apiKey) {
-                document.getElementById('gs-api-key').value = data.apiKey;
-                localStorage.setItem('warboard_apikey', data.apiKey);
+            if (data.authenticated && data.user) {
+                statusText.innerHTML = `<strong>${data.user.playerName} [${data.user.playerId}]</strong> (${data.user.factionName || 'Factionless'})`;
+            } else {
+                statusText.textContent = 'Not connected (Enter Torn Key below)';
             }
-            if (data.ffKey) document.getElementById('gs-ff-key').value = data.ffKey;
-            if (data.tsKey) document.getElementById('gs-ts-key').value = data.tsKey;
-            if (data.enemyFacId) document.getElementById('gs-enemy-id').value = data.enemyFacId;
-            if (data.myName) document.getElementById('gs-my-name').value = data.myName;
-            if (data.globalChannelId && !data.globalChannelId.includes('.') && !/[a-zA-Z]/.test(data.globalChannelId)) {
-                document.getElementById('gs-discord-webhook').value = data.globalChannelId;
-            }
-        } catch(e) {}
+        } catch(e) {
+            statusText.textContent = 'Active Session';
+        }
+    } else {
+        statusText.textContent = 'Not connected (Enter Torn Key below)';
     }
 };
 
 window.closeGlobalSettings = function() {
-    document.getElementById('global-settings-modal').style.display = 'none';
+    const modal = document.getElementById('global-settings-modal');
+    if (modal) modal.style.display = 'none';
 };
 
-window.saveGlobalSettings = function() {
+window.saveGlobalSettings = async function() {
+    const saveBtn = document.getElementById('gs-btn-save');
     const apiKey = document.getElementById('gs-api-key').value.trim();
     const ffKey = document.getElementById('gs-ff-key').value.trim();
     const tsKey = document.getElementById('gs-ts-key').value.trim();
@@ -97,29 +102,46 @@ window.saveGlobalSettings = function() {
     const discord = document.getElementById('gs-discord-webhook').value.trim();
     const cpm = document.getElementById('gs-api-cpm').value.trim() || "12";
 
-    localStorage.setItem('warboard_apikey', apiKey);
+    if (apiKey) {
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Connecting Key...';
+        }
+        try {
+            const res = await fetch('/api/auth/connect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ apiKey })
+            });
+            const data = await res.json();
+            if (data.success && data.sessionToken) {
+                localStorage.setItem('sv_session_token', data.sessionToken);
+                sessionStorage.setItem('sv_user', JSON.stringify(data.user));
+            } else {
+                alert('API Key Error: ' + (data.error || 'Failed to authenticate key.'));
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = 'Save Settings';
+                }
+                return;
+            }
+        } catch(e) {
+            alert('Failed to connect API key: ' + e.message);
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Settings';
+            }
+            return;
+        }
+    }
+
+    // Save client preferences
     localStorage.setItem('warboard_ffkey', ffKey);
     localStorage.setItem('warboard_tskey', tsKey);
     localStorage.setItem('warboard_enemyId', enemyFacId);
     localStorage.setItem('warboard_myname', myName);
     localStorage.setItem('warboard_discord', discord);
     localStorage.setItem('warboard_cpm', cpm);
-    localStorage.setItem('master_faction_config', JSON.stringify({ apiKey, ffKey, tsKey, enemyFacId, myName, discord, cpm }));
-
-    try {
-        fetch('/api/master-config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                apiKey, 
-                discordWebhook: discord, 
-                ffKey, 
-                tsKey, 
-                enemyId: enemyFacId, 
-                myName 
-            })
-        });
-    } catch(e) {}
 
     closeGlobalSettings();
     window.location.reload();

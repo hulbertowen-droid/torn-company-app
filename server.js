@@ -24,6 +24,7 @@ require('dotenv').config();
 const UI = require('./friday-ui');
 const userKeys = require('./user-keys');
 const tornKnowledge = require('./torn-knowledge');
+const sessionManager = require('./session-manager');
 
 
 // Hardcoded MongoDB URI to bypass Render settings
@@ -123,6 +124,7 @@ function connectMongo() {
             console.log("[MongoDB] Connected to MongoDB Atlas successfully");
             global.mongoConnectionError = null;
             await loadConfigFromMongo();
+            await sessionManager.initSessionStore();
         })
         .catch(err => {
             console.warn("[MongoDB] Atlas connection warning (retrying in 10s):", err.message || err);
@@ -367,6 +369,7 @@ global.turboTimeout = null;
 global.turboStats = { found: 0, checked: 0 };
 app.use(cors());
 app.use(express.json());
+app.use(sessionManager.resolveSessionMiddleware(userKeys));
 
 // Instant root healthcheck for Render router, Cloudflare, and keep-alive sentinel
 app.get(['/healthz', '/health', '/api/health'], (req, res) => {
@@ -1091,11 +1094,6 @@ setInterval(() => { globalApiUsage = {}; }, 60000);
 
 function getNextApiKey() {
     let activeKeys = [];
-    const now = Date.now();
-    
-    for (const [key, data] of Object.entries(subCache)) {
-        if (data.expires > now) activeKeys.push(key);
-    }
     
     if (ADMIN_API_KEY) activeKeys.push(ADMIN_API_KEY);
     if (TORN_API_KEY) activeKeys.push(TORN_API_KEY);
@@ -2724,6 +2722,14 @@ app.get('/api/get-discord-config', (req, res) => {
         alertOcNoParticipation: ocConfig.alertNoParticipation !== false,
         noParticipationDays: ocConfig.noParticipationDays || 1
     };
+    // Scrub sensitive credentials from client response
+    delete fullConfig.apiKey;
+    delete fullConfig.globalBotToken;
+    delete fullConfig.personalDiscordId;
+    delete fullConfig.geminiApiKey;
+    delete fullConfig.geminiApiKeys;
+    delete fullConfig.openrouterApiKey;
+    fullConfig.hasBotToken = !!(discordConfig.globalBotToken && discordConfig.globalBotToken.length > 20);
     res.json(fullConfig);
 });
 
@@ -3270,8 +3276,8 @@ app.post('/api/test-discord-alert', async (req, res) => {
                 rolePingStr = rawRole;
             }
         }
-        const pName = "Owen777";
-        const pId = "3490493";
+        const pName = "TestAgent";
+        const pId = "100001";
         const profileUrl = `https://www.torn.com/profiles.php?XID=${pId}`;
         const msgUrl = `https://www.torn.com/messages.php#/p=compose&XID=${pId}`;
         const nowSec = Math.floor(Date.now() / 1000);
@@ -3308,7 +3314,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
         }
         embed = {
             title: "⚠️ Low CPR in OC: Robbing of a Money Train [TEST]",
-            description: `**[Owen777](https://www.torn.com/profiles.php?XID=3490493)** [3490493] joined role **Hacker** in **Robbing of a Money Train** (Difficulty Level **5**), but only has **30% CPR**.\n\n` +
+            description: `**[TestAgent](https://www.torn.com/profiles.php?XID=100001)** [100001] joined role **Hacker** in **Robbing of a Money Train** (Difficulty Level **5**), but only has **30% CPR**.\n\n` +
                          `🎯 **Faction Minimum:** **65%** for Level 5\n` +
                          `⚠️ This significantly lowers the team's chance of completing the crime.\n\n` +
                          `👉 [Review Organized Crimes](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
@@ -3325,8 +3331,8 @@ app.post('/api/test-discord-alert', async (req, res) => {
             else pingStr = roleId;
         }
         embed = {
-            title: "⏳ Member Missing from OC: Owen777 [TEST]",
-            description: `**[Owen777](https://www.torn.com/profiles.php?XID=3490493)** [3490493] has not been assigned to an Organized Crime for **1.2 days (29 hours)**.\n\n` +
+            title: "⏳ Member Missing from OC: TestAgent [TEST]",
+            description: `**[TestAgent](https://www.torn.com/profiles.php?XID=100001)** [100001] has not been assigned to an Organized Crime for **1.2 days (29 hours)**.\n\n` +
                          `🎖️ **Position:** Co-Leader (Lvl 58)\n` +
                          `📊 **Status:** Online\n` +
                          `🕒 **Last Action:** 15 mins ago\n\n` +
@@ -3343,8 +3349,8 @@ app.post('/api/test-discord-alert', async (req, res) => {
             if (numOnly.length >= 15 && numOnly.length <= 22) pingStr = `<@&${numOnly}>`;
             else pingStr = roleId;
         }
-        const pName = "Owen777";
-        const pId = "3490493";
+        const pName = "TestAgent";
+        const pId = "100001";
         const itemName = "C4 Explosive";
         const armoryUrl = `https://www.torn.com/factions.php?step=your&type=1&autoItem=${encodeURIComponent(itemName)}&autoUser=${encodeURIComponent(pName)}&autoUserId=${pId}&autoAction=loan#/tab=armoury&start=0&sub=utilities`;
         const profileUrl = `https://www.torn.com/profiles.php?XID=${pId}`;
@@ -3370,7 +3376,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             title: "🟢 OC Ready to Launch: Robbing of a Money Train [TEST]",
             description: `All team members are in Torn City and ready! Crime can now be initiated by the planner.\n\n` +
                          `**Team:**\n` +
-                         `• [Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)\n` +
+                         `• [TestAgent [100001]](https://www.torn.com/profiles.php?XID=100001)\n` +
                          `• [MF_Pikle [3419413]](https://www.torn.com/profiles.php?XID=3419413)\n\n` +
                          `👉 [Initiate Organized Crime](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
             color: UI.COLORS.SUCCESS,
@@ -3397,7 +3403,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
         embed = {
             title: "🚨 OC Delayed: Kidnapping [TEST]",
             description: `Countdown reached zero, but **team cannot launch** because participant(s) are unavailable:\n\n` +
-                         `• ❌ **[Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)**: **Hospitalized** (in hospital · Free <t:${nowSec + 450}:R>)\n\n` +
+                         `• ❌ **[TestAgent [100001]](https://www.torn.com/profiles.php?XID=100001)**: **Hospitalized** (in hospital · Free <t:${nowSec + 450}:R>)\n\n` +
                          `Team members must med out, bust, or land before the crime can be initiated.\n\n` +
                          `👉 [Open Faction Crimes Tab](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
             color: UI.COLORS.ERROR,
@@ -3425,7 +3431,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             title: "⏳ OC Upcoming: Bomb Threat [TEST]",
             description: `Crime is scheduled to be ready in **<t:${nowSec + 1800}:R>** (<t:${nowSec + 1800}:t>)!\n\n` +
                          `⚠️ **Attention Team Members:** Please stay out of hospital and wrap up foreign travel:\n` +
-                         `• [Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)\n` +
+                         `• [TestAgent [100001]](https://www.torn.com/profiles.php?XID=100001)\n` +
                          `• [MF_Pikle [3419413]](https://www.torn.com/profiles.php?XID=3419413)\n\n` +
                          `👉 [View Organized Crimes](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
             color: UI.COLORS.WARNING,
@@ -3453,9 +3459,9 @@ app.post('/api/test-discord-alert', async (req, res) => {
             title: "📋 OC Scheduled: Planned Robbery [TEST]",
             description: `A new Organized Crime has been scheduled for **Spider-Verse**!\n\n` +
                          `**Target Ready Time:** <t:${nowSec + 86400}:F> (<t:${nowSec + 86400}:R>)\n` +
-                         `**Planned By:** [Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)\n\n` +
+                         `**Planned By:** [TestAgent [100001]](https://www.torn.com/profiles.php?XID=100001)\n\n` +
                          `**Assigned Roster:**\n` +
-                         `• [Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)\n` +
+                         `• [TestAgent [100001]](https://www.torn.com/profiles.php?XID=100001)\n` +
                          `• [MF_Pikle [3419413]](https://www.torn.com/profiles.php?XID=3419413)\n\n` +
                          `👉 [View Organized Crimes](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
             color: UI.COLORS.INFO,
@@ -3484,7 +3490,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
                          `💰 **Payout:** +$14,250,000 deposited into faction vault\n` +
                          `🏆 **Respect:** +112 Faction Respect\n\n` +
                          `**Team:**\n` +
-                         `• [Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)\n` +
+                         `• [TestAgent [100001]](https://www.torn.com/profiles.php?XID=100001)\n` +
                          `• [MF_Pikle [3419413]](https://www.torn.com/profiles.php?XID=3419413)`,
             color: UI.COLORS.SUCCESS,
             buttons: [
@@ -4188,7 +4194,10 @@ app.get('/api/war-flight-audit', async (req, res) => {
 });
 
 app.get('/api/dashboard-data', async (req, res) => {
-    const userKey = (req.headers['x-api-key'] || req.query.apiKey);
+    const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    if (!userKey || userKey === 'null' || userKey.trim() === '') {
+        return res.status(401).json({ error: "Authentication required" });
+    }
     const ffKey = (req.headers['x-ff-key'] || req.query.ffKey) || null;
     try {
         await verifySubscription(userKey);
@@ -4196,9 +4205,27 @@ app.get('/api/dashboard-data', async (req, res) => {
 
         const userInfo = await getUserFactionInfo(userKey);
         let targetFacId = (req.query.factionId || req.headers['x-faction-id'])
-            || userInfo?.facId
-            || discordConfig.factionId
-            || "52355";
+            || req.userSession?.factionId
+            || userInfo?.facId;
+
+        // If user is explicitly factionless, return clean factionless payload
+        if (targetFacId === '0' || targetFacId === 0 || targetFacId === 'None') {
+            return res.json({
+                success: true,
+                isFactionless: true,
+                members: {},
+                loans: [],
+                armoryError: false,
+                premiumActive: isPremium,
+                chain: null,
+                activeWar: null,
+                faction: { ID: 0, name: "Factionless", tag: "", respect: 0, members: 0 }
+            });
+        }
+
+        if (!targetFacId) {
+            targetFacId = discordConfig.factionId || "52355";
+        }
         let basicResp = await fetch(`https://api.torn.com/faction/${targetFacId}?selections=basic&key=${userKey}`);
         let basicData = await basicResp.json();
         if (basicData.error && basicData.error.code === 6) {
@@ -4753,14 +4780,17 @@ app.get('/api/scan-random-players', async (req, res) => {
 });
 
 app.post('/api/generate-recruit-msg', async (req, res) => {
-    const { playerName, score, attacks, efficiency, playtime, xanax, level, status, estStats, enemyFaction } = req.body;
+    const { playerName, score, attacks, efficiency, playtime, xanax, level, status, estStats, enemyFaction, recruiterName, recruiterId } = req.body;
+    const sender = recruiterName || req.userSession?.playerName || "Faction Recruiter";
+    const senderTag = (recruiterId || req.userSession?.playerId) ? ` [${recruiterId || req.userSession?.playerId}]` : '';
+    const signOff = `${sender}${senderTag}`;
     const factionless = status && status.toLowerCase().includes("factionless");
-    const fallback = `Hey ${playerName}!\n\nI was looking at your stats and noticed your solid progression.\n\n${factionless ? "I noticed you're currently factionless, so the timing seems perfect." : "I know you're currently in a faction, but I wanted to reach out anyway."}\n\nWe run a tight, active crew focused on ranked wars and organized crimes. We'd love to have someone with your stats on our side. If you're ever looking for a change, hit me back — happy to chat.\n\nOwen777 [3776908]`;
+    const fallback = `Hey ${playerName}!\n\nI was looking at your stats and noticed your solid progression.\n\n${factionless ? "I noticed you're currently factionless, so the timing seems perfect." : "I know you're currently in a faction, but I wanted to reach out anyway."}\n\nWe run a tight, active crew focused on ranked wars and organized crimes. We'd love to have someone with your stats on our side. If you're ever looking for a change, hit me back — happy to chat.\n\n${signOff}`;
 
     if (!GEMINI_API_KEY) return res.json({ message: fallback, source: "template" });
 
     try {
-        const prompt = `You are writing a Torn City (browser game) faction recruitment message. Keep it short (3-4 paragraphs max), casual, direct and personalized. Do NOT use generic filler like "I hope this message finds you well". Sound like a real player, not a robot.\n\nPlayer: ${playerName}\nLevel: ${level || 'Unknown'}\nPlaytime: ${playtime ? playtime + ' days' : 'Unknown'}\nXanax taken: ${xanax || 'Unknown'}\nWar stats: ${score && score !== "N/A" ? score + " score, " + attacks + " hits" : "N/A"}\nEst. Battle Stats: ${estStats || "Unknown"}\nCurrent faction status: ${status}\nEnemy faction they fought for (if any): ${enemyFaction || "None"}\n\nWrite a compelling recruitment message. If they have high war stats, mention them. If they have low playtime but high level/xanax, praise their fast progression. ${factionless ? "They are now factionless — emphasize this is a perfect time." : "Be respectful that they are still in a faction."} Sign off from Owen777 [3776908].`;
+        const prompt = `You are writing a Torn City (browser game) faction recruitment message. Keep it short (3-4 paragraphs max), casual, direct and personalized. Do NOT use generic filler like "I hope this message finds you well". Sound like a real player, not a robot.\n\nPlayer: ${playerName}\nLevel: ${level || 'Unknown'}\nPlaytime: ${playtime ? playtime + ' days' : 'Unknown'}\nXanax taken: ${xanax || 'Unknown'}\nWar stats: ${score && score !== "N/A" ? score + " score, " + attacks + " hits" : "N/A"}\nEst. Battle Stats: ${estStats || "Unknown"}\nCurrent faction status: ${status}\nEnemy faction they fought for (if any): ${enemyFaction || "None"}\n\nWrite a compelling recruitment message. If they have high war stats, mention them. If they have low playtime but high level/xanax, praise their fast progression. ${factionless ? "They are now factionless — emphasize this is a perfect time." : "Be respectful that they are still in a faction."} Sign off from ${signOff}.`;
 
         const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -4896,41 +4926,48 @@ app.get('/api/past-war', async (req, res) => {
 });
 
 app.get('/api/claims', (req, res) => {
-    const facId = req.query.factionId || req.headers['x-faction-id'] || '52355';
+    const facId = String(req.query.factionId || req.headers['x-faction-id'] || req.userSession?.factionId || (req.userSession?.isSpiderVerse ? '52355' : ''));
+    if (!facId) return res.status(400).json({ error: "Faction ID required" });
     const state = getFactionWarState(facId);
     res.json({ success: true, claims: state.claims, backups: state.backups, manualStats: state.manualStats });
 });
 app.post('/api/claim', (req, res) => {
     const { enemyId, playerName, factionId } = req.body;
-    const facId = factionId || req.headers['x-faction-id'] || '52355';
+    const facId = String(factionId || req.headers['x-faction-id'] || req.userSession?.factionId || (req.userSession?.isSpiderVerse ? '52355' : ''));
+    if (!facId) return res.status(400).json({ error: "Faction ID required" });
     const state = getFactionWarState(facId);
-    state.claims[enemyId] = { playerName, time: Date.now() };
+    state.claims[enemyId] = { playerName: playerName || req.userSession?.playerName || "Agent", time: Date.now() };
     res.json({ success: true });
 });
 app.post('/api/unclaim', (req, res) => {
     const { enemyId, playerName, factionId } = req.body;
-    const facId = factionId || req.headers['x-faction-id'] || '52355';
+    const facId = String(factionId || req.headers['x-faction-id'] || req.userSession?.factionId || (req.userSession?.isSpiderVerse ? '52355' : ''));
+    if (!facId) return res.status(400).json({ error: "Faction ID required" });
     const state = getFactionWarState(facId);
-    if (state.claims[enemyId]?.playerName === playerName) delete state.claims[enemyId];
+    const claimingUser = playerName || req.userSession?.playerName;
+    if (!claimingUser || state.claims[enemyId]?.playerName === claimingUser) delete state.claims[enemyId];
     res.json({ success: true });
 });
 app.post('/api/backup', (req, res) => {
     const { enemyId, playerName, factionId } = req.body;
-    const facId = factionId || req.headers['x-faction-id'] || '52355';
+    const facId = String(factionId || req.headers['x-faction-id'] || req.userSession?.factionId || (req.userSession?.isSpiderVerse ? '52355' : ''));
+    if (!facId) return res.status(400).json({ error: "Faction ID required" });
     const state = getFactionWarState(facId);
-    state.backups[enemyId] = { playerName, time: Date.now() };
+    state.backups[enemyId] = { playerName: playerName || req.userSession?.playerName || "Agent", time: Date.now() };
     res.json({ success: true });
 });
 app.post('/api/unbackup', (req, res) => {
     const { enemyId, factionId } = req.body;
-    const facId = factionId || req.headers['x-faction-id'] || '52355';
+    const facId = String(factionId || req.headers['x-faction-id'] || req.userSession?.factionId || (req.userSession?.isSpiderVerse ? '52355' : ''));
+    if (!facId) return res.status(400).json({ error: "Faction ID required" });
     const state = getFactionWarState(facId);
     delete state.backups[enemyId];
     res.json({ success: true });
 });
 app.post('/api/update-stats', (req, res) => {
     const { enemyId, stats, factionId } = req.body;
-    const facId = factionId || req.headers['x-faction-id'] || '52355';
+    const facId = String(factionId || req.headers['x-faction-id'] || req.userSession?.factionId || (req.userSession?.isSpiderVerse ? '52355' : ''));
+    if (!facId) return res.status(400).json({ error: "Faction ID required" });
     const state = getFactionWarState(facId);
     state.manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() };
     res.json({ success: true });
@@ -5006,9 +5043,9 @@ app.post('/api/save-spy', async (req, res) => {
 app.get('/api/warboard', async (req, res) => {
     if (global.isTurboMining) return res.json({ error: "Turbo Mining Mode is active. Live Warboard is paused." });
     try {
-        const userKey = req.headers['x-api-key'] || req.query.apiKey;
+        const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
         if (!userKey || userKey === "null" || userKey.trim() === "") {
-            return res.status(401).json({ error: "Please enter your Torn API Key in Settings (⚙) to view your faction warboard." });
+            return res.status(401).json({ error: "Please authenticate to view your faction warboard." });
         }
         const ffKey = (req.headers['x-ff-key'] || req.query.ffKey) && (req.headers['x-ff-key'] || req.query.ffKey) !== "null" && (req.headers['x-ff-key'] || req.query.ffKey) !== "" ? (req.headers['x-ff-key'] || req.query.ffKey) : null;
         await verifySubscription(userKey);
@@ -5029,7 +5066,6 @@ app.get('/api/warboard', async (req, res) => {
         }
 
         // Step 2: If no explicit faction requested or fetch failed, query user's personal /faction/ endpoint.
-        // Torn API will ALWAYS return the faction that this specific user belongs to!
         if (!myData || myData.error) {
             myData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${userKey}`, `my_faction_personal_${userKey}`, 2500);
             if (myData && myData.ID) {
@@ -5038,23 +5074,35 @@ app.get('/api/warboard', async (req, res) => {
         }
 
         // Step 3: If personal /faction/ returned error 6 (caller is factionless),
-        // fallback to server default faction (Spider-Verse 52355)
+        // cleanly inform them rather than leaking Spider-Verse
         if (!myData || (myData.error && myData.error.code === 6)) {
-            targetMyFacId = discordConfig.factionId || "52355";
-            myData = await cachedTornFetch(`https://api.torn.com/faction/${targetMyFacId}?selections=basic,rankedwars,attacks&key=${userKey}`, `my_faction_${targetMyFacId}_${userKey}`, 2500);
-            if (myData && myData.error && (myData.error.code === 6 || myData.error.code === 7)) {
-                myData = await cachedTornFetch(`https://api.torn.com/faction/${targetMyFacId}?selections=basic,rankedwars&key=${userKey}`, `my_faction_basic_${targetMyFacId}_${userKey}`, 2500);
-            }
+            return res.json({
+                success: false,
+                isFactionless: true,
+                error: "You are not currently in a faction. Live Warboard is active during faction wars.",
+                friendly: [],
+                enemy: [],
+                warInfo: null
+            });
         }
 
-        const myFacId = myData?.ID ? myData.ID.toString() : (targetMyFacId || "52355");
+        const myFacId = myData?.ID ? myData.ID.toString() : (targetMyFacId || (req.userSession?.isSpiderVerse ? "52355" : null));
+        if (!myFacId) {
+            return res.json({
+                success: false,
+                error: "Unable to determine faction. Live Warboard is active during faction wars.",
+                friendly: [],
+                enemy: [],
+                warInfo: null
+            });
+        }
         const fState = getFactionWarState(myFacId);
 
         // Resilience: If myData hit rate limit or transient error, serve last known good payload for THIS faction ONLY
         if (!myData || myData.error || !myData.members || Object.keys(myData.members).length === 0) {
             if (lastGoodWarboardByFaction[myFacId]) {
                 return res.json(lastGoodWarboardByFaction[myFacId]);
-            } else if (lastGoodWarboardPayload && String(myFacId) === "52355") {
+            } else if (lastGoodWarboardPayload && String(myFacId) === "52355" && (req.userSession?.isSpiderVerse || !req.userSession)) {
                 return res.json(lastGoodWarboardPayload);
             } else {
                 return res.status(500).json({ error: "Unable to retrieve faction data. Please verify your API key has faction access." });
@@ -5070,7 +5118,7 @@ app.get('/api/warboard', async (req, res) => {
         if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
         let enemyDataResult = { members: {} };
         if (enemyId) { 
-            enemyDataResult = await cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey()||userKey}`, `enemy_faction_${enemyId}`, 2500); 
+            enemyDataResult = await cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey || getNextApiKey()}`, `enemy_faction_${enemyId}`, 2500); 
         }
 
         let activeWar = null;
@@ -5310,15 +5358,118 @@ app.get('/api/warboard', async (req, res) => {
         res.status(403).json({ error: err.message });
     }
 });
-// ── Faction Portal Access Control ──────────────────────────────────────────
+// ── Universal Torn Web Session & Authentication Engine ─────────────────────
+
+// POST /api/auth/connect — Authenticate any Torn API key, encrypt it in the server vault, and issue a session token
+app.post('/api/auth/connect', async (req, res) => {
+    try {
+        const apiKey = String(req.body.apiKey || req.headers['x-api-key'] || '').trim().replace(/['"\s]/g, '');
+        if (!apiKey || apiKey.length < 16) {
+            return res.status(400).json({ success: false, error: "Valid Torn API Key required (16 characters)." });
+        }
+
+        const tornRes = await fetch(`https://api.torn.com/user/?selections=profile,bars&key=${apiKey}&timestamp=${Date.now()}`, {
+            signal: AbortSignal.timeout(10000)
+        });
+        const data = await tornRes.json();
+
+        if (data.error) {
+            const errCode = data.error.code;
+            const errMsg = data.error.error || "Unknown Torn API error";
+            if (errCode === 2) return res.status(400).json({ success: false, error: "Incorrect or invalid Torn API key." });
+            if (errCode === 7) return res.status(400).json({ success: false, error: "Access level too low. Key must have at least Public or Limited Access." });
+            return res.status(400).json({ success: false, error: `Torn API error [${errCode}]: ${errMsg}` });
+        }
+
+        if (!data.player_id) {
+            return res.status(400).json({ success: false, error: "Unable to retrieve player profile with this key." });
+        }
+
+        const playerId = data.player_id;
+        const playerName = data.name || `Player #${playerId}`;
+        const userFacId = String(data.faction?.faction_id || '0');
+        const userFacName = data.faction?.faction_name || 'None';
+        const userFacRole = data.faction?.position || '';
+        const isSpiderVerse = userFacId === '52355';
+
+        // Securely encrypt and store the key in vault under torn:<id>
+        await userKeys.linkUserApiKeyByTornId(playerId, apiKey);
+
+        // Generate cryptographically secure session
+        const session = await sessionManager.createSession({
+            playerId,
+            playerName,
+            level: data.level || 1,
+            factionId: userFacId,
+            factionName: userFacName,
+            factionRole: userFacRole,
+            isSpiderVerse,
+            bars: {
+                energy: data.energy || null,
+                nerve: data.nerve || null,
+                happy: data.happy || null,
+                life: data.life || null
+            }
+        });
+
+        // Return session token and user info ONLY — NEVER return the raw API key!
+        return res.json({
+            success: true,
+            sessionToken: session.token,
+            user: {
+                playerId,
+                playerName,
+                level: session.level,
+                factionId: userFacId,
+                factionName: userFacName,
+                factionRole: userFacRole,
+                isSpiderVerse,
+                bars: session.bars
+            }
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// GET /api/auth/me — Check current authenticated session
+app.get('/api/auth/me', (req, res) => {
+    if (!req.userSession) {
+        return res.json({ authenticated: false, message: "No active session" });
+    }
+    return res.json({
+        authenticated: true,
+        user: {
+            playerId: req.userSession.playerId,
+            playerName: req.userSession.playerName,
+            level: req.userSession.level,
+            factionId: req.userSession.factionId,
+            factionName: req.userSession.factionName,
+            factionRole: req.userSession.factionRole,
+            isSpiderVerse: req.userSession.isSpiderVerse,
+            bars: req.userSession.bars
+        }
+    });
+});
+
+// POST /api/auth/logout — Invalidate current session
+app.post('/api/auth/logout', async (req, res) => {
+    const token = sessionManager.extractTokenFromRequest(req);
+    if (token) {
+        await sessionManager.deleteSession(token);
+    }
+    return res.json({ success: true });
+});
+
+// Backwards-compatible /api/auth/verify-faction-access
 app.post('/api/auth/verify-faction-access', async (req, res) => {
     try {
-        const apiKey = (req.body.apiKey || '').trim();
+        const apiKey = String(req.body.apiKey || '').trim();
         if (!apiKey) return res.status(400).json({ success: false, authorized: false, reason: "Torn API Key is required." });
 
         const targetFactionId = String(discordConfig.factionId || adminFactionId || '52355');
 
-        const tornRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${apiKey}&timestamp=${Date.now()}`, {
+        const tornRes = await fetch(`https://api.torn.com/user/?selections=profile,bars&key=${apiKey}&timestamp=${Date.now()}`, {
             signal: AbortSignal.timeout(9000)
         });
         const data = await tornRes.json();
@@ -5331,23 +5482,25 @@ app.post('/api/auth/verify-faction-access', async (req, res) => {
         const userFacName = data.faction?.faction_name || 'None';
         const isMember = userFacId === targetFactionId;
 
-        if (!isMember) {
-            return res.json({
-                success: true,
-                authorized: false,
-                reason: `You are currently in "${userFacName}" [ID: ${userFacId}]. Only active members of Spider-Verse [${targetFactionId}] are authorized to enter.`,
-                player: {
-                    id: data.player_id,
-                    name: data.name,
-                    factionName: userFacName,
-                    factionId: userFacId
-                }
-            });
-        }
+        // Automatically create and link session
+        await userKeys.linkUserApiKeyByTornId(data.player_id, apiKey);
+        const session = await sessionManager.createSession({
+            playerId: data.player_id,
+            playerName: data.name,
+            level: data.level || 1,
+            factionId: userFacId,
+            factionName: userFacName,
+            factionRole: data.faction?.position || '',
+            isSpiderVerse: isMember,
+            bars: { energy: data.energy, nerve: data.nerve, happy: data.happy, life: data.life }
+        });
 
         return res.json({
             success: true,
-            authorized: true,
+            authorized: isMember,
+            sessionToken: session.token,
+            isSpiderVerse: isMember,
+            reason: isMember ? undefined : `You are currently in "${userFacName}" [ID: ${userFacId}]. Only active members of Spider-Verse [${targetFactionId}] are authorized for Spider-Verse specific tools.`,
             player: {
                 id: data.player_id,
                 name: data.name,
@@ -5419,7 +5572,7 @@ app.post('/api/test-oc-alert', async (req, res) => {
                 title: "⏳ OC Upcoming: Bomb Threat [TEST]",
                 description: `Crime is scheduled to be ready in **<t:${now + 1800}:R>** (<t:${now + 1800}:t>)!\n\n` +
                              `⚠️ **Attention Team Members:** Please stay out of hospital and wrap up foreign travel:\n` +
-                             `• [Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)\n` +
+                             `• [TestAgent [100001]](https://www.torn.com/profiles.php?XID=100001)\n` +
                              `• [MF_Pikle [3419413]](https://www.torn.com/profiles.php?XID=3419413)\n\n` +
                              `👉 [View Organized Crimes](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
                 color: UI.COLORS.WARNING,
@@ -5430,7 +5583,7 @@ app.post('/api/test-oc-alert', async (req, res) => {
             embed = {
                 title: "🚨 OC Delayed: Kidnapping [TEST]",
                 description: `Countdown reached zero, but **team cannot launch** because participant(s) are unavailable:\n\n` +
-                             `• ❌ **[Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)**: **Hospitalized** (in hospital · Free <t:${now + 450}:R>)\n\n` +
+                             `• ❌ **[TestAgent [100001]](https://www.torn.com/profiles.php?XID=100001)**: **Hospitalized** (in hospital · Free <t:${now + 450}:R>)\n\n` +
                              `Team members must med out, bust, or land before the crime can be initiated.\n\n` +
                              `👉 [Open Faction Crimes Tab](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
                 color: UI.COLORS.ERROR,
@@ -5442,9 +5595,9 @@ app.post('/api/test-oc-alert', async (req, res) => {
                 title: "📋 OC Scheduled: Planned Robbery [TEST]",
                 description: `A new Organized Crime has been scheduled for **Spider-Verse**!\n\n` +
                              `**Target Ready Time:** <t:${now + 86400}:F> (<t:${now + 86400}:R>)\n` +
-                             `**Planned By:** [Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)\n\n` +
+                             `**Planned By:** [TestAgent [100001]](https://www.torn.com/profiles.php?XID=100001)\n\n` +
                              `**Assigned Roster:**\n` +
-                             `• [Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)\n` +
+                             `• [TestAgent [100001]](https://www.torn.com/profiles.php?XID=100001)\n` +
                              `• [MF_Pikle [3419413]](https://www.torn.com/profiles.php?XID=3419413)\n\n` +
                              `👉 [View Organized Crimes](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
                 color: UI.COLORS.INFO,
@@ -5456,7 +5609,7 @@ app.post('/api/test-oc-alert', async (req, res) => {
                 title: "🟢 OC Ready to Launch: Robbing of a Money Train [TEST]",
                 description: `All team members are in Torn City and ready! Crime can now be initiated by the planner.\n\n` +
                              `**Team:**\n` +
-                             `• [Owen777 [3490493]](https://www.torn.com/profiles.php?XID=3490493)\n` +
+                             `• [TestAgent [100001]](https://www.torn.com/profiles.php?XID=100001)\n` +
                              `• [MF_Pikle [3419413]](https://www.torn.com/profiles.php?XID=3419413)\n\n` +
                              `👉 [Initiate Organized Crime](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
                 color: UI.COLORS.SUCCESS,
@@ -5489,14 +5642,15 @@ let myUserStatsMemoryCache = {};
 
 app.get('/api/my-stats', async (req, res) => {
     try {
-        const key = req.headers['x-api-key'] || req.query.apiKey;
-        if (!key || key === "null" || key.trim() === "") return res.status(401).json({ error: "Missing API key" });
+        const key = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+        if (!key || key === "null" || key.trim() === "") return res.status(401).json({ error: "Authentication required" });
 
-        const cacheKey = key.slice(-8);
+        const playerId = req.userSession?.playerId || (subCache[key]?.playerId) || key.slice(-8);
+        const cacheKey = `my_stats_${playerId}`;
         const cached = myUserStatsMemoryCache[cacheKey];
 
         try {
-            const r = await cachedTornFetch(`https://api.torn.com/user/?selections=battlestats,profile&key=${key}`, `my_stats_${cacheKey}`, 300000);
+            const r = await cachedTornFetch(`https://api.torn.com/user/?selections=battlestats,profile&key=${key}`, cacheKey, 300000);
             if (r && !r.error && (r.strength || r.name)) {
                 const payload = {
                     success: true,
@@ -5542,9 +5696,9 @@ function parseStatValue(val) {
 
 app.get('/api/master-config', (req, res) => {
     res.json({
-        globalBotToken: discordConfig.globalBotToken || "",
         globalChannelId: discordConfig.globalChannelId || "",
-        cpm: discordConfig.cpm || 12
+        cpm: discordConfig.cpm || 12,
+        hasBotToken: !!(discordConfig.globalBotToken && discordConfig.globalBotToken.length > 20)
     });
 });
 
@@ -5670,7 +5824,7 @@ app.get('/api/ocs', async (req, res) => {
             return res.status(400).json({ error: `Torn API Error: ${crimeData.error.error || JSON.stringify(crimeData.error)}` });
         }
 
-        // Build a name lookup map: { "1234567": "Owen777", ... }
+        // Build a name lookup map: { "1234567": "PlayerName", ... }
         const memberNames = {};
         if (memberData.members) {
             Object.entries(memberData.members).forEach(([id, m]) => {
@@ -5748,11 +5902,11 @@ Keep your advice specific to the data provided. Be concise, punchy, and use emoj
 });
 
 // ─── F.R.I.D.A.Y Torn Wiki & Forum AI Intelligence & Sandbox ─────────────────
-const FRIDAY_TORN_SYSTEM_PROMPT = `You are F.R.I.D.A.Y, the tactical Torn City intelligence oracle for Owen777's faction: Spider-Verse.
+const FRIDAY_TORN_SYSTEM_PROMPT = `You are F.R.I.D.A.Y, the tactical Torn City intelligence oracle for Spider-Verse.
 
 PRIMARY PURPOSE & STRICT SCOPE:
 1. EXCLUSIVELY TORN CITY GAMEPLAY: You are strictly a Torn City game intelligence oracle. You ONLY answer questions about Torn City gameplay, training math, gym gains, battle stats, happy jumps, ranked wars, chains, crimes (Crimes 2.0 & OC 2.0), travel, items, company management, and faction rules.
-2. ABSOLUTELY NO WEBSITE / TECHNICAL DEV DISCUSSIONS: You do NOT answer questions about web development, website code, source files, HTML, CSS, JavaScript, Node.js, databases, servers, or internal app architecture. If anyone asks about website code or features, decline politely and concisely: "I am exclusively trained on Torn City gameplay, mechanics, and faction operations. For website or app technical questions, please contact Owen777 or leadership."
+2. ABSOLUTELY NO WEBSITE / TECHNICAL DEV DISCUSSIONS: You do NOT answer questions about web development, website code, source files, HTML, CSS, JavaScript, Node.js, databases, servers, or internal app architecture. If anyone asks about website code or features, decline politely and concisely: "I am exclusively trained on Torn City gameplay, mechanics, and faction operations. For website or app technical questions, please contact leadership."
 3. SUMMARIZE THE CORE IDEA FIRST (CONCISE & ACTIONABLE):
    - Always lead with a quick, punchy summary (1-2 sentences) giving the direct bottom-line answer.
    - Follow with concise bullet points or step-by-step numbers for the essential facts or action items.
@@ -5768,7 +5922,7 @@ STRICT KNOWLEDGE & SOURCING RULES:
 3. WIKI & FORUM CITATIONS: Whenever applicable, cite the relevant Torn Wiki page or forum guide/author (e.g. "Torn Wiki: Happy", "Baldr's Basic Advice", "Vladar's FF Guide", "Chedburn's OC 2.0 Announcement").
 
 SPIDER-VERSE FACTION OPERATIONAL DIRECTIVES (Trained Knowledge):
-- Faction Leader / Co-Leader: Owen777 [3490493].
+- Faction: Spider-Verse [52355].
 - Organized Crimes (OC 2.0) CPR Limits (Trained Faction Thresholds):
   * Level 1 & Level 2: NO minimum CPR needed (0% — any member can join without restriction).
   * Level 3 & Level 4: Around 40% and higher (40%+ required).
@@ -6274,7 +6428,7 @@ Your job is to jump into the conversation naturally — like an experienced, cle
 
 ═══ CRITICAL TORN CITY KNOWLEDGE & ANTI-HALLUCINATION MANDATES ═══
 1. NEVER "CORRECT" VALID TORN TERMINOLOGY OR ITEMS:
-   - When a user says a Torn item name (e.g. "chocolate truffles", "tootsie rolls", "jawbreaker", "edvd"), NEVER claim they meant a different item (e.g. NEVER say "Chocolate boxes, Owen" or substitute an item).
+   - When a user says a Torn item name (e.g. "chocolate truffles", "tootsie rolls", "jawbreaker", "edvd"), NEVER claim they meant a different item (e.g. NEVER say "Chocolate boxes, Agent" or substitute an item).
    - "Chocolate truffles" IS Bag of Chocolate Truffles (ID 529, Candy, +100 Happy, 30m booster cooldown).
    - Differentiate similarly named items:
      * Bag of Chocolate Truffles (+100 Happy, 30m CD) is NOT Box of Chocolate Bars (+25 Happy) or Big Box of Chocolate Bars (+35 Happy).
@@ -6516,7 +6670,7 @@ app.get('/api/war-bounties', async (req, res) => {
 
         let enemyName = "Enemy Faction";
         if (activeWar && activeWar.factions) {
-            const myId = (facData.ID || facData.faction_id || 52355).toString();
+            const myId = (facData.ID || facData.faction_id || '').toString();
             const enemyEntry = Object.entries(activeWar.factions).find(([fid]) => fid.toString() !== myId);
             if (enemyEntry && enemyEntry[1]?.name) enemyName = enemyEntry[1].name;
         }
@@ -6844,6 +6998,19 @@ setInterval(() => {
     getLiveYataStocks().catch(() => {});
 }, 60 * 1000);
 
+
+app.get('/api/items', async (req, res) => {
+    try {
+        const apiKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey || getNextApiKey();
+        const cached = await cachedTornFetch(`https://api.torn.com/torn/?selections=items&key=${apiKey || 'null'}`, 'torn_items_catalog', 3600000);
+        if (cached && cached.items) {
+            return res.json({ success: true, items: cached.items });
+        }
+        return res.status(500).json({ error: "Failed to load Torn items database" });
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
+});
 
 app.get('/api/travel-profits', async (req, res) => {
     const apiKey = req.headers['x-api-key'] || req.query.apiKey;
@@ -7700,7 +7867,7 @@ app.get('/api/elim/snipe', async (req, res) => {
         const excludeIds = new Set(
             (req.query.exclude || '').split(',').map(s => s.trim()).filter(Boolean)
         );
-        const userId = tornId || discordId || (resolvedUser ? String(resolvedUser.playerId) : '') || '';
+        const userId = tornId || discordId || (req.userSession ? String(req.userSession.playerId) : '') || (resolvedUser ? String(resolvedUser.playerId) : '') || '';
 
         const result = await findElimSnipeTargetForUser({ apiKey, userId, tier, excludeIds });
         return res.json(result);

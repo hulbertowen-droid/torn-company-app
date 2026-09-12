@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      2.5
 // @description  Integrates the Torn Company App Dibs system directly into the Torn Faction page, with a live "who's dibbing on who" overview.
-// @author       Owen
+// @author       Torn Operations
 // @match        https://www.torn.com/factions.php*
 // @match        https://www.torn.com/profiles.php*
 // @grant        GM_xmlhttpRequest

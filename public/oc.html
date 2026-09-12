@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OC Manager | Owen's Faction Tools</title>
+    <title>OC Manager | Torn Operations Hub</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/global.css">
@@ -159,7 +159,7 @@
 <body>
     <nav class="sidebar" id="app-sidebar">
         <div class="sidebar-header">
-            <div class="sidebar-logo">Owen's Faction Tools</div>
+            <div class="sidebar-logo">🕷️ Torn Operations</div>
             <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Theme" style="background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 1.2em; display: flex; justify-content: center; align-items: center; width: 35px; height: 35px; border-radius: 6px; transition: 0.2s; margin-right: 10px;">🌗</button>
             <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
         </div>
@@ -246,7 +246,7 @@ function closeSettings() { document.getElementById("settings-modal").style.displ
 
 function saveSettings() {
     myKey = document.getElementById("api-key").value.trim();
-    localStorage.setItem("warboard_apikey", myKey);
+    // warboard_apikey removed for security
     closeSettings();
     fetchOCs();
 }

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Faction Dashboard | Owen's Faction Tools</title>
+    <title>Faction Dashboard | Torn Operations Hub</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/global.css">
 <style>
@@ -179,7 +179,7 @@
 <body>
     <nav class="sidebar" id="app-sidebar">
         <div class="sidebar-header">
-            <div class="sidebar-logo">Owen's Faction Tools</div>
+            <div class="sidebar-logo">🕷️ Torn Operations</div>
             <div style="display:flex;gap:6px;">
                 <button onclick="toggleTheme()" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:1.1em;padding:4px 8px;border-radius:6px;" title="Toggle Theme">🌗</button>
                 <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
@@ -578,7 +578,7 @@ let dashData = null;
 
 async function loadAll() {
     myKey = localStorage.getItem("warboard_apikey") || "";
-    if (!myKey) {
+    if (!myKey && !localStorage.getItem("sv_session_token")) {
         document.getElementById('analyst-output').innerHTML = '<span style="color:var(--red)">⚠️ No API key set. Open Settings (⚙️) to add your Torn API key.</span>';
         document.getElementById('analyst-output').classList.remove('loading');
         return;
@@ -705,7 +705,7 @@ async function initSentinel() {
         if (data.wars && data.wars.length > 0) {
             select.innerHTML = data.wars.map(w => {
                 const dateStr = w.start ? new Date(w.start * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-                const isWon = w.winner === 52355 || w.winner === Number(localStorage.getItem('warboard_factionid') || 0) || (w.ourScore > w.theirScore);
+                const isWon = (dashData?.faction?.ID && w.winner === dashData.faction.ID) || w.winner === Number(localStorage.getItem('warboard_factionid') || 0) || (w.ourScore > w.theirScore);
                 const tag = w.isOngoing ? '💥 ACTIVE' : (isWon ? '🏆 WON' : '💀 LOST');
                 return `<option value="${w.id}">[${tag}] vs ${w.enemy} (${dateStr})</option>`;
             }).join('');

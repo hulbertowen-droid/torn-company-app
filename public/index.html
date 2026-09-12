@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Warboard | Owen's Faction Tools</title>
+    <title>Live Warboard | Torn Operations Hub</title>
     <meta name="description" content="Real-time faction war intelligence — track friendly members, enemy targets, battle stats, and issue tactical orders.">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
@@ -363,7 +363,7 @@
 <body>
     <nav class="sidebar" id="app-sidebar">
         <div class="sidebar-header">
-            <div class="sidebar-logo">Owen's Faction Tools</div>
+            <div class="sidebar-logo">🕷️ Torn Operations</div>
             <div style="display:flex;gap:6px;">
                 <button onclick="toggleTheme()" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:1.1em;padding:4px 8px;border-radius:6px;transition:0.2s;" title="Toggle Theme">🌗</button>
                 <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
@@ -733,7 +733,7 @@
             </summary>
             <div class="credits-bar-body">
                 Certain tactical features—such as exact battle stat estimates, player activity timelines, and live flight landing ETAs—require an active <a href="https://ffscouter.com" target="_blank" style="color:var(--blue);">FF Scouter Premium</a> subscription and API Key linked in Settings. All times displayed in Official Torn City Time (TCT/UTC) alongside your local timezone.<br><br>
-                <span style="color:var(--gold);font-weight:bold;">Owen's Faction Tools engineered and created by <a href="https://www.torn.com/profiles.php?XID=3776908" target="_blank" style="color:var(--gold);">Owen777 [3776908]</a>.</span>
+                <span style="color:var(--gold);font-weight:bold;">Torn Operations Hub — High-performance intelligence and war telemetry.</span>
             </div>
         </details>
 
@@ -1012,7 +1012,7 @@ function renderMiniHud(data) {
 }
 
 async function loadWarboardBounties() {
-    if (!myKey) return;
+    if (!myKey && !localStorage.getItem("sv_session_token")) return;
     try {
         const res = await fetch('/api/war-bounties', { headers: { 'x-api-key': myKey } });
         const data = await res.json();
@@ -1213,7 +1213,7 @@ async function saveSettings() {
     globalChannelId = rawChan.replace(/[^0-9]/g, '');
     let parsedCpm = parseInt(document.getElementById("api-cpm").value);
     cpm = (parsedCpm && parsedCpm > 0 && parsedCpm <= 60) ? parsedCpm : 12;
-    localStorage.setItem("warboard_apikey", myKey);
+    // warboard_apikey removed for security
     localStorage.setItem("warboard_ffkey", ffKey);
     localStorage.setItem("warboard_tskey", tsKey);
     localStorage.setItem("warboard_myFactionId", myFacIdInput);
@@ -1381,7 +1381,7 @@ async function fetchWarboard() {
             }
         } else {
             // 🟢 PEACETIME STANDBY & HYBRID RECAP MODE
-            if (heroTitle) heroTitle.innerText = myFaction?.name ? `${myFaction.name} [${myFaction.id || '52355'}]` : 'Spider-Verse';
+            if (heroTitle) heroTitle.innerText = myFaction?.name ? `${myFaction.name} [${myFaction.id || ''}]` : 'Spider-Verse';
             if (heroSub) heroSub.innerText = "Peacetime Standby • Faction Operations & Last War Performance Showcase";
             if (warBadge) {
                 warBadge.className = "war-badge peace";
@@ -2107,7 +2107,7 @@ function showToast(msg, type = "red") {
 
 // ─── Actions ──────────────────────────────────────────────────────────────────
 function getMyCurrentFactionId() {
-    return currentWarboardData?.warInfo?.myFaction?.id || localStorage.getItem("warboard_myFactionId") || '52355';
+    return currentWarboardData?.warInfo?.myFaction?.id || localStorage.getItem("warboard_myFactionId") || '';
 }
 async function claimTarget(id) { 
     const fId = getMyCurrentFactionId();
