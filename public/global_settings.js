@@ -163,7 +163,7 @@ const globalSettingsHTML = `
         <div class="global-form-row">
             <label for="gs-api-key">Torn API Key (Connect / Switch Account)</label>
             <input type="password" id="gs-api-key" aria-label="Torn API Key" placeholder="Paste Torn API Key to authenticate">
-            <div class="helper-text">Encrypted AES-256 server-side. Zero client storage.</div>
+            <div class="helper-text">Saved securely for session & tactical warboard tools.</div>
         </div>
 
         <div class="global-form-row">
@@ -224,7 +224,7 @@ window.openGlobalSettings = async function() {
     injectGlobalSettings();
     const modal = document.getElementById('global-settings-modal');
     modal.style.display = 'flex';
-    document.getElementById('gs-api-key').value = "";
+    document.getElementById('gs-api-key').value = localStorage.getItem('warboard_apikey') || "";
     document.getElementById('gs-ff-key').value = localStorage.getItem('warboard_ffkey') || "";
     document.getElementById('gs-ts-key').value = localStorage.getItem('warboard_tskey') || "";
     document.getElementById('gs-enemy-id').value = localStorage.getItem('warboard_enemyId') || "";
@@ -247,7 +247,12 @@ window.openGlobalSettings = async function() {
             statusText.textContent = 'Active Session';
         }
     } else {
-        statusText.innerHTML = '<span style="color:var(--text-tertiary, #64748b);">Not connected (Enter Key below)</span>';
+        const savedKey = localStorage.getItem('warboard_apikey');
+        if (savedKey) {
+            statusText.innerHTML = '<span style="color:var(--accent-emerald, #10b981);">Key Saved</span>';
+        } else {
+            statusText.innerHTML = '<span style="color:var(--text-tertiary, #64748b);">Not connected (Enter Key below)</span>';
+        }
     }
 };
 
@@ -267,6 +272,7 @@ window.saveGlobalSettings = async function() {
     const cpm = document.getElementById('gs-api-cpm').value.trim() || "12";
 
     if (apiKey) {
+        localStorage.setItem('warboard_apikey', apiKey);
         if (saveBtn) {
             saveBtn.disabled = true;
             saveBtn.textContent = 'Authenticating Key...';
@@ -281,21 +287,11 @@ window.saveGlobalSettings = async function() {
             if (data.success && data.sessionToken) {
                 localStorage.setItem('sv_session_token', data.sessionToken);
                 sessionStorage.setItem('sv_user', JSON.stringify(data.user));
-            } else {
-                alert('API Key Error: ' + (data.error || 'Failed to authenticate key.'));
-                if (saveBtn) {
-                    saveBtn.disabled = false;
-                    saveBtn.textContent = 'Save & Synchronize';
-                }
-                return;
+            } else if (data.error) {
+                console.warn('API Key authentication notice:', data.error);
             }
         } catch(e) {
-            alert('Failed to connect API key: ' + e.message);
-            if (saveBtn) {
-                saveBtn.disabled = false;
-                saveBtn.textContent = 'Save & Synchronize';
-            }
-            return;
+            console.warn('Failed to connect API key to session vault:', e.message);
         }
     }
 

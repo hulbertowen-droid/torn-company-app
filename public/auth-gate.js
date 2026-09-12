@@ -22,31 +22,34 @@
         '/ai-sandbox.html'
     ];
 
-    // Immediately purge any legacy client-side API key storage
-    try {
-        localStorage.removeItem('warboard_apikey');
-        localStorage.removeItem('tornApiKey');
-    } catch(e) {}
-
     // ─────────────────────────────────────────────────────────────
-    // Fetch Interceptor: Automatically injects x-session-token
+    // Fetch Interceptor: Automatically injects x-session-token and x-api-key
     // ─────────────────────────────────────────────────────────────
     const originalFetch = window.fetch;
     window.fetch = function(url, options = {}) {
         const token = localStorage.getItem('sv_session_token');
-        if (token && typeof url === 'string' && (url.startsWith('/api/') || url.startsWith('http://' + window.location.host + '/api/') || url.startsWith('https://' + window.location.host + '/api/'))) {
+        const apiKey = localStorage.getItem('warboard_apikey');
+        if (typeof url === 'string' && (url.startsWith('/api/') || url.startsWith('http://' + window.location.host + '/api/') || url.startsWith('https://' + window.location.host + '/api/'))) {
             options = Object.assign({}, options);
             if (!options.headers) {
-                options.headers = { 'x-session-token': token };
-            } else if (options.headers instanceof Headers) {
-                if (!options.headers.has('x-session-token')) {
+                options.headers = {};
+            }
+            if (options.headers instanceof Headers) {
+                if (token && !options.headers.has('x-session-token')) {
                     options.headers.append('x-session-token', token);
                 }
+                if (apiKey && !options.headers.has('x-api-key')) {
+                    options.headers.append('x-api-key', apiKey);
+                }
             } else if (Array.isArray(options.headers)) {
-                options.headers.push(['x-session-token', token]);
+                if (token) options.headers.push(['x-session-token', token]);
+                if (apiKey) options.headers.push(['x-api-key', apiKey]);
             } else {
-                if (!options.headers['x-session-token']) {
+                if (token && !options.headers['x-session-token']) {
                     options.headers['x-session-token'] = token;
+                }
+                if (apiKey && !options.headers['x-api-key']) {
+                    options.headers['x-api-key'] = apiKey;
                 }
             }
         }
@@ -292,7 +295,31 @@
     let currentUser = null;
 
     async function checkAuth() {
-        const token = localStorage.getItem('sv_session_token');
+        let token = localStorage.getItem('sv_session_token');
+        const savedApiKey = localStorage.getItem('warboard_apikey');
+
+        // If no token but saved key exists, restore session seamlessly
+        if (!token && savedApiKey) {
+            try {
+                const autoRes = await fetch('/api/auth/connect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiKey: savedApiKey })
+                });
+                const autoData = await autoRes.json();
+                if (autoData && autoData.success && autoData.sessionToken) {
+                    token = autoData.sessionToken;
+                    localStorage.setItem('sv_session_token', token);
+                    currentUser = autoData.user;
+                    sessionStorage.setItem('sv_user', JSON.stringify(currentUser));
+                    handleAuthenticated(currentUser);
+                    return;
+                }
+            } catch(e) {
+                console.warn('[Torn Auth] Auto-session restoration failed:', e);
+            }
+        }
+
         if (!token) {
             handleUnauthenticated();
             return;
@@ -309,6 +336,24 @@
                 sessionStorage.setItem('sv_user', JSON.stringify(currentUser));
                 handleAuthenticated(currentUser);
             } else {
+                // If token expired, try re-authenticating with saved key before giving up
+                if (savedApiKey) {
+                    try {
+                        const reRes = await fetch('/api/auth/connect', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ apiKey: savedApiKey })
+                        });
+                        const reData = await reRes.json();
+                        if (reData && reData.success && reData.sessionToken) {
+                            localStorage.setItem('sv_session_token', reData.sessionToken);
+                            currentUser = reData.user;
+                            sessionStorage.setItem('sv_user', JSON.stringify(currentUser));
+                            handleAuthenticated(currentUser);
+                            return;
+                        }
+                    } catch(e) {}
+                }
                 localStorage.removeItem('sv_session_token');
                 sessionStorage.removeItem('sv_user');
                 handleUnauthenticated();
@@ -455,7 +500,7 @@
                 <div class="sv-auth-subtitle">Connect Your Torn Account</div>
                 <p class="sv-auth-desc">
                     Enter your Torn API Key to access personal analytics, market tracking, and tactical modules. 
-                    <strong>Your API key is never stored in your browser</strong> — it is encrypted and held safely server-side.
+                    Your API key is saved securely to power real-time warboard, scouting, and faction tools.
                 </p>
                 <div class="sv-auth-input-group">
                     <label>Torn API Key (Public / Read-Only or Limited)</label>
@@ -475,6 +520,9 @@
         }
 
         const input = document.getElementById('sv-modal-key-input');
+        if (input) {
+            input.value = localStorage.getItem('warboard_apikey') || '';
+        }
         const submitBtn = document.getElementById('sv-modal-connect-btn');
         const alertBox = document.getElementById('sv-modal-alert');
 
@@ -503,8 +551,9 @@
                     throw new Error(data.error || 'Authentication failed');
                 }
 
-                // Success! Store session token ONLY (never the raw API key)
+                // Success! Store session token and API key
                 localStorage.setItem('sv_session_token', data.sessionToken);
+                localStorage.setItem('warboard_apikey', key);
                 sessionStorage.setItem('sv_user', JSON.stringify(data.user));
                 currentUser = data.user;
 

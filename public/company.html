@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -15,8 +15,8 @@
     
     <!-- Scripts & Auth -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="/auth-gate.js?v=3.2.0"></script>
-    <script src="/global_settings.js?v=3.2.0"></script>
+    <script src="/auth-gate.js?v=3.2.1"></script>
+    <script src="/global_settings.js?v=3.2.1"></script>
     <script src="/global-topbar.js?v=3.2.0"></script>
 
     <style>
@@ -452,6 +452,7 @@ function switchTab(tab) {
 
 function openSettings() { 
     document.getElementById('settings-modal').style.display = 'flex';
+    document.getElementById('api-key-input').value = localStorage.getItem('warboard_apikey') || myKey || '';
     fetch('/api/company-config').then(r => r.json()).then(data => {
         if (data.success) {
             document.getElementById('webhook-input').value = data.globalChannelId || '';
@@ -470,7 +471,19 @@ function closeSettings() { document.getElementById('settings-modal').style.displ
 
 function saveKey() {
     myKey = document.getElementById('api-key-input').value.trim();
-    // warboard_apikey removed for security
+    if (myKey) {
+        localStorage.setItem('warboard_apikey', myKey);
+        fetch('/api/auth/connect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiKey: myKey })
+        }).then(r => r.json()).then(d => {
+            if (d.success && d.sessionToken) {
+                localStorage.setItem('sv_session_token', d.sessionToken);
+                sessionStorage.setItem('sv_user', JSON.stringify(d.user));
+            }
+        }).catch(() => {});
+    }
     const config = { globalChannelId: document.getElementById('webhook-input').value.trim(), threshold: document.getElementById('threshold-input').value, apiKey: myKey };
     localStorage.setItem('master_company_config', JSON.stringify(config));
     fetch('/api/save-company-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
@@ -781,6 +794,6 @@ loadCompanyData();
     }
 </script>
 
-    <script src="/global_settings.js?v=3.2.0"></script>
+    <script src="/global_settings.js?v=3.2.1"></script>
 </body>
 </html>

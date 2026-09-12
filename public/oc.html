@@ -13,8 +13,8 @@
     <link rel="stylesheet" href="/global.css?v=3.2.0">
     
     <!-- Scripts & Auth -->
-    <script src="/auth-gate.js?v=3.2.0"></script>
-    <script src="/global_settings.js?v=3.2.0"></script>
+    <script src="/auth-gate.js?v=3.2.1"></script>
+    <script src="/global_settings.js?v=3.2.1"></script>
     <script src="/global-topbar.js?v=3.2.0"></script>
 
     <style>
@@ -279,7 +279,7 @@
         </div>
     </div>
 
-<script src="/auth-gate.js?v=3.2.0"></script>
+<script src="/auth-gate.js?v=3.2.1"></script>
 <script>
 let myKey = localStorage.getItem("warboard_apikey") || "";
 let allCrimes = [];
@@ -291,12 +291,27 @@ const REFRESH_MS = 300000;
 document.getElementById("api-key").value = myKey;
 
 function toggleSidebar() { document.getElementById('app-sidebar').classList.toggle('collapsed'); }
-function openSettings() { document.getElementById("settings-modal").style.display = "flex"; }
+function openSettings() { 
+    document.getElementById("settings-modal").style.display = "flex"; 
+    document.getElementById("api-key").value = localStorage.getItem('warboard_apikey') || myKey || '';
+}
 function closeSettings() { document.getElementById("settings-modal").style.display = "none"; }
 
 function saveSettings() {
     myKey = document.getElementById("api-key").value.trim();
-    // warboard_apikey removed for security
+    if (myKey) {
+        localStorage.setItem('warboard_apikey', myKey);
+        fetch('/api/auth/connect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiKey: myKey })
+        }).then(r => r.json()).then(d => {
+            if (d.success && d.sessionToken) {
+                localStorage.setItem('sv_session_token', d.sessionToken);
+                sessionStorage.setItem('sv_user', JSON.stringify(d.user));
+            }
+        }).catch(() => {});
+    }
     closeSettings();
     fetchOCs();
 }
@@ -640,6 +655,6 @@ if (myKey) {
     }
 </script>
 
-    <script src="/global_settings.js?v=3.2.0"></script>
+    <script src="/global_settings.js?v=3.2.1"></script>
 </body>
 </html>

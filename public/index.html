@@ -14,8 +14,8 @@
     
     <!-- Scripts & Auth -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="/auth-gate.js?v=3.2.0"></script>
-    <script src="/global_settings.js?v=3.2.0"></script>
+    <script src="/auth-gate.js?v=3.2.1"></script>
+    <script src="/global_settings.js?v=3.2.1"></script>
     <script src="/global-topbar.js?v=3.2.0"></script>
 
     <style>
@@ -1273,7 +1273,7 @@ let hasShownSyncCompleteNotice = false;
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 function openSettings() {
-    document.getElementById("api-key").value = myKey;
+    document.getElementById("api-key").value = localStorage.getItem("warboard_apikey") || myKey || "";
     document.getElementById("ff-key").value = ffKey;
     document.getElementById("ts-key").value = tsKey;
     if (document.getElementById("my-faction-id")) {
@@ -1340,7 +1340,19 @@ async function saveSettings() {
     globalChannelId = rawChan.replace(/[^0-9]/g, '');
     let parsedCpm = parseInt(document.getElementById("api-cpm").value);
     cpm = (parsedCpm && parsedCpm > 0 && parsedCpm <= 60) ? parsedCpm : 12;
-    // warboard_apikey removed for security
+    if (myKey) {
+        localStorage.setItem("warboard_apikey", myKey);
+        fetch('/api/auth/connect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiKey: myKey })
+        }).then(r => r.json()).then(d => {
+            if (d.success && d.sessionToken) {
+                localStorage.setItem('sv_session_token', d.sessionToken);
+                sessionStorage.setItem('sv_user', JSON.stringify(d.user));
+            }
+        }).catch(() => {});
+    }
     localStorage.setItem("warboard_ffkey", ffKey);
     localStorage.setItem("warboard_tskey", tsKey);
     localStorage.setItem("warboard_myFactionId", myFacIdInput);
