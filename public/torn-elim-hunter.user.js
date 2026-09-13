@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter
 // @namespace    https://spider-verse.net/
-// @version      2.5.2
+// @version      2.6.0
 // @description  Autonomous 1-click snipe button for Torn Elimination. Finds beatable enemies that are NOT in hospital and NOT flying from ANY page.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -67,19 +67,46 @@
         } catch (e) {}
     }
 
-    // ── Session exclude list ───────────────────────────────────────
+    // ── Session exclude list (Auto-expires after 60s to prevent permanent lockout) ──
     function getExclude() {
-        try { return (sessionStorage.getItem(SESS_EXCL) || '').split(',').filter(Boolean); }
-        catch (e) { return []; }
+        try {
+            const raw = sessionStorage.getItem(SESS_EXCL);
+            if (!raw) return [];
+            const now = Date.now();
+            const valid = [];
+            for (const item of raw.split(',').filter(Boolean)) {
+                const [id, ts] = item.split(':');
+                if (id && (!ts || (now - Number(ts) < 60000))) {
+                    valid.push(id);
+                }
+            }
+            return valid;
+        } catch (e) { return []; }
     }
 
     function addExclude(id) {
         if (!id || id === '0') return;
-        let list = getExclude();
-        const sid = String(id);
-        if (!list.includes(sid)) list.push(sid);
-        if (list.length > MAX_EXCLUDE) list = list.slice(list.length - MAX_EXCLUDE);
-        try { sessionStorage.setItem(SESS_EXCL, list.join(',')); } catch (e) {}
+        try {
+            const now = Date.now();
+            let raw = sessionStorage.getItem(SESS_EXCL) || '';
+            const map = new Map();
+            for (const item of raw.split(',').filter(Boolean)) {
+                const [eid, ets] = item.split(':');
+                if (eid && (now - Number(ets || now) < 60000)) {
+                    map.set(eid, Number(ets || now));
+                }
+            }
+            map.set(String(id), now);
+            const trimmed = Array.from(map.entries()).slice(-15);
+            sessionStorage.setItem(SESS_EXCL, trimmed.map(([i, t]) => `${i}:${t}`).join(','));
+        } catch (e) {}
+    }
+
+    function clearExclude() {
+        try {
+            sessionStorage.removeItem(SESS_EXCL);
+            sessionStorage.removeItem('elimv2_exclude');
+        } catch (e) {}
     }
 
     // ── State ──────────────────────────────────────────────────────
@@ -208,9 +235,12 @@
         for (let i = 0; i < foundTeams.length; i++) {
             const item = foundTeams[i];
             try {
+                item.el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
                 item.el.click();
                 showToast(`⚡ Scanning [${i + 1}/${foundTeams.length}]: ${item.name}...`);
-                await new Promise(r => setTimeout(r, 850));
+                await new Promise(r => setTimeout(r, 1200));
+                window.scrollBy(0, 150);
+                await new Promise(r => setTimeout(r, 200));
 
                 const links = document.querySelectorAll('a[href*="profiles.php?XID="], a[href*="profiles.php?xid="]');
                 const members = [];
@@ -221,7 +251,23 @@
                     const id = m[1];
                     if (seen.has(id) || id === selfId) return;
                     seen.add(id);
-                    members.push({ id, name: (link.innerText || '').trim() });
+
+                    let level = 0;
+                    const row = link.closest('li, tr, [class*="row"], [class*="member"], [class*="user"], .table-row');
+                    if (row) {
+                        const lvlMatch = (row.innerText || '').match(/(?:lvl|level)\s*[:.]?\s*(\d+)/i);
+                        if (lvlMatch) {
+                            level = parseInt(lvlMatch[1], 10);
+                        } else {
+                            const lvlEl = row.querySelector('.level, [class*="level"]');
+                            if (lvlEl) {
+                                const num = parseInt((lvlEl.innerText || '').replace(/\D/g, ''), 10);
+                                if (!isNaN(num) && num > 0 && num <= 100) level = num;
+                            }
+                        }
+                    }
+
+                    members.push({ id, name: (link.innerText || '').trim(), level });
                 });
 
                 if (members.length > 0) {
@@ -234,7 +280,7 @@
                     if (d && d.success) {
                         totalSynced += (d.memberCount || members.length);
                         teamsSynced++;
-                        syncedTeams.add(item.name.toLowerCase());
+                        if (members.length >= 3) syncedTeams.add(item.name.toLowerCase());
                     }
                 }
             } catch (err) {}
@@ -296,13 +342,31 @@
                 const id = m[1];
                 if (seen.has(id) || id === selfId) return;
                 seen.add(id);
-                members.push({ id, name: (link.innerText || '').trim() });
+
+                let level = 0;
+                const row = link.closest('li, tr, [class*="row"], [class*="member"], [class*="user"], .table-row');
+                if (row) {
+                    const lvlMatch = (row.innerText || '').match(/(?:lvl|level)\s*[:.]?\s*(\d+)/i);
+                    if (lvlMatch) {
+                        level = parseInt(lvlMatch[1], 10);
+                    } else {
+                        const lvlEl = row.querySelector('.level, [class*="level"]');
+                        if (lvlEl) {
+                            const num = parseInt((lvlEl.innerText || '').replace(/\D/g, ''), 10);
+                            if (!isNaN(num) && num > 0 && num <= 100) level = num;
+                        }
+                    }
+                }
+
+                members.push({ id, name: (link.innerText || '').trim(), level });
             });
 
             if (members.length === 0) return;
 
             rosterSyncInFlight = true;
-            syncedTeams.add(teamKey);
+            if (members.length >= 3) {
+                syncedTeams.add(teamKey);
+            }
 
             gmFetch(`${BACKEND}/api/elim/sync-roster`, {
                 method: 'POST',
@@ -522,16 +586,18 @@
                             executeSnipe();
                         }
                     });
-                } else if (code === 'NO_LIVE_TARGETS') {
+                } else if (code === 'NO_LIVE_TARGETS' || code === 'ALL_TARGETS_HOSP_FLY') {
                     renderStatusCard({
                         title: 'All Opponents in Hospital / Flying',
                         icon: '🏥',
-                        message: 'All verified opponents on other teams are currently hospitalized, traveling, or jailed.',
-                        detail: 'Opponent hospital timers are constantly expiring. Hit re-check in a few moments to catch anyone as soon as they discharge.',
+                        message: msg || 'All verified opponents on other teams are currently hospitalized, traveling, or jailed.',
+                        detail: 'Opponent hospital timers expire rapidly in Elimination. Hit re-check to catch opponents as soon as they discharge.',
                         borderColor: '#3498db',
                         titleColor: '#5dade2',
                         primaryBtnText: '🔄 Re-Check Opponents',
-                        primaryBtnAction: () => executeSnipe()
+                        primaryBtnAction: () => { clearExclude(); executeSnipe(); },
+                        secondaryBtnText: '⚡ Auto-Scan Other Teams',
+                        secondaryBtnAction: () => autoScanEntireElimination()
                     });
                 } else if (code === 'NO_SYNCED_ROSTERS' || String(msg).toLowerCase().includes('competition.php')) {
                     renderStatusCard({
@@ -553,20 +619,20 @@
                         borderColor: '#e74c3c',
                         titleColor: '#e74c3c',
                         primaryBtnText: '🔄 Try Again',
-                        primaryBtnAction: () => executeSnipe()
+                        primaryBtnAction: () => { clearExclude(); executeSnipe(); }
                     });
                 } else {
                     renderStatusCard({
                         title: 'No Target Available',
                         icon: '⚠️',
                         message: msg,
-                        detail: 'Check your tier settings or ensure opposing Elimination rosters have been discovered from competition.php.',
+                        detail: 'Opposing candidates may be temporarily on short cooldown or in hospital. Click below to refresh candidate search or discover more opposing teams.',
                         borderColor: '#e67e22',
                         titleColor: '#f39c12',
-                        primaryBtnText: '🔄 Try Again',
-                        primaryBtnAction: () => executeSnipe(),
-                        secondaryBtnText: '⚙️ Settings',
-                        secondaryBtnAction: () => openSettings()
+                        primaryBtnText: '🔄 Try Again (Fresh)',
+                        primaryBtnAction: () => { clearExclude(); executeSnipe(); },
+                        secondaryBtnText: '⚡ Auto-Scan All Teams',
+                        secondaryBtnAction: () => autoScanEntireElimination()
                     });
                 }
 

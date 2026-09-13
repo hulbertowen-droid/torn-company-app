@@ -7485,9 +7485,10 @@ app.post('/api/elim/sync-roster', async (req, res) => {
         const seen = new Set();
         members.forEach(m => {
             const id = String(m.id || m.playerId || m || '').trim();
+            const level = Number(m.level) || 0;
             if (id && id !== '0' && !ownFactionIds.has(id) && !seen.has(id)) {
                 seen.add(id);
-                validCandidates.push({ id, team: teamName, name: m.name || '' });
+                validCandidates.push({ id, team: teamName, name: m.name || '', level });
             }
         });
 
@@ -7746,8 +7747,8 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             const docs = await elimCol.find({
                 source: 'torn_elimination',
                 competitionId: compId,
-                updatedAt: { $gte: new Date(Date.now() - 72 * 60 * 60 * 1000) }
-            }).sort({ bs: 1, level: 1 }).limit(4000).toArray();
+                updatedAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+            }).sort({ bs: 1, level: 1 }).limit(6000).toArray();
             for (const d of docs) {
                 const cid = String(d._id);
                 if (normalizeElimTeamName(d.team) !== normalizeElimTeamName(myTeam) && !candidateMeta.has(cid)) {
@@ -7769,80 +7770,105 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
     // Source C: Synced rosters from memory (user's roster + shared tournament pool)
     const userRoster = elimState.rosters.get(userKeyId) || (userId ? (elimState.rosters.get(String(userId)) || elimState.rosters.get(`torn:${userId}`)) : null);
     if (userRoster && userRoster.competitionId === compId &&
-        Date.now() - userRoster.syncedAt <= 48 * 60 * 60 * 1000 &&
+        Date.now() - userRoster.syncedAt <= 14 * 24 * 60 * 60 * 1000 &&
         Array.isArray(userRoster.members)) {
         for (const m of userRoster.members) {
             if (m && m.team && normalizeElimTeamName(m.team) !== normalizeElimTeamName(myTeam)) {
                 const cid = String(m.id || m.playerId || m);
                 if (!candidateMeta.has(cid)) {
-                    candidateMeta.set(cid, { id: cid, team: m.team, source: 'torn_elimination', competitionId: compId });
+                    candidateMeta.set(cid, { id: cid, team: m.team, level: m.level || 0, name: m.name || '', source: 'torn_elimination', competitionId: compId });
                 }
             }
         }
     }
     for (const [rKey, rData] of elimState.rosters.entries()) {
         if (rData && rData.competitionId === compId &&
-            Date.now() - rData.syncedAt <= 48 * 60 * 60 * 1000 &&
+            Date.now() - rData.syncedAt <= 14 * 24 * 60 * 60 * 1000 &&
             Array.isArray(rData.members)) {
             for (const m of rData.members) {
                 if (m && m.team && normalizeElimTeamName(m.team) !== normalizeElimTeamName(myTeam)) {
                     const cid = String(m.id || m.playerId || m);
                     if (!candidateMeta.has(cid)) {
-                        candidateMeta.set(cid, { id: cid, team: m.team, source: 'torn_elimination', competitionId: compId });
+                        candidateMeta.set(cid, { id: cid, team: m.team, level: m.level || 0, name: m.name || '', source: 'torn_elimination', competitionId: compId });
                     }
                 }
             }
         }
     }
 
-    // Filter candidates strictly
-    let pool = Array.from(candidateMeta.values()).filter(cand => {
-        const id = cand.id;
+    // ── 2b. Mandatory Base Safety Filter (Cannot attack yourself, faction, or own elimination team) ──
+    const baseEligible = Array.from(candidateMeta.values()).filter(cand => {
+        const id = String(cand.id);
         if (!id || id === '0') return false;
         if (myId && id === myId) return false;                  // Never attack yourself
         if (ownFactionIds.has(id)) return false;                // Protect faction teammates
         if (normalizeElimTeamName(cand.team) === normalizeElimTeamName(myTeam)) return false; // Protect elimination teammates
         if (cand.source !== 'torn_elimination') return false;   // Hard provenance verification
-        if (excludeSet.has(id)) return false;                   // Session / explicit exclusion
-        if (elimState.hospBlacklist.has(id)) return false;       // Hospitalized / traveling / jailed
-        if (myServed.has(id)) return false;                     // Recently served to THIS user (5m cooldown)
-        if (cand.isLeader && myStats < 500_000_000) return false; // Never match against tournament captains unless user is an extreme whale
         return true;
     });
 
-    if (pool.length === 0) {
+    if (baseEligible.length === 0) {
         return {
             success: false,
-            code: candidateMeta.size === 0 ? 'NO_VERIFIED_TARGETS' : 'ALL_TARGETS_UNAVAILABLE',
+            code: 'NO_VERIFIED_TARGETS',
             isParticipating: true,
             targetCount: 0,
-            message: candidateMeta.size === 0
-                ? `You are enrolled in team "${myTeam}", but no opposing Elimination team rosters have been synced yet. Please visit competition.php and click "Scan All Teams".`
-                : 'All verified opposing Elimination candidates are currently on cooldown, in hospital, or flying. Please wait a moment.'
+            message: `You are enrolled in team "${myTeam}", but no opposing Elimination team rosters have been synced yet. Please visit competition.php to discover enemy teams.`
         };
     }
 
+    // ── Progressive Fallback Filter ──
+    // Pass 1: Strict exclusion (excludes served in last 30s, hospital blacklist, session exclusions)
+    let pool = baseEligible.filter(cand => {
+        const id = cand.id;
+        if (excludeSet.has(id)) return false;
+        if (elimState.hospBlacklist.has(id)) return false;
+        if (myServed.has(id)) return false;
+        return true;
+    });
+
+    // Pass 2: If pool is empty, relax served cooldowns (allows re-engaging targets)
+    if (pool.length === 0) {
+        pool = baseEligible.filter(cand => {
+            const id = cand.id;
+            if (excludeSet.has(id)) return false;
+            if (elimState.hospBlacklist.has(id)) return false;
+            return true;
+        });
+    }
+
+    // Pass 3: If still empty, relax session exclusions (user clicked Try Again / Snipe)
+    if (pool.length === 0) {
+        pool = baseEligible.filter(cand => {
+            const id = cand.id;
+            if (elimState.hospBlacklist.has(id)) return false;
+            return true;
+        });
+    }
+
+    // Pass 4: If still empty, relax hospital blacklist (live check in Step 6 will verify live status)
+    if (pool.length === 0) {
+        pool = baseEligible.slice();
+    }
+
     // ── Intelligent Batch Prioritization ──
-    // Sort pool so beatable, hittable candidates (or lowest level) are evaluated first
+    // Sort pool so beatable, lower-stat, lower-level candidates are prioritized
     pool.sort((a, b) => {
         const aBs = a.bs || 0;
         const bBs = b.bs || 0;
         if (aBs > 0 && bBs > 0 && myStats > 0) {
-            const idealTarget = myStats * 0.75;
+            const idealTarget = myStats * 0.70;
             return Math.abs(aBs - idealTarget) - Math.abs(bBs - idealTarget);
         }
-        if (aBs > 0 && myStats > 0) return aBs <= myStats * 1.25 ? -1 : 1;
-        if (bBs > 0 && myStats > 0) return bBs <= myStats * 1.25 ? 1 : -1;
-        return (a.level || 0) - (b.level || 0);
+        if (aBs > 0 && myStats > 0) return aBs <= myStats * 1.15 ? -1 : 1;
+        if (bBs > 0 && myStats > 0) return bBs <= myStats * 1.15 ? 1 : -1;
+        const aLvl = a.level || 1;
+        const bLvl = b.level || 1;
+        return aLvl - bLvl;
     });
 
-    // Sample top 80 candidates and shuffle slightly for variety
-    const topCandidates = pool.slice(0, 80);
-    for (let i = topCandidates.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [topCandidates[i], topCandidates[j]] = [topCandidates[j], topCandidates[i]];
-    }
-    const batch = topCandidates.slice(0, 40);
+    // Take top 80 candidates for bulk evaluation
+    const batch = pool.slice(0, 80);
     const batchIds = batch.map(b => b.id);
 
     // ── 3. Query FF Scouter for live Fair Fight & Battle Stat estimates ──
@@ -7863,24 +7889,20 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
                     const id = String(rawId);
                     if (!batchIds.includes(id)) return;
 
-                    let ff = null;
-                    if (p.fair_fight != null && !isNaN(Number(p.fair_fight))) {
-                        ff = Number(p.fair_fight);
-                    } else if (p.ff != null && !isNaN(Number(p.ff))) {
-                        ff = Number(p.ff);
-                    }
-
                     const bs = (p.bs_estimate != null && !isNaN(Number(p.bs_estimate)))
                         ? Number(p.bs_estimate) : (Number(p.battlestats) || 0);
 
-                    // Accurate Fair Fight formula: FF = 1 + (8/3) * (Target BS / Attacker BS)
-                    if (ff === null && bs > 0 && myStats > 0) {
+                    // Calculate accurate Fair Fight relative to the requesting user's live stats:
+                    // FF = 1 + (8/3) * (Target BS / Attacker BS)
+                    let ff = null;
+                    if (bs > 0 && myStats > 0) {
                         ff = parseFloat((1 + (8 / 3) * (bs / myStats)).toFixed(2));
+                    } else if (p.fair_fight != null && !isNaN(Number(p.fair_fight))) {
+                        ff = Number(p.fair_fight);
                     }
 
                     if (ff !== null || bs > 0) {
                         ffStats.set(id, { ff, bs, distribution: p.distribution });
-                        // Cache discovered stats in MongoDB in the background
                         if (bs > 0 && mongoose.connection.readyState === 1) {
                             try {
                                 const col = mongoose.connection.db.collection('elim_candidates');
@@ -7902,42 +7924,27 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         const id = cand.id;
         const s = ffStats.get(id);
         const bs = (s && s.bs) || cand.bs || 0;
-        const ff = s ? s.ff : null;
+        const lvl = cand.level || 0;
 
-        // If stats are completely unknown from FFScouter & database
-        if (bs === 0 && (ff === null || isNaN(ff))) {
-            if (cleanTier === 'all') return true;
-            // In easy / manageable, only allow unknown stats if level is proven low (level <= 20)
-            const lvl = cand.level || 0;
-            if (lvl > 0 && lvl <= 20) return true;
-            return false; // High/unknown level with unknown stats is NEVER assumed easy
-        }
-
-        const ratio = (myStats > 0 && bs > 0) ? (bs / myStats) : (ff ? (ff - 1) * (3 / 8) : null);
-
-        // Strict stat ceiling: never allow targets with stats higher than the user's tier
-        if (myStats > 0 && bs > 0) {
-            if (cleanTier === 'easy' && bs > myStats * 0.85) return false;
-            if (cleanTier === 'manageable' && bs > myStats * 1.25) return false;
-            if (cleanTier === 'difficult' && bs > myStats * 1.65) return false;
-        }
-
-        if (cleanTier === 'easy') {
-            if (ff !== null && ff >= 3.0) return false;
-            if (ratio !== null && ratio > 0.85) return false;
+        // If stats are known from FF Scouter / database:
+        if (bs > 0 && myStats > 0) {
+            const ratio = bs / myStats;
+            if (cleanTier === 'easy' && ratio > 0.80) return false;
+            if (cleanTier === 'manageable' && ratio > 1.20) return false;
+            if (cleanTier === 'difficult' && ratio > 1.60) return false;
+            if (cleanTier === 'all' && myStats < 5_000_000 && ratio > 4.0) return false; // Never serve 100B whales even on 'all'
             return true;
         }
-        if (cleanTier === 'manageable') {
-            if (ff !== null && ff > 3.8) return false;
-            if (ratio !== null && ratio > 1.25) return false;
-            return true;
+
+        // If stats are unknown, use candidate level:
+        if (myStats > 0) {
+            if (cleanTier === 'easy') return lvl > 0 && lvl <= 22;
+            if (cleanTier === 'manageable') return lvl === 0 || lvl <= 40;
+            if (cleanTier === 'difficult') return lvl === 0 || lvl <= 60;
+            if (cleanTier === 'all') return myStats >= 5_000_000 || lvl <= 75;
         }
-        if (cleanTier === 'difficult') {
-            if (ff !== null && ff > 4.5) return false;
-            if (ratio !== null && ratio > 1.65) return false;
-            return true;
-        }
-        return true; // 'all'
+
+        return true;
     });
 
     if (tierPass.length === 0) {
@@ -7946,9 +7953,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             code: 'NO_TIER_MATCH',
             isParticipating: true,
             targetCount: 0,
-            message: ffScouterFailed
-                ? 'FF Scouter is temporarily unavailable. Try "All Tiers" in Settings or wait a moment.'
-                : `No candidates matched your Fair Fight tier (${cleanTier}) against your current stats (~${formatElimStat(myStats)}). Try raising tier or scanning all teams.`
+            message: `No opposing candidates matched your Fair Fight tier (${cleanTier}) against your current stats (~${formatElimStat(myStats)}). Visit competition.php to discover more opposing rosters.`
         };
     }
 
@@ -7958,11 +7963,26 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         const targetId = cand.id;
         const s = ffStats.get(targetId) || { ff: null, bs: 0 };
         const targetBS = s.bs || cand.bs || 0;
-        const ratio = (myStats > 0 && targetBS > 0) ? (targetBS / myStats) : (s.ff ? (s.ff - 1) * (3 / 8) : 1.0);
+        const targetLvl = cand.level || 0;
+
+        // Calculate ratio
+        let ratio = 1.0;
+        if (myStats > 0 && targetBS > 0) {
+            ratio = targetBS / myStats;
+        } else if (targetLvl > 0) {
+            const estBS = estimateStatsFromLevel(targetLvl);
+            ratio = myStats > 0 ? (estBS / myStats) : 1.0;
+        } else {
+            ratio = 0.65; // Assume moderate newcomer for unknown
+        }
+
         const ff = s.ff != null ? s.ff : parseFloat((1 + (8 / 3) * ratio).toFixed(2));
 
-        // Hard Drop: If candidate is too strong (>1.35x stats) and tier is not 'all', drop them
-        if (cleanTier !== 'all' && myStats > 0 && targetBS > myStats * 1.35) {
+        // Hard Drop: If candidate is excessively strong, drop them immediately
+        if (cleanTier !== 'all' && myStats > 0 && targetBS > myStats * 1.30) {
+            continue;
+        }
+        if (cleanTier === 'all' && myStats > 0 && myStats < 5_000_000 && targetBS > myStats * 4.0) {
             continue;
         }
 
@@ -7997,7 +8017,6 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             risk = "Extreme";
         }
 
-        // Never serve "Too Strong" unless tier is explicitly 'all'
         if (difficulty === "Too Strong" && cleanTier !== 'all') {
             continue;
         }
@@ -8011,6 +8030,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             competitionId: cand.competitionId,
             ff,
             bs: targetBS,
+            level: targetLvl,
             ratio,
             score,
             difficulty,
@@ -8028,22 +8048,22 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         };
     }
 
-    // Sort by highest score first. For ties, sort by lowest ratio (easiest target first)
+    // Sort by highest score first; for ties, lowest ratio (easiest target first)
     scoredCandidates.sort((a, b) => (b.score - a.score) || (a.ratio - b.ratio));
 
-    // ── 6. Live Status Verification (Exclude Hospital, Flying, Jail) ──
+    // ── 6. Live Status Verification (Exclude Hospital, Flying, Jail & Verify Level) ──
     let chosenTarget = null;
     let checkedCount = 0;
     let hospCount = 0;
     let flyCount = 0;
 
-    for (const cand of scoredCandidates.slice(0, 12)) {
+    for (const cand of scoredCandidates.slice(0, 30)) {
         checkedCount++;
         let prof;
         try {
             const r = await fetch(
                 `https://api.torn.com/user/${cand.id}?selections=profile&key=${encodeURIComponent(apiKey)}`,
-                { signal: AbortSignal.timeout(5000) }
+                { signal: AbortSignal.timeout(4000) }
             );
             prof = await r.json();
         } catch (e) {
@@ -8055,10 +8075,10 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         const rawState = prof.status.state || '';
         const state = rawState.toLowerCase();
 
-        // Hospital check
+        // Hospital check (60-90 seconds max blacklist, med-outs happen fast)
         if (state === 'hospital') {
             hospCount++;
-            const durationMins = prof.status.until ? Math.max(5, Math.ceil((prof.status.until * 1000 - Date.now()) / 60000)) : 20;
+            const durationMins = prof.status.until ? Math.min(2, Math.max(1, Math.ceil((prof.status.until * 1000 - Date.now()) / 60000))) : 1;
             elimState.hospBlacklist.set(cand.id, Date.now() + durationMins * 60 * 1000);
             continue;
         }
@@ -8066,26 +8086,46 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         // Flying / Traveling check
         if (state === 'traveling' || state === 'abroad') {
             flyCount++;
-            const durationMins = prof.status.until ? Math.max(15, Math.ceil((prof.status.until * 1000 - Date.now()) / 60000)) : 120;
+            const durationMins = prof.status.until ? Math.min(8, Math.max(2, Math.ceil((prof.status.until * 1000 - Date.now()) / 60000))) : 4;
             elimState.hospBlacklist.set(cand.id, Date.now() + durationMins * 60 * 1000);
             continue;
         }
 
         // Jail check
         if (state === 'jail' || state === 'federal') {
-            elimState.hospBlacklist.set(cand.id, Date.now() + 30 * 60 * 1000);
+            elimState.hospBlacklist.set(cand.id, Date.now() + 5 * 60 * 1000);
             continue;
         }
 
         if (state !== 'okay') {
-            elimState.hospBlacklist.set(cand.id, Date.now() + 20 * 60 * 1000);
+            elimState.hospBlacklist.set(cand.id, Date.now() + 45 * 1000);
             continue;
         }
 
-        // Confirmed Okay — apply 5-minute per-user served cooldown
-        myServed.set(cand.id, Date.now() + 5 * 60 * 1000);
+        // Whale protection guard: check live level & estimated strength against requesting user
+        const targetLvl = Number(prof.level) || cand.level || 1;
+        const targetEstBS = cand.bs > 0 ? cand.bs : estimateStatsFromLevel(targetLvl);
+        if (cleanTier !== 'all' && myStats > 0) {
+            if (cleanTier === 'easy' && (targetEstBS > myStats * 0.85 || targetLvl > 25)) continue;
+            if (cleanTier === 'manageable' && (targetEstBS > myStats * 1.25 || targetLvl > 45)) continue;
+            if (cleanTier === 'difficult' && (targetEstBS > myStats * 1.70 || targetLvl > 65)) continue;
+        } else if (cleanTier === 'all' && myStats > 0 && myStats < 5_000_000) {
+            // Even in 'all' tier, protect sub-5M players from 100B tournament whales
+            if (targetEstBS > myStats * 5.0 && targetLvl > 70) continue;
+        }
 
-        const targetBSHuman = cand.bs > 0 ? formatElimStat(cand.bs) : 'Unknown';
+        // Persist verified level to MongoDB in background
+        if (mongoose.connection.readyState === 1 && targetLvl > 0) {
+            try {
+                const col = mongoose.connection.db.collection('elim_candidates');
+                col.updateOne({ _id: Number(cand.id) }, { $set: { level: targetLvl, name: prof.name || '' } }).catch(() => {});
+            } catch (e) {}
+        }
+
+        // Confirmed Okay — apply short 30-second per-user served cooldown
+        myServed.set(cand.id, Date.now() + 30 * 1000);
+
+        const targetBSHuman = cand.bs > 0 ? formatElimStat(cand.bs) : (targetLvl > 0 ? `~${formatElimStat(estimateStatsFromLevel(targetLvl))}` : 'Unknown');
         const attackerBSHuman = myStats > 0 ? formatElimStat(myStats) : 'Unknown';
 
         let bsBullet = "Fair Fight score indicates a favorable target matchup";
@@ -8099,6 +8139,8 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             } else {
                 bsBullet = `Target battle stats (~${targetBSHuman}) exceed standard range (${attackerBSHuman}) — caution advised`;
             }
+        } else {
+            bsBullet = `Level ${targetLvl} opponent — estimated stats (~${targetBSHuman}) match your tier profile`;
         }
 
         const why = [
@@ -8113,12 +8155,12 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             success: true,
             targetId: cand.id,
             name: prof.name || `Player #${cand.id}`,
-            level: prof.level || 1,
+            level: targetLvl,
             status: "Available (Okay)",
             travel: "In Torn City (Not flying)",
             team: cand.team,
             attackerTeam: myTeam,
-            targetBS: cand.bs,
+            targetBS: cand.bs || targetEstBS,
             targetBSHuman,
             attackerBS: myStats,
             attackerBSHuman,
@@ -8151,7 +8193,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             code: 'ALL_TARGETS_HOSP_FLY',
             isParticipating: true,
             targetCount: 0,
-            message: `All ${checkedCount} evaluated targets on opposing teams are currently in hospital (${hospCount}) or flying (${flyCount}). Please wait a moment.`
+            message: `All ${checkedCount} evaluated targets on opposing teams are currently in hospital (${hospCount}) or flying (${flyCount}). Hospital times expire rapidly — try again in a few moments.`
         };
     }
 
