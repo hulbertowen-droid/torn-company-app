@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter
 // @namespace    https://spider-verse.net/
-// @version      2.4.3
+// @version      2.4.4
 // @description  Autonomous 1-click snipe button for Torn Elimination. Finds beatable enemies that are NOT in hospital and NOT flying from ANY page.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -20,6 +20,21 @@
 
 (function () {
     'use strict';
+
+    // ── Device & Platform Detection ────────────────────────────────
+    const isAndroid = /android/i.test(navigator.userAgent || navigator.vendor || '');
+    const isIOS     = /iphone|ipad|ipod/i.test(navigator.userAgent || navigator.vendor || '');
+    const isMobile  = isAndroid || isIOS || (typeof window !== 'undefined' && window.innerWidth <= 768);
+
+    function getDefaultBottomOffset() {
+        if (isAndroid) return 96;
+        if (isIOS) return 70;
+        return 62;
+    }
+
+    function sanitizeKey(k) {
+        return String(k || '').replace(/[\s\r\n'"]/g, '').trim();
+    }
 
     // ── Constants ──────────────────────────────────────────────────
     const BACKEND       = 'https://spider-verse.net';
@@ -68,7 +83,7 @@
     }
 
     // ── State ──────────────────────────────────────────────────────
-    let apiKey     = load(KEY_API, '');
+    let apiKey     = sanitizeKey(load(KEY_API, ''));
     let ffTier     = load(KEY_TIER, 'manageable');
     let autoLaunch = load(KEY_AUTOLAUNCH, false);
     let myId       = '';
@@ -355,8 +370,18 @@
                 return;
             }
 
-            if (data && (data.code === 'ACCOUNT_NOT_CONNECTED' || data.error === 'apiKey required')) {
-                renderNotConnectedCard();
+            if (data && (
+                data.code === 'ACCOUNT_NOT_CONNECTED' ||
+                data.error === 'apiKey required' ||
+                data.code === 'INVALID_API_KEY' ||
+                data.isInvalidKey ||
+                data.errorCode === 2 ||
+                data.errorCode === 1 ||
+                (data.code === 'API_ERROR' && (data.errorCode === 2 || String(data.message || '').includes('[2') || String(data.message || '').toLowerCase().includes('incorrect key')))
+            )) {
+                apiKey = '';
+                save(KEY_API, '');
+                renderNotConnectedCard(data.message || 'Torn API rejected your key (Error 2: Incorrect Key). Please enter a valid Limited API key.');
                 setButtonState('needkey');
                 busy = false;
                 return;
@@ -402,7 +427,7 @@
     }
 
     // ── Torn Account Not Connected Card Display ───────────────────
-    function renderNotConnectedCard() {
+    function renderNotConnectedCard(customMsg = '') {
         if (!cardEl) {
             cardEl = document.createElement('div');
             cardEl.id = 'elim-target-card';
@@ -412,6 +437,8 @@
                 border-radius: 10px;
                 padding: 14px;
                 width: 310px;
+                max-width: calc(100vw - 24px);
+                box-sizing: border-box;
                 color: #ecf0f1;
                 font-size: 12px;
                 box-shadow: 0 10px 32px rgba(0,0,0,0.85);
@@ -436,12 +463,19 @@
                 </span>
                 <span id="ev2-card-close" style="cursor:pointer; color:#95a5a6; font-size:13px; font-weight:bold;" title="Close">✖</span>
             </div>
-            <div style="font-size:11.5px; color:#bdc3c7; line-height:1.45; margin-bottom:10px;">
-                To evaluate targets tailored to your battle strength and verify hittability, please connect your Torn Limited API Key.
-            </div>
-            <div style="margin-bottom:10px;">
+            ${customMsg ? `
+                <div style="background:rgba(231,76,60,0.18); border:1px solid #e74c3c; border-radius:6px; padding:8px 10px; margin-bottom:10px; font-size:11px; color:#ff7675; line-height:1.4;">
+                    ⚠️ ${customMsg}
+                </div>
+            ` : `
+                <div style="font-size:11.5px; color:#bdc3c7; line-height:1.45; margin-bottom:10px;">
+                    To evaluate targets tailored to your battle strength and verify hittability, please connect your Torn Limited API Key.
+                </div>
+            `}
+            <div style="display:flex; gap:6px; margin-bottom:10px; align-items:center;">
                 <input type="password" id="ev2-quick-key" placeholder="Paste 16-character Limited Key"
-                    style="width:100%; box-sizing:border-box; padding:7px 9px; background:#262b38; border:1px solid #3d4455; color:#fff; border-radius:5px; font-size:11px;">
+                    style="flex:1; box-sizing:border-box; padding:7px 9px; background:#262b38; border:1px solid #3d4455; color:#fff; border-radius:5px; font-size:11px;">
+                <button type="button" id="ev2-quick-eye" style="padding:6px 8px; background:#262b38; border:1px solid #3d4455; color:#bdc3c7; border-radius:5px; cursor:pointer; font-size:12px;" title="Show/Hide Key">👁️</button>
             </div>
             <div style="display:flex; gap:6px; margin-bottom:10px;">
                 <button id="ev2-quick-connect" style="flex:2; padding:7px 10px; background:#27ae60; color:#fff; border:none; border-radius:5px; font-weight:900; font-size:11.5px; cursor:pointer;">
@@ -462,31 +496,60 @@
         const closeBtn = document.getElementById('ev2-card-close');
         if (closeBtn) closeBtn.onclick = () => { cardEl.style.display = 'none'; };
 
+        const quickEye = document.getElementById('ev2-quick-eye');
+        const quickInput = document.getElementById('ev2-quick-key');
+        if (quickEye && quickInput) {
+            quickEye.onclick = () => {
+                quickInput.type = quickInput.type === 'password' ? 'text' : 'password';
+            };
+        }
+
         const connBtn = document.getElementById('ev2-quick-connect');
         if (connBtn) {
             connBtn.onclick = async () => {
-                const input = (document.getElementById('ev2-quick-key')?.value || '').trim();
+                const rawVal = document.getElementById('ev2-quick-key')?.value || '';
+                const input = sanitizeKey(rawVal);
                 if (!input || input.length < 16) {
                     showToast('⚠️ Please enter a valid 16-character Torn API key');
                     return;
                 }
                 connBtn.disabled = true;
+                connBtn.textContent = '⏳ Verifying with Torn...';
+
+                let verifiedId = '';
+                let verifiedName = '';
+                try {
+                    const checkRaw = await gmFetch(`https://api.torn.com/user/?selections=profile&key=${encodeURIComponent(input)}`);
+                    const checkData = JSON.parse(checkRaw);
+                    if (checkData && checkData.error) {
+                        showToast(`❌ Torn API error [${checkData.error.code}]: ${checkData.error.error}`);
+                        connBtn.disabled = false;
+                        connBtn.textContent = '⚡ Connect & Snipe';
+                        return;
+                    }
+                    if (checkData && checkData.player_id) {
+                        verifiedId = String(checkData.player_id);
+                        verifiedName = checkData.name || '';
+                    }
+                } catch (err1) {}
+
                 connBtn.textContent = '⏳ Linking...';
                 try {
                     const linkResRaw = await gmFetch(`${BACKEND}/api/user/link-key`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ apiKey: input, tornId: myId })
+                        body: JSON.stringify({ apiKey: input, tornId: verifiedId || myId })
                     });
                     const linkRes = JSON.parse(linkResRaw);
                     if (linkRes.success) {
                         apiKey = input;
                         save(KEY_API, apiKey);
-                        if (linkRes.playerId) {
-                            myId = String(linkRes.playerId);
+                        const finalId = verifiedId || (linkRes.playerId ? String(linkRes.playerId) : myId);
+                        if (finalId) {
+                            myId = finalId;
                             sessionStorage.setItem(SESS_MYID, myId);
                         }
-                        showToast(`✅ Linked as ${linkRes.playerName || 'Player'}!`);
+                        showToast(`✅ Linked as ${linkRes.playerName || verifiedName || 'Player'}!`);
                         cardEl.style.display = 'none';
                         executeSnipe();
                     } else {
@@ -514,6 +577,8 @@
                 border-radius: 10px;
                 padding: 14px;
                 width: 310px;
+                max-width: calc(100vw - 24px);
+                box-sizing: border-box;
                 color: #ecf0f1;
                 font-size: 12px;
                 box-shadow: 0 10px 32px rgba(0,0,0,0.85);
@@ -575,6 +640,8 @@
                 border-radius: 10px;
                 padding: 12px 14px;
                 width: 300px;
+                max-width: calc(100vw - 24px);
+                box-sizing: border-box;
                 color: #ecf0f1;
                 font-size: 12px;
                 box-shadow: 0 10px 32px rgba(0,0,0,0.85);
@@ -743,9 +810,23 @@
         const savedLeft = localStorage.getItem('elim_widget_pos_x');
         const savedTop  = localStorage.getItem('elim_widget_pos_y');
 
-        let positionStyles = 'bottom: 62px; right: 18px;';
+        const defBottom = getDefaultBottomOffset();
+        const defRight  = isAndroid ? 12 : (isIOS ? 14 : 18);
+        let positionStyles = `bottom: ${defBottom}px; right: ${defRight}px;`;
+
         if (savedLeft !== null && savedTop !== null) {
-            positionStyles = `left: ${savedLeft}px; top: ${savedTop}px;`;
+            const x = parseInt(savedLeft, 10);
+            const y = parseInt(savedTop, 10);
+            const vpW = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+            const vpH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+            const bottomForbidden = isAndroid ? 96 : (isIOS ? 70 : 55);
+
+            if (!isNaN(x) && !isNaN(y) && x >= 5 && x <= (vpW - 70) && y >= 5 && y <= (vpH - bottomForbidden - 35)) {
+                positionStyles = `left: ${x}px; top: ${y}px; bottom: auto; right: auto;`;
+            } else {
+                localStorage.removeItem('elim_widget_pos_x');
+                localStorage.removeItem('elim_widget_pos_y');
+            }
         }
 
         wrapEl.style.cssText = `
@@ -768,7 +849,9 @@
             border: 2px solid #e74c3c;
             border-radius: 10px;
             padding: 14px;
-            width: 290px;
+            width: 295px;
+            max-width: calc(100vw - 24px);
+            box-sizing: border-box;
             color: #ecf0f1;
             font-size: 12px;
             box-shadow: 0 8px 30px rgba(0,0,0,0.8);
@@ -782,10 +865,13 @@
             </div>
             <label style="display:block; margin-bottom:8px;">
                 Torn API Key (connected to FF Scouter):
-                <input type="password" id="ev2-key" value="${apiKey.replace(/"/g, '&quot;')}"
-                    placeholder="Paste your Torn API key"
-                    style="width:100%; box-sizing:border-box; margin-top:3px; padding:5px 7px;
-                    background:#262b38; border:1px solid #3d4455; color:#fff; border-radius:5px; font-size:11px;">
+                <div style="display:flex; gap:6px; margin-top:3px; align-items:center;">
+                    <input type="password" id="ev2-key" value="${apiKey.replace(/"/g, '&quot;')}"
+                        placeholder="Paste your Torn API key"
+                        style="flex:1; box-sizing:border-box; padding:6px 8px;
+                        background:#262b38; border:1px solid #3d4455; color:#fff; border-radius:5px; font-size:11px;">
+                    <button type="button" id="ev2-key-eye" style="padding:5px 8px; background:#262b38; border:1px solid #3d4455; color:#bdc3c7; border-radius:5px; cursor:pointer; font-size:12px;" title="Show/Hide Key">👁️</button>
+                </div>
             </label>
             <label style="display:block; margin-bottom:8px;">
                 Fair Fight Tier Limit:
@@ -801,6 +887,15 @@
                 <input type="checkbox" id="ev2-autolaunch" ${autoLaunch ? 'checked' : ''} style="cursor:pointer;">
                 <span>⚡ Auto-launch attack page directly</span>
             </label>
+            <div style="margin-bottom:8px;">
+                <div style="font-size:10px; color:#7f8c8d; text-transform:uppercase; margin-bottom:5px; font-weight:700;">Widget Position Presets:</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px;">
+                    <button id="ev2-pos-br" type="button" style="padding:6px 7px; background:#262b38; border:1px solid #3d4455; color:#ecf0f1; border-radius:4px; font-size:10px; font-weight:700; cursor:pointer;">↘️ Bottom Right (Default)</button>
+                    <button id="ev2-pos-tr" type="button" style="padding:6px 7px; background:#262b38; border:1px solid #3d4455; color:#ecf0f1; border-radius:4px; font-size:10px; font-weight:700; cursor:pointer;">↗️ Top Right (Clear)</button>
+                    <button id="ev2-pos-bl" type="button" style="padding:6px 7px; background:#262b38; border:1px solid #3d4455; color:#ecf0f1; border-radius:4px; font-size:10px; font-weight:700; cursor:pointer;">↙️ Bottom Left</button>
+                    <button id="ev2-pos-tl" type="button" style="padding:6px 7px; background:#262b38; border:1px solid #3d4455; color:#ecf0f1; border-radius:4px; font-size:10px; font-weight:700; cursor:pointer;">↖️ Top Left</button>
+                </div>
+            </div>
             <div style="background:#1e2230; border:1px solid #3d4455; border-radius:5px; padding:8px; margin-bottom:8px; font-size:10px; color:#bdc3c7; line-height:1.4;">
                 ✨ <b>Autonomous Targeting:</b> Drag anywhere with ⠿ grip so it never blocks chat. Click — to minimize to a tiny button.
             </div>
@@ -815,7 +910,7 @@
             <button id="ev2-clearroster" style="width:100%; padding:5px; background:#2c3e50; color:#bdc3c7; border:1px solid #3d4455;
                 border-radius:5px; cursor:pointer; font-size:10px;">🔄 Re-sync Roster (visit competition.php)</button>
             <div style="margin-top:8px; color:#7f8c8d; font-size:10px;">
-                v2.4.1 — Autonomous Elimination Target Finder
+                v2.4.4 — Autonomous Elimination Target Finder
             </div>
         `;
 
@@ -831,10 +926,13 @@
         dragHandle.title = 'Hold & drag anywhere on screen';
         dragHandle.style.cssText = `
             cursor: grab;
-            padding: 6px 4px;
+            padding: ${isMobile ? '8px 10px' : '6px 4px'};
+            min-width: 24px;
+            min-height: 24px;
             color: #7f8c8d;
-            font-size: 16px;
+            font-size: 18px;
             user-select: none;
+            touch-action: none;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -991,10 +1089,15 @@
             let newLeft = initialLeft + deltaX;
             let newTop = initialTop + deltaY;
 
-            const maxLeft = window.innerWidth - wrapEl.offsetWidth - 10;
-            const maxTop = window.innerHeight - wrapEl.offsetHeight - 10;
-            newLeft = Math.max(10, Math.min(newLeft, maxLeft));
-            newTop = Math.max(10, Math.min(newTop, maxTop));
+            const vpW = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+            const vpH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+            const bottomForbiddenZone = isAndroid ? 96 : (isIOS ? 70 : 55);
+
+            const maxLeft = Math.max(5, vpW - wrapEl.offsetWidth - 8);
+            const maxTop = Math.max(5, vpH - wrapEl.offsetHeight - bottomForbiddenZone);
+
+            newLeft = Math.max(5, Math.min(newLeft, maxLeft));
+            newTop = Math.max(5, Math.min(newTop, maxTop));
 
             wrapEl.style.left = `${newLeft}px`;
             wrapEl.style.top = `${newTop}px`;
@@ -1011,8 +1114,15 @@
             document.removeEventListener('touchend', stopDrag);
 
             const rect = wrapEl.getBoundingClientRect();
-            localStorage.setItem('elim_widget_pos_x', Math.round(rect.left));
-            localStorage.setItem('elim_widget_pos_y', Math.round(rect.top));
+            const vpH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+            const bottomForbiddenZone = isAndroid ? 96 : (isIOS ? 70 : 55);
+
+            if (rect.top <= (vpH - bottomForbiddenZone - 35)) {
+                localStorage.setItem('elim_widget_pos_x', Math.round(rect.left));
+                localStorage.setItem('elim_widget_pos_y', Math.round(rect.top));
+            } else {
+                resetWidgetPosition('bottom-right');
+            }
         }
 
         dragHandle.addEventListener('mousedown', startDrag);
@@ -1027,30 +1137,117 @@
         wrapEl.appendChild(rowEl);
         document.body.appendChild(wrapEl);
 
+        function resetWidgetPosition(preset = 'bottom-right') {
+            localStorage.removeItem('elim_widget_pos_x');
+            localStorage.removeItem('elim_widget_pos_y');
+            wrapEl.style.left = 'auto';
+            wrapEl.style.top = 'auto';
+            wrapEl.style.bottom = 'auto';
+            wrapEl.style.right = 'auto';
+
+            const dBottom = getDefaultBottomOffset();
+            const dRight = isAndroid ? 12 : (isIOS ? 14 : 18);
+
+            if (preset === 'top-right') {
+                wrapEl.style.top = isAndroid ? '60px' : '50px';
+                wrapEl.style.right = `${dRight}px`;
+                showToast('📍 Position: Top Right');
+            } else if (preset === 'top-left') {
+                wrapEl.style.top = isAndroid ? '60px' : '50px';
+                wrapEl.style.left = '12px';
+                showToast('📍 Position: Top Left');
+            } else if (preset === 'bottom-left') {
+                wrapEl.style.bottom = `${dBottom}px`;
+                wrapEl.style.left = '12px';
+                showToast('📍 Position: Bottom Left');
+            } else {
+                wrapEl.style.bottom = `${dBottom}px`;
+                wrapEl.style.right = `${dRight}px`;
+                showToast('📍 Position: Bottom Right (Default)');
+            }
+        }
+
         // Settings events
         document.getElementById('ev2-settings-close').onclick = () => {
             drawerEl.style.display = 'none';
             drawerOpen = false;
         };
 
+        const keyEyeBtn = document.getElementById('ev2-key-eye');
+        const keyField = document.getElementById('ev2-key');
+        if (keyEyeBtn && keyField) {
+            keyEyeBtn.onclick = () => {
+                keyField.type = keyField.type === 'password' ? 'text' : 'password';
+            };
+        }
+
+        document.getElementById('ev2-pos-br').onclick = () => resetWidgetPosition('bottom-right');
+        document.getElementById('ev2-pos-tr').onclick = () => resetWidgetPosition('top-right');
+        document.getElementById('ev2-pos-bl').onclick = () => resetWidgetPosition('bottom-left');
+        document.getElementById('ev2-pos-tl').onclick = () => resetWidgetPosition('top-left');
+        document.getElementById('ev2-resetpos').onclick = () => resetWidgetPosition('bottom-right');
+
         document.getElementById('ev2-open-comp').onclick = () => {
             window.location.href = 'https://www.torn.com/competition.php';
         };
 
-        document.getElementById('ev2-resetpos').onclick = () => {
-            localStorage.removeItem('elim_widget_pos_x');
-            localStorage.removeItem('elim_widget_pos_y');
-            wrapEl.style.left = 'auto';
-            wrapEl.style.top = 'auto';
-            wrapEl.style.bottom = '62px';
-            wrapEl.style.right = '18px';
-            showToast('📍 Position reset to above chat dock');
-        };
-
         document.getElementById('ev2-save').onclick = async () => {
-            const keyInput   = document.getElementById('ev2-key').value.trim();
+            const rawVal     = document.getElementById('ev2-key').value;
+            const keyInput   = sanitizeKey(rawVal);
             const tierInput  = document.getElementById('ev2-tier').value;
             const launchInput= document.getElementById('ev2-autolaunch').checked;
+            const saveBtn    = document.getElementById('ev2-save');
+
+            if (keyInput && keyInput.length < 16) {
+                showToast('⚠️ Torn API keys must be at least 16 characters.');
+                saveBtn.textContent = '⚠️ Key too short';
+                setTimeout(() => { saveBtn.textContent = '💾 Save'; }, 2000);
+                return;
+            }
+
+            saveBtn.disabled = true;
+            saveBtn.textContent = '⏳ Verifying with Torn...';
+
+            let verifiedName = '';
+            let verifiedId = '';
+
+            if (keyInput) {
+                try {
+                    const checkRaw = await gmFetch(`https://api.torn.com/user/?selections=profile&key=${encodeURIComponent(keyInput)}`);
+                    const checkData = JSON.parse(checkRaw);
+                    if (checkData && checkData.error) {
+                        const errCode = checkData.error.code;
+                        const errMsg = checkData.error.error || 'Unknown error';
+                        showToast(`❌ Torn API rejected key [${errCode}: ${errMsg}]`);
+                        saveBtn.textContent = `❌ Invalid Key [${errCode}]`;
+                        saveBtn.disabled = false;
+                        setTimeout(() => { saveBtn.textContent = '💾 Save'; }, 2500);
+                        return;
+                    }
+                    if (checkData && checkData.player_id) {
+                        verifiedId = String(checkData.player_id);
+                        verifiedName = checkData.name || '';
+                    }
+                } catch (netErr) {
+                    try {
+                        const linkResRaw = await gmFetch(`${BACKEND}/api/user/link-key`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ apiKey: keyInput, tornId: myId })
+                        });
+                        const linkRes = JSON.parse(linkResRaw);
+                        if (!linkRes.success) {
+                            showToast(`❌ ${linkRes.error || 'Invalid API Key'}`);
+                            saveBtn.textContent = '❌ Invalid Key';
+                            saveBtn.disabled = false;
+                            setTimeout(() => { saveBtn.textContent = '💾 Save'; }, 2500);
+                            return;
+                        }
+                        if (linkRes.playerId) verifiedId = String(linkRes.playerId);
+                        if (linkRes.playerName) verifiedName = linkRes.playerName;
+                    } catch (e2) {}
+                }
+            }
 
             apiKey = keyInput;
             ffTier = tierInput;
@@ -1059,28 +1256,33 @@
             save(KEY_TIER, ffTier);
             save(KEY_AUTOLAUNCH, autoLaunch);
 
-            myId = '';
-            sessionStorage.removeItem(SESS_MYID);
-
-            const saveBtn = document.getElementById('ev2-save');
-            saveBtn.textContent = '⏳ Verifying...';
-            await resolveMyId();
-
-            if (apiKey && apiKey.length >= 16) {
-                // Sync key securely to backend AES-256 vault
-                gmFetch(`${BACKEND}/api/user/link-key`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ apiKey, tornId: myId })
-                }).catch(() => {});
+            if (verifiedId) {
+                myId = verifiedId;
+                sessionStorage.setItem(SESS_MYID, myId);
+            } else if (!apiKey) {
+                myId = '';
+                sessionStorage.removeItem(SESS_MYID);
             }
 
-            saveBtn.textContent = myId ? '✅ Saved!' : (apiKey ? '⚠️ Check Key' : '✅ Settings Saved');
+            if (apiKey && apiKey.length >= 16) {
+                try {
+                    await gmFetch(`${BACKEND}/api/user/link-key`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ apiKey, tornId: myId })
+                    });
+                } catch (e) {}
+            }
+
+            saveBtn.textContent = verifiedName ? `✅ Saved as ${verifiedName}!` : '✅ Saved!';
+            saveBtn.disabled = false;
+            setButtonState('idle');
+
             setTimeout(() => {
                 saveBtn.textContent = '💾 Save';
                 drawerEl.style.display = 'none';
                 drawerOpen = false;
-            }, 1500);
+            }, 1200);
         };
 
         document.getElementById('ev2-clearsess').onclick = () => {

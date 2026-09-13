@@ -7260,7 +7260,17 @@ app.post('/api/elim/sync-roster', async (req, res) => {
                 { signal: AbortSignal.timeout(5000) }
             );
             const uData = await uRes.json();
-            if (!uData || uData.error || !uData.competition || uData.competition.name !== 'Elimination') {
+            if (uData && uData.error) {
+                const errCode = uData.error.code;
+                const isInvalidKey = errCode === 2 || errCode === 1 || errCode === 13;
+                return res.status(400).json({
+                    success: false,
+                    code: isInvalidKey ? 'INVALID_API_KEY' : 'API_ERROR',
+                    errorCode: errCode,
+                    message: `Torn API authentication error [${errCode}]: ${uData.error.error}`
+                });
+            }
+            if (!uData || !uData.competition || uData.competition.name !== 'Elimination') {
                 return res.status(400).json({
                     success: false,
                     code: 'NOT_IN_ELIMINATION',
@@ -7403,12 +7413,24 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         );
         const userData = await userRes.json();
         if (userData && userData.error) {
+            const errCode = userData.error.code;
+            const isInvalidKey = errCode === 2 || errCode === 1 || errCode === 13;
+            if (isInvalidKey && userId) {
+                try {
+                    userKeys.unlinkUserApiKeyByTornId(userId);
+                    userKeys.unlinkUserApiKey(userId);
+                } catch (e) {}
+            }
             return {
                 success: false,
-                code: 'API_ERROR',
+                code: isInvalidKey ? 'INVALID_API_KEY' : 'API_ERROR',
+                errorCode: errCode,
+                isInvalidKey,
                 isParticipating: false,
                 targetCount: 0,
-                message: userKeys.sanitizeErrorMessage(`Torn API authentication error [${userData.error.code}]: ${userData.error.error}`)
+                message: isInvalidKey
+                    ? `Torn API authentication error [${errCode}: ${userData.error.error}]`
+                    : userKeys.sanitizeErrorMessage(`Torn API authentication error [${userData.error.code}]: ${userData.error.error}`)
             };
         }
         if (!userData || !userData.player_id) {
@@ -7890,7 +7912,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
 // GET /api/elim/snipe — Multi-user Elimination Target Finder endpoint
 app.get('/api/elim/snipe', async (req, res) => {
     try {
-        let apiKey = (req.headers['x-api-key'] || req.query.apiKey || '').trim();
+        let apiKey = (req.headers['x-api-key'] || req.query.apiKey || '').replace(/[\s\r\n'"]/g, '').trim();
         const tornId = (req.headers['x-torn-id'] || req.query.tornId || req.query.myId || '').trim();
         const discordId = (req.headers['x-discord-id'] || req.query.discordId || '').trim();
 
@@ -7950,12 +7972,16 @@ app.get('/api/user/status', (req, res) => {
 // POST /api/user/link-key — Securely link an API key from Web UI or Userscript
 app.post('/api/user/link-key', async (req, res) => {
     try {
-        const rawKey = (req.body.apiKey || req.headers['x-api-key'] || '').trim();
+        const rawKey = (req.body.apiKey || req.headers['x-api-key'] || '').replace(/[\s\r\n'"]/g, '').trim();
         const tornId = (req.body.tornId || req.headers['x-torn-id'] || '').trim();
         const discordId = (req.body.discordId || req.headers['x-discord-id'] || '').trim();
 
         if (!rawKey) {
             return res.status(400).json({ success: false, error: 'apiKey is required' });
+        }
+
+        if (rawKey.length < 16) {
+            return res.status(400).json({ success: false, error: 'API key must be at least 16 characters' });
         }
 
         const result = await userKeys.linkUserApiKeyByTornId(tornId, rawKey, discordId);
