@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter
 // @namespace    https://spider-verse.net/
-// @version      2.6.0
+// @version      2.6.1
 // @description  Autonomous 1-click snipe button for Torn Elimination. Finds beatable enemies that are NOT in hospital and NOT flying from ANY page.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -217,15 +217,17 @@
         await new Promise(r => setTimeout(r, 600));
 
         // Find all clickable team tabs/cards on the competition page
-        const allClickables = Array.from(document.querySelectorAll('a, button, li, [class*="tab"], [class*="team"], [class*="title"], [class*="name"]'));
         const foundTeams = [];
 
         for (const tName of KNOWN_ELIM_TEAMS) {
-            const el = allClickables.find(c => {
+            const allMatches = Array.from(document.querySelectorAll('a, button, [role="button"], [role="tab"], [class*="team"], [class*="tab"], [class*="card"], li, h4, h3, div')).filter(c => {
                 const text = (c.innerText || c.textContent || '').trim();
-                return text.toLowerCase().includes(tName.toLowerCase()) && text.length < 50;
+                return text.toLowerCase().includes(tName.toLowerCase()) && text.length < 250;
             });
-            if (el) foundTeams.push({ name: tName, el });
+            if (allMatches.length > 0) {
+                allMatches.sort((a, b) => (a.innerText || '').length - (b.innerText || '').length);
+                foundTeams.push({ name: tName, el: allMatches[0] });
+            }
         }
 
         const selfId = await resolveMyId();
@@ -271,10 +273,11 @@
                 });
 
                 if (members.length > 0) {
+                    const savedMyTeam = sessionStorage.getItem('elimv2_my_team') || '';
                     const raw = await gmFetch(`${BACKEND}/api/elim/sync-roster`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'x-torn-id': selfId },
-                        body: JSON.stringify({ apiKey, members, teamName: item.name, myId: selfId })
+                        body: JSON.stringify({ apiKey, members, teamName: item.name, myId: selfId, myTeam: savedMyTeam })
                     });
                     const d = JSON.parse(raw);
                     if (d && d.success) {
@@ -304,6 +307,15 @@
             window.history.replaceState({}, document.title, window.location.pathname);
             setTimeout(() => { autoScanEntireElimination(); }, 1200);
             return;
+        }
+
+        // Detect own team if indicated on competition page
+        const ownTeamEl = document.querySelector('[class*="your-team"], [class*="my-team"], [class*="user-team"], .user-team, .current-team');
+        if (ownTeamEl) {
+            const tText = (ownTeamEl.innerText || ownTeamEl.textContent || '').replace(/\s*\(\s*\d+[^)]*\)/g, '').trim();
+            if (tText && tText.length < 40) {
+                sessionStorage.setItem('elimv2_my_team', tText);
+            }
         }
 
         // Try to identify the active opposing team name from tab or header
@@ -368,10 +380,11 @@
                 syncedTeams.add(teamKey);
             }
 
+            const savedMyTeam = sessionStorage.getItem('elimv2_my_team') || '';
             gmFetch(`${BACKEND}/api/elim/sync-roster`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'x-torn-id': selfId },
-                body: JSON.stringify({ apiKey, members, teamName, myId: selfId })
+                body: JSON.stringify({ apiKey, members, teamName, myId: selfId, myTeam: savedMyTeam })
             }).then(raw => {
                 try {
                     const d = JSON.parse(raw);
@@ -496,10 +509,12 @@
                 addExclude(currentTarget);
             }
 
+            const savedMyTeam = sessionStorage.getItem('elimv2_my_team') || '';
             const params = new URLSearchParams({
                 tier: ffTier,
                 exclude: exclude.join(','),
-                myId: myId || ''
+                myId: myId || '',
+                myTeam: savedMyTeam
             });
 
             const reqHeaders = {};
@@ -1725,6 +1740,60 @@
         setButtonState('idle');
     }
 
+    // ── Universal Opponent Harvester on Target-Rich Pages ──────────
+    let lastHarvestTime = 0;
+    async function harvestPageCandidates() {
+        if (!apiKey) return;
+        const now = Date.now();
+        if (now - lastHarvestTime < 15000) return; // Rate limit harvests to once per 15s
+
+        const url = window.location.href;
+        const isTargetRich = url.includes('competition.php') || url.includes('sid=attackLog') || url.includes('sid=attack') || url.includes('hospitalview.php');
+        if (!isTargetRich) return;
+
+        const links = document.querySelectorAll('a[href*="profiles.php?XID="], a[href*="profiles.php?xid="]');
+        if (!links || links.length === 0) return;
+
+        const selfId = await resolveMyId();
+        const members = [];
+        const seen = new Set();
+
+        links.forEach(link => {
+            const m = link.href.match(/xid=(\d+)/i);
+            if (!m) return;
+            const id = m[1];
+            if (seen.has(id) || id === selfId) return;
+            seen.add(id);
+
+            let level = 0;
+            const row = link.closest('li, tr, [class*="row"], [class*="member"], [class*="user"], .table-row');
+            if (row) {
+                const lvlMatch = (row.innerText || '').match(/(?:lvl|level)\s*[:.]?\s*(\d+)/i);
+                if (lvlMatch) {
+                    level = parseInt(lvlMatch[1], 10);
+                } else {
+                    const lvlEl = row.querySelector('.level, [class*="level"]');
+                    if (lvlEl) {
+                        const num = parseInt((lvlEl.innerText || '').replace(/\D/g, ''), 10);
+                        if (!isNaN(num) && num > 0 && num <= 100) level = num;
+                    }
+                }
+            }
+
+            members.push({ id, name: (link.innerText || '').trim(), level });
+        });
+
+        if (members.length >= 2) {
+            lastHarvestTime = now;
+            const savedMyTeam = sessionStorage.getItem('elimv2_my_team') || '';
+            gmFetch(`${BACKEND}/api/elim/sync-roster`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'x-torn-id': selfId },
+                body: JSON.stringify({ apiKey, members, teamName: 'Opposing Team', myId: selfId, myTeam: savedMyTeam })
+            }).catch(() => {});
+        }
+    }
+
     // ── MutationObserver for SPA navigation ───────────────────────
     let navTimer = null;
     let lastUrl  = window.location.href;
@@ -1739,6 +1808,7 @@
             }
             setButtonState('idle');
             syncRosterIfOnCompetitionPage();
+            harvestPageCandidates();
             checkAttackScreenForHosp();
         }, 800);
     }
@@ -1747,6 +1817,7 @@
     function init() {
         buildWidget();
         syncRosterIfOnCompetitionPage();
+        harvestPageCandidates();
         checkAttackScreenForHosp();
 
         const obs = new MutationObserver(onPageChange);

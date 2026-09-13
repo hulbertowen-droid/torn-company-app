@@ -7445,14 +7445,15 @@ app.post('/api/elim/sync-roster', async (req, res) => {
             const uProfile = uData.profile || uData;
             const uComp = uData.competition;
             const uCompTeam = uComp ? String(uComp.team || uComp.team_name || '').trim() : '';
-            if (!uComp || uComp.name !== 'Elimination' || !uCompTeam || uCompTeam.toLowerCase() === 'unknown') {
+            if (!uComp || (uComp.name !== 'Elimination' && !String(uComp.description || '').toLowerCase().includes('elimination'))) {
                 return res.status(400).json({
                     success: false,
                     code: 'NOT_IN_ELIMINATION',
                     message: 'Cannot sync roster: You are not enrolled in an active Elimination team. Join a team in the Torn competition page first.'
                 });
             }
-            userTeam = uCompTeam.replace(/\s*\(\s*\d+[^)]*\)/g, '').trim();
+            const myTeamFromClient = String(req.body.myTeam || '').trim();
+            userTeam = (myTeamFromClient || (uCompTeam && uCompTeam.toLowerCase() !== 'unknown' ? uCompTeam : 'My Elimination Team')).replace(/\s*\(\s*\d+[^)]*\)/g, '').trim();
             if (uComp.id) compId = String(uComp.id);
 
             // Faction members protection
@@ -7539,9 +7540,10 @@ app.post('/api/elim/sync-roster', async (req, res) => {
  * @param {string} opts.userId - User identifier (Discord ID or Torn ID) for isolated cooldowns
  * @param {string} opts.tier - 'easy' | 'manageable' | 'difficult' | 'all'
  * @param {Set|Array|string} opts.excludeIds - IDs to exclude from this lookup
+ * @param {string} [opts.userProvidedTeam] - Optional user team name from client DOM
  * @returns {Promise<object>}
  */
-async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'manageable', excludeIds = new Set() }) {
+async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'manageable', excludeIds = new Set(), userProvidedTeam = '' }) {
     if (!apiKey) {
         return {
             success: false,
@@ -7631,13 +7633,10 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         if (profile.name) attackerName = profile.name;
 
         // HARD PARTICIPATION VALIDATION:
-        // Torn API v2 always returns competition.name="Elimination" during the event — even for non-enrolled users.
-        // The ONLY reliable signal that a user is NOT enrolled is team="Unknown" (with no actual team assigned).
+        // Torn API v2 always returns competition.name="Elimination" during the event.
+        // For regular tournament participants, Torn API v2 intentionally masks team="Unknown".
         const isElim = comp && (comp.name === 'Elimination' || String(comp.description || '').toLowerCase().includes('elimination'));
-        const userTeam = (comp && (comp.team || comp.team_name)) ? String(comp.team || comp.team_name).trim() : '';
-        const notEnrolled = !isElim || !userTeam || userTeam.toLowerCase() === 'unknown';
-
-        if (notEnrolled) {
+        if (!isElim) {
             return {
                 success: false,
                 code: 'NOT_IN_ELIMINATION',
@@ -7647,17 +7646,18 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             };
         }
 
-        if (comp.status === 'eliminated' || comp.status === 'ended' || comp.lives === 0) {
+        if (comp.status === 'eliminated' || comp.status === 'ended') {
             return {
                 success: false,
                 code: 'USER_ELIMINATED',
                 isParticipating: false,
                 targetCount: 0,
-                message: `Your Elimination team (${userTeam}) or the tournament has ended or been eliminated.`
+                message: `Your Elimination team or the tournament has ended or been eliminated.`
             };
         }
 
-        myTeam = userTeam.replace(/\s*\(\s*\d+[^)]*\)/g, '').trim();
+        const rawTeam = (userProvidedTeam || (comp && (comp.team || comp.team_name)) || '').trim();
+        myTeam = (rawTeam && rawTeam.toLowerCase() !== 'unknown') ? rawTeam.replace(/\s*\(\s*\d+[^)]*\)/g, '').trim() : 'My Elimination Team';
         if (comp.id) compId = String(comp.id);
 
         // Parse battlestats from v2
@@ -7796,6 +7796,99 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         }
     }
 
+    // Source D: Autonomous Tournament Opponent Ingestion from Live Competition Attacks
+    if (candidateMeta.size < 80 && apiKey) {
+        try {
+            const atksRes = await fetch(
+                `https://api.torn.com/v2/user/competition/attacks?key=${encodeURIComponent(apiKey)}`,
+                { signal: AbortSignal.timeout(5000) }
+            );
+            const atksData = await atksRes.json();
+            if (atksData && Array.isArray(atksData.attacks)) {
+                const autoDiscovered = [];
+                for (const a of atksData.attacks) {
+                    let opp = null;
+                    const ffMod = a.modifiers && typeof a.modifiers.fair_fight === 'number' ? a.modifiers.fair_fight : null;
+                    if (a.attacker && String(a.attacker.id) === myId && a.defender && a.defender.id) {
+                        opp = a.defender;
+                    } else if (a.defender && String(a.defender.id) === myId && a.attacker && a.attacker.id) {
+                        opp = a.attacker;
+                    } else if (a.defender && a.defender.id && String(a.defender.id) !== myId) {
+                        opp = a.defender;
+                    }
+                    if (opp && opp.id && String(opp.id) !== myId && !ownFactionIds.has(String(opp.id))) {
+                        const cid = String(opp.id);
+                        const lvl = Number(opp.level) || 0;
+                        const oppTeam = opp.team || 'Opposing Team';
+                        if (!candidateMeta.has(cid)) {
+                            let estBS = 0;
+                            if (ffMod && ffMod > 1 && myStats > 0) {
+                                estBS = Math.round(myStats * (ffMod - 1) * (3 / 8));
+                            } else if (lvl > 0) {
+                                estBS = estimateStatsFromLevel(lvl);
+                            }
+                            candidateMeta.set(cid, {
+                                id: cid,
+                                team: oppTeam,
+                                name: opp.name || '',
+                                level: lvl,
+                                source: 'torn_elimination',
+                                competitionId: compId,
+                                bs: estBS,
+                                ff: ffMod
+                            });
+                            autoDiscovered.push({ id: cid, team: oppTeam, name: opp.name || '', level: lvl, bs: estBS });
+                        }
+                    }
+                }
+                if (autoDiscovered.length > 0) {
+                    elimAddCandidates(autoDiscovered, compId).catch(() => {});
+                }
+            }
+        } catch (atksErr) {}
+    }
+
+    // Source E: Recent Faction Attacks (Harvest opponents attacked by faction teammates)
+    if (candidateMeta.size < 60 && apiKey) {
+        try {
+            const facAtksRes = await fetch(
+                `https://api.torn.com/faction/?selections=attacks&key=${encodeURIComponent(apiKey)}`,
+                { signal: AbortSignal.timeout(4000) }
+            );
+            const facAtksData = await facAtksRes.json();
+            if (facAtksData && facAtksData.attacks) {
+                const facAtks = Array.isArray(facAtksData.attacks) ? facAtksData.attacks : Object.values(facAtksData.attacks);
+                const facDiscovered = [];
+                for (const fa of facAtks) {
+                    const defId = String(fa.defender_id || '');
+                    if (defId && defId !== '0' && defId !== myId && !ownFactionIds.has(defId)) {
+                        if (!candidateMeta.has(defId)) {
+                            const ffMod = fa.modifiers && typeof fa.modifiers.fair_fight === 'number' ? fa.modifiers.fair_fight : null;
+                            let estBS = 0;
+                            if (ffMod && ffMod > 1 && myStats > 0) {
+                                estBS = Math.round(myStats * (ffMod - 1) * (3 / 8));
+                            }
+                            candidateMeta.set(defId, {
+                                id: defId,
+                                team: 'Opposing Team',
+                                name: fa.defender_name || '',
+                                level: 0,
+                                source: 'torn_elimination',
+                                competitionId: compId,
+                                bs: estBS,
+                                ff: ffMod
+                            });
+                            facDiscovered.push({ id: defId, team: 'Opposing Team', name: fa.defender_name || '', bs: estBS });
+                        }
+                    }
+                }
+                if (facDiscovered.length > 0) {
+                    elimAddCandidates(facDiscovered, compId).catch(() => {});
+                }
+            }
+        } catch (fe) {}
+    }
+
     // ── 2b. Mandatory Base Safety Filter (Cannot attack yourself, faction, or own elimination team) ──
     const baseEligible = Array.from(candidateMeta.values()).filter(cand => {
         const id = String(cand.id);
@@ -7929,19 +8022,20 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         // If stats are known from FF Scouter / database:
         if (bs > 0 && myStats > 0) {
             const ratio = bs / myStats;
-            if (cleanTier === 'easy' && ratio > 0.80) return false;
-            if (cleanTier === 'manageable' && ratio > 1.20) return false;
-            if (cleanTier === 'difficult' && ratio > 1.60) return false;
-            if (cleanTier === 'all' && myStats < 5_000_000 && ratio > 4.0) return false; // Never serve 100B whales even on 'all'
+            if (cleanTier === 'easy' && ratio > 0.85) return false;
+            if (cleanTier === 'manageable' && ratio > 1.25) return false;
+            if (cleanTier === 'difficult' && ratio > 1.65) return false;
+            if (cleanTier === 'all' && myStats < 5_000_000 && ratio > 2.0) return false; // STRICT: max 2.0x for sub-5M
+            if (cleanTier === 'all' && myStats >= 5_000_000 && ratio > 4.0) return false;
             return true;
         }
 
         // If stats are unknown, use candidate level:
         if (myStats > 0) {
-            if (cleanTier === 'easy') return lvl > 0 && lvl <= 22;
-            if (cleanTier === 'manageable') return lvl === 0 || lvl <= 40;
-            if (cleanTier === 'difficult') return lvl === 0 || lvl <= 60;
-            if (cleanTier === 'all') return myStats >= 5_000_000 || lvl <= 75;
+            if (cleanTier === 'easy') return lvl > 0 && lvl <= 25;
+            if (cleanTier === 'manageable') return lvl === 0 || lvl <= 42;
+            if (cleanTier === 'difficult') return lvl === 0 || lvl <= 48;
+            if (cleanTier === 'all') return myStats >= 5_000_000 || (lvl > 0 && lvl <= 52);
         }
 
         return true;
@@ -7979,11 +8073,14 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         const ff = s.ff != null ? s.ff : parseFloat((1 + (8 / 3) * ratio).toFixed(2));
 
         // Hard Drop: If candidate is excessively strong, drop them immediately
-        if (cleanTier !== 'all' && myStats > 0 && targetBS > myStats * 1.30) {
-            continue;
-        }
-        if (cleanTier === 'all' && myStats > 0 && myStats < 5_000_000 && targetBS > myStats * 4.0) {
-            continue;
+        if (myStats > 0 && myStats < 5_000_000) {
+            if (cleanTier === 'easy' && (targetBS > myStats * 0.85 || targetLvl > 25)) continue;
+            if (cleanTier === 'manageable' && (targetBS > myStats * 1.25 || targetLvl > 42)) continue;
+            if (cleanTier === 'difficult' && (targetBS > myStats * 1.65 || targetLvl > 48)) continue;
+            if (cleanTier === 'all' && (targetBS > Math.min(2_500_000, myStats * 2.0) || targetLvl > 52)) continue;
+        } else if (myStats > 0) {
+            if (cleanTier !== 'all' && targetBS > myStats * 1.30) continue;
+            if (cleanTier === 'all' && targetBS > myStats * 4.0) continue;
         }
 
         let baseScore = 50;
@@ -8105,13 +8202,16 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         // Whale protection guard: check live level & estimated strength against requesting user
         const targetLvl = Number(prof.level) || cand.level || 1;
         const targetEstBS = cand.bs > 0 ? cand.bs : estimateStatsFromLevel(targetLvl);
-        if (cleanTier !== 'all' && myStats > 0) {
+        if (myStats > 0 && myStats < 5_000_000) {
+            if (cleanTier === 'easy' && (targetEstBS > myStats * 0.85 || targetLvl > 25)) continue;
+            if (cleanTier === 'manageable' && (targetEstBS > myStats * 1.25 || targetLvl > 42)) continue;
+            if (cleanTier === 'difficult' && (targetEstBS > myStats * 1.65 || targetLvl > 48)) continue;
+            if (cleanTier === 'all' && (targetEstBS > Math.min(2_500_000, myStats * 2.0) || targetLvl > 52)) continue;
+        } else if (myStats > 0) {
             if (cleanTier === 'easy' && (targetEstBS > myStats * 0.85 || targetLvl > 25)) continue;
             if (cleanTier === 'manageable' && (targetEstBS > myStats * 1.25 || targetLvl > 45)) continue;
             if (cleanTier === 'difficult' && (targetEstBS > myStats * 1.70 || targetLvl > 65)) continue;
-        } else if (cleanTier === 'all' && myStats > 0 && myStats < 5_000_000) {
-            // Even in 'all' tier, protect sub-5M players from 100B tournament whales
-            if (targetEstBS > myStats * 5.0 && targetLvl > 70) continue;
+            if (cleanTier === 'all' && targetEstBS > myStats * 5.0 && targetLvl > 75) continue;
         }
 
         // Persist verified level to MongoDB in background
@@ -8239,12 +8339,13 @@ app.get('/api/elim/snipe', async (req, res) => {
         }
 
         const tier = (req.query.tier || 'manageable').toLowerCase();
+        const myTeamQuery = (req.query.myTeam || req.query.team || '').trim();
         const excludeIds = new Set(
             (req.query.exclude || '').split(',').map(s => s.trim()).filter(Boolean)
         );
         const userId = tornId || discordId || (req.userSession ? String(req.userSession.playerId) : '') || (resolvedUser ? String(resolvedUser.playerId) : '') || '';
 
-        const result = await findElimSnipeTargetForUser({ apiKey, userId, tier, excludeIds });
+        const result = await findElimSnipeTargetForUser({ apiKey, userId, tier, excludeIds, userProvidedTeam: myTeamQuery });
         return res.json(result);
     } catch (err) {
         console.error('[Elim Snipe API] Error:', userKeys.sanitizeErrorMessage(err.message));
