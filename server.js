@@ -7270,8 +7270,8 @@ app.post('/api/elim/sync-roster', async (req, res) => {
 
         try {
             const uRes = await fetch(
-                `https://api.torn.com/user/?selections=profile,competition&key=${encodeURIComponent(apiKey)}`,
-                { signal: AbortSignal.timeout(5000) }
+                `https://api.torn.com/v2/user/?selections=profile,competition&key=${encodeURIComponent(apiKey)}`,
+                { signal: AbortSignal.timeout(6000) }
             );
             const uData = await uRes.json();
             if (uData && uData.error) {
@@ -7281,23 +7281,28 @@ app.post('/api/elim/sync-roster', async (req, res) => {
                     success: false,
                     code: isInvalidKey ? 'INVALID_API_KEY' : 'API_ERROR',
                     errorCode: errCode,
-                    message: `Torn API authentication error [${errCode}]: ${uData.error.error}`
+                    message: isInvalidKey
+                        ? `Torn API authentication error [${errCode}: ${uData.error.error}]`
+                        : userKeys.sanitizeErrorMessage(`Torn API error [${errCode}]: ${uData.error.error}`)
                 });
             }
-            if (!uData || !uData.competition || uData.competition.name !== 'Elimination') {
+            const uProfile = uData.profile || uData;
+            const uComp = uData.competition;
+            if (!uComp || uComp.name !== 'Elimination') {
                 return res.status(400).json({
                     success: false,
                     code: 'NOT_IN_ELIMINATION',
                     message: 'Cannot sync roster: Your account is not currently participating in an active Elimination tournament.'
                 });
             }
-            userTeam = String(uData.competition.team || uData.competition.team_name || '').replace(/\s*\(\s*\d+[^)]*\)/g, '').trim();
-            if (uData.competition.id) compId = String(uData.competition.id);
+            userTeam = String(uComp.team || uComp.team_name || '').replace(/\s*\(\s*\d+[^)]*\)/g, '').trim();
+            if (uComp.id) compId = String(uComp.id);
 
             // Faction members protection
-            if (uData.faction && uData.faction.faction_id) {
+            const fId = uProfile.faction_id || (uProfile.faction && uProfile.faction.faction_id);
+            if (fId) {
                 const fRes = await fetch(
-                    `https://api.torn.com/faction/${uData.faction.faction_id}?selections=basic&key=${encodeURIComponent(apiKey)}`,
+                    `https://api.torn.com/faction/${fId}?selections=basic&key=${encodeURIComponent(apiKey)}`,
                     { signal: AbortSignal.timeout(4000) }
                 );
                 const fData = await fRes.json();
@@ -7421,15 +7426,15 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
     const ownFactionIds = new Set();
 
     try {
-        // ── Fetch profile + competition from Torn API v1 ──
+        // ── Fetch profile + competition + battlestats from Torn API v2 (competition is v2-only) ──
         const userRes = await fetch(
-            `https://api.torn.com/user/?selections=profile,competition&key=${encodeURIComponent(apiKey)}`,
-            { signal: AbortSignal.timeout(6000) }
+            `https://api.torn.com/v2/user/?selections=profile,competition,battlestats&key=${encodeURIComponent(apiKey)}`,
+            { signal: AbortSignal.timeout(7000) }
         );
         const userData = await userRes.json();
         if (userData && userData.error) {
             const errCode = userData.error.code;
-            // Error 23 = "only available in API v2" — NOT a bad key, do not unlink
+            // Only actual authentication failures unlink the key (1=Key is empty, 2=Incorrect key, 13=Key disabled)
             const isInvalidKey = errCode === 2 || errCode === 1 || errCode === 13;
             if (isInvalidKey && userId) {
                 try {
@@ -7449,7 +7454,12 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
                     : userKeys.sanitizeErrorMessage(`Torn API error [${userData.error.code}]: ${userData.error.error}`)
             };
         }
-        if (!userData || !userData.player_id) {
+
+        const profile = (userData && userData.profile) ? userData.profile : userData;
+        const comp = userData && userData.competition;
+        const bs = userData && userData.battlestats;
+
+        if (!profile || (!profile.id && !profile.player_id)) {
             return {
                 success: false,
                 code: 'NETWORK_ERROR',
@@ -7459,11 +7469,10 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             };
         }
 
-        myId = String(userData.player_id);
-        if (userData.name) attackerName = userData.name;
+        myId = String(profile.id || profile.player_id);
+        if (profile.name) attackerName = profile.name;
 
         // HARD PARTICIPATION VALIDATION:
-        const comp = userData.competition;
         const isElim = comp && (comp.name === 'Elimination' || String(comp.description || '').toLowerCase().includes('elimination'));
         const userTeam = (comp && (comp.team || comp.team_name)) ? String(comp.team || comp.team_name).trim() : '';
 
@@ -7490,29 +7499,19 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         myTeam = userTeam.replace(/\s*\(\s*\d+[^)]*\)/g, '').trim();
         if (comp.id) compId = String(comp.id);
 
-        // ── Fetch battlestats from Torn API v2 (v1 does not support this selection) ──
-        try {
-            const bsRes = await fetch(
-                `https://api.torn.com/v2/user/?selections=battlestats&key=${encodeURIComponent(apiKey)}`,
-                { signal: AbortSignal.timeout(5000) }
-            );
-            const bsData = await bsRes.json();
-            const bs = bsData && bsData.battlestats;
-            if (bs && typeof bs.strength === 'number') {
-                attackerStats.strength = bs.strength || 0;
-                attackerStats.speed = bs.speed || 0;
-                attackerStats.defense = bs.defense || 0;
-                attackerStats.dexterity = bs.dexterity || 0;
-                attackerStats.total = bs.total || (attackerStats.strength + attackerStats.speed + attackerStats.defense + attackerStats.dexterity);
-                myStats = attackerStats.total;
-            }
-        } catch (bsErr) {
-            // Non-fatal: proceed without battlestats (Fair Fight scoring will be skipped)
+        // Parse battlestats from v2
+        if (bs) {
+            attackerStats.strength = (bs.strength && typeof bs.strength.value === 'number') ? bs.strength.value : (Number(bs.strength) || 0);
+            attackerStats.speed = (bs.speed && typeof bs.speed.value === 'number') ? bs.speed.value : (Number(bs.speed) || 0);
+            attackerStats.defense = (bs.defense && typeof bs.defense.value === 'number') ? bs.defense.value : (Number(bs.defense) || 0);
+            attackerStats.dexterity = (bs.dexterity && typeof bs.dexterity.value === 'number') ? bs.dexterity.value : (Number(bs.dexterity) || 0);
+            attackerStats.total = (typeof bs.total === 'number') ? bs.total : (attackerStats.strength + attackerStats.speed + attackerStats.defense + attackerStats.dexterity);
+            myStats = attackerStats.total;
         }
 
         // Protect own faction members
-        if (userData.faction && userData.faction.faction_id) {
-            const fId = userData.faction.faction_id;
+        const fId = profile.faction_id || (profile.faction && profile.faction.faction_id);
+        if (fId) {
             try {
                 const fRes = await fetch(
                     `https://api.torn.com/faction/${fId}?selections=basic&key=${encodeURIComponent(apiKey)}`,

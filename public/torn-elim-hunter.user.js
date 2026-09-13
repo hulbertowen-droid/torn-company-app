@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter
 // @namespace    https://spider-verse.net/
-// @version      2.4.6
+// @version      2.4.7
 // @description  Autonomous 1-click snipe button for Torn Elimination. Finds beatable enemies that are NOT in hospital and NOT flying from ANY page.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -377,7 +377,7 @@
                 data.isInvalidKey ||
                 data.errorCode === 2 ||
                 data.errorCode === 1 ||
-                (data.code === 'API_ERROR' && (data.errorCode === 2 || String(data.message || '').includes('[2') || String(data.message || '').toLowerCase().includes('incorrect key')))
+                (data.code === 'API_ERROR' && (data.errorCode === 2 || /\[2[:\]]/.test(String(data.message || '')) || String(data.message || '').toLowerCase().includes('incorrect key')))
             )) {
                 apiKey = '';
                 save(KEY_API, '');
