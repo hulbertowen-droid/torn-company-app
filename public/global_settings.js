@@ -306,3 +306,13 @@ window.saveGlobalSettings = async function() {
     closeGlobalSettings();
     window.location.reload();
 };
+
+// Automatically activate Instant Navigation Prefetcher on all pages
+(function() {
+    if (!document.querySelector('script[src*="instant-nav.js"]')) {
+        const s = document.createElement('script');
+        s.src = '/instant-nav.js?v=3.2.2';
+        s.defer = true;
+        document.head.appendChild(s);
+    }
+})();

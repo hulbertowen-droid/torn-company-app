@@ -279,7 +279,6 @@
         </div>
     </div>
 
-<script src="/auth-gate.js?v=3.2.1"></script>
 <script>
 let myKey = localStorage.getItem("warboard_apikey") || "";
 let allCrimes = [];
@@ -384,6 +383,7 @@ async function fetchOCs() {
         }
 
         allCrimes = data.crimes || [];
+        try { sessionStorage.setItem('sv_cache_ocs', JSON.stringify(allCrimes)); } catch(e) {}
         renderOCs(allCrimes);
         startProgressBar();
 
@@ -660,6 +660,19 @@ function autoOpenAll() {
     document.querySelectorAll('.oc-card').forEach(c => c.classList.add('open'));
 }
 
+// Instant render from session cache if available
+try {
+    const cachedOcs = sessionStorage.getItem('sv_cache_ocs');
+    if (cachedOcs) {
+        const parsed = JSON.parse(cachedOcs);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+            allCrimes = parsed;
+            renderOCs(allCrimes);
+            setTimeout(autoOpenAll, 50);
+        }
+    }
+} catch(e) {}
+
 // Init
 if (myKey) {
     fetchOCs().then(() => { setTimeout(autoOpenAll, 200); });
@@ -695,7 +708,5 @@ if (myKey) {
         }
     }
 </script>
-
-    <script src="/global_settings.js?v=3.2.1"></script>
 </body>
 </html>

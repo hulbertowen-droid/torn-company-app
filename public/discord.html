@@ -3565,10 +3565,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (localStorage.getItem('sidebar_collapsed') === 'true') sidebar.classList.add('collapsed');
     if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-mode');
 
+    // Instant render from session cache
+    try {
+        const cachedCfg = sessionStorage.getItem('sv_cache_discord_cfg');
+        if (cachedCfg) applyConfigToDOM(JSON.parse(cachedCfg));
+    } catch(e) {}
+
     try {
         const res = await fetch('/api/get-discord-config');
         const cfg = await res.json();
         initialConfigSnapshot = JSON.parse(JSON.stringify(cfg));
+        try { sessionStorage.setItem('sv_cache_discord_cfg', JSON.stringify(cfg)); } catch(e) {}
         applyConfigToDOM(cfg);
 
         const localFfKey = localStorage.getItem('warboard_ffkey') || '';

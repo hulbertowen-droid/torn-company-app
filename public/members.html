@@ -507,6 +507,7 @@ async function loadMembers() {
         document.getElementById('last-upd').textContent = 'Updated: ' + new Date().toLocaleTimeString();
 
         renderMembers();
+        try { sessionStorage.setItem('sv_cache_members', JSON.stringify(allMembers)); } catch(e) {}
         startProgress();
 
     } catch(e) {
@@ -780,6 +781,21 @@ document.addEventListener('visibilitychange', () => {
     }
 });
 
+// Instant render from session cache
+try {
+    const cachedMembers = sessionStorage.getItem('sv_cache_members');
+    if (cachedMembers) {
+        const parsed = JSON.parse(cachedMembers);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+            allMembers = parsed;
+            document.getElementById('summary-row').style.display = 'grid';
+            document.getElementById('controls-row').style.display = 'flex';
+            document.getElementById('refresh-row').style.display = 'flex';
+            renderMembers();
+        }
+    }
+} catch(e) {}
+
 loadMembers();
 </script>
 
@@ -804,7 +820,5 @@ loadMembers();
         }
     }
 </script>
-
-    <script src="/global_settings.js?v=3.2.1"></script>
 </body>
 </html>

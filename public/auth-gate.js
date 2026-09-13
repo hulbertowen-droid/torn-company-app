@@ -298,6 +298,33 @@
         let token = localStorage.getItem('sv_session_token');
         const savedApiKey = localStorage.getItem('warboard_apikey');
 
+        // FAST-PATH: If user is already authenticated in this session, authorize immediately (0ms delay)
+        const cachedUserStr = sessionStorage.getItem('sv_user');
+        if (cachedUserStr && token) {
+            try {
+                currentUser = JSON.parse(cachedUserStr);
+                if (currentUser && currentUser.playerId) {
+                    handleAuthenticated(currentUser);
+
+                    // Silent non-blocking background verification
+                    fetch('/api/auth/me', {
+                        headers: { 'x-session-token': token }
+                    }).then(r => r.json()).then(data => {
+                        if (data && data.authenticated && data.user) {
+                            currentUser = data.user;
+                            sessionStorage.setItem('sv_user', JSON.stringify(currentUser));
+                            injectUserBadge(currentUser);
+                        } else if (data && !data.authenticated) {
+                            sessionStorage.removeItem('sv_user');
+                            localStorage.removeItem('sv_session_token');
+                            handleUnauthenticated();
+                        }
+                    }).catch(() => {});
+                    return;
+                }
+            } catch(e) {}
+        }
+
         // If no token but saved key exists, restore session seamlessly
         if (!token && savedApiKey) {
             try {

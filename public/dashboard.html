@@ -751,6 +751,21 @@ async function loadAll() {
         document.getElementById('analyst-output').classList.remove('loading');
         return;
     }
+
+    // Instant render from session cache if available
+    try {
+        const cachedDashStr = sessionStorage.getItem('sv_cache_dashboard');
+        const cachedWarsStr = sessionStorage.getItem('sv_cache_wars');
+        if (cachedDashStr) {
+            const cachedDash = JSON.parse(cachedDashStr);
+            const cachedWars = cachedWarsStr ? JSON.parse(cachedWarsStr) : { wars: [] };
+            if (cachedDash && !cachedDash.error) {
+                dashData = { dash: cachedDash, wars: cachedWars };
+                renderAll(cachedDash, cachedWars);
+            }
+        }
+    } catch(e) {}
+
     document.getElementById('last-updated').innerText = 'Refreshing...';
     try {
         const [dashRes, warRes] = await Promise.all([
@@ -766,6 +781,10 @@ async function loadAll() {
         }
 
         dashData = { dash, wars };
+        try {
+            sessionStorage.setItem('sv_cache_dashboard', JSON.stringify(dash));
+            sessionStorage.setItem('sv_cache_wars', JSON.stringify(wars));
+        } catch(e) {}
         renderAll(dash, wars);
         loadWarBounties();
         initSentinel();

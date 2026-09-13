@@ -526,6 +526,13 @@ function formatTimeAgo(ts) {
 }
 
 async function loadCompanyData() {
+    try {
+        const cc = sessionStorage.getItem('sv_cache_company');
+        if (cc) {
+            companyData = JSON.parse(cc);
+            if (companyData) renderDashboard();
+        }
+    } catch(e) {}
     if (!myKey && !localStorage.getItem("sv_session_token")) {
         document.getElementById('loading-state').style.display = 'none';
         document.getElementById('alert-box').style.display = 'block';
@@ -537,6 +544,7 @@ async function loadCompanyData() {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         companyData = data.company;
+        try { sessionStorage.setItem('sv_cache_company', JSON.stringify(companyData)); } catch(e) {}
         renderDashboard();
     } catch (err) {
         document.getElementById('loading-state').style.display = 'none';

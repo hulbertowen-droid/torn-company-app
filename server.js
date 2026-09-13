@@ -439,8 +439,8 @@ app.use(express.static('public', {
             // Tampermonkey userscripts: cache 30 mins in browser, stale-while-revalidate for 24h
             res.setHeader('Cache-Control', 'public, max-age=1800, stale-while-revalidate=86400');
         } else if (p.endsWith('.html')) {
-            // HTML files: allow caching with ETag revalidation (304 Not Modified when unchanged)
-            res.setHeader('Cache-Control', 'no-cache');
+            // HTML files: fast tab switching with 15s browser cache + 300s background revalidation
+            res.setHeader('Cache-Control', 'public, max-age=15, stale-while-revalidate=300');
         } else if (p.endsWith('.css') || p.endsWith('.js')) {
             // Static styles and shared scripts: cache 24h, background revalidate
             res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
@@ -3863,6 +3863,7 @@ app.post('/api/discord-ping', async (req, res) => {
 
 
 const warAuditCache = {};
+const warListCache = {};
 
 app.get('/api/war-list', async (req, res) => {
     const userKey = req.headers['x-api-key'] || req.query.apiKey;
@@ -3873,6 +3874,12 @@ app.get('/api/war-list', async (req, res) => {
             || userInfo?.facId
             || discordConfig.factionId
             || "52355";
+
+        const cacheKey = String(targetFacId);
+        if (!req.query.force && warListCache[cacheKey] && (Date.now() - warListCache[cacheKey].timestamp) < 15000) {
+            return res.json(warListCache[cacheKey].data);
+        }
+
         let facRes = await fetch(`https://api.torn.com/faction/${targetFacId}?selections=basic,rankedwars&key=${userKey}`, { signal: AbortSignal.timeout(8000) });
         let facData = await facRes.json();
         if (facData.error && facData.error.code === 6) {
@@ -3912,7 +3919,9 @@ app.get('/api/war-list', async (req, res) => {
             }
         }
         wars.sort((a, b) => b.start - a.start);
-        res.json({ success: true, wars });
+        const resultPayload = { success: true, wars };
+        warListCache[cacheKey] = { timestamp: Date.now(), data: resultPayload };
+        res.json(resultPayload);
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -4422,6 +4431,8 @@ app.get('/api/war-flight-audit', async (req, res) => {
     }
 });
 
+const dashboardDataCache = {};
+
 app.get('/api/dashboard-data', async (req, res) => {
     const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
     if (!userKey || userKey === 'null' || userKey.trim() === '') {
@@ -4455,11 +4466,23 @@ app.get('/api/dashboard-data', async (req, res) => {
         if (!targetFacId) {
             targetFacId = discordConfig.factionId || "52355";
         }
-        let basicResp = await fetch(`https://api.torn.com/faction/${targetFacId}?selections=basic&key=${userKey}`);
-        let basicData = await basicResp.json();
+
+        const cacheKey = `${targetFacId}_${isPremium ? 'prem' : 'free'}`;
+        if (!req.query.force && dashboardDataCache[cacheKey] && (Date.now() - dashboardDataCache[cacheKey].timestamp) < 15000) {
+            return res.json(dashboardDataCache[cacheKey].data);
+        }
+
+        // Fetch basic, armory, and chain/rankedwars in parallel for maximum speed
+        const [basicResp, armoryResp, chainResp] = await Promise.all([
+            fetch(`https://api.torn.com/faction/${targetFacId}?selections=basic&key=${userKey}`).catch(e => null),
+            fetch(`https://api.torn.com/faction/?selections=armor,weapons,temporary&key=${userKey}`).catch(e => null),
+            fetch(`https://api.torn.com/faction/?selections=chain,rankedwars&key=${userKey}`).catch(e => null)
+        ]);
+
+        let basicData = basicResp ? await basicResp.json().catch(() => ({})) : {};
         if (basicData.error && basicData.error.code === 6) {
-            basicResp = await fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`);
-            basicData = await basicResp.json();
+            const retryResp = await fetch(`https://api.torn.com/faction/?selections=basic&key=${userKey}`).catch(e => null);
+            if (retryResp) basicData = await retryResp.json().catch(() => ({}));
         }
         if (basicData.error) return res.status(400).json({ error: basicData.error.error });
 
@@ -4473,8 +4496,7 @@ app.get('/api/dashboard-data', async (req, res) => {
 
         let loans = [];
         let armoryError = false;
-        const armoryResp = await fetch(`https://api.torn.com/faction/?selections=armor,weapons,temporary&key=${userKey}`);
-        const armoryData = await armoryResp.json();
+        const armoryData = armoryResp ? await armoryResp.json().catch(() => ({ error: true })) : { error: true };
 
         if (armoryData.error) { armoryError = true; } 
         else {
@@ -4501,13 +4523,12 @@ app.get('/api/dashboard-data', async (req, res) => {
             });
         }
 
-        // Fetch chain and ranked war data
+        // Parse chain and ranked war data
         let chain = null;
         let activeWar = null;
         try {
-            const chainResp = await fetch(`https://api.torn.com/faction/?selections=chain,rankedwars&key=${userKey}`);
-            const chainData = await chainResp.json();
-            if (!chainData.error) {
+            const chainData = chainResp ? await chainResp.json().catch(() => ({})) : {};
+            if (chainData && !chainData.error) {
                 chain = chainData.chain || null;
                 if (chainData.rankedwars) {
                     for (const [warId, warInfo] of Object.entries(chainData.rankedwars)) {
@@ -4544,14 +4565,23 @@ app.get('/api/dashboard-data', async (req, res) => {
             capacity: basicData.capacity
         };
 
-        res.json({ success: true, members: parsedMembers, loans, armoryError, premiumActive: isPremium, chain, activeWar, faction });
+        const resultPayload = { success: true, members: parsedMembers, loans, armoryError, premiumActive: isPremium, chain, activeWar, faction };
+        dashboardDataCache[cacheKey] = { timestamp: Date.now(), data: resultPayload };
+        res.json(resultPayload);
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
+
+const companyApiCache = {};
 
 app.get('/api/company', async (req, res) => {
     const apiKey = req.headers['x-api-key'] || req.query.apiKey;
     try {
         await verifySubscription(apiKey);
+        const cacheKey = String(apiKey || 'default');
+        if (!req.query.force && companyApiCache[cacheKey] && (Date.now() - companyApiCache[cacheKey].timestamp) < 20000) {
+            return res.json(companyApiCache[cacheKey].data);
+        }
+
         const resp = await fetch(`https://api.torn.com/company/?selections=profile,detailed,employees,stock&key=${apiKey}`);
         const data = await resp.json();
         
@@ -4559,7 +4589,9 @@ app.get('/api/company', async (req, res) => {
             return res.status(400).json({ error: "Torn API Error: " + data.error.error });
         }
         
-        res.json({ success: true, company: data });
+        const resultPayload = { success: true, company: data };
+        companyApiCache[cacheKey] = { timestamp: Date.now(), data: resultPayload };
+        res.json(resultPayload);
     } catch (err) { 
         res.status(403).json({ error: err.message }); 
     }
@@ -6071,23 +6103,41 @@ app.get('/api/debug-ffscouter', async (req, res) => {
     }
 });
 
+const ocApiCache = {};
+
 app.get('/api/ocs', async (req, res) => {
     try {
         const userKey = req.headers['x-api-key'] || req.query.apiKey;
         if (!userKey || userKey === "null" || userKey.trim() === "") return res.status(401).json({ error: "No API key provided. Please add your API key in Settings." });
 
-        // 1. Fetch user profile to get their faction ID (v2 API requires explicit ID)
-        const userRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`);
-        const userData = await userRes.json();
-        
-        if (userData.error) {
-            return res.status(400).json({ error: `API Key Error: ${userData.error.error}` });
+        // Resolve faction ID from session, cache, or profile
+        let fid = req.userSession?.factionId;
+        if (!fid) {
+            const userInfo = await getUserFactionInfo(userKey);
+            fid = userInfo?.facId;
         }
-        if (!userData.faction || userData.faction.faction_id === 0) {
-            return res.status(400).json({ error: "You are not currently in a faction, so you cannot view Organized Crimes." });
+
+        if (fid && !req.query.force && ocApiCache[fid] && (Date.now() - ocApiCache[fid].timestamp) < 15000) {
+            return res.json(ocApiCache[fid].data);
         }
-        
-        const fid = userData.faction.faction_id;
+
+        if (!fid) {
+            // Fetch user profile to get their faction ID (v2 API requires explicit ID)
+            const userRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`);
+            const userData = await userRes.json();
+            
+            if (userData.error) {
+                return res.status(400).json({ error: `API Key Error: ${userData.error.error}` });
+            }
+            if (!userData.faction || userData.faction.faction_id === 0) {
+                return res.status(400).json({ error: "You are not currently in a faction, so you cannot view Organized Crimes." });
+            }
+            fid = userData.faction.faction_id;
+        }
+
+        if (!req.query.force && ocApiCache[fid] && (Date.now() - ocApiCache[fid].timestamp) < 15000) {
+            return res.json(ocApiCache[fid].data);
+        }
 
         // 2. Fetch OC crimes AND faction members explicitly by faction ID
         const [crimeRes, memberRes] = await Promise.all([
@@ -6120,7 +6170,9 @@ app.get('/api/ocs', async (req, res) => {
             return { ...crime, slots };
         });
 
-        res.json({ success: true, crimes });
+        const resultPayload = { success: true, crimes };
+        ocApiCache[fid] = { timestamp: Date.now(), data: resultPayload };
+        res.json(resultPayload);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -7295,10 +7347,11 @@ app.get('/api/travel-profits', async (req, res) => {
     try {
         await verifySubscription(apiKey);
         
-        // Fetch Torn market data
-        const resp = await fetch(`https://api.torn.com/torn/?selections=items&key=${apiKey}`);
-        const data = await resp.json();
-        if (data.error) return res.status(400).json({ error: "Torn API Error: " + data.error.error });
+        // Fetch Torn market data using high-speed server cache
+        const cachedCatalog = await cachedTornFetch(`https://api.torn.com/torn/?selections=items&key=${apiKey}`, 'torn_items_catalog', 3600000);
+        if (!cachedCatalog || !cachedCatalog.items) {
+            return res.status(500).json({ error: "Failed to load Torn items database" });
+        }
 
         // Fetch live YATA stock data (with cache & timeout resilience)
         const yataData = await getLiveYataStocks();
@@ -7312,7 +7365,7 @@ app.get('/api/travel-profits', async (req, res) => {
             "China": "chi", "UAE": "uae", "South Africa": "sou"
         };
 
-        const items = data.items;
+        const items = cachedCatalog.items;
         const foreignItems = [
             { id: 261, name: "Wolverine Plushie", country: "Canada", cost: 30, flightTimeMins: 29 },
             { id: 274, name: "Jaguar Plushie", country: "Mexico", cost: 10000, flightTimeMins: 18 },

@@ -442,6 +442,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── Load ─────────────────────────────────────────────────────────────────────
 async function loadProfits(showSpin = false) {
+    try {
+        const ct = sessionStorage.getItem('sv_cache_travel');
+        if (ct) {
+            allItems = JSON.parse(ct);
+            if (Array.isArray(allItems) && allItems.length > 0) {
+                renderTable();
+                updateKPIs();
+            }
+        }
+    } catch(e) {}
     const apiKey = localStorage.getItem('warboard_apikey') || localStorage.getItem('tornApiKey');
     const tbody = document.getElementById('profits-tbody');
     const refreshBtn = document.getElementById('refresh-btn');
@@ -462,6 +472,7 @@ async function loadProfits(showSpin = false) {
         if (data.error) throw new Error(data.error);
 
         allItems = data.items;
+        try { sessionStorage.setItem('sv_cache_travel', JSON.stringify(allItems)); } catch(e) {}
         renderTable();
         updateKPIs();
 
