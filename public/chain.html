@@ -854,11 +854,19 @@ const MILESTONES = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 5
 
 let queueInterval = null;
 let queueData = [];
+let isFetchingQueue = false;
+let lastQueueEtag = '';
 
 async function fetchWarboardQueue() {
-    if (!myKey) return;
+    if (!myKey || isFetchingQueue || document.hidden) return;
+    isFetchingQueue = true;
     try {
-        const res = await fetch(`/api/warboard`, { headers: { 'x-api-key': myKey } });
+        const headers = { 'x-api-key': myKey };
+        if (lastQueueEtag) headers['If-None-Match'] = lastQueueEtag;
+        const res = await fetch(`/api/warboard`, { headers });
+        if (res.status === 304) return;
+        const etagHeader = res.headers.get('ETag');
+        if (etagHeader) lastQueueEtag = etagHeader;
         const data = await res.json();
         if (data.enemy) {
             // Filter only claimed targets
@@ -878,6 +886,8 @@ async function fetchWarboardQueue() {
         }
     } catch (e) {
         console.error("Queue fetch error:", e);
+    } finally {
+        isFetchingQueue = false;
     }
 }
 
@@ -931,9 +941,25 @@ function formatEstStatsPlain(estValue) {
     return estValue;
 }
 
-// Start queue loop
-fetchWarboardQueue();
-setInterval(fetchWarboardQueue, 5000); // Poll API every 5s
+// Start queue loop with visibility guard
+function startQueueLoop() {
+    if (queueInterval) clearInterval(queueInterval);
+    fetchWarboardQueue();
+    queueInterval = setInterval(fetchWarboardQueue, 12000); // Poll every 12s
+}
+function stopQueueLoop() {
+    if (queueInterval) { clearInterval(queueInterval); queueInterval = null; }
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        stopQueueLoop();
+    } else {
+        startQueueLoop();
+    }
+});
+
+startQueueLoop();
 setInterval(renderQueue, 1000); // Re-render every 1s for countdowns
 
 

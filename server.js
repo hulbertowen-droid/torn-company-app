@@ -14,6 +14,7 @@ try {
 
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -398,6 +399,13 @@ global.turboInterval = null;
 global.turboTimeout = null;
 global.turboStats = { found: 0, checked: 0 };
 app.use(cors());
+app.use(compression({
+    threshold: 1024,
+    filter: (req, res) => {
+        if (req.headers['x-no-compression']) return false;
+        return compression.filter(req, res);
+    }
+}));
 app.use(express.json());
 app.use(sessionManager.resolveSessionMiddleware(userKeys));
 
@@ -422,14 +430,20 @@ app.post('/api/sync-recruits-now', async (req, res) => {
 
 app.use(express.static('public', {
     maxAge: 0,
-    setHeaders: (res, path) => {
-        if (path.endsWith('.html')) {
-            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-            res.setHeader('Pragma', 'no-cache');
-            res.setHeader('Expires', '0');
-        } else if (path.endsWith('.css') || path.endsWith('.js')) {
-            res.setHeader('Cache-Control', 'no-cache, must-revalidate');
-            res.setHeader('Pragma', 'no-cache');
+    setHeaders: (res, filePath) => {
+        const p = filePath.toLowerCase();
+        if (p.endsWith('.user.js')) {
+            // Tampermonkey userscripts: cache 30 mins in browser, stale-while-revalidate for 24h
+            res.setHeader('Cache-Control', 'public, max-age=1800, stale-while-revalidate=86400');
+        } else if (p.endsWith('.html')) {
+            // HTML files: allow caching with ETag revalidation (304 Not Modified when unchanged)
+            res.setHeader('Cache-Control', 'no-cache');
+        } else if (p.endsWith('.css') || p.endsWith('.js')) {
+            // Static styles and shared scripts: cache 24h, background revalidate
+            res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+        } else if (p.endsWith('.png') || p.endsWith('.jpg') || p.endsWith('.svg') || p.endsWith('.ico') || p.endsWith('.webp')) {
+            // Media assets: long-lived cache
+            res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
         } else {
             res.setHeader('Cache-Control', 'public, max-age=86400');
         }
@@ -5082,6 +5096,16 @@ app.get('/api/claims', (req, res) => {
     const facId = String(req.query.factionId || req.headers['x-faction-id'] || req.userSession?.factionId || (req.userSession?.isSpiderVerse ? '52355' : ''));
     if (!facId) return res.status(400).json({ error: "Faction ID required" });
     const state = getFactionWarState(facId);
+
+    const rawData = JSON.stringify({ c: state.claims, b: state.backups, s: state.manualStats });
+    const hash = crypto.createHash('md5').update(rawData).digest('hex');
+    const etag = `W/"${hash}"`;
+
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', 'no-cache');
+    if (req.headers['if-none-match'] === etag) {
+        return res.status(304).end();
+    }
     res.json({ success: true, claims: state.claims, backups: state.backups, manualStats: state.manualStats });
 });
 app.post('/api/claim', (req, res) => {
@@ -5192,6 +5216,22 @@ app.post('/api/save-spy', async (req, res) => {
         res.json({success: true, data: spyDatabase[targetId]});
     } catch(err) { res.status(403).json({ error: err.message }); }
 });
+
+function sendWarboardResponse(req, res, payload) {
+    try {
+        const jsonStr = typeof payload === 'string' ? payload : JSON.stringify(payload);
+        const hash = crypto.createHash('md5').update(jsonStr).digest('hex');
+        const etag = `W/"${hash}"`;
+        res.setHeader('ETag', etag);
+        res.setHeader('Cache-Control', 'no-cache');
+        if (req.headers['if-none-match'] === etag) {
+            return res.status(304).end();
+        }
+        return res.type('application/json').send(jsonStr);
+    } catch(e) {
+        return res.json(payload);
+    }
+}
 
 app.get('/api/warboard', async (req, res) => {
     if (global.isTurboMining) return res.json({ error: "Turbo Mining Mode is active. Live Warboard is paused." });
@@ -5441,10 +5481,10 @@ app.get('/api/warboard', async (req, res) => {
 
         if (friendlyMembers.length === 0) {
             if (lastGoodWarboardByFaction[myFacId]) {
-                return res.json(lastGoodWarboardByFaction[myFacId]);
+                return sendWarboardResponse(req, res, lastGoodWarboardByFaction[myFacId]);
             }
             if (lastGoodWarboardPayload && String(myFacId) === "52355") {
-                return res.json(lastGoodWarboardPayload);
+                return sendWarboardResponse(req, res, lastGoodWarboardPayload);
             }
         }
 
@@ -5500,13 +5540,13 @@ app.get('/api/warboard', async (req, res) => {
             }
         }
 
-        res.json(payload);
+        sendWarboardResponse(req, res, payload);
     } catch (err) {
         if (targetMyFacId && lastGoodWarboardByFaction[targetMyFacId]) {
-            return res.json(lastGoodWarboardByFaction[targetMyFacId]);
+            return sendWarboardResponse(req, res, lastGoodWarboardByFaction[targetMyFacId]);
         }
         if (lastGoodWarboardPayload) {
-            return res.json(lastGoodWarboardPayload);
+            return sendWarboardResponse(req, res, lastGoodWarboardPayload);
         }
         res.status(403).json({ error: err.message });
     }
@@ -7278,8 +7318,12 @@ app.get('/api/travel-profits', async (req, res) => {
 // =====================================================
 
 // =====================================================
-// ELIMINATION SNIPER API v3 — Autonomous Dynamic Target Finder
+// ELIMINATION SNIPER API v4 — Authoritative 2026 Target Finder
+// Strictly validates against live 2026 Torn Elimination event data
 // =====================================================
+
+const CURRENT_ELIM_YEAR = 2026;
+const CURRENT_ELIM_COMP_ID = 'elimination_2026';
 
 function formatElimStat(num) {
     if (!num || isNaN(num) || num <= 0) return "0";
@@ -7297,14 +7341,21 @@ function normalizeElimTeamName(teamName) {
         .toLowerCase();
 }
 
-// Multi-user roster storage + global hospital blacklist
+// ── Multi-user Elimination State & Segregated Caches ──
 const elimState = {
-    // Map<userKeyId, { members: Array<{ id: string, team: string }>, syncedAt: number, teamName: string }>
+    // Current 2026 tournament metadata cache (60s TTL)
+    // { year: 2026, competitionId: 'elimination_2026', teams: Map, activeTeams: Set, eliminatedTeams: Set, leaders: Map, fetchedAt: number }
+    tournament: null,
+    // Map<userKeyId, { members: Array<{ id: string, team: string, level: number, name: string }>, syncedAt: number, teamName: string, competitionId: string }>
     rosters: new Map(),
     // Map<playerId, expiresAt> — blacklist for hosp/flying players
     hospBlacklist: new Map(),
-    // Map<userKeyId, Map<playerId, expiresAt>> — per-user 5m served cooldowns
-    servedCooldowns: new Map()
+    // Map<playerId, expiresAt> — blacklist for players verified NOT in 2026 Elimination (10m TTL)
+    nonElimBlacklist: new Map(),
+    // Map<userKeyId, Map<playerId, expiresAt>> — per-user served cooldowns (30s window per target)
+    servedCooldowns: new Map(),
+    // Faction members cache: Map<factionId, { members: Set<string>, fetchedAt: number }> (5m TTL)
+    factionMembersCache: new Map()
 };
 
 function elimCleanBlacklist() {
@@ -7312,10 +7363,143 @@ function elimCleanBlacklist() {
     for (const [id, exp] of elimState.hospBlacklist.entries()) {
         if (now > exp) elimState.hospBlacklist.delete(id);
     }
+    for (const [id, exp] of elimState.nonElimBlacklist.entries()) {
+        if (now > exp) elimState.nonElimBlacklist.delete(id);
+    }
 }
 
-// Add and persist verified Elimination competitors into MongoDB
-async function elimAddCandidates(candidates, competitionId = 'elimination') {
+/**
+ * Fetch authoritative 2026 Elimination tournament status from official Torn API.
+ * Dynamically tracks active teams, lives, eliminations, and official team leaders.
+ * 
+ * @param {string} apiKey - Requesting user's API key
+ * @param {boolean} [forceRefresh=false] - Bypass 60s cache
+ * @returns {Promise<object|null>}
+ */
+async function getActiveEliminationTournament(apiKey, forceRefresh = false) {
+    const now = Date.now();
+    if (!forceRefresh && elimState.tournament && (now - elimState.tournament.fetchedAt < 60_000)) {
+        return elimState.tournament;
+    }
+
+    try {
+        let rawTeams = null;
+
+        // Primary: Torn API v2 tournament endpoint
+        try {
+            const res = await fetch(
+                `https://api.torn.com/v2/torn/competition/elimination?key=${encodeURIComponent(apiKey)}`,
+                { signal: AbortSignal.timeout(6000) }
+            );
+            const data = await res.json();
+            if (data && Array.isArray(data.elimination) && data.elimination.length > 0) {
+                rawTeams = data.elimination;
+            }
+        } catch (e2) {}
+
+        // Fallback: Torn API v1 competition selection
+        if (!rawTeams) {
+            try {
+                const res1 = await fetch(
+                    `https://api.torn.com/torn/?selections=competition&key=${encodeURIComponent(apiKey)}`,
+                    { signal: AbortSignal.timeout(5000) }
+                );
+                const data1 = await res1.json();
+                if (data1 && data1.competition && data1.competition.teams) {
+                    const t = data1.competition.teams;
+                    rawTeams = Array.isArray(t) ? t : Object.values(t);
+                }
+            } catch (e1) {}
+        }
+
+        if (Array.isArray(rawTeams) && rawTeams.length > 0) {
+            const teamsMap = new Map();
+            const activeTeams = new Set();
+            const eliminatedTeams = new Set();
+            const leadersMap = new Map(); // id -> { id, name, team, normTeam, isLeader: true }
+
+            for (const t of rawTeams) {
+                const tName = String(t.name || t.team_name || '').trim();
+                if (!tName) continue;
+                const normName = normalizeElimTeamName(tName);
+                const lives = Number(t.lives != null ? t.lives : 50);
+                const isEliminated = Boolean(t.eliminated) || lives <= 0;
+
+                const teamObj = {
+                    id: t.id || t.teamID,
+                    name: tName,
+                    normName,
+                    lives,
+                    eliminated: isEliminated,
+                    participants: Number(t.participants) || 0,
+                    participantsLeft: Number(t.participants_left != null ? t.participants_left : t.participants) || 0
+                };
+                teamsMap.set(normName, teamObj);
+
+                if (isEliminated) {
+                    eliminatedTeams.add(normName);
+                } else {
+                    activeTeams.add(normName);
+
+                    // Extract verified captains and vice-captains (authoritative leaders)
+                    const captainObj = t.leaders?.captain || t.captain;
+                    if (captainObj) {
+                        const cid = String(captainObj.id || captainObj);
+                        const cName = captainObj.name || '';
+                        if (cid && cid !== '0') {
+                            leadersMap.set(cid, {
+                                id: cid,
+                                name: cName,
+                                team: tName,
+                                normTeam: normName,
+                                isLeader: true,
+                                source: 'torn_elimination',
+                                competitionId: CURRENT_ELIM_COMP_ID
+                            });
+                        }
+                    }
+
+                    const vcs = Array.isArray(t.leaders?.vice_captains)
+                        ? t.leaders.vice_captains
+                        : (Array.isArray(t.vice_captains) ? t.vice_captains : []);
+                    for (const vc of vcs) {
+                        const vcid = String(vc.id || vc);
+                        const vcName = (typeof vc.name === 'string' ? vc.name : (vc.name?.playername || '')) || '';
+                        if (vcid && vcid !== '0') {
+                            leadersMap.set(vcid, {
+                                id: vcid,
+                                name: vcName,
+                                team: tName,
+                                normTeam: normName,
+                                isLeader: true,
+                                source: 'torn_elimination',
+                                competitionId: CURRENT_ELIM_COMP_ID
+                            });
+                        }
+                    }
+                }
+            }
+
+            elimState.tournament = {
+                year: CURRENT_ELIM_YEAR,
+                competitionId: CURRENT_ELIM_COMP_ID,
+                teams: teamsMap,
+                activeTeams,
+                eliminatedTeams,
+                leaders: leadersMap,
+                fetchedAt: now
+            };
+            return elimState.tournament;
+        }
+    } catch (e) {
+        console.error('[Elim Tournament] Error synchronizing 2026 event status:', e.message);
+    }
+
+    return elimState.tournament;
+}
+
+// Add and persist verified Elimination competitors into MongoDB (2026 event scoped)
+async function elimAddCandidates(candidates, competitionId = CURRENT_ELIM_COMP_ID) {
     if (!Array.isArray(candidates) || candidates.length === 0) return;
     const cleanOps = [];
     for (const c of candidates) {
@@ -7332,6 +7516,7 @@ async function elimAddCandidates(candidates, competitionId = 'elimination') {
                 _id: numId,
                 team,
                 competitionId,
+                tournamentYear: CURRENT_ELIM_YEAR,
                 source: 'torn_elimination',
                 isLeader,
                 updatedAt: new Date()
@@ -7376,12 +7561,9 @@ app.post('/api/elim/report-hosp', (req, res) => {
 app.post('/api/elim/sync-roster', async (req, res) => {
     try {
         let apiKey      = (req.headers['x-api-key'] || req.body.apiKey || '').trim();
-        // The userscript sends the resolved Torn ID as `myId`; treat it as the
-        // account ID as well so this roster is retrieved by the same key during
-        // later /api/elim/snipe requests.
         const tornId    = (req.headers['x-torn-id'] || req.body.tornId || req.body.myId || '').trim();
         const discordId = (req.headers['x-discord-id'] || req.body.discordId || '').trim();
-        const members   = req.body.members; // [{ id, name }]
+        const members   = req.body.members; // [{ id, name, level }]
         const teamName  = String(req.body.teamName || req.body.team || '').replace(/\s*\(\s*\d+[^)]*\)/g, '').trim();
         const myId      = String(req.body.myId || tornId || '').trim();
 
@@ -7418,9 +7600,9 @@ app.post('/api/elim/sync-roster', async (req, res) => {
             return res.status(400).json({ error: 'members array required' });
         }
 
-        // Verify requesting user is actually participating in Elimination
+        // 1. Authoritative verification of user's active Elimination participation
         let userTeam = '';
-        let compId = 'elimination';
+        let ownFactionId = null;
         const ownFactionIds = new Set();
         if (myId) ownFactionIds.add(myId);
 
@@ -7442,25 +7624,28 @@ app.post('/api/elim/sync-roster', async (req, res) => {
                         : userKeys.sanitizeErrorMessage(`Torn API error [${errCode}]: ${uData.error.error}`)
                 });
             }
-            const uProfile = uData.profile || uData;
+
             const uComp = uData.competition;
             const uCompTeam = uComp ? String(uComp.team || uComp.team_name || '').trim() : '';
-            if (!uComp || (uComp.name !== 'Elimination' && !String(uComp.description || '').toLowerCase().includes('elimination'))) {
+            const normUCompTeam = normalizeElimTeamName(uCompTeam);
+
+            // HARD CHECK: A user with team="Unknown" or missing team is NOT in Elimination!
+            if (!uComp || uComp.name !== 'Elimination' || !uCompTeam || normUCompTeam === 'unknown') {
                 return res.status(400).json({
                     success: false,
                     code: 'NOT_IN_ELIMINATION',
                     message: 'Cannot sync roster: You are not enrolled in an active Elimination team. Join a team in the Torn competition page first.'
                 });
             }
-            const myTeamFromClient = String(req.body.myTeam || '').trim();
-            userTeam = (myTeamFromClient || (uCompTeam && uCompTeam.toLowerCase() !== 'unknown' ? uCompTeam : 'My Elimination Team')).replace(/\s*\(\s*\d+[^)]*\)/g, '').trim();
-            if (uComp.id) compId = String(uComp.id);
 
-            // Faction members protection
-            const fId = uProfile.faction_id || (uProfile.faction && uProfile.faction.faction_id);
-            if (fId) {
+            userTeam = uCompTeam;
+            const uProfile = uData.profile || uData;
+            ownFactionId = uProfile.faction_id || (uProfile.faction && uProfile.faction.faction_id);
+
+            // Fetch own faction members to ensure no faction member is ingested as an opposing candidate
+            if (ownFactionId) {
                 const fRes = await fetch(
-                    `https://api.torn.com/faction/${fId}?selections=basic&key=${encodeURIComponent(apiKey)}`,
+                    `https://api.torn.com/faction/${ownFactionId}?selections=basic&key=${encodeURIComponent(apiKey)}`,
                     { signal: AbortSignal.timeout(4000) }
                 );
                 const fData = await fRes.json();
@@ -7472,8 +7657,9 @@ app.post('/api/elim/sync-roster', async (req, res) => {
             return res.status(500).json({ error: 'Failed to verify Torn competition status via API.' });
         }
 
-        // HARD OPPONENT CHECK: Cannot sync your own team
-        if (userTeam && normalizeElimTeamName(teamName) === normalizeElimTeamName(userTeam)) {
+        // 2. Validate opposing team against active 2026 Elimination teams
+        const normSyncedTeam = normalizeElimTeamName(teamName);
+        if (normSyncedTeam === normalizeElimTeamName(userTeam)) {
             return res.status(400).json({
                 success: false,
                 error: 'CANNOT_SYNC_OWN_TEAM',
@@ -7481,7 +7667,25 @@ app.post('/api/elim/sync-roster', async (req, res) => {
             });
         }
 
-        // Filter and format opposing members
+        const tourney = await getActiveEliminationTournament(apiKey);
+        if (tourney && tourney.teams.size > 0) {
+            if (!tourney.teams.has(normSyncedTeam)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'INVALID_ELIM_TEAM',
+                    message: `"${teamName}" is not a recognized team in the 2026 Elimination tournament.`
+                });
+            }
+            if (tourney.eliminatedTeams.has(normSyncedTeam)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'TEAM_ALREADY_ELIMINATED',
+                    message: `Team "${teamName}" has already been eliminated from the 2026 tournament.`
+                });
+            }
+        }
+
+        // 3. Filter and sanitize opposing members (exclude faction members, self, invalid IDs)
         const validCandidates = [];
         const seen = new Set();
         members.forEach(m => {
@@ -7489,15 +7693,22 @@ app.post('/api/elim/sync-roster', async (req, res) => {
             const level = Number(m.level) || 0;
             if (id && id !== '0' && !ownFactionIds.has(id) && !seen.has(id)) {
                 seen.add(id);
-                validCandidates.push({ id, team: teamName, name: m.name || '', level });
+                validCandidates.push({
+                    id,
+                    team: teamName,
+                    name: m.name || '',
+                    level,
+                    source: 'torn_elimination',
+                    competitionId: CURRENT_ELIM_COMP_ID,
+                    tournamentYear: CURRENT_ELIM_YEAR
+                });
             }
         });
 
-        // Store in per-user and shared roster pool
+        // 4. Store in per-user and shared roster pool (strictly scoped to CURRENT_ELIM_COMP_ID)
         const userKeyId = tornId ? `torn:${tornId}` : (discordId ? `discord:${discordId}` : `key:${crypto.createHash('sha256').update(apiKey).digest('hex').slice(0, 16)}`);
         const existing = elimState.rosters.get(userKeyId) || (tornId ? elimState.rosters.get(String(tornId)) : null);
-        // Never carry opponent IDs across separate tournament iterations
-        const existingMembers = (existing && existing.competitionId === compId) ? existing.members : [];
+        const existingMembers = (existing && existing.competitionId === CURRENT_ELIM_COMP_ID) ? existing.members : [];
         const memberMap = new Map();
         existingMembers.forEach(em => memberMap.set(em.id, em));
         validCandidates.forEach(vc => memberMap.set(vc.id, vc));
@@ -7507,7 +7718,8 @@ app.post('/api/elim/sync-roster', async (req, res) => {
             members: mergedMembers,
             teamName: userTeam,
             opposingTeamName: teamName,
-            competitionId: compId,
+            competitionId: CURRENT_ELIM_COMP_ID,
+            tournamentYear: CURRENT_ELIM_YEAR,
             syncedAt: Date.now()
         };
 
@@ -7517,8 +7729,8 @@ app.post('/api/elim/sync-roster', async (req, res) => {
             elimState.rosters.set(`torn:${tornId}`, rosterData);
         }
 
-        // Persist to MongoDB with source: "torn_elimination"
-        elimAddCandidates(validCandidates, compId).catch(() => {});
+        // Persist to MongoDB with strictly 2026 event metadata
+        elimAddCandidates(validCandidates, CURRENT_ELIM_COMP_ID).catch(() => {});
 
         res.json({
             success: true,
@@ -7532,18 +7744,21 @@ app.post('/api/elim/sync-roster', async (req, res) => {
 });
 
 /**
- * Reusable Core Engine: Autonomous Elimination Target Finder
- * Evaluates live hittability tailored to the requesting user's actual battle stats.
+ * Reusable Core Engine: Authoritative 2026 Elimination Target Finder
+ * 
+ * Pipeline:
+ * User -> verify user is currently in 2026 Elimination -> retrieve current 2026 Elimination data ->
+ * determine legitimate target pool -> validate each candidate via Torn API v2 -> return only verified target.
  * 
  * @param {object} opts
  * @param {string} opts.apiKey - Requesting user's live Torn Limited API key
  * @param {string} opts.userId - User identifier (Discord ID or Torn ID) for isolated cooldowns
  * @param {string} opts.tier - 'easy' | 'manageable' | 'difficult' | 'all'
  * @param {Set|Array|string} opts.excludeIds - IDs to exclude from this lookup
- * @param {string} [opts.userProvidedTeam] - Optional user team name from client DOM
+ * @param {boolean} [opts.forceRefreshTournament=false] - Force live refresh of tournament state
  * @returns {Promise<object>}
  */
-async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'manageable', excludeIds = new Set(), userProvidedTeam = '' }) {
+async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'manageable', excludeIds = new Set(), forceRefreshTournament = false }) {
     if (!apiKey) {
         return {
             success: false,
@@ -7556,7 +7771,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
 
     elimCleanBlacklist();
 
-    // Isolated per-user served cooldowns (5-minute window per target per user)
+    // Isolated per-user served cooldowns (30-second window per target per user)
     const userKeyId = String(userId || crypto.createHash('sha256').update(apiKey).digest('hex').slice(0, 16));
     if (!elimState.servedCooldowns) {
         elimState.servedCooldowns = new Map();
@@ -7576,17 +7791,16 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         ? excludeIds
         : new Set(Array.isArray(excludeIds) ? excludeIds : String(excludeIds).split(',').map(s => s.trim()).filter(Boolean));
 
-    // ── 1. HARD GATE: Dynamically verify user's Elimination participation, battle stats, and team ──
+    // ── 1. HARD GATE: Authoritatively verify user's Elimination participation, battle stats, and team ──
     let myId = '';
     let myStats = 0;
     let attackerName = "Attacker";
     let attackerStats = { strength: 0, speed: 0, defense: 0, dexterity: 0, total: 0 };
     let myTeam = "";
-    let compId = "elimination";
+    let myFactionId = null;
     const ownFactionIds = new Set();
 
     try {
-        // ── Fetch profile + competition + battlestats from Torn API v2 (competition is v2-only) ──
         const userRes = await fetch(
             `https://api.torn.com/v2/user/?selections=profile,competition,battlestats&key=${encodeURIComponent(apiKey)}`,
             { signal: AbortSignal.timeout(7000) }
@@ -7594,7 +7808,6 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         const userData = await userRes.json();
         if (userData && userData.error) {
             const errCode = userData.error.code;
-            // Only actual authentication failures unlink the key (1=Key is empty, 2=Incorrect key, 13=Key disabled)
             const isInvalidKey = errCode === 2 || errCode === 1 || errCode === 13;
             if (isInvalidKey && userId) {
                 try {
@@ -7633,10 +7846,16 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         if (profile.name) attackerName = profile.name;
 
         // HARD PARTICIPATION VALIDATION:
-        // Torn API v2 always returns competition.name="Elimination" during the event.
-        // For regular tournament participants, Torn API v2 intentionally masks team="Unknown".
-        const isElim = comp && (comp.name === 'Elimination' || String(comp.description || '').toLowerCase().includes('elimination'));
-        if (!isElim) {
+        // In Torn API v2, non-participants return competition.team="Unknown" or empty.
+        // A player is ONLY participating if competition.name="Elimination" AND team is a valid, non-empty, non-"Unknown" team.
+        const rawUserTeam = comp ? String(comp.team || comp.team_name || '').trim() : '';
+        const normUserTeam = normalizeElimTeamName(rawUserTeam);
+        const isEnrolled = comp &&
+            comp.name === 'Elimination' &&
+            rawUserTeam !== '' &&
+            normUserTeam !== 'unknown';
+
+        if (!isEnrolled) {
             return {
                 success: false,
                 code: 'NOT_IN_ELIMINATION',
@@ -7646,21 +7865,9 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             };
         }
 
-        if (comp.status === 'eliminated' || comp.status === 'ended') {
-            return {
-                success: false,
-                code: 'USER_ELIMINATED',
-                isParticipating: false,
-                targetCount: 0,
-                message: `Your Elimination team or the tournament has ended or been eliminated.`
-            };
-        }
+        myTeam = rawUserTeam;
 
-        const rawTeam = (userProvidedTeam || (comp && (comp.team || comp.team_name)) || '').trim();
-        myTeam = (rawTeam && rawTeam.toLowerCase() !== 'unknown') ? rawTeam.replace(/\s*\(\s*\d+[^)]*\)/g, '').trim() : 'My Elimination Team';
-        if (comp.id) compId = String(comp.id);
-
-        // Parse battlestats from v2
+        // Parse attacker's battlestats from API v2
         if (bs) {
             attackerStats.strength = (bs.strength && typeof bs.strength.value === 'number') ? bs.strength.value : (Number(bs.strength) || 0);
             attackerStats.speed = (bs.speed && typeof bs.speed.value === 'number') ? bs.speed.value : (Number(bs.speed) || 0);
@@ -7670,19 +7877,29 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             myStats = attackerStats.total;
         }
 
-        // Protect own faction members
-        const fId = profile.faction_id || (profile.faction && profile.faction.faction_id);
-        if (fId) {
-            try {
-                const fRes = await fetch(
-                    `https://api.torn.com/faction/${fId}?selections=basic&key=${encodeURIComponent(apiKey)}`,
-                    { signal: AbortSignal.timeout(4000) }
-                );
-                const fData = await fRes.json();
-                if (fData && fData.members) {
-                    Object.keys(fData.members).forEach(mid => ownFactionIds.add(String(mid)));
-                }
-            } catch (fe) {}
+        // Cache and retrieve own faction members
+        myFactionId = profile.faction_id || (profile.faction && profile.faction.faction_id);
+        if (myFactionId) {
+            const cachedFaction = elimState.factionMembersCache.get(String(myFactionId));
+            if (cachedFaction && (Date.now() - cachedFaction.fetchedAt < 5 * 60 * 1000)) {
+                cachedFaction.members.forEach(mid => ownFactionIds.add(String(mid)));
+            } else {
+                try {
+                    const fRes = await fetch(
+                        `https://api.torn.com/faction/${myFactionId}?selections=basic&key=${encodeURIComponent(apiKey)}`,
+                        { signal: AbortSignal.timeout(4000) }
+                    );
+                    const fData = await fRes.json();
+                    if (fData && fData.members) {
+                        const mSet = new Set();
+                        Object.keys(fData.members).forEach(mid => {
+                            mSet.add(String(mid));
+                            ownFactionIds.add(String(mid));
+                        });
+                        elimState.factionMembersCache.set(String(myFactionId), { members: mSet, fetchedAt: Date.now() });
+                    }
+                } catch (fe) {}
+            }
         }
     } catch (ue) {
         return {
@@ -7696,67 +7913,74 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
 
     if (myId) ownFactionIds.add(myId);
 
-    // ── 2. Assemble candidate pool strictly from verified opposing Elimination teams ──
-    const candidateMeta = new Map(); // id -> { id, team, source, competitionId }
+    // ── 2. Retrieve authoritative 2026 tournament status & active opposing teams ──
+    const tournament = await getActiveEliminationTournament(apiKey, forceRefreshTournament);
+    const normMyTeam = normalizeElimTeamName(myTeam);
 
-    // Source A: Official Competition endpoint teams (Captains, Vice-Captains, Team members)
-    try {
-        const compRes = await fetch(
-            `https://api.torn.com/torn/?selections=competition&key=${encodeURIComponent(apiKey)}`,
-            { signal: AbortSignal.timeout(5000) }
-        );
-        const compData = await compRes.json();
-        if (compData && compData.competition && compData.competition.teams) {
-            const rawTeams = compData.competition.teams;
-            const teamsList = Array.isArray(rawTeams) ? rawTeams : (typeof rawTeams === 'object' ? Object.values(rawTeams) : []);
-            const discoveredCandidates = [];
-            for (const t of teamsList) {
-                if (!t) continue;
-                const tName = String(t.name || t.team_name || '').trim();
-                if (!tName || normalizeElimTeamName(tName) === normalizeElimTeamName(myTeam)) continue; // Skip own team
-                if (t.status === 'eliminated' || t.lives === 0) continue; // Skip eliminated team
+    if (tournament && tournament.teams.size > 0) {
+        // Check if user's own team has been eliminated
+        if (tournament.eliminatedTeams.has(normMyTeam) ||
+            (tournament.teams.has(normMyTeam) && tournament.teams.get(normMyTeam).lives <= 0)) {
+            return {
+                success: false,
+                code: 'USER_ELIMINATED',
+                isParticipating: false,
+                targetCount: 0,
+                message: `Your Elimination team ("${myTeam}") has been eliminated from the 2026 tournament.`
+            };
+        }
 
-                if (t.captain) {
-                    const cid = String(t.captain.id || t.captain);
-                    candidateMeta.set(cid, { id: cid, team: tName, source: 'torn_elimination', competitionId: compId, isLeader: true });
-                    discoveredCandidates.push({ id: cid, team: tName, isLeader: true });
-                }
-                const vcs = Array.isArray(t.vice_captains) ? t.vice_captains : (t.vice_captains && typeof t.vice_captains === 'object' ? Object.values(t.vice_captains) : []);
-                vcs.forEach(vc => {
-                    const cid = String(vc.id || vc);
-                    candidateMeta.set(cid, { id: cid, team: tName, source: 'torn_elimination', competitionId: compId, isLeader: true });
-                    discoveredCandidates.push({ id: cid, team: tName, isLeader: true });
+        const activeOpponents = Array.from(tournament.activeTeams).filter(t => t !== normMyTeam);
+        if (activeOpponents.length === 0) {
+            return {
+                success: false,
+                code: 'TOURNAMENT_ENDED',
+                isParticipating: true,
+                targetCount: 0,
+                message: 'No active opposing Elimination teams remain in the tournament.'
+            };
+        }
+    }
+
+    // ── 3. Assemble candidate pool strictly from verified 2026 opposing Elimination teams ──
+    const candidateMeta = new Map(); // id -> { id, team, source, competitionId, isLeader, level, bs, name }
+
+    // Source A: Official Tournament Leaders (captains & vice-captains of active opposing teams)
+    if (tournament && tournament.leaders) {
+        for (const [cid, leader] of tournament.leaders.entries()) {
+            if (leader.normTeam !== normMyTeam && tournament.activeTeams.has(leader.normTeam)) {
+                candidateMeta.set(cid, {
+                    id: cid,
+                    team: leader.team,
+                    name: leader.name || '',
+                    source: 'torn_elimination',
+                    competitionId: CURRENT_ELIM_COMP_ID,
+                    isLeader: true
                 });
-                const mems = Array.isArray(t.members) ? t.members : (t.members && typeof t.members === 'object' ? Object.values(t.members) : []);
-                mems.forEach(m => {
-                    const cid = String(m.id || m.playerId || m);
-                    candidateMeta.set(cid, { id: cid, team: tName, source: 'torn_elimination', competitionId: compId });
-                    discoveredCandidates.push({ id: cid, team: tName });
-                });
-            }
-            if (discoveredCandidates.length > 0) {
-                elimAddCandidates(discoveredCandidates, compId).catch(() => {});
             }
         }
-    } catch (ce) {}
+    }
 
-    // Source B: Verified opposing team rosters from MongoDB (EXCLUSIVELY source: 'torn_elimination' within active tournament)
+    // Source B: Verified opposing team rosters from MongoDB (strictly 2026 event scoped)
     if (mongoose.connection.readyState === 1) {
         try {
             const elimCol = mongoose.connection.db.collection('elim_candidates');
             const docs = await elimCol.find({
                 source: 'torn_elimination',
-                competitionId: compId,
-                updatedAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+                competitionId: CURRENT_ELIM_COMP_ID,
+                updatedAt: { $gte: new Date('2026-09-01') }
             }).sort({ bs: 1, level: 1 }).limit(6000).toArray();
+
             for (const d of docs) {
                 const cid = String(d._id);
-                if (normalizeElimTeamName(d.team) !== normalizeElimTeamName(myTeam) && !candidateMeta.has(cid)) {
+                const cNormTeam = normalizeElimTeamName(d.team);
+                const isOpponent = cNormTeam !== normMyTeam && (!tournament || tournament.activeTeams.has(cNormTeam));
+                if (isOpponent && !candidateMeta.has(cid)) {
                     candidateMeta.set(cid, {
                         id: cid,
                         team: d.team,
                         source: 'torn_elimination',
-                        competitionId: d.competitionId || compId,
+                        competitionId: CURRENT_ELIM_COMP_ID,
                         bs: d.bs || 0,
                         level: d.level || 0,
                         name: d.name || '',
@@ -7767,154 +7991,46 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         } catch (dbErr) {}
     }
 
-    // Source C: Synced rosters from memory (user's roster + shared tournament pool)
-    const userRoster = elimState.rosters.get(userKeyId) || (userId ? (elimState.rosters.get(String(userId)) || elimState.rosters.get(`torn:${userId}`)) : null);
-    if (userRoster && userRoster.competitionId === compId &&
-        Date.now() - userRoster.syncedAt <= 14 * 24 * 60 * 60 * 1000 &&
-        Array.isArray(userRoster.members)) {
-        for (const m of userRoster.members) {
-            if (m && m.team && normalizeElimTeamName(m.team) !== normalizeElimTeamName(myTeam)) {
-                const cid = String(m.id || m.playerId || m);
-                if (!candidateMeta.has(cid)) {
-                    candidateMeta.set(cid, { id: cid, team: m.team, level: m.level || 0, name: m.name || '', source: 'torn_elimination', competitionId: compId });
-                }
-            }
-        }
-    }
+    // Source C: Synced rosters from memory (strictly CURRENT_ELIM_COMP_ID and active opponents)
     for (const [rKey, rData] of elimState.rosters.entries()) {
-        if (rData && rData.competitionId === compId &&
-            Date.now() - rData.syncedAt <= 14 * 24 * 60 * 60 * 1000 &&
-            Array.isArray(rData.members)) {
+        if (rData && rData.competitionId === CURRENT_ELIM_COMP_ID && Array.isArray(rData.members)) {
             for (const m of rData.members) {
-                if (m && m.team && normalizeElimTeamName(m.team) !== normalizeElimTeamName(myTeam)) {
-                    const cid = String(m.id || m.playerId || m);
-                    if (!candidateMeta.has(cid)) {
-                        candidateMeta.set(cid, { id: cid, team: m.team, level: m.level || 0, name: m.name || '', source: 'torn_elimination', competitionId: compId });
-                    }
-                }
-            }
-        }
-    }
-
-    // Source D: Autonomous Tournament Opponent Ingestion from Live Competition Attacks
-    if (apiKey) {
-        try {
-            const atksRes = await fetch(
-                `https://api.torn.com/v2/user/competition/attacks?key=${encodeURIComponent(apiKey)}`,
-                { signal: AbortSignal.timeout(5000) }
-            );
-            const atksData = await atksRes.json();
-            if (atksData && Array.isArray(atksData.attacks)) {
-                const autoDiscovered = [];
-                for (const a of atksData.attacks) {
-                    let opp = null;
-                    const ffMod = a.modifiers && typeof a.modifiers.fair_fight === 'number' ? a.modifiers.fair_fight : null;
-                    if (a.attacker && String(a.attacker.id) === myId && a.defender && a.defender.id) {
-                        opp = a.defender;
-                    } else if (a.defender && String(a.defender.id) === myId && a.attacker && a.attacker.id) {
-                        opp = a.attacker;
-                    } else if (a.defender && a.defender.id && String(a.defender.id) !== myId) {
-                        opp = a.defender;
-                    }
-                    if (opp && opp.id && String(opp.id) !== myId && !ownFactionIds.has(String(opp.id))) {
-                        const cid = String(opp.id);
-                        const lvl = Number(opp.level) || 0;
-                        const oppTeam = opp.team || 'Opposing Team';
-                        let estBS = 0;
-                        if (ffMod && ffMod > 1 && myStats > 0) {
-                            estBS = Math.round(myStats * (ffMod - 1) * (3 / 8));
-                        } else if (lvl > 0) {
-                            estBS = estimateStatsFromLevel(lvl);
-                        }
+                if (m && m.team) {
+                    const cNormTeam = normalizeElimTeamName(m.team);
+                    const isOpponent = cNormTeam !== normMyTeam && (!tournament || tournament.activeTeams.has(cNormTeam));
+                    if (isOpponent) {
+                        const cid = String(m.id || m.playerId || m);
                         if (!candidateMeta.has(cid)) {
                             candidateMeta.set(cid, {
                                 id: cid,
-                                team: oppTeam,
-                                name: opp.name || '',
-                                level: lvl,
+                                team: m.team,
+                                level: m.level || 0,
+                                name: m.name || '',
                                 source: 'torn_elimination',
-                                competitionId: compId,
-                                bs: estBS,
-                                ff: ffMod,
-                                isLeader: false
+                                competitionId: CURRENT_ELIM_COMP_ID
                             });
-                            autoDiscovered.push({ id: cid, team: oppTeam, name: opp.name || '', level: lvl, bs: estBS, isLeader: false });
-                        } else {
-                            const existing = candidateMeta.get(cid);
-                            if (lvl > 0 && (!existing.level || existing.level === 0)) existing.level = lvl;
-                            if (estBS > 0 && (!existing.bs || existing.bs === 0)) existing.bs = estBS;
-                            if (ffMod && !existing.ff) existing.ff = ffMod;
-                            if (opp.name && !existing.name) existing.name = opp.name;
-                            if (oppTeam && oppTeam !== 'Opposing Team' && existing.team === 'Opposing Team') existing.team = oppTeam;
                         }
                     }
                 }
-                if (autoDiscovered.length > 0) {
-                    elimAddCandidates(autoDiscovered, compId).catch(() => {});
-                }
             }
-        } catch (atksErr) {}
+        }
     }
 
-    // Source E: Recent Faction Attacks (Harvest opponents attacked by faction teammates)
-    if (apiKey) {
-        try {
-            const facAtksRes = await fetch(
-                `https://api.torn.com/faction/?selections=attacks&key=${encodeURIComponent(apiKey)}`,
-                { signal: AbortSignal.timeout(4000) }
-            );
-            const facAtksData = await facAtksRes.json();
-            if (facAtksData && facAtksData.attacks) {
-                const facAtks = Array.isArray(facAtksData.attacks) ? facAtksData.attacks : Object.values(facAtksData.attacks);
-                const facDiscovered = [];
-                for (const fa of facAtks) {
-                    const defId = String(fa.defender_id || '');
-                    if (defId && defId !== '0' && defId !== myId && !ownFactionIds.has(defId)) {
-                        const ffMod = fa.modifiers && typeof fa.modifiers.fair_fight === 'number' ? fa.modifiers.fair_fight : null;
-                        let estBS = 0;
-                        if (ffMod && ffMod > 1 && myStats > 0) {
-                            estBS = Math.round(myStats * (ffMod - 1) * (3 / 8));
-                        }
-                        if (!candidateMeta.has(defId)) {
-                            candidateMeta.set(defId, {
-                                id: defId,
-                                team: 'Opposing Team',
-                                name: fa.defender_name || '',
-                                level: 0,
-                                source: 'torn_elimination',
-                                competitionId: compId,
-                                bs: estBS,
-                                ff: ffMod,
-                                isLeader: false
-                            });
-                            facDiscovered.push({ id: defId, team: 'Opposing Team', name: fa.defender_name || '', bs: estBS, isLeader: false });
-                        } else {
-                            const existing = candidateMeta.get(defId);
-                            if (estBS > 0 && (!existing.bs || existing.bs === 0)) existing.bs = estBS;
-                            if (ffMod && !existing.ff) existing.ff = ffMod;
-                            if (fa.defender_name && !existing.name) existing.name = fa.defender_name;
-                        }
-                    }
-                }
-                if (facDiscovered.length > 0) {
-                    elimAddCandidates(facDiscovered, compId).catch(() => {});
-                }
-            }
-        } catch (fe) {}
-    }
-
-    // ── 2b. Mandatory Base Safety Filter (Cannot attack yourself, faction, or own elimination team) ──
+    // ── 4. Mandatory Base Safety Filter (No self, no faction members, no teammates, no non-elim) ──
     const baseEligible = Array.from(candidateMeta.values()).filter(cand => {
         const id = String(cand.id);
         if (!id || id === '0') return false;
-        if (myId && id === myId) return false;                  // Never attack yourself
-        if (ownFactionIds.has(id)) return false;                // Protect faction teammates
-        if (normalizeElimTeamName(cand.team) === normalizeElimTeamName(myTeam)) return false; // Protect elimination teammates
-        if (cand.source !== 'torn_elimination') return false;   // Hard provenance verification
+        if (myId && id === myId) return false;                           // Never attack yourself
+        if (ownFactionIds.has(id)) return false;                         // Never attack faction members
+        if (normalizeElimTeamName(cand.team) === normMyTeam) return false; // Never attack elimination teammates
+        if (tournament && !tournament.activeTeams.has(normalizeElimTeamName(cand.team))) return false; // Exclude eliminated teams
+        if (cand.source !== 'torn_elimination') return false;            // Provenance verification
+        if (elimState.nonElimBlacklist.has(id)) return false;            // Known non-participants
         return true;
     });
 
     if (baseEligible.length === 0) {
+        console.warn(`[Elim Snipe] No candidate pool for user ${myId} (${myTeam}). Candidates in meta: ${candidateMeta.size}`);
         return {
             success: false,
             code: 'NO_VERIFIED_TARGETS',
@@ -7924,8 +8040,8 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         };
     }
 
-    // ── Progressive Fallback Filter ──
-    // Pass 1: Strict exclusion (excludes served in last 30s, hospital blacklist, session exclusions)
+    // ── Progressive Fallback Filter for Local Exclusions ──
+    // Pass 1: Exclude user-requested exclusions, active hospital blacklist, and recently served targets
     let pool = baseEligible.filter(cand => {
         const id = cand.id;
         if (excludeSet.has(id)) return false;
@@ -7934,7 +8050,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         return true;
     });
 
-    // Pass 2: If pool is empty, relax served cooldowns (allows re-engaging targets)
+    // Pass 2: If pool empty, relax served cooldowns
     if (pool.length === 0) {
         pool = baseEligible.filter(cand => {
             const id = cand.id;
@@ -7944,7 +8060,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         });
     }
 
-    // Pass 3: If still empty, relax session exclusions (user clicked Try Again / Snipe)
+    // Pass 3: If still empty, relax session exclusions
     if (pool.length === 0) {
         pool = baseEligible.filter(cand => {
             const id = cand.id;
@@ -7953,15 +8069,13 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         });
     }
 
-    // Pass 4: If still empty, relax hospital blacklist (live check in Step 6 will verify live status)
+    // Pass 4: Fallback to all base eligible (live check will filter hospital/flying)
     if (pool.length === 0) {
         pool = baseEligible.slice();
     }
 
-    // ── Intelligent Batch Prioritization ──
-    // Sort pool so beatable, lower-stat, lower-level candidates are prioritized
+    // ── 5. Intelligent Batch Prioritization & Sorting ──
     pool.sort((a, b) => {
-        // Demote leaders/captains for sub-5M players (leaders are high-level targets constantly hospitalized)
         const aLeader = Boolean(a.isLeader);
         const bLeader = Boolean(b.isLeader);
         if (myStats > 0 && myStats < 5_000_000) {
@@ -7978,26 +8092,21 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         if (aBs > 0 && myStats > 0) return aBs <= myStats * 1.25 ? -1 : 1;
         if (bBs > 0 && myStats > 0) return bBs <= myStats * 1.25 ? 1 : -1;
 
-        // Leaders with unknown level default to 85, regular opponents to 45 (never 1)
         const aLvl = a.level > 0 ? a.level : (aLeader ? 85 : 45);
         const bLvl = b.level > 0 ? b.level : (bLeader ? 85 : 45);
         return aLvl - bLvl;
     });
 
-    // Take top 120 candidates for bulk evaluation
     const batch = pool.slice(0, 120);
     const batchIds = batch.map(b => b.id);
 
-    // ── 3. Query FF Scouter for live Fair Fight & Battle Stat estimates ──
+    // ── 6. Query FF Scouter for Battle Stat estimates ──
     const ffStats = new Map();
-    let ffScouterFailed = false;
-
     try {
-        const ffUrl = `https://ffscouter.com/api/v1/get-stats?key=${encodeURIComponent(apiKey)}&targets=${batchIds.join(',')}`;
-        const r = await fetch(ffUrl, { signal: AbortSignal.timeout(7000) });
-        if (!r.ok) {
-            ffScouterFailed = true;
-        } else {
+        const ffKey = typeof getFFScouterKey === 'function' ? getFFScouterKey() : (process.env.FFSCOUTER_KEY || apiKey);
+        const ffUrl = `https://ffscouter.com/api/v1/get-stats?key=${encodeURIComponent(ffKey || apiKey)}&targets=${batchIds.join(',')}`;
+        const r = await fetch(ffUrl, { signal: AbortSignal.timeout(6000) });
+        if (r.ok) {
             const d = await r.json();
             if (Array.isArray(d)) {
                 d.forEach(p => {
@@ -8009,8 +8118,6 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
                     const bs = (p.bs_estimate != null && !isNaN(Number(p.bs_estimate)))
                         ? Number(p.bs_estimate) : (Number(p.battlestats) || 0);
 
-                    // Calculate accurate Fair Fight relative to the requesting user's live stats:
-                    // FF = 1 + (8/3) * (Target BS / Attacker BS)
                     let ff = null;
                     if (bs > 0 && myStats > 0) {
                         ff = parseFloat((1 + (8 / 3) * (bs / myStats)).toFixed(2));
@@ -8028,35 +8135,29 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
                         }
                     }
                 });
-            } else {
-                ffScouterFailed = true;
             }
         }
-    } catch (ffe) {
-        ffScouterFailed = true;
-    }
+    } catch (ffe) {}
 
-    // ── 4. Filter candidates by realistic hittability against requesting user's live stats ──
+    // ── 7. Filter candidates by realistic hittability against requesting user's stats ──
     const tierPass = batch.filter(cand => {
         const id = cand.id;
         const s = ffStats.get(id);
         const bs = (s && s.bs) || cand.bs || 0;
         const lvl = cand.level || 0;
 
-        // If stats are known from FF Scouter / database:
         if (bs > 0 && myStats > 0) {
             const ratio = bs / myStats;
             if (cleanTier === 'easy' && ratio > 0.85) return false;
             if (cleanTier === 'manageable' && ratio > 1.25) return false;
             if (cleanTier === 'difficult' && ratio > 1.65) return false;
-            if (cleanTier === 'all' && myStats < 5_000_000 && ratio > 2.0) return false; // STRICT: max 2.0x for sub-5M
+            if (cleanTier === 'all' && myStats < 5_000_000 && ratio > 2.0) return false;
             if (cleanTier === 'all' && myStats >= 5_000_000 && ratio > 4.0) return false;
             return true;
         }
 
-        // If stats are unknown, use candidate level:
         if (myStats > 0) {
-            if (cand.isLeader && myStats < 5_000_000) return false; // Demote unknown captains for sub-5M
+            if (cand.isLeader && myStats < 5_000_000) return false;
             if (cleanTier === 'easy') return lvl > 0 && lvl <= 25;
             if (cleanTier === 'manageable') return lvl === 0 || lvl <= 42;
             if (cleanTier === 'difficult') return lvl === 0 || lvl <= 48;
@@ -8076,7 +8177,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         };
     }
 
-    // ── 5. Target Scoring System (0 to 100 ranking) ──
+    // ── 8. Candidate Scoring System ──
     const scoredCandidates = [];
     for (const cand of tierPass) {
         const targetId = cand.id;
@@ -8084,7 +8185,6 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         const targetBS = s.bs || cand.bs || 0;
         const targetLvl = cand.level || 0;
 
-        // Calculate ratio
         let ratio = 1.0;
         if (myStats > 0 && targetBS > 0) {
             ratio = targetBS / myStats;
@@ -8092,14 +8192,13 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             const estBS = estimateStatsFromLevel(targetLvl);
             ratio = myStats > 0 ? (estBS / myStats) : 1.0;
         } else if (cand.isLeader) {
-            ratio = 3.0; // Leaders are high-stat tournament veterans
+            ratio = 3.0;
         } else {
-            ratio = 0.65; // Assume moderate newcomer for unknown
+            ratio = 0.65;
         }
 
         const ff = s.ff != null ? s.ff : parseFloat((1 + (8 / 3) * ratio).toFixed(2));
 
-        // Hard Drop: If candidate is excessively strong, drop them immediately
         if (myStats > 0 && myStats < 5_000_000) {
             if (cleanTier === 'easy' && (targetBS > myStats * 0.85 || targetLvl > 25)) continue;
             if (cleanTier === 'manageable' && (targetBS > myStats * 1.25 || targetLvl > 42)) continue;
@@ -8114,7 +8213,6 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         let difficulty = "Manageable";
         let risk = "Medium";
 
-        // Optimal elimination range: 0.35x - 0.85x user stats (safe win, high competition points)
         if (ratio >= 0.35 && ratio <= 0.85) {
             baseScore = 95 - Math.round(Math.abs(ratio - 0.65) * 20);
             difficulty = "Comfortably Hittable";
@@ -8141,12 +8239,9 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             risk = "Extreme";
         }
 
-        if (difficulty === "Too Strong" && cleanTier !== 'all') {
-            continue;
-        }
+        if (difficulty === "Too Strong" && cleanTier !== 'all') continue;
 
         const score = Math.min(99, Math.max(10, baseScore));
-
         scoredCandidates.push({
             id: targetId,
             team: cand.team,
@@ -8172,50 +8267,87 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         };
     }
 
-    // Sort by highest score first; for ties, lowest ratio (easiest target first)
     scoredCandidates.sort((a, b) => (b.score - a.score) || (a.ratio - b.ratio));
 
-    // ── 6. Live Status Verification (Exclude Hospital, Flying, Jail & Verify Level) ──
+    // ── 9. Live Authoritative Target Verification via Torn API v2 ──
+    // Every single candidate MUST authoritatively pass live Torn competition and profile checks
     let chosenTarget = null;
     let checkedCount = 0;
     let hospCount = 0;
     let flyCount = 0;
+    let nonElimCount = 0;
 
-    for (const cand of scoredCandidates.slice(0, 50)) {
+    for (const cand of scoredCandidates.slice(0, 45)) {
         checkedCount++;
-        let prof;
+        let profData;
         try {
             const r = await fetch(
-                `https://api.torn.com/user/${cand.id}?selections=profile&key=${encodeURIComponent(apiKey)}`,
-                { signal: AbortSignal.timeout(4000) }
+                `https://api.torn.com/v2/user/${cand.id}/?selections=profile,competition&key=${encodeURIComponent(apiKey)}`,
+                { signal: AbortSignal.timeout(4500) }
             );
-            prof = await r.json();
+            profData = await r.json();
         } catch (e) {
             continue;
         }
 
-        if (!prof || prof.error || !prof.status) continue;
+        if (!profData || profData.error) continue;
 
-        const rawState = prof.status.state || '';
+        // CHECK 1: Live Tournament Participation & Opposing Team Verification
+        const tComp = profData.competition;
+        const tCompTeam = tComp ? String(tComp.team || tComp.team_name || '').trim() : '';
+        const normTCompTeam = normalizeElimTeamName(tCompTeam);
+
+        const isLiveParticipant = tComp &&
+            tComp.name === 'Elimination' &&
+            tCompTeam !== '' &&
+            normTCompTeam !== 'unknown';
+
+        if (!isLiveParticipant) {
+            nonElimCount++;
+            elimState.nonElimBlacklist.set(cand.id, Date.now() + 10 * 60 * 1000);
+            continue;
+        }
+
+        // Must be on an opposing team (not user's team)
+        if (normTCompTeam === normMyTeam) {
+            continue;
+        }
+
+        // Must be on an active team in the 2026 tournament (not eliminated)
+        if (tournament && !tournament.activeTeams.has(normTCompTeam)) {
+            elimState.nonElimBlacklist.set(cand.id, Date.now() + 10 * 60 * 1000);
+            continue;
+        }
+
+        // CHECK 2: Live Faction Protection
+        const tProf = profData.profile || profData;
+        const tFactionId = tProf.faction_id || (tProf.faction && tProf.faction.faction_id);
+        if (tFactionId && myFactionId && String(tFactionId) === String(myFactionId)) {
+            ownFactionIds.add(cand.id);
+            continue;
+        }
+        if (ownFactionIds.has(cand.id)) {
+            continue;
+        }
+
+        // CHECK 3: Live Attackability (Status State)
+        const rawState = (tProf.status && tProf.status.state) ? String(tProf.status.state) : '';
         const state = rawState.toLowerCase();
 
-        // Hospital check (60-90 seconds max blacklist, med-outs happen fast)
         if (state === 'hospital') {
             hospCount++;
-            const durationMins = prof.status.until ? Math.min(2, Math.max(1, Math.ceil((prof.status.until * 1000 - Date.now()) / 60000))) : 1;
+            const durationMins = tProf.status.until ? Math.min(2, Math.max(1, Math.ceil((tProf.status.until * 1000 - Date.now()) / 60000))) : 1;
             elimState.hospBlacklist.set(cand.id, Date.now() + durationMins * 60 * 1000);
             continue;
         }
 
-        // Flying / Traveling check
         if (state === 'traveling' || state === 'abroad') {
             flyCount++;
-            const durationMins = prof.status.until ? Math.min(8, Math.max(2, Math.ceil((prof.status.until * 1000 - Date.now()) / 60000))) : 4;
+            const durationMins = tProf.status.until ? Math.min(8, Math.max(2, Math.ceil((tProf.status.until * 1000 - Date.now()) / 60000))) : 4;
             elimState.hospBlacklist.set(cand.id, Date.now() + durationMins * 60 * 1000);
             continue;
         }
 
-        // Jail check
         if (state === 'jail' || state === 'federal') {
             elimState.hospBlacklist.set(cand.id, Date.now() + 5 * 60 * 1000);
             continue;
@@ -8226,33 +8358,25 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             continue;
         }
 
-        // Whale protection guard: check live level & estimated strength against requesting user
-        const targetLvl = Number(prof.level) || cand.level || 1;
-        const targetEstBS = cand.bs > 0 ? cand.bs : estimateStatsFromLevel(targetLvl);
+        // CHECK 4: Whale protection guard against live level
+        const liveLevel = Number(tProf.level) || cand.level || 1;
+        const liveEstBS = cand.bs > 0 ? cand.bs : estimateStatsFromLevel(liveLevel);
         if (myStats > 0 && myStats < 5_000_000) {
-            if (cleanTier === 'easy' && (targetEstBS > myStats * 0.85 || targetLvl > 25)) continue;
-            if (cleanTier === 'manageable' && (targetEstBS > myStats * 1.25 || targetLvl > 42)) continue;
-            if (cleanTier === 'difficult' && (targetEstBS > myStats * 1.65 || targetLvl > 48)) continue;
-            if (cleanTier === 'all' && (targetEstBS > Math.min(2_500_000, myStats * 2.0) || targetLvl > 52)) continue;
+            if (cleanTier === 'easy' && (liveEstBS > myStats * 0.85 || liveLevel > 25)) continue;
+            if (cleanTier === 'manageable' && (liveEstBS > myStats * 1.25 || liveLevel > 42)) continue;
+            if (cleanTier === 'difficult' && (liveEstBS > myStats * 1.65 || liveLevel > 48)) continue;
+            if (cleanTier === 'all' && (liveEstBS > Math.min(2_500_000, myStats * 2.0) || liveLevel > 52)) continue;
         } else if (myStats > 0) {
-            if (cleanTier === 'easy' && (targetEstBS > myStats * 0.85 || targetLvl > 25)) continue;
-            if (cleanTier === 'manageable' && (targetEstBS > myStats * 1.25 || targetLvl > 45)) continue;
-            if (cleanTier === 'difficult' && (targetEstBS > myStats * 1.70 || targetLvl > 65)) continue;
-            if (cleanTier === 'all' && targetEstBS > myStats * 5.0 && targetLvl > 75) continue;
+            if (cleanTier === 'easy' && (liveEstBS > myStats * 0.85 || liveLevel > 25)) continue;
+            if (cleanTier === 'manageable' && (liveEstBS > myStats * 1.25 || liveLevel > 45)) continue;
+            if (cleanTier === 'difficult' && (liveEstBS > myStats * 1.70 || liveLevel > 65)) continue;
+            if (cleanTier === 'all' && liveEstBS > myStats * 5.0 && liveLevel > 75) continue;
         }
 
-        // Persist verified level to MongoDB in background
-        if (mongoose.connection.readyState === 1 && targetLvl > 0) {
-            try {
-                const col = mongoose.connection.db.collection('elim_candidates');
-                col.updateOne({ _id: Number(cand.id) }, { $set: { level: targetLvl, name: prof.name || '' } }).catch(() => {});
-            } catch (e) {}
-        }
-
-        // Confirmed Okay — apply short 30-second per-user served cooldown
+        // Verified Live Candidate — Apply 30s per-user served cooldown
         myServed.set(cand.id, Date.now() + 30 * 1000);
 
-        const targetBSHuman = cand.bs > 0 ? formatElimStat(cand.bs) : (targetLvl > 0 ? `~${formatElimStat(estimateStatsFromLevel(targetLvl))}` : 'Unknown');
+        const targetBSHuman = cand.bs > 0 ? formatElimStat(cand.bs) : (liveLevel > 0 ? `~${formatElimStat(estimateStatsFromLevel(liveLevel))}` : 'Unknown');
         const attackerBSHuman = myStats > 0 ? formatElimStat(myStats) : 'Unknown';
 
         let bsBullet = "Fair Fight score indicates a favorable target matchup";
@@ -8267,11 +8391,11 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
                 bsBullet = `Target battle stats (~${targetBSHuman}) exceed standard range (${attackerBSHuman}) — caution advised`;
             }
         } else {
-            bsBullet = `Level ${targetLvl} opponent — estimated stats (~${targetBSHuman}) match your tier profile`;
+            bsBullet = `Level ${liveLevel} opponent — estimated stats (~${targetBSHuman}) match your tier profile`;
         }
 
         const why = [
-            `Verified opponent on opposing team "${cand.team}"`,
+            `Verified 2026 Elimination participant on opposing team "${tCompTeam}"`,
             "Available to attack (confirmed Okay in Torn City)",
             "Not hospitalized, flying, or jailed",
             bsBullet,
@@ -8281,13 +8405,13 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         chosenTarget = {
             success: true,
             targetId: cand.id,
-            name: prof.name || `Player #${cand.id}`,
-            level: targetLvl,
+            name: tProf.name || `Player #${cand.id}`,
+            level: liveLevel,
             status: "Available (Okay)",
             travel: "In Torn City (Not flying)",
-            team: cand.team,
+            team: tCompTeam,
             attackerTeam: myTeam,
-            targetBS: cand.bs || targetEstBS,
+            targetBS: cand.bs || liveEstBS,
             targetBSHuman,
             attackerBS: myStats,
             attackerBSHuman,
@@ -8298,11 +8422,13 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             why,
             targetCount: scoredCandidates.length,
             isParticipating: true,
+            attackUrl: `https://www.torn.com/page.php?sid=attack&user2ID=${cand.id}`,
             provenance: {
                 source: "torn_elimination",
-                competitionId: compId,
+                competitionId: CURRENT_ELIM_COMP_ID,
+                tournamentYear: CURRENT_ELIM_YEAR,
                 attackerTeam: myTeam,
-                targetTeam: cand.team,
+                targetTeam: tCompTeam,
                 isEliminationParticipant: true,
                 isValidOpponent: true
             }
@@ -8313,6 +8439,8 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
     if (chosenTarget) {
         return chosenTarget;
     }
+
+    console.info(`[Elim Snipe] Verification complete for user ${myId}. Checked: ${checkedCount}, Hosp: ${hospCount}, Flying: ${flyCount}, NonElim: ${nonElimCount}`);
 
     if (hospCount + flyCount === checkedCount && checkedCount > 0) {
         return {
@@ -8326,10 +8454,10 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
 
     return {
         success: false,
-        code: 'NO_LIVE_TARGETS',
+        code: 'NO_VERIFIED_TARGETS',
         isParticipating: true,
         targetCount: 0,
-        message: 'No available Elimination targets passed live verification. Please try again in a few seconds.'
+        message: 'No verified Elimination targets available right now.'
     };
 }
 
@@ -8366,13 +8494,19 @@ app.get('/api/elim/snipe', async (req, res) => {
         }
 
         const tier = (req.query.tier || 'manageable').toLowerCase();
-        const myTeamQuery = (req.query.myTeam || req.query.team || '').trim();
+        const forceRefreshTournament = req.query.refresh === '1' || req.query.refreshTourney === '1';
         const excludeIds = new Set(
             (req.query.exclude || '').split(',').map(s => s.trim()).filter(Boolean)
         );
         const userId = tornId || discordId || (req.userSession ? String(req.userSession.playerId) : '') || (resolvedUser ? String(resolvedUser.playerId) : '') || '';
 
-        const result = await findElimSnipeTargetForUser({ apiKey, userId, tier, excludeIds, userProvidedTeam: myTeamQuery });
+        const result = await findElimSnipeTargetForUser({
+            apiKey,
+            userId,
+            tier,
+            excludeIds,
+            forceRefreshTournament
+        });
         return res.json(result);
     } catch (err) {
         console.error('[Elim Snipe API] Error:', userKeys.sanitizeErrorMessage(err.message));
@@ -15022,10 +15156,19 @@ function setupSlashBotEvents(bot, token) {
                             ephemeral: true
                         }).catch(() => {});
                     }
+                    if (result?.code === 'USER_ELIMINATED') {
+                        return interaction.followUp({
+                            embeds: [sanitizeEmbed(UI.warning(
+                                '🛑 Elimination Team Knocked Out',
+                                result?.message || 'Your Elimination team has been eliminated from the 2026 tournament.'
+                            ))],
+                            ephemeral: true
+                        }).catch(() => {});
+                    }
                     return interaction.followUp({
                         embeds: [sanitizeEmbed(UI.warning(
                             '🎯 Target Finder Notice',
-                            result?.message || 'No additional candidates available right now. Please try again shortly.'
+                            result?.message || 'No verified Elimination targets available right now. Please try again shortly.'
                         ))],
                         ephemeral: true
                     }).catch(() => {});
@@ -15117,11 +15260,18 @@ function setupSlashBotEvents(bot, token) {
                     );
                     return await interaction.editReply({ embeds: [sanitizeEmbed(elimNotice)] });
                 }
+                if (result?.code === 'USER_ELIMINATED') {
+                    const elimNotice = UI.warning(
+                        '🛑 Elimination Team Knocked Out',
+                        result?.message || 'Your Elimination team has been eliminated from the 2026 tournament.'
+                    );
+                    return await interaction.editReply({ embeds: [sanitizeEmbed(elimNotice)] });
+                }
 
                 return await interaction.editReply({
                     embeds: [sanitizeEmbed(UI.warning(
                         '🎯 Target Finder Notice',
-                        result?.message || 'No candidates available right now matching your criteria. Please try again shortly or adjust tier in settings.'
+                        result?.message || 'No verified Elimination targets available right now matching your criteria. Please try again shortly or adjust tier in settings.'
                     ))]
                 });
             }

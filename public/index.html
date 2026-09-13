@@ -1474,12 +1474,33 @@ setInterval(() => {
     });
 }, 1000);
 
-function startPolling() {
-    if (fetchTimer) clearInterval(fetchTimer);
-    let refreshMs = Math.floor(60000 / cpm);
-    fetchWarboard(); startRefreshProgressBar(refreshMs);
-    fetchTimer = setInterval(() => { fetchWarboard(); startRefreshProgressBar(refreshMs); }, refreshMs);
+function stopPolling() {
+    if (fetchTimer) { clearInterval(fetchTimer); fetchTimer = null; }
+    if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
 }
+
+function startPolling() {
+    if (document.hidden) return;
+    if (fetchTimer) clearInterval(fetchTimer);
+    let refreshMs = Math.max(3000, Math.floor(60000 / cpm));
+    fetchWarboard(); startRefreshProgressBar(refreshMs);
+    fetchTimer = setInterval(() => {
+        if (document.hidden) {
+            stopPolling();
+            return;
+        }
+        fetchWarboard();
+        startRefreshProgressBar(refreshMs);
+    }, refreshMs);
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        stopPolling();
+    } else {
+        startPolling();
+    }
+});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatTime(ts) {
@@ -1532,13 +1553,24 @@ function getStatusPillClass(p) {
 }
 
 // ─── Main Fetch ───────────────────────────────────────────────────────────────
+let isFetchingWarboard = false;
+let lastWarboardEtag = '';
+
 async function fetchWarboard() {
-    if (!myKey) return;
+    if (!myKey || isFetchingWarboard || document.hidden) return;
+    isFetchingWarboard = true;
     try {
         const reqHeaders = { 'x-api-key': myKey, 'x-enemy-id': enemyFacId, 'x-ff-key': ffKey };
         const myFacOverride = localStorage.getItem("warboard_myFactionId") || "";
         if (myFacOverride) reqHeaders['x-faction-id'] = myFacOverride;
+        if (lastWarboardEtag) reqHeaders['If-None-Match'] = lastWarboardEtag;
         const res = await fetch(`/api/warboard`, { headers: reqHeaders });
+        if (res.status === 304) {
+            document.getElementById("last-updated").innerText = `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}`;
+            return;
+        }
+        const etagHeader = res.headers.get('ETag');
+        if (etagHeader) lastWarboardEtag = etagHeader;
         const data = await res.json();
         
         if (data.error) {
@@ -1775,7 +1807,7 @@ async function fetchWarboard() {
                 syncBanner.style.display = "none";
             }
         }
-    } catch(e) { console.error("Warboard fetch failed:", e); }
+    } catch(e) { console.error("Warboard fetch failed:", e); } finally { isFetchingWarboard = false; }
 }
 
 // ─── Peacetime Pre-War Scouter Actions ───────────────────────────────────────

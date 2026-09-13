@@ -39,8 +39,13 @@
     let consecutiveFailures = 0;
     let pollInterval = null;
     let injectInterval = null;
+    let lastClaimsEtag = null;
+    let currentPollDelay = 6000;
+    const MIN_POLL_DELAY = 6000;   // 6s active
+    const MAX_POLL_DELAY = 15000;  // 15s idle
+    let pollTimeout = null;
 
-    const STALE_AFTER_FAILURES = 3; // ~7.5s of no successful contact at the 2.5s poll rate
+    const STALE_AFTER_FAILURES = 4;
 
     // ---- Styles ----
     const style = document.createElement('style');
@@ -516,38 +521,61 @@
     function fetchClaims() {
         if (!backendUrl || isFetching) return;
 
-        // Used to skip fetching when no buttons existed yet, unless the URL
-        // looked like an enemy faction roster page. That URL check doesn't
-        // match the war pop-out, which delayed or blocked claims from ever
-        // loading there. Simpler and more robust to just always fetch.
         isFetching = true;
+        const headers = { "Accept": "application/json" };
+        if (lastClaimsEtag) {
+            headers["If-None-Match"] = lastClaimsEtag;
+        }
+
         GM_xmlhttpRequest({
             method: 'GET',
             url: `${backendUrl}/api/claims`,
+            headers: headers,
             onload: function(response) {
                 isFetching = false;
                 let ok = false;
-                if (response.status >= 200 && response.status < 300) {
+                let changed = false;
+
+                if (response.status === 304) {
+                    // 304 Not Modified: Claims unchanged. 0 body bytes transferred!
+                    ok = true;
+                    changed = false;
+                    currentPollDelay = Math.min(currentPollDelay + 2000, MAX_POLL_DELAY);
+                } else if (response.status >= 200 && response.status < 300) {
                     try {
                         const data = JSON.parse(response.responseText);
                         if (data.success && data.claims) {
                             activeClaims = data.claims;
                             ok = true;
+                            changed = true;
+                            currentPollDelay = MIN_POLL_DELAY;
+                        }
+                        if (response.responseHeaders) {
+                            const match = response.responseHeaders.match(/^etag:\s*(.+)$/im);
+                            if (match && match[1]) lastClaimsEtag = match[1].trim();
                         }
                     } catch (e) {}
                 }
+
                 if (ok) {
                     hasEverSucceeded = true;
                     consecutiveFailures = 0;
                 } else {
                     consecutiveFailures++;
                 }
-                updateUI();
+
+                if (changed) {
+                    updateUI();
+                }
+
+                scheduleNextPoll();
             },
             onerror: function() {
                 isFetching = false;
                 consecutiveFailures++;
                 updateUI();
+                currentPollDelay = Math.min(currentPollDelay + 3000, MAX_POLL_DELAY);
+                scheduleNextPoll();
             }
         });
     }
@@ -567,9 +595,10 @@
             url: `${backendUrl}/api/claim`,
             headers: { "Content-Type": "application/json" },
             data: JSON.stringify({ enemyId: enemyId.toString(), playerName: playerName }),
-            onload: function() { fetchClaims(); },
+            onload: function() { resetPollRate(); fetchClaims(); },
             onerror: function() {
                 showToast('Could not reach the Dibs server', true);
+                resetPollRate();
                 fetchClaims();
             }
         });
@@ -581,9 +610,10 @@
             url: `${backendUrl}/api/unclaim`,
             headers: { "Content-Type": "application/json" },
             data: JSON.stringify({ enemyId: enemyId.toString(), playerName: playerName }),
-            onload: function() { fetchClaims(); },
+            onload: function() { resetPollRate(); fetchClaims(); },
             onerror: function() {
                 showToast('Could not reach the Dibs server', true);
+                resetPollRate();
                 fetchClaims();
             }
         });
@@ -884,18 +914,30 @@
     }
 
     // ---- Timers, paused while the tab/page is hidden ----
-    function startTimers() {
-        if (!pollInterval) {
+    function scheduleNextPoll(delay = currentPollDelay) {
+        if (pollTimeout) { clearTimeout(pollTimeout); pollTimeout = null; }
+        if (document.hidden) return;
+        pollTimeout = setTimeout(() => {
             fetchClaims();
-            pollInterval = setInterval(fetchClaims, 2500);
+        }, delay);
+    }
+
+    function resetPollRate() {
+        currentPollDelay = MIN_POLL_DELAY;
+        if (!isFetching) {
+            scheduleNextPoll(100);
         }
+    }
+
+    function startTimers() {
+        resetPollRate();
         if (!injectInterval) {
-            injectInterval = setInterval(() => requestAnimationFrame(injectButtons), 2000);
+            injectInterval = setInterval(() => requestAnimationFrame(injectButtons), 2500);
         }
     }
 
     function stopTimers() {
-        if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+        if (pollTimeout) { clearTimeout(pollTimeout); pollTimeout = null; }
         if (injectInterval) { clearInterval(injectInterval); injectInterval = null; }
     }
 
@@ -907,6 +949,14 @@
             startTimers();
         }
     });
+
+    // Reset backoff to active rate when user interacts with the page
+    window.addEventListener('click', () => {
+        if (currentPollDelay > MIN_POLL_DELAY) resetPollRate();
+    }, { passive: true });
+    window.addEventListener('keydown', () => {
+        if (currentPollDelay > MIN_POLL_DELAY) resetPollRate();
+    }, { passive: true });
 
     function init() {
         injectButtons();

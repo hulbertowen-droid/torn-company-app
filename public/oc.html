@@ -323,30 +323,58 @@ function setTab(tab) {
     renderOCs(allCrimes);
 }
 
+let isFetchingOCs = false;
+let lastOCsEtag = '';
+
+function stopProgressBar() {
+    if (progressTimer) { clearInterval(progressTimer); progressTimer = null; }
+    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+}
+
 function startProgressBar() {
+    if (document.hidden) return;
     if (progressTimer) clearInterval(progressTimer);
     const bar = document.getElementById("refresh-bar");
     let startTime = Date.now();
-    bar.style.transition = "none"; bar.style.width = "0%";
-    setTimeout(() => { bar.style.transition = "width 0.1s linear"; }, 50);
+    if (bar) {
+        bar.style.transition = "none"; bar.style.width = "0%";
+        setTimeout(() => { bar.style.transition = "width 0.1s linear"; }, 50);
+    }
     progressTimer = setInterval(() => {
+        if (document.hidden) { stopProgressBar(); return; }
         let pct = Math.min((Date.now() - startTime) / REFRESH_MS * 100, 100);
-        bar.style.width = pct + "%";
+        if (bar) bar.style.width = pct + "%";
     }, 100);
 }
 
 async function fetchOCs() {
-    if (!myKey) {
-        document.getElementById("oc-container").innerHTML = `
-            <div class="alert-box alert-info">
-                ⚙️ <strong>API Key Required</strong> — Click the ⚙️ Settings button and paste your Torn API key (needs Faction access) to load your organized crimes.
-            </div>`;
-        document.getElementById("status-line").textContent = "No API key set.";
+    if (!myKey || isFetchingOCs || document.hidden) {
+        if (!myKey) {
+            document.getElementById("oc-container").innerHTML = `
+                <div class="alert-box alert-info">
+                    ⚙️ <strong>API Key Required</strong> — Click the ⚙️ Settings button and paste your Torn API key (needs Faction access) to load your organized crimes.
+                </div>`;
+            document.getElementById("status-line").textContent = "No API key set.";
+        }
         return;
     }
 
+    isFetchingOCs = true;
     try {
-        const res = await fetch(`/api/ocs`, { headers: { 'x-api-key': myKey } });
+        const headers = { 'x-api-key': myKey };
+        if (lastOCsEtag) headers['If-None-Match'] = lastOCsEtag;
+        const res = await fetch(`/api/ocs`, { headers });
+        if (res.status === 304) {
+            startProgressBar();
+            if (refreshTimer) clearInterval(refreshTimer);
+            refreshTimer = setInterval(() => {
+                if (document.hidden) { stopProgressBar(); return; }
+                fetchOCs();
+            }, REFRESH_MS);
+            return;
+        }
+        const etagHeader = res.headers.get('ETag');
+        if (etagHeader) lastOCsEtag = etagHeader;
         const data = await res.json();
 
         if (data.error) {
@@ -363,12 +391,25 @@ async function fetchOCs() {
         document.getElementById("status-line").textContent = `Showing ${allCrimes.length} crimes • Last updated: ${now} • Auto-refresh every 5 min`;
 
         if (refreshTimer) clearInterval(refreshTimer);
-        refreshTimer = setInterval(fetchOCs, REFRESH_MS);
+        refreshTimer = setInterval(() => {
+            if (document.hidden) { stopProgressBar(); return; }
+            fetchOCs();
+        }, REFRESH_MS);
 
     } catch (e) {
         document.getElementById("oc-container").innerHTML = `<div class="alert-box alert-error">❌ Failed to connect to server. Is Render still deploying?</div>`;
+    } finally {
+        isFetchingOCs = false;
     }
 }
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        stopProgressBar();
+    } else {
+        fetchOCs();
+    }
+});
 
 function getCrimeEmoji(name) {
     if (!name) return "🔫";
