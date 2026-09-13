@@ -35,6 +35,23 @@ process.env.MONGODB_URI = "mongodb+srv://WarBoard:WarBoardPass123@cluster0.iwnnn
 
 const mongoose = require('mongoose');
 
+const DEFAULT_WELCOME_RULES = `⚡ **Priority Directive: Rush to Level 15!**
+Get to **Level 15** as fast as possible to unlock foreign travel, run plushies/flowers, and generate high daily income!
+
+📋 **Organized Crimes (OC 2.0) Requirements:**
+OC (Short for organized crimes) are a requirement to be in this faction.
+You can join one by simply [clicking here](https://www.torn.com/factions.php?step=your&type=1#/tab=crimes)
+
+There are requirements for joining specific roles, that is the sole purpose of this post.
+Familiarize yourself with these:
+• **Level 1/2:** No CPR Requirement
+• **Level 3/4:** Minimum CPR of 50
+• **Level 5/6:** Minimum CPR of 40
+
+The minimum CPR for levels 3 and up may change as we get better at crimes, be aware of notices being sent and this thread being edited to reflect current expectations.
+
+If you're outside of the bounds of the minimum CPR you will be removed and expected to join a new one yourself.`;
+
 // ── Master State & Configuration Store (Pre-initialized to prevent TDZ ReferenceErrors) ──
 let discordConfig = { 
     globalChannelId: "", 
@@ -69,13 +86,20 @@ let discordConfig = {
     disabledCommands: [],
     geminiApiKeys: [],
     geminiApiKey: "",
-    openrouterApiKey: ""
+    openrouterApiKey: "",
+    welcomeChannelId: "",
+    postWelcomeRulesOnJoin: true,
+    welcomeRulesTitle: "📜 Welcome to the Faction & Server Rules",
+    welcomeRulesContent: DEFAULT_WELCOME_RULES
 };
 let companyConfig = { apiKey: "", companyId: "", globalChannelId: "", threshold: 0, alertedItems: {} };
 let marketConfig = { globalChannelId: "", autoDefense: false, sniperTargets: [] };
 let ocConfig = { 
     globalChannelId: "", 
     roleId: "",
+    ocManagerRoleId: "",
+    ocManagerUserIds: "",
+    dmOcManagersOnLowCpr: true,
     alertPlanned: true,
     alertUpcoming: true,
     upcomingMinutes: 30,
@@ -84,8 +108,8 @@ let ocConfig = {
     alertMissingItems: true,
     alertCompleted: true,
     alertLowCpr: true,
-    lowCprDefaultThreshold: 30,
-    lowCprLevels: { 1: 0, 2: 0, 3: 40, 4: 40, 5: 36, 6: 36, 7: 80, 8: 85 },
+    lowCprDefaultThreshold: 40,
+    lowCprLevels: { 1: 0, 2: 0, 3: 50, 4: 50, 5: 40, 6: 40, 7: 80, 8: 85 },
     alertNoParticipation: true,
     noParticipationDays: 1
 };
@@ -104,6 +128,9 @@ let activeGiveaways = {};
 let warFlightArchive = {};
 let warAuditArchive = {};
 let lastGoodWarboardPayload = null;
+let slashCommandBot = null;
+let slashBotStarted = false;
+let isStartingSlashBot = false;
 
 const configSchema = new mongoose.Schema({
     _id: { type: String, default: 'master' },
@@ -569,13 +596,20 @@ discordConfig = {
     factionRoleId: "",
     leaderRoleId: "",
     autoVerifyOnJoin: true,
-    disabledCommands: []
+    disabledCommands: [],
+    welcomeChannelId: "",
+    postWelcomeRulesOnJoin: true,
+    welcomeRulesTitle: "📜 Welcome to the Faction & Server Rules",
+    welcomeRulesContent: DEFAULT_WELCOME_RULES
 };
 marketConfig = { globalChannelId: "", autoDefense: false, sniperTargets: [] };
 let marketMemory = { defense: {}, sniper: {} };
 ocConfig = { 
     globalChannelId: "", 
     roleId: "",
+    ocManagerRoleId: "",
+    ocManagerUserIds: "",
+    dmOcManagersOnLowCpr: true,
     alertPlanned: true,
     alertUpcoming: true,
     upcomingMinutes: 30,
@@ -584,14 +618,14 @@ ocConfig = {
     alertMissingItems: true,
     alertCompleted: true,
     alertLowCpr: true,
-    lowCprDefaultThreshold: 30,
+    lowCprDefaultThreshold: 40,
     lowCprLevels: {
         1: 0,
         2: 0,
-        3: 40,
-        4: 40,
-        5: 36,
-        6: 36,
+        3: 50,
+        4: 50,
+        5: 40,
+        6: 40,
         7: 80,
         8: 85
     },
@@ -2715,6 +2749,9 @@ app.get('/api/get-discord-config', (req, res) => {
         alertOverdose: discordConfig.alertOverdose !== false,
         ocChannelId: ocConfig.globalChannelId || discordConfig.ocChannelId || "",
         ocRoleId: ocConfig.roleId || discordConfig.ocRoleId || "",
+        ocManagerRoleId: ocConfig.ocManagerRoleId || "",
+        ocManagerUserIds: ocConfig.ocManagerUserIds || "",
+        dmOcManagersOnLowCpr: ocConfig.dmOcManagersOnLowCpr !== false,
         alertOcPlanned: ocConfig.alertPlanned !== false,
         alertOcUpcoming: ocConfig.alertUpcoming !== false,
         ocUpcomingMinutes: ocConfig.upcomingMinutes || 30,
@@ -2723,10 +2760,14 @@ app.get('/api/get-discord-config', (req, res) => {
         alertOcMissingItems: ocConfig.alertMissingItems !== false,
         alertOcCompleted: ocConfig.alertCompleted !== false,
         alertOcLowCpr: ocConfig.alertLowCpr !== false,
-        lowCprDefaultThreshold: ocConfig.lowCprDefaultThreshold || 30,
-        lowCprLevels: ocConfig.lowCprLevels || { 1: 0, 2: 0, 3: 40, 4: 40, 5: 36, 6: 36, 7: 80, 8: 85 },
+        lowCprDefaultThreshold: ocConfig.lowCprDefaultThreshold || 40,
+        lowCprLevels: ocConfig.lowCprLevels || { 1: 0, 2: 0, 3: 50, 4: 50, 5: 40, 6: 40, 7: 80, 8: 85 },
         alertOcNoParticipation: ocConfig.alertNoParticipation !== false,
-        noParticipationDays: ocConfig.noParticipationDays || 1
+        noParticipationDays: ocConfig.noParticipationDays || 1,
+        welcomeChannelId: discordConfig.welcomeChannelId || "",
+        postWelcomeRulesOnJoin: discordConfig.postWelcomeRulesOnJoin !== false,
+        welcomeRulesTitle: discordConfig.welcomeRulesTitle || "📜 Welcome to the Faction & Server Rules",
+        welcomeRulesContent: discordConfig.welcomeRulesContent || DEFAULT_WELCOME_RULES
     };
     // Scrub sensitive credentials from client response
     delete fullConfig.apiKey;
@@ -2795,7 +2836,10 @@ app.post('/api/save-discord-config', async (req, res) => {
         ocConfig.globalChannelId = payload.ocChannelId;
     }
     if (payload.ocRoleId !== undefined) ocConfig.roleId = String(payload.ocRoleId || '').trim();
-    if (payload.alertOcPlanned !== undefined) ocConfig.alertPlanned = !!payload.alertOcPlanned;
+    if (payload.ocManagerRoleId !== undefined) ocConfig.ocManagerRoleId = String(payload.ocManagerRoleId || '').replace(/[^0-9]/g, '');
+    if (payload.ocManagerUserIds !== undefined) ocConfig.ocManagerUserIds = String(payload.ocManagerUserIds || '').trim();
+    if (payload.dmOcManagersOnLowCpr !== undefined) ocConfig.dmOcManagersOnLowCpr = !!payload.dmOcManagersOnLowCpr;
+    if (payload.alertOcPlanned !== undefined) ocConfig.alertOcPlanned = !!payload.alertOcPlanned;
     if (payload.alertOcUpcoming !== undefined) ocConfig.alertUpcoming = !!payload.alertOcUpcoming;
     if (payload.ocUpcomingMinutes !== undefined) ocConfig.upcomingMinutes = parseInt(payload.ocUpcomingMinutes, 10) || 30;
     if (payload.alertOcReady !== undefined) ocConfig.alertReady = !!payload.alertOcReady;
@@ -2803,7 +2847,7 @@ app.post('/api/save-discord-config', async (req, res) => {
     if (payload.alertOcMissingItems !== undefined) ocConfig.alertMissingItems = !!payload.alertOcMissingItems;
     if (payload.alertOcCompleted !== undefined) ocConfig.alertCompleted = !!payload.alertOcCompleted;
     if (payload.alertOcLowCpr !== undefined) ocConfig.alertLowCpr = !!payload.alertOcLowCpr;
-    if (payload.lowCprDefaultThreshold !== undefined) ocConfig.lowCprDefaultThreshold = Math.max(1, Math.min(100, parseInt(payload.lowCprDefaultThreshold, 10) || 30));
+    if (payload.lowCprDefaultThreshold !== undefined) ocConfig.lowCprDefaultThreshold = Math.max(1, Math.min(100, parseInt(payload.lowCprDefaultThreshold, 10) || 40));
     if (payload.lowCprLevels !== undefined && typeof payload.lowCprLevels === 'object') {
         ocConfig.lowCprLevels = { ...ocConfig.lowCprLevels, ...payload.lowCprLevels };
     }
@@ -2814,6 +2858,18 @@ app.post('/api/save-discord-config', async (req, res) => {
     if (payload.globalBotToken !== undefined) {
         payload.globalBotToken = String(payload.globalBotToken || '').trim();
     }
+
+    if (payload.welcomeChannelId !== undefined) {
+        let rawWChan = String(payload.welcomeChannelId || '').trim();
+        if (rawWChan.includes('.') || /[a-zA-Z]/.test(rawWChan)) {
+            payload.welcomeChannelId = "";
+        } else {
+            payload.welcomeChannelId = rawWChan.replace(/[^0-9]/g, '');
+        }
+    }
+    if (payload.postWelcomeRulesOnJoin !== undefined) payload.postWelcomeRulesOnJoin = !!payload.postWelcomeRulesOnJoin;
+    if (payload.welcomeRulesTitle !== undefined) payload.welcomeRulesTitle = String(payload.welcomeRulesTitle || '').trim();
+    if (payload.welcomeRulesContent !== undefined) payload.welcomeRulesContent = String(payload.welcomeRulesContent || '').trim();
 
     if (payload.verificationChannelId !== undefined) {
         let rawVChan = String(payload.verificationChannelId || '').trim();
@@ -3510,6 +3566,9 @@ app.post('/api/test-discord-alert', async (req, res) => {
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
+    } else if (type === 'welcome_rules') {
+        chanId = req.body.welcomeChannelId || discordConfig.welcomeChannelId || chanId;
+        embed = buildWelcomeRulesEmbed(discordId || null);
     } else {
         return res.json({ success: false, error: "Unknown test type." });
     }
@@ -3519,6 +3578,94 @@ app.post('/api/test-discord-alert', async (req, res) => {
     if (!result.success) return res.json({ success: false, error: result.error });
     
     res.json({ success: true, warning: result.warning || null });
+});
+
+app.post('/api/discord/post-rules', async (req, res) => {
+    try {
+        const chanId = (req.body.channelId || discordConfig.welcomeChannelId || '').replace(/[^0-9]/g, '');
+        if (!chanId) {
+            return res.status(400).json({ success: false, error: "Please specify or save a Welcome & Rules Channel ID first." });
+        }
+        const client = getAnyActiveDiscordClient();
+        const botToken = discordConfig.globalBotToken;
+        const embed = buildWelcomeRulesEmbed(null);
+
+        if (client) {
+            try {
+                const channel = client.channels.cache.get(chanId) || (await client.channels.fetch(chanId).catch(() => null));
+                if (channel && channel.isTextBased()) {
+                    const sent = await channel.send({ embeds: [sanitizeEmbed(embed)] });
+                    return res.json({ success: true, messageId: sent.id, message: "Rules card posted successfully!" });
+                }
+            } catch(clientErr) {
+                console.warn('[Post Rules] Client channel.send failed, falling back to REST queue:', clientErr.message);
+            }
+        }
+
+        // REST queue fallback
+        if (botToken && botToken.length > 20) {
+            const result = await sendChannelMessage(botToken, chanId, embed, "📢 **Official Faction & Server Directives**", true);
+            return res.json({ success: result.success, error: result.error, message: result.success ? "Rules card dispatched!" : undefined });
+        }
+
+        return res.status(400).json({ success: false, error: "Discord bot is not connected. Enter your Bot Token and click Save first." });
+    } catch(e) {
+        return res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.post('/api/test-oc-manager-dm', async (req, res) => {
+    try {
+        const managerIds = await getOcManagerDiscordUserIds();
+        if (!managerIds || managerIds.length === 0) {
+            return res.json({
+                success: false,
+                error: "No OC Managers found. Configure an OC Manager Role or add Manager User IDs in the OC settings."
+            });
+        }
+
+        const testEmbed = {
+            title: "🚨 [TEST] OC Manager Alert: Robbing of a Money Train",
+            description: `This is a test notification verifying your OC Manager direct message alerts.\n\n` +
+                         `When a faction member joins an Organized Crime with CPR below the required threshold, you will receive a direct message like this one immediately.\n\n` +
+                         `👉 [Review Organized Crimes](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+            color: UI.COLORS.WARNING,
+            fields: [
+                { name: "Test Player", value: "**[AgentSpider](https://www.torn.com/profiles.php?XID=100001)** [100001]", inline: true },
+                { name: "Crime / Slot", value: "Robbing of a Money Train (Hacker)", inline: true },
+                { name: "CPR vs Requirement", value: "⚠️ **30% CPR** (Min: **40%**)", inline: true }
+            ],
+            footer: UI.FOOTER,
+            timestamp: new Date().toISOString()
+        };
+
+        let sentCount = 0;
+        let errors = [];
+        for (const uId of managerIds) {
+            const result = await sendDirectMessageToUser(uId, testEmbed);
+            if (result.success) {
+                sentCount++;
+            } else {
+                errors.push(`<@${uId}>: ${result.error || 'Failed'}`);
+            }
+        }
+
+        if (sentCount > 0) {
+            return res.json({
+                success: true,
+                sentCount,
+                total: managerIds.length,
+                message: `Successfully dispatched test DM to ${sentCount} OC manager(s)!`
+            });
+        } else {
+            return res.json({
+                success: false,
+                error: `Failed to DM managers (${errors.join(', ')}). Ensure managers allow direct messages in Discord server privacy settings.`
+            });
+        }
+    } catch(e) {
+        return res.status(500).json({ success: false, error: e.message });
+    }
 });
 
 app.post('/api/discord/kill', (req, res) => {
@@ -11769,7 +11916,7 @@ async function checkFactionOrganizedCrimes() {
                             if (!ocMemory[trackingId]) {
                                 ocMemory[trackingId] = Date.now();
                                 memoryChanged = true;
-                                await sendChannelMessage(botToken, channelId, {
+                                const lowCprEmbed = {
                                     title: `⚠️ Low CPR in OC: ${v2Crime.name}`,
                                     description: `**[${pName}](${profileUrl})** [${pId}] joined role **${roleLabel}** in **${v2Crime.name}** (Difficulty Level **${diffLvl}**), but only has **${passRate}% CPR**.\n\n` +
                                                  `🎯 **Recommended Minimum:** **${minCpr}%** for Level ${diffLvl}\n` +
@@ -11778,7 +11925,30 @@ async function checkFactionOrganizedCrimes() {
                                     color: UI.COLORS.ERROR,
                                     footer: UI.FOOTER,
                                     timestamp: new Date().toISOString()
-                                }, mention).catch(() => {});
+                                };
+                                await sendChannelMessage(botToken, channelId, lowCprEmbed, mention).catch(() => {});
+
+                                // Direct Message OC Managers (Part 1 requirement)
+                                if (ocConfig.dmOcManagersOnLowCpr !== false) {
+                                    getOcManagerDiscordUserIds().then(managerIds => {
+                                        if (managerIds && managerIds.length > 0) {
+                                            const dmEmbed = {
+                                                ...lowCprEmbed,
+                                                title: `🚨 [OC Manager Alert] Low CPR: ${v2Crime.name}`,
+                                                fields: [
+                                                    { name: "Player", value: `**[${pName}](${profileUrl})** [${pId}]`, inline: true },
+                                                    { name: "Crime / Slot", value: `${v2Crime.name} (${roleLabel})`, inline: true },
+                                                    { name: "CPR vs Requirement", value: `⚠️ **${passRate}%** (Min: **${minCpr}%**)`, inline: true }
+                                                ]
+                                            };
+                                            for (const mId of managerIds) {
+                                                sendDirectMessageToUser(mId, dmEmbed).catch(e => {
+                                                    console.warn(`[OC Alert] Failed to DM manager ${mId}:`, e?.message);
+                                                });
+                                            }
+                                        }
+                                    }).catch(err => console.warn('[OC Alert] Failed to resolve OC managers for DM:', err?.message));
+                                }
                             }
                         }
                     }
@@ -12948,6 +13118,23 @@ async function handleGuildMemberAdd(member) {
 
     console.log(`[Verification-on-Join] New member joined ${guild.name}: ${member.user.tag} (${member.id})`);
 
+    // ── Dedicated Welcome & Faction Rules Announcement (Option C) ──
+    if (discordConfig.welcomeChannelId && discordConfig.postWelcomeRulesOnJoin !== false) {
+        try {
+            const welcomeRulesChan = guild.channels.cache.get(discordConfig.welcomeChannelId)
+                || (await guild.channels.fetch(discordConfig.welcomeChannelId).catch(() => null));
+            if (welcomeRulesChan && welcomeRulesChan.isTextBased()) {
+                const rulesEmbed = buildWelcomeRulesEmbed(member.id);
+                welcomeRulesChan.send({
+                    content: `👋 Welcome to the server, <@${member.id}>! Please review our faction rules and priority objectives below:`,
+                    embeds: [sanitizeEmbed(rulesEmbed)]
+                }).catch(e => console.warn('[Welcome Rules] Failed to send to welcome channel:', e.message));
+            }
+        } catch(err) {
+            console.warn('[Welcome Rules] Error sending join welcome:', err.message);
+        }
+    }
+
     // Ensure botMember is ready
     let botMember = guild.members.me;
     if (!botMember) {
@@ -13241,6 +13428,126 @@ function buildEndedGiveawayButtons(g) {
 function getAnyActiveDiscordClient() {
     if (slashCommandBot && slashCommandBot.isReady?.()) return slashCommandBot;
     return Object.values(activeDiscordBots).find(c => c && c.isReady && c.isReady()) || null;
+}
+
+// ── Discord Direct Message (DM) Dispatcher ──
+async function sendDirectMessageToUser(discordUserId, embed, content = "") {
+    if (!discordUserId) return { success: false, error: "Missing User ID" };
+    const cleanId = String(discordUserId).trim().replace(/[^0-9]/g, '');
+    if (!cleanId || cleanId.length < 15) return { success: false, error: "Invalid Discord User ID" };
+
+    // 1. Try via active Discord.js Client
+    const client = getAnyActiveDiscordClient();
+    if (client) {
+        try {
+            const user = await client.users.fetch(cleanId).catch(() => null);
+            if (user) {
+                const cleanEmbed = sanitizeEmbed(embed);
+                const payload = cleanEmbed ? { embeds: [cleanEmbed] } : {};
+                if (content) payload.content = content;
+                await user.send(payload);
+                return { success: true };
+            }
+        } catch(e) {
+            console.warn(`[Discord DM] Client user.send failed for ${cleanId}:`, e.message);
+        }
+    }
+
+    // 2. REST API v10 fallback (POST /users/@me/channels -> executeDiscordSend)
+    const botToken = discordConfig.globalBotToken;
+    if (botToken && !botToken.startsWith('http') && botToken.length > 20) {
+        try {
+            const dmChanRes = await fetch('https://discord.com/api/v10/users/@me/channels', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bot ${botToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ recipient_id: cleanId })
+            });
+            const dmChanData = await dmChanRes.json();
+            if (dmChanData && dmChanData.id) {
+                return await executeDiscordSend(botToken, dmChanData.id, embed, content);
+            }
+        } catch(e) {
+            console.warn(`[Discord DM] REST DM fallback failed for ${cleanId}:`, e.message);
+        }
+    }
+
+    return { success: false, error: `Could not reach user ${cleanId} via DM. Check Discord DM privacy settings.` };
+}
+
+// ── Resolve OC Manager User IDs (Role + Explicit IDs) ──
+async function getOcManagerDiscordUserIds() {
+    const userIds = new Set();
+    // 1. Explicit user IDs from config
+    const rawUserIds = ocConfig.ocManagerUserIds;
+    if (Array.isArray(rawUserIds)) {
+        for (const id of rawUserIds) {
+            const clean = String(id || '').trim().replace(/[^0-9]/g, '');
+            if (clean && clean.length >= 15) userIds.add(clean);
+        }
+    } else if (typeof rawUserIds === 'string' && rawUserIds.trim()) {
+        const parts = rawUserIds.split(/[\s,]+/);
+        for (const part of parts) {
+            const clean = part.replace(/[^0-9]/g, '');
+            if (clean && clean.length >= 15) userIds.add(clean);
+        }
+    }
+
+    // 2. Role-based resolution
+    const roleId = (ocConfig.ocManagerRoleId || '').replace(/[^0-9]/g, '');
+    if (roleId) {
+        const client = getAnyActiveDiscordClient();
+        if (client) {
+            const guildId = discordConfig.guildId || client.guilds.cache.firstKey();
+            const guild = guildId ? client.guilds.cache.get(guildId) : client.guilds.cache.first();
+            if (guild) {
+                try {
+                    const role = guild.roles.cache.get(roleId) || (await guild.roles.fetch(roleId).catch(() => null));
+                    if (role) {
+                        if (guild.members.cache.size <= 1) {
+                            await guild.members.fetch().catch(() => null);
+                        }
+                        for (const [mId, member] of role.members) {
+                            if (!member.user?.bot) {
+                                userIds.add(mId);
+                            }
+                        }
+                    }
+                } catch(e) {
+                    console.warn('[OC Managers] Role member resolution failed:', e.message);
+                }
+            }
+        }
+    }
+
+    return Array.from(userIds);
+}
+
+// ── Build Official Welcome & Rules Embed (Option C) ──
+function buildWelcomeRulesEmbed(memberId = null) {
+    const title = discordConfig.welcomeRulesTitle || "📜 Welcome to the Faction & Server Rules";
+    const rulesBody = discordConfig.welcomeRulesContent || DEFAULT_WELCOME_RULES;
+    
+    let description = '';
+    if (memberId) {
+        description = `👋 **Welcome to the server, <@${memberId}>!**\n\n` + rulesBody;
+    } else {
+        description = rulesBody;
+    }
+
+    return {
+        title,
+        description,
+        color: UI.COLORS.BRAND,
+        footer: UI.FOOTER,
+        timestamp: new Date().toISOString(),
+        links: [
+            { label: "💼 Torn Crimes (OC)", url: "https://www.torn.com/factions.php?step=your&type=1#/tab=crimes" },
+            { label: "🛡️ Link Discord", url: "https://www.torn.com/discord" }
+        ]
+    };
 }
 
 async function endGiveaway(gId, client = null) {
@@ -13616,10 +13923,10 @@ async function registerSlashCommands(token, guildId = null) {
     }
 }
 
-// Start the Discord gateway bot for slash command interactions
-let slashCommandBot = null;
-let slashBotStarted = false;
-let isStartingSlashBot = false;
+// Start the Discord gateway bot for slash command interactions (pre-declared at top of file)
+slashCommandBot = null;
+slashBotStarted = false;
+isStartingSlashBot = false;
 
 function setupSlashBotEvents(bot, token) {
     bot.on('error', (err) => {

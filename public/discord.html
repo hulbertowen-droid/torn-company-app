@@ -1921,7 +1921,7 @@
                                         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
                                             <div style="font-size:0.78em; font-weight:700; color:var(--gold);">Default CPR Threshold:</div>
                                             <div style="display:flex; align-items:center; gap:5px;">
-                                                <input type="number" id="lowCprDefaultThreshold" min="1" max="100" value="30" onchange="trackDirty();" style="width:65px; padding:3px 6px; background:var(--bg-subtle); border:1px solid var(--border-subtle); color:var(--text-main); border-radius:4px; font-weight:700; text-align:center;">
+                                                <input type="number" id="lowCprDefaultThreshold" min="1" max="100" value="40" onchange="trackDirty();" style="width:65px; padding:3px 6px; background:var(--bg-subtle); border:1px solid var(--border-subtle); color:var(--text-main); border-radius:4px; font-weight:700; text-align:center;">
                                                 <span style="font-size:0.78em; color:var(--text-dim);">%</span>
                                             </div>
                                         </div>
@@ -1937,19 +1937,19 @@
                                             </div>
                                             <div style="background:rgba(255,255,255,0.03); padding:4px 6px; border-radius:4px; border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between;">
                                                 <span style="font-size:0.74em; color:var(--text-dim);">Lvl 3:</span>
-                                                <input type="number" class="cpr-lvl-input" data-lvl="3" min="1" max="100" value="40" onchange="trackDirty();" style="width:44px; padding:2px 4px; background:var(--bg-subtle); border:1px solid var(--border-subtle); color:var(--text-main); border-radius:3px; font-size:0.78em; font-weight:700; text-align:center;">
+                                                <input type="number" class="cpr-lvl-input" data-lvl="3" min="1" max="100" value="50" onchange="trackDirty();" style="width:44px; padding:2px 4px; background:var(--bg-subtle); border:1px solid var(--border-subtle); color:var(--text-main); border-radius:3px; font-size:0.78em; font-weight:700; text-align:center;">
                                             </div>
                                             <div style="background:rgba(255,255,255,0.03); padding:4px 6px; border-radius:4px; border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between;">
                                                 <span style="font-size:0.74em; color:var(--text-dim);">Lvl 4:</span>
-                                                <input type="number" class="cpr-lvl-input" data-lvl="4" min="1" max="100" value="40" onchange="trackDirty();" style="width:44px; padding:2px 4px; background:var(--bg-subtle); border:1px solid var(--border-subtle); color:var(--text-main); border-radius:3px; font-size:0.78em; font-weight:700; text-align:center;">
+                                                <input type="number" class="cpr-lvl-input" data-lvl="4" min="1" max="100" value="50" onchange="trackDirty();" style="width:44px; padding:2px 4px; background:var(--bg-subtle); border:1px solid var(--border-subtle); color:var(--text-main); border-radius:3px; font-size:0.78em; font-weight:700; text-align:center;">
                                             </div>
                                             <div style="background:rgba(255,255,255,0.03); padding:4px 6px; border-radius:4px; border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between;">
                                                 <span style="font-size:0.74em; color:var(--text-dim);">Lvl 5:</span>
-                                                <input type="number" class="cpr-lvl-input" data-lvl="5" min="1" max="100" value="36" onchange="trackDirty();" style="width:44px; padding:2px 4px; background:var(--bg-subtle); border:1px solid var(--border-subtle); color:var(--text-main); border-radius:3px; font-size:0.78em; font-weight:700; text-align:center;">
+                                                <input type="number" class="cpr-lvl-input" data-lvl="5" min="1" max="100" value="40" onchange="trackDirty();" style="width:44px; padding:2px 4px; background:var(--bg-subtle); border:1px solid var(--border-subtle); color:var(--text-main); border-radius:3px; font-size:0.78em; font-weight:700; text-align:center;">
                                             </div>
                                             <div style="background:rgba(255,255,255,0.03); padding:4px 6px; border-radius:4px; border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between;">
                                                 <span style="font-size:0.74em; color:var(--text-dim);">Lvl 6:</span>
-                                                <input type="number" class="cpr-lvl-input" data-lvl="6" min="1" max="100" value="36" onchange="trackDirty();" style="width:44px; padding:2px 4px; background:var(--bg-subtle); border:1px solid var(--border-subtle); color:var(--text-main); border-radius:3px; font-size:0.78em; font-weight:700; text-align:center;">
+                                                <input type="number" class="cpr-lvl-input" data-lvl="6" min="1" max="100" value="40" onchange="trackDirty();" style="width:44px; padding:2px 4px; background:var(--bg-subtle); border:1px solid var(--border-subtle); color:var(--text-main); border-radius:3px; font-size:0.78em; font-weight:700; text-align:center;">
                                             </div>
                                             <div style="background:rgba(255,255,255,0.03); padding:4px 6px; border-radius:4px; border:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:space-between;">
                                                 <span style="font-size:0.74em; color:var(--text-dim);">Lvl 7:</span>
@@ -1960,8 +1960,23 @@
                                                 <input type="number" class="cpr-lvl-input" data-lvl="8" min="1" max="100" value="85" onchange="trackDirty();" style="width:44px; padding:2px 4px; background:var(--bg-subtle); border:1px solid var(--border-subtle); color:var(--text-main); border-radius:3px; font-size:0.78em; font-weight:700; text-align:center;">
                                             </div>
                                         </div>
+
+                                        <!-- OC Manager DM Bar -->
+                                        <div style="margin-top:10px; padding:8px 10px; background:rgba(88,101,242,0.08); border:1px solid rgba(88,101,242,0.25); border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+                                            <div style="display:flex; align-items:center; gap:8px;">
+                                                <span style="font-size:1.1em;">📬</span>
+                                                <div>
+                                                    <div style="font-size:0.78em; font-weight:700; color:var(--text-main);">Direct Message OC Managers on Low CPR</div>
+                                                    <div style="font-size:0.7em; color:var(--text-dim);">Sends a direct message alert to designated OC managers when a player joins below CPR.</div>
+                                                </div>
+                                            </div>
+                                            <div style="display:flex; align-items:center; gap:8px;">
+                                                <button type="button" class="btn-test" id="btn-test-oc-dm" onclick="testOcManagerDm()" style="font-size:0.72em; padding:3px 8px;">▷ Test Manager DM</button>
+                                                <label class="switch" style="transform:scale(0.85);"><input type="checkbox" id="dmOcManagersOnLowCpr" checked onchange="trackDirty();"><span class="slider"></span></label>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <span class="trigger-route-tag">📍 OC Channel</span>
+                                    <span class="trigger-route-tag">📍 OC Channel + OC Manager DMs</span>
                                 </div>
                             </div>
                             <div class="trigger-controls">
@@ -2102,6 +2117,28 @@
                     </div>
                 </div>
 
+                <!-- Row 3.5: OC Manager Role & Direct User IDs (Part 1) -->
+                <div class="field-grid">
+                    <div class="field-group">
+                        <div class="field-label">
+                            <label for="oc-manager-roleid" style="margin:0;">🕵️ OC Manager Role <span class="opt">(Direct Message Alerts)</span></label>
+                            <a href="javascript:void(0)" onclick="toggleManualInput('oc-manager-roleid')" style="font-size:0.75em; color:var(--spider-blue); text-decoration:none;">✏️ Custom ID</a>
+                        </div>
+                        <select class="field-input role-picker" id="oc-manager-roleid-select" onchange="onRoleSelectChange(this, 'oc-manager-roleid'); trackDirty();">
+                            <option value="">-- Select OC Manager Role --</option>
+                        </select>
+                        <input class="field-input manual-id-input" type="text" id="oc-manager-roleid" placeholder="Role ID for OC Managers" autocomplete="off" oninput="trackDirty();" style="display:none; margin-top:6px;">
+                        <span class="field-hint">All members with this role receive instant Discord DMs when someone joins an OC below CPR.</span>
+                    </div>
+                    <div class="field-group">
+                        <div class="field-label">
+                            <label for="oc-manager-userids" style="margin:0;">📬 OC Manager User IDs <span class="opt">(optional manual DMs)</span></label>
+                        </div>
+                        <input class="field-input" type="text" id="oc-manager-userids" placeholder="e.g. 123456789012345678, 987654321098765432" autocomplete="off" oninput="trackDirty();">
+                        <span class="field-hint">Specific Discord User IDs to also DM for critical OC events (comma-separated).</span>
+                    </div>
+                </div>
+
                 <!-- Row 4: Verification & Banking Channels -->
                 <div class="field-grid">
                     <div class="field-group">
@@ -2204,6 +2241,80 @@
                         <span id="post-verify-status" style="font-size:0.84em; font-weight:600;"></span>
                         <button type="button" class="btn-action teal" onclick="postVerificationCard()" id="btn-post-verify" style="font-weight:700;">
                             📌 Post Verification Card
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 📜 Dedicated Welcome & Faction Rules Manager (Option C) -->
+        <div class="card" id="card-welcome-rules" style="border-left: 3px solid var(--gold);">
+            <div class="card-header">
+                <div>
+                    <p class="card-title">
+                        <span>📜</span> Welcome & Faction Rules Manager
+                        <span class="tag faction" style="background:rgba(255,165,2,0.15); color:var(--gold); border-color:rgba(255,165,2,0.3);">NEW MEMBER ONBOARDING (OPTION C)</span>
+                    </p>
+                    <span class="card-subtitle">Automatically welcome new joiners in Discord, guide them to Level 15, and outline faction Organized Crime requirements.</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="field-grid">
+                    <div class="field-group">
+                        <div class="field-label">
+                            <label for="welcome-channelid" style="margin:0;">📢 Dedicated Welcome & Rules Channel</label>
+                            <a href="javascript:void(0)" onclick="toggleManualInput('welcome-channelid')" style="font-size:0.75em; color:var(--spider-blue); text-decoration:none;">✏️ Custom ID</a>
+                        </div>
+                        <select class="field-input channel-picker" id="welcome-channelid-select" onchange="onChannelSelectChange(this, 'welcome-channelid'); trackDirty();">
+                            <option value="">-- Select Welcome Channel (e.g. #welcome-and-rules) --</option>
+                        </select>
+                        <input class="field-input manual-id-input" type="text" id="welcome-channelid" placeholder="e.g. 1491526701673349180" autocomplete="off" oninput="sanitizeChannelIdInput(this); trackDirty();" style="display:none; margin-top:6px;">
+                        <span class="field-hint">The dedicated channel where welcoming notices and faction guidelines are displayed.</span>
+                    </div>
+                    <div class="field-group" style="display:flex; flex-direction:column; justify-content:center;">
+                        <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 14px; background:rgba(0,0,0,0.25); border:1px solid var(--border-subtle); border-radius:var(--radius-sm);">
+                            <div>
+                                <div style="font-size:0.85em; font-weight:700; color:var(--text-main);">Auto-Post Rules on Member Join</div>
+                                <div style="font-size:0.75em; color:var(--text-dim);">Post the rules card and ping new members as soon as they join the server.</div>
+                            </div>
+                            <label class="switch"><input type="checkbox" id="postWelcomeRulesOnJoin" checked onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field-grid single" style="margin-top:14px;">
+                    <div class="field-group">
+                        <div class="field-label">
+                            <label for="welcome-rules-title" style="margin:0;">🏷️ Rules Embed Header Title</label>
+                        </div>
+                        <input class="field-input" type="text" id="welcome-rules-title" value="📜 Welcome to the Faction & Server Rules" oninput="trackDirty();">
+                    </div>
+                </div>
+
+                <div class="field-grid single" style="margin-top:14px;">
+                    <div class="field-group">
+                        <div class="field-label">
+                            <label for="welcome-rules-content" style="margin:0;">📝 Faction Rules & Directive Template (Fully Editable)</label>
+                            <span class="opt">Customizable anytime — supports Markdown & links</span>
+                        </div>
+                        <textarea class="field-input" id="welcome-rules-content" rows="11" style="font-family:monospace; font-size:0.85em; line-height:1.5; resize:vertical;" oninput="trackDirty();"></textarea>
+                        <span class="field-hint">This text is delivered when new members arrive and displayed when leaders publish rules. Adjust CPR requirements or goals anytime.</span>
+                    </div>
+                </div>
+
+                <!-- Action Bar -->
+                <div style="margin-top:16px; padding:14px 18px; background:rgba(255,165,2,0.06); border:1px solid rgba(255,165,2,0.25); border-radius:var(--radius-md); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+                    <div>
+                        <div style="font-size:0.92em; font-weight:700; color:var(--gold);">📢 Publish Official Rules Card</div>
+                        <div style="font-size:0.8em; color:var(--text-muted);">Instantly posts or refreshes this official rules embed into your designated welcome channel.</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <span id="post-rules-status" style="font-size:0.84em; font-weight:600;"></span>
+                        <button type="button" class="btn-test" onclick="testAlert('welcome_rules')" id="btn-test-welcome_rules">
+                            ▷ Test Embed
+                        </button>
+                        <button type="button" class="btn-action" onclick="postOfficialRulesCard()" id="btn-post-rules" style="font-weight:700; background:linear-gradient(135deg, #e67e22, #f39c12); color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer;">
+                            📢 Post / Refresh Rules in Channel
                         </button>
                     </div>
                 </div>
@@ -3081,6 +3192,7 @@ function populateChannelSelects() {
         { id: 'inactivity-channelid', defaultLabel: '-- Same as Main Alert Channel --' },
         { id: 'overdose-channelid', defaultLabel: '-- Same as Main Alert Channel --' },
         { id: 'oc-channelid', defaultLabel: '-- Same as Main Alert Channel --' },
+        { id: 'welcome-channelid', defaultLabel: '-- Select Welcome Channel (e.g. #welcome-and-rules) --' },
         { id: 'verification-channelid', defaultLabel: '-- Select Channel --' },
         { id: 'banking-channelid', defaultLabel: '-- Post in Command Channel --' }
     ];
@@ -3111,6 +3223,7 @@ function populateRoleSelects() {
         { id: 'inactivity-roleid', defaultLabel: '-- Select Role (or leave blank) --' },
         { id: 'overdose-roleid', defaultLabel: '-- Select Role (or leave blank) --' },
         { id: 'oc-roleid', defaultLabel: '-- Select Role (or leave blank) --' },
+        { id: 'oc-manager-roleid', defaultLabel: '-- Select OC Manager Role --' },
         { id: 'banker-roleid', defaultLabel: '-- Select Role (or leave blank) --' },
         { id: 'unverified-roleid', defaultLabel: '-- Select Role --' },
         { id: 'verified-roleid', defaultLabel: '-- Select Role --' },
@@ -3314,6 +3427,13 @@ function applyConfigToDOM(cfg) {
     if (document.getElementById('banker-roleid')) document.getElementById('banker-roleid').value = (cfg.bankerRoleId || localStorage.getItem('warboard_banker_roleid') || '').replace(/[^0-9]/g, '');
     if (document.getElementById('oc-channelid')) document.getElementById('oc-channelid').value = (cfg.ocChannelId || localStorage.getItem('warboard_oc_channelid') || '').replace(/[^0-9]/g, '');
     if (document.getElementById('oc-roleid')) document.getElementById('oc-roleid').value = cfg.ocRoleId || localStorage.getItem('warboard_oc_roleid') || '';
+    if (document.getElementById('oc-manager-roleid')) document.getElementById('oc-manager-roleid').value = (cfg.ocManagerRoleId || localStorage.getItem('warboard_oc_manager_roleid') || '').replace(/[^0-9]/g, '');
+    if (document.getElementById('oc-manager-userids')) document.getElementById('oc-manager-userids').value = cfg.ocManagerUserIds || localStorage.getItem('warboard_oc_manager_userids') || '';
+    if (document.getElementById('welcome-channelid')) document.getElementById('welcome-channelid').value = (cfg.welcomeChannelId || localStorage.getItem('warboard_welcome_channelid') || '').replace(/[^0-9]/g, '');
+    if (document.getElementById('welcome-rules-title')) document.getElementById('welcome-rules-title').value = cfg.welcomeRulesTitle || '📜 Welcome to the Faction & Server Rules';
+    if (document.getElementById('welcome-rules-content')) {
+        document.getElementById('welcome-rules-content').value = cfg.welcomeRulesContent || `⚡ **Priority Directive: Rush to Level 15!**\nGet to **Level 15** as fast as possible to unlock foreign travel, run plushies/flowers, and generate high daily income!\n\n📋 **Organized Crimes (OC 2.0) Requirements:**\nOC (Short for organized crimes) are a requirement to be in this faction.\nYou can join one by simply [clicking here](https://www.torn.com/factions.php?step=your&type=1#/tab=crimes)\n\nThere are requirements for joining specific roles, that is the sole purpose of this post.\nFamiliarize yourself with these:\n• **Level 1/2:** No CPR Requirement\n• **Level 3/4:** Minimum CPR of 50\n• **Level 5/6:** Minimum CPR of 40\n\nThe minimum CPR for levels 3 and up may change as we get better at crimes, be aware of notices being sent and this thread being edited to reflect current expectations.\n\nIf you're outside of the bounds of the minimum CPR you will be removed and expected to join a new one yourself.`;
+    }
     if (document.getElementById('verification-channelid')) document.getElementById('verification-channelid').value = (cfg.verificationChannelId || localStorage.getItem('warboard_verification_channelid') || '').replace(/[^0-9]/g, '');
     if (document.getElementById('unverified-roleid')) document.getElementById('unverified-roleid').value = (cfg.unverifiedRoleId || localStorage.getItem('warboard_unverified_roleid') || '').replace(/[^0-9]/g, '');
     if (document.getElementById('verified-roleid')) document.getElementById('verified-roleid').value = cfg.verifiedRoleId || localStorage.getItem('warboard_verified_roleid') || '';
@@ -3322,7 +3442,7 @@ function applyConfigToDOM(cfg) {
     if (document.getElementById('guild-id-input')) document.getElementById('guild-id-input').value = (cfg.guildId || localStorage.getItem('warboard_guildid') || '').replace(/[^0-9]/g, '');
 
     if (document.getElementById('lowCprDefaultThreshold')) {
-        document.getElementById('lowCprDefaultThreshold').value = cfg.lowCprDefaultThreshold ?? 30;
+        document.getElementById('lowCprDefaultThreshold').value = cfg.lowCprDefaultThreshold ?? 40;
     }
     if (cfg.lowCprLevels && typeof cfg.lowCprLevels === 'object') {
         document.querySelectorAll('.cpr-lvl-input').forEach(inp => {
@@ -3355,7 +3475,9 @@ function applyConfigToDOM(cfg) {
         alertOcMissingItems: cfg.alertOcMissingItems !== false,
         alertOcCompleted: cfg.alertOcCompleted !== false,
         alertOcLowCpr: cfg.alertOcLowCpr !== false,
+        dmOcManagersOnLowCpr: cfg.dmOcManagersOnLowCpr !== false,
         alertOcNoParticipation: cfg.alertOcNoParticipation !== false,
+        postWelcomeRulesOnJoin: cfg.postWelcomeRulesOnJoin !== false,
         autoVerifyOnJoin: cfg.autoVerifyOnJoin !== false,
     };
     for (const [id, val] of Object.entries(flags)) {
@@ -3434,12 +3556,19 @@ async function saveDiscordConfig() {
     const bankerRoleId = (document.getElementById('banker-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const ocChannelId = (document.getElementById('oc-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const ocRoleId = (document.getElementById('oc-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const ocManagerRoleId = (document.getElementById('oc-manager-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const ocManagerUserIds = document.getElementById('oc-manager-userids')?.value.trim() || '';
+    const dmOcManagersOnLowCpr = document.getElementById('dmOcManagersOnLowCpr')?.checked ?? true;
+    const welcomeChannelId = (document.getElementById('welcome-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const postWelcomeRulesOnJoin = document.getElementById('postWelcomeRulesOnJoin')?.checked ?? true;
+    const welcomeRulesTitle = document.getElementById('welcome-rules-title')?.value.trim() || '';
+    const welcomeRulesContent = document.getElementById('welcome-rules-content')?.value || '';
     const ocUpcomingMinutes = parseInt(document.getElementById('ocUpcomingMinutes')?.value || '30', 10);
-    const lowCprDefaultThreshold = parseInt(document.getElementById('lowCprDefaultThreshold')?.value || '30', 10);
+    const lowCprDefaultThreshold = parseInt(document.getElementById('lowCprDefaultThreshold')?.value || '40', 10);
     const lowCprLevels = {};
     document.querySelectorAll('.cpr-lvl-input').forEach(inp => {
         const lvl = inp.dataset.lvl;
-        if (lvl) lowCprLevels[lvl] = parseInt(inp.value || '30', 10);
+        if (lvl) lowCprLevels[lvl] = parseInt(inp.value || '40', 10);
     });
     const noParticipationDays = parseFloat(document.getElementById('noParticipationDays')?.value || '1');
     const verificationChannelId = (document.getElementById('verification-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
@@ -3479,6 +3608,9 @@ async function saveDiscordConfig() {
     localStorage.setItem('warboard_banker_roleid', bankerRoleId);
     localStorage.setItem('warboard_oc_channelid', ocChannelId);
     localStorage.setItem('warboard_oc_roleid', ocRoleId);
+    localStorage.setItem('warboard_oc_manager_roleid', ocManagerRoleId);
+    localStorage.setItem('warboard_oc_manager_userids', ocManagerUserIds);
+    localStorage.setItem('warboard_welcome_channelid', welcomeChannelId);
     localStorage.setItem('warboard_verification_channelid', verificationChannelId);
     localStorage.setItem('warboard_unverified_roleid', unverifiedRoleId);
     localStorage.setItem('warboard_verified_roleid', verifiedRoleId);
@@ -3505,6 +3637,13 @@ async function saveDiscordConfig() {
             bankerRoleId,
             ocChannelId,
             ocRoleId,
+            ocManagerRoleId,
+            ocManagerUserIds,
+            dmOcManagersOnLowCpr,
+            welcomeChannelId,
+            postWelcomeRulesOnJoin,
+            welcomeRulesTitle,
+            welcomeRulesContent,
             ocUpcomingMinutes,
             alertOcLowCpr: document.getElementById('alertOcLowCpr')?.checked ?? true,
             lowCprDefaultThreshold,
@@ -3609,6 +3748,74 @@ async function postVerificationCard() {
     }
 }
 
+// ── Post Official Rules Card (Option C) ──
+async function postOfficialRulesCard() {
+    const statusEl = document.getElementById('post-rules-status');
+    const btn = document.getElementById('btn-post-rules');
+    const chanId = (document.getElementById('welcome-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    if (!chanId) {
+        if (statusEl) { statusEl.style.color = 'var(--spider-red)'; statusEl.textContent = '❌ Enter Welcome Channel ID first.'; }
+        showToast('Specify a Welcome & Rules Channel ID before posting.', 'error');
+        return;
+    }
+
+    if (statusEl) { statusEl.style.color = 'var(--spider-blue)'; statusEl.textContent = '⏳ Posting rules card...'; }
+    if (btn) btn.disabled = true;
+
+    try {
+        const res = await fetch('/api/discord/post-rules', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channelId: chanId })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+            if (statusEl) { statusEl.style.color = 'var(--green)'; statusEl.textContent = '✅ Posted to channel!'; }
+            showToast('Official rules card posted into Discord welcome channel!', 'success');
+        } else {
+            if (statusEl) { statusEl.style.color = 'var(--spider-red)'; statusEl.textContent = '❌ ' + (data.error || 'Failed'); }
+            showToast('Failed to post rules card: ' + (data.error || 'Unknown error'), 'error');
+        }
+    } catch(err) {
+        if (statusEl) { statusEl.style.color = 'var(--spider-red)'; statusEl.textContent = '❌ ' + err.message; }
+        showToast('Network error: ' + err.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+        setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 6000);
+    }
+}
+
+// ── Test OC Manager Direct Messages (Part 1) ──
+async function testOcManagerDm() {
+    const btn = document.getElementById('btn-test-oc-dm');
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '⏳ Testing DM...';
+    }
+    showToast('Dispatching test alert DM to configured OC Managers...', 'info');
+
+    try {
+        const res = await fetch('/api/test-oc-manager-dm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast(data.message || `Successfully sent test DM to ${data.sentCount} OC manager(s)!`, 'success');
+        } else {
+            showToast(data.error || 'Failed to dispatch test DM to managers.', 'error');
+        }
+    } catch(err) {
+        showToast('Error testing OC manager DM: ' + err.message, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = '▷ Test Manager DM';
+        }
+    }
+}
+
 // ── Test Alert Dispatcher ──
 async function testAlert(type) {
     const btn = document.getElementById('btn-test-' + type) || document.getElementById('btn-test-target');
@@ -3627,6 +3834,9 @@ async function testAlert(type) {
         ocChannelId = (document.getElementById('oc-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
         ocRoleId = (document.getElementById('oc-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
         if (ocChannelId) channelId = ocChannelId;
+    } else if (type === 'welcome_rules') {
+        const welcomeChanId = (document.getElementById('welcome-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
+        if (welcomeChanId) channelId = welcomeChanId;
     } else if (type === 'inactivity' && inactivityChannelId) {
         channelId = inactivityChannelId;
     } else if (type === 'overdose' && overdoseChannelId) {
@@ -3669,6 +3879,7 @@ async function testAlert(type) {
                     overdoseChannelId,
                     ocChannelId,
                     ocRoleId,
+                    welcomeChannelId: (document.getElementById('welcome-channelid')?.value.trim() || '').replace(/[^0-9]/g, ''),
                     globalChannelId: channelId,
                     globalBotToken: botToken
                 }),
