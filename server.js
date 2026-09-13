@@ -13819,8 +13819,19 @@ function setupSlashBotEvents(bot, token) {
     bot.on(Events.MessageCreate, async (msg) => {
         if (msg.author?.bot) return;
         const text = (msg.content || '').trim().toLowerCase();
-        const isKill = text === '!kill' || text === '/kill' || text === '!mute' || text === '!pause' || text === '/pause' || (text.startsWith('kill') && msg.mentions?.has?.(bot.user));
-        const isLive = text === '!live' || text === '/live' || text === '!resume' || text === '/resume' || (text.startsWith('live') && msg.mentions?.has?.(bot.user));
+
+        // 1. Direct mention (@F.R.I.D.A.Y, <@ID>, or explicit @friday tag)
+        const botId = bot.user?.id;
+        const botUsername = bot.user?.username;
+        const isBotDirectlyMentioned = Boolean(
+            (botId && (msg.mentions?.users?.has(botId) || new RegExp(`<@!?${botId}>`).test(msg.content || ''))) ||
+            (botUsername && new RegExp(`@${botUsername}\\b`, 'i').test(msg.content || '')) ||
+            /@friday\b/i.test(msg.content || '')
+        );
+        const isBotMentioned = isBotDirectlyMentioned;
+
+        const isKill = text === '!kill' || text === '/kill' || text === '!mute' || text === '!pause' || text === '/pause' || (text.startsWith('kill') && isBotDirectlyMentioned);
+        const isLive = text === '!live' || text === '/live' || text === '!resume' || text === '/resume' || (text.startsWith('live') && isBotDirectlyMentioned);
 
         if (isKill) {
             const actor = msg.author?.username || "Admin";
@@ -13836,9 +13847,32 @@ function setupSlashBotEvents(bot, token) {
         // Ignore commands starting with ! or / so we don't interfere with prefix commands
         if (msg.content.startsWith('!') || msg.content.startsWith('/')) return;
 
-        // 1. Direct mention (@F.R.I.D.A.Y or <@ID>)
-        const isBotMentioned = msg.mentions?.has?.(bot.user) || (bot.user && new RegExp(`<@!?${bot.user.id}>`).test(msg.content));
-        
+        // Pings that aren't her:
+        // - @everyone or @here
+        const hasEveryoneOrHerePing = Boolean(
+            msg.mentions?.everyone || 
+            /@(?:everyone|here)\b/i.test(msg.content || '')
+        );
+
+        // - Role mentions (<@&roleId>)
+        const hasRolePing = Boolean(
+            (msg.mentions?.roles && msg.mentions.roles.size > 0) || 
+            /<@&\d+>/.test(msg.content || '')
+        );
+
+        // - Mentions of other users (excluding Friday herself)
+        const hasOtherUserPing = Boolean(
+            (msg.mentions?.users && Array.from(msg.mentions.users.keys()).some(id => id !== botId)) ||
+            (/<@!?(\d+)>/.test(msg.content || '') && !isBotDirectlyMentioned)
+        );
+
+        const hasNonBotPing = hasEveryoneOrHerePing || hasRolePing || hasOtherUserPing;
+
+        // CRITICAL RULE: If the message contains any pings that aren't directly her
+        // (like @everyone, @here, roles, or other users) and Friday was NOT directly mentioned,
+        // do NOT respond under ANY circumstances (even in active conversation mode channels).
+        if (hasNonBotPing && !isBotDirectlyMentioned) return;
+
         // 2. Addressed directly at the start of message (e.g. "Friday, ...", "Hey Friday, ...", "Hi Friday")
         const isAddressedToFriday = /^(?:hey|hi|yo)?\s*friday\b/i.test(msg.content.trim());
 
