@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter
 // @namespace    https://spider-verse.net/
-// @version      2.4.8
+// @version      2.4.9
 // @description  Autonomous 1-click snipe button for Torn Elimination. Finds beatable enemies that are NOT in hospital and NOT flying from ANY page.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -88,6 +88,7 @@
     let autoLaunch = load(KEY_AUTOLAUNCH, false);
     let myId       = '';
     let busy       = false;
+    let lastKnownCount = 0;
 
     // ── Get My Torn ID directly from page DOM/cookies ───────────────
     function getMyTornIdFromPage() {
@@ -407,7 +408,8 @@
 
             if (data && data.success && data.targetId) {
                 addExclude(data.targetId);
-                setButtonState('idle', null, data.targetCount);
+                if (data.targetCount > 0) lastKnownCount = data.targetCount;
+                setButtonState('idle', null, lastKnownCount);
 
                 if (autoLaunch) {
                     launchAttack(data.targetId, data.provenance);
@@ -923,9 +925,10 @@
         const isAttackPage = /user2ID=\d+/i.test(window.location.href);
 
         switch (state) {
-            case 'idle':
-                if (count !== undefined && count !== null && count > 0) {
-                    btnEl.textContent = isAttackPage ? `⚔️ NEXT TARGET (${count} left)` : `⚔️ SNIPE TARGET (${count} ready)`;
+            case 'idle': {
+                const displayCount = (count !== undefined && count !== null && count > 0) ? count : lastKnownCount;
+                if (displayCount > 0) {
+                    btnEl.textContent = isAttackPage ? `⚔️ NEXT TARGET (${displayCount} left)` : `⚔️ SNIPE TARGET (${displayCount} ready)`;
                 } else {
                     btnEl.textContent = isAttackPage ? '⚔️ NEXT TARGET' : '⚔️ SNIPE TARGET';
                 }
@@ -933,6 +936,7 @@
                 btnEl.style.opacity = '1';
                 btnEl.disabled = false;
                 break;
+            }
             case 'not_in_elim':
                 btnEl.textContent = '🛑 ELIM: Not Enrolled';
                 btnEl.style.background = '#4b5563';

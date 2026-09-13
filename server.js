@@ -7288,14 +7288,16 @@ app.post('/api/elim/sync-roster', async (req, res) => {
             }
             const uProfile = uData.profile || uData;
             const uComp = uData.competition;
-            if (!uComp || uComp.name !== 'Elimination') {
+            const uCompTeamId = uComp && (uComp.team_id || uComp.teamId);
+            const uCompTeam = uComp ? String(uComp.team || uComp.team_name || '').trim() : '';
+            if (!uComp || uComp.name !== 'Elimination' || !uCompTeam || uCompTeam.toLowerCase() === 'unknown' || !uCompTeamId) {
                 return res.status(400).json({
                     success: false,
                     code: 'NOT_IN_ELIMINATION',
-                    message: 'Cannot sync roster: Your account is not currently participating in an active Elimination tournament.'
+                    message: 'Cannot sync roster: You are not enrolled in an active Elimination team. Join a team in the Torn competition page first.'
                 });
             }
-            userTeam = String(uComp.team || uComp.team_name || '').replace(/\s*\(\s*\d+[^)]*\)/g, '').trim();
+            userTeam = uCompTeam.replace(/\s*\(\s*\d+[^)]*\)/g, '').trim();
             if (uComp.id) compId = String(uComp.id);
 
             // Faction members protection
@@ -7475,14 +7477,16 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         // HARD PARTICIPATION VALIDATION:
         const isElim = comp && (comp.name === 'Elimination' || String(comp.description || '').toLowerCase().includes('elimination'));
         const userTeam = (comp && (comp.team || comp.team_name)) ? String(comp.team || comp.team_name).trim() : '';
+        const userTeamId = comp && (comp.team_id || comp.teamId);
 
-        if (!isElim || !userTeam) {
+        // Torn API v2 returns team="Unknown" and team_id=null for users NOT actually enrolled
+        if (!isElim || !userTeam || userTeam.toLowerCase() === 'unknown' || !userTeamId) {
             return {
                 success: false,
                 code: 'NOT_IN_ELIMINATION',
                 isParticipating: false,
                 targetCount: 0,
-                message: 'No active Elimination competition found for your account. Target finding is disabled until you are enrolled on an active Elimination team.'
+                message: 'You are not enrolled in an active Elimination team. Join a team in the Torn competition page to use this feature.'
             };
         }
 
