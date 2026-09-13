@@ -7288,9 +7288,8 @@ app.post('/api/elim/sync-roster', async (req, res) => {
             }
             const uProfile = uData.profile || uData;
             const uComp = uData.competition;
-            const uCompTeamId = uComp && (uComp.team_id || uComp.teamId);
             const uCompTeam = uComp ? String(uComp.team || uComp.team_name || '').trim() : '';
-            if (!uComp || uComp.name !== 'Elimination' || !uCompTeam || uCompTeam.toLowerCase() === 'unknown' || !uCompTeamId) {
+            if (!uComp || uComp.name !== 'Elimination' || !uCompTeam || uCompTeam.toLowerCase() === 'unknown') {
                 return res.status(400).json({
                     success: false,
                     code: 'NOT_IN_ELIMINATION',
@@ -7475,12 +7474,13 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         if (profile.name) attackerName = profile.name;
 
         // HARD PARTICIPATION VALIDATION:
+        // Torn API v2 always returns competition.name="Elimination" during the event — even for non-enrolled users.
+        // The ONLY reliable signal that a user is NOT enrolled is team="Unknown" (with no actual team assigned).
         const isElim = comp && (comp.name === 'Elimination' || String(comp.description || '').toLowerCase().includes('elimination'));
         const userTeam = (comp && (comp.team || comp.team_name)) ? String(comp.team || comp.team_name).trim() : '';
-        const userTeamId = comp && (comp.team_id || comp.teamId);
+        const notEnrolled = !isElim || !userTeam || userTeam.toLowerCase() === 'unknown';
 
-        // Torn API v2 returns team="Unknown" and team_id=null for users NOT actually enrolled
-        if (!isElim || !userTeam || userTeam.toLowerCase() === 'unknown' || !userTeamId) {
+        if (notEnrolled) {
             return {
                 success: false,
                 code: 'NOT_IN_ELIMINATION',
