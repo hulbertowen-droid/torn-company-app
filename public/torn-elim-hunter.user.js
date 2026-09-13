@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter
 // @namespace    https://spider-verse.net/
-// @version      2.4.9
+// @version      2.5.0
 // @description  Autonomous 1-click snipe button for Torn Elimination. Finds beatable enemies that are NOT in hospital and NOT flying from ANY page.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -984,6 +984,15 @@
             drawerEl.style.display = 'block';
             drawerOpen = true;
             if (cardEl) cardEl.style.display = 'none';
+            // Flip drawer direction based on widget position
+            if (wrapEl) {
+                const rect = wrapEl.getBoundingClientRect();
+                const vpH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+                const isTopHalf = rect.top < vpH / 2;
+                wrapEl.style.flexDirection = isTopHalf ? 'column-reverse' : 'column';
+                drawerEl.style.marginBottom = isTopHalf ? '0' : '4px';
+                drawerEl.style.marginTop = isTopHalf ? '4px' : '0';
+            }
         }
     }
 
@@ -1043,6 +1052,9 @@
             font-size: 12px;
             box-shadow: 0 8px 30px rgba(0,0,0,0.8);
             margin-bottom: 4px;
+            max-height: calc(100vh - 120px);
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
         `;
 
         drawerEl.innerHTML = `
@@ -1166,8 +1178,37 @@
         `;
         cogBtn.onclick = () => {
             drawerOpen = !drawerOpen;
-            drawerEl.style.display = drawerOpen ? 'block' : 'none';
-            if (drawerOpen && cardEl) cardEl.style.display = 'none';
+            if (drawerOpen) {
+                drawerEl.style.display = 'block';
+                if (cardEl) cardEl.style.display = 'none';
+                // Flip drawer direction: if widget is in top half of screen, open downward
+                const rect = wrapEl.getBoundingClientRect();
+                const vpH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+                const isTopHalf = rect.top < vpH / 2;
+                if (isTopHalf) {
+                    // Widget near top: show drawer BELOW the row
+                    wrapEl.style.flexDirection = 'column-reverse';
+                    drawerEl.style.marginBottom = '0';
+                    drawerEl.style.marginTop = '4px';
+                } else {
+                    // Widget near bottom: show drawer ABOVE the row (default)
+                    wrapEl.style.flexDirection = 'column';
+                    drawerEl.style.marginBottom = '4px';
+                    drawerEl.style.marginTop = '0';
+                }
+                // Clamp drawer so it stays on screen
+                requestAnimationFrame(() => {
+                    const dr = drawerEl.getBoundingClientRect();
+                    const vpW2 = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+                    if (dr.right > vpW2 - 4) {
+                        drawerEl.style.marginRight = `${dr.right - vpW2 + 8}px`;
+                    } else {
+                        drawerEl.style.marginRight = '0';
+                    }
+                });
+            } else {
+                drawerEl.style.display = 'none';
+            }
         };
 
         const minBtn = document.createElement('button');
@@ -1216,16 +1257,54 @@
         miniEl.onmouseout  = () => { miniEl.style.transform = 'scale(1)'; };
 
         minBtn.onclick = () => {
+            // Snap to nearest corner before minimizing
+            const rect = wrapEl.getBoundingClientRect();
+            const vpW = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+            const vpH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+            const bottomZone = isAndroid ? 96 : (isIOS ? 70 : 55);
+            const PILL = 44; // pill size + margin
+            const PAD  = 10;
+
+            // Nearest horizontal edge
+            const snapRight = (rect.left + rect.width / 2) > vpW / 2;
+            // Nearest vertical edge — avoid the bottom nav bar
+            const snapBottom = (rect.top + rect.height / 2) > (vpH - bottomZone) / 2;
+
+            // Clear old position
+            wrapEl.style.left = wrapEl.style.right = wrapEl.style.top = wrapEl.style.bottom = 'auto';
+
+            if (snapRight) {
+                wrapEl.style.right = `${PAD}px`;
+            } else {
+                wrapEl.style.left = `${PAD}px`;
+            }
+            if (snapBottom) {
+                wrapEl.style.bottom = `${bottomZone + PAD}px`;
+            } else {
+                wrapEl.style.top = `${PAD + (isAndroid ? 56 : 44)}px`; // clear Android top bar
+            }
+
             rowEl.style.display = 'none';
             if (drawerEl) drawerEl.style.display = 'none';
             if (cardEl) cardEl.style.display = 'none';
             miniEl.style.display = 'flex';
             localStorage.setItem('elim_widget_minimized', 'true');
+            // Clear saved free-drag pos — the snapped position is now the mini position
+            localStorage.removeItem('elim_widget_pos_x');
+            localStorage.removeItem('elim_widget_pos_y');
         };
 
         miniEl.onclick = () => {
             miniEl.style.display = 'none';
             rowEl.style.display = 'flex';
+            // Restore default position when expanding
+            const dBottom = getDefaultBottomOffset();
+            const dRight = isAndroid ? 12 : (isIOS ? 14 : 18);
+            wrapEl.style.left = 'auto';
+            wrapEl.style.top = 'auto';
+            wrapEl.style.bottom = `${dBottom}px`;
+            wrapEl.style.right = `${dRight}px`;
+            wrapEl.style.flexDirection = 'column';
             localStorage.setItem('elim_widget_minimized', 'false');
         };
 
