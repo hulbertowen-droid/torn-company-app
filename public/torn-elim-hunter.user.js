@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter
 // @namespace    https://spider-verse.net/
-// @version      2.5.1
+// @version      2.5.2
 // @description  Autonomous 1-click snipe button for Torn Elimination. Finds beatable enemies that are NOT in hospital and NOT flying from ANY page.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -164,15 +164,101 @@
     // ── Auto-sync competition page rosters to backend (Elimination only) ──
     const syncedTeams = new Set();
     let rosterSyncInFlight = false;
+    let isAutoScanningAll = false;
+
+    const KNOWN_ELIM_TEAMS = [
+        'Rocket Scientists', 'High Voltage', 'Gold Dust', 'Touching Grass',
+        'APEX', 'Sticks and Stones', 'Reptilians', 'Loose Cannons',
+        'Conspiracy Theorists', 'Brain Surgeons', 'Inanimate Objects', 'Nine Lives'
+    ];
+
+    async function autoScanEntireElimination() {
+        if (!window.location.href.includes('competition.php')) {
+            window.location.href = 'https://www.torn.com/competition.php?autoScan=1';
+            return;
+        }
+        if (!apiKey) {
+            showToast('⚠️ Please enter your Torn API key in Settings first.');
+            return;
+        }
+        if (isAutoScanningAll) return;
+        isAutoScanningAll = true;
+
+        showToast('⚡ Starting full scan across all Elimination teams...');
+
+        // Wait for DOM to settle
+        await new Promise(r => setTimeout(r, 600));
+
+        // Find all clickable team tabs/cards on the competition page
+        const allClickables = Array.from(document.querySelectorAll('a, button, li, [class*="tab"], [class*="team"], [class*="title"], [class*="name"]'));
+        const foundTeams = [];
+
+        for (const tName of KNOWN_ELIM_TEAMS) {
+            const el = allClickables.find(c => {
+                const text = (c.innerText || c.textContent || '').trim();
+                return text.toLowerCase().includes(tName.toLowerCase()) && text.length < 50;
+            });
+            if (el) foundTeams.push({ name: tName, el });
+        }
+
+        const selfId = await resolveMyId();
+        let totalSynced = 0;
+        let teamsSynced = 0;
+
+        for (let i = 0; i < foundTeams.length; i++) {
+            const item = foundTeams[i];
+            try {
+                item.el.click();
+                showToast(`⚡ Scanning [${i + 1}/${foundTeams.length}]: ${item.name}...`);
+                await new Promise(r => setTimeout(r, 850));
+
+                const links = document.querySelectorAll('a[href*="profiles.php?XID="], a[href*="profiles.php?xid="]');
+                const members = [];
+                const seen = new Set();
+                links.forEach(link => {
+                    const m = link.href.match(/xid=(\d+)/i);
+                    if (!m) return;
+                    const id = m[1];
+                    if (seen.has(id) || id === selfId) return;
+                    seen.add(id);
+                    members.push({ id, name: (link.innerText || '').trim() });
+                });
+
+                if (members.length > 0) {
+                    const raw = await gmFetch(`${BACKEND}/api/elim/sync-roster`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'x-torn-id': selfId },
+                        body: JSON.stringify({ apiKey, members, teamName: item.name, myId: selfId })
+                    });
+                    const d = JSON.parse(raw);
+                    if (d && d.success) {
+                        totalSynced += (d.memberCount || members.length);
+                        teamsSynced++;
+                        syncedTeams.add(item.name.toLowerCase());
+                    }
+                }
+            } catch (err) {}
+        }
+
+        isAutoScanningAll = false;
+        showToast(`✅ Tournament Scan Complete! Synced ${totalSynced} competitors across ${teamsSynced} teams!`);
+    }
 
     function syncRosterIfOnCompetitionPage() {
         if (!window.location.href.includes('competition.php')) return;
         if (!apiKey) return;
-        if (rosterSyncInFlight) return;
+        if (rosterSyncInFlight || isAutoScanningAll) return;
 
         // Verify that this is the Elimination competition view
         const pageText = (document.body ? document.body.innerText || '' : '').toLowerCase();
         if (!pageText.includes('elimination')) return;
+
+        // If autoScan=1 param is in URL, kick off the full tournament sweep
+        if (window.location.search.includes('autoScan=1')) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+            setTimeout(() => { autoScanEntireElimination(); }, 1200);
+            return;
+        }
 
         // Try to identify the active opposing team name from tab or header
         let rawTeam = '';
@@ -228,10 +314,7 @@
                     if (d && d.success && d.memberCount !== undefined) {
                         showToast(`✅ Synced ${d.memberCount} competitors from team "${teamName}"`);
                     } else if (d && d.code === 'NOT_IN_ELIMINATION') {
-                        // User not enrolled in Elimination
                         setButtonState('not_in_elim');
-                    } else if (d && d.error === 'CANNOT_SYNC_OWN_TEAM') {
-                        // User's own team — keep in syncedTeams to prevent re-attempts
                     }
                 } catch (e) {}
             }).catch(() => {
@@ -425,19 +508,19 @@
                         title: 'No Matching Targets in Tier',
                         icon: '⚖️',
                         message: msg,
-                        detail: `You are currently filtering by: <b>${ffTier.toUpperCase()}</b>. Opponents on other teams are active right now, but their battle stats fall outside this filter. Switching to <b>All Tiers</b> will reveal all available targets.`,
+                        detail: `Filtering by: <b>${ffTier.toUpperCase()}</b>. No beatable opponents were found in the currently synced rosters. Auto-scan all 12 teams to discover hundreds of new hittable targets across the tournament!`,
                         borderColor: '#e67e22',
                         titleColor: '#f39c12',
-                        primaryBtnText: '🎯 Switch to All Tiers & Snipe',
-                        primaryBtnAction: () => {
+                        primaryBtnText: '⚡ Auto-Scan All Teams for Targets',
+                        primaryBtnAction: () => autoScanEntireElimination(),
+                        secondaryBtnText: '🎯 Try All Tiers',
+                        secondaryBtnAction: () => {
                             ffTier = 'all';
                             save(KEY_TIER, 'all');
                             const tierSel = document.getElementById('ev2-tier');
                             if (tierSel) tierSel.value = 'all';
                             executeSnipe();
-                        },
-                        secondaryBtnText: '⚙️ Settings',
-                        secondaryBtnAction: () => openSettings()
+                        }
                     });
                 } else if (code === 'NO_LIVE_TARGETS') {
                     renderStatusCard({
@@ -452,14 +535,14 @@
                     });
                 } else if (code === 'NO_SYNCED_ROSTERS' || String(msg).toLowerCase().includes('competition.php')) {
                     renderStatusCard({
-                        title: 'Sync Opponent Rosters',
+                        title: 'Scan Tournament Rosters',
                         icon: '📋',
                         message: msg,
-                        detail: 'The hunter needs to register opposing teams. Visit the Torn Competition page once — the script will automatically discover and sync all enemy teams.',
+                        detail: 'The hunter needs to register opposing teams. Click below to automatically discover and sync all enemy team rosters across the tournament!',
                         borderColor: '#f1c40f',
                         titleColor: '#f1c40f',
-                        primaryBtnText: '🏆 Open Competition Page',
-                        primaryBtnAction: () => { window.location.href = 'https://www.torn.com/competition.php'; }
+                        primaryBtnText: '⚡ Auto-Scan All 12 Teams Now',
+                        primaryBtnAction: () => autoScanEntireElimination()
                     });
                 } else if (code === 'API_ERROR' || code === 'NETWORK_ERROR') {
                     renderStatusCard({
@@ -1100,6 +1183,8 @@
             </div>
             <button id="ev2-save" style="width:100%; padding:7px; background:#27ae60; color:#fff; border:none;
                 border-radius:5px; font-weight:800; cursor:pointer; font-size:12px; margin-bottom:6px;">💾 Save</button>
+            <button id="ev2-scan-all" style="width:100%; padding:8px; background:#e67e22; color:#fff; border:none;
+                border-radius:5px; font-weight:800; cursor:pointer; font-size:11px; margin-bottom:6px;">⚡ Auto-Scan All 12 Teams (Full Roster)</button>
             <button id="ev2-open-comp" style="width:100%; padding:6px; background:#2980b9; color:#fff; border:none;
                 border-radius:5px; font-weight:700; cursor:pointer; font-size:11px; margin-bottom:6px;">🏆 Open Competition Page</button>
             <button id="ev2-resetpos" style="width:100%; padding:5px; background:#34495e; color:#ecf0f1; border:1px solid #4a5568;
@@ -1109,7 +1194,7 @@
             <button id="ev2-clearroster" style="width:100%; padding:5px; background:#2c3e50; color:#bdc3c7; border:1px solid #3d4455;
                 border-radius:5px; cursor:pointer; font-size:10px;">🔄 Re-sync Roster (visit competition.php)</button>
             <div style="margin-top:8px; color:#7f8c8d; font-size:10px;">
-                v2.5.1 — Autonomous Elimination Target Finder
+                v2.5.2 — Autonomous Elimination Target Finder
             </div>
         `;
 
@@ -1452,6 +1537,10 @@
         document.getElementById('ev2-pos-bl').onclick = () => resetWidgetPosition('bottom-left');
         document.getElementById('ev2-pos-tl').onclick = () => resetWidgetPosition('top-left');
         document.getElementById('ev2-resetpos').onclick = () => resetWidgetPosition('bottom-right');
+
+        document.getElementById('ev2-scan-all').onclick = () => {
+            autoScanEntireElimination();
+        };
 
         document.getElementById('ev2-open-comp').onclick = () => {
             window.location.href = 'https://www.torn.com/competition.php';

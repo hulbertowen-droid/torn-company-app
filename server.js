@@ -7175,19 +7175,28 @@ async function elimAddCandidates(candidates, competitionId = 'elimination') {
         const idStr = String(c.id || c._id || '').trim();
         const numId = parseInt(idStr, 10);
         const team = String(c.team || '').trim();
+        const name = String(c.name || '').trim();
+        const level = Number(c.level) || 0;
+        const bs = Number(c.bs || c.battlestats) || 0;
+        const isLeader = Boolean(c.isLeader);
+
         if (!isNaN(numId) && numId > 0 && team) {
+            const setFields = {
+                _id: numId,
+                team,
+                competitionId,
+                source: 'torn_elimination',
+                isLeader,
+                updatedAt: new Date()
+            };
+            if (name) setFields.name = name;
+            if (level > 0) setFields.level = level;
+            if (bs > 0) setFields.bs = bs;
+
             cleanOps.push({
                 updateOne: {
                     filter: { _id: numId },
-                    update: {
-                        $set: {
-                            _id: numId,
-                            team,
-                            competitionId,
-                            source: 'torn_elimination',
-                            updatedAt: new Date()
-                        }
-                    },
+                    update: { $set: setFields },
                     upsert: true
                 }
             });
@@ -7561,14 +7570,14 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
 
                 if (t.captain) {
                     const cid = String(t.captain.id || t.captain);
-                    candidateMeta.set(cid, { id: cid, team: tName, source: 'torn_elimination', competitionId: compId });
-                    discoveredCandidates.push({ id: cid, team: tName });
+                    candidateMeta.set(cid, { id: cid, team: tName, source: 'torn_elimination', competitionId: compId, isLeader: true });
+                    discoveredCandidates.push({ id: cid, team: tName, isLeader: true });
                 }
                 const vcs = Array.isArray(t.vice_captains) ? t.vice_captains : (t.vice_captains && typeof t.vice_captains === 'object' ? Object.values(t.vice_captains) : []);
                 vcs.forEach(vc => {
                     const cid = String(vc.id || vc);
-                    candidateMeta.set(cid, { id: cid, team: tName, source: 'torn_elimination', competitionId: compId });
-                    discoveredCandidates.push({ id: cid, team: tName });
+                    candidateMeta.set(cid, { id: cid, team: tName, source: 'torn_elimination', competitionId: compId, isLeader: true });
+                    discoveredCandidates.push({ id: cid, team: tName, isLeader: true });
                 });
                 const mems = Array.isArray(t.members) ? t.members : (t.members && typeof t.members === 'object' ? Object.values(t.members) : []);
                 mems.forEach(m => {
@@ -7590,12 +7599,21 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             const docs = await elimCol.find({
                 source: 'torn_elimination',
                 competitionId: compId,
-                updatedAt: { $gte: new Date(Date.now() - 36 * 60 * 60 * 1000) }
-            }).limit(500).toArray();
+                updatedAt: { $gte: new Date(Date.now() - 72 * 60 * 60 * 1000) }
+            }).sort({ bs: 1, level: 1 }).limit(4000).toArray();
             for (const d of docs) {
                 const cid = String(d._id);
                 if (normalizeElimTeamName(d.team) !== normalizeElimTeamName(myTeam) && !candidateMeta.has(cid)) {
-                    candidateMeta.set(cid, { id: cid, team: d.team, source: 'torn_elimination', competitionId: d.competitionId || compId });
+                    candidateMeta.set(cid, {
+                        id: cid,
+                        team: d.team,
+                        source: 'torn_elimination',
+                        competitionId: d.competitionId || compId,
+                        bs: d.bs || 0,
+                        level: d.level || 0,
+                        name: d.name || '',
+                        isLeader: Boolean(d.isLeader)
+                    });
                 }
             }
         } catch (dbErr) {}
@@ -7604,7 +7622,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
     // Source C: Synced rosters from memory (user's roster + shared tournament pool)
     const userRoster = elimState.rosters.get(userKeyId) || (userId ? (elimState.rosters.get(String(userId)) || elimState.rosters.get(`torn:${userId}`)) : null);
     if (userRoster && userRoster.competitionId === compId &&
-        Date.now() - userRoster.syncedAt <= 36 * 60 * 60 * 1000 &&
+        Date.now() - userRoster.syncedAt <= 48 * 60 * 60 * 1000 &&
         Array.isArray(userRoster.members)) {
         for (const m of userRoster.members) {
             if (m && m.team && normalizeElimTeamName(m.team) !== normalizeElimTeamName(myTeam)) {
@@ -7617,7 +7635,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
     }
     for (const [rKey, rData] of elimState.rosters.entries()) {
         if (rData && rData.competitionId === compId &&
-            Date.now() - rData.syncedAt <= 36 * 60 * 60 * 1000 &&
+            Date.now() - rData.syncedAt <= 48 * 60 * 60 * 1000 &&
             Array.isArray(rData.members)) {
             for (const m of rData.members) {
                 if (m && m.team && normalizeElimTeamName(m.team) !== normalizeElimTeamName(myTeam)) {
@@ -7630,9 +7648,6 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         }
     }
 
-    // NOTE: ZERO QUERIES TO db.collection('players')
-    // NOTE: ZERO FALLBACK TO GENERIC ATTACKABLE PLAYERS OR FACTION MEMBERS
-
     // Filter candidates strictly
     let pool = Array.from(candidateMeta.values()).filter(cand => {
         const id = cand.id;
@@ -7644,6 +7659,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         if (excludeSet.has(id)) return false;                   // Session / explicit exclusion
         if (elimState.hospBlacklist.has(id)) return false;       // Hospitalized / traveling / jailed
         if (myServed.has(id)) return false;                     // Recently served to THIS user (5m cooldown)
+        if (cand.isLeader && myStats < 500_000_000) return false; // Never match against tournament captains unless user is an extreme whale
         return true;
     });
 
@@ -7654,17 +7670,32 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             isParticipating: true,
             targetCount: 0,
             message: candidateMeta.size === 0
-                ? `You are enrolled in team "${myTeam}", but no opposing Elimination team rosters have been synced yet. Please visit competition.php and view enemy teams.`
+                ? `You are enrolled in team "${myTeam}", but no opposing Elimination team rosters have been synced yet. Please visit competition.php and click "Scan All Teams".`
                 : 'All verified opposing Elimination candidates are currently on cooldown, in hospital, or flying. Please wait a moment.'
         };
     }
 
-    // Shuffle so repeat requests explore different candidates
-    for (let i = pool.length - 1; i > 0; i--) {
+    // ── Intelligent Batch Prioritization ──
+    // Sort pool so beatable, hittable candidates (or lowest level) are evaluated first
+    pool.sort((a, b) => {
+        const aBs = a.bs || 0;
+        const bBs = b.bs || 0;
+        if (aBs > 0 && bBs > 0 && myStats > 0) {
+            const idealTarget = myStats * 0.75;
+            return Math.abs(aBs - idealTarget) - Math.abs(bBs - idealTarget);
+        }
+        if (aBs > 0 && myStats > 0) return aBs <= myStats * 1.25 ? -1 : 1;
+        if (bBs > 0 && myStats > 0) return bBs <= myStats * 1.25 ? 1 : -1;
+        return (a.level || 0) - (b.level || 0);
+    });
+
+    // Sample top 80 candidates and shuffle slightly for variety
+    const topCandidates = pool.slice(0, 80);
+    for (let i = topCandidates.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [pool[i], pool[j]] = [pool[j], pool[i]];
+        [topCandidates[i], topCandidates[j]] = [topCandidates[j], topCandidates[i]];
     }
-    const batch = pool.slice(0, 35);
+    const batch = topCandidates.slice(0, 40);
     const batchIds = batch.map(b => b.id);
 
     // ── 3. Query FF Scouter for live Fair Fight & Battle Stat estimates ──
@@ -7695,13 +7726,20 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
                     const bs = (p.bs_estimate != null && !isNaN(Number(p.bs_estimate)))
                         ? Number(p.bs_estimate) : (Number(p.battlestats) || 0);
 
-                    // Fallback FF calculation: FF = 1 + (8/3) * (Target BS / Attacker BS)
+                    // Accurate Fair Fight formula: FF = 1 + (8/3) * (Target BS / Attacker BS)
                     if (ff === null && bs > 0 && myStats > 0) {
                         ff = parseFloat((1 + (8 / 3) * (bs / myStats)).toFixed(2));
                     }
 
                     if (ff !== null || bs > 0) {
                         ffStats.set(id, { ff, bs, distribution: p.distribution });
+                        // Cache discovered stats in MongoDB in the background
+                        if (bs > 0 && mongoose.connection.readyState === 1) {
+                            try {
+                                const col = mongoose.connection.db.collection('elim_candidates');
+                                col.updateOne({ _id: Number(id) }, { $set: { bs, ff, lastScouted: new Date() } }).catch(() => {});
+                            } catch (e) {}
+                        }
                     }
                 });
             } else {
@@ -7716,22 +7754,41 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
     const tierPass = batch.filter(cand => {
         const id = cand.id;
         const s = ffStats.get(id);
-        if (!s || s.ff === null || isNaN(s.ff)) {
-            return cleanTier === 'all';
+        const bs = (s && s.bs) || cand.bs || 0;
+        const ff = s ? s.ff : null;
+
+        // If stats are completely unknown from FFScouter & database
+        if (bs === 0 && (ff === null || isNaN(ff))) {
+            if (cleanTier === 'all') return true;
+            // In easy / manageable, only allow unknown stats if level is proven low (level <= 20)
+            const lvl = cand.level || 0;
+            if (lvl > 0 && lvl <= 20) return true;
+            return false; // High/unknown level with unknown stats is NEVER assumed easy
         }
 
-        const ff = s.ff;
-        const bs = s.bs || 0;
-        const ratio = (myStats > 0 && bs > 0) ? (bs / myStats) : (ff ? (ff - 1) * (3 / 8) : 1);
+        const ratio = (myStats > 0 && bs > 0) ? (bs / myStats) : (ff ? (ff - 1) * (3 / 8) : null);
+
+        // Strict stat ceiling: never allow targets with stats higher than the user's tier
+        if (myStats > 0 && bs > 0) {
+            if (cleanTier === 'easy' && bs > myStats * 0.85) return false;
+            if (cleanTier === 'manageable' && bs > myStats * 1.25) return false;
+            if (cleanTier === 'difficult' && bs > myStats * 1.65) return false;
+        }
 
         if (cleanTier === 'easy') {
-            return ff < 3.0 && ratio <= 0.85;
+            if (ff !== null && ff >= 3.0) return false;
+            if (ratio !== null && ratio > 0.85) return false;
+            return true;
         }
         if (cleanTier === 'manageable') {
-            return ff <= 3.8 && ratio <= 1.25;
+            if (ff !== null && ff > 3.8) return false;
+            if (ratio !== null && ratio > 1.25) return false;
+            return true;
         }
         if (cleanTier === 'difficult') {
-            return ff <= 4.5 && ratio <= 1.65;
+            if (ff !== null && ff > 4.5) return false;
+            if (ratio !== null && ratio > 1.65) return false;
+            return true;
         }
         return true; // 'all'
     });
@@ -7744,7 +7801,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             targetCount: 0,
             message: ffScouterFailed
                 ? 'FF Scouter is temporarily unavailable. Try "All Tiers" in Settings or wait a moment.'
-                : `No candidates matched your Fair Fight tier (${cleanTier}) against your current stats (~${formatElimStat(myStats)}). Try raising tier in Settings.`
+                : `No candidates matched your Fair Fight tier (${cleanTier}) against your current stats (~${formatElimStat(myStats)}). Try raising tier or scanning all teams.`
         };
     }
 
@@ -7753,9 +7810,14 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
     for (const cand of tierPass) {
         const targetId = cand.id;
         const s = ffStats.get(targetId) || { ff: null, bs: 0 };
-        const targetBS = s.bs || 0;
+        const targetBS = s.bs || cand.bs || 0;
         const ratio = (myStats > 0 && targetBS > 0) ? (targetBS / myStats) : (s.ff ? (s.ff - 1) * (3 / 8) : 1.0);
         const ff = s.ff != null ? s.ff : parseFloat((1 + (8 / 3) * ratio).toFixed(2));
+
+        // Hard Drop: If candidate is too strong (>1.35x stats) and tier is not 'all', drop them
+        if (cleanTier !== 'all' && myStats > 0 && targetBS > myStats * 1.35) {
+            continue;
+        }
 
         let baseScore = 50;
         let difficulty = "Manageable";
@@ -7783,12 +7845,17 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             difficulty = "Challenging / Risky";
             risk = "High";
         } else {
-            baseScore = 20;
+            baseScore = 15;
             difficulty = "Too Strong";
             risk = "Extreme";
         }
 
-        const score = Math.min(99, Math.max(15, baseScore));
+        // Never serve "Too Strong" unless tier is explicitly 'all'
+        if (difficulty === "Too Strong" && cleanTier !== 'all') {
+            continue;
+        }
+
+        const score = Math.min(99, Math.max(10, baseScore));
 
         scoredCandidates.push({
             id: targetId,
@@ -7804,7 +7871,18 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         });
     }
 
-    scoredCandidates.sort((a, b) => b.score - a.score);
+    if (scoredCandidates.length === 0) {
+        return {
+            success: false,
+            code: 'NO_TIER_MATCH',
+            isParticipating: true,
+            targetCount: 0,
+            message: `All current opposing candidates exceed your Fair Fight tier (${cleanTier}). Please visit competition.php to sync more enemy rosters.`
+        };
+    }
+
+    // Sort by highest score first. For ties, sort by lowest ratio (easiest target first)
+    scoredCandidates.sort((a, b) => (b.score - a.score) || (a.ratio - b.ratio));
 
     // ── 6. Live Status Verification (Exclude Hospital, Flying, Jail) ──
     let chosenTarget = null;
