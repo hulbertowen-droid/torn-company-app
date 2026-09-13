@@ -101,7 +101,10 @@ let ocConfig = {
     ocManagerRoleId: "",
     ocManagerUserIds: "",
     dmOcManagersOnLowCpr: true,
+    dmPlayerOnLowCpr: true,
     alertPlanned: true,
+    alertCountdown4h: true,
+    alertCountdown2h: true,
     alertUpcoming: true,
     upcomingMinutes: 30,
     alertReady: true,
@@ -624,7 +627,10 @@ ocConfig = {
     ocManagerRoleId: "",
     ocManagerUserIds: "",
     dmOcManagersOnLowCpr: true,
+    dmPlayerOnLowCpr: true,
     alertPlanned: true,
+    alertCountdown4h: true,
+    alertCountdown2h: true,
     alertUpcoming: true,
     upcomingMinutes: 30,
     alertReady: true,
@@ -2766,7 +2772,10 @@ app.get('/api/get-discord-config', (req, res) => {
         ocManagerRoleId: ocConfig.ocManagerRoleId || "",
         ocManagerUserIds: ocConfig.ocManagerUserIds || "",
         dmOcManagersOnLowCpr: ocConfig.dmOcManagersOnLowCpr !== false,
+        dmPlayerOnLowCpr: ocConfig.dmPlayerOnLowCpr !== false,
         alertOcPlanned: ocConfig.alertPlanned !== false,
+        alertCountdown4h: ocConfig.alertCountdown4h !== false,
+        alertCountdown2h: ocConfig.alertCountdown2h !== false,
         alertOcUpcoming: ocConfig.alertUpcoming !== false,
         ocUpcomingMinutes: ocConfig.upcomingMinutes || 30,
         alertOcReady: ocConfig.alertReady !== false,
@@ -2853,7 +2862,10 @@ app.post('/api/save-discord-config', async (req, res) => {
     if (payload.ocManagerRoleId !== undefined) ocConfig.ocManagerRoleId = String(payload.ocManagerRoleId || '').replace(/[^0-9]/g, '');
     if (payload.ocManagerUserIds !== undefined) ocConfig.ocManagerUserIds = String(payload.ocManagerUserIds || '').trim();
     if (payload.dmOcManagersOnLowCpr !== undefined) ocConfig.dmOcManagersOnLowCpr = !!payload.dmOcManagersOnLowCpr;
+    if (payload.dmPlayerOnLowCpr !== undefined) ocConfig.dmPlayerOnLowCpr = !!payload.dmPlayerOnLowCpr;
     if (payload.alertOcPlanned !== undefined) ocConfig.alertOcPlanned = !!payload.alertOcPlanned;
+    if (payload.alertCountdown4h !== undefined) ocConfig.alertCountdown4h = !!payload.alertCountdown4h;
+    if (payload.alertCountdown2h !== undefined) ocConfig.alertCountdown2h = !!payload.alertCountdown2h;
     if (payload.alertOcUpcoming !== undefined) ocConfig.alertUpcoming = !!payload.alertOcUpcoming;
     if (payload.ocUpcomingMinutes !== undefined) ocConfig.upcomingMinutes = parseInt(payload.ocUpcomingMinutes, 10) || 30;
     if (payload.alertOcReady !== undefined) ocConfig.alertReady = !!payload.alertOcReady;
@@ -3519,6 +3531,56 @@ app.post('/api/test-discord-alert', async (req, res) => {
                     url: "https://www.torn.com/factions.php?step=your#/tab=crimes"
                 }
             ],
+            footer: UI.FOOTER,
+            timestamp: new Date().toISOString()
+        };
+    } else if (type === 'oc_countdown_4h') {
+        chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
+        const roleId = req.body.ocRoleId || ocConfig.roleId;
+        if (roleId && String(roleId).trim()) {
+            const numOnly = String(roleId).replace(/\D/g, '');
+            if (numOnly.length >= 15 && numOnly.length <= 22) pingStr = `<@&${numOnly}>`;
+            else pingStr = roleId;
+        }
+        const nowSec = Math.floor(Date.now() / 1000);
+        embed = {
+            title: "⏰ OC 4-Hour Countdown: Planned Robbery [TEST]",
+            description: `The Organized Crime **Planned Robbery** is scheduled to become ready in **~4 hours**!\n\n` +
+                         `🎯 **Ready Time:** <t:${nowSec + 14400}:F> (<t:${nowSec + 14400}:R>)\n\n` +
+                         `⚠️ **Attention Team Members:**\n` +
+                         `• **Stay in Torn City:** Avoid international flights that will not return in time.\n` +
+                         `• **Stay Out of Hospital / Jail:** Avoid risky attacks and bust teammates out if needed.\n` +
+                         `• **Equipment Check:** Ensure any necessary OC items are equipped or borrowed from the armory.\n\n` +
+                         `**Assigned Roster:**\n` +
+                         `• **[TestAgent [100001]](https://www.torn.com/profiles.php?XID=100001)** — 🟢 Available in Torn City\n` +
+                         `• **[MF_Pikle [3419413]](https://www.torn.com/profiles.php?XID=3419413)** — 🟢 Available in Torn City\n\n` +
+                         `👉 [View Organized Crimes](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+            color: UI.COLORS.INFO,
+            footer: UI.FOOTER,
+            timestamp: new Date().toISOString()
+        };
+    } else if (type === 'oc_countdown_2h') {
+        chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
+        const roleId = req.body.ocRoleId || ocConfig.roleId;
+        if (roleId && String(roleId).trim()) {
+            const numOnly = String(roleId).replace(/\D/g, '');
+            if (numOnly.length >= 15 && numOnly.length <= 22) pingStr = `<@&${numOnly}>`;
+            else pingStr = roleId;
+        }
+        const nowSec = Math.floor(Date.now() / 1000);
+        embed = {
+            title: "🚨 OC 2-Hour Urgent Alert: Planned Robbery [TEST]",
+            description: `Organized Crime **Planned Robbery** launches in **~2 hours**!\n\n` +
+                         `🎯 **Ready Time:** <t:${nowSec + 7200}:F> (<t:${nowSec + 7200}:R>)\n\n` +
+                         `🚨 **CRITICAL INSTRUCTIONS FOR PARTICIPANTS:**\n` +
+                         `• **DO NOT FLY:** Most flights take over 2 hours round trip. Stay in Torn City!\n` +
+                         `• **STAY OUT OF HOSPITAL:** Avoid initiating fights or taking unnecessary damage.\n` +
+                         `• **BE ACTIVE AT LAUNCH:** The crime will be initiated the moment the timer hits zero.\n\n` +
+                         `**Assigned Roster:**\n` +
+                         `• **[TestAgent [100001]](https://www.torn.com/profiles.php?XID=100001)** — 🟢 Available in Torn City\n` +
+                         `• **[MF_Pikle [3419413]](https://www.torn.com/profiles.php?XID=3419413)** — 🟢 Available in Torn City\n\n` +
+                         `👉 [View Organized Crimes](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+            color: UI.COLORS.WARNING,
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
@@ -5713,7 +5775,10 @@ app.get('/api/oc-config', (req, res) => {
     res.json({
         globalChannelId: ocConfig.globalChannelId || "",
         roleId: ocConfig.roleId || "",
+        dmPlayerOnLowCpr: ocConfig.dmPlayerOnLowCpr !== false,
         alertPlanned: ocConfig.alertPlanned !== false,
+        alertCountdown4h: ocConfig.alertCountdown4h !== false,
+        alertCountdown2h: ocConfig.alertCountdown2h !== false,
         alertUpcoming: ocConfig.alertUpcoming !== false,
         upcomingMinutes: ocConfig.upcomingMinutes || 30,
         alertReady: ocConfig.alertReady !== false,
@@ -5726,7 +5791,10 @@ app.post('/api/save-oc-config', (req, res) => {
     const { 
         globalChannelId, 
         roleId, 
+        dmPlayerOnLowCpr,
         alertPlanned, 
+        alertCountdown4h,
+        alertCountdown2h,
         alertUpcoming, 
         upcomingMinutes, 
         alertReady, 
@@ -5736,7 +5804,10 @@ app.post('/api/save-oc-config', (req, res) => {
 
     if (globalChannelId !== undefined) ocConfig.globalChannelId = String(globalChannelId).trim();
     if (roleId !== undefined) ocConfig.roleId = String(roleId).trim();
+    if (dmPlayerOnLowCpr !== undefined) ocConfig.dmPlayerOnLowCpr = !!dmPlayerOnLowCpr;
     if (alertPlanned !== undefined) ocConfig.alertPlanned = !!alertPlanned;
+    if (alertCountdown4h !== undefined) ocConfig.alertCountdown4h = !!alertCountdown4h;
+    if (alertCountdown2h !== undefined) ocConfig.alertCountdown2h = !!alertCountdown2h;
     if (alertUpcoming !== undefined) ocConfig.alertUpcoming = !!alertUpcoming;
     if (upcomingMinutes !== undefined) ocConfig.upcomingMinutes = Math.max(5, parseInt(upcomingMinutes, 10) || 30);
     if (alertReady !== undefined) ocConfig.alertReady = !!alertReady;
@@ -12059,8 +12130,147 @@ async function checkFactionOrganizedCrimes() {
                 }
             }
 
-            // ── TRIGGER 2: OC Upcoming ─────────────────────────────────────────
             const timeLeft = crime.time_left !== undefined ? crime.time_left : (crime.time_ready ? (crime.time_ready - now) : 9999);
+
+            // ── TRIGGER 2A: OC 4-Hour Countdown Ping ───────────────────────────
+            const isFourHours = timeLeft > 7200 && timeLeft <= 14400; // between 2h (7200s) and 4h (14400s)
+            if (crime.initiated === 0 && isFourHours && !tracker.countdown4h && (ocConfig.alertCountdown4h !== false)) {
+                tracker.countdown4h = true;
+                trackerChanged = true;
+
+                // Resolve Discord Snowflakes for participants
+                const participantDiscordData = [];
+                for (const p of participantDetails) {
+                    try {
+                        const dId = await getDiscordId(p.id);
+                        participantDiscordData.push({ ...p, discordId: dId });
+                    } catch(e) {
+                        participantDiscordData.push({ ...p, discordId: null });
+                    }
+                }
+
+                const pingsList = participantDiscordData.filter(p => p.discordId).map(p => `<@${p.discordId}>`);
+                const pingText = pingsList.length > 0 ? pingsList.join(' ') : mention;
+
+                const rosterWithPings = participantDiscordData.map(p => {
+                    const tag = p.discordId ? ` (<@${p.discordId}>)` : '';
+                    let statusBadge = '🟢 Available in Torn City';
+                    if (p.state.toLowerCase() !== 'okay') {
+                        const untilStr = p.until ? ` · Free <t:${p.until}:R>` : '';
+                        statusBadge = `⚠️ **${p.state}** (${p.desc}${untilStr})`;
+                    }
+                    return `• **[${p.name} [${p.id}]](https://www.torn.com/profiles.php?XID=${p.id})**${tag} — ${statusBadge}`;
+                }).join('\n') || pListMarkdown;
+
+                const embed4h = {
+                    title: `⏰ OC 4-Hour Countdown: ${crime.crime_name}`,
+                    description: `The Organized Crime **${crime.crime_name}** is scheduled to become ready in **~4 hours**!\n\n` +
+                                 `🎯 **Ready Time:** <t:${crime.time_ready}:F> (<t:${crime.time_ready}:R>)\n\n` +
+                                 `⚠️ **Attention Team Members:**\n` +
+                                 `• **Stay in Torn City:** Avoid international flights that will not return in time.\n` +
+                                 `• **Stay Out of Hospital / Jail:** Avoid risky attacks and keep life topped up.\n` +
+                                 `• **Equipment Check:** Ensure any necessary OC items are equipped or borrowed from the armory.\n\n` +
+                                 `**Assigned Roster:**\n${rosterWithPings}\n\n` +
+                                 `👉 [View Organized Crimes](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+                    color: UI.COLORS.INFO,
+                    footer: UI.FOOTER,
+                    timestamp: new Date().toISOString()
+                };
+
+                await sendChannelMessage(botToken, channelId, embed4h, pingText).catch(() => {});
+
+                // DM each participant individually
+                for (const p of participantDiscordData) {
+                    if (p.discordId) {
+                        const dmEmbed = {
+                            title: `⏰ 4-Hour OC Reminder: ${crime.crime_name}`,
+                            description: `Hello **${p.name}**,\n\n` +
+                                         `Your Organized Crime **${crime.crime_name}** is scheduled to become ready in **~4 hours**!\n\n` +
+                                         `🎯 **Scheduled Launch:** <t:${crime.time_ready}:F> (<t:${crime.time_ready}:R>)\n\n` +
+                                         `Please plan ahead: remain in Torn City, avoid traveling overseas, and stay out of hospital.\n\n` +
+                                         `👉 [Open Faction Crimes Tab](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+                            color: UI.COLORS.INFO,
+                            footer: UI.FOOTER,
+                            timestamp: new Date().toISOString()
+                        };
+                        sendDirectMessageToUser(p.discordId, dmEmbed).catch(() => {});
+                    }
+                }
+            } else if (crime.initiated === 0 && timeLeft <= 7200 && !tracker.countdown4h) {
+                tracker.countdown4h = true;
+                trackerChanged = true;
+            }
+
+            // ── TRIGGER 2B: OC 2-Hour Countdown Ping ───────────────────────────
+            const isTwoHours = timeLeft > upcomingSec && timeLeft <= 7200; // between upcomingSec (30m) and 2h (7200s)
+            if (crime.initiated === 0 && isTwoHours && !tracker.countdown2h && (ocConfig.alertCountdown2h !== false)) {
+                tracker.countdown2h = true;
+                trackerChanged = true;
+
+                // Resolve Discord Snowflakes for participants
+                const participantDiscordData = [];
+                for (const p of participantDetails) {
+                    try {
+                        const dId = await getDiscordId(p.id);
+                        participantDiscordData.push({ ...p, discordId: dId });
+                    } catch(e) {
+                        participantDiscordData.push({ ...p, discordId: null });
+                    }
+                }
+
+                const pingsList = participantDiscordData.filter(p => p.discordId).map(p => `<@${p.discordId}>`);
+                const pingText = pingsList.length > 0 ? pingsList.join(' ') : mention;
+
+                const rosterWithPings = participantDiscordData.map(p => {
+                    const tag = p.discordId ? ` (<@${p.discordId}>)` : '';
+                    let statusBadge = '🟢 Available in Torn City';
+                    if (p.state.toLowerCase() !== 'okay') {
+                        const untilStr = p.until ? ` · Free <t:${p.until}:R>` : '';
+                        statusBadge = `⚠️ **${p.state}** (${p.desc}${untilStr})`;
+                    }
+                    return `• **[${p.name} [${p.id}]](https://www.torn.com/profiles.php?XID=${p.id})**${tag} — ${statusBadge}`;
+                }).join('\n') || pListMarkdown;
+
+                const embed2h = {
+                    title: `🚨 OC 2-Hour Urgent Alert: ${crime.crime_name}`,
+                    description: `Organized Crime **${crime.crime_name}** launches in **~2 hours**!\n\n` +
+                                 `🎯 **Ready Time:** <t:${crime.time_ready}:F> (<t:${crime.time_ready}:R>)\n\n` +
+                                 `🚨 **CRITICAL INSTRUCTIONS FOR PARTICIPANTS:**\n` +
+                                 `• **DO NOT FLY:** Most flights take over 2 hours round trip. Stay in Torn City!\n` +
+                                 `• **STAY OUT OF HOSPITAL:** Avoid initiating fights or taking unnecessary damage.\n` +
+                                 `• **BE ACTIVE AT LAUNCH:** The crime will be initiated the moment the timer hits zero.\n\n` +
+                                 `**Assigned Roster:**\n${rosterWithPings}\n\n` +
+                                 `👉 [View Organized Crimes](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+                    color: UI.COLORS.WARNING,
+                    footer: UI.FOOTER,
+                    timestamp: new Date().toISOString()
+                };
+
+                await sendChannelMessage(botToken, channelId, embed2h, pingText).catch(() => {});
+
+                // DM each participant individually
+                for (const p of participantDiscordData) {
+                    if (p.discordId) {
+                        const dmEmbed = {
+                            title: `🚨 Final 2-Hour OC Alert: ${crime.crime_name}`,
+                            description: `Hello **${p.name}**,\n\n` +
+                                         `Your Organized Crime **${crime.crime_name}** is scheduled to launch in **~2 hours**!\n\n` +
+                                         `🎯 **Scheduled Launch:** <t:${crime.time_ready}:F> (<t:${crime.time_ready}:R>)\n\n` +
+                                         `🚨 **Do not leave Torn City or take flights**, and ensure you stay out of hospital. Your team needs you present at launch!\n\n` +
+                                         `👉 [Open Faction Crimes Tab](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+                            color: UI.COLORS.WARNING,
+                            footer: UI.FOOTER,
+                            timestamp: new Date().toISOString()
+                        };
+                        sendDirectMessageToUser(p.discordId, dmEmbed).catch(() => {});
+                    }
+                }
+            } else if (crime.initiated === 0 && timeLeft <= upcomingSec && !tracker.countdown2h) {
+                tracker.countdown2h = true;
+                trackerChanged = true;
+            }
+
+            // ── TRIGGER 2: OC Upcoming ─────────────────────────────────────────
             if (crime.initiated === 0 && timeLeft > 0 && timeLeft <= upcomingSec && !tracker.upcoming && (ocConfig.alertUpcoming !== false)) {
                 tracker.upcoming = true;
                 trackerChanged = true;
@@ -12220,6 +12430,16 @@ async function checkFactionOrganizedCrimes() {
                             if (!ocMemory[trackingId]) {
                                 ocMemory[trackingId] = Date.now();
                                 memoryChanged = true;
+
+                                // Resolve player's Discord ID if available
+                                let playerDiscordId = null;
+                                try {
+                                    playerDiscordId = await getDiscordId(pId);
+                                } catch(e) {}
+
+                                const playerMention = playerDiscordId ? `<@${playerDiscordId}>` : "";
+                                const channelMention = playerMention ? (mention ? `${mention} ${playerMention}` : playerMention) : mention;
+
                                 const lowCprEmbed = {
                                     title: `⚠️ Low CPR in OC: ${v2Crime.name}`,
                                     description: `**[${pName}](${profileUrl})** [${pId}] joined role **${roleLabel}** in **${v2Crime.name}** (Difficulty Level **${diffLvl}**), but only has **${passRate}% CPR**.\n\n` +
@@ -12230,9 +12450,37 @@ async function checkFactionOrganizedCrimes() {
                                     footer: UI.FOOTER,
                                     timestamp: new Date().toISOString()
                                 };
-                                await sendChannelMessage(botToken, channelId, lowCprEmbed, mention).catch(() => {});
+                                await sendChannelMessage(botToken, channelId, lowCprEmbed, channelMention).catch(() => {});
 
-                                // Direct Message OC Managers (Part 1 requirement)
+                                // 1. Direct Message the Player who joined with Low CPR
+                                if (ocConfig.dmPlayerOnLowCpr !== false && playerDiscordId) {
+                                    const playerDmEmbed = {
+                                        title: `⚠️ Organized Crime Notice: Low CPR Rating`,
+                                        description: `Hello **${pName}**,\n\n` +
+                                                     `You recently joined the role **${roleLabel}** in **${v2Crime.name}** (Difficulty Level **${diffLvl}**).\n\n` +
+                                                     `⚠️ Your current Crime Pass Rate for this role is **${passRate}%**, but the faction minimum requirement is **${minCpr}% CPR**.\n\n` +
+                                                     `**Why this matters:**\n` +
+                                                     `• Lower CPR significantly increases the risk of the entire crime failing.\n` +
+                                                     `• If a crime fails, team members are jailed or hospitalized and faction respect/money is lost.\n` +
+                                                     `• OC leadership may remove members who do not meet the minimum CPR rating.\n\n` +
+                                                     `**Recommended Action:**\n` +
+                                                     `Please switch to an OC role where your CPR meets or exceeds the requirement, or practice lower-level crimes first to build up your CPR.\n\n` +
+                                                     `👉 [Manage Your Organized Crimes on Torn](https://www.torn.com/factions.php?step=your#/tab=crimes)`,
+                                        color: UI.COLORS.WARNING,
+                                        fields: [
+                                            { name: "Crime", value: v2Crime.name, inline: true },
+                                            { name: "Your Assigned Role", value: roleLabel, inline: true },
+                                            { name: "CPR vs Requirement", value: `⚠️ **${passRate}%** (Required: **${minCpr}%**)`, inline: true }
+                                        ],
+                                        footer: UI.FOOTER,
+                                        timestamp: new Date().toISOString()
+                                    };
+                                    sendDirectMessageToUser(playerDiscordId, playerDmEmbed).catch(e => {
+                                        console.warn(`[OC Alert] Failed to DM player ${pId} (${pName}):`, e?.message);
+                                    });
+                                }
+
+                                // 2. Direct Message OC Managers
                                 if (ocConfig.dmOcManagersOnLowCpr !== false) {
                                     getOcManagerDiscordUserIds().then(managerIds => {
                                         if (managerIds && managerIds.length > 0) {

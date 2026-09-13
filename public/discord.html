@@ -1850,6 +1850,36 @@
                             </div>
                         </div>
 
+                        <div class="trigger-row" id="ti-alertCountdown4h" data-tags="oc 4h 4-hour countdown reminder ping">
+                            <div class="trigger-row-left">
+                                <span class="trigger-icon">⏰</span>
+                                <div class="trigger-info">
+                                    <div class="trigger-name">OC 4-Hour Countdown Ping <span class="tag faction">FACTION</span></div>
+                                    <div class="trigger-desc">Pings all assigned participants in the OC channel and sends individual DMs at 4 hours before scheduled launch so team members can plan ahead and stay in Torn City.</div>
+                                    <span class="trigger-route-tag">📍 OC Channel + Participant DMs</span>
+                                </div>
+                            </div>
+                            <div class="trigger-controls">
+                                <button class="btn-test" id="btn-test-oc_countdown_4h" onclick="testAlert('oc_countdown_4h')">▷ Test</button>
+                                <label class="switch"><input type="checkbox" id="alertCountdown4h" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                        </div>
+
+                        <div class="trigger-row" id="ti-alertCountdown2h" data-tags="oc 2h 2-hour countdown reminder ping urgent">
+                            <div class="trigger-row-left">
+                                <span class="trigger-icon">🚨</span>
+                                <div class="trigger-info">
+                                    <div class="trigger-name">OC 2-Hour Urgent Countdown Ping <span class="tag faction">FACTION</span></div>
+                                    <div class="trigger-desc">Urgent ping to all assigned participants in the OC channel and via direct message at 2 hours before launch warning them not to fly or take hospital risk.</div>
+                                    <span class="trigger-route-tag">📍 OC Channel + Participant DMs</span>
+                                </div>
+                            </div>
+                            <div class="trigger-controls">
+                                <button class="btn-test" id="btn-test-oc_countdown_2h" onclick="testAlert('oc_countdown_2h')">▷ Test</button>
+                                <label class="switch"><input type="checkbox" id="alertCountdown2h" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                        </div>
+
                         <div class="trigger-row" id="ti-alertOcReady" data-tags="oc ready launch initiate">
                             <div class="trigger-row-left">
                                 <span class="trigger-icon">🟢</span>
@@ -1975,8 +2005,22 @@
                                                 <label class="switch" style="transform:scale(0.85);"><input type="checkbox" id="dmOcManagersOnLowCpr" checked onchange="trackDirty();"><span class="slider"></span></label>
                                             </div>
                                         </div>
+
+                                        <!-- Player DM Bar on Low CPR -->
+                                        <div style="margin-top:8px; padding:8px 10px; background:rgba(230,57,70,0.08); border:1px solid rgba(230,57,70,0.25); border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+                                            <div style="display:flex; align-items:center; gap:8px;">
+                                                <span style="font-size:1.1em;">📩</span>
+                                                <div>
+                                                    <div style="font-size:0.78em; font-weight:700; color:var(--text-main);">Direct Message Player on Low CPR</div>
+                                                    <div style="font-size:0.7em; color:var(--text-dim);">Sends an instructional direct message alert directly to the player when they join a role below the CPR requirement.</div>
+                                                </div>
+                                            </div>
+                                            <div style="display:flex; align-items:center; gap:8px;">
+                                                <label class="switch" style="transform:scale(0.85);"><input type="checkbox" id="dmPlayerOnLowCpr" checked onchange="trackDirty();"><span class="slider"></span></label>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <span class="trigger-route-tag">📍 OC Channel + OC Manager DMs</span>
+                                    <span class="trigger-route-tag">📍 OC Channel + Player & Manager DMs</span>
                                 </div>
                             </div>
                             <div class="trigger-controls">
@@ -3469,6 +3513,8 @@ function applyConfigToDOM(cfg) {
         inactivityTracker: cfg.inactivityTracker !== false,
         alertOverdose: cfg.alertOverdose !== false,
         alertOcPlanned: cfg.alertOcPlanned !== false,
+        alertCountdown4h: cfg.alertCountdown4h !== false,
+        alertCountdown2h: cfg.alertCountdown2h !== false,
         alertOcUpcoming: cfg.alertOcUpcoming !== false,
         alertOcReady: cfg.alertOcReady !== false,
         alertOcDelayed: cfg.alertOcDelayed !== false,
@@ -3476,6 +3522,7 @@ function applyConfigToDOM(cfg) {
         alertOcCompleted: cfg.alertOcCompleted !== false,
         alertOcLowCpr: cfg.alertOcLowCpr !== false,
         dmOcManagersOnLowCpr: cfg.dmOcManagersOnLowCpr !== false,
+        dmPlayerOnLowCpr: cfg.dmPlayerOnLowCpr !== false,
         alertOcNoParticipation: cfg.alertOcNoParticipation !== false,
         postWelcomeRulesOnJoin: cfg.postWelcomeRulesOnJoin !== false,
         autoVerifyOnJoin: cfg.autoVerifyOnJoin !== false,
@@ -3559,6 +3606,9 @@ async function saveDiscordConfig() {
     const ocManagerRoleId = (document.getElementById('oc-manager-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const ocManagerUserIds = document.getElementById('oc-manager-userids')?.value.trim() || '';
     const dmOcManagersOnLowCpr = document.getElementById('dmOcManagersOnLowCpr')?.checked ?? true;
+    const dmPlayerOnLowCpr = document.getElementById('dmPlayerOnLowCpr')?.checked ?? true;
+    const alertCountdown4h = document.getElementById('alertCountdown4h')?.checked ?? true;
+    const alertCountdown2h = document.getElementById('alertCountdown2h')?.checked ?? true;
     const welcomeChannelId = (document.getElementById('welcome-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const postWelcomeRulesOnJoin = document.getElementById('postWelcomeRulesOnJoin')?.checked ?? true;
     const welcomeRulesTitle = document.getElementById('welcome-rules-title')?.value.trim() || '';
@@ -3640,6 +3690,9 @@ async function saveDiscordConfig() {
             ocManagerRoleId,
             ocManagerUserIds,
             dmOcManagersOnLowCpr,
+            dmPlayerOnLowCpr,
+            alertCountdown4h,
+            alertCountdown2h,
             welcomeChannelId,
             postWelcomeRulesOnJoin,
             welcomeRulesTitle,
