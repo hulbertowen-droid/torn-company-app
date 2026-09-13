@@ -7797,7 +7797,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
     }
 
     // Source D: Autonomous Tournament Opponent Ingestion from Live Competition Attacks
-    if (candidateMeta.size < 80 && apiKey) {
+    if (apiKey) {
         try {
             const atksRes = await fetch(
                 `https://api.torn.com/v2/user/competition/attacks?key=${encodeURIComponent(apiKey)}`,
@@ -7820,13 +7820,13 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
                         const cid = String(opp.id);
                         const lvl = Number(opp.level) || 0;
                         const oppTeam = opp.team || 'Opposing Team';
+                        let estBS = 0;
+                        if (ffMod && ffMod > 1 && myStats > 0) {
+                            estBS = Math.round(myStats * (ffMod - 1) * (3 / 8));
+                        } else if (lvl > 0) {
+                            estBS = estimateStatsFromLevel(lvl);
+                        }
                         if (!candidateMeta.has(cid)) {
-                            let estBS = 0;
-                            if (ffMod && ffMod > 1 && myStats > 0) {
-                                estBS = Math.round(myStats * (ffMod - 1) * (3 / 8));
-                            } else if (lvl > 0) {
-                                estBS = estimateStatsFromLevel(lvl);
-                            }
                             candidateMeta.set(cid, {
                                 id: cid,
                                 team: oppTeam,
@@ -7835,9 +7835,17 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
                                 source: 'torn_elimination',
                                 competitionId: compId,
                                 bs: estBS,
-                                ff: ffMod
+                                ff: ffMod,
+                                isLeader: false
                             });
-                            autoDiscovered.push({ id: cid, team: oppTeam, name: opp.name || '', level: lvl, bs: estBS });
+                            autoDiscovered.push({ id: cid, team: oppTeam, name: opp.name || '', level: lvl, bs: estBS, isLeader: false });
+                        } else {
+                            const existing = candidateMeta.get(cid);
+                            if (lvl > 0 && (!existing.level || existing.level === 0)) existing.level = lvl;
+                            if (estBS > 0 && (!existing.bs || existing.bs === 0)) existing.bs = estBS;
+                            if (ffMod && !existing.ff) existing.ff = ffMod;
+                            if (opp.name && !existing.name) existing.name = opp.name;
+                            if (oppTeam && oppTeam !== 'Opposing Team' && existing.team === 'Opposing Team') existing.team = oppTeam;
                         }
                     }
                 }
@@ -7849,7 +7857,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
     }
 
     // Source E: Recent Faction Attacks (Harvest opponents attacked by faction teammates)
-    if (candidateMeta.size < 60 && apiKey) {
+    if (apiKey) {
         try {
             const facAtksRes = await fetch(
                 `https://api.torn.com/faction/?selections=attacks&key=${encodeURIComponent(apiKey)}`,
@@ -7862,12 +7870,12 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
                 for (const fa of facAtks) {
                     const defId = String(fa.defender_id || '');
                     if (defId && defId !== '0' && defId !== myId && !ownFactionIds.has(defId)) {
+                        const ffMod = fa.modifiers && typeof fa.modifiers.fair_fight === 'number' ? fa.modifiers.fair_fight : null;
+                        let estBS = 0;
+                        if (ffMod && ffMod > 1 && myStats > 0) {
+                            estBS = Math.round(myStats * (ffMod - 1) * (3 / 8));
+                        }
                         if (!candidateMeta.has(defId)) {
-                            const ffMod = fa.modifiers && typeof fa.modifiers.fair_fight === 'number' ? fa.modifiers.fair_fight : null;
-                            let estBS = 0;
-                            if (ffMod && ffMod > 1 && myStats > 0) {
-                                estBS = Math.round(myStats * (ffMod - 1) * (3 / 8));
-                            }
                             candidateMeta.set(defId, {
                                 id: defId,
                                 team: 'Opposing Team',
@@ -7876,9 +7884,15 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
                                 source: 'torn_elimination',
                                 competitionId: compId,
                                 bs: estBS,
-                                ff: ffMod
+                                ff: ffMod,
+                                isLeader: false
                             });
-                            facDiscovered.push({ id: defId, team: 'Opposing Team', name: fa.defender_name || '', bs: estBS });
+                            facDiscovered.push({ id: defId, team: 'Opposing Team', name: fa.defender_name || '', bs: estBS, isLeader: false });
+                        } else {
+                            const existing = candidateMeta.get(defId);
+                            if (estBS > 0 && (!existing.bs || existing.bs === 0)) existing.bs = estBS;
+                            if (ffMod && !existing.ff) existing.ff = ffMod;
+                            if (fa.defender_name && !existing.name) existing.name = fa.defender_name;
                         }
                     }
                 }
@@ -7947,21 +7961,31 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
     // ── Intelligent Batch Prioritization ──
     // Sort pool so beatable, lower-stat, lower-level candidates are prioritized
     pool.sort((a, b) => {
+        // Demote leaders/captains for sub-5M players (leaders are high-level targets constantly hospitalized)
+        const aLeader = Boolean(a.isLeader);
+        const bLeader = Boolean(b.isLeader);
+        if (myStats > 0 && myStats < 5_000_000) {
+            if (!aLeader && bLeader) return -1;
+            if (aLeader && !bLeader) return 1;
+        }
+
         const aBs = a.bs || 0;
         const bBs = b.bs || 0;
         if (aBs > 0 && bBs > 0 && myStats > 0) {
             const idealTarget = myStats * 0.70;
             return Math.abs(aBs - idealTarget) - Math.abs(bBs - idealTarget);
         }
-        if (aBs > 0 && myStats > 0) return aBs <= myStats * 1.15 ? -1 : 1;
-        if (bBs > 0 && myStats > 0) return bBs <= myStats * 1.15 ? 1 : -1;
-        const aLvl = a.level || 1;
-        const bLvl = b.level || 1;
+        if (aBs > 0 && myStats > 0) return aBs <= myStats * 1.25 ? -1 : 1;
+        if (bBs > 0 && myStats > 0) return bBs <= myStats * 1.25 ? 1 : -1;
+
+        // Leaders with unknown level default to 85, regular opponents to 45 (never 1)
+        const aLvl = a.level > 0 ? a.level : (aLeader ? 85 : 45);
+        const bLvl = b.level > 0 ? b.level : (bLeader ? 85 : 45);
         return aLvl - bLvl;
     });
 
-    // Take top 80 candidates for bulk evaluation
-    const batch = pool.slice(0, 80);
+    // Take top 120 candidates for bulk evaluation
+    const batch = pool.slice(0, 120);
     const batchIds = batch.map(b => b.id);
 
     // ── 3. Query FF Scouter for live Fair Fight & Battle Stat estimates ──
@@ -8032,6 +8056,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
 
         // If stats are unknown, use candidate level:
         if (myStats > 0) {
+            if (cand.isLeader && myStats < 5_000_000) return false; // Demote unknown captains for sub-5M
             if (cleanTier === 'easy') return lvl > 0 && lvl <= 25;
             if (cleanTier === 'manageable') return lvl === 0 || lvl <= 42;
             if (cleanTier === 'difficult') return lvl === 0 || lvl <= 48;
@@ -8066,6 +8091,8 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         } else if (targetLvl > 0) {
             const estBS = estimateStatsFromLevel(targetLvl);
             ratio = myStats > 0 ? (estBS / myStats) : 1.0;
+        } else if (cand.isLeader) {
+            ratio = 3.0; // Leaders are high-stat tournament veterans
         } else {
             ratio = 0.65; // Assume moderate newcomer for unknown
         }
@@ -8154,7 +8181,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
     let hospCount = 0;
     let flyCount = 0;
 
-    for (const cand of scoredCandidates.slice(0, 30)) {
+    for (const cand of scoredCandidates.slice(0, 50)) {
         checkedCount++;
         let prof;
         try {
