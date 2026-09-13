@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter
 // @namespace    https://spider-verse.net/
-// @version      2.4.7
+// @version      2.4.8
 // @description  Autonomous 1-click snipe button for Torn Elimination. Finds beatable enemies that are NOT in hospital and NOT flying from ANY page.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -365,6 +365,16 @@
                 });
                 data = JSON.parse(raw);
             } catch (netErr) {
+                renderStatusCard({
+                    title: 'Server Connection Error',
+                    icon: '📡',
+                    message: 'Could not connect to spider-verse.net backend.',
+                    detail: 'Please check your internet connection or try again in a few seconds.',
+                    borderColor: '#e74c3c',
+                    titleColor: '#e74c3c',
+                    primaryBtnText: '🔄 Retry Snipe',
+                    primaryBtnAction: () => executeSnipe()
+                });
                 setButtonState('error', 'Server unreachable');
                 busy = false;
                 return;
@@ -405,10 +415,89 @@
                     renderTargetCard(data);
                 }
             } else {
-                const msg = (data && data.message) ? data.message : 'No targets available';
+                const code = (data && data.code) || '';
+                const msg  = (data && data.message) || 'No targets available';
+
+                if (code === 'NO_TIER_MATCH') {
+                    renderStatusCard({
+                        title: 'No Matching Targets in Tier',
+                        icon: '⚖️',
+                        message: msg,
+                        detail: `You are currently filtering by: <b>${ffTier.toUpperCase()}</b>. Opponents on other teams are active right now, but their battle stats fall outside this filter. Switching to <b>All Tiers</b> will reveal all available targets.`,
+                        borderColor: '#e67e22',
+                        titleColor: '#f39c12',
+                        primaryBtnText: '🎯 Switch to All Tiers & Snipe',
+                        primaryBtnAction: () => {
+                            ffTier = 'all';
+                            save(KEY_TIER, 'all');
+                            const tierSel = document.getElementById('ev2-tier');
+                            if (tierSel) tierSel.value = 'all';
+                            executeSnipe();
+                        },
+                        secondaryBtnText: '⚙️ Settings',
+                        secondaryBtnAction: () => openSettings()
+                    });
+                } else if (code === 'NO_LIVE_TARGETS') {
+                    renderStatusCard({
+                        title: 'All Opponents in Hospital / Flying',
+                        icon: '🏥',
+                        message: 'All verified opponents on other teams are currently hospitalized, traveling, or jailed.',
+                        detail: 'Opponent hospital timers are constantly expiring. Hit re-check in a few moments to catch anyone as soon as they discharge.',
+                        borderColor: '#3498db',
+                        titleColor: '#5dade2',
+                        primaryBtnText: '🔄 Re-Check Opponents',
+                        primaryBtnAction: () => executeSnipe()
+                    });
+                } else if (code === 'NO_SYNCED_ROSTERS' || String(msg).toLowerCase().includes('competition.php')) {
+                    renderStatusCard({
+                        title: 'Sync Opponent Rosters',
+                        icon: '📋',
+                        message: msg,
+                        detail: 'The hunter needs to register opposing teams. Visit the Torn Competition page once — the script will automatically discover and sync all enemy teams.',
+                        borderColor: '#f1c40f',
+                        titleColor: '#f1c40f',
+                        primaryBtnText: '🏆 Open Competition Page',
+                        primaryBtnAction: () => { window.location.href = 'https://www.torn.com/competition.php'; }
+                    });
+                } else if (code === 'API_ERROR' || code === 'NETWORK_ERROR') {
+                    renderStatusCard({
+                        title: 'Torn API Notice',
+                        icon: '⚠️',
+                        message: msg,
+                        detail: 'The Torn API returned a temporary notice or rate limit. Please wait a moment before trying again.',
+                        borderColor: '#e74c3c',
+                        titleColor: '#e74c3c',
+                        primaryBtnText: '🔄 Try Again',
+                        primaryBtnAction: () => executeSnipe()
+                    });
+                } else {
+                    renderStatusCard({
+                        title: 'No Target Available',
+                        icon: '⚠️',
+                        message: msg,
+                        detail: 'Check your tier settings or ensure opposing Elimination rosters have been discovered from competition.php.',
+                        borderColor: '#e67e22',
+                        titleColor: '#f39c12',
+                        primaryBtnText: '🔄 Try Again',
+                        primaryBtnAction: () => executeSnipe(),
+                        secondaryBtnText: '⚙️ Settings',
+                        secondaryBtnAction: () => openSettings()
+                    });
+                }
+
                 setButtonState('error', msg);
             }
         } catch (err) {
+            renderStatusCard({
+                title: 'Unexpected Error',
+                icon: '⚠️',
+                message: err.message || 'An unexpected error occurred.',
+                detail: 'Try clicking the button again or reloading the page.',
+                borderColor: '#e74c3c',
+                titleColor: '#e74c3c',
+                primaryBtnText: '🔄 Retry',
+                primaryBtnAction: () => executeSnipe()
+            });
             setButtonState('error', 'Unexpected error');
         } finally {
             busy = false;
@@ -625,6 +714,100 @@
 
         const compBtn = document.getElementById('ev2-comp-link');
         if (compBtn) compBtn.onclick = () => { window.location.href = 'https://www.torn.com/competition.php'; };
+    }
+
+    // ── Status / Diagnostic Card Display ───────────────────────────
+    function renderStatusCard({
+        title = 'Notice',
+        icon = 'ℹ️',
+        message = '',
+        detail = '',
+        borderColor = '#e67e22',
+        titleColor = '#f39c12',
+        primaryBtnText = '',
+        primaryBtnAction = null,
+        secondaryBtnText = '',
+        secondaryBtnAction = null
+    } = {}) {
+        if (!cardEl) {
+            cardEl = document.createElement('div');
+            cardEl.id = 'elim-target-card';
+            cardEl.style.cssText = `
+                background: #1a1d27;
+                border: 2px solid ${borderColor};
+                border-radius: 10px;
+                padding: 14px;
+                width: 310px;
+                max-width: calc(100vw - 24px);
+                box-sizing: border-box;
+                color: #ecf0f1;
+                font-size: 12px;
+                box-shadow: 0 10px 32px rgba(0,0,0,0.85);
+                text-align: left;
+                display: none;
+                margin-bottom: 4px;
+            `;
+            if (wrapEl && rowEl) {
+                wrapEl.insertBefore(cardEl, rowEl);
+            }
+        }
+
+        cardEl.style.borderColor = borderColor;
+
+        if (drawerEl) {
+            drawerEl.style.display = 'none';
+            drawerOpen = false;
+        }
+
+        cardEl.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #3d4455; padding-bottom:7px; margin-bottom:10px;">
+                <span style="font-weight:900; font-size:13px; color:${titleColor}; display:flex; align-items:center; gap:6px;">
+                    ${icon} ${title}
+                </span>
+                <span id="ev2-status-close" style="cursor:pointer; color:#95a5a6; font-size:13px; font-weight:bold;" title="Close">✖</span>
+            </div>
+            <div style="font-size:12px; color:#ecf0f1; font-weight:600; line-height:1.45; margin-bottom:8px;">
+                ${message}
+            </div>
+            ${detail ? `
+                <div style="background:#222736; border:1px solid #3d4455; border-radius:6px; padding:8px 10px; margin-bottom:10px; font-size:11px; color:#bdc3c7; line-height:1.4;">
+                    ${detail}
+                </div>
+            ` : ''}
+            <div style="display:flex; gap:6px; margin-top:10px;">
+                ${primaryBtnText ? `
+                    <button id="ev2-status-primary" style="flex:1; padding:8px 10px; background:#2980b9; color:#fff; border:none; border-radius:5px; font-weight:700; font-size:11px; cursor:pointer;">
+                        ${primaryBtnText}
+                    </button>
+                ` : ''}
+                ${secondaryBtnText ? `
+                    <button id="ev2-status-secondary" style="padding:8px 10px; background:#2c3e50; color:#bdc3c7; border:1px solid #3d4455; border-radius:5px; font-weight:600; font-size:11px; cursor:pointer;">
+                        ${secondaryBtnText}
+                    </button>
+                ` : ''}
+            </div>
+        `;
+
+        cardEl.style.display = 'block';
+
+        const closeBtn = document.getElementById('ev2-status-close');
+        if (closeBtn) closeBtn.onclick = () => { cardEl.style.display = 'none'; };
+
+        const pBtn = document.getElementById('ev2-status-primary');
+        if (pBtn && typeof primaryBtnAction === 'function') {
+            pBtn.onclick = () => {
+                cardEl.style.display = 'none';
+                primaryBtnAction();
+            };
+        }
+
+        const sBtn = document.getElementById('ev2-status-secondary');
+        if (sBtn && typeof secondaryBtnAction === 'function') {
+            sBtn.onclick = () => {
+                cardEl.style.display = 'none';
+                secondaryBtnAction();
+            };
+        }
     }
 
     // ── Target Card Display ───────────────────────────────────────
