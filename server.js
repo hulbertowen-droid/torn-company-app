@@ -5655,17 +5655,30 @@ app.get('/api/my-stats', async (req, res) => {
         const cached = myUserStatsMemoryCache[cacheKey];
 
         try {
-            const r = await cachedTornFetch(`https://api.torn.com/user/?selections=battlestats,profile&key=${key}`, cacheKey, 300000);
-            if (r && !r.error && (r.strength || r.name)) {
+            const r = await cachedTornFetch(`https://api.torn.com/user/?selections=profile&key=${key}`, cacheKey, 300000);
+            if (r && !r.error && r.name) {
+                // Fetch battlestats from v2 (v1 doesn't support this selection — Error 23)
+                let strength = 0, speed = 0, defense = 0, dexterity = 0;
+                try {
+                    const bsRes = await fetch(`https://api.torn.com/v2/user/?selections=battlestats&key=${key}`, { signal: AbortSignal.timeout(5000) });
+                    const bsData = await bsRes.json();
+                    const bs = bsData && bsData.battlestats;
+                    if (bs && typeof bs.strength === 'number') {
+                        strength = bs.strength || 0;
+                        speed = bs.speed || 0;
+                        defense = bs.defense || 0;
+                        dexterity = bs.dexterity || 0;
+                    }
+                } catch (bsErr) {}
                 const payload = {
                     success: true,
                     name: r.name || "Agent",
                     level: r.level || 0,
-                    strength: r.strength || 0,
-                    speed: r.speed || 0,
-                    defense: r.defense || 0,
-                    dexterity: r.dexterity || 0,
-                    total: (r.strength || 0) + (r.speed || 0) + (r.defense || 0) + (r.dexterity || 0)
+                    strength,
+                    speed,
+                    defense,
+                    dexterity,
+                    total: strength + speed + defense + dexterity
                 };
                 myUserStatsMemoryCache[cacheKey] = payload;
                 return res.json(payload);
@@ -7407,13 +7420,15 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
     const ownFactionIds = new Set();
 
     try {
+        // ── Fetch profile + competition from Torn API v1 ──
         const userRes = await fetch(
-            `https://api.torn.com/user/?selections=profile,competition,battlestats&key=${encodeURIComponent(apiKey)}`,
+            `https://api.torn.com/user/?selections=profile,competition&key=${encodeURIComponent(apiKey)}`,
             { signal: AbortSignal.timeout(6000) }
         );
         const userData = await userRes.json();
         if (userData && userData.error) {
             const errCode = userData.error.code;
+            // Error 23 = "only available in API v2" — NOT a bad key, do not unlink
             const isInvalidKey = errCode === 2 || errCode === 1 || errCode === 13;
             if (isInvalidKey && userId) {
                 try {
@@ -7430,7 +7445,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
                 targetCount: 0,
                 message: isInvalidKey
                     ? `Torn API authentication error [${errCode}: ${userData.error.error}]`
-                    : userKeys.sanitizeErrorMessage(`Torn API authentication error [${userData.error.code}]: ${userData.error.error}`)
+                    : userKeys.sanitizeErrorMessage(`Torn API error [${userData.error.code}]: ${userData.error.error}`)
             };
         }
         if (!userData || !userData.player_id) {
@@ -7474,13 +7489,24 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
         myTeam = userTeam.replace(/\s*\(\s*\d+[^)]*\)/g, '').trim();
         if (comp.id) compId = String(comp.id);
 
-        if (typeof userData.strength === 'number') {
-            attackerStats.strength = userData.strength || 0;
-            attackerStats.speed = userData.speed || 0;
-            attackerStats.defense = userData.defense || 0;
-            attackerStats.dexterity = userData.dexterity || 0;
-            attackerStats.total = userData.total || (attackerStats.strength + attackerStats.speed + attackerStats.defense + attackerStats.dexterity);
-            myStats = attackerStats.total;
+        // ── Fetch battlestats from Torn API v2 (v1 does not support this selection) ──
+        try {
+            const bsRes = await fetch(
+                `https://api.torn.com/v2/user/?selections=battlestats&key=${encodeURIComponent(apiKey)}`,
+                { signal: AbortSignal.timeout(5000) }
+            );
+            const bsData = await bsRes.json();
+            const bs = bsData && bsData.battlestats;
+            if (bs && typeof bs.strength === 'number') {
+                attackerStats.strength = bs.strength || 0;
+                attackerStats.speed = bs.speed || 0;
+                attackerStats.defense = bs.defense || 0;
+                attackerStats.dexterity = bs.dexterity || 0;
+                attackerStats.total = bs.total || (attackerStats.strength + attackerStats.speed + attackerStats.defense + attackerStats.dexterity);
+                myStats = attackerStats.total;
+            }
+        } catch (bsErr) {
+            // Non-fatal: proceed without battlestats (Fair Fight scoring will be skipped)
         }
 
         // Protect own faction members
