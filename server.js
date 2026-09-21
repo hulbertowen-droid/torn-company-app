@@ -11582,31 +11582,31 @@ function getPreFilledVaultUrl(tornId, amount) {
 function buildBankRequestButtons(req) {
     const vaultUrl = getPreFilledVaultUrl(req.tornId, req.amount);
     const amtFmt = Number(req.amount).toLocaleString();
-    const appBaseUrl = process.env.APP_URL || 'https://spider-verse.net';
-    const payUrl = `${appBaseUrl}/api/bank/pay/${req.id}`;
 
     if (req.status === 'pending') {
-        // Open request — clicking "Give Cash" brings banker straight to prefilled Torn vault with zero extra steps!
+        // Open request — 1-click in Discord claims the request, updates card, and gives the direct Torn vault link!
         return [{ type: 1, components: [
             {
                 type: 2,
-                style: 5, // Link button — 1-click opens Torn directly with recipient & amount pre-filled!
-                label: `💸 Give Cash ($${amtFmt})`,
-                url: payUrl
+                style: 3, // Green (Success) - Interactive claim button, never routes to external broken websites
+                custom_id: `bank_pay_${req.id}`,
+                label: `💸 Give Cash ($${amtFmt})`
+            },
+            {
+                type: 2,
+                style: 5, // Direct Link button straight to Torn Faction Vault prefilled
+                label: '🔗 Direct Torn Vault',
+                url: vaultUrl
             },
             {
                 type: 2,
                 style: 4, // Red (Danger) - cancels the entire request
                 custom_id: `bank_cancel_${req.id}`,
-                label: '❌ Cancel Request'
+                label: '❌ Cancel'
             }
         ]}];
     } else if (req.status === 'verifying') {
         // A banker clicked "Give Cash"
-        // 1. Give Cash is locked for everyone else (disabled button showing who claimed it)
-        // 2. Direct link to Torn faction vault pre-filled
-        // 3. Cancel Fulfillment (Unclaim) button in Grey (releases the fulfillment back to pending)
-        // 4. Cancel Request button in Red (cancels the entire withdrawal request)
         const fulfillerLabel = req.fulfillerName ? `@${req.fulfillerName}` : 'Banker';
         return [{ type: 1, components: [
             {
@@ -11619,20 +11619,26 @@ function buildBankRequestButtons(req) {
             {
                 type: 2,
                 style: 5, // Link — opens Torn faction vault directly
-                label: `💸 Open Vault in Torn ($${amtFmt})`,
+                label: `💸 Open Vault ($${amtFmt})`,
                 url: vaultUrl
+            },
+            {
+                type: 2,
+                style: 1, // Primary (Blue) — Manual instant log verification check
+                custom_id: `bank_check_${req.id}`,
+                label: '🔄 Check Logs'
             },
             {
                 type: 2,
                 style: 2, // Grey (Secondary) — Cancel Fulfillment only (release claim)
                 custom_id: `bank_unclaim_${req.id}`,
-                label: '↩️ Cancel Fulfillment (Unclaim)'
+                label: '↩️ Unclaim'
             },
             {
                 type: 2,
                 style: 4, // Red (Danger) — Cancel entire Request
                 custom_id: `bank_cancel_${req.id}`,
-                label: '❌ Cancel Request'
+                label: '❌ Cancel'
             }
         ]}];
     } else {
@@ -15886,10 +15892,31 @@ function setupSlashBotEvents(bot, token) {
                 }
                 const updatedReq = bankRequests[reqId];
                 if (updatedReq) {
-                    return interaction.editReply({
+                    await interaction.editReply({
                         embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
                         components: buildBankRequestButtons(updatedReq)
                     }).catch(() => {});
+                }
+                if (res.message) {
+                    await interaction.followUp({ content: res.message, ephemeral: true }).catch(() => {});
+                }
+                return;
+            }
+
+            // ── Bank: Instant Log Verification Check ──
+            if (customId.startsWith('bank_check_')) {
+                const reqId = customId.replace('bank_check_', '').trim();
+                await interaction.deferUpdate().catch(() => {});
+                const res = await executeFulfillRequest(reqId, interaction);
+                const updatedReq = bankRequests[reqId];
+                if (updatedReq) {
+                    await interaction.editReply({
+                        embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
+                        components: buildBankRequestButtons(updatedReq)
+                    }).catch(() => {});
+                }
+                if (res.message) {
+                    await interaction.followUp({ content: res.message, ephemeral: true }).catch(() => {});
                 }
                 return;
             }
