@@ -14829,15 +14829,9 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
             timestamp: new Date().toISOString()
         };
 
-        const actionRow = UI.actionRow(
-            UI.primaryBtn(`btn_bs_update_${playerId}`, '🔄 Update Again', '🔄'),
-            UI.linkBtn(`https://www.torn.com/profiles.php?XID=${playerId}`, '👤 Profile', '👤'),
-            UI.linkBtn('https://www.torn.com/gym.php', '🏋️ Gym', '🏋️')
-        );
-
         return await interaction.editReply({
             embeds: [sanitizeEmbed(embed)],
-            components: [actionRow]
+            components: []
         });
 
     } catch(err) {
