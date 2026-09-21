@@ -14669,33 +14669,29 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
             const pctDex = ((dex / safeTotal) * 100).toFixed(1);
             const formatMod = (m) => m > 0 ? ` (+${m}%)` : (m < 0 ? ` (${m}%)` : '');
 
-            const viewDesc = lastUpdatedTime
-                ? `Current battle stats for **[${playerName} [${playerId}]](https://www.torn.com/profiles.php?XID=${playerId})**.\nLast manual update was **${lastUpdatedTime}**.\n\n**Total Battle Stats:** **\`${total.toLocaleString('en-US')}\`**`
-                : `Current live battle stats for **[${playerName} [${playerId}]](https://www.torn.com/profiles.php?XID=${playerId})**.\nNo previous manual update recorded yet. Run \`/bs update\` to start tracking your gains!\n\n**Total Battle Stats:** **\`${total.toLocaleString('en-US')}\`**`;
+            const archetype = getStatArchetype(str, def, spd, dex);
+            const snapshotTs = prevRecord?.lastUpdated ? `<t:${Math.floor(prevRecord.lastUpdated / 1000)}:R>` : 'Live';
+            const updateHint = lastUpdatedTime ? `Updated ${lastUpdatedTime}` : 'No baseline yet — run `/bs update` to track gains';
 
             const embed = {
-                title: `📊 Battle Stats: ${playerName} [${playerId}]`,
-                description: viewDesc,
+                title: `📊 ${playerName} [${playerId}]`,
+                description: [
+                    `**Total:** \`${total.toLocaleString('en-US')}\`  ·  ${archetype}  ·  ${snapshotTs}`,
+                    ``,
+                    `⚔️ \`${str.toLocaleString('en-US')}\`${formatMod(modStr)} (${pctStr}%)  🛡️ \`${def.toLocaleString('en-US')}\`${formatMod(modDef)} (${pctDef}%)`,
+                    `⚡ \`${spd.toLocaleString('en-US')}\`${formatMod(modSpd)} (${pctSpd}%)  🎯 \`${dex.toLocaleString('en-US')}\`${formatMod(modDex)} (${pctDex}%)`,
+                    ``,
+                    `-# ${updateHint}`
+                ].join('\n'),
                 color: UI.COLORS.INFO,
-                fields: [
-                    { name: '⚔️ Strength', value: `**${str.toLocaleString('en-US')}** (${pctStr}%)${formatMod(modStr)}`, inline: true },
-                    { name: '🛡️ Defense', value: `**${def.toLocaleString('en-US')}** (${pctDef}%)${formatMod(modDef)}`, inline: true },
-                    { name: '\u200b', value: '\u200b', inline: true },
-                    { name: '⚡ Speed', value: `**${spd.toLocaleString('en-US')}** (${pctSpd}%)${formatMod(modSpd)}`, inline: true },
-                    { name: '🎯 Dexterity', value: `**${dex.toLocaleString('en-US')}** (${pctDex}%)${formatMod(modDex)}`, inline: true },
-                    { name: '\u200b', value: '\u200b', inline: true },
-                    { name: '📊 Total Battle Stats', value: `**${total.toLocaleString('en-US')}**`, inline: false },
-                    { name: '⚖️ Build Archetype', value: getStatArchetype(str, def, spd, dex), inline: true },
-                    { name: '⏱️ Snapshot', value: prevRecord?.lastUpdated ? `<t:${Math.floor(prevRecord.lastUpdated / 1000)}:R>` : 'Live API', inline: true }
-                ],
                 footer: UI.FOOTER,
                 timestamp: new Date().toISOString()
             };
 
             const actionRow = UI.actionRow(
-                UI.primaryBtn(`btn_bs_update_${playerId}`, '🔄 Update Now', '🔄'),
-                UI.linkBtn(`https://www.torn.com/profiles.php?XID=${playerId}`, '👤 Torn Profile', '👤'),
-                UI.linkBtn('https://www.torn.com/gym.php', '🏋️ Torn Gym', '🏋️')
+                UI.primaryBtn(`btn_bs_update_${playerId}`, '🔄 Update', '🔄'),
+                UI.linkBtn(`https://www.torn.com/profiles.php?XID=${playerId}`, '👤 Profile', '👤'),
+                UI.linkBtn('https://www.torn.com/gym.php', '🏋️ Gym', '🏋️')
             );
 
             return await interaction.editReply({ embeds: [sanitizeEmbed(embed)], components: [actionRow] });
@@ -14816,65 +14812,27 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
 
         const formatMod = (m) => m > 0 ? ` (+${m}%)` : (m < 0 ? ` (${m}%)` : '');
 
+        const archetype = getStatArchetype(str, def, spd, dex);
+
         const embed = {
-            title: `📊 Battle Stats: ${playerName} [${playerId}]`,
-            description: descMessage,
+            title: `📊 ${playerName} [${playerId}]`,
+            description: [
+                `**Total:** \`${total.toLocaleString('en-US')}\`${totalDiffTag}  ·  ${archetype}`,
+                ``,
+                `⚔️ \`${str.toLocaleString('en-US')}\`${formatMod(modStr)} (${pctStr}%)${strDiffTag}  🛡️ \`${def.toLocaleString('en-US')}\`${formatMod(modDef)} (${pctDef}%)${defDiffTag}`,
+                `⚡ \`${spd.toLocaleString('en-US')}\`${formatMod(modSpd)} (${pctSpd}%)${spdDiffTag}  🎯 \`${dex.toLocaleString('en-US')}\`${formatMod(modDex)} (${pctDex}%)${dexDiffTag}`,
+                ``,
+                descMessage ? `-# ${descMessage.replace(/\*\*/g, '').replace(/\n/g, ' ').substring(0, 200)}` : `-# Stats recorded.`
+            ].join('\n'),
             color: (diffTotal > 0 || !hasPrevious) ? UI.COLORS.SUCCESS : UI.COLORS.BRAND,
-            fields: [
-                {
-                    name: '⚔️ Strength',
-                    value: `**${str.toLocaleString('en-US')}** (${pctStr}%)${formatMod(modStr)}${strDiffTag}`,
-                    inline: true
-                },
-                {
-                    name: '🛡️ Defense',
-                    value: `**${def.toLocaleString('en-US')}** (${pctDef}%)${formatMod(modDef)}${defDiffTag}`,
-                    inline: true
-                },
-                {
-                    name: '\u200b',
-                    value: '\u200b',
-                    inline: true
-                },
-                {
-                    name: '⚡ Speed',
-                    value: `**${spd.toLocaleString('en-US')}** (${pctSpd}%)${formatMod(modSpd)}${spdDiffTag}`,
-                    inline: true
-                },
-                {
-                    name: '🎯 Dexterity',
-                    value: `**${dex.toLocaleString('en-US')}** (${pctDex}%)${formatMod(modDex)}${dexDiffTag}`,
-                    inline: true
-                },
-                {
-                    name: '\u200b',
-                    value: '\u200b',
-                    inline: true
-                },
-                {
-                    name: '📊 Total Battle Stats',
-                    value: `**${total.toLocaleString('en-US')}**${totalDiffTag}`,
-                    inline: false
-                },
-                {
-                    name: '⚖️ Build Archetype',
-                    value: getStatArchetype(str, def, spd, dex),
-                    inline: true
-                },
-                {
-                    name: '⏱️ Updated',
-                    value: `<t:${Math.floor(Date.now() / 1000)}:R>`,
-                    inline: true
-                }
-            ],
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
 
         const actionRow = UI.actionRow(
             UI.primaryBtn(`btn_bs_update_${playerId}`, '🔄 Update Again', '🔄'),
-            UI.linkBtn(`https://www.torn.com/profiles.php?XID=${playerId}`, '👤 Torn Profile', '👤'),
-            UI.linkBtn('https://www.torn.com/gym.php', '🏋️ Torn Gym', '🏋️')
+            UI.linkBtn(`https://www.torn.com/profiles.php?XID=${playerId}`, '👤 Profile', '👤'),
+            UI.linkBtn('https://www.torn.com/gym.php', '🏋️ Gym', '🏋️')
         );
 
         return await interaction.editReply({
