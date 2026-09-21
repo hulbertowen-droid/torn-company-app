@@ -273,6 +273,10 @@ async function loadConfigFromMongo() {
             if (saved.userApiKeys) {
                 userKeys.importEncryptedFromMongo(saved.userApiKeys);
             }
+            if (saved.battleStatsHistory) {
+                battleStatsHistory = { ...(battleStatsHistory || {}), ...(saved.battleStatsHistory || {}) };
+                console.log(`[Mongo] Restored battle stats history for ${Object.keys(battleStatsHistory).filter(k => !k.startsWith('discord_')).length} player(s) from MongoDB Atlas.`);
+            }
             console.log('[Mongo] Restored master configurations from MongoDB Atlas.');
             
             if (discordConfig.apiKey) {
@@ -731,6 +735,27 @@ function saveBankRequests() {
     saveToMongo();
 }
 
+let battleStatsHistory = {};
+const BATTLESTATS_HISTORY_FILE = path.join(__dirname, 'data', 'battlestats_history.json');
+try {
+    if (fs.existsSync(BATTLESTATS_HISTORY_FILE)) {
+        battleStatsHistory = JSON.parse(fs.readFileSync(BATTLESTATS_HISTORY_FILE, 'utf8'));
+    }
+} catch(e) {
+    console.error('[BattleStats] Error loading battlestats_history.json:', e.message);
+}
+
+function saveBattleStatsHistory() {
+    try {
+        const dataDir = path.join(__dirname, 'data');
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+        fs.writeFileSync(BATTLESTATS_HISTORY_FILE, JSON.stringify(battleStatsHistory, null, 2), 'utf8');
+    } catch(e) {
+        console.error('[BattleStats] Error saving battlestats_history.json:', e.message);
+    }
+    saveToMongo();
+}
+
 try { if (fs.existsSync('spy_db.json')) spyDatabase = JSON.parse(fs.readFileSync('spy_db.json')); } catch(e) {}
 try { if (fs.existsSync('user_tracking.json')) userTracking = JSON.parse(fs.readFileSync('user_tracking.json')); } catch(e) {}
 try { if (fs.existsSync('api_pool.json')) apiPoolConfig = JSON.parse(fs.readFileSync('api_pool.json')); } catch(e) {}
@@ -770,6 +795,7 @@ function saveToMongo() {
                         warAuditArchive,
                         lastWarboardPayload: lastGoodWarboardPayload,
                         userApiKeys: userKeys.exportEncryptedForMongo(),
+                        battleStatsHistory: (typeof battleStatsHistory !== 'undefined' ? battleStatsHistory : {}),
                         updatedAt: new Date()
                     }
                 },
@@ -14291,6 +14317,351 @@ setInterval(() => {
     }
 }, 5000);
 
+// ─── Battle Stats Tracker & Progression Engine (TornStats Parity) ─────────────
+function formatTimeSince(ms) {
+    const sec = Math.max(1, Math.floor(ms / 1000));
+    if (sec < 60) return `${sec} second${sec === 1 ? '' : 's'} ago`;
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min} minute${min === 1 ? '' : 's'} ago`;
+    const hrs = Math.floor(min / 60);
+    if (hrs < 24) return `${hrs} hour${hrs === 1 ? '' : 's'} ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
+function getStatArchetype(str, def, spd, dex) {
+    const total = str + def + spd + dex;
+    if (total <= 0) return 'Novice';
+    const pStr = str / total;
+    const pDef = def / total;
+    const pSpd = spd / total;
+    const pDex = dex / total;
+
+    if (pDef >= 0.45) return '🛡️ Baldr (Heavy Defense Tank)';
+    if (pStr >= 0.45) return '💥 Heavy Hitter (Strength Specialist)';
+    if (pSpd >= 0.45) return '⚡ Speedster (Speed Specialist)';
+    if (pDex >= 0.45) return '🎯 Ghost (Dexterity Specialist)';
+    if (pStr + pDef >= 0.65) return '🥊 Hank (Strength + Defense Brawler)';
+    if (pSpd + pDex >= 0.65) return '💨 Agile Rogue (Speed + Dexterity)';
+    if (pStr + pSpd >= 0.65) return '⚡ Glass Cannon (Strength + Speed)';
+    if (pDef + pDex >= 0.65) return '🧱 Wall (Defense + Dexterity)';
+    const maxP = Math.max(pStr, pDef, pSpd, pDex);
+    const minP = Math.min(pStr, pDef, pSpd, pDex);
+    if (maxP - minP <= 0.10) return '⚖️ All-Rounder (Balanced Build)';
+    return '📈 Hybrid Build';
+}
+
+async function handleBattleStatsUpdate(interaction, options = {}) {
+    const { forceUpdate = true, keyInput = null, isPublic = false, isButton = false } = options;
+
+    try {
+        if (isButton) {
+            await interaction.deferReply({ ephemeral: true }).catch(() => {});
+        } else {
+            if (!interaction.deferred && !interaction.replied) {
+                await interaction.deferReply({ ephemeral: !isPublic }).catch(() => {});
+            }
+        }
+
+        const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
+
+        // 1. If keyInput is provided, attempt to link it directly
+        if (keyInput) {
+            const cleanKey = keyInput.trim();
+            if (cleanKey.length !== 16 || !/^[a-zA-Z0-9]+$/.test(cleanKey)) {
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.error('Invalid API Key', 'Torn API keys must be exactly 16 alphanumeric characters.'))]
+                });
+            }
+            const linkRes = await userKeys.linkUserApiKey(interaction.user.id, cleanKey);
+            if (!linkRes.success) {
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.error('Key Linking Failed', `⚠️ **Could not link API key:** ${linkRes.error}\n\nPlease verify your key at [Torn Preferences](https://www.torn.com/preferences.php#tab=api) and ensure it has **Limited Access**.`))]
+                });
+            }
+        }
+
+        // 2. Resolve user's API key
+        const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username);
+        if (!resolved) {
+            const linkEmbed = UI.warning(
+                '🔑 Torn Limited API Key Required',
+                `Hey **${invokerName}**, to look up your live battle stats and track your training gains, you need to link your Torn **Limited Access API Key**.\n\n` +
+                `🔒 **Zero Public Exposure:** Your key is encrypted with **military-grade AES-256-GCM** and stored in secure memory/database. F.R.I.D.A.Y only accesses it to calculate your stats.\n\n` +
+                `Provide it via \`/bs update key:YOUR_KEY\` or click **Link Limited Key** below:`
+            );
+            const actionRow = UI.actionRow(
+                UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑'),
+                UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')
+            );
+            return await interaction.editReply({ embeds: [sanitizeEmbed(linkEmbed)], components: [actionRow] });
+        }
+
+        // 3. Fetch live profile and battlestats from Torn API
+        let rawData = null;
+        try {
+            const url = `https://api.torn.com/user/?selections=profile,battlestats&key=${resolved.key}`;
+            const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+            rawData = await res.json();
+        } catch(e) {
+            return await interaction.editReply({
+                embeds: [sanitizeEmbed(UI.error('Connection Failed', `Could not reach Torn API: ${e.message}. Please try again in a moment.`))]
+            });
+        }
+
+        if (!rawData || rawData.error || !rawData.player_id) {
+            const errDetail = rawData?.error?.error || 'Unknown Torn API error';
+            return await interaction.editReply({
+                embeds: [sanitizeEmbed(UI.error('Fetch Failed', `⚠️ Torn API returned: ${errDetail}\n\nIf you recently rotated your key, please update it with \`/linkkey\`.`))]
+            });
+        }
+
+        const playerId = rawData.player_id;
+        const playerName = rawData.name || invokerName;
+        const str = Number(rawData.strength || 0);
+        const def = Number(rawData.defense || 0);
+        const spd = Number(rawData.speed || 0);
+        const dex = Number(rawData.dexterity || 0);
+        const total = Number(rawData.total || (str + def + spd + dex));
+        const modStr = Number(rawData.strength_modifier || 0);
+        const modDef = Number(rawData.defense_modifier || 0);
+        const modSpd = Number(rawData.speed_modifier || 0);
+        const modDex = Number(rawData.dexterity_modifier || 0);
+
+        const recordKey = String(playerId);
+        const prevRecord = battleStatsHistory[recordKey];
+
+        // 4. View Mode: show existing record or current stats without recording new baseline
+        if (!forceUpdate) {
+            const lastUpdatedTime = prevRecord?.lastUpdated ? formatTimeSince(Date.now() - prevRecord.lastUpdated) : null;
+            const safeTotal = total > 0 ? total : 1;
+            const pctStr = ((str / safeTotal) * 100).toFixed(1);
+            const pctDef = ((def / safeTotal) * 100).toFixed(1);
+            const pctSpd = ((spd / safeTotal) * 100).toFixed(1);
+            const pctDex = ((dex / safeTotal) * 100).toFixed(1);
+            const formatMod = (m) => m > 0 ? ` (+${m}%)` : (m < 0 ? ` (${m}%)` : '');
+
+            const viewDesc = lastUpdatedTime
+                ? `Current battle stats for **[${playerName} [${playerId}]](https://www.torn.com/profiles.php?XID=${playerId})**.\nLast manual update was **${lastUpdatedTime}**.\n\n**Total Battle Stats:** **\`${total.toLocaleString('en-US')}\`**`
+                : `Current live battle stats for **[${playerName} [${playerId}]](https://www.torn.com/profiles.php?XID=${playerId})**.\nNo previous manual update recorded yet. Run \`/bs update\` to start tracking your gains!\n\n**Total Battle Stats:** **\`${total.toLocaleString('en-US')}\`**`;
+
+            const embed = {
+                title: `📊 Battle Stats: ${playerName} [${playerId}]`,
+                description: viewDesc,
+                color: UI.COLORS.INFO,
+                fields: [
+                    { name: '⚔️ Strength', value: `**${str.toLocaleString('en-US')}** (${pctStr}%)${formatMod(modStr)}`, inline: true },
+                    { name: '🛡️ Defense', value: `**${def.toLocaleString('en-US')}** (${pctDef}%)${formatMod(modDef)}`, inline: true },
+                    { name: '\u200b', value: '\u200b', inline: true },
+                    { name: '⚡ Speed', value: `**${spd.toLocaleString('en-US')}** (${pctSpd}%)${formatMod(modSpd)}`, inline: true },
+                    { name: '🎯 Dexterity', value: `**${dex.toLocaleString('en-US')}** (${pctDex}%)${formatMod(modDex)}`, inline: true },
+                    { name: '\u200b', value: '\u200b', inline: true },
+                    { name: '📊 Total Battle Stats', value: `**${total.toLocaleString('en-US')}**`, inline: false },
+                    { name: '⚖️ Build Archetype', value: getStatArchetype(str, def, spd, dex), inline: true },
+                    { name: '⏱️ Snapshot', value: prevRecord?.lastUpdated ? `<t:${Math.floor(prevRecord.lastUpdated / 1000)}:R>` : 'Live API', inline: true }
+                ],
+                footer: UI.FOOTER,
+                timestamp: new Date().toISOString()
+            };
+
+            const actionRow = UI.actionRow(
+                UI.primaryBtn(`btn_bs_update_${playerId}`, '🔄 Update Now', '🔄'),
+                UI.linkBtn(`https://www.torn.com/profiles.php?XID=${playerId}`, '👤 Torn Profile', '👤'),
+                UI.linkBtn('https://www.torn.com/gym.php', '🏋️ Torn Gym', '🏋️')
+            );
+
+            return await interaction.editReply({ embeds: [sanitizeEmbed(embed)], components: [actionRow] });
+        }
+
+        // 5. Update Mode: Calculate gains against previous record
+        let diffStr = 0, diffDef = 0, diffSpd = 0, diffDex = 0, diffTotal = 0;
+        let hasPrevious = false;
+        let elapsedMs = 0;
+        let timeAgo = '';
+
+        if (prevRecord && prevRecord.stats && prevRecord.lastUpdated) {
+            hasPrevious = true;
+            diffStr = str - (Number(prevRecord.stats.strength) || 0);
+            diffDef = def - (Number(prevRecord.stats.defense) || 0);
+            diffSpd = spd - (Number(prevRecord.stats.speed) || 0);
+            diffDex = dex - (Number(prevRecord.stats.dexterity) || 0);
+            diffTotal = total - (Number(prevRecord.stats.total) || 0);
+            elapsedMs = Math.max(0, Date.now() - prevRecord.lastUpdated);
+            timeAgo = formatTimeSince(elapsedMs);
+        }
+
+        let descMessage = '';
+        if (!hasPrevious) {
+            descMessage = `**Your stats have been updated!**\n` +
+                `🎉 Your initial battle stats baseline has been recorded! Run \`/bs update\` again after training to track your stat gains.\n\n` +
+                `**Total Battle Stats:** **\`${total.toLocaleString('en-US')}\`**`;
+        } else {
+            const gainsParts = [];
+            if (diffStr > 0) gainsParts.push(`**${diffStr.toLocaleString('en-US')}** strength`);
+            if (diffDef > 0) gainsParts.push(`**${diffDef.toLocaleString('en-US')}** defense`);
+            if (diffSpd > 0) gainsParts.push(`**${diffSpd.toLocaleString('en-US')}** speed`);
+            if (diffDex > 0) gainsParts.push(`**${diffDex.toLocaleString('en-US')}** dexterity`);
+
+            if (gainsParts.length > 0) {
+                const gainsStr = gainsParts.join(', ');
+                const totalStr = `**${diffTotal.toLocaleString('en-US')}**`;
+                descMessage = `**Your stats have been updated!** You have gained ${gainsStr} since your last manual update **${timeAgo}**. You have gained a total of ${totalStr} stats.\n\n` +
+                    `**Total Battle Stats:** **\`${total.toLocaleString('en-US')}\`**`;
+            } else if (diffTotal === 0) {
+                descMessage = `**Your stats have been updated!** No stat gains recorded since your last manual update **${timeAgo}**.\n\n` +
+                    `**Total Battle Stats:** **\`${total.toLocaleString('en-US')}\`**`;
+            } else if (diffTotal < 0) {
+                descMessage = `**Your stats have been updated!** Your total stats decreased by **${Math.abs(diffTotal).toLocaleString('en-US')}** since your last manual update **${timeAgo}** (likely due to an overdose or debuff).\n\n` +
+                    `**Total Battle Stats:** **\`${total.toLocaleString('en-US')}\`**`;
+            } else {
+                descMessage = `**Your stats have been updated!** You have gained a total of **${diffTotal.toLocaleString('en-US')}** stats since your last manual update **${timeAgo}**.\n\n` +
+                    `**Total Battle Stats:** **\`${total.toLocaleString('en-US')}\`**`;
+            }
+        }
+
+        // 6. Save update to history
+        if (!battleStatsHistory[recordKey]) {
+            battleStatsHistory[recordKey] = {
+                playerId,
+                playerName,
+                discordUserId: interaction.user.id,
+                history: []
+            };
+        }
+        if (!Array.isArray(battleStatsHistory[recordKey].history)) {
+            battleStatsHistory[recordKey].history = [];
+        }
+
+        if (hasPrevious) {
+            battleStatsHistory[recordKey].history.unshift({
+                timestamp: prevRecord.lastUpdated,
+                strength: prevRecord.stats.strength,
+                defense: prevRecord.stats.defense,
+                speed: prevRecord.stats.speed,
+                dexterity: prevRecord.stats.dexterity,
+                total: prevRecord.stats.total,
+                gains: {
+                    strength: diffStr,
+                    defense: diffDef,
+                    speed: diffSpd,
+                    dexterity: diffDex,
+                    total: diffTotal
+                }
+            });
+            if (battleStatsHistory[recordKey].history.length > 50) {
+                battleStatsHistory[recordKey].history = battleStatsHistory[recordKey].history.slice(0, 50);
+            }
+        }
+
+        battleStatsHistory[recordKey].playerName = playerName;
+        battleStatsHistory[recordKey].discordUserId = interaction.user.id;
+        battleStatsHistory[recordKey].lastUpdated = Date.now();
+        battleStatsHistory[recordKey].stats = {
+            strength: str,
+            defense: def,
+            speed: spd,
+            dexterity: dex,
+            total: total,
+            modifiers: {
+                strength: modStr,
+                defense: modDef,
+                speed: modSpd,
+                dexterity: modDex
+            }
+        };
+        battleStatsHistory['discord_' + interaction.user.id] = playerId;
+
+        saveBattleStatsHistory();
+
+        // 7. Render response embed
+        const safeTotal = total > 0 ? total : 1;
+        const pctStr = ((str / safeTotal) * 100).toFixed(1);
+        const pctDef = ((def / safeTotal) * 100).toFixed(1);
+        const pctSpd = ((spd / safeTotal) * 100).toFixed(1);
+        const pctDex = ((dex / safeTotal) * 100).toFixed(1);
+
+        const strDiffTag = diffStr > 0 ? ` \`[+${diffStr.toLocaleString('en-US')}]\`` : '';
+        const defDiffTag = diffDef > 0 ? ` \`[+${diffDef.toLocaleString('en-US')}]\`` : '';
+        const spdDiffTag = diffSpd > 0 ? ` \`[+${diffSpd.toLocaleString('en-US')}]\`` : '';
+        const dexDiffTag = diffDex > 0 ? ` \`[+${diffDex.toLocaleString('en-US')}]\`` : '';
+        const totalDiffTag = diffTotal > 0 ? ` \`[+${diffTotal.toLocaleString('en-US')} total gain]\`` : '';
+
+        const formatMod = (m) => m > 0 ? ` (+${m}%)` : (m < 0 ? ` (${m}%)` : '');
+
+        const embed = {
+            title: `📊 Battle Stats: ${playerName} [${playerId}]`,
+            description: descMessage,
+            color: (diffTotal > 0 || !hasPrevious) ? UI.COLORS.SUCCESS : UI.COLORS.BRAND,
+            fields: [
+                {
+                    name: '⚔️ Strength',
+                    value: `**${str.toLocaleString('en-US')}** (${pctStr}%)${formatMod(modStr)}${strDiffTag}`,
+                    inline: true
+                },
+                {
+                    name: '🛡️ Defense',
+                    value: `**${def.toLocaleString('en-US')}** (${pctDef}%)${formatMod(modDef)}${defDiffTag}`,
+                    inline: true
+                },
+                {
+                    name: '\u200b',
+                    value: '\u200b',
+                    inline: true
+                },
+                {
+                    name: '⚡ Speed',
+                    value: `**${spd.toLocaleString('en-US')}** (${pctSpd}%)${formatMod(modSpd)}${spdDiffTag}`,
+                    inline: true
+                },
+                {
+                    name: '🎯 Dexterity',
+                    value: `**${dex.toLocaleString('en-US')}** (${pctDex}%)${formatMod(modDex)}${dexDiffTag}`,
+                    inline: true
+                },
+                {
+                    name: '\u200b',
+                    value: '\u200b',
+                    inline: true
+                },
+                {
+                    name: '📊 Total Battle Stats',
+                    value: `**${total.toLocaleString('en-US')}**${totalDiffTag}`,
+                    inline: false
+                },
+                {
+                    name: '⚖️ Build Archetype',
+                    value: getStatArchetype(str, def, spd, dex),
+                    inline: true
+                },
+                {
+                    name: '⏱️ Updated',
+                    value: `<t:${Math.floor(Date.now() / 1000)}:R>`,
+                    inline: true
+                }
+            ],
+            footer: UI.FOOTER,
+            timestamp: new Date().toISOString()
+        };
+
+        const actionRow = UI.actionRow(
+            UI.primaryBtn(`btn_bs_update_${playerId}`, '🔄 Update Again', '🔄'),
+            UI.linkBtn(`https://www.torn.com/profiles.php?XID=${playerId}`, '👤 Torn Profile', '👤'),
+            UI.linkBtn('https://www.torn.com/gym.php', '🏋️ Torn Gym', '🏋️')
+        );
+
+        return await interaction.editReply({
+            embeds: [sanitizeEmbed(embed)],
+            components: [actionRow]
+        });
+
+    } catch(err) {
+        console.error('[BattleStats] Error in handleBattleStatsUpdate:', err);
+        return await interaction.editReply({
+            embeds: [sanitizeEmbed(UI.error('Command Error', `An unexpected error occurred while processing battle stats: ${err.message}`))]
+        }).catch(() => {});
+    }
+}
+
 // ─── Register Slash Commands with Discord ─────────────────────────────────────
 async function registerSlashCommands(token, guildId = null) {
     const rest = new REST({ version: '10' }).setToken(token);
@@ -14481,7 +14852,20 @@ async function registerSlashCommands(token, guildId = null) {
                     { name: '🔴 Difficult (<= 1.65x BS)', value: 'difficult' },
                     { name: '⚡ All Tiers (Unrestricted)', value: 'all' }
                 )
-            ).toJSON()
+            ).toJSON(),
+
+        // 20. Battle Stats Manual Update & Training Progress Tracker (/bs, /bsupdate)
+        new SlashCommandBuilder().setName('bs').setDescription('Track Torn battle stats and training gains (like TornStats)')
+            .addSubcommand(sub => sub.setName('update').setDescription('Fetch live battle stats, record training progress, and calculate stat gains')
+                .addStringOption(opt => opt.setName('key').setDescription('Optional: provide/link your 16-char Limited Access API key').setRequired(false))
+                .addBooleanOption(opt => opt.setName('public').setDescription('Set to true to post publicly in the channel (default: private)').setRequired(false))
+            )
+            .addSubcommand(sub => sub.setName('view').setDescription('View your current recorded battle stats, stat distribution, and last update time')
+                .addBooleanOption(opt => opt.setName('public').setDescription('Set to true to post publicly in the channel (default: private)').setRequired(false))
+            ).toJSON(),
+        new SlashCommandBuilder().setName('bsupdate').setDescription('Quick shortcut: Update battle stats and calculate training gains')
+            .addStringOption(opt => opt.setName('key').setDescription('Optional: provide/link your 16-char Limited Access API key').setRequired(false))
+            .addBooleanOption(opt => opt.setName('public').setDescription('Set to true to post publicly in the channel (default: private)').setRequired(false)).toJSON()
     ];
 
     const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : [])
@@ -15255,6 +15639,12 @@ function setupSlashBotEvents(bot, token) {
                 }).catch(() => {});
             }
 
+            // ── Battle Stats Quick Update Button ──
+            if (customId.startsWith('btn_bs_update')) {
+                await handleBattleStatsUpdate(interaction, { forceUpdate: true, isButton: true });
+                return;
+            }
+
             // ── Bank: Verify & Fulfill ──
             if (customId.startsWith('bank_pay_')) {
                 const reqId = customId.replace('bank_pay_', '').trim();
@@ -15748,6 +16138,19 @@ function setupSlashBotEvents(bot, token) {
                     ephemeral: true
                 });
             }
+        }
+
+        // ── Battle Stats Manual Update & Progression Tracker (/bs, /bsupdate) ──
+        if (cmd === 'bs' || cmd === 'bsupdate') {
+            const forceUpdate = (cmd === 'bsupdate') || (!subcommand || subcommand === 'update');
+            const keyOption = interaction.options?.getString?.('key');
+            const isPublic = interaction.options?.getBoolean?.('public') === true;
+            await handleBattleStatsUpdate(interaction, {
+                forceUpdate,
+                keyInput: keyOption,
+                isPublic
+            });
+            return;
         }
 
         // ── Set OpenRouter Backup Key Slash Command (Admin/Owner) ──
