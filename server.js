@@ -3264,12 +3264,110 @@ async function safeDiscordFetch(url, token, options = {}) {
     }
 }
 
+// API endpoint: Discord REST & Gateway Diagnostics (inspects IP rate limits vs Token rate limits)
+app.get('/api/discord/diagnostics', async (req, res) => {
+    const token = (req.query.token || discordConfig.globalBotToken || '').trim();
+    const results = {};
+    
+    try {
+        const publicRes = await fetch('https://discord.com/api/v10/gateway');
+        results.publicGateway = {
+            status: publicRes.status,
+            ok: publicRes.ok,
+            retryAfterHeader: publicRes.headers.get('retry-after'),
+            contentType: publicRes.headers.get('content-type'),
+            data: await publicRes.json().catch(() => null)
+        };
+    } catch (e) {
+        results.publicGateway = { error: e.message };
+    }
+
+    if (token) {
+        try {
+            const authRes = await fetch('https://discord.com/api/v10/users/@me', {
+                headers: {
+                    Authorization: `Bot ${token}`,
+                    'User-Agent': 'DiscordBot (https://spider-verse.net, 2.0)'
+                }
+            });
+            results.usersMe = {
+                status: authRes.status,
+                ok: authRes.ok,
+                retryAfterHeader: authRes.headers.get('retry-after'),
+                xRateLimitReset: authRes.headers.get('x-ratelimit-reset'),
+                xRateLimitResetAfter: authRes.headers.get('x-ratelimit-reset-after'),
+                xRateLimitBucket: authRes.headers.get('x-ratelimit-bucket'),
+                xRateLimitScope: authRes.headers.get('x-ratelimit-scope'),
+                contentType: authRes.headers.get('content-type'),
+                data: await authRes.json().catch(() => null)
+            };
+        } catch (e) {
+            results.usersMe = { error: e.message };
+        }
+    }
+
+    results.botReady = slashCommandBot?.isReady?.() || false;
+    results.botTag = slashCommandBot?.user?.tag || null;
+
+    res.json(results);
+});
+
 // API endpoint: Auto-detect Discord Guild, channels, and roles
 app.get('/api/discord/guild-info', async (req, res) => {
     try {
         const token = (req.query.token || discordConfig.globalBotToken || '').trim();
         if (!token) {
             return res.status(400).json({ success: false, error: "Missing bot token. Please enter or save your Bot Token." });
+        }
+
+        // Fast-path: If the Discord gateway bot is already connected, serve directly from memory cache (0 REST calls)
+        if (slashCommandBot && slashCommandBot.isReady && slashCommandBot.isReady()) {
+            const meUser = slashCommandBot.user;
+            const botAvatarUrl = meUser?.displayAvatarURL ? meUser.displayAvatarURL() : null;
+            const cachedGuilds = Array.from(slashCommandBot.guilds.cache.values()).map(g => ({
+                id: g.id,
+                name: g.name,
+                icon: g.icon
+            }));
+
+            let activeGuildId = req.query.guildId || discordConfig.guildId;
+            let activeGuild = slashCommandBot.guilds.cache.get(activeGuildId) || slashCommandBot.guilds.cache.first();
+            if (activeGuild) {
+                activeGuildId = activeGuild.id;
+                const categories = {};
+                activeGuild.channels.cache.forEach(c => {
+                    if (c.type === 4) categories[c.id] = c.name;
+                });
+                const channels = Array.from(activeGuild.channels.cache.values())
+                    .filter(c => c.isTextBased && c.isTextBased())
+                    .sort((a, b) => (a.position || 0) - (b.position || 0))
+                    .map(c => ({
+                        id: c.id,
+                        name: c.name,
+                        type: c.type,
+                        parentName: c.parentId ? categories[c.parentId] : null,
+                        position: c.position || 0
+                    }));
+                const roles = Array.from(activeGuild.roles.cache.values())
+                    .sort((a, b) => (b.position || 0) - (a.position || 0))
+                    .map(r => ({
+                        id: r.id,
+                        name: r.name,
+                        color: r.color,
+                        position: r.position || 0
+                    }));
+
+                return res.json({
+                    success: true,
+                    bot: { id: meUser.id, username: meUser.username, avatar: botAvatarUrl },
+                    guilds: cachedGuilds,
+                    guildId: activeGuildId,
+                    guildName: activeGuild.name,
+                    channels,
+                    roles,
+                    cached: true
+                });
+            }
         }
 
         // 1. Fetch user / bot identity
