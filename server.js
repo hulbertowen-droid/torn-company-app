@@ -12,6 +12,9 @@ try {
     v8.setFlagsFromString('--max_old_space_size=384');
 } catch(e) {}
 
+const dns = require('dns');
+try { dns.setServers(['8.8.8.8', '1.1.1.1']); } catch(e) {}
+
 const express = require('express');
 const cors = require('cors');
 const compression = require('compression');
@@ -3477,6 +3480,18 @@ app.get('/api/discord/guild-info', async (req, res) => {
     } catch (err) {
         console.warn("[guild-info Error]:", err.message);
         const status = err.status || 500;
+        if (status === 429 && (discordConfig.guildId || discordConfig.globalGuildId)) {
+            return res.json({
+                success: true,
+                rateLimited: true,
+                guildId: discordConfig.guildId || discordConfig.globalGuildId,
+                guildName: "Discord Server (Saved)",
+                channels: discordConfig.globalChannelId ? [{ id: discordConfig.globalChannelId, name: "saved-channel" }] : [],
+                roles: [],
+                bot: { id: "bot", username: "F.R.I.D.A.Y" },
+                message: "Discord API is on cooldown. Loaded saved configuration."
+            });
+        }
         res.status(status).json({
             success: false,
             isTokenInvalid: status === 401,

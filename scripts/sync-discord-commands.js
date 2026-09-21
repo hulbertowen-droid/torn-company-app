@@ -38,7 +38,7 @@ async function main() {
     console.log('🜜 Authenticated as bot:', me.username, 'App ID:', applicationId);
 
     const serverCode = fs.readFileSync('server.js', 'utf8');
-    const startIdx = serverCode.indepOf('const commands = [');
+    const startIdx = serverCode.indexOf('const commands = [');
     const endIdx = serverCode.indexOf('\n    ];\n\n    const disabledCmds');
 
     if (startIdx === -1 || endIdx === -1) {
