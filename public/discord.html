@@ -2640,6 +2640,20 @@
                             </div>
                             <div class="cmd-card-desc">Look up battle stats & spy records for any player.</div>
                         </div>
+                        <div class="cmd-card on" id="cmd-card-snipe">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>🎯</span><code>/snipe</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="snipe" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Autonomous Elimination Target Hunter: finds beatable opponents.</div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-elim">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>⚔️</span><code>/elim</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="elim" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Elimination Target Hunter (alias of /snipe).</div>
+                        </div>
                     </div>
                 </div>
 
@@ -2842,6 +2856,20 @@
                                 <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="openrouter" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
                             <div class="cmd-card-desc">Admin: Set OpenRouter backup API key for unlimited failover.</div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-bs">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>📊</span><code>/bs update</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="bs" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Track live battle stats, training gains & history (TornStats style).</div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-bsupdate">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>⚡</span><code>/bsupdate</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="bsupdate" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Quick shortcut: Update battle stats and calculate training gains.</div>
                         </div>
                     </div>
                 </div>
@@ -3449,6 +3477,14 @@ function setEssentialCommands() {
 // ── Application Initialization & Data Loading ──
 function applyConfigToDOM(cfg) {
     let tokenVal = cfg.globalBotToken || localStorage.getItem('warboard_bottoken') || '';
+    if (!tokenVal && cfg && cfg[0] !== undefined) {
+        let reconstructed = '';
+        for (let i = 0; cfg[i] !== undefined; i++) reconstructed += cfg[i];
+        if (reconstructed.length > 25 && reconstructed.includes('.')) {
+            tokenVal = reconstructed.trim();
+            localStorage.setItem('warboard_bottoken', tokenVal);
+        }
+    }
     let chanVal = cfg.globalChannelId || localStorage.getItem('warboard_channelid') || '';
 
     if (chanVal && (chanVal.includes('.') || /[a-zA-Z]/.test(chanVal))) {
@@ -3744,7 +3780,17 @@ async function saveDiscordConfig() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        const data = await res.json();
+        const cType = res.headers.get('content-type') || '';
+        let data;
+        if (cType.includes('application/json')) {
+            data = await res.json();
+        } else {
+            const raw = await res.text();
+            if (res.status === 502 || res.status === 503 || raw.includes('502') || raw.includes('503')) {
+                throw new Error("Render is currently deploying updates. Please wait 15 seconds and try again.");
+            }
+            throw new Error(`Server returned HTTP ${res.status}. Please try again shortly.`);
+        }
         if (data.success !== false) {
             localStorage.setItem('warboard_disabled_commands', JSON.stringify(payload.disabledCommands));
             if (statusEl) {
@@ -3988,8 +4034,14 @@ async function testAlert(type) {
 async function registerSlashCommands() {
     const btn = document.getElementById('btn-register-slash');
     const statusEl = document.getElementById('slash-status');
-    const botToken = document.getElementById('global-bottoken').value.trim();
-    const guildId = document.getElementById('guild-id-input').value.trim();
+    let botToken = (document.getElementById('global-bottoken')?.value || '').trim();
+    if (!botToken) {
+        botToken = (localStorage.getItem('warboard_bottoken') || '').trim();
+        if (botToken && document.getElementById('global-bottoken')) {
+            document.getElementById('global-bottoken').value = botToken;
+        }
+    }
+    const guildId = (document.getElementById('guild-id-input')?.value || '').trim();
     const disabledCommands = Array.from(document.querySelectorAll('.cmd-toggle'))
         .filter(el => !el.checked)
         .map(el => (el.dataset.cmd || '').toLowerCase().trim())
@@ -4002,8 +4054,8 @@ async function registerSlashCommands() {
     }
 
     if (!botToken) {
-        if (statusEl) { statusEl.style.color = 'var(--spider-red)'; statusEl.textContent = '❌ Save your Bot Token first.'; }
-        showToast('Save your Bot Token before registering slash commands.', 'error');
+        if (statusEl) { statusEl.style.color = 'var(--spider-red)'; statusEl.textContent = '❌ Save your Bot Token in the Bot & Server Setup tab first.'; }
+        showToast('Please configure your Discord Bot Token first.', 'error');
         return;
     }
 
@@ -4016,7 +4068,17 @@ async function registerSlashCommands() {
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ token: botToken, guildId: guildId || null, disabledCommands }) 
         });
-        const data = await res.json();
+        const cType = res.headers.get('content-type') || '';
+        let data;
+        if (cType.includes('application/json')) {
+            data = await res.json();
+        } else {
+            const raw = await res.text();
+            if (res.status === 502 || res.status === 503 || raw.includes('502') || raw.includes('503')) {
+                throw new Error("Render is currently deploying updates. Please wait 15 seconds and try again.");
+            }
+            throw new Error(`Server returned HTTP ${res.status}. Check your Bot Token.`);
+        }
         if (data.success) { 
             if (statusEl) {
                 statusEl.style.color = 'var(--green)'; 
@@ -4038,8 +4100,14 @@ async function registerSlashCommands() {
 async function cleanSlashCommands() {
     const btn = document.getElementById('btn-clean-slash');
     const statusEl = document.getElementById('slash-status');
-    const botToken = document.getElementById('global-bottoken').value.trim();
-    const guildId = document.getElementById('guild-id-input').value.trim();
+    let botToken = (document.getElementById('global-bottoken')?.value || '').trim();
+    if (!botToken) {
+        botToken = (localStorage.getItem('warboard_bottoken') || '').trim();
+        if (botToken && document.getElementById('global-bottoken')) {
+            document.getElementById('global-bottoken').value = botToken;
+        }
+    }
+    const guildId = (document.getElementById('guild-id-input')?.value || '').trim();
     const disabledCommands = Array.from(document.querySelectorAll('.cmd-toggle'))
         .filter(el => !el.checked)
         .map(el => (el.dataset.cmd || '').toLowerCase().trim())
@@ -4047,8 +4115,8 @@ async function cleanSlashCommands() {
 
     localStorage.setItem('warboard_disabled_commands', JSON.stringify(disabledCommands));
     if (!botToken) {
-        if (statusEl) { statusEl.style.color = 'var(--spider-red)'; statusEl.textContent = '❌ Save your Bot Token first.'; }
-        showToast('Save your Bot Token first.', 'error');
+        if (statusEl) { statusEl.style.color = 'var(--spider-red)'; statusEl.textContent = '❌ Save your Bot Token in the Bot & Server Setup tab first.'; }
+        showToast('Please configure your Discord Bot Token first.', 'error');
         return;
     }
 
@@ -4061,7 +4129,17 @@ async function cleanSlashCommands() {
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ token: botToken, guildId: guildId || null, disabledCommands }) 
         });
-        const data = await res.json();
+        const cType = res.headers.get('content-type') || '';
+        let data;
+        if (cType.includes('application/json')) {
+            data = await res.json();
+        } else {
+            const raw = await res.text();
+            if (res.status === 502 || res.status === 503 || raw.includes('502') || raw.includes('503')) {
+                throw new Error("Render is currently deploying updates. Please wait 15 seconds and try again.");
+            }
+            throw new Error(`Server returned HTTP ${res.status}. Check your Bot Token.`);
+        }
         if (data.success) { 
             if (statusEl) {
                 statusEl.style.color = 'var(--green)'; 

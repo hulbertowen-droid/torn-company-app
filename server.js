@@ -205,6 +205,18 @@ async function loadConfigFromMongo() {
                 if (discordConfig.bankingChannelId && (discordConfig.bankingChannelId.includes('.') || /[a-zA-Z]/.test(discordConfig.bankingChannelId))) {
                     discordConfig.bankingChannelId = "";
                 }
+                // CRITICAL REPAIR: If discordConfig has numeric keys (0..71) from an accidental string spread, reconstruct globalBotToken if missing, and scrub numeric keys
+                if (discordConfig[0] !== undefined) {
+                    let reconstructed = '';
+                    for (let i = 0; discordConfig[i] !== undefined; i++) {
+                        reconstructed += discordConfig[i];
+                        delete discordConfig[i];
+                    }
+                    if ((!discordConfig.globalBotToken || discordConfig.globalBotToken.length < 20) && reconstructed.length > 25 && reconstructed.includes('.')) {
+                        discordConfig.globalBotToken = reconstructed.trim();
+                        console.log(`[Config Repair] Restored globalBotToken from string spread (${discordConfig.globalBotToken.length} chars).`);
+                    }
+                }
                 if (Array.isArray(discordConfig.conversationChannels)) {
                     activeConversationChannels = new Set(discordConfig.conversationChannels);
                     for (const chan of activeConversationChannels) {
@@ -2825,6 +2837,9 @@ app.get('/api/get-discord-config', (req, res) => {
     delete fullConfig.geminiApiKey;
     delete fullConfig.geminiApiKeys;
     delete fullConfig.openrouterApiKey;
+    for (let i = 0; fullConfig[i] !== undefined; i++) {
+        delete fullConfig[i];
+    }
     fullConfig.hasBotToken = !!(discordConfig.globalBotToken && discordConfig.globalBotToken.length > 20);
     res.json(fullConfig);
 });
@@ -14873,12 +14888,30 @@ async function registerSlashCommands(token, guildId = null) {
     const activeCommands = commands.filter(cmd => !disabledCmds.includes(cmd.name.toLowerCase()));
 
     try {
-        const botRes = await fetch(`https://discord.com/api/v10/users/@me`, {
-            headers: { Authorization: `Bot ${token}` }
-        });
-        const botData = await botRes.json();
-        const applicationId = botData.id;
-        if (!applicationId) throw new Error("Could not get bot application ID. Check your bot token.");
+        let applicationId = slashCommandBot?.user?.id;
+        if (!applicationId) {
+            try {
+                const userMe = await rest.get(Routes.user('@me'));
+                if (userMe?.id) applicationId = userMe.id;
+            } catch(restErr) {
+                const botRes = await fetch(`https://discord.com/api/v10/users/@me`, {
+                    headers: {
+                        Authorization: `Bot ${token}`,
+                        'User-Agent': 'DiscordBot (https://spider-verse.net, 2.0)'
+                    }
+                });
+                const cType = botRes.headers.get('content-type') || '';
+                if (!cType.includes('application/json')) {
+                    if (botRes.status === 401) throw new Error("401 Unauthorized: Discord Bot Token is invalid. Please check your token in Settings.");
+                    if (botRes.status === 429) throw new Error("429 Too Many Requests: Discord API rate limit reached. Please try again in 1 minute.");
+                    throw new Error(`Discord API returned HTTP ${botRes.status} (non-JSON response). The bot token may be invalid.`);
+                }
+                const botData = await botRes.json();
+                applicationId = botData?.id;
+                if (!applicationId) throw new Error(botData?.message || "Could not retrieve bot application ID from Discord.");
+            }
+        }
+        if (!applicationId) throw new Error("Could not get bot application ID. Check your bot token in Settings.");
 
         if (guildId) {
             await rest.put(Routes.applicationGuildCommands(applicationId, guildId), { body: activeCommands });
@@ -17093,11 +17126,27 @@ app.post('/api/discord/clean-commands', async (req, res) => {
         if (!token) return res.status(400).json({ error: "Missing bot token" });
 
         const rest = new REST({ version: '10' }).setToken(token.trim());
-        const botRes = await fetch(`https://discord.com/api/v10/users/@me`, {
-            headers: { Authorization: `Bot ${token.trim()}` }
-        });
-        const botData = await botRes.json();
-        const applicationId = botData.id;
+        let applicationId = slashCommandBot?.user?.id;
+        if (!applicationId) {
+            try {
+                const userMe = await rest.get(Routes.user('@me'));
+                if (userMe?.id) applicationId = userMe.id;
+            } catch(restErr) {
+                const botRes = await fetch(`https://discord.com/api/v10/users/@me`, {
+                    headers: {
+                        Authorization: `Bot ${token.trim()}`,
+                        'User-Agent': 'DiscordBot (https://spider-verse.net, 2.0)'
+                    }
+                });
+                const cType = botRes.headers.get('content-type') || '';
+                if (!cType.includes('application/json')) {
+                    if (botRes.status === 401) throw new Error("401 Unauthorized: Discord Bot Token is invalid. Check your token in Settings.");
+                    throw new Error(`Discord API returned HTTP ${botRes.status} (non-JSON).`);
+                }
+                const botData = await botRes.json();
+                applicationId = botData?.id;
+            }
+        }
         if (!applicationId) throw new Error("Could not retrieve application ID. Check your bot token.");
 
         // Clear global
@@ -17389,6 +17438,16 @@ app.get('/api/admin/api-metrics', (req, res) => {
         ...metrics,
         broadcaster: broadcasterStats
     });
+});
+
+// ── Catch-All JSON Responders for /api/* (Guarantees valid JSON, never HTML) ──
+app.use('/api', (req, res) => {
+    res.status(404).json({ success: false, error: `Endpoint not found: ${req.method} ${req.originalUrl}` });
+});
+
+app.use('/api', (err, req, res, next) => {
+    console.error('[API Error]', req.method, req.originalUrl, err?.message || err);
+    res.status(500).json({ success: false, error: err?.message || 'Internal server error' });
 });
 
 const server = app.listen(PORT, '0.0.0.0', () => {
