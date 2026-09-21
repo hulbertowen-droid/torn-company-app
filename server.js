@@ -1493,15 +1493,17 @@ async function backfillWarDefends(watchKey, watchFactionId, warStart, enemyFacti
 }
 
 
-// Background Task 4: Global Recruitment Scanner
+// // Background Task 4: Global Recruitment Scanner (PAUSED to conserve Render outbound bandwidth and Torn API budget)
+// Recruitment scanning is available on-demand via the Turbo Mining UI (/recruits.html).
+/*
 setInterval(async () => {
     if (global.isTurboMining) return;
     let watchKey = getNextApiKey();
-    if (!watchKey) return; // Need an API key to scan
+    if (!watchKey) return;
 
-            const dataDir = path.join(__dirname, 'data');
-        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
-        const recruitsFile = path.join(__dirname, 'data', 'recruits.json');
+    const dataDir = path.join(__dirname, 'data');
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
+    const recruitsFile = path.join(__dirname, 'data', 'recruits.json');
     let cachedRecruits = [];
     try {
         if (fs.existsSync(recruitsFile)) {
@@ -1509,27 +1511,21 @@ setInterval(async () => {
         }
     } catch (e) {}
 
-    // Only scan if we have less than 2000 recruits in database
     if (cachedRecruits.length > 2000) {
-        // Rotate out the oldest 200 recruits
         cachedRecruits = cachedRecruits.slice(200);
     }
 
     const batchSize = 20;
     const randomIds = [];
-    // Target newer/mid-level players usually found in ID ranges 2,500,000 to 3,400,000
     for (let i = 0; i < batchSize; i++) {
         const rand = Math.random();
-            if (rand < 0.60) {
-                // 60% chance for ultra-new players in 2026 (IDs 4.5M to 5.0M)
-                randomIds.push(Math.floor(Math.random() * (5000000 - 4500000 + 1) + 4500000));
-            } else if (rand < 0.90) {
-                // 30% chance for mid players (IDs 3.0M to 4.5M)
-                randomIds.push(Math.floor(Math.random() * (4500000 - 3000000 + 1) + 3000000));
-            } else {
-                // 10% chance for veterans (IDs 1.5M to 3.0M)
-                randomIds.push(Math.floor(Math.random() * (3000000 - 1500000 + 1) + 1500000));
-            }
+        if (rand < 0.60) {
+            randomIds.push(Math.floor(Math.random() * (5000000 - 4500000 + 1) + 4500000));
+        } else if (rand < 0.90) {
+            randomIds.push(Math.floor(Math.random() * (4500000 - 3000000 + 1) + 3000000));
+        } else {
+            randomIds.push(Math.floor(Math.random() * (3000000 - 1500000 + 1) + 1500000));
+        }
     }
 
     try {
@@ -1544,15 +1540,11 @@ setInterval(async () => {
             const profile = userData.profile || userData;
             const personalstats = userData.personalstats || {};
             
-            // Only care about active players
             if (profile.status && (profile.status.state === "Federal" || profile.status.state === "Fallen")) return null;
-            // Filter out players who haven't logged in for over 7 days
             if (profile.last_action && profile.last_action.timestamp) {
                 const daysInactive = (Date.now() / 1000 - profile.last_action.timestamp) / 86400;
                 if (daysInactive > 7) return null;
             }
-            
-            // Only care about Factionless players (No poaching rule!)
             if (profile.faction && profile.faction.faction_id !== 0) return null;
 
             const level = profile.level || 1;
@@ -1568,13 +1560,13 @@ setInterval(async () => {
                 id,
                 name: profile.name,
                 level,
-                        age: profile.age || 1,
-                        playtime: playtimeDays,
-                        xanax,
-                        refills,
-                        se,
-                        estStats,
-                        donator,
+                age: profile.age || 1,
+                playtime: playtimeDays,
+                xanax,
+                refills,
+                se,
+                estStats,
+                donator,
                 status: profile.status ? `${profile.status.state} (${profile.status.description || ''})` : "Offline",
                 faction: "Factionless"
             };
@@ -1584,37 +1576,46 @@ setInterval(async () => {
         const validRecruits = batchResults.filter(r => r !== null);
         
         if (validRecruits.length > 0) {
-            // Deduplicate
             if (process.env.MONGODB_URI) {
-                    const bulkOps = validRecruits.map(r => ({
-                        updateOne: { filter: { id: r.id }, update: { $set: r }, upsert: true }
-                    }));
-                    try {
-                        await Recruit.bulkWrite(bulkOps);
-                        console.log(`[Cron] Upserted ${validRecruits.length} factionless recruits to MongoDB.`);
-                    } catch(e) { console.log('MongoDB bulkWrite error', e); }
-                } else {
-                    const existingIds = new Set(cachedRecruits.map(r => r.id));
-                    validRecruits.forEach(r => {
-                        if (!existingIds.has(r.id)) cachedRecruits.push(r);
-                    });
-                    try { fs.writeFileSync(recruitsFile, JSON.stringify(cachedRecruits, null, 2)); } catch(e){}
-                }
+                const bulkOps = validRecruits.map(r => ({
+                    updateOne: { filter: { id: r.id }, update: { $set: r }, upsert: true }
+                }));
+                try {
+                    await Recruit.bulkWrite(bulkOps);
+                    console.log(`[Cron] Upserted ${validRecruits.length} factionless recruits to MongoDB.`);
+                } catch(e) { console.log('MongoDB bulkWrite error', e); }
+            } else {
+                const existingIds = new Set(cachedRecruits.map(r => r.id));
+                validRecruits.forEach(r => {
+                    if (!existingIds.has(r.id)) cachedRecruits.push(r);
+                });
+                try { fs.writeFileSync(recruitsFile, JSON.stringify(cachedRecruits, null, 2)); } catch(e){}
+            }
         }
-    } catch (e) {
-        // Silent fail for background tasks
-    }
-}, 120000); // Run every 2 minutes
-// Background Task 1: Wall Watcher & Scraper
+    } catch (e) {}
+}, 120000);
+*/
+
+// Background Task 1: Wall Watcher & Scraper (Adaptive War/Peace Polling)
+let lastPeaceWarCheck = 0;
 setInterval(async () => {
     if (global.isTurboMining) return;
     let watchFactionId = discordConfig.factionId || dynamicFactionId || "52355";
     let watchKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
     if (!watchKey || !watchFactionId) return;
 
+    // Bandwidth Optimization: In peace time (no active war), poll lightweight rankedwars (1 KB) once every 60s
+    // When a war is active, poll full attacks & roster every 25s
+    const now = Date.now();
+    if (!activeWarId && (now - lastPeaceWarCheck < 60000)) {
+        return;
+    }
+
     try {
-        const liveRes = await fetch(`https://api.torn.com/faction/${watchFactionId}?selections=attacks,basic,rankedwars&key=${watchKey}`);
+        const selections = activeWarId ? 'attacks,basic,rankedwars' : 'rankedwars';
+        const liveRes = await fetch(`https://api.torn.com/faction/${watchFactionId}?selections=${selections}&key=${watchKey}`);
         const liveData = await liveRes.json();
+        if (!activeWarId) lastPeaceWarCheck = Date.now();
         
         let ongoingWar = getActiveRankedWar(liveData);
         if (ongoingWar && ongoingWar.war) {
@@ -1825,7 +1826,7 @@ setInterval(async () => {
         }
 
     } catch (err) {}
-}, 20000); 
+}, 25000); // 25s loop during war, adaptive 60s lightweight check during peace 
 
 // Background Task 2: Market Watcher
 setInterval(async () => {
@@ -2981,13 +2982,9 @@ app.post('/api/save-discord-config', async (req, res) => {
     }
     saveDiscordConfig(); 
 
-    // Auto-start slash command bot whenever a bot token is saved, and auto-sync registered slash commands
+    // Auto-start slash command bot whenever a bot token is saved
     if (discordConfig.globalBotToken && discordConfig.globalBotToken.trim().length > 20) {
         startSlashCommandBot(discordConfig.globalBotToken.trim()).catch(() => {});
-        const targetGuild = discordConfig.guildId;
-        registerSlashCommands(discordConfig.globalBotToken.trim(), targetGuild).catch(err => {
-            console.warn("[Slash Bot] Auto command re-registration error:", err.message);
-        });
     }
 
     res.json({ success: true, disabledCommands: discordConfig.disabledCommands || [] }); 
@@ -3184,7 +3181,7 @@ app.post('/api/discord/send-bot-message', async (req, res) => {
     }
 });
 
-// ── Safe Discord REST Fetcher (Enforces timeouts, headers, and friendly error handling) ──
+// ── Safe Discord REST Fetcher (Enforces timeouts, headers, auto-retry on 429, and friendly error handling) ──
 async function safeDiscordFetch(url, token, options = {}) {
     const timeoutMs = options.timeoutMs || 8000;
     const ac = new AbortController();
@@ -3207,23 +3204,48 @@ async function safeDiscordFetch(url, token, options = {}) {
         clearTimeout(timer);
 
         const cType = res.headers.get('content-type') || '';
+        let data = null;
+        if (cType.includes('application/json')) {
+            try {
+                data = await res.json();
+            } catch (e) {
+                data = null;
+            }
+        }
+
+        // Handle 429 Too Many Requests with automatic backoff retry
+        if (res.status === 429) {
+            const headerRetry = res.headers.get('retry-after') || res.headers.get('x-ratelimit-reset-after');
+            const retryAfterSec = data?.retry_after ?? (headerRetry ? parseFloat(headerRetry) : 2);
+            const retryCount = options._retryCount || 0;
+            if (retryCount < 2 && retryAfterSec <= 12) {
+                const waitMs = Math.min(Math.ceil(retryAfterSec * 1000) + 500, 15000);
+                console.warn(`[safeDiscordFetch] Discord 429 rate limit hit (${retryAfterSec}s). Auto-waiting ${waitMs}ms before retry (attempt ${retryCount + 1}/2)...`);
+                await new Promise(r => setTimeout(r, waitMs));
+                return safeDiscordFetch(url, token, {
+                    ...options,
+                    _retryCount: retryCount + 1,
+                    timeoutMs: Math.max(timeoutMs, waitMs + 8000)
+                });
+            }
+            const cooldownSec = Math.ceil(retryAfterSec || 5);
+            const err = new Error(`Discord API rate limit reached. Cooldown is ${cooldownSec}s. Please wait a moment and try again.`);
+            err.status = 429;
+            throw err;
+        }
+
+        if (res.status === 401) {
+            const err = new Error("401 Unauthorized: Discord Bot Token is invalid or expired. Please reset your token in Discord Developer Portal -> Bot -> Reset Token.");
+            err.status = 401;
+            throw err;
+        }
+
         if (!cType.includes('application/json')) {
-            if (res.status === 401) {
-                const err = new Error("401 Unauthorized: Discord Bot Token is invalid or expired. Please reset your token in Discord Developer Portal -> Bot -> Reset Token.");
-                err.status = 401;
-                throw err;
-            }
-            if (res.status === 429) {
-                const err = new Error("429 Too Many Requests: Discord API rate limit reached. Please try again in 1 minute.");
-                err.status = 429;
-                throw err;
-            }
             const err = new Error(`Discord API returned non-JSON HTTP ${res.status}.`);
             err.status = res.status;
             throw err;
         }
 
-        const data = await res.json();
         if (!res.ok) {
             const err = new Error(data?.message || `Discord API error HTTP ${res.status}`);
             err.status = res.status;
@@ -12743,7 +12765,7 @@ async function checkFactionOrganizedCrimes() {
     }
 }
 
-setInterval(checkFactionOrganizedCrimes, 45000);
+setInterval(checkFactionOrganizedCrimes, 180000); // 3 minutes (conserves bandwidth while preserving prompt alerts)
 setTimeout(checkFactionOrganizedCrimes, 60000);
 
 async function executeFulfillRequest(reqId, interaction) {
@@ -14749,8 +14771,8 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
     }
 }
 
-// ─── Register Slash Commands with Discord ─────────────────────────────────────
-async function registerSlashCommands(token, guildId = null) {
+let lastSlashRegisterTime = 0;
+async function registerSlashCommands(token, guildId = null, options = {}) {
     const rest = new REST({ version: '10' }).setToken(token);
 
     const commands = [
@@ -14973,24 +14995,29 @@ async function registerSlashCommands(token, guildId = null) {
             await safeDiscordFetch(`https://discord.com/api/v10/applications/${applicationId}/guilds/${targetGuildId}/commands`, token, {
                 method: 'PUT',
                 body: activeCommands,
-                timeoutMs: 12000
+                timeoutMs: 15000
             });
             console.log(`[Slash Commands] Registered ${activeCommands.length}/${commands.length} guild commands for guild ${targetGuildId} (${disabledCmds.length} disabled)`);
             
-            // Clean global commands asynchronously so duplicates don't linger
-            safeDiscordFetch(`https://discord.com/api/v10/applications/${applicationId}/commands`, token, {
-                method: 'PUT',
-                body: [],
-                timeoutMs: 8000
-            }).catch(() => {});
+            // Only clean global commands if explicitly requested (e.g. Purge Duplicates) to avoid double-hitting rate limits
+            if (options.cleanGlobal) {
+                setTimeout(() => {
+                    safeDiscordFetch(`https://discord.com/api/v10/applications/${applicationId}/commands`, token, {
+                        method: 'PUT',
+                        body: [],
+                        timeoutMs: 10000
+                    }).catch(() => {});
+                }, 1500);
+            }
         } else {
             await safeDiscordFetch(`https://discord.com/api/v10/applications/${applicationId}/commands`, token, {
                 method: 'PUT',
                 body: activeCommands,
-                timeoutMs: 12000
+                timeoutMs: 15000
             });
             console.log(`[Slash Commands] Registered ${activeCommands.length}/${commands.length} global commands (${disabledCmds.length} disabled)`);
         }
+        lastSlashRegisterTime = Date.now();
         return { success: true, count: activeCommands.length, total: commands.length, disabledCount: disabledCmds.length, guildId: targetGuildId };
     } catch (e) {
         console.error("[Slash Commands] Registration failed:", e.message);
@@ -15029,7 +15056,12 @@ function setupSlashBotEvents(bot, token) {
             }
         } catch(e) {}
 
-        // Automatically register slash commands without duplicates
+        // Guard against duplicate registrations on bot startup/reconnect
+        if (Date.now() - lastSlashRegisterTime < 120000) {
+            console.log("[Slash Bot] Commands registered recently; skipping redundant ClientReady registration.");
+            return;
+        }
+
         try {
             const targetGuild = discordConfig.guildId;
             if (targetGuild) {
@@ -17104,8 +17136,7 @@ async function startSlashCommandBot(token) {
                 GatewayIntentBits.Guilds,
                 GatewayIntentBits.GuildMessages,
                 GatewayIntentBits.GuildMembers,
-                GatewayIntentBits.MessageContent,
-                GatewayIntentBits.GuildMessageTyping
+                GatewayIntentBits.MessageContent
             ]
         });
 
@@ -17120,8 +17151,7 @@ async function startSlashCommandBot(token) {
                 slashCommandBot = new Client({
                     intents: [
                         GatewayIntentBits.Guilds,
-                        GatewayIntentBits.GuildMessages,
-                        GatewayIntentBits.GuildMessageTyping
+                        GatewayIntentBits.GuildMessages
                     ]
                 });
                 setupSlashBotEvents(slashCommandBot, cleanToken);
@@ -17147,11 +17177,14 @@ setTimeout(() => {
 
 
 // API endpoint: register slash commands
-// API endpoint: register slash commands
 app.post('/api/discord/register-slash-commands', async (req, res) => {
     try {
         const token = (req.body.token || discordConfig.globalBotToken || '').trim();
         const guildId = req.body.guildId || discordConfig.guildId || null;
+        if (req.body.guildId && req.body.guildId !== discordConfig.guildId) {
+            discordConfig.guildId = req.body.guildId;
+            saveDiscordConfig();
+        }
         if (req.body.disabledCommands !== undefined && Array.isArray(req.body.disabledCommands)) {
             discordConfig.disabledCommands = req.body.disabledCommands.map(c => String(c).toLowerCase().trim()).filter(Boolean);
             saveDiscordConfig();
@@ -17174,13 +17207,17 @@ app.post('/api/discord/clean-commands', async (req, res) => {
     try {
         const token = (req.body.token || discordConfig.globalBotToken || '').trim();
         const guildId = req.body.guildId || discordConfig.guildId || null;
+        if (req.body.guildId && req.body.guildId !== discordConfig.guildId) {
+            discordConfig.guildId = req.body.guildId;
+            saveDiscordConfig();
+        }
         if (req.body.disabledCommands !== undefined && Array.isArray(req.body.disabledCommands)) {
             discordConfig.disabledCommands = req.body.disabledCommands.map(c => String(c).toLowerCase().trim()).filter(Boolean);
             saveDiscordConfig();
         }
         if (!token) return res.status(400).json({ success: false, error: "Missing bot token. Please configure your Discord Bot Token." });
 
-        const result = await registerSlashCommands(token, guildId);
+        const result = await registerSlashCommands(token, guildId, { cleanGlobal: true });
         if (!result.success) {
             return res.status(result.status || 500).json(result);
         }

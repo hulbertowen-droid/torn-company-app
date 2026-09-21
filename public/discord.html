@@ -4099,7 +4099,6 @@ async function registerSlashCommands() {
     localStorage.setItem('warboard_disabled_commands', JSON.stringify(disabledCommands));
     if (guildId) {
         localStorage.setItem('warboard_guildid', guildId);
-        fetch('/api/save-discord-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guildId, disabledCommands }) }).catch(() => {});
     }
 
     if (!botToken && !initialConfigSnapshot?.hasBotToken) {
