@@ -1535,6 +1535,15 @@
                 <span class="card-subtitle">Encrypted server-side storage — never leaked to browser logs</span>
             </div>
             <div class="card-body">
+                <div id="token-expired-alert" style="display:none; background: rgba(255, 71, 87, 0.12); border: 1px solid rgba(255, 71, 87, 0.4); border-radius: 10px; padding: 14px 18px; margin-bottom: 20px;">
+                    <div style="display:flex; align-items:center; gap:10px; font-weight:700; color:#ff6b81; font-size:1.05em;">
+                        <span>⚠️ Discord Bot Token Expired or Revoked (401 Unauthorized)</span>
+                    </div>
+                    <div style="margin-top:6px; font-size:0.9em; color:#f1f2f6; line-height:1.5;">
+                        Discord reported that this bot token is invalid or has expired. This happens automatically when tokens are regenerated or detected by Discord security scanners.<br>
+                        <strong>How to fix:</strong> Open the <a href="https://discord.com/developers/applications" target="_blank" style="color:var(--spider-blue); font-weight:600; text-decoration:underline;">Discord Developer Portal</a> → select your Application → click the <strong>Bot</strong> tab on the left menu → click <strong>Reset Token</strong> → copy your fresh token, paste it into the <strong>Discord Bot Token</strong> box below, and click <strong>Save Configuration</strong>.
+                    </div>
+                </div>
                 <div class="field-grid">
                     <div class="field-group">
                         <label class="field-label" for="global-bottoken">
@@ -3190,17 +3199,47 @@ function filterCommands() {
     });
 }
 
+function showTokenExpiredBanner(msg) {
+    const banner = document.getElementById('token-expired-alert');
+    if (banner) banner.style.display = 'block';
+    const detectedName = document.getElementById('detected-server-name');
+    if (detectedName) detectedName.textContent = '❌ Bot Token Expired (401 Unauthorized)';
+    const detectedDetail = document.getElementById('detected-server-detail');
+    if (detectedDetail) detectedDetail.textContent = msg || 'Reset token in Discord Developer Portal -> Bot -> Reset Token';
+}
+
+function hideTokenExpiredBanner() {
+    const banner = document.getElementById('token-expired-alert');
+    if (banner) banner.style.display = 'none';
+}
+
 // ── Discord API Guild & Channel Fetching ──
 async function fetchGuildAndChannels(force = false) {
     const token = (document.getElementById('global-bottoken')?.value.trim() || '');
-    if (!token) return;
     const btn = document.getElementById('btn-refresh-channels');
     if (btn) btn.disabled = true;
     try {
         const guildIdInput = (document.getElementById('guild-id-input')?.value.trim() || '').replace(/[^0-9]/g, '');
-        const url = `/api/discord/guild-info?token=${encodeURIComponent(token)}${guildIdInput ? `&guildId=${guildIdInput}` : ''}`;
+        const queryParams = [];
+        if (token) queryParams.push(`token=${encodeURIComponent(token)}`);
+        if (guildIdInput) queryParams.push(`guildId=${guildIdInput}`);
+        const url = `/api/discord/guild-info${queryParams.length ? '?' + queryParams.join('&') : ''}`;
+        
         const res = await fetch(url);
-        const data = await res.json();
+        const cType = res.headers.get('content-type') || '';
+        let data;
+        if (cType.includes('application/json')) {
+            data = await res.json();
+        } else {
+            const raw = await res.text();
+            throw new Error(`Server returned HTTP ${res.status}`);
+        }
+
+        if (data.isTokenInvalid || res.status === 401) {
+            showTokenExpiredBanner(data.error);
+            return;
+        }
+        hideTokenExpiredBanner();
 
         if (data.success && data.guildName) {
             const nameEl = document.getElementById('detected-server-name');
@@ -3240,6 +3279,8 @@ async function fetchGuildAndChannels(force = false) {
             const detailEl = document.getElementById('detected-server-detail');
             if (nameEl) nameEl.textContent = `Bot: ${data.bot.username}`;
             if (detailEl) detailEl.textContent = data.message || 'Bot is not in any server yet. Click Re-Invite Bot above.';
+        } else if (data.error) {
+            showToast(data.error, 'error');
         }
     } catch(e) {
         console.warn("Failed to fetch guild channels:", e);
@@ -3587,10 +3628,18 @@ function applyConfigToDOM(cfg) {
     updateKillswitchUI(cfg.notificationsKilled === true);
     setConnectionStatus(!!(tokenVal && chanVal));
     updateActiveCount();
-    updateInviteLink();
     calculateSetupProgress();
+    populateChannelSelects();
+    populateRoleSelects();
 
-    if (tokenVal && tokenVal.length > 20) {
+    if (cfg.hasBotToken && !tokenVal) {
+        const tokenInput = document.getElementById('global-bottoken');
+        if (tokenInput && !tokenInput.value) {
+            tokenInput.placeholder = '•••••••••••••••••••••••• (Token securely saved on server)';
+        }
+    }
+
+    if ((tokenVal && tokenVal.length > 20) || cfg.hasBotToken) {
         fetchGuildAndChannels();
     }
     updateBroadcastPreview();
@@ -4053,7 +4102,7 @@ async function registerSlashCommands() {
         fetch('/api/save-discord-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ guildId, disabledCommands }) }).catch(() => {});
     }
 
-    if (!botToken) {
+    if (!botToken && !initialConfigSnapshot?.hasBotToken) {
         if (statusEl) { statusEl.style.color = 'var(--spider-red)'; statusEl.textContent = '❌ Save your Bot Token in the Bot & Server Setup tab first.'; }
         showToast('Please configure your Discord Bot Token first.', 'error');
         return;
@@ -4062,12 +4111,17 @@ async function registerSlashCommands() {
     btn.disabled = true;
     if (statusEl) { statusEl.style.color = 'var(--gold)'; statusEl.textContent = '⏳ Registering & syncing with Discord...'; }
 
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 20000);
+
     try {
         const res = await fetch('/api/discord/register-slash-commands', { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ token: botToken, guildId: guildId || null, disabledCommands }) 
+            body: JSON.stringify({ token: botToken || undefined, guildId: guildId || null, disabledCommands }),
+            signal: ac.signal
         });
+        clearTimeout(timer);
         const cType = res.headers.get('content-type') || '';
         let data;
         if (cType.includes('application/json')) {
@@ -4080,20 +4134,26 @@ async function registerSlashCommands() {
             throw new Error(`Server returned HTTP ${res.status}. Check your Bot Token.`);
         }
         if (data.success) { 
+            hideTokenExpiredBanner();
             if (statusEl) {
                 statusEl.style.color = 'var(--green)'; 
-                statusEl.textContent = '✅ ' + data.count + ' active commands registered' + (data.disabledCount ? ` (${data.disabledCount} disabled)` : '') + '. ' + (guildId ? 'Available immediately.' : 'Takes up to 1 hour globally.'); 
+                statusEl.textContent = '✅ ' + data.count + ' active commands registered' + (data.disabledCount ? ` (${data.disabledCount} disabled)` : '') + '. ' + (data.guildId ? 'Available immediately.' : 'Takes up to 1 hour globally.'); 
             }
             showToast(`${data.count} commands registered with Discord!`, 'success');
         } else {
+            if (res.status === 401 || data.error?.includes('401')) {
+                showTokenExpiredBanner(data.error);
+            }
             throw new Error(data.error || 'Registration failed');
         }
     } catch (e) {
-        if (statusEl) { statusEl.style.color = 'var(--spider-red)'; statusEl.textContent = '❌ ' + e.message; }
-        showToast('Command sync failed: ' + e.message, 'error');
+        clearTimeout(timer);
+        const errMsg = e.name === 'AbortError' ? 'Request timed out after 20s. Check Bot Token in Developer Portal.' : e.message;
+        if (statusEl) { statusEl.style.color = 'var(--spider-red)'; statusEl.textContent = '❌ ' + errMsg; }
+        showToast('Command sync failed: ' + errMsg, 'error');
     } finally {
         btn.disabled = false;
-        setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 10000);
+        setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 12000);
     }
 }
 
@@ -4114,7 +4174,7 @@ async function cleanSlashCommands() {
         .filter(Boolean);
 
     localStorage.setItem('warboard_disabled_commands', JSON.stringify(disabledCommands));
-    if (!botToken) {
+    if (!botToken && !initialConfigSnapshot?.hasBotToken) {
         if (statusEl) { statusEl.style.color = 'var(--spider-red)'; statusEl.textContent = '❌ Save your Bot Token in the Bot & Server Setup tab first.'; }
         showToast('Please configure your Discord Bot Token first.', 'error');
         return;
@@ -4123,12 +4183,17 @@ async function cleanSlashCommands() {
     btn.disabled = true;
     if (statusEl) { statusEl.style.color = 'var(--gold)'; statusEl.textContent = '⏳ Purging duplicates & re-registering cleanly...'; }
 
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 20000);
+
     try {
         const res = await fetch('/api/discord/clean-commands', { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ token: botToken, guildId: guildId || null, disabledCommands }) 
+            body: JSON.stringify({ token: botToken || undefined, guildId: guildId || null, disabledCommands }),
+            signal: ac.signal
         });
+        clearTimeout(timer);
         const cType = res.headers.get('content-type') || '';
         let data;
         if (cType.includes('application/json')) {
@@ -4141,17 +4206,23 @@ async function cleanSlashCommands() {
             throw new Error(`Server returned HTTP ${res.status}. Check your Bot Token.`);
         }
         if (data.success) { 
+            hideTokenExpiredBanner();
             if (statusEl) {
                 statusEl.style.color = 'var(--green)'; 
                 statusEl.textContent = '✅ Purged duplicate commands & registered ' + data.count + ' active commands cleanly' + (data.disabledCount ? ` (${data.disabledCount} disabled)` : '') + '!'; 
             }
             showToast('Purged duplicates & cleanly re-registered commands!', 'success');
         } else {
+            if (res.status === 401 || data.error?.includes('401')) {
+                showTokenExpiredBanner(data.error);
+            }
             throw new Error(data.error || 'Purge failed');
         }
     } catch (e) {
-        if (statusEl) { statusEl.style.color = 'var(--spider-red)'; statusEl.textContent = '❌ ' + e.message; }
-        showToast('Clean failed: ' + e.message, 'error');
+        clearTimeout(timer);
+        const errMsg = e.name === 'AbortError' ? 'Request timed out after 20s. Check Bot Token in Developer Portal.' : e.message;
+        if (statusEl) { statusEl.style.color = 'var(--spider-red)'; statusEl.textContent = '❌ ' + errMsg; }
+        showToast('Clean failed: ' + errMsg, 'error');
     } finally {
         btn.disabled = false;
         setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 12000);

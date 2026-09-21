@@ -2923,8 +2923,15 @@ app.post('/api/save-discord-config', async (req, res) => {
     saveOcConfig();
 
     if (payload.globalBotToken !== undefined) {
-        payload.globalBotToken = String(payload.globalBotToken || '').trim();
+        const rawToken = String(payload.globalBotToken || '').trim();
+        if (rawToken.length > 20) {
+            payload.globalBotToken = rawToken;
+        } else if (rawToken === '') {
+            delete payload.globalBotToken;
+        }
     }
+    delete payload.discord;
+    delete discordConfig.discord;
 
     if (payload.welcomeChannelId !== undefined) {
         let rawWChan = String(payload.welcomeChannelId || '').trim();
@@ -3177,30 +3184,93 @@ app.post('/api/discord/send-bot-message', async (req, res) => {
     }
 });
 
+// ── Safe Discord REST Fetcher (Enforces timeouts, headers, and friendly error handling) ──
+async function safeDiscordFetch(url, token, options = {}) {
+    const timeoutMs = options.timeoutMs || 8000;
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeoutMs);
+    try {
+        const fetchOptions = {
+            method: options.method || 'GET',
+            headers: {
+                Authorization: `Bot ${token}`,
+                'User-Agent': 'DiscordBot (https://spider-verse.net, 2.0)',
+                ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+                ...(options.headers || {})
+            },
+            signal: ac.signal
+        };
+        if (options.body) {
+            fetchOptions.body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+        }
+        const res = await fetch(url, fetchOptions);
+        clearTimeout(timer);
+
+        const cType = res.headers.get('content-type') || '';
+        if (!cType.includes('application/json')) {
+            if (res.status === 401) {
+                const err = new Error("401 Unauthorized: Discord Bot Token is invalid or expired. Please reset your token in Discord Developer Portal -> Bot -> Reset Token.");
+                err.status = 401;
+                throw err;
+            }
+            if (res.status === 429) {
+                const err = new Error("429 Too Many Requests: Discord API rate limit reached. Please try again in 1 minute.");
+                err.status = 429;
+                throw err;
+            }
+            const err = new Error(`Discord API returned non-JSON HTTP ${res.status}.`);
+            err.status = res.status;
+            throw err;
+        }
+
+        const data = await res.json();
+        if (!res.ok) {
+            const err = new Error(data?.message || `Discord API error HTTP ${res.status}`);
+            err.status = res.status;
+            err.code = data?.code;
+            throw err;
+        }
+        return data;
+    } catch (err) {
+        clearTimeout(timer);
+        if (err.name === 'AbortError') {
+            const timeoutErr = new Error(`Discord API request timed out (${Math.round(timeoutMs / 1000)}s). Discord may be slow or unreachable.`);
+            timeoutErr.status = 504;
+            throw timeoutErr;
+        }
+        throw err;
+    }
+}
+
 // API endpoint: Auto-detect Discord Guild, channels, and roles
 app.get('/api/discord/guild-info', async (req, res) => {
     try {
         const token = (req.query.token || discordConfig.globalBotToken || '').trim();
         if (!token) {
-            return res.status(400).json({ error: "Missing bot token. Please enter or save your Bot Token." });
+            return res.status(400).json({ success: false, error: "Missing bot token. Please enter or save your Bot Token." });
         }
-
-        const headers = { Authorization: `Bot ${token}` };
 
         // 1. Fetch user / bot identity
-        const meRes = await fetch('https://discord.com/api/v10/users/@me', { headers });
-        const meData = await meRes.json();
-        if (meData.message || !meData.id) {
-            return res.status(401).json({ error: meData.message || "Invalid bot token" });
+        let meData;
+        try {
+            meData = await safeDiscordFetch('https://discord.com/api/v10/users/@me', token, { timeoutMs: 8000 });
+        } catch (authErr) {
+            if (authErr.status === 401) {
+                return res.status(401).json({
+                    success: false,
+                    isTokenInvalid: true,
+                    error: "401 Unauthorized: Your Discord Bot Token is invalid or has expired. Please reset the token in the Discord Developer Portal."
+                });
+            }
+            throw authErr;
         }
 
-        const botAvatarUrl = meData.avatar ? `https://cdn.discordapp.com/avatars/${meData.id}/${meData.avatar}.png` : null;
+        const botAvatarUrl = meData?.avatar ? `https://cdn.discordapp.com/avatars/${meData.id}/${meData.avatar}.png` : null;
 
         // 2. Fetch guilds the bot is in
-        const guildsRes = await fetch('https://discord.com/api/v10/users/@me/guilds', { headers });
-        const guilds = await guildsRes.json();
+        const guilds = await safeDiscordFetch('https://discord.com/api/v10/users/@me/guilds', token, { timeoutMs: 8000 });
         if (!Array.isArray(guilds)) {
-            return res.status(400).json({ error: guilds.message || "Failed to fetch guilds from Discord" });
+            return res.status(400).json({ success: false, error: "Failed to fetch guilds from Discord" });
         }
 
         if (guilds.length === 0) {
@@ -3222,7 +3292,6 @@ app.get('/api/discord/guild-info', async (req, res) => {
         if (!activeGuild) {
             activeGuild = guilds[0];
             activeGuildId = activeGuild.id;
-            // Auto-sync into discordConfig if not set
             if (!discordConfig.guildId || guilds.length === 1) {
                 discordConfig.guildId = activeGuildId;
                 saveDiscordConfig();
@@ -3230,13 +3299,10 @@ app.get('/api/discord/guild-info', async (req, res) => {
         }
 
         // 3. Fetch channels and roles for the active guild
-        const [channelsRes, rolesRes] = await Promise.all([
-            fetch(`https://discord.com/api/v10/guilds/${activeGuildId}/channels`, { headers }),
-            fetch(`https://discord.com/api/v10/guilds/${activeGuildId}/roles`, { headers })
+        const [rawChannels, rawRoles] = await Promise.all([
+            safeDiscordFetch(`https://discord.com/api/v10/guilds/${activeGuildId}/channels`, token, { timeoutMs: 8000 }),
+            safeDiscordFetch(`https://discord.com/api/v10/guilds/${activeGuildId}/roles`, token, { timeoutMs: 8000 })
         ]);
-
-        const rawChannels = await channelsRes.json();
-        const rawRoles = await rolesRes.json();
 
         // Build category map (type 4 = GuildCategory)
         const categories = {};
@@ -3289,7 +3355,13 @@ app.get('/api/discord/guild-info', async (req, res) => {
             roles
         });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.warn("[guild-info Error]:", err.message);
+        const status = err.status || 500;
+        res.status(status).json({
+            success: false,
+            isTokenInvalid: status === 401,
+            error: err.message
+        });
     }
 });
 
@@ -14890,58 +14962,39 @@ async function registerSlashCommands(token, guildId = null) {
     try {
         let applicationId = slashCommandBot?.user?.id;
         if (!applicationId) {
-            try {
-                const userMe = await rest.get(Routes.user('@me'));
-                if (userMe?.id) applicationId = userMe.id;
-            } catch(restErr) {
-                const botRes = await fetch(`https://discord.com/api/v10/users/@me`, {
-                    headers: {
-                        Authorization: `Bot ${token}`,
-                        'User-Agent': 'DiscordBot (https://spider-verse.net, 2.0)'
-                    }
-                });
-                const cType = botRes.headers.get('content-type') || '';
-                if (!cType.includes('application/json')) {
-                    if (botRes.status === 401) throw new Error("401 Unauthorized: Discord Bot Token is invalid. Please check your token in Settings.");
-                    if (botRes.status === 429) throw new Error("429 Too Many Requests: Discord API rate limit reached. Please try again in 1 minute.");
-                    throw new Error(`Discord API returned HTTP ${botRes.status} (non-JSON response). The bot token may be invalid.`);
-                }
-                const botData = await botRes.json();
-                applicationId = botData?.id;
-                if (!applicationId) throw new Error(botData?.message || "Could not retrieve bot application ID from Discord.");
-            }
+            const meData = await safeDiscordFetch('https://discord.com/api/v10/users/@me', token, { timeoutMs: 8000 });
+            applicationId = meData?.id;
         }
         if (!applicationId) throw new Error("Could not get bot application ID. Check your bot token in Settings.");
 
-        if (guildId) {
-            await rest.put(Routes.applicationGuildCommands(applicationId, guildId), { body: activeCommands });
-            console.log(`[Slash Commands] Registered ${activeCommands.length}/${commands.length} guild commands for guild ${guildId} (${disabledCmds.length} disabled)`);
-            // Wipe global commands so Discord doesn't display duplicate entries in this guild
-            await rest.put(Routes.applicationCommands(applicationId), { body: [] }).catch(() => {});
-            if (slashCommandBot?.isReady?.()) {
-                for (const gId of slashCommandBot.guilds.cache.keys()) {
-                    if (gId !== guildId) {
-                        await rest.put(Routes.applicationGuildCommands(applicationId, gId), { body: [] }).catch(() => {});
-                    }
-                }
-            }
+        const targetGuildId = guildId || discordConfig.guildId || null;
+
+        if (targetGuildId) {
+            await safeDiscordFetch(`https://discord.com/api/v10/applications/${applicationId}/guilds/${targetGuildId}/commands`, token, {
+                method: 'PUT',
+                body: activeCommands,
+                timeoutMs: 12000
+            });
+            console.log(`[Slash Commands] Registered ${activeCommands.length}/${commands.length} guild commands for guild ${targetGuildId} (${disabledCmds.length} disabled)`);
+            
+            // Clean global commands asynchronously so duplicates don't linger
+            safeDiscordFetch(`https://discord.com/api/v10/applications/${applicationId}/commands`, token, {
+                method: 'PUT',
+                body: [],
+                timeoutMs: 8000
+            }).catch(() => {});
         } else {
-            await rest.put(Routes.applicationCommands(applicationId), { body: activeCommands });
+            await safeDiscordFetch(`https://discord.com/api/v10/applications/${applicationId}/commands`, token, {
+                method: 'PUT',
+                body: activeCommands,
+                timeoutMs: 12000
+            });
             console.log(`[Slash Commands] Registered ${activeCommands.length}/${commands.length} global commands (${disabledCmds.length} disabled)`);
-            // Wipe guild commands from known guilds so Discord doesn't display duplicate entries
-            if (discordConfig.guildId) {
-                await rest.put(Routes.applicationGuildCommands(applicationId, discordConfig.guildId), { body: [] }).catch(() => {});
-            }
-            if (slashCommandBot?.isReady?.()) {
-                for (const gId of slashCommandBot.guilds.cache.keys()) {
-                    await rest.put(Routes.applicationGuildCommands(applicationId, gId), { body: [] }).catch(() => {});
-                }
-            }
         }
-        return { success: true, count: activeCommands.length, total: commands.length, disabledCount: disabledCmds.length };
+        return { success: true, count: activeCommands.length, total: commands.length, disabledCount: disabledCmds.length, guildId: targetGuildId };
     } catch (e) {
         console.error("[Slash Commands] Registration failed:", e.message);
-        return { success: false, error: e.message };
+        return { success: false, error: e.message, status: e.status || 500 };
     }
 }
 
@@ -17094,82 +17147,47 @@ setTimeout(() => {
 
 
 // API endpoint: register slash commands
+// API endpoint: register slash commands
 app.post('/api/discord/register-slash-commands', async (req, res) => {
     try {
-        const token = req.body.token || discordConfig.globalBotToken;
-        const guildId = req.body.guildId || null;
+        const token = (req.body.token || discordConfig.globalBotToken || '').trim();
+        const guildId = req.body.guildId || discordConfig.guildId || null;
         if (req.body.disabledCommands !== undefined && Array.isArray(req.body.disabledCommands)) {
             discordConfig.disabledCommands = req.body.disabledCommands.map(c => String(c).toLowerCase().trim()).filter(Boolean);
             saveDiscordConfig();
         }
-        if (!token) return res.status(400).json({ error: "Missing bot token" });
-        const result = await registerSlashCommands(token.trim(), guildId);
-        if (result.success) {
-            // Also (re)start the slash command bot
-            startSlashCommandBot(token.trim()).catch(() => {});
+        if (!token) return res.status(400).json({ success: false, error: "Missing bot token. Please configure your Discord Bot Token." });
+        
+        const result = await registerSlashCommands(token, guildId);
+        if (!result.success) {
+            return res.status(result.status || 500).json(result);
         }
+        startSlashCommandBot(token).catch(() => {});
         res.json(result);
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        res.status(500).json({ success: false, error: e.message });
     }
 });
 
 // API endpoint: purge duplicate commands and cleanly re-sync
 app.post('/api/discord/clean-commands', async (req, res) => {
     try {
-        const token = req.body.token || discordConfig.globalBotToken;
+        const token = (req.body.token || discordConfig.globalBotToken || '').trim();
         const guildId = req.body.guildId || discordConfig.guildId || null;
         if (req.body.disabledCommands !== undefined && Array.isArray(req.body.disabledCommands)) {
             discordConfig.disabledCommands = req.body.disabledCommands.map(c => String(c).toLowerCase().trim()).filter(Boolean);
             saveDiscordConfig();
         }
-        if (!token) return res.status(400).json({ error: "Missing bot token" });
+        if (!token) return res.status(400).json({ success: false, error: "Missing bot token. Please configure your Discord Bot Token." });
 
-        const rest = new REST({ version: '10' }).setToken(token.trim());
-        let applicationId = slashCommandBot?.user?.id;
-        if (!applicationId) {
-            try {
-                const userMe = await rest.get(Routes.user('@me'));
-                if (userMe?.id) applicationId = userMe.id;
-            } catch(restErr) {
-                const botRes = await fetch(`https://discord.com/api/v10/users/@me`, {
-                    headers: {
-                        Authorization: `Bot ${token.trim()}`,
-                        'User-Agent': 'DiscordBot (https://spider-verse.net, 2.0)'
-                    }
-                });
-                const cType = botRes.headers.get('content-type') || '';
-                if (!cType.includes('application/json')) {
-                    if (botRes.status === 401) throw new Error("401 Unauthorized: Discord Bot Token is invalid. Check your token in Settings.");
-                    throw new Error(`Discord API returned HTTP ${botRes.status} (non-JSON).`);
-                }
-                const botData = await botRes.json();
-                applicationId = botData?.id;
-            }
+        const result = await registerSlashCommands(token, guildId);
+        if (!result.success) {
+            return res.status(result.status || 500).json(result);
         }
-        if (!applicationId) throw new Error("Could not retrieve application ID. Check your bot token.");
-
-        // Clear global
-        await rest.put(Routes.applicationCommands(applicationId), { body: [] }).catch(() => {});
-
-        // Clear target guild and all known guilds
-        if (guildId) {
-            await rest.put(Routes.applicationGuildCommands(applicationId, guildId), { body: [] }).catch(() => {});
-        }
-        if (slashCommandBot?.isReady?.()) {
-            for (const gId of slashCommandBot.guilds.cache.keys()) {
-                await rest.put(Routes.applicationGuildCommands(applicationId, gId), { body: [] }).catch(() => {});
-            }
-        }
-
-        // Re-register clean commands
-        const result = await registerSlashCommands(token.trim(), guildId);
-        if (result.success) {
-            startSlashCommandBot(token.trim()).catch(() => {});
-        }
+        startSlashCommandBot(token).catch(() => {});
         res.json({ success: true, count: result.count, disabledCount: result.disabledCount, message: "Commands purged and re-registered cleanly with zero duplicates!" });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        res.status(500).json({ success: false, error: e.message });
     }
 });
 
