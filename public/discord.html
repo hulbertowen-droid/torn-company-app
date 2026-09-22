@@ -1602,7 +1602,7 @@
                         <button type="button" class="tab-pill active" onclick="setAlertCategory('all')" id="tab-all">All Alerts</button>
                         <button type="button" class="tab-pill" onclick="setAlertCategory('war')" id="tab-war">⚔️ War (6)</button>
                         <button type="button" class="tab-pill" onclick="setAlertCategory('chain')" id="tab-chain">⛓️ Chain (3)</button>
-                        <button type="button" class="tab-pill" onclick="setAlertCategory('defense')" id="tab-defense">🛡️ Defense (1)</button>
+                        <button type="button" class="tab-pill" onclick="setAlertCategory('defense')" id="tab-defense">🛡️ Defense (2)</button>
                         <button type="button" class="tab-pill" onclick="setAlertCategory('members')" id="tab-members">👥 Members (2)</button>
                         <button type="button" class="tab-pill" onclick="setAlertCategory('oc')" id="tab-oc">💼 OC (8)</button>
                         <button type="button" class="tab-pill" onclick="setAlertCategory('security')" id="tab-security">🔒 Security (1)</button>
@@ -1755,7 +1755,7 @@
                 <div class="trigger-category-block" data-cat="defense">
                     <div class="category-title">
                         <span>🛡️ Faction Defense & Inbound Attacks</span>
-                        <span class="count-badge">1 Trigger</span>
+                        <span class="count-badge">2 Triggers</span>
                     </div>
                     <div class="trigger-grid">
                         <div class="trigger-row" id="ti-friendlyAttacked" data-tags="defense member attack friendly retaliate">
@@ -1770,6 +1770,21 @@
                             <div class="trigger-controls">
                                 <button class="btn-test" id="btn-test-friendlyAttacked" onclick="testAlert('friendlyAttacked')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="friendlyAttacked" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                        </div>
+
+                        <div class="trigger-row on" id="ti-retalSentinel" data-tags="defense retal retaliation risk attack incoming warning counter">
+                            <div class="trigger-row-left">
+                                <span class="trigger-icon">🛡️</span>
+                                <div class="trigger-info">
+                                    <div class="trigger-name">Retaliation Risk Engine <span class="tag war">AUTONOMOUS</span></div>
+                                    <div class="trigger-desc">Autonomous retaliation prediction: ingests combat logs, correlates 0–6h retal pairs, calculates empirical Bayes risk (k=7), and alerts members before attacking.</div>
+                                    <span class="trigger-route-tag">📍 Integrated (/risk, /targets, /snipe, /claim)</span>
+                                </div>
+                            </div>
+                            <div class="trigger-controls">
+                                <button class="btn-test" id="btn-test-retalSentinel" onclick="testAlert('retalSentinel')">▷ Test</button>
+                                <label class="switch"><input type="checkbox" id="retalSentinel" checked onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
                         </div>
                     </div>
@@ -2662,6 +2677,13 @@
                                 <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="elim" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
                             <div class="cmd-card-desc">Elimination Target Hunter (alias of /snipe).</div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-risk">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>🛡️</span><code>/risk</code> & <code>/retal</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="risk" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Retaliation Risk Engine: Predicts retaliation odds, response time, and known retaliator pool.</div>
                         </div>
                     </div>
                 </div>
@@ -3584,6 +3606,7 @@ function applyConfigToDOM(cfg) {
         chainUnder90: cfg.chainUnder90 === true || cfg.chainUnder90 === undefined,
         chainMilestone: cfg.chainMilestone === true || cfg.chainMilestone === undefined,
         friendlyAttacked: cfg.friendlyAttacked === true,
+        retalSentinel: cfg.retalSentinel !== false,
         medOutSniper: cfg.medOutSniper === true || cfg.medOutSniper === undefined,
         travelWarnings: cfg.travelWarnings === true || cfg.travelWarnings === undefined,
         chainWarnings: cfg.chainWarnings === true || cfg.chainWarnings === undefined,
@@ -3806,6 +3829,7 @@ async function saveDiscordConfig() {
             chainUnder90: document.getElementById('chainUnder90').checked,
             chainMilestone: document.getElementById('chainMilestone').checked,
             friendlyAttacked: document.getElementById('friendlyAttacked').checked,
+            retalSentinel: document.getElementById('retalSentinel')?.checked ?? true,
             medOutSniper: document.getElementById('medOutSniper').checked,
             travelWarnings: document.getElementById('travelWarnings').checked,
             chainWarnings: document.getElementById('chainWarnings').checked,

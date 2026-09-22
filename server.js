@@ -3565,6 +3565,27 @@ app.post('/api/test-discord-alert', async (req, res) => {
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
+    } else if (type === 'retalSentinel' || type === 'retal') {
+        embed = {
+            title: "🛡️ Retaliation Risk Engine • Live Alert",
+            description: `**Retaliation Probability:** 67% \`▓▓▓▓▓▓▓░░░\`\n` +
+                `**Target:** **[Test Enemy] [999999]**\n` +
+                `**Confidence:** 🟢 14 direct observations\n` +
+                `**Response Window:** Avg 3m 42s · Median 2m 15s\n` +
+                `**Win/Loss Ratio (on Retals):** 0.35:1\n` +
+                `⚡ Typically responds within 10 minutes or not at all.\n\n` +
+                `**⚠️ Likely Retaliators:**\n` +
+                `🔴 [Player 123456](https://www.torn.com/profiles.php?XID=123456) — 8 confirmed retaliations\n` +
+                `🟡 [Player 789012](https://www.torn.com/profiles.php?XID=789012) — 4 confirmed retaliations\n\n` +
+                `-# Data aggregated via F.R.I.D.A.Y. Retaliation Risk Engine (k=7 shrinkage)`,
+            color: UI.COLORS.BRAND,
+            footer: { text: "F.R.I.D.A.Y Retaliation Risk Engine • Discord Sentinel" },
+            timestamp: new Date().toISOString(),
+            links: [
+                { label: "⚔️ Attack", url: `https://www.torn.com/page.php?sid=attack&user2ID=999999` },
+                { label: "👤 Profile", url: `https://www.torn.com/profiles.php?XID=999999` }
+            ]
+        };
     } else if (type === 'inactivity') {
         chanId = req.body.inactivityChannelId || discordConfig.inactivityChannelId || chanId;
         let rolePingStr = "";
