@@ -1653,6 +1653,49 @@ setInterval(async () => {
 // ── Retaliation & Member Attacked Real-time Alerts ──
 const processedAlertedAttacks = new Set();
 
+async function getPlayerStatsFromFFScouter(targetId) {
+    if (!targetId || targetId === '0') return null;
+    const sId = String(targetId).trim();
+    const ffKey = (typeof getGlobalFFKey === 'function' ? getGlobalFFKey() : null) || discordConfig.ffKey;
+    if (!ffKey) return null;
+
+    try {
+        const url = `https://ffscouter.com/api/v1/get-stats?key=${encodeURIComponent(ffKey)}&targets=${encodeURIComponent(sId)}`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(5000), headers: { 'Accept': 'application/json' } });
+        const data = await res.json().catch(() => null);
+        if (!data) return null;
+
+        const list = Array.isArray(data) ? data : (Array.isArray(data.data) ? data.data : [data]);
+        const p = list.find(item => String(item.player_id || item.id) === sId) || list[0];
+        if (p && (p.bs_estimate || p.total || p.bs_estimate_human)) {
+            const rawVal = Number(p.bs_estimate || p.total || 0);
+            const humanStr = p.bs_estimate_human || (rawVal > 0 ? `~${rawVal.toLocaleString()}` : null);
+            const ff = p.fair_fight ? Number(p.fair_fight).toFixed(2) : null;
+            
+            if (rawVal > 0) {
+                statsCache[sId] = { stats: rawVal, time: Date.now() };
+                if (!spyDatabase[sId]) {
+                    spyDatabase[sId] = {
+                        total: rawVal,
+                        timestamp: Date.now(),
+                        source: 'ffscouter'
+                    };
+                }
+            }
+
+            return {
+                total: rawVal,
+                human: humanStr,
+                fairFight: ff,
+                source: p.source || 'FF Scouter'
+            };
+        }
+    } catch(e) {
+        console.warn(`[FF Scouter] Error getting stats for ${sId}:`, e.message);
+    }
+    return null;
+}
+
 async function handleMemberAttackedAlert(atk) {
     try {
         if (!atk) return;
@@ -1732,27 +1775,85 @@ async function handleMemberAttackedAlert(atk) {
             { name: "Result", value: result, inline: true }
         ];
 
-        // Attacker Estimated Battle Stats
+        // 1. Attacker Estimated Battle Stats (Query FF Scouter for live accurate stats!)
         if (!isStealthed) {
-            const rawEst = (spyDatabase[attackerId]?.total) || (statsCache[attackerId]?.stats) || (manualStats[attackerId]?.stats) || 0;
-            const statStr = rawEst > 0 ? `~${rawEst.toLocaleString()}` : "Unknown";
-            fields.push({ name: "Attacker Est. Stats", value: statStr, inline: true });
+            let statDisplay = "Unknown";
+            const ffStats = await getPlayerStatsFromFFScouter(attackerId);
+            if (ffStats) {
+                const ffPart = ffStats.fairFight ? ` (FF: ${ffStats.fairFight})` : '';
+                statDisplay = `~${ffStats.human || ffStats.total.toLocaleString()}${ffPart} [FF Scouter]`;
+            } else {
+                const rawEst = (spyDatabase[attackerId]?.total) || (statsCache[attackerId]?.stats) || (manualStats[attackerId]?.stats) || 0;
+                if (rawEst > 0) {
+                    statDisplay = `~${rawEst.toLocaleString()}`;
+                }
+            }
+            fields.push({ name: "Attacker Est. Stats", value: statDisplay, inline: true });
         }
 
-        // Retaliation Risk from Retal Risk Engine (for external attacks)
-        if (!isInternal && !isStealthed) {
+        // 2. Full Retaliation Risk Engine Breakdown (Always active when attacker is known)
+        if (!isStealthed) {
             try {
                 const risk = await retalEngine.getRiskScore(attackerId, atkFac);
                 if (risk && risk.adjusted_rate !== undefined) {
-                    const riskPct = Math.round(risk.adjusted_rate * 100);
-                    const riskTag = retalEngine.formatRiskTag ? retalEngine.formatRiskTag(risk.adjusted_rate) : `${riskPct}%`;
+                    const riskPct = Math.round((risk.adjusted_rate || 0) * 100);
+                    const filled = Math.min(10, Math.max(0, Math.round(riskPct / 10)));
+                    const empty = Math.max(0, 10 - filled);
+                    const bar = '`' + '▓'.repeat(filled) + '░'.repeat(empty) + '`';
+
                     fields.push({
-                        name: "Retaliation Risk",
-                        value: `${riskTag} (${riskPct}%) · ${risk.confidence_label || 'Empirical Bayes prior'}`,
-                        inline: false
+                        name: "🛡️ Retaliation Probability",
+                        value: `**${riskPct}%** ${bar}`,
+                        inline: true
                     });
+
+                    fields.push({
+                        name: "🎯 Risk Confidence",
+                        value: risk.confidence_label || 'Empirical Bayes Prior (k=7)',
+                        inline: true
+                    });
+
+                    let windowStr = '⏱️ Pending more observations';
+                    if (risk.avg_response_seconds) {
+                        const avgMin = Math.round(risk.avg_response_seconds / 60);
+                        windowStr = avgMin <= 10 ? `⚡ Fast (<10m, avg ~${avgMin}m)` : `⏳ Delayed (avg ~${avgMin}m)`;
+                    }
+                    fields.push({
+                        name: "⏱️ Response Window",
+                        value: windowStr,
+                        inline: true
+                    });
+
+                    if (risk.win_loss_ratio !== null && risk.win_loss_ratio !== undefined) {
+                        const wlText = risk.win_loss_ratio < 0.5 ? 'Favors us' : risk.win_loss_ratio > 1.5 ? 'Dangerous' : 'Even';
+                        fields.push({
+                            name: "⚔️ Retal Win/Loss",
+                            value: `${risk.win_loss_ratio}:1 (${wlText})`,
+                            inline: true
+                        });
+                    }
+
+                    if (risk.retaliator_pool && risk.retaliator_pool.length > 0) {
+                        const poolLines = risk.retaliator_pool.slice(0, 3).map((r, i) => {
+                            const icon = i === 0 ? '🔴' : i === 1 ? '🟡' : '🟠';
+                            return `${icon} [Player ${r.id}](https://www.torn.com/profiles.php?XID=${r.id}) — ${r.count} confirmed retal${r.count !== 1 ? 's' : ''}`;
+                        });
+                        fields.push({
+                            name: "⚠️ Likely Retaliators",
+                            value: poolLines.join('\n'),
+                            inline: false
+                        });
+                    } else if (isInternal) {
+                        fields.push({
+                            name: "⚠️ Likely Retaliators",
+                            value: "*Internal sparring hit between faction members — no enemy retal risk.*",
+                            inline: false
+                        });
+                    }
                 }
-            } catch(e) {}
+            } catch(e) {
+                console.warn('[Discord Retal Sentinel] Risk score calc warning:', e.message);
+            }
         }
 
         const links = [];
@@ -1786,7 +1887,7 @@ async function handleMemberAttackedAlert(atk) {
             title,
             description: desc,
             color,
-            footer: { text: "F.R.I.D.A.Y Retaliation Sentinel • Spider-Verse" },
+            footer: { text: "F.R.I.D.A.Y Retaliation Risk Engine • Empirical Bayes k=7 • λ=0.05" },
             timestamp: new Date().toISOString(),
             targetId: (!isStealthed && attackerId !== "0") ? attackerId : undefined,
             fields,
