@@ -14901,6 +14901,8 @@ async function registerSlashCommands(token, guildId = null, options = {}) {
             .addStringOption(opt => opt.setName('target').setDescription('Torn Player ID or Name').setRequired(true)).toJSON(),
         new SlashCommandBuilder().setName('risk').setDescription('Retaliation risk report for a target — retal rate, response time, known retaliators')
             .addStringOption(opt => opt.setName('target').setDescription('Numeric Torn Player ID').setRequired(true)).toJSON(),
+        new SlashCommandBuilder().setName('retal').setDescription('Retaliation risk report for a target — retal rate, response time, known retaliators')
+            .addStringOption(opt => opt.setName('target').setDescription('Numeric Torn Player ID').setRequired(true)).toJSON(),
 
         // 4. Chain Management
         new SlashCommandBuilder().setName('chain').setDescription('Check live faction chain status, timer, and multiplier').toJSON(),
@@ -17217,7 +17219,7 @@ function setupSlashBotEvents(bot, token) {
             } else if (cmd === 'spy') {
                 const target = interaction.options.getString('target');
                 embed = await buildSpyEmbed(target, apiKey);
-            } else if (cmd === 'risk') {
+            } else if (cmd === 'risk' || cmd === 'retal' || cmd === 'retaliation') {
                 const targetId = (interaction.options.getString('target') || '').trim().replace(/[^0-9]/g, '');
                 if (!targetId) {
                     embed = UI.warning('⚠️ Invalid Target', 'Please provide a numeric Torn Player ID.');
