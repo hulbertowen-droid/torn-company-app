@@ -1764,7 +1764,7 @@
                                 <div class="trigger-info">
                                     <div class="trigger-name">Faction Member Under Attack <span class="tag war">WAR</span></div>
                                     <div class="trigger-desc">Fires immediately when an enemy attacks any friendly alliance member — includes enemy stats & retaliate button.</div>
-                                    <span class="trigger-route-tag">📍 Main Alert Channel</span>
+                                    <span class="trigger-route-tag">📍 Retaliator / Main Alert Channel</span>
                                 </div>
                             </div>
                             <div class="trigger-controls">
@@ -1779,7 +1779,7 @@
                                 <div class="trigger-info">
                                     <div class="trigger-name">Retaliation Risk Engine <span class="tag war">AUTONOMOUS</span></div>
                                     <div class="trigger-desc">Autonomous retaliation prediction: ingests combat logs, correlates 0–6h retal pairs, calculates empirical Bayes risk (k=7), and alerts members before attacking.</div>
-                                    <span class="trigger-route-tag">📍 Integrated (/risk, /targets, /snipe, /claim)</span>
+                                    <span class="trigger-route-tag">📍 Retaliator Channel & Slash Commands</span>
                                 </div>
                             </div>
                             <div class="trigger-controls">
@@ -2159,6 +2159,32 @@
                     </div>
                 </div>
 
+                <!-- Row 2.5: Retaliator / Counter-Combat Channel & Role -->
+                <div class="field-grid">
+                    <div class="field-group">
+                        <div class="field-label">
+                            <label for="retal-channelid" style="margin:0;">⚔️ Retaliator Channel <span class="opt">(optional)</span></label>
+                            <a href="javascript:void(0)" onclick="toggleManualInput('retal-channelid')" style="font-size:0.75em; color:var(--spider-blue); text-decoration:none;">✏️ Custom ID</a>
+                        </div>
+                        <select class="field-input channel-picker" id="retal-channelid-select" onchange="onChannelSelectChange(this, 'retal-channelid'); trackDirty();">
+                            <option value="">-- Same as Main Alert Channel --</option>
+                        </select>
+                        <input class="field-input manual-id-input" type="text" id="retal-channelid" placeholder="e.g. 1491526701673349180" autocomplete="off" oninput="sanitizeChannelIdInput(this); trackDirty();" style="display:none; margin-top:6px;">
+                        <span class="field-hint">Dedicated room for Retaliation Risk alerts, counter-attack orders, and enemy retaliator intel.</span>
+                    </div>
+                    <div class="field-group">
+                        <div class="field-label">
+                            <label for="retal-roleid" style="margin:0;">⚔️ Retaliator Ping Role <span class="opt">(optional)</span></label>
+                            <a href="javascript:void(0)" onclick="toggleManualInput('retal-roleid')" style="font-size:0.75em; color:var(--spider-blue); text-decoration:none;">✏️ Custom ID</a>
+                        </div>
+                        <select class="field-input role-picker" id="retal-roleid-select" onchange="onRoleSelectChange(this, 'retal-roleid'); trackDirty();">
+                            <option value="">-- Select Role (or leave blank) --</option>
+                        </select>
+                        <input class="field-input manual-id-input" type="text" id="retal-roleid" placeholder="Role ID, @here, or @everyone" autocomplete="off" oninput="trackDirty();" style="display:none; margin-top:6px;">
+                        <span class="field-hint">Role to ping when retaliation targets or incoming retaliations strike (e.g. Enforcers, Hitters).</span>
+                    </div>
+                </div>
+
                 <!-- Row 3: OC Channel & Role -->
                 <div class="field-grid">
                     <div class="field-group">
@@ -2415,6 +2441,7 @@
                         </label>
                         <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
                             <button type="button" class="btn-test" onclick="quickSelectChannel('main')">🚨 Main Alert</button>
+                            <button type="button" class="btn-test" onclick="quickSelectChannel('retal')">⚔️ Retaliator</button>
                             <button type="button" class="btn-test" onclick="quickSelectChannel('overdose')">💊 Overdose</button>
                             <button type="button" class="btn-test" onclick="quickSelectChannel('oc')">💼 OC</button>
                             <button type="button" class="btn-test" onclick="quickSelectChannel('inactivity')">💤 Inactivity</button>
@@ -3326,6 +3353,7 @@ function populateChannelSelects() {
         { id: 'global-channelid', defaultLabel: '-- Select Channel --' },
         { id: 'inactivity-channelid', defaultLabel: '-- Same as Main Alert Channel --' },
         { id: 'overdose-channelid', defaultLabel: '-- Same as Main Alert Channel --' },
+        { id: 'retal-channelid', defaultLabel: '-- Same as Main Alert Channel --' },
         { id: 'oc-channelid', defaultLabel: '-- Same as Main Alert Channel --' },
         { id: 'welcome-channelid', defaultLabel: '-- Select Welcome Channel (e.g. #welcome-and-rules) --' },
         { id: 'verification-channelid', defaultLabel: '-- Select Channel --' },
@@ -3357,6 +3385,7 @@ function populateRoleSelects() {
     const roleFields = [
         { id: 'inactivity-roleid', defaultLabel: '-- Select Role (or leave blank) --' },
         { id: 'overdose-roleid', defaultLabel: '-- Select Role (or leave blank) --' },
+        { id: 'retal-roleid', defaultLabel: '-- Select Role (or leave blank) --' },
         { id: 'oc-roleid', defaultLabel: '-- Select Role (or leave blank) --' },
         { id: 'oc-manager-roleid', defaultLabel: '-- Select OC Manager Role --' },
         { id: 'banker-roleid', defaultLabel: '-- Select Role (or leave blank) --' },
@@ -3566,6 +3595,8 @@ function applyConfigToDOM(cfg) {
     if (document.getElementById('inactivity-roleid')) document.getElementById('inactivity-roleid').value = cfg.inactivityRoleId || localStorage.getItem('warboard_inactivity_roleid') || '';
     if (document.getElementById('overdose-channelid')) document.getElementById('overdose-channelid').value = (cfg.overdoseChannelId || localStorage.getItem('warboard_overdose_channelid') || '').replace(/[^0-9]/g, '');
     if (document.getElementById('overdose-roleid')) document.getElementById('overdose-roleid').value = cfg.overdoseRoleId || localStorage.getItem('warboard_overdose_roleid') || '';
+    if (document.getElementById('retal-channelid')) document.getElementById('retal-channelid').value = (cfg.retalChannelId || localStorage.getItem('warboard_retal_channelid') || '').replace(/[^0-9]/g, '');
+    if (document.getElementById('retal-roleid')) document.getElementById('retal-roleid').value = cfg.retalRoleId || localStorage.getItem('warboard_retal_roleid') || '';
     if (document.getElementById('banking-channelid')) document.getElementById('banking-channelid').value = (cfg.bankingChannelId || localStorage.getItem('warboard_banking_channelid') || '').replace(/[^0-9]/g, '');
     if (document.getElementById('banker-roleid')) document.getElementById('banker-roleid').value = (cfg.bankerRoleId || localStorage.getItem('warboard_banker_roleid') || '').replace(/[^0-9]/g, '');
     if (document.getElementById('oc-channelid')) document.getElementById('oc-channelid').value = (cfg.ocChannelId || localStorage.getItem('warboard_oc_channelid') || '').replace(/[^0-9]/g, '');
@@ -3714,6 +3745,8 @@ async function saveDiscordConfig() {
     const inactivityRoleId = document.getElementById('inactivity-roleid')?.value.trim() || '';
     const overdoseChannelId = (document.getElementById('overdose-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const overdoseRoleId = document.getElementById('overdose-roleid')?.value.trim() || '';
+    const retalChannelId = (document.getElementById('retal-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const retalRoleId = document.getElementById('retal-roleid')?.value.trim() || '';
     const bankingChannelId = (document.getElementById('banking-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const bankerRoleId = (document.getElementById('banker-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const ocChannelId = (document.getElementById('oc-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
@@ -3768,6 +3801,8 @@ async function saveDiscordConfig() {
     localStorage.setItem('warboard_inactivity_roleid', inactivityRoleId);
     localStorage.setItem('warboard_overdose_channelid', overdoseChannelId);
     localStorage.setItem('warboard_overdose_roleid', overdoseRoleId);
+    localStorage.setItem('warboard_retal_channelid', retalChannelId);
+    localStorage.setItem('warboard_retal_roleid', retalRoleId);
     localStorage.setItem('warboard_guildid', guildId);
     localStorage.setItem('warboard_banking_channelid', bankingChannelId);
     localStorage.setItem('warboard_banker_roleid', bankerRoleId);
@@ -3798,6 +3833,8 @@ async function saveDiscordConfig() {
             guildId,
             overdoseChannelId,
             overdoseRoleId,
+            retalChannelId,
+            retalRoleId,
             bankingChannelId,
             bankerRoleId,
             ocChannelId,
@@ -4006,9 +4043,12 @@ async function testAlert(type) {
     const inactivityChannelId = (document.getElementById('inactivity-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const overdoseRoleId = document.getElementById('overdose-roleid')?.value.trim() || '';
     const overdoseChannelId = (document.getElementById('overdose-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const retalRoleId = document.getElementById('retal-roleid')?.value.trim() || '';
+    const retalChannelId = (document.getElementById('retal-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     let ocRoleId = '';
     let ocChannelId = '';
     const isOc = type.startsWith('oc_');
+    const tLower = String(type || '').toLowerCase();
     if (isOc) {
         ocChannelId = (document.getElementById('oc-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
         ocRoleId = (document.getElementById('oc-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
@@ -4020,6 +4060,8 @@ async function testAlert(type) {
         channelId = inactivityChannelId;
     } else if (type === 'overdose' && overdoseChannelId) {
         channelId = overdoseChannelId;
+    } else if ((tLower.includes('retal') || tLower.includes('realitor') || type === 'friendlyAttacked') && retalChannelId) {
+        channelId = retalChannelId;
     }
 
     if (!botToken || !channelId) {
@@ -4056,6 +4098,8 @@ async function testAlert(type) {
                     inactivityChannelId,
                     overdoseRoleId,
                     overdoseChannelId,
+                    retalRoleId,
+                    retalChannelId,
                     ocChannelId,
                     ocRoleId,
                     welcomeChannelId: (document.getElementById('welcome-channelid')?.value.trim() || '').replace(/[^0-9]/g, ''),
@@ -4375,6 +4419,7 @@ function updateSelectedChannelsBadge() {
 function quickSelectChannel(type) {
     let targetId = '';
     if (type === 'main') targetId = document.getElementById('global-channelid')?.value.trim();
+    else if (type === 'retal') targetId = document.getElementById('retal-channelid')?.value.trim() || document.getElementById('global-channelid')?.value.trim();
     else if (type === 'overdose') targetId = document.getElementById('overdose-channelid')?.value.trim();
     else if (type === 'oc') targetId = document.getElementById('oc-channelid')?.value.trim();
     else if (type === 'inactivity') targetId = document.getElementById('inactivity-channelid')?.value.trim();

@@ -65,6 +65,8 @@ let discordConfig = {
     guildId: "",
     bankingChannelId: "",
     bankerRoleId: "",
+    retalChannelId: "",
+    retalRoleId: "",
     targetOnline: false, 
     targetLanded: true, 
     targetOutHosp: false, 
@@ -611,6 +613,8 @@ discordConfig = {
     guildId: "",
     bankingChannelId: "",
     bankerRoleId: "",
+    retalChannelId: "",
+    retalRoleId: "",
     targetOnline: false, 
     targetLanded: true, 
     targetOutHosp: false, 
@@ -1710,7 +1714,8 @@ setInterval(async () => {
                         }
                     }
                     
-                    if (hasBackfilledWar && isRecent && discordConfig.friendlyAttacked === true && discordConfig.globalChannelId) {
+                    let retalTargetChannel = discordConfig.retalChannelId || discordConfig.globalChannelId;
+                    if (hasBackfilledWar && isRecent && discordConfig.friendlyAttacked === true && retalTargetChannel) {
                         let attackerName = atk.attacker_name || "Unknown"; 
                         let attackerFactionName = atk.attacker_faction_name || "None"; 
                         let defenderName = atk.defender_name || uId;
@@ -1721,8 +1726,16 @@ setInterval(async () => {
 
                         let dId = await getDiscordId(uId);
                         let pingStr = (dId && /^\d{17,20}$/.test(dId)) ? `<@${dId}>` : "";
+                        if (discordConfig.retalRoleId) {
+                            const roleId = discordConfig.retalRoleId;
+                            const numOnly = String(roleId).replace(/\D/g, '');
+                            let rPing = "";
+                            if (numOnly.length >= 15 && numOnly.length <= 22) rPing = `<@&${numOnly}>`;
+                            else if (roleId === '@here' || roleId === '@everyone') rPing = roleId;
+                            if (rPing) pingStr = pingStr ? `${rPing} ${pingStr}` : rPing;
+                        }
 
-                        if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { 
+                        if (discordConfig.globalBotToken && retalTargetChannel) sendChannelMessage(discordConfig.globalBotToken, retalTargetChannel, { 
                             title: "🚨 Faction Member Attacked", 
                             description: `**${defenderName}** was attacked by **${attackerName}** [${attackerId}] from \`${attackerFactionName}\`.`,
                             color: UI.COLORS.ERROR,
@@ -2895,6 +2908,16 @@ app.post('/api/save-discord-config', async (req, res) => {
         }
     }
 
+    if (payload.retalChannelId !== undefined) {
+        let rawRetal = String(payload.retalChannelId || '').trim();
+        if (rawRetal.includes('.') || /[a-zA-Z]/.test(rawRetal)) {
+            payload.retalChannelId = "";
+        } else {
+            payload.retalChannelId = rawRetal.replace(/[^0-9]/g, '');
+        }
+    }
+    if (payload.retalRoleId !== undefined) payload.retalRoleId = String(payload.retalRoleId || '').trim();
+
     if (payload.ocChannelId !== undefined) {
         let rawOc = String(payload.ocChannelId || '').trim();
         if (rawOc.includes('.') || /[a-zA-Z]/.test(rawOc)) {
@@ -3521,7 +3544,8 @@ app.post('/api/test-discord-alert', async (req, res) => {
     let pingStr = (discordId && /^\d{17,20}$/.test(String(discordId).trim())) ? `<@${String(discordId).trim()}>` : "";
     let embed = {};
     
-    if (type === 'travel') {
+    const t = String(type || '').toLowerCase().trim();
+    if (t === 'travel') {
         embed = {
             title: "✈️ Overseas Alert",
             description: `**[Your Name]** — an enemy (**[Test] EnemyName**) is flying to **Mexico** where you are located.\n\nReturn to Torn or fly to a different destination.`,
@@ -3533,7 +3557,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
                 { label: "🌐 Travel Desk", url: `https://torn-company-app-production.up.railway.app/travel.html` }
             ]
         };
-    } else if (type === 'chain') {
+    } else if (t === 'chain') {
         embed = {
             title: "⚔️ Member Under Attack",
             description: `**[Your Name]**, you've been hit **3 times in a row** without defending. Log in to Torn and respond.`,
@@ -3545,12 +3569,43 @@ app.post('/api/test-discord-alert', async (req, res) => {
                 { label: "📡 Live Warboard", url: `https://torn-company-app-production.up.railway.app/` }
             ]
         };
-    } else if (type === 'target' || type === 'sniper') {
+    } else if (t === 'chainunder90') {
         embed = {
-            title: type === 'sniper' ? "💊 Early Hospital Escape" : "✈️ Target Returned from Abroad",
-            description: type === 'sniper'
-                ? `**[Test Enemy]** [999999] left hospital early using meds or a revive and is now online.`
-                : `**[Test Enemy]** [999999] has landed back in Torn and is now attackable.`,
+            title: "⏱️ Chain Alert: Under 90 Seconds!",
+            description: "⚠️ **The active chain timer is at 82s!** Land a hit immediately to preserve the faction chain multiplier.",
+            color: UI.COLORS.ERROR,
+            footer: UI.FOOTER,
+            timestamp: new Date().toISOString(),
+            links: [
+                { label: "🔗 View Chain", url: "https://www.torn.com/factions.php?step=your#/tab=chains" },
+                { label: "🎯 Attack Targets", url: "https://torn-company-app-production.up.railway.app/" }
+            ]
+        };
+    } else if (t === 'chainmilestone') {
+        embed = {
+            title: "🏆 Chain Milestone: 100 Hits!",
+            description: "Hit **#100** landed by **[Test Player]** · **+10.00 Respect** bonus gained for the faction!",
+            color: UI.COLORS.WARNING,
+            footer: UI.FOOTER,
+            timestamp: new Date().toISOString(),
+            links: [{ label: "🔗 View Chain", url: "https://www.torn.com/factions.php?step=your#/tab=chains" }]
+        };
+    } else if (t === 'target' || t === 'sniper' || t === 'targetlanded' || t === 'targetonline' || t === 'targetouthosp' || t === 'medoutsniper') {
+        let title = "✈️ Target Returned from Abroad";
+        let desc = "**[Test Enemy]** [999999] has landed back in Torn and is now attackable.";
+        if (t === 'targetonline') {
+            title = "🟢 Enemy Target Online";
+            desc = "**[Test Enemy]** [999999] is now **Online in Torn** and ready for combat engagement.";
+        } else if (t === 'targetouthosp') {
+            title = "🏥 Target Out of Hospital";
+            desc = "**[Test Enemy]** [999999] hospital timer has expired naturally — now **Okay** and attackable.";
+        } else if (t === 'sniper' || t === 'medoutsniper') {
+            title = "💊 Early Hospital Escape (Med-Out)";
+            desc = "**[Test Enemy]** [999999] left hospital early using meds or a revive and is currently online.";
+        }
+        embed = {
+            title,
+            description: desc,
             color: UI.COLORS.SUCCESS,
             targetId: "999999",
             fields: [
@@ -3565,7 +3620,14 @@ app.post('/api/test-discord-alert', async (req, res) => {
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
-    } else if (type === 'retalSentinel' || type === 'retal') {
+    } else if (t.includes('retal') || t.includes('realitor')) {
+        chanId = req.body.retalChannelId || discordConfig.retalChannelId || chanId;
+        const roleId = req.body.retalRoleId || discordConfig.retalRoleId;
+        if (roleId && String(roleId).trim()) {
+            const numOnly = String(roleId).replace(/\D/g, '');
+            if (numOnly.length >= 15 && numOnly.length <= 22) pingStr = `<@&${numOnly}>`;
+            else if (roleId === '@here' || roleId === '@everyone') pingStr = roleId;
+        }
         embed = {
             title: "🛡️ Retaliation Risk Engine • Live Alert",
             description: `**Retaliation Probability:** 67% \`▓▓▓▓▓▓▓░░░\`\n` +
@@ -3586,7 +3648,31 @@ app.post('/api/test-discord-alert', async (req, res) => {
                 { label: "👤 Profile", url: `https://www.torn.com/profiles.php?XID=999999` }
             ]
         };
-    } else if (type === 'inactivity') {
+    } else if (t === 'friendlyattacked' || t === 'friendly_attacked') {
+        chanId = req.body.retalChannelId || discordConfig.retalChannelId || chanId;
+        const roleId = req.body.retalRoleId || discordConfig.retalRoleId;
+        if (roleId && String(roleId).trim()) {
+            const numOnly = String(roleId).replace(/\D/g, '');
+            if (numOnly.length >= 15 && numOnly.length <= 22) pingStr = `<@&${numOnly}>`;
+            else if (roleId === '@here' || roleId === '@everyone') pingStr = roleId;
+        }
+        embed = {
+            title: "🚨 Faction Member Under Attack",
+            description: "**[Friendly Member]** [100001] was attacked by **[Hostile Enemy]** [999999] from `Enemy Syndicate`.",
+            color: UI.COLORS.ERROR,
+            targetId: "999999",
+            fields: [
+                { name: "Attacker Est. Stats", value: "~18,500,000", inline: true },
+                { name: "Outcome", value: "Hospitalized", inline: true }
+            ],
+            links: [
+                { label: "⚔️ Retaliate Now", url: "https://www.torn.com/page.php?sid=attack&user2ID=999999" },
+                { label: "👤 Profile", url: "https://www.torn.com/profiles.php?XID=999999" }
+            ],
+            footer: UI.FOOTER,
+            timestamp: new Date().toISOString()
+        };
+    } else if (t === 'inactivity') {
         chanId = req.body.inactivityChannelId || discordConfig.inactivityChannelId || chanId;
         let rolePingStr = "";
         const roleInput = req.body.inactivityRoleId || discordConfig.inactivityRoleId;
@@ -3619,7 +3705,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             timestamp: new Date().toISOString()
         };
         pingStr = rolePingStr;
-    } else if (type === 'overdose') {
+    } else if (t === 'overdose') {
         chanId = req.body.overdoseChannelId || discordConfig.overdoseChannelId || chanId;
         let rolePingStr = "";
         const roleInput = req.body.overdoseRoleId || discordConfig.overdoseRoleId;
@@ -3662,7 +3748,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             timestamp: new Date().toISOString()
         };
         pingStr = rolePingStr;
-    } else if (type === 'oc_low_cpr') {
+    } else if (t === 'oc_low_cpr') {
         chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
         const roleId = req.body.ocRoleId || ocConfig.roleId;
         if (roleId && String(roleId).trim()) {
@@ -3680,7 +3766,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
-    } else if (type === 'oc_no_participation') {
+    } else if (t === 'oc_no_participation') {
         chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
         const roleId = req.body.ocRoleId || ocConfig.roleId;
         if (roleId && String(roleId).trim()) {
@@ -3699,7 +3785,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
-    } else if (type === 'oc_missing_item') {
+    } else if (t === 'oc_missing_item') {
         chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
         const roleId = req.body.ocRoleId || ocConfig.roleId;
         if (roleId && String(roleId).trim()) {
@@ -3722,7 +3808,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
-    } else if (type === 'oc_ready') {
+    } else if (t === 'oc_ready') {
         chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
         const roleId = req.body.ocRoleId || ocConfig.roleId;
         if (roleId && String(roleId).trim()) {
@@ -3749,7 +3835,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
-    } else if (type === 'oc_delayed') {
+    } else if (t === 'oc_delayed') {
         chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
         const roleId = req.body.ocRoleId || ocConfig.roleId;
         if (roleId && String(roleId).trim()) {
@@ -3776,7 +3862,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
-    } else if (type === 'oc_upcoming') {
+    } else if (t === 'oc_upcoming') {
         chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
         const roleId = req.body.ocRoleId || ocConfig.roleId;
         if (roleId && String(roleId).trim()) {
@@ -3804,7 +3890,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
-    } else if (type === 'oc_countdown_4h') {
+    } else if (t === 'oc_countdown_4h') {
         chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
         const roleId = req.body.ocRoleId || ocConfig.roleId;
         if (roleId && String(roleId).trim()) {
@@ -3829,7 +3915,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
-    } else if (type === 'oc_countdown_2h') {
+    } else if (t === 'oc_countdown_2h') {
         chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
         const roleId = req.body.ocRoleId || ocConfig.roleId;
         if (roleId && String(roleId).trim()) {
@@ -3854,7 +3940,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
-    } else if (type === 'oc_planned') {
+    } else if (t === 'oc_planned') {
         chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
         const roleId = req.body.ocRoleId || ocConfig.roleId;
         if (roleId && String(roleId).trim()) {
@@ -3884,7 +3970,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
-    } else if (type === 'oc_completed') {
+    } else if (t === 'oc_completed') {
         chanId = req.body.ocChannelId || ocConfig.globalChannelId || chanId;
         const roleId = req.body.ocRoleId || ocConfig.roleId;
         if (roleId && String(roleId).trim()) {
@@ -3912,7 +3998,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
-    } else if (type === 'welcome_rules') {
+    } else if (t === 'welcome_rules') {
         chanId = req.body.welcomeChannelId || discordConfig.welcomeChannelId || chanId;
         embed = buildWelcomeRulesEmbed(discordId || null);
     } else {
