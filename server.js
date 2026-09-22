@@ -3899,7 +3899,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
-    } else if (t.includes('retal') || t.includes('realitor')) {
+    } else if (t.includes('retal') || t.includes('realitor') || t === 'friendlyattacked' || t === 'friendly_attacked') {
         chanId = req.body.retalChannelId || discordConfig.retalChannelId || chanId;
         const roleId = req.body.retalRoleId || discordConfig.retalRoleId;
         if (roleId && String(roleId).trim()) {
@@ -3908,47 +3908,29 @@ app.post('/api/test-discord-alert', async (req, res) => {
             else if (roleId === '@here' || roleId === '@everyone') pingStr = roleId;
         }
         embed = {
-            title: "🛡️ Retaliation Risk Engine • Live Alert",
-            description: `**Retaliation Probability:** 67% \`▓▓▓▓▓▓▓░░░\`\n` +
-                `**Target:** **[Test Enemy] [999999]**\n` +
-                `**Confidence:** 🟢 14 direct observations\n` +
-                `**Response Window:** Avg 3m 42s · Median 2m 15s\n` +
-                `**Win/Loss Ratio (on Retals):** 0.35:1\n` +
-                `⚡ Typically responds within 10 minutes or not at all.\n\n` +
-                `**⚠️ Likely Retaliators:**\n` +
-                `🔴 [Player 123456](https://www.torn.com/profiles.php?XID=123456) — 8 confirmed retaliations\n` +
-                `🟡 [Player 789012](https://www.torn.com/profiles.php?XID=789012) — 4 confirmed retaliations\n\n` +
-                `-# Data aggregated via F.R.I.D.A.Y. Retaliation Risk Engine (k=7 shrinkage)`,
-            color: UI.COLORS.BRAND,
-            footer: { text: "F.R.I.D.A.Y Retaliation Risk Engine • Discord Sentinel" },
-            timestamp: new Date().toISOString(),
-            links: [
-                { label: "⚔️ Attack", url: `https://www.torn.com/page.php?sid=attack&user2ID=999999` },
-                { label: "👤 Profile", url: `https://www.torn.com/profiles.php?XID=999999` }
-            ]
-        };
-    } else if (t === 'friendlyattacked' || t === 'friendly_attacked') {
-        chanId = req.body.retalChannelId || discordConfig.retalChannelId || chanId;
-        const roleId = req.body.retalRoleId || discordConfig.retalRoleId;
-        if (roleId && String(roleId).trim()) {
-            const numOnly = String(roleId).replace(/\D/g, '');
-            if (numOnly.length >= 15 && numOnly.length <= 22) pingStr = `<@&${numOnly}>`;
-            else if (roleId === '@here' || roleId === '@everyone') pingStr = roleId;
-        }
-        embed = {
-            title: "🚨 Faction Member Under Attack",
+            title: "🚨 Faction Member Attacked • Retaliation Alert",
             description: "**[Friendly Member]** [100001] was attacked by **[Hostile Enemy]** [999999] from `Enemy Syndicate`.",
             color: UI.COLORS.ERROR,
             targetId: "999999",
             fields: [
-                { name: "Attacker Est. Stats", value: "~18,500,000", inline: true },
-                { name: "Outcome", value: "Hospitalized", inline: true }
+                { name: "Result", value: "Hospitalized", inline: true },
+                { name: "Attacker Est. Stats", value: "~820k (FF: 3.63) [FF Scouter]", inline: true },
+                { name: "🛡️ Retaliation Probability", value: "**67%** `▓▓▓▓▓▓▓░░░`", inline: true },
+                { name: "🎯 Risk Confidence", value: "🟢 14 direct observations", inline: true },
+                { name: "⏱️ Response Window", value: "⚡ Fast (<10m, avg ~3m 42s)", inline: true },
+                { name: "⚔️ Retal Win/Loss", value: "0.35:1 (Favors us)", inline: true },
+                {
+                    name: "⚠️ Likely Retaliators",
+                    value: "🔴 [Player 123456](https://www.torn.com/profiles.php?XID=123456) — 8 confirmed retals\n🟡 [Player 789012](https://www.torn.com/profiles.php?XID=789012) — 4 confirmed retals",
+                    inline: false
+                }
             ],
             links: [
-                { label: "⚔️ Retaliate Now", url: "https://www.torn.com/page.php?sid=attack&user2ID=999999" },
-                { label: "👤 Profile", url: "https://www.torn.com/profiles.php?XID=999999" }
+                { label: "⚔️ Retaliate / Attack", url: "https://www.torn.com/page.php?sid=attack&user2ID=999999" },
+                { label: "👤 Attacker Profile", url: "https://www.torn.com/profiles.php?XID=999999" },
+                { label: "🛡️ Defender Profile", url: "https://www.torn.com/profiles.php?XID=100001" }
             ],
-            footer: UI.FOOTER,
+            footer: { text: "F.R.I.D.A.Y Retaliation Risk Engine • Empirical Bayes k=7 • λ=0.05" },
             timestamp: new Date().toISOString()
         };
     } else if (t === 'inactivity') {
