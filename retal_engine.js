@@ -16,8 +16,8 @@
 const K_SHRINKAGE          = 7;              // Empirical Bayes k — low-sample protection
 const LAMBDA_DECAY         = 0.05;           // Exponential decay rate per day
 const RETAL_WINDOW_SECS    = 6 * 3600;       // 6-hour retal correlation window
-const PEACE_POLL_MS        = 90_000;         // 90s poll in peacetime
-const WAR_POLL_MS          = 45_000;         // 45s poll during active war
+const PEACE_POLL_MS        = 30_000;         // 30s poll in peacetime (2 req/min, 2% of rate limit)
+const WAR_POLL_MS          = 15_000;         // 15s poll during active war
 const SWEEP_INTERVAL_MS    = 15 * 60 * 1000; // 15m un-correlated attack sweep
 const ATTACK_LOG_TTL_DAYS  = 90;
 const GLOBAL_MEAN_RATE     = 0.28;           // Prior when no faction data
@@ -43,9 +43,11 @@ const DEFAULT_SCALING = {
 // ── Module State ────────────────────────────────────────────────────────────
 let _getApiKey      = null;      // () => string|null
 let _db             = null;      // MongoDB Db instance
-let _ourFactionId   = null;      // number — resolved dynamically from first successful poll
+let _ourFactionId   = 52355;     // number — Spider-Verse (52355), updated dynamically if faction changes
 let _lastIngestTs   = 0;         // unix seconds of last fetched attack
 let _recentCodes    = new Set(); // dedup cache (last DEDUP_CACHE_SIZE attack codes)
+let _alertedAttackCodes = new Set(); // in-memory dedup for alerts
+let _onAttackAlertCallback = null;   // async callback (atkPayload) => void
 let _isWarMode      = false;
 let _modelWeights   = null;      // [bias, w1..w5]
 let _modelScaling   = null;      // { means: number[], stds: number[] }
@@ -154,6 +156,91 @@ async function loadModelWeights() {
     }
 }
 
+// ── Attack Alert Dispatch & Backlog ──────────────────────────────────────────
+function setOnAttackAlertCallback(fn) {
+    _onAttackAlertCallback = fn;
+}
+
+async function dispatchAttackAlert(doc, atkRaw = {}) {
+    if (typeof _onAttackAlertCallback !== 'function') return;
+    const code = String(doc._id || doc.code || '');
+    if (!code) return;
+
+    if (_alertedAttackCodes.has(code)) return;
+
+    try {
+        if (_db) {
+            const existing = await col('attack_alerts').findOne({ _id: code });
+            if (existing) {
+                _alertedAttackCodes.add(code);
+                return;
+            }
+            // Mark as alerted in MongoDB
+            await col('attack_alerts').insertOne({
+                _id: code,
+                timestamp: doc.timestamp,
+                attacker_id: doc.attacker_id,
+                defender_id: doc.defender_id,
+                direction: doc.direction,
+                alerted_at: new Date()
+            }).catch(() => {});
+        }
+        _alertedAttackCodes.add(code);
+
+        // Keep _alertedAttackCodes bounded
+        if (_alertedAttackCodes.size > 5000) {
+            const oldest = _alertedAttackCodes.values().next().value;
+            _alertedAttackCodes.delete(oldest);
+        }
+
+        const payload = {
+            code,
+            attacker_id: doc.attacker_id,
+            attacker_name: doc.attacker_name || atkRaw.attacker_name || '',
+            attacker_faction: doc.attacker_faction_id || doc.attacker_faction || 0,
+            attacker_faction_name: doc.attacker_faction_name || atkRaw.attacker_factionname || '',
+            defender_id: doc.defender_id,
+            defender_name: doc.defender_name || atkRaw.defender_name || '',
+            defender_faction: doc.defender_faction_id || doc.defender_faction || 0,
+            defender_faction_name: doc.defender_faction_name || atkRaw.defender_factionname || '',
+            result: doc.result || atkRaw.result || 'Attacked',
+            timestamp: doc.timestamp,
+            respect: doc.respect || atkRaw.respect_gain || 0,
+            modifiers: doc.modifiers || atkRaw.modifiers || {},
+            direction: doc.direction
+        };
+
+        console.log(`[RetalEngine] Dispatching alert for attack ${code}: ${payload.defender_name || payload.defender_id} attacked by ${payload.attacker_name || payload.attacker_id} (${doc.direction})`);
+        await _onAttackAlertCallback(payload);
+    } catch(e) {
+        console.warn('[RetalEngine] Alert dispatch error for attack', code, ':', e.message);
+    }
+}
+
+async function checkPendingRecentAlerts() {
+    if (typeof _onAttackAlertCallback !== 'function' || !_db) return;
+    try {
+        const cutoff = nowSecs() - 3600; // last 60 minutes
+        const recentAttacks = await col('attack_log')
+            .find({
+                defender_faction_id: _ourFactionId,
+                timestamp: { $gte: cutoff }
+            })
+            .sort({ timestamp: 1 })
+            .toArray();
+
+        if (recentAttacks.length > 0) {
+            console.log(`[RetalEngine] Checking ${recentAttacks.length} recent attacks from last 60m for pending alerts...`);
+            for (const doc of recentAttacks) {
+                if (doc.attacker_id && doc.defender_id && doc.attacker_id === doc.defender_id) continue;
+                await dispatchAttackAlert(doc);
+            }
+        }
+    } catch(e) {
+        console.warn('[RetalEngine] Backlog alert check error:', e.message);
+    }
+}
+
 // ── 1. Attack Ingestion Job ──────────────────────────────────────────────────
 async function ingestAttacks() {
     if (typeof _getApiKey !== 'function') return;
@@ -174,9 +261,8 @@ async function ingestAttacks() {
         }
 
         // Dynamically resolve our faction ID
-        if (!_ourFactionId && data.ID) {
+        if (data.ID) {
             _ourFactionId = Number(data.ID);
-            console.log(`[RetalEngine] Resolved our faction ID: ${_ourFactionId}`);
         }
 
         // War mode detection
@@ -194,27 +280,64 @@ async function ingestAttacks() {
         const newIncoming = [];
 
         for (const [code, atk] of Object.entries(attacks)) {
-            if (_recentCodes.has(code)) continue;
             if (!atk.timestamp_ended) continue;
 
             const ts = Number(atk.timestamp_ended);
             const atkFac = Number(atk.attacker_faction || 0);
             const defFac = Number(atk.defender_faction || 0);
+            const atkId = Number(atk.attacker_id || 0);
+            const defId = Number(atk.defender_id || 0);
 
             let direction = null;
             if (_ourFactionId) {
-                if (atkFac === _ourFactionId) direction = 'outgoing';
+                if (atkFac === _ourFactionId && defFac === _ourFactionId) direction = 'internal';
+                else if (atkFac === _ourFactionId) direction = 'outgoing';
                 else if (defFac === _ourFactionId) direction = 'incoming';
             }
 
             if (!direction) continue; // Skip attacks not involving our faction
 
+            const attackerName = atk.attacker_name || data.members?.[atkId]?.name || '';
+            const defenderName = atk.defender_name || data.members?.[defId]?.name || '';
+            const attackerFactionName = atk.attacker_factionname || (atkFac === _ourFactionId ? (data.name || 'Spider-Verse') : '');
+            const defenderFactionName = atk.defender_factionname || (defFac === _ourFactionId ? (data.name || 'Spider-Verse') : '');
+
+            // Real-time alert check: if our faction member was attacked (not self-hit)
+            if (defFac === _ourFactionId && atkId !== defId) {
+                const isRecent = ts > (nowSecs() - 3600); // within last 60 mins
+                if (isRecent) {
+                    const tempDoc = {
+                        _id: code,
+                        attacker_id: atkId,
+                        attacker_name: attackerName,
+                        attacker_faction_id: atkFac,
+                        attacker_faction_name: attackerFactionName,
+                        defender_id: defId,
+                        defender_name: defenderName,
+                        defender_faction_id: defFac,
+                        defender_faction_name: defenderFactionName,
+                        timestamp: ts,
+                        result: atk.result || 'unknown',
+                        respect: Number(atk.respect_gain || atk.respect || 0),
+                        modifiers: atk.modifiers || {},
+                        direction
+                    };
+                    dispatchAttackAlert(tempDoc, atk).catch(err => console.warn('[RetalEngine] Alert dispatch error:', err.message));
+                }
+            }
+
+            if (_recentCodes.has(code)) continue;
+
             const doc = {
                 _id: code,
-                attacker_id: Number(atk.attacker_id || 0),
+                attacker_id: atkId,
+                attacker_name: attackerName,
                 attacker_faction_id: atkFac,
-                defender_id: Number(atk.defender_id || 0),
+                attacker_faction_name: attackerFactionName,
+                defender_id: defId,
+                defender_name: defenderName,
                 defender_faction_id: defFac,
+                defender_faction_name: defenderFactionName,
                 timestamp: ts,
                 result: atk.result || 'unknown',
                 respect: Number(atk.respect_gain || atk.respect || 0),
@@ -227,7 +350,7 @@ async function ingestAttacks() {
             docs.push(doc);
 
             if (direction === 'outgoing') newOutgoing.push(doc);
-            else newIncoming.push(doc);
+            else if (direction === 'incoming') newIncoming.push(doc);
 
             // Maintain FIFO dedup cache
             if (_recentCodes.size >= DEDUP_CACHE_SIZE) {
@@ -250,7 +373,7 @@ async function ingestAttacks() {
 
         console.log(`[RetalEngine] Ingested ${docs.length} attacks (${newOutgoing.length} out / ${newIncoming.length} in)`);
 
-        // Correlate new attacks immediately
+        // Correlate new attacks immediately (internal hits skipped from correlation)
         if (newOutgoing.length > 0 || newIncoming.length > 0) {
             await runImmediateCorrelation(newOutgoing, newIncoming);
         }
@@ -904,8 +1027,10 @@ async function pollLoop() {
  * Start the Retaliation Risk Engine.
  * @param {Function} getApiKeyFn — () => string|null, dynamically invoked for each request
  * @param {Object} mongoDb — MongoDB Db instance
+ * @param {Function} onAttackAlertFn — async (atkPayload) => void, optional alert callback
  */
-async function startRetaliationEngine(getApiKeyFn, mongoDb) {
+async function startRetaliationEngine(getApiKeyFn, mongoDb, onAttackAlertFn = null) {
+    if (onAttackAlertFn) _onAttackAlertCallback = onAttackAlertFn;
     if (_running) return;
     _getApiKey = getApiKeyFn;
     _db = mongoDb;
@@ -916,9 +1041,12 @@ async function startRetaliationEngine(getApiKeyFn, mongoDb) {
     await seedDedupCache();
     await loadModelWeights();
 
+    // Check recent backlog attacks on boot so no attacks miss alerts
+    checkPendingRecentAlerts().catch(e => console.warn('[RetalEngine] Backlog check error:', e));
+
     // Kick off background loop
     pollLoop().catch(e => console.error('[RetalEngine] Fatal poll loop error:', e));
-    console.log('[RetalEngine] Engine running in background (90s peace / 45s war interval).');
+    console.log('[RetalEngine] Engine running in background (30s peace / 15s war interval).');
 }
 
 /**
@@ -948,28 +1076,35 @@ async function getRiskScoreBulk(targets) {
     );
     const map = new Map();
     for (let i = 0; i < targets.length; i++) {
+        const t = targets[i];
         const r = results[i];
-        map.set(Number(targets[i].id), r.status === 'fulfilled' ? r.value : _defaultScore(targets[i].id, targets[i].faction_id));
+        if (r.status === 'fulfilled') {
+            map.set(Number(t.id), r.value);
+        } else {
+            map.set(Number(t.id), _defaultScore(t.id, t.faction_id));
+        }
     }
     return map;
 }
 
 /**
- * Get named retaliator pool for a target (for /claim).
+ * Fetch top retaliator pool for a target faction.
  */
-async function getRetaliatorPool(targetId, targetFactionId = null) {
-    if (!_db) return [];
+async function getRetaliatorPool(targetFactionId) {
+    if (!_db || !targetFactionId) return [];
     try {
-        const [playerAgg, factionAgg] = await Promise.all([
-            col('retal_aggregates').findOne({ _id: `player_${targetId}` }),
-            targetFactionId ? col('retal_aggregates').findOne({ _id: `faction_${targetFactionId}` }) : null
-        ]);
-        return playerAgg?.retaliator_pool ?? factionAgg?.retaliator_pool ?? [];
-    } catch(e) { return []; }
+        const doc = await col('retal_aggregates').findOne({
+            type: 'faction',
+            entity_id: Number(targetFactionId)
+        });
+        return doc?.retaliator_pool || [];
+    } catch(e) {
+        return [];
+    }
 }
 
 /**
- * Build a compact inline risk tag for embed rows (e.g. "🛡️ 34% 🟢").
+ * Build compact inline risk tag for embed rows (e.g. "🛡️ 34% 🟢").
  */
 function formatRiskTag(score) {
     if (!score) return '';
@@ -981,22 +1116,19 @@ function formatRiskTag(score) {
 }
 
 /**
- * Build a full /risk embed object for a target.
+ * Build rich Discord embed from retal risk score.
  */
-function buildRiskEmbed(score, playerName) {
+function buildRiskEmbed(score, playerName = null) {
     const pct = Math.round((score.adjusted_rate || 0) * 100);
     const bar = buildRateBar(score.adjusted_rate);
-    const winLoss = score.win_loss_ratio != null ? `${score.win_loss_ratio}:1` : 'N/A';
+    const avgTime = formatDuration(score.avg_response_seconds);
+    const medTime = formatDuration(score.median_response_seconds);
+    const timeStr = score.avg_response_seconds
+        ? `Avg ${avgTime} · Median ${medTime}`
+        : 'Unknown (insufficient data)';
 
-    const avgTime = score.avg_response_seconds
-        ? formatDuration(score.avg_response_seconds)
-        : null;
-    const medTime = score.median_response_seconds
-        ? formatDuration(score.median_response_seconds)
-        : null;
-
-    const timeStr = avgTime
-        ? `Avg ${avgTime}${medTime && medTime !== avgTime ? ` · Median ${medTime}` : ''}`
+    const winLoss = score.win_loss_ratio !== null
+        ? `${score.win_loss_ratio}:1 (${score.win_loss_ratio < 0.5 ? 'Favors us' : score.win_loss_ratio > 1.5 ? 'Dangerous' : 'Even'})`
         : 'Insufficient sample';
 
     const responseWindow = score.avg_response_seconds && score.avg_response_seconds < 600
@@ -1059,6 +1191,7 @@ function formatDuration(seconds) {
 
 module.exports = {
     startRetaliationEngine,
+    setOnAttackAlertCallback,
     getRiskScore,
     getRiskScoreBulk,
     getRetaliatorPool,

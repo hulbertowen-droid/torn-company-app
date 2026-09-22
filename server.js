@@ -316,6 +316,17 @@ async function loadConfigFromMongo() {
                     startSlashCommandBot(discordConfig.globalBotToken.trim()).catch(() => {});
                 } catch(e) {}
             }
+
+            // Start Retaliation Risk Engine with real-time alert callback
+            try {
+                if (mongoose.connection.readyState === 1) {
+                    retalEngine.startRetaliationEngine(
+                        () => getNextApiKey() || discordConfig.apiKey || TORN_API_KEY,
+                        mongoose.connection.db,
+                        handleMemberAttackedAlert
+                    ).catch(e => console.warn('[RetalEngine] Start error in loadConfig:', e.message));
+                }
+            } catch(e) {}
         }
     } catch(e) {
         console.error('[Mongo] Config load error:', e.message);
@@ -596,6 +607,41 @@ function getPlayerName(id, fallback = null) {
     if (statsCache[sId]?.name) {
         playerNameCache[sId] = statsCache[sId].name;
         return playerNameCache[sId];
+    }
+    return fallback || `Player #${sId}`;
+}
+
+async function resolvePlayerName(id, fallback = null) {
+    if (!id || id === '0' || id === 0) return fallback || "Someone (Stealthed)";
+    const sId = String(id).trim();
+    if (playerNameCache[sId]) return playerNameCache[sId];
+    if (spyDatabase[sId]?.name) {
+        playerNameCache[sId] = spyDatabase[sId].name;
+        return playerNameCache[sId];
+    }
+    if (statsCache[sId]?.name) {
+        playerNameCache[sId] = statsCache[sId].name;
+        return playerNameCache[sId];
+    }
+    try {
+        if (mongoose.connection.readyState === 1) {
+            const pDoc = await mongoose.connection.db.collection('players').findOne({ _id: Number(sId) }, { projection: { name: 1 } });
+            if (pDoc?.name) {
+                playerNameCache[sId] = pDoc.name;
+                return pDoc.name;
+            }
+        }
+    } catch(e) {}
+    const apiKey = getNextApiKey() || discordConfig.apiKey || TORN_API_KEY;
+    if (apiKey) {
+        try {
+            const res = await fetch(`https://api.torn.com/user/${sId}?selections=profile&key=${apiKey}`, { signal: AbortSignal.timeout(5000) });
+            const data = await res.json();
+            if (data && data.name) {
+                playerNameCache[sId] = data.name;
+                return data.name;
+            }
+        } catch(e) {}
     }
     return fallback || `Player #${sId}`;
 }
@@ -1604,6 +1650,156 @@ setInterval(async () => {
 }, 120000);
 */
 
+// ── Retaliation & Member Attacked Real-time Alerts ──
+const processedAlertedAttacks = new Set();
+
+async function handleMemberAttackedAlert(atk) {
+    try {
+        if (!atk) return;
+        if (global.isNotificationsKilled) return;
+        if (discordConfig.friendlyAttacked === false) return;
+
+        const retalTargetChannel = (discordConfig.retalChannelId && String(discordConfig.retalChannelId).trim()) 
+            || "1491499332044591176" 
+            || discordConfig.globalChannelId;
+        if (!retalTargetChannel || !discordConfig.globalBotToken) return;
+
+        const alertCode = String(atk.code || atk._id || '');
+        if (alertCode) {
+            if (processedAlertedAttacks.has(alertCode)) return;
+            processedAlertedAttacks.add(alertCode);
+
+            if (processedAlertedAttacks.size > 5000) {
+                const oldest = processedAlertedAttacks.values().next().value;
+                processedAlertedAttacks.delete(oldest);
+            }
+
+            if (mongoose.connection.readyState === 1) {
+                const existing = await mongoose.connection.db.collection('attack_alerts').findOne({ _id: alertCode });
+                if (existing) return;
+                await mongoose.connection.db.collection('attack_alerts').insertOne({
+                    _id: alertCode,
+                    timestamp: atk.timestamp || atk.timestamp_ended,
+                    attacker_id: atk.attacker_id,
+                    defender_id: atk.defender_id,
+                    alerted_at: new Date()
+                }).catch(() => {});
+            }
+        }
+
+        const attackerId = atk.attacker_id ? String(atk.attacker_id).trim() : "0";
+        const defenderId = atk.defender_id ? String(atk.defender_id).trim() : "0";
+        const atkFac = Number(atk.attacker_faction || atk.attacker_faction_id || 0);
+        const defFac = Number(atk.defender_faction || atk.defender_faction_id || 0);
+
+        // Skip self attacks
+        if (attackerId && defenderId && attackerId === defenderId) return;
+
+        const isInternal = (atkFac === 52355 && defFac === 52355);
+        const isStealthed = (attackerId === "0" || !attackerId);
+
+        let attackerName = atk.attacker_name;
+        if (!attackerName || attackerName === 'Unknown') {
+            attackerName = isStealthed ? "Someone (Stealthed)" : await resolvePlayerName(attackerId, `Player [${attackerId}]`);
+        }
+
+        let defenderName = atk.defender_name;
+        if (!defenderName || defenderName === 'Unknown') {
+            defenderName = await resolvePlayerName(defenderId, `Member [${defenderId}]`);
+        }
+
+        let attackerFactionName = atk.attacker_faction_name || atk.attacker_factionname;
+        if (!attackerFactionName) {
+            attackerFactionName = isInternal ? "Spider-Verse" : (atkFac ? `Faction ${atkFac}` : "Factionless");
+        }
+
+        const result = atk.result || "Attacked";
+        const isDefended = ["Lost", "Defended", "Stalemate", "Escape", "Timeout", "Interrupted"].includes(result);
+
+        const title = isDefended ? "🛡️ Faction Member Defended Attack" : "🚨 Faction Member Attacked";
+        const color = isDefended ? (UI.COLORS?.SUCCESS || 0x00b894) : (UI.COLORS?.ERROR || 0xe17055);
+
+        let desc = "";
+        if (isInternal) {
+            desc = `**${defenderName}** was attacked by fellow faction member **${attackerName}** [${attackerId}] (Friendly Sparring / Test Hit).`;
+        } else if (isStealthed) {
+            desc = `**${defenderName}** was attacked by an unknown assailant (**Someone** — stealthed hit).`;
+        } else {
+            desc = `**${defenderName}** was attacked by **${attackerName}** [${attackerId}] from \`${attackerFactionName}\`.`;
+        }
+
+        const fields = [
+            { name: "Result", value: result, inline: true }
+        ];
+
+        // Attacker Estimated Battle Stats
+        if (!isStealthed) {
+            const rawEst = (spyDatabase[attackerId]?.total) || (statsCache[attackerId]?.stats) || (manualStats[attackerId]?.stats) || 0;
+            const statStr = rawEst > 0 ? `~${rawEst.toLocaleString()}` : "Unknown";
+            fields.push({ name: "Attacker Est. Stats", value: statStr, inline: true });
+        }
+
+        // Retaliation Risk from Retal Risk Engine (for external attacks)
+        if (!isInternal && !isStealthed) {
+            try {
+                const risk = await retalEngine.getRiskScore(attackerId, atkFac);
+                if (risk && risk.adjusted_rate !== undefined) {
+                    const riskPct = Math.round(risk.adjusted_rate * 100);
+                    const riskTag = retalEngine.formatRiskTag ? retalEngine.formatRiskTag(risk.adjusted_rate) : `${riskPct}%`;
+                    fields.push({
+                        name: "Retaliation Risk",
+                        value: `${riskTag} (${riskPct}%) · ${risk.confidence_label || 'Empirical Bayes prior'}`,
+                        inline: false
+                    });
+                }
+            } catch(e) {}
+        }
+
+        const links = [];
+        if (!isStealthed) {
+            links.push({ label: "⚔️ Retaliate / Attack", url: `https://www.torn.com/page.php?sid=attack&user2ID=${attackerId}` });
+            links.push({ label: "👤 Attacker Profile", url: `https://www.torn.com/profiles.php?XID=${attackerId}` });
+        }
+        if (defenderId !== "0" && defenderId) {
+            links.push({ label: "🛡️ Defender Profile", url: `https://www.torn.com/profiles.php?XID=${defenderId}` });
+        }
+
+        // Ping Retaliator Role + Defender
+        let pingStr = "";
+        if (defenderId !== "0" && defenderId) {
+            const dId = await getDiscordId(defenderId);
+            if (dId && /^\d{17,20}$/.test(dId)) {
+                pingStr = `<@${dId}>`;
+            }
+        }
+
+        const roleId = discordConfig.retalRoleId;
+        if (roleId && String(roleId).trim()) {
+            const numOnly = String(roleId).replace(/\D/g, '');
+            let rPing = "";
+            if (numOnly.length >= 15 && numOnly.length <= 22) rPing = `<@&${numOnly}>`;
+            else if (roleId === '@here' || roleId === '@everyone') rPing = roleId;
+            if (rPing) pingStr = pingStr ? `${rPing} ${pingStr}` : rPing;
+        }
+
+        const embed = {
+            title,
+            description: desc,
+            color,
+            footer: { text: "F.R.I.D.A.Y Retaliation Sentinel • Spider-Verse" },
+            timestamp: new Date().toISOString(),
+            targetId: (!isStealthed && attackerId !== "0") ? attackerId : undefined,
+            fields,
+            links
+        };
+
+        console.log(`[Discord Retal Sentinel] Sending member attacked alert to channel ${retalTargetChannel}: ${desc}`);
+        await sendChannelMessage(discordConfig.globalBotToken, retalTargetChannel, embed, pingStr, true);
+    } catch(err) {
+        console.warn('[Discord Retal Sentinel] Error sending member attacked alert:', err.message);
+    }
+}
+
 // Background Task 1: Wall Watcher & Scraper (Adaptive War/Peace Polling)
 let lastPeaceWarCheck = 0;
 setInterval(async () => {
@@ -1714,40 +1910,20 @@ setInterval(async () => {
                         }
                     }
                     
-                    let retalTargetChannel = discordConfig.retalChannelId || discordConfig.globalChannelId;
-                    if (hasBackfilledWar && isRecent && discordConfig.friendlyAttacked === true && retalTargetChannel) {
-                        let attackerName = atk.attacker_name || "Unknown"; 
-                        let attackerFactionName = atk.attacker_faction_name || "None"; 
-                        let defenderName = atk.defender_name || uId;
-
-                        let rawEst = (spyDatabase[attackerId] && spyDatabase[attackerId].total) ? spyDatabase[attackerId].total : (statsCache[attackerId]?.stats || manualStats[attackerId]?.stats || 0);
-                        let enemyEst = (typeof rawEst === 'number' && !isNaN(rawEst) && rawEst > 0) ? rawEst : 0;
-                        let statStr = enemyEst > 0 ? `~${enemyEst.toLocaleString()}` : "Unknown";
-
-                        let dId = await getDiscordId(uId);
-                        let pingStr = (dId && /^\d{17,20}$/.test(dId)) ? `<@${dId}>` : "";
-                        if (discordConfig.retalRoleId) {
-                            const roleId = discordConfig.retalRoleId;
-                            const numOnly = String(roleId).replace(/\D/g, '');
-                            let rPing = "";
-                            if (numOnly.length >= 15 && numOnly.length <= 22) rPing = `<@&${numOnly}>`;
-                            else if (roleId === '@here' || roleId === '@everyone') rPing = roleId;
-                            if (rPing) pingStr = pingStr ? `${rPing} ${pingStr}` : rPing;
-                        }
-
-                        if (discordConfig.globalBotToken && retalTargetChannel) sendChannelMessage(discordConfig.globalBotToken, retalTargetChannel, { 
-                            title: "🚨 Faction Member Attacked", 
-                            description: `**${defenderName}** was attacked by **${attackerName}** [${attackerId}] from \`${attackerFactionName}\`.`,
-                            color: UI.COLORS.ERROR,
-                            footer: UI.FOOTER,
-                            timestamp: new Date().toISOString(),
-                            targetId: attackerId,
-                            fields: [{ name: "Attacker Est. Stats", value: statStr, inline: true }],
-                            links: [
-                                { label: "⚔️ Attack Back", url: `https://www.torn.com/page.php?sid=attack&user2ID=${attackerId}` },
-                                { label: "👤 Profile", url: `https://www.torn.com/profiles.php?XID=${attackerId}` }
-                            ]
-                        }, pingStr);
+                    if (hasBackfilledWar && isRecent) {
+                        handleMemberAttackedAlert({
+                            code: atk.code || atkId,
+                            attacker_id: attackerId,
+                            attacker_name: atk.attacker_name,
+                            attacker_faction: atk.attacker_faction,
+                            attacker_faction_name: atk.attacker_faction_name,
+                            defender_id: uId,
+                            defender_name: atk.defender_name,
+                            defender_faction: atk.defender_faction,
+                            defender_faction_name: atk.defender_faction_name,
+                            result: atk.result,
+                            timestamp: atk.timestamp_ended
+                        }).catch(e => console.warn('[Retal Alert War] Error:', e.message));
                     }
                 }
                 
@@ -2819,6 +2995,8 @@ app.get('/api/get-discord-config', (req, res) => {
     }
     const fullConfig = {
         ...discordConfig,
+        retalChannelId: discordConfig.retalChannelId || "1491499332044591176",
+        retalRoleId: discordConfig.retalRoleId || "",
         inactivityChannelId: discordConfig.inactivityChannelId || "",
         overdoseChannelId: discordConfig.overdoseChannelId || "",
         overdoseRoleId: discordConfig.overdoseRoleId || "",
@@ -15292,13 +15470,15 @@ function setupSlashBotEvents(bot, token) {
             if (mongoose.connection.readyState === 1) {
                 retalEngine.startRetaliationEngine(
                     () => getNextApiKey() || discordConfig.apiKey || TORN_API_KEY,
-                    mongoose.connection.db
+                    mongoose.connection.db,
+                    handleMemberAttackedAlert
                 ).catch(e => console.warn('[RetalEngine] Start error:', e.message));
             } else {
                 mongoose.connection.once('connected', () => {
                     retalEngine.startRetaliationEngine(
                         () => getNextApiKey() || discordConfig.apiKey || TORN_API_KEY,
-                        mongoose.connection.db
+                        mongoose.connection.db,
+                        handleMemberAttackedAlert
                     ).catch(e => console.warn('[RetalEngine] Start error:', e.message));
                 });
             }
