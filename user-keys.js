@@ -247,6 +247,9 @@ async function linkUserApiKey(discordUserId, rawKey) {
             success: true,
             playerName: data.name,
             playerId: data.player_id,
+            faction: data.faction || null,
+            status: data.status || null,
+            level: data.level || 1,
             bars
         };
     } catch (err) {
@@ -907,6 +910,19 @@ function formatDeterministicStatsReply(stats, invokerName, intent, rawQuery = ""
     return `📊 **Status for ${invokerName}:** ⚡ Energy: **${stats.energy.current}/${stats.energy.maximum}** | 💉 Nerve: **${stats.nerve.current}/${stats.nerve.maximum}** | 😊 Happy: **${stats.happy.current}** | ❤️ Life: **${stats.life.current}/${stats.life.maximum}**`;
 }
 
+function hasLinkedKey(discordUserId) {
+    if (!discordUserId) return false;
+    return userKeysStore.has(String(discordUserId).trim());
+}
+
+function getAllLinkedDiscordIds() {
+    const ids = [];
+    for (const k of userKeysStore.keys()) {
+        if (!k.startsWith('torn:')) ids.push(k);
+    }
+    return ids;
+}
+
 // Initialize on require
 loadKeysFromDisk();
 
@@ -920,6 +936,8 @@ module.exports = {
     resolveUserApiKey,
     resolveUserApiKeyByTornId,
     getUserAccountStatus,
+    hasLinkedKey,
+    getAllLinkedDiscordIds,
     sanitizeErrorMessage,
     fetchUserLiveStats,
     detectUserAccountIntent,
