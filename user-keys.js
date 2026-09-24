@@ -122,9 +122,15 @@ function loadKeysFromDisk() {
             const raw = fs.readFileSync(KEYS_FILE, 'utf8');
             const dataObj = JSON.parse(raw);
             let count = 0;
-            for (const [discordId, record] of Object.entries(dataObj)) {
+            for (const [key, record] of Object.entries(dataObj)) {
                 if (record && record.ciphertext && record.iv && record.tag) {
-                    userKeysStore.set(discordId, record);
+                    userKeysStore.set(key, record);
+                    if (record.tornId && !userKeysStore.has(`torn:${record.tornId}`)) {
+                        userKeysStore.set(`torn:${record.tornId}`, record);
+                    }
+                    if (record.discordUserId && !userKeysStore.has(record.discordUserId)) {
+                        userKeysStore.set(record.discordUserId, record);
+                    }
                     count++;
                 }
             }
@@ -140,14 +146,15 @@ function loadKeysFromDisk() {
  */
 function exportEncryptedForMongo() {
     const dataObj = {};
-    for (const [discordId, record] of userKeysStore.entries()) {
-        dataObj[discordId] = {
+    for (const [key, record] of userKeysStore.entries()) {
+        dataObj[key] = {
             tornId: record.tornId,
             playerName: record.playerName,
+            discordUserId: record.discordUserId || (!key.startsWith('torn:') ? key : null),
             ciphertext: record.ciphertext,
             iv: record.iv,
             tag: record.tag,
-            linkedAt: record.linkedAt
+            linkedAt: record.linkedAt || Date.now()
         };
     }
     return dataObj;
@@ -159,9 +166,15 @@ function exportEncryptedForMongo() {
 function importEncryptedFromMongo(saved) {
     if (!saved || typeof saved !== 'object') return;
     let count = 0;
-    for (const [discordId, record] of Object.entries(saved)) {
+    for (const [key, record] of Object.entries(saved)) {
         if (record && record.ciphertext && record.iv && record.tag) {
-            userKeysStore.set(discordId, record);
+            userKeysStore.set(key, record);
+            if (record.tornId && !userKeysStore.has(`torn:${record.tornId}`)) {
+                userKeysStore.set(`torn:${record.tornId}`, record);
+            }
+            if (record.discordUserId && !userKeysStore.has(record.discordUserId)) {
+                userKeysStore.set(record.discordUserId, record);
+            }
             count++;
         }
     }
@@ -225,6 +238,7 @@ async function linkUserApiKey(discordUserId, rawKey) {
         const record = {
             tornId: data.player_id,
             playerName: data.name,
+            discordUserId: String(discordUserId),
             ciphertext: encrypted.ciphertext,
             iv: encrypted.iv,
             tag: encrypted.tag,
@@ -232,6 +246,7 @@ async function linkUserApiKey(discordUserId, rawKey) {
         };
 
         userKeysStore.set(String(discordUserId), record);
+        userKeysStore.set(`torn:${data.player_id}`, record);
         saveKeysToDisk();
 
         console.log(`[UserKeys] Successfully encrypted and linked key for ${data.name} [${data.player_id}] (Discord ${discordUserId})`);
@@ -295,14 +310,17 @@ async function linkUserApiKeyByTornId(tornId, rawKey, discordUserId = null) {
         const record = {
             tornId: data.player_id,
             playerName: data.name,
+            discordUserId: discordUserId ? String(discordUserId) : null,
             ciphertext: encrypted.ciphertext,
             iv: encrypted.iv,
             tag: encrypted.tag,
             linkedAt: Date.now()
         };
 
-        const storeKey = discordUserId ? String(discordUserId) : `torn:${data.player_id}`;
-        userKeysStore.set(storeKey, record);
+        if (discordUserId) {
+            userKeysStore.set(String(discordUserId), record);
+        }
+        userKeysStore.set(`torn:${data.player_id}`, record);
         saveKeysToDisk();
 
         return {
@@ -368,10 +386,10 @@ function isOwnerUser(discordUserId, authorName = '', authorUsername = '', verifi
  * @returns {{ key: string, playerName: string, playerId: number, isOwner: boolean } | null}
  */
 function resolveUserApiKey(discordUserId, authorName = '', authorUsername = '', primaryOwnerKey = '', verifiedPlayerId = null) {
-    const dId = String(discordUserId || '');
+    const dId = String(discordUserId || '').trim();
 
     // 1. Check user's encrypted vault by Discord ID
-    if (userKeysStore.has(dId)) {
+    if (dId && userKeysStore.has(dId)) {
         const record = userKeysStore.get(dId);
         const decrypted = decryptKey(record);
         if (decrypted) {
@@ -384,8 +402,32 @@ function resolveUserApiKey(discordUserId, authorName = '', authorUsername = '', 
         }
     }
 
-    // 2. Check if user is the explicit bot administrator with an admin key
-    if (primaryOwnerKey && isOwnerUser(dId, authorName, authorUsername, verifiedPlayerId)) {
+    // 2. Check by verifiedPlayerId or if dId is a numeric Torn ID or 'torn:ID'
+    let tId = verifiedPlayerId;
+    if (!tId && dId) {
+        if (dId.startsWith('torn:')) {
+            tId = dId.replace('torn:', '');
+        } else if (/^\d{5,10}$/.test(dId) && userKeysStore.has(`torn:${dId}`)) {
+            tId = dId;
+        }
+    }
+    if (tId) {
+        const byTorn = resolveUserApiKeyByTornId(tId);
+        if (byTorn) return byTorn;
+    }
+
+    // 3. Fallback search across all stored records for matching discordUserId
+    if (dId) {
+        for (const [k, rec] of userKeysStore.entries()) {
+            if (rec && (rec.discordUserId === dId || k === dId)) {
+                const dec = decryptKey(rec);
+                if (dec) return { key: dec, playerName: rec.playerName, playerId: rec.tornId, isOwner: false };
+            }
+        }
+    }
+
+    // 4. Check if user is the explicit bot administrator with an admin key
+    if (primaryOwnerKey && isOwnerUser(dId, authorName, authorUsername, verifiedPlayerId || tId)) {
         return {
             key: primaryOwnerKey,
             playerName: adminMeta.playerName || 'Admin',
@@ -912,7 +954,30 @@ function formatDeterministicStatsReply(stats, invokerName, intent, rawQuery = ""
 
 function hasLinkedKey(discordUserId) {
     if (!discordUserId) return false;
-    return userKeysStore.has(String(discordUserId).trim());
+    const str = String(discordUserId).trim();
+    if (userKeysStore.has(str)) return true;
+    if (userKeysStore.has(`torn:${str}`)) return true;
+    for (const [k, rec] of userKeysStore.entries()) {
+        if (rec && (rec.discordUserId === str || String(rec.tornId) === str)) return true;
+    }
+    return false;
+}
+
+function getDecryptedKey(identifier) {
+    if (!identifier) return null;
+    const str = String(identifier).trim();
+    if (userKeysStore.has(str)) {
+        return decryptKey(userKeysStore.get(str));
+    }
+    if (userKeysStore.has(`torn:${str}`)) {
+        return decryptKey(userKeysStore.get(`torn:${str}`));
+    }
+    for (const [k, rec] of userKeysStore.entries()) {
+        if (rec && (rec.discordUserId === str || String(rec.tornId) === str)) {
+            return decryptKey(rec);
+        }
+    }
+    return null;
 }
 
 function getAllLinkedDiscordIds() {
@@ -937,6 +1002,7 @@ module.exports = {
     resolveUserApiKeyByTornId,
     getUserAccountStatus,
     hasLinkedKey,
+    getDecryptedKey,
     getAllLinkedDiscordIds,
     sanitizeErrorMessage,
     fetchUserLiveStats,

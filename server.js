@@ -14122,7 +14122,8 @@ async function executeVerifyWithKey(interactionOrMember, rawKey) {
         };
     }
 
-    const cleanKey = String(rawKey || '').trim();
+    const rawKeyStr = (rawKey && typeof rawKey === 'object' && rawKey.key) ? rawKey.key : String(rawKey || '');
+    const cleanKey = rawKeyStr.trim().replace(/['"\s]/g, '');
     if (!cleanKey || cleanKey.length < 10) {
         return {
             success: false,
@@ -14394,7 +14395,7 @@ async function executeVerifyMember(memberOrUser, guild, arg3, arg4) {
 
     // Check if user already has a linked Limited API key
     if (userKeys && typeof userKeys.hasLinkedKey === 'function' && userKeys.hasLinkedKey(discordUserId)) {
-        const storedKey = userKeys.resolveUserApiKey(discordUserId);
+        const storedKey = (userKeys.getDecryptedKey && userKeys.getDecryptedKey(discordUserId)) || userKeys.resolveUserApiKey(discordUserId)?.key || userKeys.resolveUserApiKey(discordUserId);
         if (storedKey) {
             return await executeVerifyWithKey(memberOrUser, storedKey);
         }
@@ -17040,7 +17041,7 @@ function setupSlashBotEvents(bot, token) {
 
                 if (userKeys && typeof userKeys.hasLinkedKey === 'function' && userKeys.hasLinkedKey(interaction.user.id)) {
                     await interaction.deferReply({ ephemeral: true });
-                    const linkedKey = userKeys.resolveUserApiKey(interaction.user.id);
+                    const linkedKey = (userKeys.getDecryptedKey && userKeys.getDecryptedKey(interaction.user.id)) || userKeys.resolveUserApiKey(interaction.user.id)?.key || userKeys.resolveUserApiKey(interaction.user.id);
                     const result = await executeVerifyWithKey(interaction, linkedKey);
                     const replyPayload = { embeds: [sanitizeEmbed(result)] };
                     if (result.components && result.components.length > 0) {
@@ -18113,7 +18114,7 @@ function setupSlashBotEvents(bot, token) {
 
             if (userKeys && typeof userKeys.hasLinkedKey === 'function' && userKeys.hasLinkedKey(interaction.user.id)) {
                 await interaction.deferReply({ ephemeral: true });
-                const linkedKey = userKeys.resolveUserApiKey(interaction.user.id);
+                const linkedKey = (userKeys.getDecryptedKey && userKeys.getDecryptedKey(interaction.user.id)) || userKeys.resolveUserApiKey(interaction.user.id)?.key || userKeys.resolveUserApiKey(interaction.user.id);
                 const resultEmbed = await executeVerifyWithKey(interaction, linkedKey);
                 const replyPayload = { embeds: [sanitizeEmbed(resultEmbed)] };
                 if (resultEmbed.components && resultEmbed.components.length > 0) {
