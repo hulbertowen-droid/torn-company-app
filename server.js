@@ -11808,14 +11808,15 @@ function checkExpiredBankRequests() {
             if (req.channelId && req.messageId && slashCommandBot?.isReady?.()) {
                 (async () => {
                     try {
-                        const chan = slashCommandBot.channels.cache.get(req.channelId);
+                        const chan = slashCommandBot.channels.cache.get(req.channelId)
+                            || await slashCommandBot.channels.fetch(req.channelId).catch(() => null);
                         if (chan) {
-                            const msg = await chan.messages.fetch(req.messageId);
+                            const msg = await chan.messages.fetch(req.messageId).catch(() => null);
                             if (msg) {
                                 await msg.edit({
                                     embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
                                     components: buildBankRequestButtons(req)
-                                });
+                                }).catch(() => {});
                             }
                         }
                     } catch(e) {}
@@ -11832,14 +11833,15 @@ function checkExpiredBankRequests() {
             if (req.channelId && req.messageId && slashCommandBot?.isReady?.()) {
                 (async () => {
                     try {
-                        const chan = slashCommandBot.channels.cache.get(req.channelId);
+                        const chan = slashCommandBot.channels.cache.get(req.channelId)
+                            || await slashCommandBot.channels.fetch(req.channelId).catch(() => null);
                         if (chan) {
-                            const msg = await chan.messages.fetch(req.messageId);
+                            const msg = await chan.messages.fetch(req.messageId).catch(() => null);
                             if (msg) {
                                 await msg.edit({
                                     embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
                                     components: buildBankRequestButtons(req)
-                                });
+                                }).catch(() => {});
                             }
                         }
                     } catch(e) {}
@@ -11982,6 +11984,8 @@ function getPreFilledVaultUrl(tornId, amount) {
 function buildBankRequestButtons(req) {
     const vaultUrl = getPreFilledVaultUrl(req.tornId, req.amount);
     const amtFmt = Number(req.amount).toLocaleString();
+    const appBaseUrl = process.env.APP_URL ? process.env.APP_URL.replace(/\/$/, '') : 'https://torn-company-app-production.up.railway.app';
+    const payUrl = `${appBaseUrl}/api/bank/pay/${req.id}`;
 
     if (req.status === 'pending') {
         // Stacked vertically: each button in its own ActionRow
@@ -11989,9 +11993,9 @@ function buildBankRequestButtons(req) {
             { type: 1, components: [
                 {
                     type: 2,
-                    style: 5, // Direct Link button straight to Torn Faction Vault prefilled
+                    style: 5, // Direct 1-Click Vault (Claims in Discord & opens Torn Vault prefilled)
                     label: `💸 Direct Give ($${amtFmt})`,
-                    url: vaultUrl
+                    url: payUrl
                 }
             ]},
             { type: 1, components: [
@@ -12012,7 +12016,7 @@ function buildBankRequestButtons(req) {
                     type: 2,
                     style: 2, // Grey (Secondary) - disabled indicator
                     custom_id: `bank_claimed_${req.id}`,
-                    label: `🔒 In Progress by ${fulfillerLabel}`,
+                    label: `🔒 In Progress by ${fulfillerLabel}`.slice(0, 80),
                     disabled: true
                 }
             ]},
@@ -13340,7 +13344,7 @@ async function executeFulfillRequest(reqId, interaction) {
         req.verifiedAt = Date.now();
         saveBankRequests();
 
-        if (req.channelId && req.messageId) {
+        if ((!interaction || !interaction.message) && req.channelId && req.messageId) {
             try {
                 const targetChan = interaction.client.channels.cache.get(req.channelId)
                     || await interaction.client.channels.fetch(req.channelId).catch(() => null);
@@ -13370,7 +13374,7 @@ async function executeFulfillRequest(reqId, interaction) {
     req.status = 'verifying';
     saveBankRequests();
 
-    if (req.channelId && req.messageId) {
+    if ((!interaction || !interaction.message) && req.channelId && req.messageId) {
         try {
             const targetChan = interaction.client.channels.cache.get(req.channelId)
                 || await interaction.client.channels.fetch(req.channelId).catch(() => null);
@@ -13431,7 +13435,7 @@ async function executeUnclaimFulfillment(reqId, interaction) {
     req.fulfilledAt = null;
     saveBankRequests();
 
-    if (req.channelId && req.messageId) {
+    if ((!interaction || !interaction.message) && req.channelId && req.messageId) {
         try {
             const targetChan = interaction.client.channels.cache.get(req.channelId)
                 || await interaction.client.channels.fetch(req.channelId).catch(() => null);
@@ -13453,16 +13457,16 @@ async function executeUnclaimFulfillment(reqId, interaction) {
     };
 }
 
-async function executeCancelRequest(reqId, interaction) {
+async function executeCancelRequest(reqId, interaction = null) {
     const req = bankRequests[reqId];
     if (!req) {
         return { success: false, message: "⚠️ Bank request not found or expired." };
     }
 
-    const isRequester = (interaction.user.id === req.userId);
+    const isRequester = (interaction?.user?.id === req.userId);
     const isBankerOrAdmin = (!discordConfig.bankerRoleId) ||
-        (interaction.member?.roles?.cache?.has(discordConfig.bankerRoleId)) ||
-        (interaction.member?.permissions?.has?.('Administrator'));
+        (interaction?.member?.roles?.cache?.has(discordConfig.bankerRoleId)) ||
+        (interaction?.member?.permissions?.has?.('Administrator'));
     if (!isRequester && !isBankerOrAdmin) {
         return { success: false, message: `⚠️ Only <@${req.userId}> (the requester) or a banker/admin can cancel this request.` };
     }
@@ -13472,25 +13476,28 @@ async function executeCancelRequest(reqId, interaction) {
     }
 
     req.status = 'cancelled';
-    req.cancelledBy = interaction.user.id;
-    req.cancellerName = interaction.user.username;
+    req.cancelledBy = interaction?.user?.id || 'system';
+    req.cancellerName = interaction?.user?.username || 'System';
     req.cancelledAt = Date.now();
     saveBankRequests();
 
     const updatedEmbed = buildBankRequestEmbed(req);
     const updatedButtons = buildBankRequestButtons(req);
 
-    if (req.channelId && req.messageId) {
+    if ((!interaction || !interaction.message) && req.channelId && req.messageId) {
         try {
-            const targetChan = interaction.client.channels.cache.get(req.channelId)
-                || await interaction.client.channels.fetch(req.channelId).catch(() => null);
-            if (targetChan) {
-                const targetMsg = await targetChan.messages.fetch(req.messageId).catch(() => null);
-                if (targetMsg) {
-                    await targetMsg.edit({
-                        embeds: [sanitizeEmbed(updatedEmbed)],
-                        components: updatedButtons
-                    }).catch(() => {});
+            const client = interaction?.client || slashCommandBot;
+            if (client) {
+                const targetChan = client.channels.cache.get(req.channelId)
+                    || await client.channels.fetch(req.channelId).catch(() => null);
+                if (targetChan) {
+                    const targetMsg = await targetChan.messages.fetch(req.messageId).catch(() => null);
+                    if (targetMsg) {
+                        await targetMsg.edit({
+                            embeds: [sanitizeEmbed(updatedEmbed)],
+                            components: updatedButtons
+                        }).catch(() => {});
+                    }
                 }
             }
         } catch(e) {}
@@ -15545,7 +15552,8 @@ function setupSlashBotEvents(bot, token) {
                     if ((req.status === 'pending' || req.status === 'verifying') && req.channelId && req.messageId) {
                         (async () => {
                             try {
-                                const ch = bot.channels.cache.get(req.channelId);
+                                const ch = bot.channels.cache.get(req.channelId)
+                                    || await bot.channels.fetch(req.channelId).catch(() => null);
                                 if (ch) {
                                     const m = await ch.messages.fetch(req.messageId).catch(() => null);
                                     if (m) {
@@ -16673,26 +16681,30 @@ function setupSlashBotEvents(bot, token) {
                 return;
             }
 
-            // ── Bank: Clicked In-Progress Button Indicator ──
-            if (customId.startsWith('bank_claimed_') || customId.startsWith('verifying_display_')) {
+            // ── Bank: Clicked In-Progress Button Indicator or Superseded ──
+            if (customId.startsWith('bank_claimed_') || customId.startsWith('verifying_display_') || customId.startsWith('superseded_')) {
                 return interaction.deferUpdate().catch(() => {});
             }
 
             // ── Bank Request Cancel (Entire Request Void) ──
             if (customId.startsWith('bank_cancel_')) {
                 const reqId = customId.replace('bank_cancel_', '').trim();
+                await interaction.deferUpdate().catch(() => {});
                 const res = await executeCancelRequest(reqId, interaction);
                 if (!res.success) {
-                    return interaction.reply({ content: res.message, ephemeral: true }).catch(() => {});
+                    return interaction.followUp({ content: res.message, ephemeral: true }).catch(() => {});
                 }
                 const updatedReq = bankRequests[reqId];
                 if (updatedReq) {
-                    return interaction.update({
+                    await interaction.editReply({
                         embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
                         components: buildBankRequestButtons(updatedReq)
                     }).catch(() => {});
                 }
-                return interaction.deferUpdate().catch(() => {});
+                if (res.message) {
+                    await interaction.followUp({ content: res.message, ephemeral: true }).catch(() => {});
+                }
+                return;
             }
 
             // ── Giveaway: Enter / Leave ──

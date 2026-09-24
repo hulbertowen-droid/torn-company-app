@@ -245,12 +245,22 @@ function verifySyntax(codeString, filename = 'server.js') {
             };
         }
 
-        // Discord API Component Safety: Link buttons (style: 5) cannot have custom_id
+        // Discord API Component Safety
+        // 1. Link buttons (style: 5) cannot have custom_id
         const linkWithCustomIdRegex = /\{\s*[^}]*style:\s*5[^}]*custom_id:[^}]*\}|\{\s*[^}]*custom_id:[^}]*style:\s*5[^}]*\}/;
         if (linkWithCustomIdRegex.test(codeString)) {
             return {
                 valid: false,
                 error: 'Discord API Error: Link buttons (style: 5) cannot have a custom_id. Either use style: 1-4 for interactive buttons, or remove custom_id for link buttons.'
+            };
+        }
+
+        // 2. Interactive buttons (style: 1-4) cannot have url
+        const interactiveWithUrlRegex = /\{\s*[^}]*style:\s*[1-4][^}]*url:[^}]*\}|\{\s*[^}]*url:[^}]*style:\s*[1-4][^}]*\}/;
+        if (interactiveWithUrlRegex.test(codeString)) {
+            return {
+                valid: false,
+                error: 'Discord API Error: Interactive buttons (style: 1-4) cannot have a url. Use style: 5 for link buttons, or custom_id for interactive buttons.'
             };
         }
 
@@ -367,6 +377,7 @@ CRITICAL RULES:
 5. The REPLACE block contains the modified version of those same lines.
 6. Do NOT include markdown code fences.
 7. Do NOT explain or add commentary.${errorAdvisory}
+8. DISCORD COMPONENT RULES: Link buttons (style: 5) MUST have a valid "url" and MUST NEVER have a "custom_id". Interactive buttons (style: 1-4) MUST have a "custom_id" and MUST NEVER have a "url". Each ActionRow (type: 1) can contain up to 5 buttons, and a message can contain up to 5 ActionRows.
 
 Plan: ${plan}
 Request: ${requestText}`;
