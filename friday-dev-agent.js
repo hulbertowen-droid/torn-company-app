@@ -564,6 +564,37 @@ function buildRejectionCard(classification, reason, requestText, authorName) {
 }
 
 /**
+ * Safely resolves the GitHub token from config, direct environment variables,
+ * or case-insensitive / aliased environment variables (vital for Linux / Railway).
+ */
+function resolveGitHubToken(discordConfig = {}) {
+    // 1. Direct discordConfig check
+    if (discordConfig && typeof discordConfig.githubToken === 'string' && discordConfig.githubToken.trim().length > 10) {
+        return discordConfig.githubToken.trim().replace(/^["']|["']$/g, '');
+    }
+
+    // 2. Direct process.env check
+    const direct = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || process.env.GITHUB_PAT || process.env.GIT_TOKEN;
+    if (direct && typeof direct === 'string' && direct.trim().length > 10) {
+        return direct.trim().replace(/^["']|["']$/g, '');
+    }
+
+    // 3. Case-insensitive & fuzzy environment scan across process.env
+    for (const [key, val] of Object.entries(process.env)) {
+        if (!val || typeof val !== 'string' || val.trim().length <= 10) continue;
+        const normKey = key.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (normKey.includes('GITHUB') && (normKey.includes('TOKEN') || normKey.includes('PAT') || normKey.includes('KEY') || normKey.includes('SECRET'))) {
+            return val.trim().replace(/^["']|["']$/g, '');
+        }
+        if (normKey === 'GHTOKEN' || normKey === 'GITTOKEN' || normKey === 'GITHUB') {
+            return val.trim().replace(/^["']|["']$/g, '');
+        }
+    }
+
+    return "";
+}
+
+/**
  * Execute deployment: Pushes commit to GitHub via REST API.
  * Railway automatically catches the push and rebuilds.
  */
@@ -576,7 +607,7 @@ async function deployToGitHub(actionId, user, discordConfig = {}) {
         };
     }
 
-    const githubToken = process.env.GITHUB_TOKEN || discordConfig.githubToken || "";
+    const githubToken = resolveGitHubToken(discordConfig);
     if (!githubToken) {
         return {
             success: false,
@@ -693,5 +724,6 @@ module.exports = {
     buildRejectionCard,
     deployToGitHub,
     cancelDeployment,
+    resolveGitHubToken,
     pendingDeployments
 };

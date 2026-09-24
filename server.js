@@ -15513,6 +15513,16 @@ function setupSlashBotEvents(bot, token) {
         console.log(`[Slash Bot] Ready as ${c.user.tag}`);
         slashBotStarted = true;
 
+        // Auto-detect and sync GitHub deployment token from environment
+        try {
+            const detectedToken = fridayDev.resolveGitHubToken(discordConfig);
+            if (detectedToken && (!discordConfig.githubToken || discordConfig.githubToken !== detectedToken)) {
+                discordConfig.githubToken = detectedToken;
+                saveDiscordConfig();
+                console.log('[DevOps] Auto-synced GitHub deployment token from environment.');
+            }
+        } catch(e) {}
+
         try {
             if (c.user.username !== 'F.R.I.D.A.Y') {
                 await c.user.setUsername('F.R.I.D.A.Y').catch(() => {});
@@ -16331,16 +16341,17 @@ function setupSlashBotEvents(bot, token) {
                 if (!deployResult.success) {
                     if (deployResult.code === 'TOKEN_REQUIRED') {
                         const tokenRow = UI.actionRow(
-                            UI.primaryBtn('btn_dev_set_token', 'Set GitHub Token', '🔑'),
+                            UI.primaryBtn(`btn_dev_deploy_${actionId}`, 'Retry Deploy', '🚀'),
+                            UI.secondaryBtn('btn_dev_set_token', 'Set GitHub Token', '🔑'),
                             UI.dangerBtn(`btn_dev_cancel_${actionId}`, 'Discard Action', '❌')
                         );
                         return interaction.editReply({
                             embeds: [sanitizeEmbed(UI.warning(
                                 '🔐 GitHub Token Required',
                                 `**F.R.I.D.A.Y. is ready to deploy your code, but requires a GitHub Personal Access Token.**\n\n` +
-                                `• **Why:** F.R.I.D.A.Y. pushes the verified commit directly to your GitHub repository in the cloud without needing your PC.\n` +
-                                `• **How to create:** Visit [GitHub Personal Access Tokens](https://github.com/settings/tokens) and generate a token with **Contents: Read and write**.\n\n` +
-                                `Click **Set GitHub Token** below to paste it securely:`
+                                `• **Already added in Railway?** Click **Retry Deploy** below. (If Railway just restarted, the token is now loaded).\n` +
+                                `• **Need to enter it directly?** Click **Set GitHub Token** to paste your token into Discord.\n\n` +
+                                `_Token requires \`repo\` (Contents: Read & write) permissions on \`hulbertowen-droid/torn-company-app\`._`
                             ))],
                             components: [tokenRow]
                         }).catch(() => {});
@@ -17170,7 +17181,7 @@ function setupSlashBotEvents(bot, token) {
 
             // If no token provided, display status and setup instructions
             if (!inputToken) {
-                const currentToken = process.env.GITHUB_TOKEN || discordConfig.githubToken || "";
+                const currentToken = fridayDev.resolveGitHubToken(discordConfig);
                 const isConfigured = Boolean(currentToken && currentToken.length > 15);
 
                 const statusEmbed = {
