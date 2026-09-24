@@ -237,7 +237,6 @@ function verifySyntax(codeString, filename = 'server.js') {
     if (filename.endsWith('.js')) {
         try {
             new vm.Script(codeString, { filename });
-            return { valid: true };
         } catch (err) {
             return {
                 valid: false,
@@ -245,6 +244,17 @@ function verifySyntax(codeString, filename = 'server.js') {
                 stack: err.stack
             };
         }
+
+        // Discord API Component Safety: Link buttons (style: 5) cannot have custom_id
+        const linkWithCustomIdRegex = /\{\s*[^}]*style:\s*5[^}]*custom_id:[^}]*\}|\{\s*[^}]*custom_id:[^}]*style:\s*5[^}]*\}/;
+        if (linkWithCustomIdRegex.test(codeString)) {
+            return {
+                valid: false,
+                error: 'Discord API Error: Link buttons (style: 5) cannot have a custom_id. Either use style: 1-4 for interactive buttons, or remove custom_id for link buttons.'
+            };
+        }
+
+        return { valid: true };
     }
 
     if (filename.endsWith('.json')) {
