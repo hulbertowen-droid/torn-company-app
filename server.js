@@ -11989,16 +11989,9 @@ function buildBankRequestButtons(req) {
             { type: 1, components: [
                 {
                     type: 2,
-                    style: 3, // Green (Success) - Interactive claim button
+                    style: 5, // Direct Link button straight to Torn Faction Vault prefilled (also acts as claim/verifying transition)
                     custom_id: `bank_pay_${req.id}`,
-                    label: `💸 Give Cash ($${amtFmt})`
-                }
-            ]},
-            { type: 1, components: [
-                {
-                    type: 2,
-                    style: 5, // Direct Link button straight to Torn Faction Vault prefilled
-                    label: '🔗 Direct Torn Vault',
+                    label: `🔗 Direct Give (${amtFmt})`,
                     url: vaultUrl
                 }
             ]},
