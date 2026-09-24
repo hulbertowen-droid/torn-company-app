@@ -131,6 +131,7 @@ let userTracking = {};
 let apiPoolConfig = {};
 let bankRequests = {};
 let bankRequestCounter = 1000;
+let verifiedDiscordToTorn = {};
 let inactivityAlertsMemory = { alerts: {}, initialized: false };
 let odAlertsMemory = { alerts: {}, initialized: false };
 let ocAlertTracker = {};
@@ -296,6 +297,10 @@ async function loadConfigFromMongo() {
             if (saved.battleStatsHistory) {
                 battleStatsHistory = { ...(battleStatsHistory || {}), ...(saved.battleStatsHistory || {}) };
                 console.log(`[Mongo] Restored battle stats history for ${Object.keys(battleStatsHistory).filter(k => !k.startsWith('discord_')).length} player(s) from MongoDB Atlas.`);
+            }
+            if (saved.verifiedDiscordUsers) {
+                verifiedDiscordToTorn = { ...(verifiedDiscordToTorn || {}), ...saved.verifiedDiscordUsers };
+                console.log(`[Mongo] Restored ${Object.keys(verifiedDiscordToTorn).length} verified Discord users from MongoDB Atlas.`);
             }
             console.log('[Mongo] Restored master configurations from MongoDB Atlas.');
             
@@ -824,6 +829,26 @@ function saveBattleStatsHistory() {
     saveToMongo();
 }
 
+const VERIFIED_DISCORD_FILE = path.join(__dirname, 'data', 'verified_discord_users.json');
+try {
+    if (fs.existsSync(VERIFIED_DISCORD_FILE)) {
+        verifiedDiscordToTorn = JSON.parse(fs.readFileSync(VERIFIED_DISCORD_FILE, 'utf8'));
+    }
+} catch(e) {
+    console.error('[VerifiedUsers] Error loading verified_discord_users.json:', e.message);
+}
+
+function saveVerifiedDiscordUsers() {
+    try {
+        const dataDir = path.join(__dirname, 'data');
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+        fs.writeFileSync(VERIFIED_DISCORD_FILE, JSON.stringify(verifiedDiscordToTorn, null, 2), 'utf8');
+    } catch(e) {
+        console.error('[VerifiedUsers] Error saving verified_discord_users.json:', e.message);
+    }
+    saveToMongo();
+}
+
 try { if (fs.existsSync('spy_db.json')) spyDatabase = JSON.parse(fs.readFileSync('spy_db.json')); } catch(e) {}
 try { if (fs.existsSync('user_tracking.json')) userTracking = JSON.parse(fs.readFileSync('user_tracking.json')); } catch(e) {}
 try { if (fs.existsSync('api_pool.json')) apiPoolConfig = JSON.parse(fs.readFileSync('api_pool.json')); } catch(e) {}
@@ -864,6 +889,7 @@ function saveToMongo() {
                         lastWarboardPayload: lastGoodWarboardPayload,
                         userApiKeys: userKeys.exportEncryptedForMongo(),
                         battleStatsHistory: (typeof battleStatsHistory !== 'undefined' ? battleStatsHistory : {}),
+                        verifiedDiscordUsers: (typeof verifiedDiscordToTorn !== 'undefined' ? verifiedDiscordToTorn : {}),
                         updatedAt: new Date()
                     }
                 },
@@ -12059,22 +12085,32 @@ function buildBankRequestButtons(req) {
     }
 }
 
-async function getFactionVaultAndMember(apiKey, interaction = null, targetQuery = null) {
+let cachedFactionVault = { facId: null, data: null, timestamp: 0 };
+
+async function getFactionVaultAndMember(apiKey, interaction = null, targetQuery = null, forceFresh = false) {
     if (!apiKey) throw new Error("No Torn API key configured.");
-    const facId = discordConfig.factionId || dynamicFactionId || "";
-    const url = facId 
-        ? `https://api.torn.com/faction/${facId}?selections=basic,donations&key=${apiKey}` 
-        : `https://api.torn.com/faction/?selections=basic,donations&key=${apiKey}`;
+    const facId = discordConfig.factionId || dynamicFactionId || 52355;
+    const url = `https://api.torn.com/faction/${facId}?selections=basic,donations&key=${apiKey}`;
 
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.error || "Torn API error");
+    let data = null;
+    if (!forceFresh && cachedFactionVault.data && String(cachedFactionVault.facId) === String(facId) && (Date.now() - cachedFactionVault.timestamp < 10000)) {
+        data = cachedFactionVault.data;
+    } else {
+        const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+        data = await res.json();
+        if (data && !data.error) {
+            cachedFactionVault = { facId: String(facId), data, timestamp: Date.now() };
+        }
+    }
 
-    const donations = data.donations || {};
-    const members = data.members || {};
+    if (data && data.error) throw new Error(data.error.error || "Torn API error");
+
+    const donations = data?.donations || {};
+    const members = data?.members || {};
     let targetId = null;
     let targetDonor = null;
     let targetMember = null;
+    const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
     if (targetQuery) {
         const cleanQuery = String(targetQuery).trim().toLowerCase();
@@ -12082,9 +12118,11 @@ async function getFactionVaultAndMember(apiKey, interaction = null, targetQuery 
         if (numeric && (donations[numeric] || members[numeric])) {
             targetId = numeric;
         } else {
+            const nQuery = norm(cleanQuery);
             for (const [mId, mInfo] of Object.entries(members)) {
                 const mName = (mInfo.name || '').toLowerCase();
-                if (mName === cleanQuery || mName.includes(cleanQuery) || cleanQuery.includes(mName)) {
+                const nName = norm(mName);
+                if (mName === cleanQuery || (nQuery && (nName === nQuery || nName.includes(nQuery) || nQuery.includes(nName)))) {
                     targetId = mId;
                     break;
                 }
@@ -12092,7 +12130,8 @@ async function getFactionVaultAndMember(apiKey, interaction = null, targetQuery 
             if (!targetId) {
                 for (const [dId, dInfo] of Object.entries(donations)) {
                     const dName = (dInfo.name || '').toLowerCase();
-                    if (dName === cleanQuery || dName.includes(cleanQuery) || cleanQuery.includes(dName)) {
+                    const nName = norm(dName);
+                    if (dName === cleanQuery || (nQuery && (nName === nQuery || nName.includes(nQuery) || nQuery.includes(nName)))) {
                         targetId = dId;
                         break;
                     }
@@ -12100,32 +12139,123 @@ async function getFactionVaultAndMember(apiKey, interaction = null, targetQuery 
             }
         }
     } else if (interaction) {
-        const dName = interaction.member?.displayName || interaction.user?.username || '';
-        const matchId = dName.match(/\[(\d{3,10})\]|\((\d{3,10})\)/);
-        if (matchId && (donations[matchId[1] || matchId[2]] || members[matchId[1] || matchId[2]])) {
-            targetId = matchId[1] || matchId[2];
+        const discordUserId = interaction.user?.id;
+
+        // 1. Direct check in verified mapping (persisted in-memory + disk/mongo)
+        if (discordUserId && verifiedDiscordToTorn[discordUserId]) {
+            const entry = verifiedDiscordToTorn[discordUserId];
+            const candidateId = typeof entry === 'object' ? String(entry.tornId) : String(entry);
+            if (candidateId) {
+                targetId = candidateId;
+            }
         }
 
+        // 2. Check userKeys vault for this Discord user
+        if (!targetId && discordUserId && typeof userKeys !== 'undefined' && userKeys.getUserAccountStatus) {
+            try {
+                const acct = userKeys.getUserAccountStatus(discordUserId);
+                if (acct && acct.connected && acct.playerId) {
+                    targetId = String(acct.playerId);
+                }
+            } catch(e) {}
+        }
+
+        // 3. Known Admin / Server Owner fast-track (Owen: 992561850057240578 -> 3776908)
+        if (!targetId && discordUserId) {
+            if (discordUserId === '992561850057240578' || (discordConfig.personalDiscordId && discordUserId === discordConfig.personalDiscordId)) {
+                targetId = '3776908';
+            }
+        }
+
+        // 4. Nickname / Display Name bracket check [123456] or (123456)
         if (!targetId) {
-            const cleanDName = dName.replace(/\[\d+\]|\(\d+\)/g, '').trim().toLowerCase();
-            const uName = (interaction.user?.username || '').toLowerCase();
-            for (const [mId, mInfo] of Object.entries(members)) {
-                const mName = (mInfo.name || '').toLowerCase().trim();
-                if (mName && (cleanDName === mName || uName === mName || cleanDName.includes(mName) || mName.includes(cleanDName))) {
-                    targetId = mId;
-                    break;
+            const candidateNames = [
+                interaction.member?.nickname,
+                interaction.member?.displayName,
+                interaction.user?.globalName,
+                interaction.user?.username
+            ].filter(Boolean);
+
+            for (const nameStr of candidateNames) {
+                const matchId = nameStr.match(/\[(\d{3,10})\]|\((\d{3,10})\)/);
+                if (matchId) {
+                    const foundId = matchId[1] || matchId[2];
+                    if (foundId) {
+                        targetId = foundId;
+                        break;
+                    }
                 }
             }
         }
 
-        if (!targetId) {
-            for (const [dId, dInfo] of Object.entries(donations)) {
-                const dNameClean = (dInfo.name || '').toLowerCase().trim();
-                const cleanDName = dName.replace(/\[\d+\]|\(\d+\)/g, '').trim().toLowerCase();
-                if (dNameClean && (cleanDName === dNameClean || cleanDName.includes(dNameClean))) {
-                    targetId = dId;
-                    break;
+        // 5. Official Torn Discord Link API Check (v2 and v1 fallback)
+        if (!targetId && discordUserId && apiKey) {
+            try {
+                const v2Res = await fetch(`https://api.torn.com/v2/user/${discordUserId}/discord?key=${apiKey}`, { signal: AbortSignal.timeout(5000) });
+                const v2Data = await v2Res.json();
+                const matchedTornId = v2Data?.discord?.user_id || v2Data?.user_id || v2Data?.discord?.player_id || v2Data?.player_id || v2Data?.userID;
+                if (matchedTornId) {
+                    targetId = String(matchedTornId);
                 }
+            } catch(e) {}
+
+            if (!targetId) {
+                try {
+                    const v1Res = await fetch(`https://api.torn.com/user/${discordUserId}?selections=profile,discord&key=${apiKey}`, { signal: AbortSignal.timeout(5000) });
+                    const v1Data = await v1Res.json();
+                    if (v1Data && !v1Data.error && v1Data.player_id) {
+                        targetId = String(v1Data.player_id);
+                    }
+                } catch(e) {}
+            }
+        }
+
+        // 6. Smart Normalized Name Matching (Zero Punctuation / Emoji / Suffix Sensitivity)
+        if (!targetId) {
+            const candidateStrings = [
+                interaction.member?.nickname,
+                interaction.member?.displayName,
+                interaction.user?.globalName,
+                interaction.user?.username
+            ].filter(Boolean);
+
+            for (const rawStr of candidateStrings) {
+                const cleaned = rawStr.replace(/\[\d+\]|\(\d+\)/g, '').trim();
+                const nCandidate = norm(cleaned);
+                if (!nCandidate || nCandidate.length < 2) continue;
+
+                // Check exact normalized match in members
+                for (const [mId, mInfo] of Object.entries(members)) {
+                    const nMName = norm(mInfo.name);
+                    if (nMName && (nCandidate === nMName || nCandidate.includes(nMName) || nMName.includes(nCandidate))) {
+                        targetId = mId;
+                        break;
+                    }
+                }
+                if (targetId) break;
+
+                // Check exact normalized match in donations
+                for (const [dId, dInfo] of Object.entries(donations)) {
+                    const nDName = norm(dInfo.name);
+                    if (nDName && (nCandidate === nDName || nCandidate.includes(nDName) || nDName.includes(nCandidate))) {
+                        targetId = dId;
+                        break;
+                    }
+                }
+                if (targetId) break;
+            }
+        }
+
+        // Auto-cache to verifiedDiscordToTorn when resolved
+        if (targetId && discordUserId) {
+            const resolvedName = members[targetId]?.name || donations[targetId]?.name || interaction.user?.username || null;
+            verifiedDiscordToTorn[discordUserId] = {
+                tornId: String(targetId),
+                tornName: resolvedName,
+                timestamp: Date.now()
+            };
+            if (typeof saveVerifiedDiscordUsers === 'function') {
+                saveVerifiedDiscordUsers();
             }
         }
     }
@@ -12137,7 +12267,7 @@ async function getFactionVaultAndMember(apiKey, interaction = null, targetQuery 
 
     const totalBalance = targetDonor ? Number(targetDonor.money_balance || 0) : 0;
     const pointsBalance = targetDonor ? Number(targetDonor.points_balance || 0) : 0;
-    const tornName = targetMember?.name || targetDonor?.name || null;
+    const tornName = targetMember?.name || targetDonor?.name || (interaction?.user?.id && verifiedDiscordToTorn[interaction.user.id]?.tornName) || interaction?.user?.username || null;
 
     // Calculate existing active pending requests for this user
     let activePendingTotal = 0;
@@ -13556,8 +13686,8 @@ async function buildVaultBalanceEmbed(apiKey, targetQuery = null, requestingUser
         return { title: "🏦 Faction Vault Balance", description: "⚠️ Torn API Key is not configured.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
     }
     try {
-        const facId = discordConfig.factionId || dynamicFactionId || "";
-        const url = facId ? `https://api.torn.com/faction/${facId}?selections=basic,donations&key=${apiKey}` : `https://api.torn.com/faction/?selections=basic,donations&key=${apiKey}`;
+        const facId = discordConfig.factionId || dynamicFactionId || 52355;
+        const url = `https://api.torn.com/faction/${facId}?selections=basic,donations&key=${apiKey}`;
         const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
         const data = await res.json();
 
@@ -13568,6 +13698,7 @@ async function buildVaultBalanceEmbed(apiKey, targetQuery = null, requestingUser
         const donations = data.donations || {};
         const members = data.members || {};
         const donorEntries = Object.entries(donations);
+        const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
         let targetId = null;
         let targetDonor = null;
@@ -13575,13 +13706,15 @@ async function buildVaultBalanceEmbed(apiKey, targetQuery = null, requestingUser
         if (targetQuery) {
             const cleanQuery = String(targetQuery).trim().toLowerCase();
             const numeric = cleanQuery.replace(/[^0-9]/g, '');
-            if (numeric && donations[numeric]) {
+            if (numeric && (donations[numeric] || members[numeric])) {
                 targetId = numeric;
-                targetDonor = donations[numeric];
+                targetDonor = donations[numeric] || null;
             } else {
+                const nQuery = norm(cleanQuery);
                 for (const [dId, donor] of donorEntries) {
                     const dName = (donor.name || '').toLowerCase();
-                    if (dName.includes(cleanQuery) || cleanQuery.includes(dName)) {
+                    const nDName = norm(dName);
+                    if (dName === cleanQuery || (nQuery && (nDName === nQuery || nDName.includes(nQuery) || nQuery.includes(nDName)))) {
                         targetId = dId;
                         targetDonor = donor;
                         break;
@@ -13589,15 +13722,71 @@ async function buildVaultBalanceEmbed(apiKey, targetQuery = null, requestingUser
                 }
             }
         } else if (requestingUser) {
-            // Try to match requesting discord user
-            const uName = (requestingUser.username || requestingUser.displayName || '').toLowerCase();
-            for (const [dId, donor] of donorEntries) {
-                const dName = (donor.name || '').toLowerCase();
-                if (dName && (uName.includes(dName) || dName.includes(uName))) {
-                    targetId = dId;
-                    targetDonor = donor;
-                    break;
+            const discordUserId = requestingUser.id;
+
+            // 1. Check verified mapping
+            if (discordUserId && verifiedDiscordToTorn[discordUserId]) {
+                const entry = verifiedDiscordToTorn[discordUserId];
+                targetId = typeof entry === 'object' ? String(entry.tornId) : String(entry);
+            }
+
+            // 2. Admin fast-track
+            if (!targetId && discordUserId && (discordUserId === '992561850057240578' || discordUserId === discordConfig.personalDiscordId)) {
+                targetId = '3776908';
+            }
+
+            // 3. Check userKeys
+            if (!targetId && discordUserId && typeof userKeys !== 'undefined' && userKeys.getUserAccountStatus) {
+                try {
+                    const acct = userKeys.getUserAccountStatus(discordUserId);
+                    if (acct && acct.connected && acct.playerId) targetId = String(acct.playerId);
+                } catch(e) {}
+            }
+
+            // 4. Bracket check
+            if (!targetId) {
+                const candidates = [requestingUser.displayName, requestingUser.globalName, requestingUser.username].filter(Boolean);
+                for (const str of candidates) {
+                    const m = str.match(/\[(\d{3,10})\]|\((\d{3,10})\)/);
+                    if (m) { targetId = m[1] || m[2]; break; }
                 }
+            }
+
+            // 5. Torn API v2 / v1 discord lookup
+            if (!targetId && discordUserId && apiKey) {
+                try {
+                    const v2Res = await fetch(`https://api.torn.com/v2/user/${discordUserId}/discord?key=${apiKey}`, { signal: AbortSignal.timeout(5000) });
+                    const v2Data = await v2Res.json();
+                    const matched = v2Data?.discord?.user_id || v2Data?.user_id || v2Data?.player_id;
+                    if (matched) targetId = String(matched);
+                } catch(e) {}
+            }
+
+            // 6. Normalized name matching
+            if (!targetId) {
+                const candidates = [requestingUser.displayName, requestingUser.globalName, requestingUser.username].filter(Boolean);
+                for (const raw of candidates) {
+                    const nCand = norm(raw);
+                    if (!nCand || nCand.length < 2) continue;
+                    for (const [dId, donor] of donorEntries) {
+                        const nDName = norm(donor.name);
+                        if (nDName && (nCand === nDName || nCand.includes(nDName) || nDName.includes(nCand))) {
+                            targetId = dId;
+                            break;
+                        }
+                    }
+                    if (targetId) break;
+                }
+            }
+
+            if (targetId) {
+                targetDonor = donations[targetId] || null;
+                verifiedDiscordToTorn[discordUserId] = {
+                    tornId: String(targetId),
+                    tornName: targetDonor?.name || requestingUser.username,
+                    timestamp: Date.now()
+                };
+                if (typeof saveVerifiedDiscordUsers === 'function') saveVerifiedDiscordUsers();
             }
         }
 
@@ -14166,6 +14355,17 @@ async function executeVerifyMember(memberOrUser, guild, arg3, arg4) {
         fields.push({ name: "⚠️ Action Required: Role Hierarchy", value: roleWarnings.join('\n\n'), inline: false });
     }
 
+    if (playerId) {
+        verifiedDiscordToTorn[discordUserId] = {
+            tornId: String(playerId),
+            tornName: playerName,
+            timestamp: Date.now()
+        };
+        if (typeof saveVerifiedDiscordUsers === 'function') {
+            saveVerifiedDiscordUsers();
+        }
+    }
+
     return {
         success: true,
         playerName,
@@ -14262,11 +14462,34 @@ async function executeVerifyAll(guild, apiKey) {
         let matchedPlayerId = nickMatch ? nickMatch[1] : null;
         let matchedName = matchedPlayerId && membersMap[matchedPlayerId] ? membersMap[matchedPlayerId].name : null;
 
+        // Check verified cache, admin ID, userKeys
+        if (!matchedPlayerId && verifiedDiscordToTorn[gm.id]) {
+            const entry = verifiedDiscordToTorn[gm.id];
+            matchedPlayerId = typeof entry === 'object' ? String(entry.tornId) : String(entry);
+            matchedName = membersMap[matchedPlayerId]?.name || (typeof entry === 'object' ? entry.tornName : null);
+        }
+        if (!matchedPlayerId && (gm.id === '992561850057240578' || gm.id === discordConfig.personalDiscordId)) {
+            matchedPlayerId = '3776908';
+            matchedName = membersMap['3776908']?.name || 'Owen777';
+        }
+        if (!matchedPlayerId && typeof userKeys !== 'undefined' && userKeys.getUserAccountStatus) {
+            try {
+                const acct = userKeys.getUserAccountStatus(gm.id);
+                if (acct && acct.connected && acct.playerId) {
+                    matchedPlayerId = String(acct.playerId);
+                    matchedName = membersMap[matchedPlayerId]?.name || acct.playerName || null;
+                }
+            } catch(e) {}
+        }
+
         if (!matchedPlayerId) {
             const cleanName = (gm.displayName || gm.user.username || '').toLowerCase().trim();
-            const found = Object.entries(membersMap).find(([id, m]) =>
-                m.name.toLowerCase() === cleanName || cleanName.includes(m.name.toLowerCase())
-            );
+            const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            const nClean = norm(cleanName);
+            const found = Object.entries(membersMap).find(([id, m]) => {
+                const nM = norm(m.name);
+                return m.name.toLowerCase() === cleanName || cleanName.includes(m.name.toLowerCase()) || (nClean && nM && (nClean === nM || nClean.includes(nM) || nM.includes(nClean)));
+            });
             if (found) {
                 matchedPlayerId = found[0];
                 matchedName = found[1].name;
@@ -14274,6 +14497,11 @@ async function executeVerifyAll(guild, apiKey) {
         }
 
         if (matchedPlayerId && matchedName) {
+            verifiedDiscordToTorn[gm.id] = {
+                tornId: String(matchedPlayerId),
+                tornName: matchedName,
+                timestamp: Date.now()
+            };
             const targetNick = `${matchedName} [${matchedPlayerId}]`.slice(0, 32);
             let changed = false;
 
@@ -14331,6 +14559,10 @@ async function executeVerifyAll(guild, apiKey) {
     const warningText = globalRoleWarnings.size > 0
         ? `\n\n⚠️ **Role Hierarchy Warning:**\n${Array.from(globalRoleWarnings).join('\n')}`
         : '';
+
+    if (typeof saveVerifiedDiscordUsers === 'function') {
+        saveVerifiedDiscordUsers();
+    }
 
     return {
         title: "🛡️ Tornium Verification Audit Complete",
@@ -17688,7 +17920,7 @@ function setupSlashBotEvents(bot, token) {
 
             let vaultInfo = null;
             try {
-                vaultInfo = await getFactionVaultAndMember(apiKey, interaction);
+                vaultInfo = await getFactionVaultAndMember(apiKey, interaction, null, true);
             } catch(err) {
                 console.error("[Bank Vault Check Error]:", err.message);
             }
@@ -17698,9 +17930,26 @@ function setupSlashBotEvents(bot, token) {
                 return interaction.editReply({
                     content: `⚠️ **Could not identify your Torn Account in the faction vault!**\n\n` +
                              `To protect faction funds, the bot must verify your vault balance before withdrawal.\n` +
-                             `Please change your server nickname to include your Torn ID in brackets, e.g.:\n` +
-                             `\`${interaction.user.username} [123456]\`\n\n` +
-                             `Then run \`/withdraw ${rawAmount}\` again.`
+                             `Please click **🛡️ Verify Me** below (or run \`/verify\`) to link your official Torn identity, or set your server nickname to include your Torn ID in brackets (e.g. \`${interaction.user.username} [123456]\`).\n\n` +
+                             `Then run \`/withdraw ${rawAmount}\` again.`,
+                    components: [{
+                        type: 1,
+                        components: [
+                            {
+                                type: 2,
+                                style: 1,
+                                custom_id: 'btn_verify_now',
+                                label: '🛡️ Verify Me',
+                                emoji: { name: '🛡️' }
+                            },
+                            {
+                                type: 2,
+                                style: 5,
+                                label: '🔗 Link at Torn.com/discord',
+                                url: 'https://www.torn.com/discord'
+                            }
+                        ]
+                    }]
                 });
             }
 
