@@ -15773,15 +15773,30 @@ function setupSlashBotEvents(bot, token) {
 
                 // Unified AI caller function
                 const devAiCaller = async (sys, usr) => {
-                    const gKey = getGeminiApiKey();
-                    if (gKey) {
-                        try {
-                            const res = await callGeminiWithKey(gKey, sys, usr, [], { model: 'gemini-2.0-flash' });
-                            if (res && res.trim()) return res;
-                        } catch(e) {}
+                    try {
+                        const payload = {
+                            contents: [
+                                { role: 'user', parts: [{ text: `${sys ? sys + '\n\n' : ''}${usr}` }] }
+                            ]
+                        };
+                        const gRes = await callGeminiWithFallback(payload, null, { timeout: 15000 });
+                        if (gRes && gRes.success && gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                            return gRes.data.candidates[0].content.parts[0].text;
+                        }
+                    } catch(e) {
+                        console.warn('[DevAiCaller] Gemini fallback error:', e.message);
                     }
-                    const orRes = await callOpenRouterFallback(sys, usr, [], { model: 'qwen/qwen-2.5-coder-32b-instruct' });
-                    return orRes?.text || orRes?.content || "";
+
+                    try {
+                        const orRes = await callOpenRouterFallback(sys, usr, [], { timeout: 15000 });
+                        if (orRes && orRes.success && orRes.text) {
+                            return orRes.text;
+                        }
+                    } catch(e) {
+                        console.warn('[DevAiCaller] OpenRouter fallback error:', e.message);
+                    }
+
+                    return "";
                 };
 
                 // 1. AI Intent & Vetting Check (Anti-Troll & Scope Limiter)
