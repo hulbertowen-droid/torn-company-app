@@ -283,7 +283,7 @@ async function generateAndVerifyPatch(targetFilePath, requestText, plan, callAiF
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
         const systemPrompt = buildPatchSystemPrompt(path.basename(targetFilePath), requestText, plan, attempt);
-        const userPrompt = buildPatchUserPrompt(contextBlock, attempt);
+        const userPrompt = buildPatchUserPrompt(contextBlock, attempt, lastError);
 
         let aiRes = await callAiFn(systemPrompt, userPrompt);
         if (!aiRes || aiRes.trim().length < 10) {
@@ -337,21 +337,7 @@ async function generateAndVerifyPatch(targetFilePath, requestText, plan, callAiF
  * System prompt for patch generation — progressively stricter across attempts.
  */
 function buildPatchSystemPrompt(filename, requestText, plan, attempt) {
-    if (attempt >= 3) {
-        return `You are a code editor. Output ONLY a search/replace block in this exact format:
-
-<<<<<<< SEARCH
-const example = oldValue;
-=======
-const example = newValue;
->>>>>>>
-
-CRITICAL: Output ONLY the block above. No markdown fences. No explanation.
-File: ${filename}
-Change: ${requestText}`;
-    }
-
-    const reminder = attempt === 2 ? '\n- REMINDER: Do NOT explain. Your ENTIRE response must start with <<<<<<< SEARCH and end with >>>>>>>.' : '';
+    const errorAdvisory = attempt >= 2 ? '\n- CRITICAL: Your previous attempt failed because the SEARCH block lines could not be matched. The code you need to modify is ALREADY inside the provided snippet below. Find the real function name from the snippet. DO NOT invent or guess function names!' : '';
 
     return `You are the lead developer for F.R.I.D.A.Y., a Node.js Discord bot.
 Your ONLY task is to generate a SURGICAL search-and-replace patch for the file "${filename}".
@@ -364,29 +350,34 @@ OUTPUT FORMAT (output NOTHING else, no markdown fences):
 >>>>>>>
 
 CRITICAL RULES:
-1. SEARCH block MUST be lines that appear VERBATIM in the provided code — do NOT paraphrase, summarize, or change indentation.
-2. Do NOT copy the line numbers (e.g. "2537: ") from the snippet into the SEARCH block. Copy ONLY the actual code.
-3. Keep the SEARCH block SHORT (3 to 15 lines max).
-4. The REPLACE block contains the modified version of those same lines.
-5. Do NOT include markdown code fences.
-6. Do NOT explain or add commentary.${reminder}
+1. The SEARCH block MUST contain lines that appear VERBATIM in the provided code snippet — do NOT paraphrase, summarize, or change indentation.
+2. Do NOT invent function names, variable names, or components. Look at the functions in the provided snippet and find the actual code that implements this feature.
+3. Do NOT copy the line numbers (e.g. "2537: ") from the snippet into the SEARCH block. Copy ONLY the actual code.
+4. Keep the SEARCH block SHORT (3 to 15 lines max).
+5. The REPLACE block contains the modified version of those same lines.
+6. Do NOT include markdown code fences.
+7. Do NOT explain or add commentary.${errorAdvisory}
 
 Plan: ${plan}
 Request: ${requestText}`;
 }
 
 /**
- * User prompt for patch generation — progressively concise.
+ * User prompt for patch generation — progressively concise with error feedback.
  */
-function buildPatchUserPrompt(contextBlock, attempt) {
+function buildPatchUserPrompt(contextBlock, attempt, lastError) {
+    let errorFeedback = '';
+    if (attempt > 1 && lastError) {
+        errorFeedback = `⚠️ NOTE: Previous attempt FAILED with: ${lastError}\nMake sure your SEARCH block matches the actual functions in the code snippet below!\n\n`;
+    }
+
     if (attempt === 1) {
         return `Relevant code (line numbers are for your reference only — do NOT copy line numbers into the search block):\n\n\`\`\`javascript\n${contextBlock}\n\`\`\`\n\nGenerate ONE <<<<<<< SEARCH / ======= / >>>>>>> patch block:`;
     }
     if (attempt === 2) {
-        return `CODE CONTEXT:\n${contextBlock}\n\nOUTPUT ONLY the <<<<<<< SEARCH / ======= / >>>>>>> block. Start directly with <<<<<<< SEARCH:`;
+        return `${errorFeedback}CODE CONTEXT:\n\`\`\`javascript\n${contextBlock}\n\`\`\`\n\nOUTPUT ONLY the <<<<<<< SEARCH / ======= / >>>>>>> block. Start directly with <<<<<<< SEARCH:`;
     }
-    const lines = contextBlock.split('\n').slice(0, 100).join('\n');
-    return `CODE SNIPPET:\n${lines}\n\nOutput ONLY:\n<<<<<<< SEARCH\n[old code]\n=======\n[new code]\n>>>>>>>`;
+    return `${errorFeedback}CODE CONTEXT:\n\`\`\`javascript\n${contextBlock}\n\`\`\`\n\nCRITICAL: Copy SEARCH lines EXACTLY as they appear above. Output ONLY:\n<<<<<<< SEARCH\n[old code from snippet]\n=======\n[new modified code]\n>>>>>>>`;
 }
 
 /**
@@ -567,47 +558,85 @@ function parseSearchReplaceBlock(rawText) {
  */
 function extractRelevantLines(content, requestText, plan) {
     const lines = content.split('\n');
-    const searchTerms = `${requestText} ${plan}`.toLowerCase().match(/[a-z0-9_]{4,}/g) || ['discord', 'retal', 'war'];
+
+    // Extract search terms with stemming (singular/plural, common suffixes)
+    const rawTerms = `${requestText} ${plan}`.toLowerCase().match(/[a-z0-9_]{3,}/g) || ['discord', 'retal', 'war'];
+    const searchTerms = new Set();
+    for (const t of rawTerms) {
+        searchTerms.add(t);
+        if (t.endsWith('s') && t.length > 3) searchTerms.add(t.slice(0, -1));
+        if (t.endsWith('ies') && t.length > 4) searchTerms.add(t.slice(0, -3) + 'y');
+        if (t.endsWith('ing') && t.length > 5) searchTerms.add(t.slice(0, -3));
+        if (t.endsWith('ed') && t.length > 4) searchTerms.add(t.slice(0, -2));
+    }
+    const termsArray = Array.from(searchTerms);
 
     // Score all lines
     const scores = new Array(lines.length).fill(0);
+    let maxScore = 0;
     for (let i = 0; i < lines.length; i++) {
         const l = lines[i].toLowerCase();
         let matches = 0;
-        for (const term of searchTerms) {
+        for (const term of termsArray) {
             if (l.includes(term)) matches++;
         }
-        // Boost function definitions and key constructs
-        if (matches > 0 && /\b(?:function|const|let|async|embed|sendChannelMessage|checkFactionInactivity|handleBattleStats|inactiv)\b/.test(l)) {
-            matches += 2;
+        if (matches === 0) continue;
+
+        let lineScore = matches;
+
+        // Massive boost for function/method definitions containing the search terms
+        if (/\b(?:function|async\s+function|const\s+[a-zA-Z0-9_]+\s*=\s*(?:async\s*)?\()/i.test(l)) {
+            lineScore += 8 + (matches * 3);
         }
-        scores[i] = matches;
+
+        // Boost for UI and button components
+        if (/\b(?:components|actionrow|custom_id|buttonbuilder|actionrowbuilder|embed|color|style)\b/i.test(l)) {
+            lineScore += 4;
+        }
+
+        // Penalty for bare top-level variable declarations (e.g. `let x = {};`)
+        if (/^\s*(?:let|var)\s+[a-zA-Z0-9_]+\s*=\s*\{\}\s*;?\s*$/.test(l)) {
+            lineScore = Math.max(1, lineScore - 5);
+        }
+
+        scores[i] = lineScore;
+        if (lineScore > maxScore) maxScore = lineScore;
     }
 
-    // Find top candidate lines that are sufficiently spaced out
+    // Find candidate lines
     const candidateLines = [];
     for (let i = 0; i < lines.length; i++) {
-        if (scores[i] >= 2) {
-            const tooClose = candidateLines.some(idx => Math.abs(idx - i) < 80);
-            if (!tooClose) {
-                candidateLines.push(i);
-            }
+        if (scores[i] >= 3) {
+            candidateLines.push(i);
         }
     }
 
+    // Sort by score descending
     candidateLines.sort((a, b) => scores[b] - scores[a]);
-    const topRegions = candidateLines.slice(0, 3);
 
-    if (topRegions.length === 0) {
-        topRegions.push(2530, 1700);
+    // Filter to top candidate lines that are spaced out
+    const topRegions = [];
+    const minScore = Math.max(3, Math.floor(maxScore * 0.4)); // Must be at least 40% of max score
+
+    for (const idx of candidateLines) {
+        if (scores[idx] < minScore) continue;
+        const tooClose = topRegions.some(existing => Math.abs(existing - idx) < 90);
+        if (!tooClose) {
+            topRegions.push(idx);
+            if (topRegions.length >= 3) break;
+        }
     }
 
-    // Include line numbers in output so the AI knows what it's working with
+    if (topRegions.length === 0) {
+        topRegions.push(11982, 2530);
+    }
+
+    // Build snippets with line numbers
     const snippets = topRegions.map(bestLine => {
-        const start = Math.max(0, bestLine - 60);
-        const end = Math.min(lines.length, bestLine + 80);
+        const start = Math.max(0, bestLine - 50);
+        const end = Math.min(lines.length, bestLine + 70);
         const numberedLines = lines.slice(start, end).map((l, i) => `${start + i + 1}: ${l}`);
-        return `// ── File lines ${start + 1}–${end} of ${lines.length} ──\n` + numberedLines.join('\n');
+        return `// ── File lines ${start + 1}–${end} of ${lines.length} (Target region near line ${bestLine + 1}) ──\n` + numberedLines.join('\n');
     });
 
     return snippets.join('\n\n// ═══════════════════════════════════════════════\n\n');

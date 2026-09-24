@@ -11984,63 +11984,79 @@ function buildBankRequestButtons(req) {
     const amtFmt = Number(req.amount).toLocaleString();
 
     if (req.status === 'pending') {
-        // Open request — 1-click in Discord claims the request, updates card, and gives the direct Torn vault link!
-        return [{ type: 1, components: [
-            {
-                type: 2,
-                style: 3, // Green (Success) - Interactive claim button, never routes to external broken websites
-                custom_id: `bank_pay_${req.id}`,
-                label: `💸 Give Cash ($${amtFmt})`
-            },
-            {
-                type: 2,
-                style: 5, // Direct Link button straight to Torn Faction Vault prefilled
-                label: '🔗 Direct Torn Vault',
-                url: vaultUrl
-            },
-            {
-                type: 2,
-                style: 4, // Red (Danger) - cancels the entire request
-                custom_id: `bank_cancel_${req.id}`,
-                label: '❌ Cancel'
-            }
-        ]}];
+        // Stacked vertically: each button in its own ActionRow
+        return [
+            { type: 1, components: [
+                {
+                    type: 2,
+                    style: 3, // Green (Success) - Interactive claim button
+                    custom_id: `bank_pay_${req.id}`,
+                    label: `💸 Give Cash ($${amtFmt})`
+                }
+            ]},
+            { type: 1, components: [
+                {
+                    type: 2,
+                    style: 5, // Direct Link button straight to Torn Faction Vault prefilled
+                    label: '🔗 Direct Torn Vault',
+                    url: vaultUrl
+                }
+            ]},
+            { type: 1, components: [
+                {
+                    type: 2,
+                    style: 4, // Red (Danger) - cancels the entire request
+                    custom_id: `bank_cancel_${req.id}`,
+                    label: '❌ Cancel'
+                }
+            ]}
+        ];
     } else if (req.status === 'verifying') {
-        // A banker clicked "Give Cash"
+        // Stacked vertically: each button in its own ActionRow
         const fulfillerLabel = req.fulfillerName ? `@${req.fulfillerName}` : 'Banker';
-        return [{ type: 1, components: [
-            {
-                type: 2,
-                style: 2, // Grey (Secondary) - disabled indicator so no one else can click Give Cash
-                custom_id: `bank_claimed_${req.id}`,
-                label: `🔒 In Progress by ${fulfillerLabel}`,
-                disabled: true
-            },
-            {
-                type: 2,
-                style: 5, // Link — opens Torn faction vault directly
-                label: `💸 Open Vault ($${amtFmt})`,
-                url: vaultUrl
-            },
-            {
-                type: 2,
-                style: 1, // Primary (Blue) — Manual instant log verification check
-                custom_id: `bank_check_${req.id}`,
-                label: '🔄 Check Logs'
-            },
-            {
-                type: 2,
-                style: 2, // Grey (Secondary) — Cancel Fulfillment only (release claim)
-                custom_id: `bank_unclaim_${req.id}`,
-                label: '↩️ Unclaim'
-            },
-            {
-                type: 2,
-                style: 4, // Red (Danger) — Cancel entire Request
-                custom_id: `bank_cancel_${req.id}`,
-                label: '❌ Cancel'
-            }
-        ]}];
+        return [
+            { type: 1, components: [
+                {
+                    type: 2,
+                    style: 2, // Grey (Secondary) - disabled indicator
+                    custom_id: `bank_claimed_${req.id}`,
+                    label: `🔒 In Progress by ${fulfillerLabel}`,
+                    disabled: true
+                }
+            ]},
+            { type: 1, components: [
+                {
+                    type: 2,
+                    style: 5, // Link — opens Torn faction vault directly
+                    label: `💸 Open Vault ($${amtFmt})`,
+                    url: vaultUrl
+                }
+            ]},
+            { type: 1, components: [
+                {
+                    type: 2,
+                    style: 1, // Primary (Blue) — Manual instant log verification check
+                    custom_id: `bank_check_${req.id}`,
+                    label: '🔄 Check Logs'
+                }
+            ]},
+            { type: 1, components: [
+                {
+                    type: 2,
+                    style: 2, // Grey (Secondary) — Cancel Fulfillment only (release claim)
+                    custom_id: `bank_unclaim_${req.id}`,
+                    label: '↩️ Unclaim'
+                }
+            ]},
+            { type: 1, components: [
+                {
+                    type: 2,
+                    style: 4, // Red (Danger) — Cancel entire Request
+                    custom_id: `bank_cancel_${req.id}`,
+                    label: '❌ Cancel'
+                }
+            ]}
+        ];
     } else {
         // fulfilled, cancelled, expired — NO buttons at all (clean card)
         return [];
