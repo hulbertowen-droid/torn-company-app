@@ -15771,15 +15771,19 @@ function setupSlashBotEvents(bot, token) {
                     return null;
                 });
 
-                // Unified AI caller function
+                // Unified AI caller function — used for both vetting (short) and patch generation (long)
                 const devAiCaller = async (sys, usr) => {
                     try {
                         const payload = {
                             contents: [
                                 { role: 'user', parts: [{ text: `${sys ? sys + '\n\n' : ''}${usr}` }] }
-                            ]
+                            ],
+                            generationConfig: {
+                                maxOutputTokens: 4096,
+                                temperature: 0.2
+                            }
                         };
-                        const gRes = await callGeminiWithFallback(payload, null, { timeout: 15000 });
+                        const gRes = await callGeminiWithFallback(payload, null, { timeout: 45000 });
                         if (gRes && gRes.success && gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
                             return gRes.data.candidates[0].content.parts[0].text;
                         }
@@ -15788,7 +15792,7 @@ function setupSlashBotEvents(bot, token) {
                     }
 
                     try {
-                        const orRes = await callOpenRouterFallback(sys, usr, [], { timeout: 15000 });
+                        const orRes = await callOpenRouterFallback(sys, usr, [], { timeout: 30000 });
                         if (orRes && orRes.success && orRes.text) {
                             return orRes.text;
                         }

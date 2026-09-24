@@ -125,24 +125,24 @@ function checkDeterministicVettingRules(requestText) {
         }
     }
 
-    // 3. Scope Limiter (Anti-Drastic Overhauls)
-    const drasticPatterns = [
-        /\b(?:rewrite|rebuild|redesign|replace)\s+(?:the\s+entire|whole|all of)\s+(?:ui|bank|banking|app|server|dashboard|system)\b/i,
-        /\b(?:change|switch)\s+(?:from\s+)?(?:mongodb|mongo)\s+(?:to\s+)?(?:postgres|sql|sqlite|mysql)\b/i,
-        /\b(?:rewrite|convert)\s+(?:the\s+)?(?:code|app|server)\s+(?:to\s+)?(?:python|rust|go|c#|typescript)\b/i,
-        /\b(?:delete|remove)\s+(?:all\s+files|server\.js|package\.json)\b/i
+    // 3. Only block truly catastrophic / irreversible infrastructure operations
+    // Admins are trusted — UI tweaks, feature adds/removes, and behavior changes are fine
+    const catastrophicPatterns = [
+        /\b(?:rewrite|convert)\s+(?:the\s+)?(?:entire\s+)?(?:app|server|codebase)\s+(?:to|in)\s+(?:python|rust|go lang|c#|typescript|java)\b/i,
+        /\bdelete\s+(?:all\s+files|server\.js|package\.json)\b/i,
+        /\b(?:switch|migrate)\s+(?:from\s+)?(?:mongodb|mongo)\s+to\s+(?:postgres|mysql|sqlite)\b/i
     ];
-    for (const pat of drasticPatterns) {
+    for (const pat of catastrophicPatterns) {
         if (pat.test(text)) {
             return {
                 allowed: false,
                 classification: 'TOO_DRASTIC',
-                reason: 'Request was rejected by the Scope Limiter: Whole-system UI, architecture, or database overhauls are too large for automated in-chat deployment. Major refactors must be handled directly in the development environment.'
+                reason: 'Request blocked: catastrophic infrastructure changes (database migration, full language rewrite, or deleting core files) cannot be auto-deployed via chat.'
             };
         }
     }
 
-    return null; // Passes deterministic checks, proceed to AI evaluation
+    return null; // Passes all deterministic checks — proceed to AI evaluation
 }
 
 /**
@@ -165,30 +165,35 @@ async function evaluateRequestWithAI(requestText, authorName, authorId, callAiFn
         };
     }
 
-    const systemPrompt = `You are the Security Sentinel and Chief Software Architect for F.R.I.D.A.Y. (a high-performance Node.js Torn gaming assistant and Discord security bot).
-An administrator has requested a code/bot modification via Discord chat.
-Evaluate this request with utmost seriousness according to these strict rules:
+    const systemPrompt = `You are the Security Sentinel for F.R.I.D.A.Y. (a Node.js Discord bot for a Torn gaming faction).
+A VERIFIED SERVER ADMINISTRATOR has already passed the authorization gate before reaching you.
+Your job is to be PERMISSIVE and HELPFUL. Approve the vast majority of requests.
 
-1. ANTI-TROLL & ANTI-SABOTAGE:
-- Reject any request that attempts to troll, prank, insult users, inject slurs, deface UI, spam channels, or make the bot unhinged/unusable.
+ONLY return allowed=false for these specific attack types:
+1. TROLL/PRANK: wants the bot to insult members, spam channels, act drunk/erratic, post offensive content
+2. SECRET LEAK: wants to expose API keys, tokens, passwords, or env variables
+3. DATA DESTRUCTION: wants to drop a database, wipe collections, or delete all data
+4. AUTH BYPASS: wants to remove or disable admin checks or authentication
 
-2. SECURITY & INTEGRITY:
-- Reject requests that attempt to leak secrets, API keys, tokens, dump user databases, or bypass auth checks.
+APPROVE (allowed: true) for EVERYTHING ELSE — including but not limited to:
+- Adding, removing, or changing any command, button, embed, field, or message
+- Adjusting any number, threshold, timer, cooldown, or display format
+- Changing text, colors, emojis, or labels
+- Adding or removing features, alerts, cards, or endpoints
+- Fixing bugs or changing any bot behavior
+- Reformatting how data is shown (e.g. hours instead of days, percentages instead of raw)
+- Any UI change, feature add, or behavior tweak an admin might reasonably want
 
-3. SCOPE LIMITER (NO DRASTIC OVERHAULS):
-- ALLOWED: Focused, targeted modifications. E.g., adding/removing/updating Discord buttons, adjusting embed colors or copy, modifying alert thresholds or timers, adding a helper function or endpoint, tweaking war target or retal card metrics, fixing a specific bug.
-- BLOCKED: Drastic, massive overhauls. E.g., "rewrite the whole bank UI", "redesign the entire dashboard", "switch databases", "rewrite server.js".
-
-Return ONLY a valid JSON object matching this schema (no markdown, no backticks):
+Return ONLY valid JSON (no markdown, no extra text):
 {
-  "classification": "VALID" | "TROLL" | "TOO_DRASTIC" | "DESTRUCTIVE",
+  "classification": "VALID" | "TROLL" | "DESTRUCTIVE",
   "allowed": true | false,
-  "reason": "Clear explanation of why this was approved or rejected.",
-  "plan": "Step-by-step summary of the code change to perform.",
-  "targetFile": "server.js" | "friday-ui.js" | "public/..."
+  "reason": "One sentence explanation.",
+  "plan": "Concise step-by-step implementation plan for the code change.",
+  "targetFile": "server.js"
 }`;
 
-    const userPrompt = `Administrator "${authorName}" [ID: ${authorId}] has sent this modification request:\n\n"${requestText}"\n\nEvaluate and return JSON:`;
+    const userPrompt = `Administrator "${authorName}" [ID: ${authorId}] requests:\n\n"${requestText}"\n\nRespond with JSON only:`;
 
     try {
         const rawAiRes = await callAiFn(systemPrompt, userPrompt);
