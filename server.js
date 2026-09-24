@@ -14973,15 +14973,11 @@ function getStatArchetype(str, def, spd, dex) {
 }
 
 async function handleBattleStatsUpdate(interaction, options = {}) {
-    const { forceUpdate = true, keyInput = null, isPublic = false, isButton = false } = options;
+    const { forceUpdate = true, keyInput = null, isPublic = true, isButton = false } = options;
 
     try {
-        if (isButton) {
-            await interaction.deferReply({ ephemeral: true }).catch(() => {});
-        } else {
-            if (!interaction.deferred && !interaction.replied) {
-                await interaction.deferReply({ ephemeral: !isPublic }).catch(() => {});
-            }
+        if (!interaction.deferred && !interaction.replied) {
+            await interaction.deferReply({ ephemeral: false }).catch(() => {});
         }
 
         const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
@@ -15009,7 +15005,7 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
                 '🔑 Torn Limited API Key Required',
                 `Hey **${invokerName}**, to look up your live battle stats and track your training gains, you need to link your Torn **Limited Access API Key**.\n\n` +
                 `🔒 **Zero Public Exposure:** Your key is encrypted with **military-grade AES-256-GCM** and stored in secure memory/database. F.R.I.D.A.Y only accesses it to calculate your stats.\n\n` +
-                `Provide it via \`/bs update key:YOUR_KEY\` or click **Link Limited Key** below:`
+                `Provide it privately via \`/linkkey\` or click **Link Limited Key** below:`
             );
             const actionRow = UI.actionRow(
                 UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑'),
@@ -15435,16 +15431,13 @@ async function registerSlashCommands(token, guildId = null, options = {}) {
 
         // 20. Battle Stats Manual Update & Training Progress Tracker (/bs, /bsupdate)
         new SlashCommandBuilder().setName('bs').setDescription('Track Torn battle stats and training gains (like TornStats)')
-            .addSubcommand(sub => sub.setName('update').setDescription('Fetch live battle stats, record training progress, and calculate stat gains')
+            .addSubcommand(sub => sub.setName('update').setDescription('Fetch live battle stats, record training progress, and post publicly in channel')
                 .addStringOption(opt => opt.setName('key').setDescription('Optional: provide/link your 16-char Limited Access API key').setRequired(false))
-                .addBooleanOption(opt => opt.setName('public').setDescription('Set to true to post publicly in the channel (default: private)').setRequired(false))
             )
-            .addSubcommand(sub => sub.setName('view').setDescription('View your current recorded battle stats, stat distribution, and last update time')
-                .addBooleanOption(opt => opt.setName('public').setDescription('Set to true to post publicly in the channel (default: private)').setRequired(false))
+            .addSubcommand(sub => sub.setName('view').setDescription('View your current recorded battle stats and stat distribution publicly in channel')
             ).toJSON(),
-        new SlashCommandBuilder().setName('bsupdate').setDescription('Quick shortcut: Update battle stats and calculate training gains')
-            .addStringOption(opt => opt.setName('key').setDescription('Optional: provide/link your 16-char Limited Access API key').setRequired(false))
-            .addBooleanOption(opt => opt.setName('public').setDescription('Set to true to post publicly in the channel (default: private)').setRequired(false)).toJSON()
+        new SlashCommandBuilder().setName('bsupdate').setDescription('Quick shortcut: Update battle stats and post publicly in channel')
+            .addStringOption(opt => opt.setName('key').setDescription('Optional: provide/link your 16-char Limited Access API key').setRequired(false)).toJSON()
     ];
 
     const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : [])
@@ -16565,7 +16558,7 @@ function setupSlashBotEvents(bot, token) {
 
             // ── Battle Stats Quick Update Button ──
             if (customId.startsWith('btn_bs_update')) {
-                await handleBattleStatsUpdate(interaction, { forceUpdate: true, isButton: true });
+                await handleBattleStatsUpdate(interaction, { forceUpdate: true, isButton: false, isPublic: true });
                 return;
             }
 
@@ -17090,11 +17083,10 @@ function setupSlashBotEvents(bot, token) {
         if (cmd === 'bs' || cmd === 'bsupdate') {
             const forceUpdate = (cmd === 'bsupdate') || (!subcommand || subcommand === 'update');
             const keyOption = interaction.options?.getString?.('key');
-            const isPublic = interaction.options?.getBoolean?.('public') === true;
             await handleBattleStatsUpdate(interaction, {
                 forceUpdate,
                 keyInput: keyOption,
-                isPublic
+                isPublic: true
             });
             return;
         }
