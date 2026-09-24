@@ -757,6 +757,100 @@ function resolveGitHubToken(discordConfig = {}) {
 }
 
 /**
+ * Rigorously verifies a GitHub token against both user identity AND repository write access.
+ */
+async function verifyGitHubTokenWithRepo(token) {
+    if (!token || typeof token !== 'string' || token.trim().length < 15) {
+        return { valid: false, error: 'Token is too short or empty.' };
+    }
+    const cleanToken = token.trim().replace(/^["']|["']$/g, '');
+    const primaryAuth = cleanToken.startsWith('ghp_') ? `token ${cleanToken}` : `Bearer ${cleanToken}`;
+    const fallbackAuth = cleanToken.startsWith('ghp_') ? `Bearer ${cleanToken}` : `token ${cleanToken}`;
+
+    // 1. Check user authentication
+    let userRes = await fetch('https://api.github.com/user', {
+        headers: {
+            'Authorization': primaryAuth,
+            'Accept': 'application/vnd.github+json',
+            'User-Agent': 'Friday-Dev-Agent'
+        }
+    });
+
+    if (!userRes.ok && (userRes.status === 401 || userRes.status === 403)) {
+        userRes = await fetch('https://api.github.com/user', {
+            headers: {
+                'Authorization': fallbackAuth,
+                'Accept': 'application/vnd.github+json',
+                'User-Agent': 'Friday-Dev-Agent'
+            }
+        });
+    }
+
+    if (!userRes.ok) {
+        return {
+            valid: false,
+            error: `GitHub rejected token (HTTP ${userRes.status}). Ensure the token is active, correct, and not expired.`
+        };
+    }
+
+    const userData = await userRes.json();
+    const scopes = userRes.headers.get('x-oauth-scopes') || 'fine-grained/unspecified';
+
+    // 2. Check repository push permissions
+    let repoRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}`, {
+        headers: {
+            'Authorization': primaryAuth,
+            'Accept': 'application/vnd.github+json',
+            'User-Agent': 'Friday-Dev-Agent'
+        }
+    });
+
+    if (!repoRes.ok && (repoRes.status === 401 || repoRes.status === 403)) {
+        repoRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}`, {
+            headers: {
+                'Authorization': fallbackAuth,
+                'Accept': 'application/vnd.github+json',
+                'User-Agent': 'Friday-Dev-Agent'
+            }
+        });
+    }
+
+    if (!repoRes.ok) {
+        const repoErr = await repoRes.json().catch(() => ({}));
+        return {
+            valid: false,
+            user: userData.login,
+            scopes,
+            canPush: false,
+            error: `Authenticated as **@${userData.login}**, but could not access repository \`${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}\` (HTTP ${repoRes.status}: ${repoErr.message || ''}).`
+        };
+    }
+
+    const repoData = await repoRes.json();
+    const canPush = Boolean(repoData.permissions && (repoData.permissions.push || repoData.permissions.admin));
+
+    if (!canPush) {
+        return {
+            valid: false,
+            user: userData.login,
+            scopes,
+            canPush: false,
+            error: `Authenticated as GitHub user **@${userData.login}**, but this account does **not** have write (push) access to **${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}**.\n\n` +
+                   `• **If you own the repo:** You may be logged into GitHub as **${userData.login}** instead of **${GITHUB_REPO_OWNER}**. Log into GitHub as **${GITHUB_REPO_OWNER}** to create the token.\n` +
+                   `• **If you want @${userData.login} to deploy:** Go to https://github.com/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/settings/access and invite **@${userData.login}** as a Collaborator with Admin or Write permissions.`
+        };
+    }
+
+    return {
+        valid: true,
+        user: userData.login,
+        scopes,
+        canPush: true,
+        authHeader: primaryAuth
+    };
+}
+
+/**
  * Execute deployment: Pushes commit to GitHub via REST API.
  * Railway automatically catches the push and rebuilds.
  */
@@ -783,16 +877,29 @@ async function deployToGitHub(actionId, user, discordConfig = {}) {
     const updatedContent = deployment.updatedContent;
     const authorUsername = user?.username || deployment.authorName || "Admin";
 
+    const authHeader = githubToken.startsWith('ghp_') ? `token ${githubToken}` : `Bearer ${githubToken}`;
+    const fallbackAuth = githubToken.startsWith('ghp_') ? `Bearer ${githubToken}` : `token ${githubToken}`;
+
     try {
         // 1. Fetch current file SHA from GitHub API
         const getUrl = `https://api.github.com/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents/${targetFile}?ref=${GITHUB_BRANCH}`;
-        const getRes = await fetch(getUrl, {
+        let getRes = await fetch(getUrl, {
             headers: {
-                'Authorization': `Bearer ${githubToken}`,
+                'Authorization': authHeader,
                 'Accept': 'application/vnd.github+json',
                 'User-Agent': 'Friday-Dev-Agent'
             }
         });
+
+        if (!getRes.ok && (getRes.status === 401 || getRes.status === 403)) {
+            getRes = await fetch(getUrl, {
+                headers: {
+                    'Authorization': fallbackAuth,
+                    'Accept': 'application/vnd.github+json',
+                    'User-Agent': 'Friday-Dev-Agent'
+                }
+            });
+        }
 
         if (!getRes.ok) {
             const errData = await getRes.json().catch(() => ({}));
@@ -809,10 +916,10 @@ async function deployToGitHub(actionId, user, discordConfig = {}) {
         const putUrl = `https://api.github.com/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents/${targetFile}`;
         const commitMsg = `feat(bot): ${deployment.plan.slice(0, 72)} (via Discord Admin @${authorUsername})`;
 
-        const putRes = await fetch(putUrl, {
+        let putRes = await fetch(putUrl, {
             method: 'PUT',
             headers: {
-                'Authorization': `Bearer ${githubToken}`,
+                'Authorization': authHeader,
                 'Accept': 'application/vnd.github+json',
                 'User-Agent': 'Friday-Dev-Agent',
                 'Content-Type': 'application/json'
@@ -825,11 +932,35 @@ async function deployToGitHub(actionId, user, discordConfig = {}) {
             })
         });
 
+        if (!putRes.ok && (putRes.status === 401 || putRes.status === 403)) {
+            putRes = await fetch(putUrl, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': fallbackAuth,
+                    'Accept': 'application/vnd.github+json',
+                    'User-Agent': 'Friday-Dev-Agent',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: commitMsg,
+                    content: Buffer.from(updatedContent).toString('base64'),
+                    sha: currentSha,
+                    branch: GITHUB_BRANCH
+                })
+            });
+        }
+
         if (!putRes.ok) {
             const errData = await putRes.json().catch(() => ({}));
             let errMsg = `GitHub rejected commit: ${putRes.status} ${errData.message || ''}`;
             if (putRes.status === 403) {
-                errMsg += `\n\n🔑 **Permission Fix:** Your GitHub Personal Access Token lacks write permissions for this repository. Please generate a token at https://github.com/settings/tokens with the **\`repo\`** checkbox ticked, and set it via \`/github token:<new_token>\` or in Railway environment variables.`;
+                // Diagnose exact reason
+                const diag = await verifyGitHubTokenWithRepo(githubToken);
+                if (!diag.valid) {
+                    errMsg += `\n\n${diag.error}`;
+                } else {
+                    errMsg += `\n\n🔑 Token has write access as @${diag.user} (scopes: ${diag.scopes}), but GitHub rejected the file commit. Verify repository branch rules or fine-grained token write settings.`;
+                }
             }
             return {
                 success: false,
@@ -891,5 +1022,6 @@ module.exports = {
     deployToGitHub,
     cancelDeployment,
     resolveGitHubToken,
+    verifyGitHubTokenWithRepo,
     pendingDeployments
 };

@@ -16225,33 +16225,27 @@ function setupSlashBotEvents(bot, token) {
                 const tokenInput = (interaction.fields.getTextInputValue('github_token_input') || '').trim();
 
                 try {
-                    const testRes = await fetch('https://api.github.com/user', {
-                        headers: {
-                            'Authorization': `Bearer ${tokenInput}`,
-                            'Accept': 'application/vnd.github+json',
-                            'User-Agent': 'Friday-Dev-Agent'
-                        }
-                    });
+                    const check = await fridayDev.verifyGitHubTokenWithRepo(tokenInput);
 
-                    if (!testRes.ok) {
+                    if (!check.valid) {
                         return await interaction.editReply({
                             embeds: [sanitizeEmbed(UI.error(
-                                'Invalid GitHub Token',
-                                `GitHub rejected this token (HTTP ${testRes.status}). Please ensure the token is active and has \`repo\` (Contents: Read and write) permissions.`
+                                'GitHub Token Verification Failed',
+                                check.error
                             ))]
                         });
                     }
 
-                    const uData = await testRes.json();
                     discordConfig.githubToken = tokenInput;
                     saveDiscordConfig();
 
                     return await interaction.editReply({
                         embeds: [sanitizeEmbed(UI.success(
-                            '🔑 GitHub Token Configured!',
-                            `Successfully authenticated as GitHub user **${uData.login}**!\n\n` +
+                            '🔑 GitHub Token Configured & Verified!',
+                            `Successfully authenticated as GitHub user **@${check.user}**!\n\n` +
                             `• **Repository:** \`hulbertowen-droid/torn-company-app\`\n` +
-                            `• **Branch:** \`main\`\n\n` +
+                            `• **Write/Push Access:** 🟢 VERIFIED\n` +
+                            `• **Token Scopes:** \`${check.scopes}\`\n\n` +
                             `F.R.I.D.A.Y. can now commit approved code modifications directly from Discord and trigger automatic Railway builds.`
                         ))]
                     });
@@ -17244,32 +17238,29 @@ function setupSlashBotEvents(bot, token) {
                 });
             }
 
-            // Verify provided token against GitHub API
+            // Verify provided token against GitHub API and repository write permissions
             try {
-                const testRes = await fetch('https://api.github.com/user', {
-                    headers: {
-                        'Authorization': `Bearer ${inputToken}`,
-                        'Accept': 'application/vnd.github+json',
-                        'User-Agent': 'Friday-Dev-Agent'
-                    }
-                });
+                const check = await fridayDev.verifyGitHubTokenWithRepo(inputToken);
 
-                if (!testRes.ok) {
+                if (!check.valid) {
                     return await interaction.editReply({
-                        embeds: [sanitizeEmbed(UI.error('Token Rejected', `GitHub rejected this token (HTTP ${testRes.status}). Ensure it has \`repo\` (Contents: Read and write) permissions.`))]
+                        embeds: [sanitizeEmbed(UI.error(
+                            'GitHub Token Verification Failed',
+                            check.error
+                        ))]
                     });
                 }
 
-                const uData = await testRes.json();
                 discordConfig.githubToken = inputToken;
                 saveDiscordConfig();
 
                 return await interaction.editReply({
                     embeds: [sanitizeEmbed(UI.success(
-                        '🔑 GitHub Token Configured!',
-                        `Successfully authenticated as GitHub user **${uData.login}**!\n\n` +
+                        '🔑 GitHub Token Configured & Verified!',
+                        `Successfully authenticated as GitHub user **@${check.user}**!\n\n` +
                         `• **Repository:** \`hulbertowen-droid/torn-company-app\`\n` +
-                        `• **Branch:** \`main\`\n\n` +
+                        `• **Write/Push Access:** 🟢 VERIFIED\n` +
+                        `• **Token Scopes:** \`${check.scopes}\`\n\n` +
                         `F.R.I.D.A.Y. is now fully enabled for autonomous Discord code deployments!`
                     ))]
                 });
