@@ -1,0 +1,21 @@
+[
+  {
+    "id": "promo_1790274245977_99999",
+    "discordUserId": "123456789",
+    "playerId": 99999,
+    "playerName": "Tester",
+    "currentRole": "Spider-Soldier",
+    "requestedRole": "Web Slinger",
+    "daysInFaction": 100,
+    "reason": "Active daily hitter",
+    "guildId": "guild123",
+    "status": "approved",
+    "createdAt": 1790274245977,
+    "reviewedBy": "admin123",
+    "reviewedByName": "LeaderOwen",
+    "reviewedAt": 1790274245979,
+    "reviewReason": "",
+    "channelId": null,
+    "messageId": null
+  }
+]

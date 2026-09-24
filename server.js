@@ -34,6 +34,8 @@ const tornApiManager = require('./torn-api-manager');
 const warboardBroadcaster = require('./warboard-broadcaster');
 const retalEngine = require('./retal_engine');
 const fridayDev = require('./friday-dev-agent');
+const promotionManager = require('./promotion-manager');
+promotionManager.initPromotionManager(null);
 
 
 // Hardcoded MongoDB URI to bypass Render settings
@@ -81,6 +83,7 @@ let discordConfig = {
     inactivityRoleId: "",
     inactivityDays: 1,
     inactivityChannelId: "",
+    promotionChannelId: "",
     apiKey: "", 
     factionId: "",
     notificationsKilled: false,
@@ -168,6 +171,7 @@ function connectMongo() {
             global.mongoConnectionError = null;
             await loadConfigFromMongo();
             await sessionManager.initSessionStore();
+            promotionManager.initPromotionManager(mongoose.connection.db);
         })
         .catch(err => {
             console.warn("[MongoDB] Atlas connection warning (retrying in 10s):", err.message || err);
@@ -681,6 +685,7 @@ discordConfig = {
     inactivityRoleId: "",
     inactivityDays: 1,
     inactivityChannelId: "",
+    promotionChannelId: "",
     apiKey: "", 
     factionId: "",
     notificationsKilled: false,
@@ -3134,6 +3139,7 @@ app.get('/api/get-discord-config', (req, res) => {
         retalChannelId: discordConfig.retalChannelId || "1491499332044591176",
         retalRoleId: discordConfig.retalRoleId || "",
         inactivityChannelId: discordConfig.inactivityChannelId || "",
+        promotionChannelId: discordConfig.promotionChannelId || "",
         overdoseChannelId: discordConfig.overdoseChannelId || "",
         overdoseRoleId: discordConfig.overdoseRoleId || "",
         alertOverdose: discordConfig.alertOverdose !== false,
@@ -3199,6 +3205,15 @@ app.post('/api/save-discord-config', async (req, res) => {
             payload.inactivityChannelId = "";
         } else {
             payload.inactivityChannelId = rawInact.replace(/[^0-9]/g, '');
+        }
+    }
+
+    if (payload.promotionChannelId !== undefined) {
+        let rawPromo = String(payload.promotionChannelId || '').trim();
+        if (rawPromo.includes('.') || /[a-zA-Z]/.test(rawPromo)) {
+            payload.promotionChannelId = "";
+        } else {
+            payload.promotionChannelId = rawPromo.replace(/[^0-9]/g, '');
         }
     }
 
@@ -9363,7 +9378,7 @@ app.post('/api/user/link-key', async (req, res) => {
 
 
 // --- MULTI-TENANT DISCORD BOTS & SLASH COMMANDS ---
-const { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, InteractionType, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, InteractionType, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 let activeDiscordBots = {}; 
 let botLoginPromises = {};
 
@@ -15851,6 +15866,11 @@ async function registerSlashCommands(token, guildId = null, options = {}) {
         new SlashCommandBuilder().setName('remindkeys').setDescription('Admin: Send a polite reminder DM to verified members who haven\'t linked their API key yet')
             .addBooleanOption(opt => opt.setName('dryrun').setDescription('If true, previews members to be reminded without sending DMs').setRequired(false)).toJSON(),
 
+        // 0b. Faction Promotion Requests
+        new SlashCommandBuilder().setName('promotion').setDescription('Request a promotion to an actual faction role (excluding leadership positions)')
+            .addStringOption(opt => opt.setName('role').setDescription('Select the faction role you want to request').setRequired(false).setAutocomplete(true))
+            .addStringOption(opt => opt.setName('reason').setDescription('Optional pitch or reason for your promotion request').setRequired(false)).toJSON(),
+
         // 1. Vault Banking
         new SlashCommandBuilder().setName('withdraw').setDescription('Request money from the faction vault (with overdraft protection)')
             .addStringOption(opt => opt.setName('amount').setDescription('Amount to request (e.g. 10m, 500k, 25000000)').setRequired(true).setAutocomplete(true)).toJSON(),
@@ -16842,12 +16862,157 @@ function setupSlashBotEvents(bot, token) {
                     });
                 }
             }
+
+            // ── Faction Promotion Pitch Submission ──
+            if (interaction.customId.startsWith('modal_promo_')) {
+                await interaction.deferReply({ ephemeral: true });
+                const selectedRole = decodeURIComponent(interaction.customId.replace('modal_promo_', ''));
+                const reason = (interaction.fields.getTextInputValue('promo_reason') || '').trim();
+
+                const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+                const facId = discordConfig.factionId || dynamicFactionId || 52355;
+                const facData = await promotionManager.getFactionData(apiKey, facId);
+
+                // Resolve member identity
+                let targetTornId = null;
+                let memberName = interaction.member?.displayName || interaction.user?.username || 'Member';
+
+                if (verifiedDiscordToTorn[interaction.user.id]) {
+                    targetTornId = verifiedDiscordToTorn[interaction.user.id].tornId;
+                    memberName = verifiedDiscordToTorn[interaction.user.id].tornName || memberName;
+                }
+                if (!targetTornId && userKeys && typeof userKeys.hasLinkedKey === 'function' && userKeys.hasLinkedKey(interaction.user.id)) {
+                    const rec = userKeys.userKeysStore?.get(interaction.user.id);
+                    if (rec && rec.tornId) {
+                        targetTornId = rec.tornId;
+                        memberName = rec.playerName || memberName;
+                    }
+                }
+                if (!targetTornId && interaction.member?.displayName) {
+                    const match = interaction.member.displayName.match(/\[(\d+)\]/);
+                    if (match) targetTornId = match[1];
+                }
+
+                if (!targetTornId) {
+                    return await interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.warning(
+                            '🛡️ Verification Required',
+                            `You must be verified with your Torn account to submit a promotion request. Please click **🛡️ Verify Me** or run \`/verify\` first.`
+                        ))]
+                    });
+                }
+
+                const memberObj = facData.members?.[String(targetTornId)] || facData.members?.[targetTornId];
+                if (!memberObj) {
+                    return await interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.error(
+                            'Faction Member Only',
+                            `⚠️ You are not listed as an active member of **${facData.name || 'our faction'}** [${facId}].`
+                        ))]
+                    });
+                }
+
+                const currentRole = memberObj.position || 'Member';
+                const daysInFaction = memberObj.days_in_faction || 0;
+
+                // Check restricted role
+                if (promotionManager.isRestrictedPromotionRole(selectedRole)) {
+                    return await interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.error(
+                            '🚫 Restricted Role',
+                            `Leader and Co-leader positions cannot be requested.`
+                        ))]
+                    });
+                }
+
+                // Check already assigned
+                if (selectedRole.toLowerCase() === currentRole.toLowerCase()) {
+                    return await interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.warning(
+                            'Already Assigned',
+                            `You are already assigned as **${selectedRole}** in **${facData.name}**!`
+                        ))]
+                    });
+                }
+
+                // Check pending
+                const existing = promotionManager.getPendingRequestForPlayer(targetTornId);
+                if (existing) {
+                    return await interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.warning(
+                            'Promotion Request Pending',
+                            `⏳ You already have a pending promotion request for **${existing.requestedRole}** submitted <t:${Math.floor(existing.createdAt / 1000)}:R>!\n\nPlease wait for leadership to review it.`
+                        ))]
+                    });
+                }
+
+                // Create request
+                const promoReq = await promotionManager.createPromotionRequest({
+                    discordUserId: interaction.user.id,
+                    playerId: targetTornId,
+                    playerName: memberObj.name || memberName,
+                    currentRole,
+                    requestedRole: selectedRole,
+                    reason,
+                    daysInFaction,
+                    guildId: interaction.guild?.id
+                });
+
+                // Dispatch to leadership channel
+                await promotionManager.dispatchPromotionToLeadership(bot, interaction.guild, promoReq, discordConfig, facData);
+
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.success(
+                        '🎖️ Promotion Request Submitted!',
+                        `Your application to be promoted to **${selectedRole}** has been sent to faction leadership for review!\n\n` +
+                        `• **Current Role:** ${currentRole} (${daysInFaction} days in faction)\n` +
+                        `• **Target Role:** **${selectedRole}**\n` +
+                        (reason ? `• **Pitch:** _"${reason}"_\n` : '') +
+                        `\nF.R.I.D.A.Y will notify you once leadership reviews your application.`
+                    ))]
+                });
+            }
         }
 
-        // ── Amount Autocomplete for /withdraw ──
+        // ── String Select Menu Interactions ──
+        if (interaction.isStringSelectMenu && interaction.isStringSelectMenu()) {
+            if (interaction.customId === 'select_promotion_role') {
+                const selectedRole = interaction.values?.[0];
+                if (!selectedRole) {
+                    return interaction.reply({ content: "⚠️ No role was selected.", ephemeral: true }).catch(() => {});
+                }
+
+                if (promotionManager.isRestrictedPromotionRole(selectedRole)) {
+                    return interaction.reply({
+                        content: "🚫 Leader and Co-leader positions are appointed directly and cannot be requested.",
+                        ephemeral: true
+                    }).catch(() => {});
+                }
+
+                const modal = promotionManager.buildPromotionModal(selectedRole);
+                return await interaction.showModal(modal);
+            }
+        }
+
+        // ── Autocomplete Interactions ──
         if (interaction.isAutocomplete()) {
             const cmd = interaction.commandName;
             const focusedOption = interaction.options.getFocused(true);
+
+            if (cmd === 'promotion' && focusedOption.name === 'role') {
+                const typed = (focusedOption.value || '').toLowerCase().trim();
+                const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+                const facId = discordConfig.factionId || dynamicFactionId || 52355;
+                try {
+                    const facData = await promotionManager.getFactionData(apiKey, facId);
+                    const requestableRoles = promotionManager.getRequestableFactionRoles(facData.positions);
+                    const filtered = requestableRoles.filter(r => !typed || r.toLowerCase().includes(typed)).slice(0, 25);
+                    return await interaction.respond(filtered.map(r => ({ name: r, value: r }))).catch(() => {});
+                } catch (e) {
+                    return await interaction.respond([]).catch(() => {});
+                }
+            }
+
             if (cmd === 'withdraw' && focusedOption.name === 'amount') {
                 const typed = (focusedOption.value || '').replace(/[$,\s]/g, '');
                 const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
@@ -17458,6 +17623,81 @@ function setupSlashBotEvents(bot, token) {
                 );
 
                 return interaction.editReply({ embeds: [sanitizeEmbed(embed)], components: [actionRow] }).catch(() => {});
+            }
+
+            // ── Faction Promotion Leadership Approval / Denial ──
+            if (customId.startsWith('btn_promo_approve_') || customId.startsWith('btn_promo_deny_')) {
+                const isApprove = customId.startsWith('btn_promo_approve_');
+                const reqId = customId.replace(isApprove ? 'btn_promo_approve_' : 'btn_promo_deny_', '').trim();
+
+                const isAuthorized = interaction.member?.permissions?.has?.('Administrator') ||
+                                     (discordConfig.leaderRoleId && interaction.member?.roles?.cache?.has?.(discordConfig.leaderRoleId)) ||
+                                     (interaction.user.id === '992561850057240578' || interaction.user.id === discordConfig.personalDiscordId);
+                if (!isAuthorized) {
+                    return interaction.reply({
+                        content: "⚠️ Only Faction Leadership or Server Administrators can approve or deny promotion requests.",
+                        ephemeral: true
+                    }).catch(() => {});
+                }
+
+                await interaction.deferUpdate().catch(() => {});
+
+                const promoReq = promotionManager.getPromotionRequest(reqId);
+                if (!promoReq) {
+                    return interaction.followUp({ content: "⚠️ Promotion request not found or expired.", ephemeral: true }).catch(() => {});
+                }
+
+                if (promoReq.status !== 'pending') {
+                    return interaction.followUp({
+                        content: `⚠️ This promotion request was already **${promoReq.status}** by <@${promoReq.reviewedBy}> on <t:${Math.floor((promoReq.reviewedAt || Date.now()) / 1000)}:f>.`,
+                        ephemeral: true
+                    }).catch(() => {});
+                }
+
+                const reviewerName = interaction.member?.displayName || interaction.user?.username || 'Leadership';
+                const decision = isApprove ? 'approved' : 'denied';
+                const updated = await promotionManager.reviewPromotionRequest(reqId, interaction.user.id, reviewerName, decision);
+
+                const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+                const facId = discordConfig.factionId || dynamicFactionId || 52355;
+                const facData = await promotionManager.getFactionData(apiKey, facId);
+
+                const { embed, actionRow } = promotionManager.buildReviewedNotificationEmbed(
+                    updated, decision, reviewerName, interaction.user.id, facData.positions, facData.name
+                );
+
+                const updatePayload = {
+                    content: isApprove ? `✅ **Promotion Request Approved** by <@${interaction.user.id}>` : `❌ **Promotion Request Denied** by <@${interaction.user.id}>`,
+                    embeds: [sanitizeEmbed(embed)],
+                    components: [actionRow]
+                };
+
+                await interaction.editReply(updatePayload).catch(async () => {
+                    if (interaction.message?.edit) {
+                        await interaction.message.edit(updatePayload).catch(() => {});
+                    }
+                });
+
+                // Notify applicant via direct message
+                try {
+                    const applicantUser = await (interaction.client || bot).users.fetch(promoReq.discordUserId).catch(() => null);
+                    if (applicantUser) {
+                        const dmEmbed = isApprove ? UI.success(
+                            `🎉 Faction Promotion Approved!`,
+                            `Congratulations! Your promotion request to **${promoReq.requestedRole}** in **${facData.name}** was **APPROVED** by <@${interaction.user.id}> (${reviewerName})!\n\n` +
+                            `Leadership has been provided the direct link to update your position in Torn Faction Controls.`
+                        ) : UI.error(
+                            `Faction Promotion Request Update`,
+                            `Your promotion request to **${promoReq.requestedRole}** in **${facData.name}** was **DENIED** by <@${interaction.user.id}> (${reviewerName}).\n\n` +
+                            `Keep contributing and reach out to leadership if you have questions on requirements needed for this role!`
+                        );
+                        await applicantUser.send({ embeds: [sanitizeEmbed(dmEmbed)] }).catch(() => {});
+                    }
+                } catch(dmErr) {
+                    console.warn('[Promotions] DM to applicant failed:', dmErr.message);
+                }
+
+                return;
             }
 
             return;
@@ -18138,6 +18378,146 @@ function setupSlashBotEvents(bot, token) {
                     title: `🚨 SOS BACKUP: Target [${targetId}]`,
                     description: `**Requested by**: <@${interaction.user.id}>\n**Note**: ${note}\n\n[⚔️ CLICK HERE TO ATTACK](${attackLink}) • [👤 View Profile](https://www.torn.com/profiles.php?XID=${targetId})`,
                     color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() }]
+            });
+        }
+
+        // ── Faction Promotion Request Slash Command ──
+        if (cmd === 'promotion') {
+            await interaction.deferReply({ ephemeral: true });
+
+            const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+            const facId = discordConfig.factionId || dynamicFactionId || 52355;
+            const facData = await promotionManager.getFactionData(apiKey, facId);
+
+            // Resolve applicant's identity
+            let targetTornId = null;
+            let memberName = interaction.member?.displayName || interaction.user?.username || 'Member';
+
+            if (verifiedDiscordToTorn[interaction.user.id]) {
+                targetTornId = verifiedDiscordToTorn[interaction.user.id].tornId;
+                memberName = verifiedDiscordToTorn[interaction.user.id].tornName || memberName;
+            }
+            if (!targetTornId && userKeys && typeof userKeys.hasLinkedKey === 'function' && userKeys.hasLinkedKey(interaction.user.id)) {
+                const rec = userKeys.userKeysStore?.get(interaction.user.id);
+                if (rec && rec.tornId) {
+                    targetTornId = rec.tornId;
+                    memberName = rec.playerName || memberName;
+                }
+            }
+            if (!targetTornId && interaction.member?.displayName) {
+                const match = interaction.member.displayName.match(/\[(\d+)\]/);
+                if (match) targetTornId = match[1];
+            }
+
+            if (!targetTornId) {
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.warning(
+                        '🛡️ Verification Required',
+                        `You must be verified with your Torn account to view or submit promotion requests.\n\nPlease click **🛡️ Verify Me** or run \`/verify\` first.`
+                    ))]
+                });
+            }
+
+            const memberObj = facData.members?.[String(targetTornId)] || facData.members?.[targetTornId];
+            if (!memberObj) {
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.error(
+                        'Faction Member Only',
+                        `⚠️ You are not listed as an active member of **${facData.name || 'our faction'}** [${facId}]. Only active faction members can request promotions.`
+                    ))]
+                });
+            }
+
+            const currentRole = memberObj.position || 'Member';
+            const daysInFaction = memberObj.days_in_faction || 0;
+            const requestedRoleInput = interaction.options.getString('role');
+            const reasonInput = (interaction.options.getString('reason') || '').trim();
+
+            // Case A: User specified a role directly via argument
+            if (requestedRoleInput) {
+                const cleanRole = requestedRoleInput.trim();
+
+                if (promotionManager.isRestrictedPromotionRole(cleanRole)) {
+                    return await interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.error(
+                            '🚫 Restricted Role',
+                            `Leader and Co-leader positions are appointed directly by faction leadership and cannot be requested.`
+                        ))]
+                    });
+                }
+
+                const requestableRoles = promotionManager.getRequestableFactionRoles(facData.positions);
+                const exactRole = requestableRoles.find(r => r.toLowerCase() === cleanRole.toLowerCase());
+                if (!exactRole) {
+                    const roleList = requestableRoles.map(r => `• **${r}**`).join('\n');
+                    return await interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.warning(
+                            'Invalid Role Specified',
+                            `**${cleanRole}** is not an active role in **${facData.name}**.\n\n**Available Roles:**\n${roleList}`
+                        ))]
+                    });
+                }
+
+                if (exactRole.toLowerCase() === currentRole.toLowerCase()) {
+                    return await interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.warning(
+                            'Already Assigned',
+                            `You are already assigned as **${exactRole}** in **${facData.name}**!`
+                        ))]
+                    });
+                }
+
+                const existing = promotionManager.getPendingRequestForPlayer(targetTornId);
+                if (existing) {
+                    return await interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.warning(
+                            'Promotion Request Pending',
+                            `⏳ You already have a pending promotion request for **${existing.requestedRole}** submitted <t:${Math.floor(existing.createdAt / 1000)}:R>!\n\nPlease wait for leadership to review it.`
+                        ))]
+                    });
+                }
+
+                const promoReq = await promotionManager.createPromotionRequest({
+                    discordUserId: interaction.user.id,
+                    playerId: targetTornId,
+                    playerName: memberObj.name || memberName,
+                    currentRole,
+                    requestedRole: exactRole,
+                    reason: reasonInput,
+                    daysInFaction,
+                    guildId: interaction.guild?.id
+                });
+
+                await promotionManager.dispatchPromotionToLeadership(bot, interaction.guild, promoReq, discordConfig, facData);
+
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.success(
+                        '🎖️ Promotion Request Submitted!',
+                        `Your application to be promoted to **${exactRole}** has been sent to faction leadership for review!\n\n` +
+                        `• **Current Role:** ${currentRole} (${daysInFaction} days in faction)\n` +
+                        `• **Target Role:** **${exactRole}**\n` +
+                        (reasonInput ? `• **Pitch:** _"${reasonInput}"_\n` : '') +
+                        `\nF.R.I.D.A.Y will notify you once leadership reviews your application.`
+                    ))]
+                });
+            }
+
+            // Case B: No role provided — display interactive overview embed + Select Menu dropdown
+            const menuEmbed = promotionManager.buildPromotionMenuEmbed({
+                memberName: memberObj.name || memberName,
+                memberId: targetTornId,
+                currentRole,
+                daysInFaction,
+                facName: facData.name,
+                positions: facData.positions
+            });
+
+            const selectActionRow = promotionManager.buildPromotionSelectMenu(facData.positions, currentRole);
+            const components = selectActionRow ? [selectActionRow] : [];
+
+            return await interaction.editReply({
+                embeds: [sanitizeEmbed(menuEmbed)],
+                components
             });
         }
 
