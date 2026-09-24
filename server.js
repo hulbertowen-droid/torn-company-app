@@ -2535,10 +2535,8 @@ async function checkFactionMembersInactivity(members, expectedFactionId, faction
         }
 
         const inactiveHours = Math.floor(inactiveSec / 3600);
-        const inactiveDaysCount = Math.floor(inactiveSec / 86400);
-        const daysText = inactiveDaysCount <= 1 ? '1 day' : `${inactiveDaysCount} days`;
-        const timeDisplay = `${daysText} (${inactiveHours} hours)`;
-        const relText = m.last_action?.relative || `${inactiveHours} hours ago`;
+        const timeDisplay = `${inactiveHours} hour${inactiveHours === 1 ? '' : 's'}`;
+        const relText = m.last_action?.relative || `${inactiveHours} hour${inactiveHours === 1 ? '' : 's'} ago`;
         const memberStatus = m.status?.description || m.status?.state || m.last_action?.status || 'Offline';
 
         const embed = {
@@ -3961,10 +3959,10 @@ app.post('/api/test-discord-alert', async (req, res) => {
         }
         embed = {
             title: "💤 Inactive Member",
-            description: `**[Test Member]** [1234567] has been offline for **1 day (24 hours)** with no actions recorded.`,
+            description: `**[Test Member]** [1234567] has been offline for **24 hours** with no actions recorded.`,
             color: UI.COLORS.WARNING,
             fields: [
-                { name: "⏱️ Inactive Duration", value: "**1 day (24 hours)**", inline: true },
+                { name: "⏱️ Inactive Duration", value: "**24 hours**", inline: true },
                 { name: "🕒 Last Action", value: "Yesterday (24h ago)", inline: true },
                 { name: "📊 Current Status", value: "Offline", inline: true },
                 { name: "🎯 Role Mentioned", value: rolePingStr ? `Pinging ${rolePingStr}` : "None configured", inline: true }
@@ -16343,7 +16341,7 @@ function setupSlashBotEvents(bot, token) {
                     }).catch(() => {});
                 }
 
-                await interaction.deferUpdate();
+                await interaction.deferUpdate().catch(() => {});
 
                 const deployResult = await fridayDev.deployToGitHub(actionId, interaction.user, discordConfig);
 
@@ -16354,7 +16352,7 @@ function setupSlashBotEvents(bot, token) {
                             UI.secondaryBtn('btn_dev_set_token', 'Set GitHub Token', '🔑'),
                             UI.dangerBtn(`btn_dev_cancel_${actionId}`, 'Discard Action', '❌')
                         );
-                        return interaction.editReply({
+                        const tokenPayload = {
                             embeds: [sanitizeEmbed(UI.warning(
                                 '🔐 GitHub Token Required',
                                 `**F.R.I.D.A.Y. is ready to deploy your code, but requires a GitHub Personal Access Token.**\n\n` +
@@ -16363,16 +16361,22 @@ function setupSlashBotEvents(bot, token) {
                                 `_Token requires \`repo\` (Contents: Read & write) permissions on \`hulbertowen-droid/torn-company-app\`._`
                             ))],
                             components: [tokenRow]
-                        }).catch(() => {});
+                        };
+                        return interaction.editReply(tokenPayload).catch(async () => {
+                            if (interaction.message?.edit) await interaction.message.edit(tokenPayload).catch(() => {});
+                        });
                     }
 
-                    return interaction.editReply({
+                    const errPayload = {
                         embeds: [sanitizeEmbed(UI.error(
                             'Deployment Failed',
                             `⚠️ **Could not deploy code:** ${deployResult.error}`
                         ))],
                         components: []
-                    }).catch(() => {});
+                    };
+                    return interaction.editReply(errPayload).catch(async () => {
+                        if (interaction.message?.edit) await interaction.message.edit(errPayload).catch(() => {});
+                    });
                 }
 
                 const successEmbed = UI.success(
@@ -16385,10 +16389,14 @@ function setupSlashBotEvents(bot, token) {
                     `_F.R.I.D.A.Y. will reload automatically when the new build completes._`
                 );
 
-                return interaction.editReply({
+                const successPayload = {
                     embeds: [sanitizeEmbed(successEmbed)],
                     components: []
-                }).catch(() => {});
+                };
+
+                return interaction.editReply(successPayload).catch(async () => {
+                    if (interaction.message?.edit) await interaction.message.edit(successPayload).catch(() => {});
+                });
             }
 
             // ── DevOps Cancel Button ──
