@@ -15539,6 +15539,30 @@ function setupSlashBotEvents(bot, token) {
             }
         } catch(e) {}
 
+        // Auto-refresh any active bank requests in Discord so existing cards display stacked buttons immediately
+        try {
+            if (typeof bankRequests === 'object' && bankRequests) {
+                for (const req of Object.values(bankRequests)) {
+                    if ((req.status === 'pending' || req.status === 'verifying') && req.channelId && req.messageId) {
+                        (async () => {
+                            try {
+                                const ch = bot.channels.cache.get(req.channelId);
+                                if (ch) {
+                                    const m = await ch.messages.fetch(req.messageId).catch(() => null);
+                                    if (m) {
+                                        await m.edit({
+                                            embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
+                                            components: buildBankRequestButtons(req)
+                                        }).catch(() => {});
+                                    }
+                                }
+                            } catch(e) {}
+                        })();
+                    }
+                }
+            }
+        } catch(e) {}
+
         try {
             if (c.user.username !== 'F.R.I.D.A.Y') {
                 await c.user.setUsername('F.R.I.D.A.Y').catch(() => {});
