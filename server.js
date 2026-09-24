@@ -1246,6 +1246,11 @@ if (ADMIN_API_KEY) {
 let globalApiUsage = {};
 setInterval(() => { globalApiUsage = {}; }, 60000);
 
+// Startup grace period — prevents all background pollers from firing simultaneously on boot,
+// which would cause an API burst that slows down Discord responses during startup.
+const SERVER_START_TIME = Date.now();
+const STARTUP_GRACE_MS = 30000; // 30 seconds grace before watchers begin
+
 function getNextApiKey() {
     let activeKeys = [];
     
@@ -1906,6 +1911,7 @@ async function handleMemberAttackedAlert(atk) {
 // Background Task 1: Wall Watcher & Scraper (Adaptive War/Peace Polling)
 let lastPeaceWarCheck = 0;
 setInterval(async () => {
+    if (Date.now() - SERVER_START_TIME < STARTUP_GRACE_MS) return; // startup grace
     if (global.isTurboMining) return;
     let watchFactionId = discordConfig.factionId || dynamicFactionId || "52355";
     let watchKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
@@ -2126,6 +2132,7 @@ setInterval(async () => {
 
 // Background Task 2: Market Watcher
 setInterval(async () => {
+    if (Date.now() - SERVER_START_TIME < STARTUP_GRACE_MS) return; // startup grace
     if (global.isTurboMining) return;
     let watchKey = getNextApiKey();
     if (!marketConfig.globalChannelId || !watchKey) return;
@@ -2696,6 +2703,7 @@ async function checkFactionOverdoses(members, expectedFactionId, factionName) {
 
 // Background Task 3: Sniper & Target Status Watcher
 setInterval(async () => {
+    if (Date.now() - SERVER_START_TIME < STARTUP_GRACE_MS) return; // startup grace
     if (global.isTurboMining) return;
     if (global.isNotificationsKilled) return;
     let watchKey = getNextApiKey();
@@ -2878,6 +2886,7 @@ try { if (fs.existsSync('company_history.json')) companyHistory = JSON.parse(fs.
 function saveCompanyHistory() { fs.writeFileSync('company_history.json', JSON.stringify(companyHistory)); }
 
 setInterval(async () => {
+    if (Date.now() - SERVER_START_TIME < STARTUP_GRACE_MS) return; // startup grace
     if (!companyConfig.globalChannelId || !companyConfig.apiKey) return;
     try {
         const resp = await fetch(`https://api.torn.com/company/?selections=profile,detailed,stock&key=${companyConfig.apiKey}`);
@@ -13278,7 +13287,7 @@ async function checkFactionOrganizedCrimes() {
 }
 
 setInterval(checkFactionOrganizedCrimes, 180000); // 3 minutes (conserves bandwidth while preserving prompt alerts)
-setTimeout(checkFactionOrganizedCrimes, 60000);
+setTimeout(checkFactionOrganizedCrimes, 90000); // First fire 90s after startup (staggered from other watchers)
 
 async function executeFulfillRequest(reqId, interaction) {
     const req = bankRequests[reqId];
