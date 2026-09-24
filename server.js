@@ -33,6 +33,7 @@ const sessionManager = require('./session-manager');
 const tornApiManager = require('./torn-api-manager');
 const warboardBroadcaster = require('./warboard-broadcaster');
 const retalEngine = require('./retal_engine');
+const fridayDev = require('./friday-dev-agent');
 
 
 // Hardcoded MongoDB URI to bypass Render settings
@@ -94,6 +95,7 @@ let discordConfig = {
     geminiApiKeys: [],
     geminiApiKey: "",
     openrouterApiKey: "",
+    githubToken: "",
     welcomeChannelId: "",
     postWelcomeRulesOnJoin: true,
     welcomeRulesTitle: "📜 Welcome to the Faction & Server Rules",
@@ -15408,6 +15410,8 @@ async function registerSlashCommands(token, guildId = null, options = {}) {
         new SlashCommandBuilder().setName('unlinkkey').setDescription('Unlink and permanently delete your stored Torn API key from F.R.I.D.A.Y').toJSON(),
         new SlashCommandBuilder().setName('openrouter').setDescription('Admin: Set OpenRouter backup API key for unlimited AI failover')
             .addStringOption(opt => opt.setName('key').setDescription('OpenRouter API key (sk-or-...)').setRequired(true)).toJSON(),
+        new SlashCommandBuilder().setName('github').setDescription('Admin: Configure GitHub Personal Access Token for Discord DevOps deployments')
+            .addStringOption(opt => opt.setName('token').setDescription('GitHub PAT with repo (Contents: Read & write) permission').setRequired(false)).toJSON(),
 
         // 19. Autonomous Elimination Target Hunter
         new SlashCommandBuilder().setName('snipe').setDescription('Autonomous Elimination Target Hunter: find beatable enemies not in hosp/traveling')
@@ -15733,6 +15737,110 @@ function setupSlashBotEvents(bot, token) {
                         await channel.send({ content: clearReply }).catch(() => {});
                     }
                 });
+                return;
+            }
+
+            // ── In-Chat F.R.I.D.A.Y. DevOps & Code Modification Sentinel ──
+            const isDevRequest = fridayDev.detectDevRequest(userSpeech);
+            if (isDevRequest) {
+                const isDevAdmin = fridayDev.isAuthorizedDevAdmin(
+                    latestMsg?.member,
+                    latestMsg?.author,
+                    discordConfig,
+                    userKeys
+                );
+
+                if (!isDevAdmin) {
+                    const deniedEmbed = UI.permission("Administrator");
+                    deniedEmbed.description = `Hey **${primaryAuthor}**, automated bot and codebase modifications are restricted to verified faction and server administrators.`;
+                    await latestMsg.reply({
+                        embeds: [sanitizeEmbed(deniedEmbed)],
+                        allowedMentions: { repliedUser: false }
+                    }).catch(async () => {
+                        if (channel?.send) await channel.send({ embeds: [sanitizeEmbed(deniedEmbed)] }).catch(() => {});
+                    });
+                    return;
+                }
+
+                // Authorized Admin confirmed! Send status indicator
+                const ackMsg = await latestMsg.reply({
+                    embeds: [sanitizeEmbed(UI.loading("Analyzing request with F.R.I.D.A.Y. DevOps Sentinel"))],
+                    allowedMentions: { repliedUser: false }
+                }).catch(async () => {
+                    if (channel?.send) return await channel.send({ embeds: [sanitizeEmbed(UI.loading("Analyzing request with F.R.I.D.A.Y. DevOps Sentinel"))] }).catch(() => null);
+                    return null;
+                });
+
+                // Unified AI caller function
+                const devAiCaller = async (sys, usr) => {
+                    const gKey = getGeminiApiKey();
+                    if (gKey) {
+                        try {
+                            const res = await callGeminiWithKey(gKey, sys, usr, [], { model: 'gemini-2.0-flash' });
+                            if (res && res.trim()) return res;
+                        } catch(e) {}
+                    }
+                    const orRes = await callOpenRouterFallback(sys, usr, [], { model: 'qwen/qwen-2.5-coder-32b-instruct' });
+                    return orRes?.text || orRes?.content || "";
+                };
+
+                // 1. AI Intent & Vetting Check (Anti-Troll & Scope Limiter)
+                const vetting = await fridayDev.evaluateRequestWithAI(userSpeech, primaryAuthor, primaryAuthorId, devAiCaller);
+
+                if (!vetting.allowed) {
+                    const rejectPayload = fridayDev.buildRejectionCard(vetting.classification, vetting.reason, userSpeech, primaryAuthor);
+                    if (ackMsg?.edit) {
+                        await ackMsg.edit(rejectPayload).catch(() => {});
+                    } else if (channel?.send) {
+                        await channel.send(rejectPayload).catch(() => {});
+                    }
+                    return;
+                }
+
+                // 2. Generate Surgical Code Patch & Run Zero-Crash Pre-Flight Check
+                const targetFile = vetting.targetFile || 'server.js';
+                const patchResult = await fridayDev.generateAndVerifyPatch(targetFile, userSpeech, vetting.plan, devAiCaller);
+
+                if (!patchResult.success) {
+                    const errEmbed = UI.error(
+                        "Pre-Flight Safety Check Failed",
+                        `⚠️ The proposed modification could not be safely validated:\n\n**Details:** ${patchResult.error}\n\n_The production server on Railway was protected and no code was touched._`
+                    );
+                    const errPayload = { embeds: [sanitizeEmbed(errEmbed)], components: [] };
+                    if (ackPayload = ackMsg?.edit) {
+                        await ackMsg.edit(errPayload).catch(() => {});
+                    } else if (channel?.send) {
+                        await channel.send(errPayload).catch(() => {});
+                    }
+                    return;
+                }
+
+                // 3. Stage Pending Deployment & Build Interactive Approval Gate
+                const actionId = fridayDev.stagePendingDeployment(
+                    primaryAuthorId,
+                    primaryAuthor,
+                    userSpeech,
+                    vetting.plan,
+                    targetFile,
+                    patchResult.updatedContent,
+                    patchResult.diffSummary
+                );
+
+                const reviewCard = fridayDev.buildReviewCard(
+                    actionId,
+                    primaryAuthor,
+                    primaryAuthorId,
+                    userSpeech,
+                    vetting.plan,
+                    targetFile,
+                    patchResult.diffSummary
+                );
+
+                if (ackMsg?.edit) {
+                    await ackMsg.edit(reviewCard).catch(() => {});
+                } else if (channel?.send) {
+                    await channel.send(reviewCard).catch(() => {});
+                }
                 return;
             }
 
@@ -16065,6 +16173,49 @@ function setupSlashBotEvents(bot, token) {
 
                 return await interaction.editReply({ embeds: [sanitizeEmbed(successEmbed)] });
             }
+
+            // ── Set GitHub Deployment Token Modal (DevOps Sentinel) ──
+            if (interaction.customId === 'modal_dev_set_github_token') {
+                await interaction.deferReply({ ephemeral: true });
+                const tokenInput = (interaction.fields.getTextInputValue('github_token_input') || '').trim();
+
+                try {
+                    const testRes = await fetch('https://api.github.com/user', {
+                        headers: {
+                            'Authorization': `Bearer ${tokenInput}`,
+                            'Accept': 'application/vnd.github+json',
+                            'User-Agent': 'Friday-Dev-Agent'
+                        }
+                    });
+
+                    if (!testRes.ok) {
+                        return await interaction.editReply({
+                            embeds: [sanitizeEmbed(UI.error(
+                                'Invalid GitHub Token',
+                                `GitHub rejected this token (HTTP ${testRes.status}). Please ensure the token is active and has \`repo\` (Contents: Read and write) permissions.`
+                            ))]
+                        });
+                    }
+
+                    const uData = await testRes.json();
+                    discordConfig.githubToken = tokenInput;
+                    saveDiscordConfig();
+
+                    return await interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.success(
+                            '🔑 GitHub Token Configured!',
+                            `Successfully authenticated as GitHub user **${uData.login}**!\n\n` +
+                            `• **Repository:** \`hulbertowen-droid/torn-company-app\`\n` +
+                            `• **Branch:** \`main\`\n\n` +
+                            `F.R.I.D.A.Y. can now commit approved code modifications directly from Discord and trigger automatic Railway builds.`
+                        ))]
+                    });
+                } catch(e) {
+                    return await interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.error('Connection Error', `Failed to contact GitHub API: ${e.message}`))]
+                    });
+                }
+            }
         }
 
         // ── Amount Autocomplete for /withdraw ──
@@ -16143,6 +16294,131 @@ function setupSlashBotEvents(bot, token) {
         // ── Interactive Button Click Handler ──
         if (interaction.isButton()) {
             const customId = interaction.customId || '';
+
+            // ── DevOps Confirm & Deploy Button ──
+            if (customId.startsWith('btn_dev_deploy_')) {
+                const actionId = customId.replace('btn_dev_deploy_', '').trim();
+                const isDevAdmin = fridayDev.isAuthorizedDevAdmin(
+                    interaction.member,
+                    interaction.user,
+                    discordConfig,
+                    userKeys
+                );
+
+                if (!isDevAdmin) {
+                    return interaction.reply({
+                        content: "⚠️ Only a server administrator can authorize bot deployments.",
+                        ephemeral: true
+                    }).catch(() => {});
+                }
+
+                await interaction.deferUpdate();
+
+                const deployResult = await fridayDev.deployToGitHub(actionId, interaction.user, discordConfig);
+
+                if (!deployResult.success) {
+                    if (deployResult.code === 'TOKEN_REQUIRED') {
+                        const tokenRow = UI.actionRow(
+                            UI.primaryBtn('btn_dev_set_token', 'Set GitHub Token', '🔑'),
+                            UI.dangerBtn(`btn_dev_cancel_${actionId}`, 'Discard Action', '❌')
+                        );
+                        return interaction.editReply({
+                            embeds: [sanitizeEmbed(UI.warning(
+                                '🔐 GitHub Token Required',
+                                `**F.R.I.D.A.Y. is ready to deploy your code, but requires a GitHub Personal Access Token.**\n\n` +
+                                `• **Why:** F.R.I.D.A.Y. pushes the verified commit directly to your GitHub repository in the cloud without needing your PC.\n` +
+                                `• **How to create:** Visit [GitHub Personal Access Tokens](https://github.com/settings/tokens) and generate a token with **Contents: Read and write**.\n\n` +
+                                `Click **Set GitHub Token** below to paste it securely:`
+                            ))],
+                            components: [tokenRow]
+                        }).catch(() => {});
+                    }
+
+                    return interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.error(
+                            'Deployment Failed',
+                            `⚠️ **Could not deploy code:** ${deployResult.error}`
+                        ))],
+                        components: []
+                    }).catch(() => {});
+                }
+
+                const successEmbed = UI.success(
+                    '🚀 Modification Committed & Deploying Live!',
+                    `**Administrator <@${interaction.user.id}> has authorized deployment to Railway.**\n\n` +
+                    `• **Commit:** [\`${deployResult.commitSha}\`](${deployResult.commitUrl})\n` +
+                    `• **Message:** \`${deployResult.message}\`\n` +
+                    `• **Status:** 🟢 Pushed to \`main\` branch. Railway auto-build triggered.\n` +
+                    `• **ETA:** Live on production in ~60–90 seconds.\n\n` +
+                    `_F.R.I.D.A.Y. will reload automatically when the new build completes._`
+                );
+
+                return interaction.editReply({
+                    embeds: [sanitizeEmbed(successEmbed)],
+                    components: []
+                }).catch(() => {});
+            }
+
+            // ── DevOps Cancel Button ──
+            if (customId.startsWith('btn_dev_cancel_')) {
+                const actionId = customId.replace('btn_dev_cancel_', '').trim();
+                const isDevAdmin = fridayDev.isAuthorizedDevAdmin(
+                    interaction.member,
+                    interaction.user,
+                    discordConfig,
+                    userKeys
+                );
+
+                if (!isDevAdmin) {
+                    return interaction.reply({
+                        content: "⚠️ Only a server administrator can cancel deployments.",
+                        ephemeral: true
+                    }).catch(() => {});
+                }
+
+                fridayDev.cancelDeployment(actionId);
+
+                return interaction.update({
+                    embeds: [sanitizeEmbed(UI.neutral(
+                        '❌ Modification Cancelled',
+                        `Deployment was cancelled and discarded by <@${interaction.user.id}>. No changes were committed to GitHub or Railway.`
+                    ))],
+                    components: []
+                }).catch(() => {});
+            }
+
+            // ── Set GitHub Token Modal Opener ──
+            if (customId === 'btn_dev_set_token') {
+                const isDevAdmin = fridayDev.isAuthorizedDevAdmin(
+                    interaction.member,
+                    interaction.user,
+                    discordConfig,
+                    userKeys
+                );
+
+                if (!isDevAdmin) {
+                    return interaction.reply({
+                        content: "⚠️ Only a server administrator can configure the GitHub deployment token.",
+                        ephemeral: true
+                    }).catch(() => {});
+                }
+
+                const modal = new ModalBuilder()
+                    .setCustomId('modal_dev_set_github_token')
+                    .setTitle('Configure GitHub Deployment Token');
+
+                const tokenInput = new TextInputBuilder()
+                    .setCustomId('github_token_input')
+                    .setLabel('GitHub Personal Access Token (PAT)')
+                    .setStyle(TextInputStyle.Short)
+                    .setPlaceholder('ghp_... or github_pat_...')
+                    .setMinLength(20)
+                    .setMaxLength(255)
+                    .setRequired(true);
+
+                modal.addComponents(new ActionRowBuilder().addComponents(tokenInput));
+                return await interaction.showModal(modal);
+            }
 
             // ── Link User API Key Button (Opens private Discord Modal) ──
             if (customId === 'btn_link_user_api_key') {
@@ -16859,6 +17135,92 @@ function setupSlashBotEvents(bot, token) {
             } catch (err) {
                 return await interaction.editReply({
                     embeds: [sanitizeEmbed(UI.error('Connection Failed', `Failed to verify with OpenRouter: ${err.message}`))]
+                });
+            }
+        }
+
+        // ── Configure GitHub Deployment Token Slash Command (Admin/Owner) ──
+        if (cmd === 'github') {
+            await interaction.deferReply({ ephemeral: true });
+            const isDevAdmin = fridayDev.isAuthorizedDevAdmin(
+                interaction.member,
+                interaction.user,
+                discordConfig,
+                userKeys
+            );
+
+            if (!isDevAdmin) {
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.error('Admin Only', 'Only faction and server administrators can configure the GitHub deployment token.'))]
+                });
+            }
+
+            const inputToken = (interaction.options.getString('token') || '').trim();
+
+            // If no token provided, display status and setup instructions
+            if (!inputToken) {
+                const currentToken = process.env.GITHUB_TOKEN || discordConfig.githubToken || "";
+                const isConfigured = Boolean(currentToken && currentToken.length > 15);
+
+                const statusEmbed = {
+                    color: isConfigured ? (UI.COLORS?.SUCCESS || 0x2ecc71) : (UI.COLORS?.WARNING || 0xf39c12),
+                    title: "🐙 GitHub DevOps Deployment Status",
+                    description: isConfigured 
+                        ? "✅ **GitHub Personal Access Token is active and configured!**\n\nF.R.I.D.A.Y. can commit approved modifications directly to `hulbertowen-droid/torn-company-app` and trigger Railway builds automatically."
+                        : "⚠️ **GitHub Personal Access Token is NOT configured.**\n\nTo enable autonomous code modifications from Discord, F.R.I.D.A.Y. needs a GitHub token to commit changes in the cloud without needing your PC.",
+                    fields: [
+                        { name: "Repository", value: "`hulbertowen-droid/torn-company-app`", inline: true },
+                        { name: "Branch", value: "`main`", inline: true },
+                        { name: "Status", value: isConfigured ? "🟢 Ready for Discord Deploys" : "🟡 Token Required", inline: true },
+                        { name: "How to Configure", value: "Run `/github token:<your_token>` or click the **Set GitHub Token** button below.", inline: false }
+                    ],
+                    footer: { text: "F.R.I.D.A.Y. DevOps Sentinel • Zero-Crash Policy" },
+                    timestamp: new Date().toISOString()
+                };
+
+                const actionRow = UI.actionRow(
+                    UI.primaryBtn('btn_dev_set_token', 'Set GitHub Token', '🔑'),
+                    UI.linkBtn('https://github.com/settings/tokens', 'Create Token on GitHub', '🌐')
+                );
+
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(statusEmbed)],
+                    components: [actionRow]
+                });
+            }
+
+            // Verify provided token against GitHub API
+            try {
+                const testRes = await fetch('https://api.github.com/user', {
+                    headers: {
+                        'Authorization': `Bearer ${inputToken}`,
+                        'Accept': 'application/vnd.github+json',
+                        'User-Agent': 'Friday-Dev-Agent'
+                    }
+                });
+
+                if (!testRes.ok) {
+                    return await interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.error('Token Rejected', `GitHub rejected this token (HTTP ${testRes.status}). Ensure it has \`repo\` (Contents: Read and write) permissions.`))]
+                    });
+                }
+
+                const uData = await testRes.json();
+                discordConfig.githubToken = inputToken;
+                saveDiscordConfig();
+
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.success(
+                        '🔑 GitHub Token Configured!',
+                        `Successfully authenticated as GitHub user **${uData.login}**!\n\n` +
+                        `• **Repository:** \`hulbertowen-droid/torn-company-app\`\n` +
+                        `• **Branch:** \`main\`\n\n` +
+                        `F.R.I.D.A.Y. is now fully enabled for autonomous Discord code deployments!`
+                    ))]
+                });
+            } catch (err) {
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.error('Connection Failed', `Failed to verify with GitHub: ${err.message}`))]
                 });
             }
         }
