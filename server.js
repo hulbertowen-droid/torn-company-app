@@ -3351,9 +3351,11 @@ app.post('/api/discord/post-verification-card', async (req, res) => {
             title: `🛡️ Identity Verification Required`,
             description:
                 `To protect faction intel and member privacy, all channels remain locked until your Torn City identity is verified.\n\n` +
-                `**How to verify:**\n` +
+                `**How to verify (Standard):**\n` +
                 `**1.** Link your Discord account at **[torn.com/discord](https://www.torn.com/discord)** on the Official Torn Discord.\n` +
                 `**2.** Click **🛡️ Verify Me** below — F.R.I.D.A.Y. will handle the rest.\n\n` +
+                `⚡ **Optional Power-Up: Pre-Link Your API Key**\n` +
+                `Save time later! Click **🔑 Link API Key (Optional)** below to connect your Torn **Limited Access API Key**. F.R.I.D.A.Y will securely encrypt and save it so you **never** have to enter it again for live battle stats (\`/bs\`), gym tracking, energy/nerve updates, or automated banking!\n\n` +
                 `*Verification is instant if your account is already linked. Your nickname will be synced to \`Name [ID]\` and you'll receive your ${verifiedRoleId ? `<@&${verifiedRoleId}>` : '**Verified**'} role automatically.*`,
             color: UI.COLORS.BRAND,
             thumbnail: { url: "https://www.torn.com/favicon.ico" },
@@ -3374,6 +3376,12 @@ app.post('/api/discord/post-verification-card', async (req, res) => {
                 },
                 {
                     type: 2,
+                    style: 2, // Secondary
+                    custom_id: 'btn_link_user_api_key',
+                    label: '🔑 Link API Key (Optional)'
+                },
+                {
+                    type: 2,
                     style: 5, // Link
                     label: '🔗 Link at Torn.com/discord',
                     url: 'https://www.torn.com/discord'
@@ -3381,8 +3389,8 @@ app.post('/api/discord/post-verification-card', async (req, res) => {
                 {
                     type: 2,
                     style: 5, // Link
-                    label: '👤 My Torn Profile',
-                    url: 'https://www.torn.com/profiles.php'
+                    label: '🔑 Get API Key',
+                    url: 'https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2'
                 }
             ]
         }];
@@ -14093,10 +14101,10 @@ async function applyGuildMemberRole(guild, guildMember, botMember, roleId, actio
  * Links and encrypts a Torn Limited Access API Key via userKeys, validates player identity,
  * syncs Discord nickname to "Name [ID]", assigns Verified & Faction roles, and persists mapping.
  */
-async function executeVerifyWithKey(interactionOrMember, rawKey) {
+async function executeVerifyWithKey(interactionOrMember, rawKey, explicitGuild = null) {
     const interaction = (interactionOrMember && interactionOrMember.isCommand && typeof interactionOrMember.isCommand === 'function') || 
                         (interactionOrMember && interactionOrMember.customId !== undefined) ? interactionOrMember : null;
-    const guild = interaction ? interaction.guild : (interactionOrMember.guild || null);
+    const guild = explicitGuild || (interaction ? interaction.guild : (interactionOrMember.guild || null));
     const user = interaction ? interaction.user : (interactionOrMember.user || interactionOrMember);
     const discordUserId = user?.id;
 
@@ -14367,7 +14375,7 @@ async function executeVerifyWithKey(interactionOrMember, rawKey) {
 
     fields.push({
         name: "🔒 Military-Grade Key Security",
-        value: `Your Limited API Key is encrypted with **AES-256-GCM** using per-user authenticated tags. Your raw key is never stored in plain text, logged, or shared.`,
+        value: `Your Limited API Key is encrypted with **AES-256-GCM** using per-user authenticated tags. Your key is permanently stored and will **never** be requested again for gym stats, battle stats, or banking.`,
         inline: false
     });
 
@@ -14381,8 +14389,8 @@ async function executeVerifyWithKey(interactionOrMember, rawKey) {
         isBanker,
         rolesAdded,
         roleWarnings,
-        title: `🛡️ Verified: ${playerName} [${playerId}]`,
-        description: `✅ <@${discordUserId}> has been successfully verified!\nFull server access and live stat tracking (\`/energy\`, \`/balance\`, \`/withdraw\`) are now active.`,
+        title: `🛡️ API Key Linked: ${playerName} [${playerId}]`,
+        description: `✅ <@${discordUserId}>, your Torn Limited Access API Key has been securely linked and encrypted!\nF.R.I.D.A.Y has permanently saved your key. You will **never** have to enter your key again for live gym stats, battle stats (\`/bs\`), energy tracking, or faction banking.`,
         color: isOurFaction ? UI.COLORS.SUCCESS : UI.COLORS.INFO,
         fields,
         footer: UI.FOOTER,
@@ -14397,7 +14405,7 @@ async function executeVerifyMember(memberOrUser, guild, arg3, arg4) {
     if (userKeys && typeof userKeys.hasLinkedKey === 'function' && userKeys.hasLinkedKey(discordUserId)) {
         const storedKey = (userKeys.getDecryptedKey && userKeys.getDecryptedKey(discordUserId)) || userKeys.resolveUserApiKey(discordUserId)?.key || userKeys.resolveUserApiKey(discordUserId);
         if (storedKey) {
-            return await executeVerifyWithKey(memberOrUser, storedKey);
+            return await executeVerifyWithKey(memberOrUser, storedKey, guild);
         }
     }
 
@@ -14468,18 +14476,21 @@ async function executeVerifyMember(memberOrUser, guild, arg3, arg4) {
         } catch(e) {}
     }
 
-    // ── UNVERIFIED: Discord Account Not Verified via API Key or Global Link ──
+    // ── UNVERIFIED: Discord Account Not Linked on Official Torn Discord ──
     if (!tornUser) {
         return {
             success: false,
-            title: "🛡️ Faction Verification Required",
-            description: `Hey <@${discordUserId}>! Welcome to the server.\n\n` +
-                         `To protect faction intelligence and access faction features (Vault Banking, Warboards, Live Stat Tracking), please verify using your Torn **Limited Access API Key**.\n\n` +
-                         `**How to Verify:**\n` +
-                         `1️⃣ Click **🔑 Get API Key** below to create a **Limited Access** key on Torn.\n` +
-                         `2️⃣ Click **🛡️ Enter API Key** below to paste your 16-character key.\n` +
-                         `3️⃣ F.R.I.D.A.Y will verify your identity, sync your nickname to \`Name [ID]\`, and grant full server access!`,
-            color: UI.COLORS.BRAND, footer: UI.FOOTER, timestamp: new Date().toISOString(),
+            title: "🛡️ Official Torn Discord Link Required",
+            description: `Hey <@${discordUserId}>! Your Discord account is not linked to your Torn City account yet.\n\n` +
+                         `**How to Verify (Standard):**\n` +
+                         `1️⃣ Join or open the **[Official Torn Discord](https://www.torn.com/discord)**.\n` +
+                         `2️⃣ Complete the official verification steps to link your Discord account to your Torn player identity.\n` +
+                         `3️⃣ Once linked, click **🛡️ Verify Me** below (or type \`/verify\`) and F.R.I.D.A.Y will automatically verify you and unlock the server!\n\n` +
+                         `⚡ **Optional Power-Up: Pre-Link Your API Key**\n` +
+                         `Save time later! Click **🔑 Link API Key (Optional)** below to connect your **Limited Access API Key** so you never have to enter it again for live battle stats (\`/bs\`), gym tracking, energy/nerve updates, and automated vault banking.`,
+            color: UI.COLORS.BRAND,
+            footer: UI.FOOTER,
+            timestamp: new Date().toISOString(),
             components: [{
                 type: 1,
                 components: [
@@ -14487,20 +14498,26 @@ async function executeVerifyMember(memberOrUser, guild, arg3, arg4) {
                         type: 2,
                         style: 1, // Blurple
                         custom_id: 'btn_verify_now',
-                        label: '🛡️ Enter API Key',
+                        label: '🛡️ Verify Me',
                         emoji: { name: '🛡️' }
+                    },
+                    {
+                        type: 2,
+                        style: 2, // Secondary
+                        custom_id: 'btn_link_user_api_key',
+                        label: '🔑 Link API Key (Optional)'
+                    },
+                    {
+                        type: 2,
+                        style: 5, // Link
+                        label: '🔗 Link at Torn.com/discord',
+                        url: 'https://www.torn.com/discord'
                     },
                     {
                         type: 2,
                         style: 5, // Link
                         label: '🔑 Get API Key',
                         url: 'https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2'
-                    },
-                    {
-                        type: 2,
-                        style: 5, // Link
-                        label: '👤 My Torn Profile',
-                        url: 'https://www.torn.com/profiles.php'
                     }
                 ]
             }]
@@ -14667,7 +14684,8 @@ async function executeVerifyMember(memberOrUser, guild, arg3, arg4) {
         }
     }
 
-    return {
+    const hasLinkedKey = userKeys && typeof userKeys.hasLinkedKey === 'function' && userKeys.hasLinkedKey(discordUserId);
+    const returnObj = {
         success: true,
         playerName,
         playerId,
@@ -14684,6 +14702,28 @@ async function executeVerifyMember(memberOrUser, guild, arg3, arg4) {
         footer: UI.FOOTER,
         timestamp: new Date().toISOString()
     };
+
+    if (!hasLinkedKey) {
+        returnObj.components = [{
+            type: 1,
+            components: [
+                {
+                    type: 2,
+                    style: 2, // Secondary
+                    custom_id: 'btn_link_user_api_key',
+                    label: '🔑 Pre-Link API Key (Optional)'
+                },
+                {
+                    type: 2,
+                    style: 5, // Link
+                    label: '🔑 Get API Key',
+                    url: 'https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2'
+                }
+            ]
+        }];
+    }
+
+    return returnObj;
 }
 
 async function executeVerifyAll(guild, apiKey) {
@@ -15045,11 +15085,12 @@ async function handleGuildMemberAdd(member) {
         title: `🛡️ Welcome to ${guild.name} — Verification Required`,
         description: `Hey <@${member.id}>, welcome!\n\n` +
                      `🔒 **Server Access Locked**\n` +
-                     `To protect faction intel and access faction features (Vault Banking, Warboards, Live Stat Tracking), all members must verify using a **Limited Access API Key**.\n\n` +
-                     `**How to Verify:**\n` +
-                     `1️⃣ Click **🔑 Get API Key** below to create a **Limited Access** key on Torn.\n` +
-                     `2️⃣ Click **🛡️ Enter API Key** below to paste your 16-character key.\n` +
-                     `3️⃣ F.R.I.D.A.Y will verify your identity, sync your nickname to \`Name [ID]\`, and grant full server access!`,
+                     `To protect faction intel and member privacy, all channels remain locked until your Torn City identity is verified.\n\n` +
+                     `**How to Verify (Standard):**\n` +
+                     `1️⃣ Link your Discord account at **[torn.com/discord](https://www.torn.com/discord)** on the Official Torn Discord.\n` +
+                     `2️⃣ Click **🛡️ Verify Me** below — F.R.I.D.A.Y will sync your nickname to \`Name [ID]\` and unlock your roles.\n\n` +
+                     `⚡ **Optional Power-Up: Pre-Link Your API Key**\n` +
+                     `Save time later! Click **🔑 Link API Key (Optional)** below to connect your Torn **Limited Access API Key**. F.R.I.D.A.Y will securely encrypt and save it so you **never** have to enter it again for live battle stats (\`/bs\`), gym tracking, energy/nerve updates, or automated banking!`,
         color: UI.COLORS.BRAND,
         thumbnail: { url: "https://www.torn.com/favicon.ico" },
         footer: UI.FOOTER,
@@ -15063,20 +15104,26 @@ async function handleGuildMemberAdd(member) {
                 type: 2,
                 style: 1, // Primary (Blurple)
                 custom_id: 'btn_verify_now',
-                label: '🛡️ Enter API Key',
+                label: '🛡️ Verify Me',
                 emoji: { name: '🛡️' }
+            },
+            {
+                type: 2,
+                style: 2, // Secondary
+                custom_id: 'btn_link_user_api_key',
+                label: '🔑 Link API Key (Optional)'
+            },
+            {
+                type: 2,
+                style: 5, // Link
+                label: '🔗 Link at Torn.com/discord',
+                url: 'https://www.torn.com/discord'
             },
             {
                 type: 2,
                 style: 5, // Link
                 label: '🔑 Get API Key',
                 url: 'https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2'
-            },
-            {
-                type: 2,
-                style: 5, // Link
-                label: '👤 My Torn Profile',
-                url: 'https://www.torn.com/profiles.php'
             }
         ]
     }];
@@ -15791,9 +15838,9 @@ async function registerSlashCommands(token, guildId = null, options = {}) {
     const rest = new REST({ version: '10' }).setToken(token);
 
     const commands = [
-        // 0. Member Verification (Limited API Key Architecture)
-        new SlashCommandBuilder().setName('verify').setDescription('Verify your Torn identity using your Limited Access API Key and receive faction roles')
-            .addStringOption(opt => opt.setName('key').setDescription('Optional 16-character Torn Limited API key (omit to open secure modal)').setRequired(false)).toJSON(),
+        // 0. Member Verification
+        new SlashCommandBuilder().setName('verify').setDescription('Verify your Torn identity via Official Torn Discord cross-reference or Limited API Key')
+            .addStringOption(opt => opt.setName('key').setDescription('Optional 16-character Torn Limited API key to link for live stats & banking').setRequired(false)).toJSON(),
 
         new SlashCommandBuilder().setName('verifyall').setDescription('Admin: Re-verify all members in this Discord server and sync nicknames & roles').toJSON(),
 
@@ -17029,7 +17076,7 @@ function setupSlashBotEvents(bot, token) {
                 return await interaction.showModal(modal);
             }
 
-            // ── Instant Verification (Limited API Key Flow) ──
+            // ── Instant 1-Click Verification (Official Torn Discord Flow) ──
             if (customId === 'btn_verify_now' || customId === 'btn_verify_open_modal') {
                 const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : []).map(c => String(c).toLowerCase().trim());
                 if (disabledCmds.includes('verify')) {
@@ -17038,34 +17085,29 @@ function setupSlashBotEvents(bot, token) {
                         ephemeral: true
                     }).catch(() => {});
                 }
+                await interaction.deferReply({ ephemeral: true });
+                const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+                const result = await executeVerifyMember(interaction.member || interaction.user, interaction.guild, apiKey);
 
-                if (userKeys && typeof userKeys.hasLinkedKey === 'function' && userKeys.hasLinkedKey(interaction.user.id)) {
-                    await interaction.deferReply({ ephemeral: true });
-                    const linkedKey = (userKeys.getDecryptedKey && userKeys.getDecryptedKey(interaction.user.id)) || userKeys.resolveUserApiKey(interaction.user.id)?.key || userKeys.resolveUserApiKey(interaction.user.id);
-                    const result = await executeVerifyWithKey(interaction, linkedKey);
-                    const replyPayload = { embeds: [sanitizeEmbed(result)] };
-                    if (result.components && result.components.length > 0) {
-                        replyPayload.components = result.components;
+                if (result && result.success && interaction.guild) {
+                    const vChanId = discordConfig.verificationChannelId;
+                    if (vChanId) {
+                        try {
+                            const chan = interaction.guild.channels.cache.get(vChanId) || await interaction.guild.channels.fetch(vChanId).catch(() => null);
+                            if (chan && chan.isTextBased()) {
+                                await chan.send({
+                                    content: `🎉 <@${interaction.user.id}> has successfully verified as **[${result.playerName} [${result.playerId}]](https://www.torn.com/profiles.php?XID=${result.playerId})**! Welcome to the server!`
+                                });
+                            }
+                        } catch(e) {}
                     }
-                    return await interaction.editReply(replyPayload);
                 }
 
-                // User does not have a linked key yet -> Open the secure modal
-                const modal = new ModalBuilder()
-                    .setCustomId('modal_link_user_api_key')
-                    .setTitle('Faction Verification (API Key)');
-
-                const keyInput = new TextInputBuilder()
-                    .setCustomId('user_api_key_input')
-                    .setLabel('Enter Your Limited Access API Key')
-                    .setStyle(TextInputStyle.Short)
-                    .setPlaceholder('16-character Torn API key')
-                    .setMinLength(16)
-                    .setMaxLength(16)
-                    .setRequired(true);
-
-                modal.addComponents(new ActionRowBuilder().addComponents(keyInput));
-                return await interaction.showModal(modal);
+                const replyPayload = { embeds: [sanitizeEmbed(result)] };
+                if (result.components && result.components.length > 0) {
+                    replyPayload.components = result.components;
+                }
+                return await interaction.editReply(replyPayload);
             }
 
             // Warboard Target Claim
@@ -18099,7 +18141,7 @@ function setupSlashBotEvents(bot, token) {
             });
         }
 
-        // ── Member Verification (Limited API Key Architecture) ──
+        // ── Member Verification ──
         if (cmd === 'verify') {
             const keyArg = interaction.options.getString('key');
             if (keyArg) {
@@ -18112,33 +18154,30 @@ function setupSlashBotEvents(bot, token) {
                 return interaction.editReply(replyPayload);
             }
 
-            if (userKeys && typeof userKeys.hasLinkedKey === 'function' && userKeys.hasLinkedKey(interaction.user.id)) {
-                await interaction.deferReply({ ephemeral: true });
-                const linkedKey = (userKeys.getDecryptedKey && userKeys.getDecryptedKey(interaction.user.id)) || userKeys.resolveUserApiKey(interaction.user.id)?.key || userKeys.resolveUserApiKey(interaction.user.id);
-                const resultEmbed = await executeVerifyWithKey(interaction, linkedKey);
-                const replyPayload = { embeds: [sanitizeEmbed(resultEmbed)] };
-                if (resultEmbed.components && resultEmbed.components.length > 0) {
-                    replyPayload.components = resultEmbed.components;
+            // Standard Verification via Official Torn Discord cross-reference (or stored key)
+            await interaction.deferReply({ ephemeral: true });
+            const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+            const result = await executeVerifyMember(interaction.member || interaction.user, interaction.guild, apiKey);
+
+            if (result && result.success && interaction.guild) {
+                const vChanId = discordConfig.verificationChannelId;
+                if (vChanId) {
+                    try {
+                        const chan = interaction.guild.channels.cache.get(vChanId) || await interaction.guild.channels.fetch(vChanId).catch(() => null);
+                        if (chan && chan.isTextBased()) {
+                            await chan.send({
+                                content: `🎉 <@${interaction.user.id}> has successfully verified as **[${result.playerName} [${result.playerId}]](https://www.torn.com/profiles.php?XID=${result.playerId})**! Welcome to the server!`
+                            });
+                        }
+                    } catch(e) {}
                 }
-                return interaction.editReply(replyPayload);
             }
 
-            // User does not have a key linked -> show modal
-            const modal = new ModalBuilder()
-                .setCustomId('modal_link_user_api_key')
-                .setTitle('Faction Verification (API Key)');
-
-            const keyInput = new TextInputBuilder()
-                .setCustomId('user_api_key_input')
-                .setLabel('Enter Your Limited Access API Key')
-                .setStyle(TextInputStyle.Short)
-                .setPlaceholder('16-character Torn API key')
-                .setMinLength(16)
-                .setMaxLength(16)
-                .setRequired(true);
-
-            modal.addComponents(new ActionRowBuilder().addComponents(keyInput));
-            return await interaction.showModal(modal);
+            const replyPayload = { embeds: [sanitizeEmbed(result)] };
+            if (result.components && result.components.length > 0) {
+                replyPayload.components = result.components;
+            }
+            return interaction.editReply(replyPayload);
         }
 
         if (cmd === 'verifyall') {
@@ -18163,16 +18202,12 @@ function setupSlashBotEvents(bot, token) {
 
             const verifyCard = {
                 title: `🛡️ Identity Verification — Spider-Verse Sentinel`,
-                description: `To protect faction intelligence and access faction features (Vault Banking, Warboards, Live Stat Tracking), all members must verify using a **Limited Access API Key**.\n\n` +
-                             `**Why Limited API Key?**\n` +
-                             `• 🔒 **Private & Secure:** Encrypted with military-grade AES-256-GCM.\n` +
-                             `• ⚡ **Live Stat Tracking:** Unlocks live Energy, Nerve, Happy, and Life commands.\n` +
-                             `• 🏦 **Faction Banking:** Instant access to \`/withdraw\` and \`/balance\`.\n` +
-                             `• 🎖️ **Instant Roles:** Automatic assignment of Verified & Faction roles.\n\n` +
-                             `**How to Verify:**\n` +
-                             `1️⃣ Click **🔑 Get API Key** below to open Torn Preferences (create a key with **Limited Access**).\n` +
-                             `2️⃣ Click **🛡️ Enter API Key** below and paste your 16-character key.\n` +
-                             `3️⃣ F.R.I.D.A.Y will verify your identity, sync your nickname to \`Name [ID]\`, and grant full server access!`,
+                description: `To protect faction intel and member privacy, all channels remain locked until your Torn City identity is verified.\n\n` +
+                             `**How to Verify (Standard):**\n` +
+                             `1️⃣ Link your Discord account at **[torn.com/discord](https://www.torn.com/discord)** on the Official Torn Discord.\n` +
+                             `2️⃣ Click **🛡️ Verify Me** below — F.R.I.D.A.Y will sync your nickname to \`Name [ID]\` and unlock your roles.\n\n` +
+                             `⚡ **Optional Power-Up: Pre-Link Your API Key**\n` +
+                             `Save time later! Click **🔑 Link API Key (Optional)** below to connect your Torn **Limited Access API Key**. F.R.I.D.A.Y will securely encrypt and save it so you **never** have to enter it again for live battle stats (\`/bs\`), gym tracking, energy/nerve updates, or automated banking!`,
                 color: UI.COLORS.BRAND,
                 thumbnail: { url: "https://www.torn.com/favicon.ico" },
                 footer: UI.FOOTER,
@@ -18186,20 +18221,26 @@ function setupSlashBotEvents(bot, token) {
                         type: 2,
                         style: 1,
                         custom_id: 'btn_verify_now',
-                        label: '🛡️ Enter API Key',
+                        label: '🛡️ Verify Me',
                         emoji: { name: '🛡️' }
+                    },
+                    {
+                        type: 2,
+                        style: 2,
+                        custom_id: 'btn_link_user_api_key',
+                        label: '🔑 Link API Key (Optional)'
+                    },
+                    {
+                        type: 2,
+                        style: 5,
+                        label: '🔗 Link at Torn.com/discord',
+                        url: 'https://www.torn.com/discord'
                     },
                     {
                         type: 2,
                         style: 5,
                         label: '🔑 Get API Key',
                         url: 'https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2'
-                    },
-                    {
-                        type: 2,
-                        style: 5,
-                        label: '👤 My Torn Profile',
-                        url: 'https://www.torn.com/profiles.php'
                     }
                 ]
             }];
@@ -18272,7 +18313,7 @@ function setupSlashBotEvents(bot, token) {
                     },
                     {
                         name: "💡 Next Steps",
-                        value: `• Members can type \`/verify\` or click **🛡️ Enter API Key** in the verification channel to migrate.\n` +
+                        value: `• Members can click **🔑 Link API Key (Optional)** in the verification channel or type \`/verify key:xxxx\` to link their key.\n` +
                                `• Administrators can run \`/remindkeys\` to send friendly DM reminders to all pending members.`,
                         inline: false
                     }
