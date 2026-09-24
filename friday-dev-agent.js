@@ -110,9 +110,9 @@ function checkDeterministicVettingRules(requestText) {
 
     // 2. High-Risk Destructive Operations
     const destructivePatterns = [
-        /\b(?:drop|delete|wipe|purge|truncate)\s+(?:database|collection|users|vault|keys|tables|all data)\b/i,
-        /\b(?:steal|dump|leak|expose|print|show)\s+(?:api keys?|passwords?|tokens?|env|secret)\b/i,
-        /\b(?:disable|bypass|remove)\s+(?:auth|security|admin|permissions?|verification)\b/i,
+        /\b(?:drop|delete|wipe|purge|truncate|destroy)\b.*?\b(?:database|databases|db|collections?|users?|vault|keys?|tables?|all data|mongo|mongodb)\b/i,
+        /\b(?:steal|dump|leak|expose|print|show)\b.*?\b(?:api keys?|passwords?|tokens?|env|secrets?)\b/i,
+        /\b(?:disable|bypass|remove)\b.*?\b(?:auth|security|admin|permissions?|verification)\b/i,
         /\b(?:rm\s+-rf|process\.exit|unlinkSync)\b/i
     ];
     for (const pat of destructivePatterns) {
@@ -262,6 +262,7 @@ function verifySyntax(codeString, filename = 'server.js') {
 
 /**
  * Generate a surgical code patch using AI and verify syntax.
+ * Automatically retries up to 3 times with progressive instructions.
  */
 async function generateAndVerifyPatch(targetFilePath, requestText, plan, callAiFn) {
     const fullPath = path.isAbsolute(targetFilePath) ? targetFilePath : path.join(__dirname, targetFilePath);
@@ -272,75 +273,124 @@ async function generateAndVerifyPatch(targetFilePath, requestText, plan, callAiF
     const originalContent = fs.readFileSync(fullPath, 'utf8');
     const isLargeFile = originalContent.length > 50000;
 
-    // Include line numbers in context so AI can reference exact locations
+    // Line numbers in context block allow the AI to locate functions quickly
     const contextBlock = isLargeFile
         ? extractRelevantLines(originalContent, requestText, plan)
         : originalContent;
 
-    const systemPrompt = `You are the lead developer for F.R.I.D.A.Y., a Node.js Discord bot.
-Your task is to generate a SURGICAL search-and-replace patch for the file "${path.basename(targetFilePath)}".
+    const MAX_ATTEMPTS = 3;
+    let lastError = 'No response from coding AI.';
 
-CRITICAL RULES:
-1. The SEARCH block MUST contain lines that appear EXACTLY in the provided code — do NOT paraphrase, summarize, or reconstruct them.
-2. Copy the lines character-for-character including indentation (spaces/tabs).
-3. Keep the SEARCH block SHORT (5-20 lines max). Do not include unchanged surrounding code.
-4. The REPLACE block should contain the modified version of those same lines.
-5. Output format (no markdown fence around this block itself):
-<<<<<<< SEARCH
-[exact lines from the file]
-=======
-[replacement lines]
->>>>>>>
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        const systemPrompt = buildPatchSystemPrompt(path.basename(targetFilePath), requestText, plan, attempt);
+        const userPrompt = buildPatchUserPrompt(contextBlock, attempt);
 
-Plan: ${plan}
-Request: ${requestText}`;
-
-    const userPrompt = `Relevant code (with line numbers for reference):\n\n\`\`\`javascript\n${contextBlock}\n\`\`\`\n\nGenerate ONE <<<<<<< SEARCH / ======= / >>>>>>> patch block. Copy the SEARCH lines exactly as they appear above:`;
-
-    let aiRes = await callAiFn(systemPrompt, userPrompt);
-    if (!aiRes || aiRes.trim().length < 10) {
-        return { success: false, error: 'Coding AI did not return a response.' };
-    }
-
-    // Parse SEARCH/REPLACE block
-    const patch = parseSearchReplaceBlock(aiRes);
-    if (!patch || !patch.search.trim()) {
-        return { success: false, error: 'Could not extract valid SEARCH/REPLACE block from AI response.' };
-    }
-
-    // Attempt multi-level matching
-    const matchResult = findAndApplyPatch(originalContent, patch.search, patch.replace);
-    if (!matchResult.success) {
-        return {
-            success: false,
-            error: `The AI search block could not be matched in the target file. Aborting for safety. (Search block was ${patch.search.trim().length} chars)`
-        };
-    }
-
-    const updatedContent = matchResult.updatedContent;
-
-    // ZERO-CRASH PRE-FLIGHT SYNTAX CHECK
-    const syntaxCheck = verifySyntax(updatedContent, path.basename(targetFilePath));
-    if (!syntaxCheck.valid) {
-        return {
-            success: false,
-            error: `Zero-Crash Check FAILED — syntax error in generated code: ${syntaxCheck.error}`,
-            syntaxError: syntaxCheck.error
-        };
-    }
-
-    return {
-        success: true,
-        updatedContent,
-        diffSummary: {
-            search: patch.search.trim().slice(0, 400),
-            replace: patch.replace.trim().slice(0, 400)
+        let aiRes = await callAiFn(systemPrompt, userPrompt);
+        if (!aiRes || aiRes.trim().length < 10) {
+            lastError = `Coding AI did not return a response (attempt ${attempt}).`;
+            continue;
         }
-    };
+
+        // Parse SEARCH/REPLACE block with flexible parsing
+        const patch = parseSearchReplaceBlock(aiRes);
+        if (!patch || !patch.search.trim()) {
+            lastError = `Could not extract valid SEARCH/REPLACE block from AI response (attempt ${attempt}). Preview: "${aiRes.slice(0, 120)}..."`;
+            continue;
+        }
+
+        // Multi-level fuzzy matching
+        const matchResult = findAndApplyPatch(originalContent, patch.search, patch.replace);
+        if (!matchResult.success) {
+            lastError = `The AI search block could not be matched in ${path.basename(targetFilePath)} (attempt ${attempt}). Search block (${patch.search.trim().length} chars) was: "${patch.search.trim().slice(0, 100)}..."`;
+            continue;
+        }
+
+        // Verify that the patch actually changed something
+        if (matchResult.updatedContent === originalContent) {
+            lastError = `Patch resulted in zero code changes (attempt ${attempt}).`;
+            continue;
+        }
+
+        const updatedContent = matchResult.updatedContent;
+
+        // ZERO-CRASH PRE-FLIGHT SYNTAX CHECK
+        const syntaxCheck = verifySyntax(updatedContent, path.basename(targetFilePath));
+        if (!syntaxCheck.valid) {
+            lastError = `Zero-Crash Check FAILED — syntax error in generated code (attempt ${attempt}): ${syntaxCheck.error}`;
+            continue;
+        }
+
+        return {
+            success: true,
+            updatedContent,
+            diffSummary: {
+                search: patch.search.trim().slice(0, 400),
+                replace: patch.replace.trim().slice(0, 400)
+            }
+        };
+    }
+
+    return { success: false, error: lastError };
 }
 
 /**
- * Multi-level fuzzy matching: exact → CRLF-normalized → per-line trimmed → line-scored fuzzy
+ * System prompt for patch generation — progressively stricter across attempts.
+ */
+function buildPatchSystemPrompt(filename, requestText, plan, attempt) {
+    if (attempt >= 3) {
+        return `You are a code editor. Output ONLY a search/replace block in this exact format:
+
+<<<<<<< SEARCH
+const example = oldValue;
+=======
+const example = newValue;
+>>>>>>>
+
+CRITICAL: Output ONLY the block above. No markdown fences. No explanation.
+File: ${filename}
+Change: ${requestText}`;
+    }
+
+    const reminder = attempt === 2 ? '\n- REMINDER: Do NOT explain. Your ENTIRE response must start with <<<<<<< SEARCH and end with >>>>>>>.' : '';
+
+    return `You are the lead developer for F.R.I.D.A.Y., a Node.js Discord bot.
+Your ONLY task is to generate a SURGICAL search-and-replace patch for the file "${filename}".
+
+OUTPUT FORMAT (output NOTHING else, no markdown fences):
+<<<<<<< SEARCH
+[exact lines from the file — verbatim, including indentation]
+=======
+[modified replacement lines]
+>>>>>>>
+
+CRITICAL RULES:
+1. SEARCH block MUST be lines that appear VERBATIM in the provided code — do NOT paraphrase, summarize, or change indentation.
+2. Do NOT copy the line numbers (e.g. "2537: ") from the snippet into the SEARCH block. Copy ONLY the actual code.
+3. Keep the SEARCH block SHORT (3 to 15 lines max).
+4. The REPLACE block contains the modified version of those same lines.
+5. Do NOT include markdown code fences.
+6. Do NOT explain or add commentary.${reminder}
+
+Plan: ${plan}
+Request: ${requestText}`;
+}
+
+/**
+ * User prompt for patch generation — progressively concise.
+ */
+function buildPatchUserPrompt(contextBlock, attempt) {
+    if (attempt === 1) {
+        return `Relevant code (line numbers are for your reference only — do NOT copy line numbers into the search block):\n\n\`\`\`javascript\n${contextBlock}\n\`\`\`\n\nGenerate ONE <<<<<<< SEARCH / ======= / >>>>>>> patch block:`;
+    }
+    if (attempt === 2) {
+        return `CODE CONTEXT:\n${contextBlock}\n\nOUTPUT ONLY the <<<<<<< SEARCH / ======= / >>>>>>> block. Start directly with <<<<<<< SEARCH:`;
+    }
+    const lines = contextBlock.split('\n').slice(0, 100).join('\n');
+    return `CODE SNIPPET:\n${lines}\n\nOutput ONLY:\n<<<<<<< SEARCH\n[old code]\n=======\n[new code]\n>>>>>>>`;
+}
+
+/**
+ * Multi-level fuzzy matching: exact -> CRLF-normalized -> per-line trimmed -> key-line anchor
  */
 function findAndApplyPatch(originalContent, searchBlock, replaceBlock) {
     // Level 1: Exact match
@@ -369,7 +419,8 @@ function findAndApplyPatch(originalContent, searchBlock, replaceBlock) {
     const windowSize = searchLines.length;
     let bestMatchStart = -1;
     let bestMatchScore = 0;
-    const threshold = Math.ceil(windowSize * 0.85); // 85% of lines must match
+    // For 1-2 lines require 100%. For 3+ lines, 75% match is sufficient.
+    const threshold = windowSize <= 2 ? windowSize : Math.max(2, Math.round(windowSize * 0.75));
 
     for (let i = 0; i <= origLines.length - windowSize; i++) {
         let matchCount = 0;
@@ -386,15 +437,14 @@ function findAndApplyPatch(originalContent, searchBlock, replaceBlock) {
     }
 
     if (bestMatchStart >= 0 && bestMatchScore >= threshold) {
-        // Replace the matched region (use the original indentation from the original file)
         const before = origLines.slice(0, bestMatchStart).join('\n');
         const after = origLines.slice(bestMatchStart + windowSize).join('\n');
         const updatedContent = [before, normReplace, after].filter((s, i) => i === 1 || s.length > 0).join('\n');
         return { success: true, updatedContent };
     }
 
-    // Level 4: Single-key-line match (if search is just 1-3 lines, try finding the most unique one)
-    if (searchLines.length <= 3) {
+    // Level 4: Single-key-line match (if search is up to 4 lines, try finding the most unique one)
+    if (searchLines.length <= 4) {
         const uniqueLine = searchLines.reduce((a, b) => a.length > b.length ? a : b);
         if (uniqueLine.length > 15) {
             const lineIdx = origLines.findIndex(l => l.trim() === uniqueLine);
@@ -412,21 +462,104 @@ function findAndApplyPatch(originalContent, searchBlock, replaceBlock) {
 }
 
 /**
- * Parse <<<<<<< SEARCH / ======= / >>>>>>> blocks from AI response.
+ * Strips leading line numbers (e.g. "2537: ") and context header comments from lines.
  */
-function parseSearchReplaceBlock(text) {
-    // Try standard format
-    const match = text.match(/<<<<<<< SEARCH\s*([\s\S]*?)\s*=======\s*([\s\S]*?)\s*>>>>>>>/);
+function stripLineNumbers(str) {
+    if (!str) return str;
+    const lines = str.split('\n');
+    const filtered = lines.filter(l => !/^\s*\/\/\s*(?:──|════)/.test(l));
+    const nonEmpty = filtered.filter(l => l.trim().length > 0);
+    const countWithLineNums = nonEmpty.filter(l => /^\s*\d{1,7}:\s?/.test(l)).length;
+    if (countWithLineNums > 0 && countWithLineNums >= nonEmpty.length * 0.7) {
+        return filtered.map(l => l.replace(/^\s*\d{1,7}:\s?/, '')).join('\n');
+    }
+    return filtered.join('\n');
+}
+
+/**
+ * Cleans extracted patch search and replace strings.
+ */
+function cleanPatch(search, replace) {
+    if (!search || !search.trim()) return null;
+    let s = stripLineNumbers(search);
+    let r = stripLineNumbers(replace || '');
+    return { search: s, replace: r };
+}
+
+/**
+ * Robust parser for <<<<<<< SEARCH / ======= / >>>>>>> blocks from AI response.
+ * Supports:
+ * - Standard and multi-bracket git conflict markers (<<<, ===, >>>)
+ * - Backtick code-fence wrapped blocks (```diff, ```javascript, etc.)
+ * - // SEARCH: and // REPLACE: comment blocks
+ * - JSON object format ({ "search": "...", "replace": "..." })
+ * - Unified diff style (- and + lines)
+ */
+function parseSearchReplaceBlock(rawText) {
+    if (!rawText || typeof rawText !== 'string') return null;
+
+    let text = rawText.trim();
+
+    // 0. Strip outer markdown code fence if wrapped
+    if (text.startsWith('```')) {
+        text = text.replace(/^```[a-zA-Z0-9_-]*\r?\n/, '').replace(/\r?\n```$/, '').trim();
+    }
+
+    // 1. Flexible Conflict / Patch marker pattern: 3+ '<', 3+ '=', 3+ '>'
+    const markerRegex = /<{3,}[^\n]*\r?\n([\s\S]*?)\r?\n={3,}[^\n]*\r?\n([\s\S]*?)\r?\n>{3,}[^\n]*/;
+    let match = text.match(markerRegex);
     if (match) {
-        return { search: match[1], replace: match[2] };
+        return cleanPatch(match[1], match[2]);
     }
-    // Try without "SEARCH" label
-    const match2 = text.match(/<<<<<<<\s*([\s\S]*?)\s*=======\s*([\s\S]*?)\s*>>>>>>>/);
-    if (match2) {
-        return { search: match2[1], replace: match2[2] };
+
+    // 2. Headings / Comments pattern: // SEARCH: / // REPLACE:, ### SEARCH / ### REPLACE, etc.
+    const labelRegex = /(?:^|\n)(?:\/\/|#+|\*\*|--)?\s*(?:SEARCH|BEFORE|OLD|ORIGINAL):?[^\n]*\r?\n([\s\S]*?)\r?\n(?:\/\/|#+|\*\*|--)?\s*(?:REPLACE|AFTER|NEW|MODIFIED):?[^\n]*\r?\n([\s\S]*?)(?:\r?\n(?:\/\/|#+|\*\*|--)?\s*(?:END|>>>>>>>|###|```)|$)/i;
+    match = text.match(labelRegex);
+    if (match) {
+        return cleanPatch(match[1], match[2]);
     }
+
+    // 3. JSON format: { "search": "...", "replace": "..." }
+    try {
+        const jsonMatch = text.match(/\{[\s\S]*"(?:search|old|before)"[\s\S]*"(?:replace|new|after)"[\s\S]*\}/i);
+        if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            const search = parsed.search || parsed.old || parsed.before;
+            const replace = parsed.replace !== undefined ? parsed.replace : (parsed.new !== undefined ? parsed.new : parsed.after);
+            if (search && replace !== undefined) {
+                return cleanPatch(search, replace);
+            }
+        }
+    } catch (e) {}
+
+    // 4. Unified diff style with - and + lines
+    const diffLines = text.split('\n');
+    const minusLines = [];
+    const plusLines = [];
+    let isDiff = false;
+    for (const line of diffLines) {
+        if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('@@')) {
+            isDiff = true;
+            continue;
+        }
+        if (line.startsWith('-')) {
+            isDiff = true;
+            minusLines.push(line.slice(1));
+        } else if (line.startsWith('+')) {
+            isDiff = true;
+            plusLines.push(line.slice(1));
+        } else if (isDiff && (line.startsWith(' ') || line.trim() === '')) {
+            minusLines.push(line.startsWith(' ') ? line.slice(1) : line);
+            plusLines.push(line.startsWith(' ') ? line.slice(1) : line);
+        }
+    }
+    if (isDiff && minusLines.length > 0 && plusLines.length > 0) {
+        return cleanPatch(minusLines.join('\n'), plusLines.join('\n'));
+    }
+
     return null;
 }
+
 
 /**
  * Extract ~200 relevant lines from a large file based on keywords.
@@ -665,9 +798,13 @@ async function deployToGitHub(actionId, user, discordConfig = {}) {
 
         if (!putRes.ok) {
             const errData = await putRes.json().catch(() => ({}));
+            let errMsg = `GitHub rejected commit: ${putRes.status} ${errData.message || ''}`;
+            if (putRes.status === 403) {
+                errMsg += `\n\n🔑 **Permission Fix:** Your GitHub Personal Access Token lacks write permissions for this repository. Please generate a token at https://github.com/settings/tokens with the **\`repo\`** checkbox ticked, and set it via \`/github token:<new_token>\` or in Railway environment variables.`;
+            }
             return {
                 success: false,
-                error: `GitHub rejected commit: ${putRes.status} ${errData.message || ''}`
+                error: errMsg
             };
         }
 
