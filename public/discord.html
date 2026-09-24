@@ -2259,6 +2259,21 @@
                     </div>
                 </div>
 
+                <!-- Row 4.5: Promotion Requests Channel -->
+                <div class="field-grid">
+                    <div class="field-group">
+                        <div class="field-label">
+                            <label for="promotion-channelid" style="margin:0;">🎖️ Promotion Requests Channel <span class="opt">(optional)</span></label>
+                            <a href="javascript:void(0)" onclick="toggleManualInput('promotion-channelid')" style="font-size:0.75em; color:var(--spider-blue); text-decoration:none;">✏️ Custom ID</a>
+                        </div>
+                        <select class="field-input channel-picker" id="promotion-channelid-select" onchange="onChannelSelectChange(this, 'promotion-channelid'); trackDirty();">
+                            <option value="">-- Post in Leadership Channel --</option>
+                        </select>
+                        <input class="field-input manual-id-input" type="text" id="promotion-channelid" placeholder="e.g. 1234567890123456789" autocomplete="off" oninput="sanitizeChannelIdInput(this); trackDirty();" style="display:none; margin-top:6px;">
+                        <span class="field-hint">Routes <code>/promotion</code> requests with Approve/Deny buttons. If blank, routes to Leadership or War Alerts channel.</span>
+                    </div>
+                </div>
+
                 <!-- Row 5: Banker Role -->
                 <div class="field-grid">
                     <div class="field-group">
@@ -3357,7 +3372,8 @@ function populateChannelSelects() {
         { id: 'oc-channelid', defaultLabel: '-- Same as Main Alert Channel --' },
         { id: 'welcome-channelid', defaultLabel: '-- Select Welcome Channel (e.g. #welcome-and-rules) --' },
         { id: 'verification-channelid', defaultLabel: '-- Select Channel --' },
-        { id: 'banking-channelid', defaultLabel: '-- Post in Command Channel --' }
+        { id: 'banking-channelid', defaultLabel: '-- Post in Command Channel --' },
+        { id: 'promotion-channelid', defaultLabel: '-- Post in Leadership Channel --' }
     ];
     channelFields.forEach(({ id, defaultLabel }) => {
         const sel = document.getElementById(id + '-select');
@@ -3598,6 +3614,7 @@ function applyConfigToDOM(cfg) {
     if (document.getElementById('retal-channelid')) document.getElementById('retal-channelid').value = (cfg.retalChannelId || localStorage.getItem('warboard_retal_channelid') || '').replace(/[^0-9]/g, '');
     if (document.getElementById('retal-roleid')) document.getElementById('retal-roleid').value = cfg.retalRoleId || localStorage.getItem('warboard_retal_roleid') || '';
     if (document.getElementById('banking-channelid')) document.getElementById('banking-channelid').value = (cfg.bankingChannelId || localStorage.getItem('warboard_banking_channelid') || '').replace(/[^0-9]/g, '');
+    if (document.getElementById('promotion-channelid')) document.getElementById('promotion-channelid').value = (cfg.promotionChannelId || localStorage.getItem('warboard_promotion_channelid') || '').replace(/[^0-9]/g, '');
     if (document.getElementById('banker-roleid')) document.getElementById('banker-roleid').value = (cfg.bankerRoleId || localStorage.getItem('warboard_banker_roleid') || '').replace(/[^0-9]/g, '');
     if (document.getElementById('oc-channelid')) document.getElementById('oc-channelid').value = (cfg.ocChannelId || localStorage.getItem('warboard_oc_channelid') || '').replace(/[^0-9]/g, '');
     if (document.getElementById('oc-roleid')) document.getElementById('oc-roleid').value = cfg.ocRoleId || localStorage.getItem('warboard_oc_roleid') || '';
@@ -3748,6 +3765,7 @@ async function saveDiscordConfig() {
     const retalChannelId = (document.getElementById('retal-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const retalRoleId = document.getElementById('retal-roleid')?.value.trim() || '';
     const bankingChannelId = (document.getElementById('banking-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
+    const promotionChannelId = (document.getElementById('promotion-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const bankerRoleId = (document.getElementById('banker-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const ocChannelId = (document.getElementById('oc-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const ocRoleId = (document.getElementById('oc-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
@@ -3805,6 +3823,7 @@ async function saveDiscordConfig() {
     localStorage.setItem('warboard_retal_roleid', retalRoleId);
     localStorage.setItem('warboard_guildid', guildId);
     localStorage.setItem('warboard_banking_channelid', bankingChannelId);
+    localStorage.setItem('warboard_promotion_channelid', promotionChannelId);
     localStorage.setItem('warboard_banker_roleid', bankerRoleId);
     localStorage.setItem('warboard_oc_channelid', ocChannelId);
     localStorage.setItem('warboard_oc_roleid', ocRoleId);
@@ -3836,6 +3855,7 @@ async function saveDiscordConfig() {
             retalChannelId,
             retalRoleId,
             bankingChannelId,
+            promotionChannelId,
             bankerRoleId,
             ocChannelId,
             ocRoleId,

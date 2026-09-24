@@ -212,6 +212,55 @@ function getRequestableFactionRoles(positionsObj) {
 }
 
 /**
+ * Sort faction roles into an ordered progression hierarchy:
+ * 1. Default role (default: 1) is entry base rank (Rank 1).
+ * 2. Roles with fewer permissions come before roles with higher permissions.
+ * 3. Ties preserve faction API order.
+ */
+function getRoleHierarchy(positionsObj) {
+    if (!positionsObj || typeof positionsObj !== 'object') return [];
+    const roles = getRequestableFactionRoles(positionsObj);
+
+    return [...roles].sort((a, b) => {
+        const posA = positionsObj[a] || {};
+        const posB = positionsObj[b] || {};
+
+        const isDefA = Boolean(posA.default == 1 || posA.default === true);
+        const isDefB = Boolean(posB.default == 1 || posB.default === true);
+        if (isDefA && !isDefB) return -1;
+        if (!isDefA && isDefB) return 1;
+
+        const countA = Object.keys(posA).filter(k => k !== 'title' && k !== 'default' && (posA[k] === 1 || posA[k] === true)).length;
+        const countB = Object.keys(posB).filter(k => k !== 'title' && k !== 'default' && (posB[k] === 1 || posB[k] === true)).length;
+
+        if (countA !== countB) return countA - countB;
+        const keys = Object.keys(positionsObj);
+        return keys.indexOf(a) - keys.indexOf(b);
+    });
+}
+
+/**
+ * Calculate how many ranks up/down a requested promotion moves the user.
+ */
+function calculateRankMovement(positionsObj, currentRole, requestedRole) {
+    const hierarchy = getRoleHierarchy(positionsObj);
+    const currIdx = hierarchy.findIndex(r => r.toLowerCase() === (currentRole || '').toLowerCase());
+    const targetIdx = hierarchy.findIndex(r => r.toLowerCase() === (requestedRole || '').toLowerCase());
+
+    const currRank = currIdx !== -1 ? currIdx + 1 : 1;
+    const targetRank = targetIdx !== -1 ? targetIdx + 1 : currRank;
+    const delta = targetRank - currRank;
+
+    if (delta > 0) {
+        return `⬆️ **+${delta} Rank${delta === 1 ? '' : 's'} Up** *(Rank ${currRank} ➔ Rank ${targetRank})*`;
+    } else if (delta === 0) {
+        return `➡️ **Lateral Move** *(Same tier: Rank ${currRank})*`;
+    } else {
+        return `⬇️ **${delta} Rank${Math.abs(delta) === 1 ? '' : 's'}** *(Rank ${currRank} ➔ Rank ${targetRank})*`;
+    }
+}
+
+/**
  * Build the interactive Promotion Overview embed listing all actual faction roles.
  */
 function buildPromotionMenuEmbed({ memberName, memberId, currentRole, daysInFaction, facName, positions }) {
@@ -296,22 +345,39 @@ function buildPromotionModal(selectedRole) {
 function buildLeadershipNotificationEmbed(promoReq, positions, facName) {
     const posObj = (positions && positions[promoReq.requestedRole]) || null;
     const perks = formatPositionPerks(posObj);
+    const tenure = promoReq.daysInFaction ? `**${promoReq.daysInFaction}d** in faction` : 'New member';
+    const levelStr = promoReq.level ? `**Level ${promoReq.level}**` : 'Level ?';
 
     const fields = [
         {
-            name: "👤 Member",
+            name: "👤 Applicant",
             value: `${UI.player(promoReq.playerName, promoReq.playerId)} (<@${promoReq.discordUserId}>)`,
             inline: true
         },
         {
-            name: "📌 Current Position",
-            value: `**${promoReq.currentRole}**${promoReq.daysInFaction ? ` (${promoReq.daysInFaction}d in faction)` : ''}`,
+            name: "🎖️ Level & Tenure",
+            value: `${levelStr} · ${tenure}`,
+            inline: true
+        },
+        {
+            name: "📈 Rank Advancement",
+            value: promoReq.rankAdvancement || '⬆️ +1 Rank Up',
+            inline: true
+        },
+        {
+            name: "📌 Current Role",
+            value: `**${promoReq.currentRole}**`,
             inline: true
         },
         {
             name: "⭐ Requested Promotion",
             value: `**${promoReq.requestedRole}**`,
             inline: true
+        },
+        {
+            name: "💪 Battle Stats Progression",
+            value: promoReq.statsProgression || '📊 _Unrecorded_',
+            inline: false
         },
         {
             name: "⚡ Role Permissions",
@@ -372,22 +438,39 @@ function buildReviewedNotificationEmbed(promoReq, decision, reviewerName, review
     const isApproved = (decision === 'approved');
     const posObj = (positions && positions[promoReq.requestedRole]) || null;
     const perks = formatPositionPerks(posObj);
+    const tenure = promoReq.daysInFaction ? `**${promoReq.daysInFaction}d** in faction` : 'New member';
+    const levelStr = promoReq.level ? `**Level ${promoReq.level}**` : 'Level ?';
 
     const fields = [
         {
-            name: "👤 Member",
+            name: "👤 Applicant",
             value: `${UI.player(promoReq.playerName, promoReq.playerId)} (<@${promoReq.discordUserId}>)`,
             inline: true
         },
         {
-            name: "📌 Current Position",
-            value: `**${promoReq.currentRole}**${promoReq.daysInFaction ? ` (${promoReq.daysInFaction}d in faction)` : ''}`,
+            name: "🎖️ Level & Tenure",
+            value: `${levelStr} · ${tenure}`,
+            inline: true
+        },
+        {
+            name: "📈 Rank Advancement",
+            value: promoReq.rankAdvancement || '—',
+            inline: true
+        },
+        {
+            name: "📌 Current Role",
+            value: `**${promoReq.currentRole}**`,
             inline: true
         },
         {
             name: "⭐ Requested Promotion",
             value: `**${promoReq.requestedRole}**`,
             inline: true
+        },
+        {
+            name: "💪 Battle Stats Progression",
+            value: promoReq.statsProgression || '📊 _Unrecorded_',
+            inline: false
         },
         {
             name: "⚡ Role Permissions",
@@ -450,7 +533,7 @@ function getPendingRequestForPlayer(playerId) {
 /**
  * Create and persist a new promotion request.
  */
-async function createPromotionRequest({ discordUserId, playerId, playerName, currentRole, requestedRole, reason, daysInFaction, guildId }) {
+async function createPromotionRequest({ discordUserId, playerId, playerName, currentRole, requestedRole, reason, daysInFaction, guildId, level, rankAdvancement, statsProgression }) {
     const id = `promo_${Date.now()}_${playerId}`;
     const record = {
         id,
@@ -460,6 +543,9 @@ async function createPromotionRequest({ discordUserId, playerId, playerName, cur
         currentRole: String(currentRole || 'Member'),
         requestedRole: String(requestedRole),
         daysInFaction: Number(daysInFaction) || 0,
+        level: Number(level) || 0,
+        rankAdvancement: String(rankAdvancement || ''),
+        statsProgression: String(statsProgression || ''),
         reason: String(reason || '').trim(),
         guildId: String(guildId || ''),
         status: 'pending',
@@ -533,6 +619,8 @@ module.exports = {
     isRestrictedPromotionRole,
     formatPositionPerks,
     getRequestableFactionRoles,
+    getRoleHierarchy,
+    calculateRankMovement,
     buildPromotionMenuEmbed,
     buildPromotionSelectMenu,
     buildPromotionModal,

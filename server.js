@@ -16863,6 +16863,48 @@ function setupSlashBotEvents(bot, token) {
                 }
             }
 
+            // Helper: Resolve player's compact battle stats progression summary
+            function resolvePlayerStatsProgression(pId, discordUid) {
+                if (!pId) return '📊 _Unrecorded (No /bs snapshot on file)_';
+                const recKey = String(pId);
+                const bRecord = battleStatsHistory[recKey];
+
+                if (bRecord && bRecord.stats && bRecord.stats.total) {
+                    const total = bRecord.stats.total;
+                    const totalStr = formatStatNumber(total);
+
+                    if (Array.isArray(bRecord.history) && bRecord.history.length > 0) {
+                        const earliest = bRecord.history[bRecord.history.length - 1];
+                        const gain = total - (earliest.total || 0);
+                        const days = Math.max(1, Math.round((Date.now() - (earliest.timestamp || bRecord.lastUpdated)) / 86400000));
+                        const pct = earliest.total > 0 ? ((gain / earliest.total) * 100).toFixed(1) : 0;
+
+                        if (gain > 0) {
+                            return `📊 **~${totalStr} BS** • 📈 **+${formatStatNumber(gain)}** (+${pct}%) over ${days}d`;
+                        } else if (gain === 0) {
+                            return `📊 **~${totalStr} BS** • ⏸️ Steady over ${days}d`;
+                        } else {
+                            return `📊 **~${totalStr} BS** *(Snapshot <t:${Math.floor((bRecord.lastUpdated || Date.now()) / 1000)}:R>)*`;
+                        }
+                    }
+
+                    const timeAgo = bRecord.lastUpdated ? `<t:${Math.floor(bRecord.lastUpdated / 1000)}:R>` : 'Recent';
+                    return `📊 **~${totalStr} BS** *(Baseline recorded ${timeAgo})*`;
+                }
+
+                if (spyDatabase && spyDatabase[recKey]?.total) {
+                    const spyTotal = spyDatabase[recKey].total;
+                    return `📊 **~${formatStatNumber(spyTotal)} BS** *(Scouted)*`;
+                }
+
+                if (statsCache && statsCache[recKey]?.stats) {
+                    const cached = statsCache[recKey].stats;
+                    return `📊 **~${formatStatNumber(cached)} BS** *(Estimated)*`;
+                }
+
+                return '📊 _Unrecorded (Run `/bs` to track)_';
+            }
+
             // ── Faction Promotion Pitch Submission ──
             if (interaction.customId.startsWith('modal_promo_')) {
                 await interaction.deferReply({ ephemeral: true });
@@ -16914,6 +16956,7 @@ function setupSlashBotEvents(bot, token) {
 
                 const currentRole = memberObj.position || 'Member';
                 const daysInFaction = memberObj.days_in_faction || 0;
+                const memberLevel = memberObj.level || 0;
 
                 // Check restricted role
                 if (promotionManager.isRestrictedPromotionRole(selectedRole)) {
@@ -16946,6 +16989,10 @@ function setupSlashBotEvents(bot, token) {
                     });
                 }
 
+                // Calculate rank movement and battle stats progression
+                const rankAdvancement = promotionManager.calculateRankMovement(facData.positions, currentRole, selectedRole);
+                const statsProgression = resolvePlayerStatsProgression(targetTornId, interaction.user.id);
+
                 // Create request
                 const promoReq = await promotionManager.createPromotionRequest({
                     discordUserId: interaction.user.id,
@@ -16955,6 +17002,9 @@ function setupSlashBotEvents(bot, token) {
                     requestedRole: selectedRole,
                     reason,
                     daysInFaction,
+                    level: memberLevel,
+                    rankAdvancement,
+                    statsProgression,
                     guildId: interaction.guild?.id
                 });
 
@@ -18477,6 +18527,11 @@ function setupSlashBotEvents(bot, token) {
                     });
                 }
 
+                // Calculate rank movement and battle stats progression
+                const rankAdvancement = promotionManager.calculateRankMovement(facData.positions, currentRole, exactRole);
+                const statsProgression = resolvePlayerStatsProgression(targetTornId, interaction.user.id);
+                const memberLevel = memberObj.level || 0;
+
                 const promoReq = await promotionManager.createPromotionRequest({
                     discordUserId: interaction.user.id,
                     playerId: targetTornId,
@@ -18485,6 +18540,9 @@ function setupSlashBotEvents(bot, token) {
                     requestedRole: exactRole,
                     reason: reasonInput,
                     daysInFaction,
+                    level: memberLevel,
+                    rankAdvancement,
+                    statsProgression,
                     guildId: interaction.guild?.id
                 });
 
