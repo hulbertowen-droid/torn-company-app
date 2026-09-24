@@ -266,68 +266,65 @@ function verifySyntax(codeString, filename = 'server.js') {
 async function generateAndVerifyPatch(targetFilePath, requestText, plan, callAiFn) {
     const fullPath = path.isAbsolute(targetFilePath) ? targetFilePath : path.join(__dirname, targetFilePath);
     if (!fs.existsSync(fullPath)) {
-        return {
-            success: false,
-            error: `Target file not found: ${targetFilePath}`
-        };
+        return { success: false, error: `Target file not found: ${targetFilePath}` };
     }
 
     const originalContent = fs.readFileSync(fullPath, 'utf8');
-
-    // To prevent token blowout on large files (e.g. server.js), extract relevant context
-    let contextSnippet = originalContent;
     const isLargeFile = originalContent.length > 50000;
 
-    const systemPrompt = `You are the lead developer for F.R.I.D.A.Y.
-Your task is to generate a SURGICAL search-and-replace modification for the file "${path.basename(targetFilePath)}".
+    // Include line numbers in context so AI can reference exact locations
+    const contextBlock = isLargeFile
+        ? extractRelevantLines(originalContent, requestText, plan)
+        : originalContent;
 
-Strict Rules:
-1. ONLY modify the exact lines needed to achieve the approved plan.
-2. PRESERVE all existing comments, functions, and formatting.
-3. Output MUST use this exact format:
+    const systemPrompt = `You are the lead developer for F.R.I.D.A.Y., a Node.js Discord bot.
+Your task is to generate a SURGICAL search-and-replace patch for the file "${path.basename(targetFilePath)}".
+
+CRITICAL RULES:
+1. The SEARCH block MUST contain lines that appear EXACTLY in the provided code — do NOT paraphrase, summarize, or reconstruct them.
+2. Copy the lines character-for-character including indentation (spaces/tabs).
+3. Keep the SEARCH block SHORT (5-20 lines max). Do not include unchanged surrounding code.
+4. The REPLACE block should contain the modified version of those same lines.
+5. Output format (no markdown fence around this block itself):
 <<<<<<< SEARCH
-exact lines from existing file to replace
+[exact lines from the file]
 =======
-new updated replacement lines
+[replacement lines]
 >>>>>>>
 
-Plan to implement: ${plan}
-User request: ${requestText}`;
+Plan: ${plan}
+Request: ${requestText}`;
 
-    const userPrompt = `Here is the relevant code context:\n\n\`\`\`javascript\n${isLargeFile ? extractRelevantLines(originalContent, requestText, plan) : originalContent}\n\`\`\`\n\nGenerate the <<<<<<< SEARCH / ======= / >>>>>>> patch block:`;
+    const userPrompt = `Relevant code (with line numbers for reference):\n\n\`\`\`javascript\n${contextBlock}\n\`\`\`\n\nGenerate ONE <<<<<<< SEARCH / ======= / >>>>>>> patch block. Copy the SEARCH lines exactly as they appear above:`;
 
     let aiRes = await callAiFn(systemPrompt, userPrompt);
-    if (!aiRes) {
+    if (!aiRes || aiRes.trim().length < 10) {
         return { success: false, error: 'Coding AI did not return a response.' };
     }
 
     // Parse SEARCH/REPLACE block
     const patch = parseSearchReplaceBlock(aiRes);
-    if (!patch) {
+    if (!patch || !patch.search.trim()) {
         return { success: false, error: 'Could not extract valid SEARCH/REPLACE block from AI response.' };
     }
 
-    if (!originalContent.includes(patch.search)) {
-        // Try normalized whitespace matching
-        const normalizedOrig = originalContent.replace(/\r\n/g, '\n');
-        const normalizedSearch = patch.search.replace(/\r\n/g, '\n');
-        if (!normalizedOrig.includes(normalizedSearch)) {
-            return {
-                success: false,
-                error: 'The AI search block could not be uniquely matched in the target file. Aborting for safety.'
-            };
-        }
+    // Attempt multi-level matching
+    const matchResult = findAndApplyPatch(originalContent, patch.search, patch.replace);
+    if (!matchResult.success) {
+        return {
+            success: false,
+            error: `The AI search block could not be matched in the target file. Aborting for safety. (Search block was ${patch.search.trim().length} chars)`
+        };
     }
 
-    // Apply replacement
-    const updatedContent = originalContent.replace(patch.search, patch.replace);
+    const updatedContent = matchResult.updatedContent;
 
-    // ZERO-CRASH PRE-FLIGHT CHECK
+    // ZERO-CRASH PRE-FLIGHT SYNTAX CHECK
     const syntaxCheck = verifySyntax(updatedContent, path.basename(targetFilePath));
     if (!syntaxCheck.valid) {
         return {
             success: false,
-            error: `Zero-Crash Check FAILED! Syntax error in generated code: ${syntaxCheck.error}. Aborted to protect production.`,
+            error: `Zero-Crash Check FAILED — syntax error in generated code: ${syntaxCheck.error}`,
             syntaxError: syntaxCheck.error
         };
     }
@@ -343,7 +340,97 @@ User request: ${requestText}`;
 }
 
 /**
+ * Multi-level fuzzy matching: exact → CRLF-normalized → per-line trimmed → line-scored fuzzy
+ */
+function findAndApplyPatch(originalContent, searchBlock, replaceBlock) {
+    // Level 1: Exact match
+    if (originalContent.includes(searchBlock)) {
+        return { success: true, updatedContent: originalContent.replace(searchBlock, replaceBlock) };
+    }
+
+    // Level 2: Normalize line endings
+    const normOrig = originalContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const normSearch = searchBlock.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const normReplace = replaceBlock.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+    if (normOrig.includes(normSearch)) {
+        return { success: true, updatedContent: normOrig.replace(normSearch, normReplace) };
+    }
+
+    // Level 3: Per-line trimmed matching (handles indentation differences)
+    const origLines = normOrig.split('\n');
+    const searchLines = normSearch.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+    if (searchLines.length === 0) {
+        return { success: false };
+    }
+
+    // Slide search window through file looking for matching line sequence
+    const windowSize = searchLines.length;
+    let bestMatchStart = -1;
+    let bestMatchScore = 0;
+    const threshold = Math.ceil(windowSize * 0.85); // 85% of lines must match
+
+    for (let i = 0; i <= origLines.length - windowSize; i++) {
+        let matchCount = 0;
+        for (let j = 0; j < windowSize; j++) {
+            if (origLines[i + j].trim() === searchLines[j]) {
+                matchCount++;
+            }
+        }
+        if (matchCount > bestMatchScore) {
+            bestMatchScore = matchCount;
+            bestMatchStart = i;
+        }
+        if (matchCount >= windowSize) break; // Perfect match found
+    }
+
+    if (bestMatchStart >= 0 && bestMatchScore >= threshold) {
+        // Replace the matched region (use the original indentation from the original file)
+        const before = origLines.slice(0, bestMatchStart).join('\n');
+        const after = origLines.slice(bestMatchStart + windowSize).join('\n');
+        const updatedContent = [before, normReplace, after].filter((s, i) => i === 1 || s.length > 0).join('\n');
+        return { success: true, updatedContent };
+    }
+
+    // Level 4: Single-key-line match (if search is just 1-3 lines, try finding the most unique one)
+    if (searchLines.length <= 3) {
+        const uniqueLine = searchLines.reduce((a, b) => a.length > b.length ? a : b);
+        if (uniqueLine.length > 15) {
+            const lineIdx = origLines.findIndex(l => l.trim() === uniqueLine);
+            if (lineIdx >= 0) {
+                const origSearchLineCount = normSearch.split('\n').filter(l => l.trim()).length;
+                const before = origLines.slice(0, lineIdx).join('\n');
+                const after = origLines.slice(lineIdx + origSearchLineCount).join('\n');
+                const updatedContent = [before, normReplace, after].filter((s, i) => i === 1 || s.length > 0).join('\n');
+                return { success: true, updatedContent };
+            }
+        }
+    }
+
+    return { success: false };
+}
+
+/**
+ * Parse <<<<<<< SEARCH / ======= / >>>>>>> blocks from AI response.
+ */
+function parseSearchReplaceBlock(text) {
+    // Try standard format
+    const match = text.match(/<<<<<<< SEARCH\s*([\s\S]*?)\s*=======\s*([\s\S]*?)\s*>>>>>>>/);
+    if (match) {
+        return { search: match[1], replace: match[2] };
+    }
+    // Try without "SEARCH" label
+    const match2 = text.match(/<<<<<<<\s*([\s\S]*?)\s*=======\s*([\s\S]*?)\s*>>>>>>>/);
+    if (match2) {
+        return { search: match2[1], replace: match2[2] };
+    }
+    return null;
+}
+
+/**
  * Extract ~200 relevant lines from a large file based on keywords.
+ * Includes line numbers so the AI can reference exact locations.
  */
 function extractRelevantLines(content, requestText, plan) {
     const lines = content.split('\n');
@@ -357,8 +444,8 @@ function extractRelevantLines(content, requestText, plan) {
         for (const term of searchTerms) {
             if (l.includes(term)) matches++;
         }
-        // Boost functions, embeds, and definitions
-        if (matches > 0 && /\b(?:function|const|let|async|embed|sendChannelMessage|checkFactionInactivity)\b/.test(l)) {
+        // Boost function definitions and key constructs
+        if (matches > 0 && /\b(?:function|const|let|async|embed|sendChannelMessage|checkFactionInactivity|handleBattleStats|inactiv)\b/.test(l)) {
             matches += 2;
         }
         scores[i] = matches;
@@ -382,25 +469,15 @@ function extractRelevantLines(content, requestText, plan) {
         topRegions.push(2530, 1700);
     }
 
+    // Include line numbers in output so the AI knows what it's working with
     const snippets = topRegions.map(bestLine => {
         const start = Math.max(0, bestLine - 60);
         const end = Math.min(lines.length, bestLine + 80);
-        return `// ── Context lines ${start + 1} to ${end} of ${lines.length} ──\n` + lines.slice(start, end).join('\n');
+        const numberedLines = lines.slice(start, end).map((l, i) => `${start + i + 1}: ${l}`);
+        return `// ── File lines ${start + 1}–${end} of ${lines.length} ──\n` + numberedLines.join('\n');
     });
 
-    return snippets.join('\n\n// ═════════════════════════════════════════════════════════\n\n');
-}
-
-/**
- * Parse <<<<<<< SEARCH / ======= / >>>>>>> blocks.
- */
-function parseSearchReplaceBlock(text) {
-    const match = text.match(/<<<<<<< SEARCH\s*([\s\S]*?)\s*=======\s*([\s\S]*?)\s*>>>>>>>/);
-    if (!match) return null;
-    return {
-        search: match[1],
-        replace: match[2]
-    };
+    return snippets.join('\n\n// ═══════════════════════════════════════════════\n\n');
 }
 
 /**
