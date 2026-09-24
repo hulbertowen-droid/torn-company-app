@@ -67,18 +67,19 @@ function detectDevRequest(text) {
     if (!text || typeof text !== 'string') return false;
     const clean = text.toLowerCase().trim();
 
-    // Ignore read-only queries
+    // Ignore read-only queries UNLESS they specifically ask to change/modify something
     if (/^(?:how|why|when|what|who|show|get|view|list|check|tell|explain|is|are|can you explain)\b/i.test(clean) &&
-        !/\b(?:change|add|remove|update|fix|modify|delete|rewrite|rebuild)\b/i.test(clean)) {
+        !/\b(?:change|add|remove|update|fix|modify|delete|rewrite|rebuild|switch|set|replace|display)\b/i.test(clean)) {
         return false;
     }
 
     // Explicit code/dev instructions
-    const devKeywords = /\b(?:dev|code|feature|pull request|deploy|git|commit|patch|endpoint|handler|script|source code)\b/i;
-    const actionKeywords = /\b(?:add|remove|change|update|fix|modify|delete|rewrite|rebuild|tweak|replace|insert)\b/i;
-    const targetKeywords = /\b(?:bot|button|card|alert|embed|ui|page|endpoint|timeout|threshold|header|footer|multiplier|logic|function)\b/i;
+    const devKeywords = /\b(?:dev|code|feature|pull request|deploy|git|commit|patch|endpoints?|handlers?|scripts?|source code)\b/i;
+    const actionKeywords = /\b(?:add|remove|change|update|fix|modify|delete|rewrite|rebuild|tweak|replace|insert|switch|set|make)\b/i;
+    const targetKeywords = /\b(?:bots?|buttons?|cards?|alerts?|embeds?|uis?|pages?|endpoints?|timeouts?|thresholds?|headers?|footers?|multipliers?|logics?|functions?|numbers?|display|formats?|actions?|messages?|texts?|timers?|intervals?|hours?|days?|status|durations?)\b/i;
+    const patternKeywords = /\b(?:from\s+[a-z0-9_]+\s+to\s+[a-z0-9_]+|instead\s+of\b|show\s+[a-z0-9_]+\s+instead|make\s+it\s+show|display\s+[a-z0-9_]+\s+in)\b/i;
 
-    if (actionKeywords.test(clean) && (devKeywords.test(clean) || targetKeywords.test(clean))) {
+    if (actionKeywords.test(clean) && (devKeywords.test(clean) || targetKeywords.test(clean) || patternKeywords.test(clean))) {
         return true;
     }
 
@@ -343,26 +344,46 @@ function extractRelevantLines(content, requestText, plan) {
     const lines = content.split('\n');
     const searchTerms = `${requestText} ${plan}`.toLowerCase().match(/[a-z0-9_]{4,}/g) || ['discord', 'retal', 'war'];
 
-    let bestLine = -1;
-    let maxMatches = -1;
-
+    // Score all lines
+    const scores = new Array(lines.length).fill(0);
     for (let i = 0; i < lines.length; i++) {
         const l = lines[i].toLowerCase();
         let matches = 0;
         for (const term of searchTerms) {
             if (l.includes(term)) matches++;
         }
-        if (matches > maxMatches) {
-            maxMatches = matches;
-            bestLine = i;
+        // Boost functions, embeds, and definitions
+        if (matches > 0 && /\b(?:function|const|let|async|embed|sendChannelMessage|checkFactionInactivity)\b/.test(l)) {
+            matches += 2;
+        }
+        scores[i] = matches;
+    }
+
+    // Find top candidate lines that are sufficiently spaced out
+    const candidateLines = [];
+    for (let i = 0; i < lines.length; i++) {
+        if (scores[i] >= 2) {
+            const tooClose = candidateLines.some(idx => Math.abs(idx - i) < 80);
+            if (!tooClose) {
+                candidateLines.push(i);
+            }
         }
     }
 
-    if (bestLine === -1) bestLine = 1700; // sensible default around alerts/war
-    const start = Math.max(0, bestLine - 80);
-    const end = Math.min(lines.length, bestLine + 120);
+    candidateLines.sort((a, b) => scores[b] - scores[a]);
+    const topRegions = candidateLines.slice(0, 3);
 
-    return `// Context lines ${start + 1} to ${end} of ${lines.length}\n` + lines.slice(start, end).join('\n');
+    if (topRegions.length === 0) {
+        topRegions.push(2530, 1700);
+    }
+
+    const snippets = topRegions.map(bestLine => {
+        const start = Math.max(0, bestLine - 60);
+        const end = Math.min(lines.length, bestLine + 80);
+        return `// ── Context lines ${start + 1} to ${end} of ${lines.length} ──\n` + lines.slice(start, end).join('\n');
+    });
+
+    return snippets.join('\n\n// ═════════════════════════════════════════════════════════\n\n');
 }
 
 /**
