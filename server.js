@@ -16179,6 +16179,29 @@ function setupSlashBotEvents(bot, token) {
         slashBotStarted = false;
     });
 
+    // Listen for message deletion in Discord to instantly clean up deleted promotion requests
+    bot.on(Events.MessageDelete, async (deletedMsg) => {
+        try {
+            if (!deletedMsg?.id) return;
+            await promotionManager.handleDiscordMessageDeleted(deletedMsg.id);
+        } catch(e) {
+            console.warn('[Promotions] MessageDelete handler error:', e.message);
+        }
+    });
+
+    bot.on(Events.MessageBulkDelete, async (deletedMsgs) => {
+        try {
+            if (!deletedMsgs) return;
+            for (const msg of deletedMsgs.values()) {
+                if (msg?.id) {
+                    await promotionManager.handleDiscordMessageDeleted(msg.id);
+                }
+            }
+        } catch(e) {
+            console.warn('[Promotions] MessageBulkDelete handler error:', e.message);
+        }
+    });
+
     bot.once(Events.ClientReady, async (c) => {
         console.log(`[Slash Bot] Ready as ${c.user.tag}`);
         slashBotStarted = true;
@@ -16217,6 +16240,13 @@ function setupSlashBotEvents(bot, token) {
                 }
             }
         } catch(e) {}
+
+        // Reconcile and clean up any promotion requests whose Discord messages were deleted
+        try {
+            await promotionManager.reconcilePromotionRequests(bot, discordConfig);
+        } catch(e) {
+            console.warn('[Promotions] Startup reconciliation error:', e.message);
+        }
 
         try {
             if (c.user.username !== 'F.R.I.D.A.Y') {
@@ -17009,14 +17039,28 @@ function setupSlashBotEvents(bot, token) {
                         });
                     }
 
-                    // Check pending
-                    const existing = promotionManager.getPendingRequestForPlayer(targetTornId);
+                    // Check pending (with Discord message existence validation)
+                    const existing = await promotionManager.getPendingRequestForPlayer(targetTornId, bot, discordConfig);
                     if (existing) {
+                        const cancelRow = new ActionRowBuilder().addComponents(
+                            new ButtonBuilder()
+                                .setCustomId(`btn_promo_cancel_${existing.id}`)
+                                .setLabel('Cancel & Withdraw Request')
+                                .setStyle(ButtonStyle.Danger)
+                                .setEmoji('🗑️'),
+                            new ButtonBuilder()
+                                .setCustomId(`btn_promo_recheck_${existing.id}`)
+                                .setLabel('Recheck Discord Message')
+                                .setStyle(ButtonStyle.Secondary)
+                                .setEmoji('🔄')
+                        );
                         return await interaction.editReply({
                             embeds: [sanitizeEmbed(UI.warning(
                                 'Promotion Request Pending',
-                                `⏳ You already have a pending promotion request for **${existing.requestedRole}** submitted <t:${Math.floor(existing.createdAt / 1000)}:R>!\n\nPlease wait for leadership to review it.`
-                            ))]
+                                `⏳ You already have a pending promotion request for **${existing.requestedRole}** submitted <t:${Math.floor(existing.createdAt / 1000)}:R>!\n\n` +
+                                `If you deleted the Discord message or wish to withdraw this request, click **Cancel & Withdraw Request** below to immediately clear it.`
+                            ))],
+                            components: [cancelRow]
                         });
                     }
 
@@ -17104,8 +17148,14 @@ function setupSlashBotEvents(bot, token) {
                 try {
                     const facData = await promotionManager.getFactionData(apiKey, facId);
                     const requestableRoles = promotionManager.getRequestableFactionRoles(facData.positions);
-                    const filtered = requestableRoles.filter(r => !typed || r.toLowerCase().includes(typed)).slice(0, 25);
-                    return await interaction.respond(filtered.map(r => ({ name: r, value: r }))).catch(() => {});
+                    const filtered = requestableRoles.filter(r => !typed || r.toLowerCase().includes(typed)).slice(0, 24);
+                    const options = filtered.map(r => ({ name: r, value: r }));
+
+                    if (!typed || 'cancel'.includes(typed) || 'withdraw'.includes(typed) || 'delete'.includes(typed)) {
+                        options.unshift({ name: '🗑️ Cancel / Withdraw Current Promotion Request', value: 'cancel' });
+                    }
+
+                    return await interaction.respond(options.slice(0, 25)).catch(() => {});
                 } catch (e) {
                     return await interaction.respond([]).catch(() => {});
                 }
@@ -17721,6 +17771,57 @@ function setupSlashBotEvents(bot, token) {
                 );
 
                 return interaction.editReply({ embeds: [sanitizeEmbed(embed)], components: [actionRow] }).catch(() => {});
+            }
+
+            // ── Faction Promotion User Cancellation & Recheck ──
+            if (customId.startsWith('btn_promo_cancel_') || customId.startsWith('btn_promo_recheck_')) {
+                const isCancel = customId.startsWith('btn_promo_cancel_');
+                const reqId = customId.replace(isCancel ? 'btn_promo_cancel_' : 'btn_promo_recheck_', '').trim();
+
+                const promoReq = promotionManager.getPromotionRequest(reqId);
+                if (!promoReq) {
+                    return interaction.reply({
+                        content: "✅ No active promotion request found with this ID (it was already cleared or cancelled).",
+                        ephemeral: true
+                    }).catch(() => {});
+                }
+
+                const isApplicant = (interaction.user.id === promoReq.discordUserId);
+                const isAuthorized = isApplicant ||
+                                     interaction.member?.permissions?.has?.('Administrator') ||
+                                     (discordConfig.leaderRoleId && interaction.member?.roles?.cache?.has?.(discordConfig.leaderRoleId)) ||
+                                     (interaction.user.id === '992561850057240578' || interaction.user.id === discordConfig.personalDiscordId);
+
+                if (!isAuthorized) {
+                    return interaction.reply({
+                        content: "⚠️ Only the applicant or faction leadership can cancel this promotion request.",
+                        ephemeral: true
+                    }).catch(() => {});
+                }
+
+                await interaction.deferReply({ ephemeral: true }).catch(() => {});
+
+                if (isCancel) {
+                    await promotionManager.cancelPromotionRequest(reqId, interaction.user.id, interaction.user.username, bot);
+                    return interaction.editReply({
+                        content: `✅ Your promotion request for **${promoReq.requestedRole}** has been cancelled and cleared! You can now submit a new promotion request anytime using \`/promotion\`.`
+                    }).catch(() => {});
+                } else {
+                    const stillExists = await promotionManager.verifyPromotionMessageExists(promoReq, bot, discordConfig);
+                    if (!stillExists) {
+                        promoReq.status = 'deleted';
+                        promoReq.reviewedAt = Date.now();
+                        promoReq.reviewReason = 'Discord message deleted through Discord';
+                        await promotionManager.persistRecord(promoReq);
+                        return interaction.editReply({
+                            content: `✅ Verified! The Discord message for your previous request was deleted. Your request has been cleared, and you can now submit a new request with \`/promotion\`.`
+                        }).catch(() => {});
+                    } else {
+                        return interaction.editReply({
+                            content: `ℹ️ The promotion request message is still active in leadership review. If you want to withdraw it, click **Cancel & Withdraw Request**.`
+                        }).catch(() => {});
+                    }
+                }
             }
 
             // ── Faction Promotion Leadership Approval / Denial ──
@@ -18575,6 +18676,26 @@ function setupSlashBotEvents(bot, token) {
                 if (requestedRoleInput) {
                     const cleanRole = requestedRoleInput.trim();
 
+                    // Check if user requested to cancel their promotion
+                    if (cleanRole.toLowerCase() === 'cancel' || cleanRole.toLowerCase() === 'delete' || cleanRole.toLowerCase() === 'withdraw') {
+                        const existing = await promotionManager.getPendingRequestForPlayer(targetTornId, bot, discordConfig);
+                        if (!existing) {
+                            return await interaction.editReply({
+                                embeds: [sanitizeEmbed(UI.info(
+                                    'No Active Promotion Request',
+                                    'You do not currently have any pending promotion request to cancel.'
+                                ))]
+                            });
+                        }
+                        await promotionManager.cancelPromotionRequest(existing.id, interaction.user.id, interaction.user.username, bot);
+                        return await interaction.editReply({
+                            embeds: [sanitizeEmbed(UI.success(
+                                'Promotion Request Cancelled',
+                                `Your pending promotion request for **${existing.requestedRole}** has been cancelled and cleared.\n\nYou can submit a new promotion request anytime with \`/promotion\`.`
+                            ))]
+                        });
+                    }
+
                     if (promotionManager.isRestrictedPromotionRole(cleanRole)) {
                         return await interaction.editReply({
                             embeds: [sanitizeEmbed(UI.error(
@@ -18605,13 +18726,27 @@ function setupSlashBotEvents(bot, token) {
                         });
                     }
 
-                    const existing = promotionManager.getPendingRequestForPlayer(targetTornId);
+                    const existing = await promotionManager.getPendingRequestForPlayer(targetTornId, bot, discordConfig);
                     if (existing) {
+                        const cancelRow = new ActionRowBuilder().addComponents(
+                            new ButtonBuilder()
+                                .setCustomId(`btn_promo_cancel_${existing.id}`)
+                                .setLabel('Cancel & Withdraw Request')
+                                .setStyle(ButtonStyle.Danger)
+                                .setEmoji('🗑️'),
+                            new ButtonBuilder()
+                                .setCustomId(`btn_promo_recheck_${existing.id}`)
+                                .setLabel('Recheck Discord Message')
+                                .setStyle(ButtonStyle.Secondary)
+                                .setEmoji('🔄')
+                        );
                         return await interaction.editReply({
                             embeds: [sanitizeEmbed(UI.warning(
                                 'Promotion Request Pending',
-                                `⏳ You already have a pending promotion request for **${existing.requestedRole}** submitted <t:${Math.floor(existing.createdAt / 1000)}:R>!\n\nPlease wait for leadership to review it.`
-                            ))]
+                                `⏳ You already have a pending promotion request for **${existing.requestedRole}** submitted <t:${Math.floor(existing.createdAt / 1000)}:R>!\n\n` +
+                                `If you deleted the Discord message or wish to withdraw this request, click **Cancel & Withdraw Request** below to immediately clear it.`
+                            ))],
+                            components: [cancelRow]
                         });
                     }
 
@@ -18645,6 +18780,31 @@ function setupSlashBotEvents(bot, token) {
                             (reasonInput ? `• **Pitch:** _"${reasonInput}"_\n` : '') +
                             `\nF.R.I.D.A.Y will notify you once leadership reviews your application.`
                         ))]
+                    });
+                }
+
+                // Check if user already has an active pending promotion request before showing menu
+                const existing = await promotionManager.getPendingRequestForPlayer(targetTornId, bot, discordConfig);
+                if (existing) {
+                    const cancelRow = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(`btn_promo_cancel_${existing.id}`)
+                            .setLabel('Cancel & Withdraw Request')
+                            .setStyle(ButtonStyle.Danger)
+                            .setEmoji('🗑️'),
+                        new ButtonBuilder()
+                            .setCustomId(`btn_promo_recheck_${existing.id}`)
+                            .setLabel('Recheck Discord Message')
+                            .setStyle(ButtonStyle.Secondary)
+                            .setEmoji('🔄')
+                    );
+                    return await interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.warning(
+                            'Promotion Request Pending',
+                            `⏳ You already have a pending promotion request for **${existing.requestedRole}** submitted <t:${Math.floor(existing.createdAt / 1000)}:R>!\n\n` +
+                            `If you deleted the Discord message or wish to withdraw this request, click **Cancel & Withdraw Request** below to immediately clear it.`
+                        ))],
+                        components: [cancelRow]
                     });
                 }
 

@@ -94,16 +94,16 @@ async function syncWithMongo() {
     if (!promoCollection) return;
     try {
         const docs = await promoCollection.find({}).toArray();
-        let added = 0;
+        let synced = 0;
         for (const doc of docs) {
-            if (doc && doc.id && !promotionsStore.has(doc.id)) {
+            if (doc && doc.id) {
                 promotionsStore.set(doc.id, doc);
-                added++;
+                synced++;
             }
         }
-        if (added > 0) {
+        if (synced > 0) {
             savePromotionsToDisk();
-            console.log(`[Promotions] Synced ${added} requests from MongoDB.`);
+            console.log(`[Promotions] Synced ${synced} requests from MongoDB.`);
         }
     } catch(e) {
         console.warn('[Promotions] Mongo sync error:', e.message);
@@ -527,17 +527,198 @@ function buildReviewedNotificationEmbed(promoReq, decision, reviewerName, review
 }
 
 /**
- * Check if user already has an active pending promotion request.
+ * Verify whether the Discord message for a promotion request still exists in Discord.
+ * Returns true if message exists, false if confirmed deleted.
  */
-function getPendingRequestForPlayer(playerId) {
+async function verifyPromotionMessageExists(record, bot, discordConfig = null) {
+    if (!bot || !record) return true;
+
+    // Case 1: Specific messageId and channelId are tracked
+    if (record.channelId && record.messageId) {
+        try {
+            const chan = bot.channels.cache.get(record.channelId) || await bot.channels.fetch(record.channelId).catch(() => null);
+            if (chan && chan.isTextBased()) {
+                const msg = await chan.messages.fetch(record.messageId).catch(err => {
+                    // Discord 10008 = Unknown Message (deleted in Discord), 404 = Not Found
+                    if (err.code === 10008 || err.status === 404) return null;
+                    return undefined;
+                });
+                if (msg === null) {
+                    return false; // Confirmed deleted from Discord
+                }
+                if (msg) {
+                    return true; // Confirmed exists
+                }
+            }
+        } catch (e) {
+            console.warn('[Promotions] Message verification check error:', e.message);
+        }
+    }
+
+    // Case 2: channelId or messageId missing (e.g. unlinked legacy record)
+    const targetChanId = record.channelId || (discordConfig && (discordConfig.promotionChannelId || discordConfig.leaderChannelId || discordConfig.leadershipChannelId || discordConfig.globalChannelId));
+    if (targetChanId) {
+        try {
+            const chan = bot.channels.cache.get(targetChanId) || await bot.channels.fetch(targetChanId).catch(() => null);
+            if (chan && chan.isTextBased()) {
+                const recent = await chan.messages.fetch({ limit: 50 }).catch(() => null);
+                if (recent && recent.size > 0) {
+                    const matchingMsg = recent.find(m => {
+                        const hasButton = m.components?.some(row => 
+                            row.components?.some(btn => btn.customId && btn.customId.includes(record.id))
+                        );
+                        if (hasButton) return true;
+                        const hasEmbed = m.embeds?.some(e => 
+                            (e.title && e.title.includes(String(record.playerId))) ||
+                            (e.description && e.description.includes(String(record.playerId)))
+                        );
+                        return hasEmbed;
+                    });
+
+                    if (matchingMsg) {
+                        record.messageId = matchingMsg.id;
+                        record.channelId = chan.id;
+                        await persistRecord(record);
+                        return true;
+                    } else {
+                        // Request is not found in the channel and was created > 30s ago
+                        if (Date.now() - record.createdAt > 30000) {
+                            return false;
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    // If no messageId could be found and the request is older than 60 seconds, consider it deleted
+    if (!record.messageId && (Date.now() - record.createdAt > 60000)) {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Check if user already has an active pending promotion request.
+ * If Discord bot is provided, verifies if the Discord message still exists.
+ * If the message was deleted in Discord, marks the request as deleted automatically.
+ */
+async function getPendingRequestForPlayer(playerId, bot = null, discordConfig = null) {
     if (!playerId) return null;
     const numId = Number(playerId);
     for (const record of promotionsStore.values()) {
         if (record.playerId === numId && record.status === 'pending') {
+            if (bot) {
+                const alive = await verifyPromotionMessageExists(record, bot, discordConfig);
+                if (!alive) {
+                    record.status = 'deleted';
+                    record.reviewedAt = Date.now();
+                    record.reviewReason = 'Discord message deleted through Discord';
+                    await persistRecord(record);
+                    console.log(`[Promotions] Cleared deleted promotion request ${record.id} for player ${numId} (Discord message was deleted).`);
+                    continue;
+                }
+            }
             return record;
         }
     }
     return null;
+}
+
+/**
+ * Event handler triggered when a message is deleted in Discord.
+ * If the message corresponds to a pending promotion request, mark it deleted immediately.
+ */
+async function handleDiscordMessageDeleted(messageId) {
+    if (!messageId) return false;
+    let found = false;
+    for (const record of promotionsStore.values()) {
+        if (record.messageId === messageId && record.status === 'pending') {
+            record.status = 'deleted';
+            record.reviewedAt = Date.now();
+            record.reviewReason = 'Discord message deleted through Discord';
+            await persistRecord(record);
+            console.log(`[Promotions] Promotion request ${record.id} for player ${record.playerId} was automatically cleared because its Discord message ${messageId} was deleted.`);
+            found = true;
+        }
+    }
+    return found;
+}
+
+/**
+ * Sweep all pending requests on startup / ready and clean up any requests whose Discord messages are gone.
+ */
+async function reconcilePromotionRequests(bot, discordConfig = null) {
+    if (!bot) return;
+    try {
+        let cleaned = 0;
+        for (const record of promotionsStore.values()) {
+            if (record.status === 'pending') {
+                const alive = await verifyPromotionMessageExists(record, bot, discordConfig);
+                if (!alive) {
+                    record.status = 'deleted';
+                    record.reviewedAt = Date.now();
+                    record.reviewReason = 'Discord message deleted through Discord';
+                    await persistRecord(record);
+                    cleaned++;
+                    console.log(`[Promotions] Reconciled: Cleared orphan promotion request ${record.id} for player ${record.playerId} (message deleted).`);
+                }
+            }
+        }
+        if (cleaned > 0) {
+            console.log(`[Promotions] Reconciled ${cleaned} deleted/orphan promotion requests.`);
+        }
+    } catch (err) {
+        console.warn('[Promotions] Error during reconciliation:', err.message);
+    }
+}
+
+/**
+ * Cancel and withdraw a promotion request.
+ */
+async function cancelPromotionRequest(id, reviewerId, reviewerName, bot = null) {
+    const record = promotionsStore.get(id);
+    if (!record) return null;
+
+    record.status = 'cancelled';
+    record.reviewedBy = String(reviewerId);
+    record.reviewedByName = String(reviewerName);
+    record.reviewedAt = Date.now();
+    record.reviewReason = 'Cancelled by ' + (String(reviewerId) === record.discordUserId ? 'applicant' : 'leadership');
+
+    // Try deleting Discord message if it still exists
+    if (bot && record.channelId && record.messageId) {
+        try {
+            const chan = bot.channels.cache.get(record.channelId) || await bot.channels.fetch(record.channelId).catch(() => null);
+            if (chan && chan.isTextBased()) {
+                const msg = await chan.messages.fetch(record.messageId).catch(() => null);
+                if (msg) await msg.delete().catch(() => {});
+            }
+        } catch(e) {}
+    }
+
+    await persistRecord(record);
+    return record;
+}
+
+/**
+ * Manually delete/clear all pending requests for a player.
+ */
+async function deletePendingRequestsForPlayer(playerId, reason = 'Manually cleared') {
+    if (!playerId) return 0;
+    const numId = Number(playerId);
+    let count = 0;
+    for (const record of promotionsStore.values()) {
+        if (record.playerId === numId && record.status === 'pending') {
+            record.status = 'deleted';
+            record.reviewedAt = Date.now();
+            record.reviewReason = reason;
+            await persistRecord(record);
+            count++;
+        }
+    }
+    return count;
 }
 
 /**
@@ -613,8 +794,7 @@ async function dispatchPromotionToLeadership(bot, guild, promoReq, discordConfig
             });
             promoReq.messageId = msg.id;
             promoReq.channelId = chan.id;
-            promotionsStore.set(promoReq.id, promoReq);
-            savePromotionsToDisk();
+            await persistRecord(promoReq);
             return true;
         }
     } catch(err) {
@@ -637,9 +817,15 @@ module.exports = {
     buildLeadershipNotificationEmbed,
     buildReviewedNotificationEmbed,
     getPendingRequestForPlayer,
+    verifyPromotionMessageExists,
+    handleDiscordMessageDeleted,
+    reconcilePromotionRequests,
+    cancelPromotionRequest,
+    deletePendingRequestsForPlayer,
     createPromotionRequest,
     reviewPromotionRequest,
     getPromotionRequest,
     dispatchPromotionToLeadership,
+    persistRecord,
     promotionsStore
 };
