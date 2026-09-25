@@ -2496,7 +2496,12 @@ async function checkFactionMembersInactivity(members, expectedFactionId, faction
     if (discordConfig.inactivityTracker === false) return;
     if (!discordConfig.globalBotToken || !discordConfig.globalChannelId) return;
 
-    const myFacId = String(expectedFactionId || discordConfig.factionId || dynamicFactionId || "52355");
+    const configuredFacId = String(discordConfig.factionId || dynamicFactionId || "52355");
+    if (expectedFactionId && String(expectedFactionId) !== configuredFacId) {
+        return;
+    }
+
+    const myFacId = configuredFacId;
     const myFacName = factionName || "Spider-Verse";
 
     // 1. Purge any rogue/stale alerts for members not belonging to this faction
@@ -2611,7 +2616,14 @@ async function checkFactionOverdoses(members, expectedFactionId, factionName) {
     const targetChan = discordConfig.overdoseChannelId || discordConfig.globalChannelId;
     if (!botToken || !targetChan) return;
 
-    const myFacId = String(expectedFactionId || discordConfig.factionId || dynamicFactionId || "52355");
+    const configuredFacId = String(discordConfig.factionId || dynamicFactionId || "52355");
+    // Strict Guard: Never process overdoses for any foreign faction
+    if (expectedFactionId && String(expectedFactionId) !== configuredFacId) {
+        console.warn(`[Overdose Watcher] Rejected foreign faction: expectedFactionId ${expectedFactionId} !== configuredFacId ${configuredFacId}`);
+        return;
+    }
+
+    const myFacId = configuredFacId;
     const myFacName = factionName || "Spider-Verse";
     const nowSec = Math.floor(Date.now() / 1000);
 
@@ -2634,13 +2646,25 @@ async function checkFactionOverdoses(members, expectedFactionId, factionName) {
         saveOverdoseAlerts(odAlertsMemory);
     }
 
-    // Clean up stale alerts for players no longer in hospital or whose hospital time elapsed
+    // Clean up stale alerts: ONLY prune when member exists and is confirmed NOT in hospital and at least 30 minutes have passed since the alert
     let pruned = false;
     for (const [id, alertInfo] of Object.entries(odAlertsMemory.alerts || {})) {
         const m = members[id];
-        if (!m || (m.status?.state && m.status.state !== 'Hospital') || (m.status?.until && m.status.until <= nowSec)) {
-            delete odAlertsMemory.alerts[id];
-            pruned = true;
+        const timeSinceAlert = nowSec - (alertInfo.alertedAt || 0);
+        if (m) {
+            const state = (m.status?.state || '').toLowerCase();
+            // Player is confirmed out of hospital AND at least 30 mins passed since alert
+            if (state !== 'hospital' && timeSinceAlert > 1800) {
+                delete odAlertsMemory.alerts[id];
+                pruned = true;
+            }
+        } else {
+            // Member not found in our faction member list - NEVER immediately prune!
+            // Only prune after 7 days to prevent cache-busting / desync duplicates
+            if (timeSinceAlert > 604800) {
+                delete odAlertsMemory.alerts[id];
+                pruned = true;
+            }
         }
     }
     if (pruned) saveOverdoseAlerts(odAlertsMemory);
@@ -2675,9 +2699,17 @@ async function checkFactionOverdoses(members, expectedFactionId, factionName) {
         const untilTs = m.status?.until || 0;
         const prior = odAlertsMemory.alerts[id];
 
-        // Skip if already alerted for this specific hospital stay
-        if (prior && (prior.until === untilTs || (untilTs === 0 && (Date.now() - (prior.alertedAt * 1000)) < 14400000))) {
-            continue;
+        // Strict Deduplication:
+        // 1. If alerted in the last 24 hours (86400 sec), NEVER re-alert while still in hospital
+        // 2. If same until timestamp (or within 2 hours of it due to medical items)
+        if (prior) {
+            const timeSinceAlert = nowSec - (prior.alertedAt || 0);
+            if (timeSinceAlert < 86400) {
+                continue;
+            }
+            if (Math.abs((prior.until || 0) - untilTs) < 7200) {
+                continue;
+            }
         }
 
         const pName = m.name || `Player [${id}]`;
@@ -12949,16 +12981,14 @@ async function checkFactionOrganizedCrimes() {
 
     isCheckingOc = true;
     try {
-        const res = await fetch(`https://api.torn.com/faction/?selections=crimes,basic&key=${apiKey}&timestamp=${Date.now()}`, {
+        const myFacId = String(discordConfig.factionId || dynamicFactionId || "52355");
+        const res = await fetch(`https://api.torn.com/faction/${myFacId}?selections=crimes,basic&key=${apiKey}&timestamp=${Date.now()}`, {
             signal: AbortSignal.timeout(9000)
         });
         const data = await res.json();
         if (!data || data.error || !data.crimes) return;
+        if (data.ID && String(data.ID) !== myFacId) return;
 
-        const members = data.members || {};
-        if (discordConfig.alertOverdose !== false && Object.keys(members).length > 0) {
-            checkFactionOverdoses(members, discordConfig.factionId || "52355", data.name);
-        }
         const now = Math.floor(Date.now() / 1000);
         const mention = ocConfig.roleId ? `<@&${ocConfig.roleId}>` : "";
         const upcomingSec = (ocConfig.upcomingMinutes || 30) * 60;
