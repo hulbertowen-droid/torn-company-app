@@ -263,16 +263,47 @@
             color: #fff;
         }
         .sv-badge-container {
-            padding: 8px 12px;
-            margin: 8px 10px;
+            padding: 4px 10px;
+            margin: 0;
             background: rgba(0, 206, 201, 0.08);
             border: 1px solid rgba(0, 206, 201, 0.25);
-            border-radius: 8px;
+            border-radius: 6px;
             font-size: 0.78rem;
             display: flex;
             align-items: center;
             justify-content: space-between;
+            gap: 8px;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            flex-shrink: 1;
+            min-width: 0;
+        }
+        @media (max-width: 768px) {
+            .sv-badge-container {
+                padding: 3px 6px !important;
+                margin: 0 !important;
+                gap: 5px !important;
+                max-width: 125px !important;
+                background: rgba(0, 206, 201, 0.06) !important;
+            }
+            .sv-badge-fac {
+                display: none !important;
+            }
+            .sv-badge-user-info {
+                max-width: 75px !important;
+            }
+            .sv-badge-name {
+                font-size: 0.72rem !important;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+            }
+            #sv-logout-link {
+                font-size: 0.65rem !important;
+                padding: 2px 5px !important;
+            }
+            .sv-connect-label {
+                display: none !important;
+            }
         }
     </style>
     `;
@@ -474,11 +505,11 @@
             : (user.factionId && user.factionId !== '0' ? `<span style="color: #00cec9;">${user.factionName} [${user.factionId}]</span>` : '<span style="color: #a4b0be;">Factionless</span>');
 
         badge.innerHTML = `
-            <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px;">
-                <div style="color: #f1f2f6; font-weight: 700; font-size: 0.8rem;">${user.playerName} [${user.playerId}]</div>
-                <div style="font-size: 0.68rem;">${facDisplay}</div>
+            <div class="sv-badge-user-info" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px;">
+                <div class="sv-badge-name" style="color: #f1f2f6; font-weight: 700; font-size: 0.8rem;">${user.playerName} [${user.playerId}]</div>
+                <div class="sv-badge-fac" style="font-size: 0.68rem;">${facDisplay}</div>
             </div>
-            <a href="#" id="sv-logout-link" title="Logout" style="color: #ff6b81; text-decoration: none; font-size: 0.72rem; padding: 3px 8px; border: 1px solid rgba(255,107,129,0.35); border-radius: 4px; transition: all 0.2s;">Logout</a>
+            <a href="#" id="sv-logout-link" title="Logout" style="color: #ff6b81; text-decoration: none; font-size: 0.72rem; padding: 3px 8px; border: 1px solid rgba(255,107,129,0.35); border-radius: 4px; transition: all 0.2s; white-space: nowrap; flex-shrink: 0;">Logout</a>
         `;
 
         container.appendChild(badge);
@@ -505,10 +536,10 @@
         btn.className = 'sv-badge-container';
         btn.style.cursor = 'pointer';
         btn.innerHTML = `
-            <div style="display:flex; align-items:center; gap:6px; color:#00cec9; font-weight:700;">
-                <span>🔑</span> <span>Connect Torn Key</span>
+            <div style="display:flex; align-items:center; gap:6px; color:#00cec9; font-weight:700; white-space:nowrap; overflow:hidden;">
+                <span>🔑</span> <span class="sv-connect-label">Connect Torn Key</span>
             </div>
-            <span style="color:#a4b0be; font-size:0.75rem;">&rarr;</span>
+            <span style="color:#a4b0be; font-size:0.75rem; flex-shrink:0;">&rarr;</span>
         `;
         btn.addEventListener('click', () => showConnectModal(true));
         container.appendChild(btn);

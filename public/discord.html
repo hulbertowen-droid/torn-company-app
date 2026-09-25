@@ -51,6 +51,9 @@
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             margin: 0;
             padding: 0;
+            width: 100%;
+            max-width: 100vw;
+            box-sizing: border-box;
             overflow-x: hidden;
             padding-bottom: 90px;
         }
@@ -1279,9 +1282,64 @@
         body.sidebar-collapsed .sticky-save-bar {
             left: var(--sidebar-width-collapsed, 64px) !important;
         }
-        @media (max-width: 900px) {
+        @media (max-width: 960px) {
             .sticky-save-bar {
                 left: 0 !important;
+                right: 0 !important;
+                width: 100% !important;
+                box-sizing: border-box !important;
+            }
+            .field-input, .search-input {
+                font-size: 16px !important;
+            }
+        }
+        @media (max-width: 600px) {
+            .sticky-save-bar {
+                padding: 10px 14px !important;
+                gap: 8px !important;
+            }
+            .save-hint-text {
+                font-size: 0.76em !important;
+            }
+            .btn-save {
+                padding: 8px 14px !important;
+                font-size: 0.82em !important;
+            }
+            .btn-discard {
+                padding: 8px 12px !important;
+                font-size: 0.8em !important;
+            }
+            .ops-title {
+                font-size: 1.35em !important;
+            }
+            .server-meta-bar {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                padding: 12px !important;
+                gap: 10px !important;
+            }
+            .server-meta-left {
+                gap: 10px !important;
+            }
+            .server-meta-actions {
+                width: 100% !important;
+                justify-content: flex-start !important;
+            }
+            .card-body {
+                padding: 14px 12px !important;
+            }
+            .alerts-toolbar {
+                flex-direction: column !important;
+                align-items: stretch !important;
+            }
+            .search-box {
+                max-width: 100% !important;
+                min-width: 0 !important;
+                width: 100% !important;
+            }
+            .field-grid, .field-grid.three {
+                grid-template-columns: 1fr !important;
+                gap: 10px !important;
             }
         }
     </style>
