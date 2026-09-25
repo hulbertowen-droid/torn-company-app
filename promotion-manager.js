@@ -266,20 +266,28 @@ function calculateRankMovement(positionsObj, currentRole, requestedRole) {
 function buildPromotionMenuEmbed({ memberName, memberId, currentRole, daysInFaction, facName, positions }) {
     const requestableRoles = getRequestableFactionRoles(positions);
 
-    const fields = requestableRoles.map(role => {
+    let fields = requestableRoles.slice(0, 25).map(role => {
         const perks = formatPositionPerks(positions[role]);
         const isCurrent = (role.toLowerCase() === (currentRole || '').toLowerCase());
         return {
-            name: `${isCurrent ? '📌' : '⭐'} ${role}${isCurrent ? ' *(Your Current Role)*' : ''}`,
-            value: `• ${perks}`,
+            name: `${isCurrent ? '📌' : '⭐'} ${role}${isCurrent ? ' *(Your Current Role)*' : ''}`.slice(0, 250),
+            value: `• ${perks}`.slice(0, 1020),
             inline: false
         };
     });
 
+    if (fields.length === 0) {
+        fields = [{
+            name: 'No Additional Roles Available',
+            value: 'All current faction positions are leadership roles or no promotional roles are currently defined.',
+            inline: false
+        }];
+    }
+
     return {
         title: `🎖️ ${facName} — Faction Promotion Request`,
         description: `Hey **${memberName}**! You are currently assigned as **${currentRole || 'Member'}** in **${facName}**${daysInFaction ? ` (${daysInFaction} days in faction)` : ''}.\n\n` +
-                     `Below are the **official faction roles** currently active in our faction. You can request a promotion to any role below, and faction leadership will review your application.\n\n` +
+                     `Below are the **official faction roles** currently active in our faction. You can select a role from the dropdown below to apply for a promotion, and faction leadership will review your application.\n\n` +
                      `👑 **Note:** *Leader and Co-leader positions cannot be requested.*`,
         color: UI.COLORS.BRAND,
         fields,
@@ -296,16 +304,18 @@ function buildPromotionSelectMenu(positions, currentRole) {
 
     const options = requestableRoles.map(role => {
         const posObj = positions[role];
-        const perks = formatPositionPerks(posObj).replace(/[•*]/g, '').slice(0, 95);
+        const rawPerks = formatPositionPerks(posObj).replace(/[•*]/g, '');
         const isCurrent = (role.toLowerCase() === (currentRole || '').toLowerCase());
-        let desc = (isCurrent ? 'Current Role: ' : 'Perks: ') + perks.replace(/[•*]/g, '');
-        if (desc.length > 95) desc = desc.slice(0, 92) + '...';
+        let desc = (isCurrent ? 'Current Role: ' : 'Perks: ') + rawPerks;
+        let cleanDesc = desc ? desc.replace(/\s+/g, ' ').trim() : 'Official faction role';
+        if (!cleanDesc) cleanDesc = 'Official faction role';
+        if (cleanDesc.length > 95) cleanDesc = cleanDesc.slice(0, 92) + '...';
 
         return new StringSelectMenuOptionBuilder()
             .setLabel(role.slice(0, 100))
             .setValue(role)
-            .setDescription(desc)
-            .setEmoji(isCurrent ? '📌' : '🎖️');
+            .setDescription(cleanDesc)
+            .setEmoji(isCurrent ? '📌' : '⭐');
     });
 
     if (options.length === 0) return null;
@@ -313,7 +323,7 @@ function buildPromotionSelectMenu(positions, currentRole) {
     const selectMenu = new StringSelectMenuBuilder()
         .setCustomId('select_promotion_role')
         .setPlaceholder('Select an official faction role to request...')
-        .addOptions(options);
+        .addOptions(options.slice(0, 25));
 
     return new ActionRowBuilder().addComponents(selectMenu);
 }
