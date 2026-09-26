@@ -180,6 +180,8 @@ function buildSlashCommands() {
             ).toJSON(),
 
         // 18. Personal Account Vitals & Secure API Key Linking
+        new SlashCommandBuilder().setName('notifications').setDescription('Configure your personal Discord DM alerts (Xanax timer, travel, full energy/nerve, hosp)').toJSON(),
+        new SlashCommandBuilder().setName('dmalerts').setDescription('Quick shortcut: Manage personal Discord DM alerts & notifications').toJSON(),
         new SlashCommandBuilder().setName('energy').setDescription('Check your live energy, nerve, bars, and cooldowns (uses linked Limited API key)').toJSON(),
         new SlashCommandBuilder().setName('bars').setDescription('Check your live energy, nerve, bars, and cooldowns (alias of /energy)').toJSON(),
         new SlashCommandBuilder().setName('merits').setDescription('Check your live allocated Torn merits and upgrades (uses linked Limited API key)').toJSON(),

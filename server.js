@@ -28,6 +28,7 @@ require('dotenv').config();
 // All user-facing Discord responses should use UI.success(), UI.error(), etc.
 const UI = require('./friday-ui');
 const userKeys = require('./user-keys');
+const userAlerts = require('./user-alerts');
 const bugManager = require('./bug-manager');
 const { buildSlashCommands } = require('./discord-slash-builder');
 const tornKnowledge = require('./torn-knowledge');
@@ -302,6 +303,9 @@ async function loadConfigFromMongo() {
             }
             if (saved.userApiKeys) {
                 userKeys.importEncryptedFromMongo(saved.userApiKeys);
+            }
+            if (saved.userAlertPrefs) {
+                userAlerts.importPrefsFromMongo(saved.userAlertPrefs);
             }
             if (saved.battleStatsHistory) {
                 battleStatsHistory = { ...(battleStatsHistory || {}), ...(saved.battleStatsHistory || {}) };
@@ -898,6 +902,7 @@ function saveToMongo() {
                         warAuditArchive,
                         lastWarboardPayload: lastGoodWarboardPayload,
                         userApiKeys: userKeys.exportEncryptedForMongo(),
+                        userAlertPrefs: userAlerts.exportPrefsForMongo(),
                         battleStatsHistory: (typeof battleStatsHistory !== 'undefined' ? battleStatsHistory : {}),
                         verifiedDiscordUsers: (typeof verifiedDiscordToTorn !== 'undefined' ? verifiedDiscordToTorn : {}),
                         bugs: (typeof bugsMemory !== 'undefined' ? bugsMemory : []),
@@ -910,6 +915,7 @@ function saveToMongo() {
     }, 2000);
 }
 userKeys.setMongoSaveCallback(saveToMongo);
+userAlerts.setMongoSaveCallback(saveToMongo);
 bugManager.setMongoSaveCallback(saveToMongo);
 
 function saveDiscordConfig() { fs.writeFileSync('discord_config.json', JSON.stringify(discordConfig)); saveToMongo(); }
@@ -16097,6 +16103,13 @@ function setupSlashBotEvents(bot, token) {
             console.warn('[Promotions] Startup reconciliation error:', e.message);
         }
 
+        // Start Personal Opt-In DM Notifications Worker
+        try {
+            userAlerts.startUserAlertsWorker(bot, userKeys);
+        } catch(e) {
+            console.warn('[UserAlerts] Startup error for alerts worker:', e.message);
+        }
+
         try {
             if (c.user.username !== 'F.R.I.D.A.Y') {
                 await c.user.setUsername('F.R.I.D.A.Y').catch(() => {});
@@ -16942,6 +16955,60 @@ function setupSlashBotEvents(bot, token) {
                 return await interaction.showModal(modal);
             }
 
+            // ── Personal Alert Toggles (Opt-in DM notifications) ──
+            if (customId.startsWith('toggle_alert_')) {
+                const feature = customId.replace('toggle_alert_', ''); // 'drug', 'travel', 'energy', 'nerve', 'hospital'
+                const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
+                const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username);
+                
+                if (!resolved) {
+                    return interaction.reply({
+                        content: '⚠️ You must link your Torn Limited Access API key before enabling personal DM alerts. Use `/linkkey` to link your key.',
+                        ephemeral: true
+                    }).catch(() => {});
+                }
+
+                userAlerts.toggleUserAlertPref(interaction.user.id, feature);
+
+                const card = userAlerts.buildAlertsControlCard(interaction.user.id, {
+                    playerName: resolved.playerName,
+                    playerId: resolved.playerId
+                });
+
+                return await interaction.update({
+                    embeds: [sanitizeEmbed(card.embed)],
+                    components: card.components
+                }).catch(() => {});
+            }
+
+            // ── Personal Alert Test DM ──
+            if (customId === 'test_user_dm') {
+                await interaction.deferReply({ ephemeral: true });
+                try {
+                    const testEmbed = {
+                        title: '🧪 F.R.I.D.A.Y. DM Test Successful!',
+                        description: `Hello! If you are reading this direct message, your Discord privacy settings allow **F.R.I.D.A.Y.** to send you private notifications.\n\n` +
+                            `Any personal alerts you enable (Xanax timer, flight landing, energy full) will be delivered here instantly.`,
+                        color: UI.COLORS.SUCCESS,
+                        footer: UI.FOOTER,
+                        timestamp: new Date().toISOString()
+                    };
+                    await interaction.user.send({ embeds: [sanitizeEmbed(testEmbed)] });
+                    return await interaction.editReply({
+                        content: '✅ Test DM sent! Check your Discord direct messages to confirm receipt.'
+                    });
+                } catch (dmErr) {
+                    if (dmErr.code === 50007) {
+                        return await interaction.editReply({
+                            content: '❌ **Cannot send DM!** Your Discord privacy settings currently block direct messages from server members or bots. Please go to **Discord Settings -> Privacy & Safety** and enable direct messages from server members.'
+                        });
+                    }
+                    return await interaction.editReply({
+                        content: `⚠️ Failed to send test DM: ${dmErr.message || 'Unknown error'}`
+                    });
+                }
+            }
+
             // ── Instant 1-Click Verification (Official Torn Discord Flow) ──
             if (customId === 'btn_verify_now' || customId === 'btn_verify_open_modal') {
                 const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : []).map(c => String(c).toLowerCase().trim());
@@ -17553,6 +17620,37 @@ function setupSlashBotEvents(bot, token) {
             );
 
             return await interaction.editReply({ embeds: [sanitizeEmbed(embed)], components: [actionRow] });
+        }
+
+        // ── Personal Opt-In DM Notifications (/notifications, /dmalerts) ──
+        if (cmd === 'notifications' || cmd === 'dmalerts') {
+            await interaction.deferReply({ ephemeral: true });
+            const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
+            const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username);
+
+            if (!resolved) {
+                const linkEmbed = UI.warning(
+                    '🔑 Torn Limited API Key Required',
+                    `Hey **${invokerName}**, to receive personal automated DM alerts (like Xanax cooldown, flight landing warnings, or full energy alerts), you need to link your Torn **Limited Access API Key**.\n\n` +
+                    `🔒 **Zero Public Exposure:** Your key is encrypted with **military-grade AES-256-GCM** and only accessed to monitor your personal timers.\n\n` +
+                    `Click **Link Limited Key** below:`
+                );
+                const actionRow = UI.actionRow(
+                    UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑'),
+                    UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')
+                );
+                return await interaction.editReply({ embeds: [sanitizeEmbed(linkEmbed)], components: [actionRow] });
+            }
+
+            const card = userAlerts.buildAlertsControlCard(interaction.user.id, {
+                playerName: resolved.playerName,
+                playerId: resolved.playerId
+            });
+
+            return await interaction.editReply({
+                embeds: [sanitizeEmbed(card.embed)],
+                components: card.components
+            });
         }
 
         // ── Personal Live Energy, Bars & Cooldowns ──

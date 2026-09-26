@@ -100,6 +100,7 @@ function blankField() { return { name: '\u200b', value: '\u200b', inline: true }
 
 function primaryBtn(cid, label, emoji)   { const b = { type: 2, style: 1, custom_id: cid, label }; if (emoji) b.emoji = typeof emoji === 'string' ? { name: emoji } : emoji; return b; }
 function secondaryBtn(cid, label, emoji) { const b = { type: 2, style: 2, custom_id: cid, label }; if (emoji) b.emoji = typeof emoji === 'string' ? { name: emoji } : emoji; return b; }
+function successBtn(cid, label, emoji)   { const b = { type: 2, style: 3, custom_id: cid, label }; if (emoji) b.emoji = typeof emoji === 'string' ? { name: emoji } : emoji; return b; }
 function dangerBtn(cid, label, emoji)    { const b = { type: 2, style: 4, custom_id: cid, label }; if (emoji) b.emoji = typeof emoji === 'string' ? { name: emoji } : emoji; return b; }
 function linkBtn(url, label, emoji)      { const b = { type: 2, style: 5, url, label };             if (emoji) b.emoji = typeof emoji === 'string' ? { name: emoji } : emoji; return b; }
 function actionRow() {
@@ -124,5 +125,5 @@ module.exports = {
     num, money, stat,
     tsRelative, tsShort, tsTime, msToUnix, dateToUnix,
     sep, blankField,
-    primaryBtn, secondaryBtn, dangerBtn, linkBtn, actionRow, paginator,
+    primaryBtn, secondaryBtn, successBtn, dangerBtn, linkBtn, actionRow, paginator,
 };
