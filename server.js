@@ -12133,7 +12133,7 @@ function buildBankRequestEmbed(req) {
         let badge = `🟢 In Torn City (${req.memberStatus.state || 'Okay'})`;
         const state = (req.memberStatus.state || '').toLowerCase();
         if (state.includes('travel') || state.includes('abroad')) {
-            badge = `✈️ Traveling abroad — ⚠️ *Cannot receive vault transfer while in transit!*`;
+            badge = `✈️ Traveling / Abroad (${req.memberStatus.description || 'Abroad'})`;
         } else if (state.includes('hospital')) {
             badge = `🏥 In Hospital (${req.memberStatus.description || 'Medical'})`;
         } else if (state.includes('jail')) {
