@@ -315,8 +315,17 @@ async function loadConfigFromMongo() {
                 verifiedDiscordToTorn = { ...(verifiedDiscordToTorn || {}), ...saved.verifiedDiscordUsers };
                 console.log(`[Mongo] Restored ${Object.keys(verifiedDiscordToTorn).length} verified Discord users from MongoDB Atlas.`);
             }
-            console.log('[Mongo] Restored master configurations from MongoDB Atlas.');
-            
+            if (discordConfig.factionId) {
+                try {
+                    retalEngine.setOurFactionId(discordConfig.factionId);
+                    sessionManager.setConfiguredFactionId(discordConfig.factionId);
+                } catch(e) {}
+            }
+            if (discordConfig.factionName) {
+                try {
+                    UI.setFactionName(discordConfig.factionName);
+                } catch(e) {}
+            }
             if (discordConfig.apiKey) {
                 try {
                     const { addKey } = require('./recruit/lib/apiKeyPool');
@@ -545,7 +554,7 @@ let activeKeyIndex = 0;
 const factionWarState = {};
 
 function getFactionWarState(facId) {
-    const sId = String(facId || '52355');
+    const sId = String(facId || discordConfig.factionId || dynamicFactionId || '0');
     if (!factionWarState[sId]) {
         factionWarState[sId] = {
             activeWarId: null,
@@ -601,7 +610,11 @@ try {
         if (lastGoodWarboardPayload?.warInfo?.myFaction?.id) {
             lastGoodWarboardByFaction[lastGoodWarboardPayload.warInfo.myFaction.id.toString()] = lastGoodWarboardPayload;
         }
-        lastGoodWarboardByFaction["52355"] = lastGoodWarboardPayload;
+        if (discordConfig.factionId) {
+            lastGoodWarboardByFaction[discordConfig.factionId.toString()] = lastGoodWarboardPayload;
+        } else {
+            lastGoodWarboardByFaction["default"] = lastGoodWarboardPayload;
+        }
         console.log('[Warboard] Loaded persistent warboard cache from disk');
     }
 } catch(e) {}
@@ -1789,7 +1802,8 @@ async function handleMemberAttackedAlert(atk) {
         // Skip self attacks
         if (attackerId && defenderId && attackerId === defenderId) return;
 
-        const isInternal = (atkFac === 52355 && defFac === 52355);
+        const myFacIdNum = Number(discordConfig.factionId || dynamicFactionId || 0);
+        const isInternal = (myFacIdNum > 0 && atkFac === myFacIdNum && defFac === myFacIdNum);
         const isStealthed = (attackerId === "0" || !attackerId);
 
         let attackerName = atk.attacker_name;
@@ -1804,7 +1818,7 @@ async function handleMemberAttackedAlert(atk) {
 
         let attackerFactionName = atk.attacker_faction_name || atk.attacker_factionname;
         if (!attackerFactionName) {
-            attackerFactionName = isInternal ? "Spider-Verse" : (atkFac ? `Faction ${atkFac}` : "Factionless");
+            attackerFactionName = isInternal ? (discordConfig.factionName || "Our Faction") : (atkFac ? `Faction ${atkFac}` : "Factionless");
         }
 
         const result = atk.result || "Attacked";
@@ -1938,7 +1952,7 @@ async function handleMemberAttackedAlert(atk) {
             title,
             description: desc,
             color,
-            footer: { text: "F.R.I.D.A.Y Retaliation Risk Engine • Empirical Bayes k=7 • λ=0.05" },
+            footer: UI.FOOTER,
             timestamp: new Date().toISOString(),
             targetId: (!isStealthed && attackerId !== "0") ? attackerId : undefined,
             fields,
@@ -1957,9 +1971,9 @@ let lastPeaceWarCheck = 0;
 setInterval(async () => {
     if (Date.now() - SERVER_START_TIME < STARTUP_GRACE_MS) return; // startup grace
     if (global.isTurboMining) return;
-    let watchFactionId = discordConfig.factionId || dynamicFactionId || "52355";
+    let watchFactionId = discordConfig.factionId || dynamicFactionId || "";
     let watchKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
-    if (!watchKey || !watchFactionId) return;
+    if (!watchKey) return;
 
     // Bandwidth Optimization: In peace time (no active war), poll lightweight rankedwars (1 KB) once every 60s
     // When a war is active, poll full attacks & roster every 25s
@@ -1970,9 +1984,21 @@ setInterval(async () => {
 
     try {
         const selections = activeWarId ? 'attacks,basic,rankedwars' : 'rankedwars';
-        const liveRes = await fetch(`https://api.torn.com/faction/${watchFactionId}?selections=${selections}&key=${watchKey}`);
+        const url = watchFactionId
+            ? `https://api.torn.com/faction/${watchFactionId}?selections=${selections}&key=${watchKey}`
+            : `https://api.torn.com/faction/?selections=${selections}&key=${watchKey}`;
+        const liveRes = await fetch(url);
         const liveData = await liveRes.json();
         if (!activeWarId) lastPeaceWarCheck = Date.now();
+        if (liveData.error) return;
+        if (liveData.ID) {
+            if (!discordConfig.factionId) dynamicFactionId = String(liveData.ID);
+            if (!discordConfig.factionName && liveData.name) {
+                discordConfig.factionName = liveData.name;
+                UI.setFactionName(liveData.name);
+            }
+        }
+        watchFactionId = String(liveData.ID || watchFactionId);
         
         let ongoingWar = getActiveRankedWar(liveData);
         if (ongoingWar && ongoingWar.war) {
@@ -2514,13 +2540,13 @@ async function checkFactionMembersInactivity(members, expectedFactionId, faction
     if (discordConfig.inactivityTracker === false) return;
     if (!discordConfig.globalBotToken || !discordConfig.globalChannelId) return;
 
-    const configuredFacId = String(discordConfig.factionId || dynamicFactionId || "52355");
-    if (expectedFactionId && String(expectedFactionId) !== configuredFacId) {
+    const configuredFacId = String(discordConfig.factionId || dynamicFactionId || expectedFactionId || "");
+    if (configuredFacId && expectedFactionId && String(expectedFactionId) !== configuredFacId) {
         return;
     }
 
     const myFacId = configuredFacId;
-    const myFacName = factionName || "Spider-Verse";
+    const myFacName = factionName || discordConfig.factionName || "Our Faction";
 
     // 1. Purge any rogue/stale alerts for members not belonging to this faction
     let pruned = false;
@@ -2634,15 +2660,15 @@ async function checkFactionOverdoses(members, expectedFactionId, factionName) {
     const targetChan = discordConfig.overdoseChannelId || discordConfig.globalChannelId;
     if (!botToken || !targetChan) return;
 
-    const configuredFacId = String(discordConfig.factionId || dynamicFactionId || "52355");
+    const configuredFacId = String(discordConfig.factionId || dynamicFactionId || expectedFactionId || "");
     // Strict Guard: Never process overdoses for any foreign faction
-    if (expectedFactionId && String(expectedFactionId) !== configuredFacId) {
+    if (configuredFacId && expectedFactionId && String(expectedFactionId) !== configuredFacId) {
         console.warn(`[Overdose Watcher] Rejected foreign faction: expectedFactionId ${expectedFactionId} !== configuredFacId ${configuredFacId}`);
         return;
     }
 
     const myFacId = configuredFacId;
-    const myFacName = factionName || "Spider-Verse";
+    const myFacName = factionName || discordConfig.factionName || "Our Faction";
     const nowSec = Math.floor(Date.now() / 1000);
 
     // Initial startup check: seed existing active overdoses so server restart never triggers spam
@@ -2786,14 +2812,25 @@ setInterval(async () => {
     if (global.isTurboMining) return;
     if (global.isNotificationsKilled) return;
     let watchKey = getNextApiKey();
-    let watchFactionId = discordConfig.factionId || dynamicFactionId || "52355";
-    if (!watchKey || !watchFactionId) return;
+    let watchFactionId = discordConfig.factionId || dynamicFactionId || "";
+    if (!watchKey) return;
 
     try {
-        const facRes = await fetch(`https://api.torn.com/faction/${watchFactionId}?selections=basic,chain,rankedwars&key=${watchKey}`);
+        const url = watchFactionId
+            ? `https://api.torn.com/faction/${watchFactionId}?selections=basic,chain,rankedwars&key=${watchKey}`
+            : `https://api.torn.com/faction/?selections=basic,chain,rankedwars&key=${watchKey}`;
+        const facRes = await fetch(url);
         const facData = await facRes.json();
         if (facData.error) return;
-        if (facData.ID && String(facData.ID) !== String(watchFactionId)) return;
+        if (facData.ID) {
+            if (!discordConfig.factionId) dynamicFactionId = String(facData.ID);
+            if (!discordConfig.factionName && facData.name) {
+                discordConfig.factionName = facData.name;
+                UI.setFactionName(facData.name);
+            }
+        }
+        if (watchFactionId && facData.ID && String(facData.ID) !== String(watchFactionId)) return;
+        watchFactionId = String(facData.ID || watchFactionId);
 
         // Check Friendly Member Inactivity Tracker
         const inactChan = discordConfig.inactivityChannelId || discordConfig.globalChannelId;
@@ -3415,53 +3452,11 @@ app.post('/api/discord/post-verification-card', async (req, res) => {
         }
 
         const verifiedRoleId = discordConfig.verifiedRoleId;
-        const verifyCard = {
-            title: `🛡️ Identity Verification Required`,
-            description:
-                `To protect faction intel and member privacy, all channels remain locked until your Torn City identity is verified.\n\n` +
-                `**How to verify (Standard):**\n` +
-                `**1.** Link your Discord account at **[torn.com/discord](https://www.torn.com/discord)** on the Official Torn Discord.\n` +
-                `**2.** Click **🛡️ Verify Me** below — F.R.I.D.A.Y. will handle the rest.\n\n` +
-                `⚡ **Optional Power-Up: Pre-Link Your API Key**\n` +
-                `Save time later! Click **🔑 Link API Key (Optional)** below to connect your Torn **Limited Access API Key**. F.R.I.D.A.Y will securely encrypt and save it so you **never** have to enter it again for live battle stats (\`/bs\`), gym tracking, energy/nerve updates, or automated banking!\n\n` +
-                `*Verification is instant if your account is already linked. Your nickname will be synced to \`Name [ID]\` and you'll receive your ${verifiedRoleId ? `<@&${verifiedRoleId}>` : '**Verified**'} role automatically.*`,
-            color: UI.COLORS.BRAND,
-            thumbnail: { url: "https://www.torn.com/favicon.ico" },
-            footer: UI.FOOTER,
-            timestamp: new Date().toISOString()
-        };
-
-
-        const buttons = [{
-            type: 1,
-            components: [
-                {
-                    type: 2,
-                    style: 1, // Primary (Blurple)
-                    custom_id: 'btn_verify_now',
-                    label: '🛡️ Verify Me',
-                    emoji: { name: '🛡️' }
-                },
-                {
-                    type: 2,
-                    style: 2, // Secondary
-                    custom_id: 'btn_link_user_api_key',
-                    label: '🔑 Link API Key (Optional)'
-                },
-                {
-                    type: 2,
-                    style: 5, // Link
-                    label: '🔗 Link at Torn.com/discord',
-                    url: 'https://www.torn.com/discord'
-                },
-                {
-                    type: 2,
-                    style: 5, // Link
-                    label: '🔑 Get API Key',
-                    url: 'https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2'
-                }
-            ]
-        }];
+        const verifyCard = UI.verificationCard({
+            factionName: discordConfig.factionName || 'Spider-Verse',
+            verifiedRoleId
+        });
+        const buttons = UI.verificationButtons();
 
         await channel.send({ embeds: [sanitizeEmbed(verifyCard)], components: buttons });
         res.json({ success: true, message: `Verification card posted to #${channel.name || channelId}!` });
@@ -4077,7 +4072,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
                 { label: "👤 Attacker Profile", url: "https://www.torn.com/profiles.php?XID=999999" },
                 { label: "🛡️ Defender Profile", url: "https://www.torn.com/profiles.php?XID=100001" }
             ],
-            footer: { text: "F.R.I.D.A.Y Retaliation Risk Engine • Empirical Bayes k=7 • λ=0.05" },
+            footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
     } else if (t === 'inactivity') {
@@ -4359,7 +4354,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
         const nowSec = Math.floor(Date.now() / 1000);
         embed = {
             title: "📋 OC Scheduled: Planned Robbery [TEST]",
-            description: `A new Organized Crime has been scheduled for **Spider-Verse**!\n\n` +
+            description: `A new Organized Crime has been scheduled for **${discordConfig.factionName || 'the faction'}**!\n\n` +
                          `**Target Ready Time:** <t:${nowSec + 86400}:F> (<t:${nowSec + 86400}:R>)\n` +
                          `**Planned By:** [TestAgent [100001]](https://www.torn.com/profiles.php?XID=100001)\n\n` +
                          `**Assigned Roster:**\n` +
@@ -4540,9 +4535,11 @@ app.get('/api/inactivity-tracker', async (req, res) => {
             || userInfo?.facId
             || discordConfig.factionId
             || dynamicFactionId
-            || "52355";
-        let url = `https://api.torn.com/faction/${watchFactionId}?selections=basic&key=${userKey}`;
-        let facData = await cachedTornFetch(url, `faction_inact_${watchFactionId}`, 10000);
+            || "";
+        let url = watchFactionId
+            ? `https://api.torn.com/faction/${watchFactionId}?selections=basic&key=${userKey}`
+            : `https://api.torn.com/faction/?selections=basic&key=${userKey}`;
+        let facData = await cachedTornFetch(url, `faction_inact_${watchFactionId || 'default'}`, 10000);
         let members = facData?.members;
 
         // If targeted fetch hit error 6 (e.g. user in different faction), try /faction/
@@ -4637,14 +4634,18 @@ app.get('/api/war-list', async (req, res) => {
         let targetFacId = (req.query.factionId || req.headers['x-faction-id'])
             || userInfo?.facId
             || discordConfig.factionId
-            || "52355";
+            || dynamicFactionId
+            || "";
 
-        const cacheKey = String(targetFacId);
+        const cacheKey = String(targetFacId || 'default');
         if (!req.query.force && warListCache[cacheKey] && (Date.now() - warListCache[cacheKey].timestamp) < 15000) {
             return res.json(warListCache[cacheKey].data);
         }
 
-        let facRes = await fetch(`https://api.torn.com/faction/${targetFacId}?selections=basic,rankedwars&key=${userKey}`, { signal: AbortSignal.timeout(8000) });
+        const facUrl = targetFacId
+            ? `https://api.torn.com/faction/${targetFacId}?selections=basic,rankedwars&key=${userKey}`
+            : `https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`;
+        let facRes = await fetch(facUrl, { signal: AbortSignal.timeout(8000) });
         let facData = await facRes.json();
         if (facData.error && facData.error.code === 6) {
             facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`, { signal: AbortSignal.timeout(8000) });
@@ -4702,8 +4703,12 @@ app.get('/api/war-flight-audit', async (req, res) => {
         let targetFacId = (req.query.factionId || req.headers['x-faction-id'])
             || userInfo?.facId
             || discordConfig.factionId
-            || "52355";
-        let facRes = await fetch(`https://api.torn.com/faction/${targetFacId}?selections=basic,rankedwars&key=${userKey}`, { signal: AbortSignal.timeout(8000) });
+            || dynamicFactionId
+            || "";
+        const auditFacUrl = targetFacId
+            ? `https://api.torn.com/faction/${targetFacId}?selections=basic,rankedwars&key=${userKey}`
+            : `https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`;
+        let facRes = await fetch(auditFacUrl, { signal: AbortSignal.timeout(8000) });
         let facData = await facRes.json();
         if (facData.error && facData.error.code === 6) {
             facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`, { signal: AbortSignal.timeout(8000) });
@@ -5228,17 +5233,20 @@ app.get('/api/dashboard-data', async (req, res) => {
         }
 
         if (!targetFacId) {
-            targetFacId = discordConfig.factionId || "52355";
+            targetFacId = discordConfig.factionId || dynamicFactionId || "";
         }
 
-        const cacheKey = `${targetFacId}_${isPremium ? 'prem' : 'free'}`;
+        const cacheKey = `${targetFacId || 'default'}_${isPremium ? 'prem' : 'free'}`;
         if (!req.query.force && dashboardDataCache[cacheKey] && (Date.now() - dashboardDataCache[cacheKey].timestamp) < 15000) {
             return res.json(dashboardDataCache[cacheKey].data);
         }
 
         // Fetch basic, armory, and chain/rankedwars in parallel for maximum speed
+        const basicUrl = targetFacId
+            ? `https://api.torn.com/faction/${targetFacId}?selections=basic&key=${userKey}`
+            : `https://api.torn.com/faction/?selections=basic&key=${userKey}`;
         const [basicResp, armoryResp, chainResp] = await Promise.all([
-            fetch(`https://api.torn.com/faction/${targetFacId}?selections=basic&key=${userKey}`).catch(e => null),
+            fetch(basicUrl).catch(e => null),
             fetch(`https://api.torn.com/faction/?selections=armor,weapons,temporary&key=${userKey}`).catch(e => null),
             fetch(`https://api.torn.com/faction/?selections=chain,rankedwars&key=${userKey}`).catch(e => null)
         ]);
@@ -5951,7 +5959,7 @@ app.get('/api/past-war', async (req, res) => {
 });
 
 app.get('/api/claims', (req, res) => {
-    const facId = String(req.query.factionId || req.headers['x-faction-id'] || req.userSession?.factionId || (req.userSession?.isSpiderVerse ? '52355' : ''));
+    const facId = String(req.query.factionId || req.headers['x-faction-id'] || req.userSession?.factionId || discordConfig.factionId || dynamicFactionId || '');
     if (!facId) return res.status(400).json({ error: "Faction ID required" });
     const state = getFactionWarState(facId);
 
@@ -5968,7 +5976,7 @@ app.get('/api/claims', (req, res) => {
 });
 app.post('/api/claim', (req, res) => {
     const { enemyId, playerName, factionId } = req.body;
-    const facId = String(factionId || req.headers['x-faction-id'] || req.userSession?.factionId || (req.userSession?.isSpiderVerse ? '52355' : ''));
+    const facId = String(factionId || req.headers['x-faction-id'] || req.userSession?.factionId || discordConfig.factionId || dynamicFactionId || '');
     if (!facId) return res.status(400).json({ error: "Faction ID required" });
     const state = getFactionWarState(facId);
     state.claims[enemyId] = { playerName: playerName || req.userSession?.playerName || "Agent", time: Date.now() };
@@ -5976,7 +5984,7 @@ app.post('/api/claim', (req, res) => {
 });
 app.post('/api/unclaim', (req, res) => {
     const { enemyId, playerName, factionId } = req.body;
-    const facId = String(factionId || req.headers['x-faction-id'] || req.userSession?.factionId || (req.userSession?.isSpiderVerse ? '52355' : ''));
+    const facId = String(factionId || req.headers['x-faction-id'] || req.userSession?.factionId || discordConfig.factionId || dynamicFactionId || '');
     if (!facId) return res.status(400).json({ error: "Faction ID required" });
     const state = getFactionWarState(facId);
     const claimingUser = playerName || req.userSession?.playerName;
@@ -5985,7 +5993,7 @@ app.post('/api/unclaim', (req, res) => {
 });
 app.post('/api/backup', (req, res) => {
     const { enemyId, playerName, factionId } = req.body;
-    const facId = String(factionId || req.headers['x-faction-id'] || req.userSession?.factionId || (req.userSession?.isSpiderVerse ? '52355' : ''));
+    const facId = String(factionId || req.headers['x-faction-id'] || req.userSession?.factionId || discordConfig.factionId || dynamicFactionId || '');
     if (!facId) return res.status(400).json({ error: "Faction ID required" });
     const state = getFactionWarState(facId);
     state.backups[enemyId] = { playerName: playerName || req.userSession?.playerName || "Agent", time: Date.now() };
@@ -5993,7 +6001,7 @@ app.post('/api/backup', (req, res) => {
 });
 app.post('/api/unbackup', (req, res) => {
     const { enemyId, factionId } = req.body;
-    const facId = String(factionId || req.headers['x-faction-id'] || req.userSession?.factionId || (req.userSession?.isSpiderVerse ? '52355' : ''));
+    const facId = String(factionId || req.headers['x-faction-id'] || req.userSession?.factionId || discordConfig.factionId || dynamicFactionId || '');
     if (!facId) return res.status(400).json({ error: "Faction ID required" });
     const state = getFactionWarState(facId);
     delete state.backups[enemyId];
@@ -6001,7 +6009,7 @@ app.post('/api/unbackup', (req, res) => {
 });
 app.post('/api/update-stats', (req, res) => {
     const { enemyId, stats, factionId } = req.body;
-    const facId = String(factionId || req.headers['x-faction-id'] || req.userSession?.factionId || (req.userSession?.isSpiderVerse ? '52355' : ''));
+    const facId = String(factionId || req.headers['x-faction-id'] || req.userSession?.factionId || discordConfig.factionId || dynamicFactionId || '');
     if (!facId) return res.status(400).json({ error: "Faction ID required" });
     const state = getFactionWarState(facId);
     state.manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() };
@@ -6137,7 +6145,7 @@ app.get('/api/warboard', async (req, res) => {
             });
         }
 
-        const myFacId = myData?.ID ? myData.ID.toString() : (targetMyFacId || (req.userSession?.isSpiderVerse ? "52355" : null));
+        const myFacId = myData?.ID ? myData.ID.toString() : (targetMyFacId || req.userSession?.factionId || discordConfig.factionId || dynamicFactionId || null);
         if (!myFacId) {
             return res.json({
                 success: false,
@@ -6153,7 +6161,7 @@ app.get('/api/warboard', async (req, res) => {
         if (!myData || myData.error || !myData.members || Object.keys(myData.members).length === 0) {
             if (lastGoodWarboardByFaction[myFacId]) {
                 return res.json(lastGoodWarboardByFaction[myFacId]);
-            } else if (lastGoodWarboardPayload && String(myFacId) === "52355" && (req.userSession?.isSpiderVerse || !req.userSession)) {
+            } else if (lastGoodWarboardPayload && String(myFacId) === String(discordConfig.factionId || dynamicFactionId || "0") && (req.userSession?.isSpiderVerse || !req.userSession)) {
                 return res.json(lastGoodWarboardPayload);
             } else {
                 return res.status(500).json({ error: "Unable to retrieve faction data. Please verify your API key has faction access." });
@@ -6341,7 +6349,7 @@ app.get('/api/warboard', async (req, res) => {
             if (lastGoodWarboardByFaction[myFacId]) {
                 return sendWarboardResponse(req, res, lastGoodWarboardByFaction[myFacId]);
             }
-            if (lastGoodWarboardPayload && String(myFacId) === "52355") {
+            if (lastGoodWarboardPayload && String(myFacId) === String(discordConfig.factionId || dynamicFactionId || "default")) {
                 return sendWarboardResponse(req, res, lastGoodWarboardPayload);
             }
         }
@@ -6359,7 +6367,7 @@ app.get('/api/warboard', async (req, res) => {
                 target: activeWar.war?.target || 0,
                 myFaction: {
                     id: myData?.ID || myFacId,
-                    name: myData?.name || (myData?.ID ? "Faction #" + myData.ID : "Spider-Verse"),
+                    name: myData?.name || (myData?.ID ? "Faction #" + myData.ID : (discordConfig.factionName || "Our Faction")),
                     score: (activeWar.factions && myData.ID && activeWar.factions[myData.ID.toString()]) ? (activeWar.factions[myData.ID.toString()].score || 0) : 0,
                     chain: (activeWar.factions && myData.ID && activeWar.factions[myData.ID.toString()]) ? (activeWar.factions[myData.ID.toString()].chain || 0) : 0
                 },
@@ -6373,7 +6381,7 @@ app.get('/api/warboard', async (req, res) => {
                 active: false,
                 myFaction: {
                     id: myData?.ID || myFacId,
-                    name: myData?.name || (myData?.ID ? "Faction #" + myData.ID : "Spider-Verse"),
+                    name: myData?.name || (myData?.ID ? "Faction #" + myData.ID : (discordConfig.factionName || "Our Faction")),
                     chain: myData?.chain?.current || 0,
                     chainMax: myData?.chain?.maximum || 100,
                     chainTimeout: myData?.chain?.timeout || 0,
@@ -6390,7 +6398,7 @@ app.get('/api/warboard', async (req, res) => {
 
         if (friendlyMembers.length > 0) {
             lastGoodWarboardByFaction[myFacId] = payload;
-            if (String(myFacId) === "52355") {
+            if (String(myFacId) === String(discordConfig.factionId || dynamicFactionId || "0")) {
                 lastGoodWarboardPayload = payload;
                 try {
                     fs.writeFileSync(WARBOARD_BACKUP_FILE, JSON.stringify(payload));
@@ -6441,7 +6449,8 @@ app.post('/api/auth/connect', async (req, res) => {
         const userFacId = String(data.faction?.faction_id || '0');
         const userFacName = data.faction?.faction_name || 'None';
         const userFacRole = data.faction?.position || '';
-        const isSpiderVerse = userFacId === '52355';
+        const targetFaction = String(discordConfig.factionId || adminFactionId || dynamicFactionId || '');
+        const isSpiderVerse = Boolean(targetFaction ? (userFacId === targetFaction) : (userFacId && userFacId !== '0'));
 
         // Securely encrypt and store the key in vault under torn:<id>
         await userKeys.linkUserApiKeyByTornId(playerId, apiKey);
@@ -6518,7 +6527,8 @@ app.post('/api/auth/verify-faction-access', async (req, res) => {
         const apiKey = String(req.body.apiKey || '').trim();
         if (!apiKey) return res.status(400).json({ success: false, authorized: false, reason: "Torn API Key is required." });
 
-        const targetFactionId = String(discordConfig.factionId || adminFactionId || '52355');
+        const targetFactionId = String(discordConfig.factionId || adminFactionId || dynamicFactionId || '');
+        const targetFactionName = discordConfig.factionName || 'the faction';
 
         const tornRes = await fetch(`https://api.torn.com/user/?selections=profile,bars&key=${apiKey}&timestamp=${Date.now()}`, {
             signal: AbortSignal.timeout(9000)
@@ -6531,7 +6541,7 @@ app.post('/api/auth/verify-faction-access', async (req, res) => {
 
         const userFacId = String(data.faction?.faction_id || '0');
         const userFacName = data.faction?.faction_name || 'None';
-        const isMember = userFacId === targetFactionId;
+        const isMember = Boolean(targetFactionId ? (userFacId === targetFactionId) : (userFacId && userFacId !== '0'));
 
         // Automatically create and link session
         await userKeys.linkUserApiKeyByTornId(data.player_id, apiKey);
@@ -6551,7 +6561,7 @@ app.post('/api/auth/verify-faction-access', async (req, res) => {
             authorized: isMember,
             sessionToken: session.token,
             isSpiderVerse: isMember,
-            reason: isMember ? undefined : `You are currently in "${userFacName}" [ID: ${userFacId}]. Only active members of Spider-Verse [${targetFactionId}] are authorized for Spider-Verse specific tools.`,
+            reason: isMember ? undefined : `You are currently in "${userFacName}" [ID: ${userFacId}]. Only active members of ${targetFactionName} [${targetFactionId || 'Configured Faction'}] are authorized for faction-specific tools.`,
             player: {
                 id: data.player_id,
                 name: data.name,
@@ -6653,7 +6663,7 @@ app.post('/api/test-oc-alert', async (req, res) => {
         } else if (type === 'planned') {
             embed = {
                 title: "📋 OC Scheduled: Planned Robbery [TEST]",
-                description: `A new Organized Crime has been scheduled for **Spider-Verse**!\n\n` +
+                description: `A new Organized Crime has been scheduled for **${discordConfig.factionName || 'the faction'}**!\n\n` +
                              `**Target Ready Time:** <t:${now + 86400}:F> (<t:${now + 86400}:R>)\n` +
                              `**Planned By:** [TestAgent [100001]](https://www.torn.com/profiles.php?XID=100001)\n\n` +
                              `**Assigned Roster:**\n` +
@@ -6995,7 +7005,11 @@ Keep your advice specific to the data provided. Be concise, punchy, and use emoj
 });
 
 // ─── F.R.I.D.A.Y Torn Wiki & Forum AI Intelligence & Sandbox ─────────────────
-const FRIDAY_TORN_SYSTEM_PROMPT = `You are F.R.I.D.A.Y, the tactical Torn City intelligence oracle for Spider-Verse.
+function getFridayTornSystemPrompt() {
+    const fn = discordConfig.factionName || "our faction";
+    const fid = discordConfig.factionId || dynamicFactionId || "";
+    const fidStr = fid ? ` [${fid}]` : "";
+    return `You are F.R.I.D.A.Y, the tactical Torn City intelligence oracle for ${fn}.
 
 PRIMARY PURPOSE & STRICT SCOPE:
 1. EXCLUSIVELY TORN CITY GAMEPLAY: You are strictly a Torn City game intelligence oracle. You ONLY answer questions about Torn City gameplay, training math, gym gains, battle stats, happy jumps, ranked wars, chains, crimes (Crimes 2.0 & OC 2.0), travel, items, company management, and faction rules.
@@ -7014,8 +7028,8 @@ STRICT KNOWLEDGE & SOURCING RULES:
 2. ZERO HALLUCINATIONS: If a game mechanic, weapon, item, formula, or update is NOT documented in verified Torn Wiki articles or official Torn forum threads, you MUST explicitly state: "This item or mechanic cannot be verified in official Torn Wiki or Forum records." NEVER invent fake items, weapons, or formulas.
 3. WIKI & FORUM CITATIONS: Whenever applicable, cite the relevant Torn Wiki page or forum guide/author (e.g. "Torn Wiki: Happy", "Baldr's Basic Advice", "Vladar's FF Guide", "Chedburn's OC 2.0 Announcement").
 
-SPIDER-VERSE FACTION OPERATIONAL DIRECTIVES (Trained Knowledge):
-- Faction: Spider-Verse [52355].
+FACTION OPERATIONAL DIRECTIVES (Trained Knowledge):
+- Faction: ${fn}${fidStr}.
 - Organized Crimes (OC 2.0) CPR Limits (Trained Faction Thresholds):
   * Level 1 & Level 2: NO minimum CPR needed (0% — any member can join without restriction).
   * Level 3 & Level 4: Around 40% and higher (40%+ required).
@@ -7033,7 +7047,7 @@ SPIDER-VERSE FACTION OPERATIONAL DIRECTIVES (Trained Knowledge):
   * Fair Fight (FF) scales 1.00 to 3.00 based on battle stat ratios. Max respect is achieved near 3.00 FF.
 - Fast Level 15:
   * Hit high-level inactives from Baldr's list using energy refills to unlock foreign travel for plushies/flowers ($2M-$4M daily profit).
-- Spider-Verse Happy Jump Protocols (Trained Faction Regimen):
+- Faction Happy Jump Protocols (Trained Faction Regimen):
   * Faction Candy Perk: Our faction gives +50% Happy from candy boosters (25-happy candies yield 37 happy each; 75-happy candies yield 112 happy each).
   * 1. Budget / Lollipop Jump (Used ~80% of the time — consistent gains every ~30 hours):
     - Wait until at max natural energy (150e).
@@ -7048,6 +7062,7 @@ SPIDER-VERSE FACTION OPERATIONAL DIRECTIVES (Trained Knowledge):
     - Frequency: Every ~40 hours.
   * 3. 99k Jump: Advanced jump using 4–5 eDVDs + 1 Ecstasy + 1,000e for stats under 400k-800k.
 `;
+}
 
 function getGeminiApiKeys() {
     const keys = [];
@@ -7443,7 +7458,7 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
         const payload = {
             contents,
             systemInstruction: {
-                parts: [{ text: FRIDAY_TORN_SYSTEM_PROMPT }]
+                parts: [{ text: getFridayTornSystemPrompt() }]
             },
             tools: [{ googleSearch: {} }]
         };
@@ -7459,7 +7474,7 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
     if (!result.success && orKey) {
         // Failover to OpenRouter
         const userPrompt = `${accountContext}${tornIntel}\n\nUser Question: ${message.trim()}`;
-        const orResult = await callOpenRouterFallback(FRIDAY_TORN_SYSTEM_PROMPT, userPrompt, history);
+        const orResult = await callOpenRouterFallback(getFridayTornSystemPrompt(), userPrompt, history);
         if (orResult.success && orResult.text) {
             return {
                 reply: orResult.text.trim(),
@@ -7503,7 +7518,9 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
 }
 
 // ─── F.R.I.D.A.Y Natural Conversation Responder ──────────────────────────────
-const FRIDAY_RESPONDER_SYSTEM_PROMPT = `You are F.R.I.D.A.Y, a sharp, witty, highly knowledgeable Torn City faction member hanging out in the Spider-Verse Discord server.
+function getFridayResponderSystemPrompt() {
+    const fn = discordConfig.factionName || "our faction";
+    return `You are F.R.I.D.A.Y, a sharp, witty, highly knowledgeable Torn City faction member hanging out in the ${fn} Discord server.
 Your job is to jump into the conversation naturally — like an experienced, clever teammate with authentic Torn City expertise and a great sense of humor.
 
 ═══ PERSONALITY: FUNNY, WITTY, BUT NOT OVER-THE-TOP ═══
@@ -7542,6 +7559,7 @@ Your job is to jump into the conversation naturally — like an experienced, cle
 5. ZERO SCRIPT OR CODE MODIFICATION POWERS:
    - You are a Discord chat companion and intel bot, NOT a developer or sysadmin. You have NO ability to change bot scripts, mute background systems, alter server settings, or modify code.
    - If a user asks you to change the script, turn off/mute notifications, edit code, or adjust bot settings via chat, tell them with dry humor that you can't edit bot scripts or settings from chat, and suggest they use the website dashboard or check with an administrator. NEVER claim you changed or will change a script or setting!`;
+}
 
 async function generateChatResponse(convoLines = [], hint = "", invokerName = "", replyContext = null, userAccountData = null, detectedIntent = null, userSpeech = "") {
     const key = getGeminiApiKey();
@@ -7652,7 +7670,7 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
         const payload = {
             contents: [{ role: 'user', parts: [{ text: convoPrompt }] }],
             systemInstruction: {
-                parts: [{ text: FRIDAY_RESPONDER_SYSTEM_PROMPT }]
+                parts: [{ text: getFridayResponderSystemPrompt() }]
             },
             generationConfig: {
                 temperature: 0.7
@@ -7669,7 +7687,7 @@ async function generateChatResponse(convoLines = [], hint = "", invokerName = ""
 
     // 2. Secondary AI Failover Provider: OpenRouter (Free Multi-Model Pool)
     if (orKey) {
-        const orResult = await callOpenRouterFallback(FRIDAY_RESPONDER_SYSTEM_PROMPT, convoPrompt);
+        const orResult = await callOpenRouterFallback(getFridayResponderSystemPrompt(), convoPrompt);
         if (orResult.success && orResult.text) {
             return orResult.text.trim();
         }
@@ -9858,11 +9876,11 @@ async function buildCountryStatusEmbed(country, apiKey) {
     const emoji = COUNTRY_EMOJIS[country] || "✈️";
     const now = Math.floor(Date.now() / 1000);
 
-    let factionId = discordConfig.factionId || dynamicFactionId || "52355";
-    if (!factionId || !apiKey) {
+    let factionId = discordConfig.factionId || dynamicFactionId || "";
+    if (!apiKey) {
         return {
             title: `${emoji} ${country} — Travel Intel`,
-            description: "⚠️ Bot not configured: missing API key or faction ID. Visit the Discord Alerts page to set up.",
+            description: "⚠️ Bot not configured: missing API key. Visit the Discord Alerts page to set up.",
             color: UI.COLORS.ERROR,
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
@@ -9873,13 +9891,25 @@ async function buildCountryStatusEmbed(country, apiKey) {
         const ffKey = getGlobalFFKey();
 
         // 1. Fetch Friendly Faction
-        const facRes = await fetch(`https://api.torn.com/faction/${factionId}?selections=basic,rankedwars&key=${apiKey}`, {
+        const facUrl = factionId
+            ? `https://api.torn.com/faction/${factionId}?selections=basic,rankedwars&key=${apiKey}`
+            : `https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`;
+        const facRes = await fetch(facUrl, {
             signal: AbortSignal.timeout(8000)
         });
         const facData = await facRes.json();
         if (facData.error) throw new Error(facData.error.error || "Torn API error");
 
-        const friendlyName = facData.name || "Our Faction";
+        if (facData.ID) {
+            factionId = String(facData.ID);
+            if (!discordConfig.factionId) dynamicFactionId = String(facData.ID);
+            if (!discordConfig.factionName && facData.name) {
+                discordConfig.factionName = facData.name;
+                UI.setFactionName(facData.name);
+            }
+        }
+
+        const friendlyName = facData.name || discordConfig.factionName || "Our Faction";
 
         // 2. Determine Enemy Faction ID (only if actively in war)
         let enemyId = currentEnemyFacId || (getActiveRankedWar(facData) ? (discordConfig.enemyFacId || autoDetectEnemyFaction(facData)) : null);
@@ -10311,7 +10341,7 @@ async function buildTargetsEmbed(apiKey) {
         const riskMap = await retalEngine.getRiskScoreBulk(riskTargets).catch(() => new Map());
 
         const lines = top10.map((m, idx) => {
-            const onlineDot = m.last_action?.status === 'Online' ? '🟢' : (m.last_action?.status === 'Idle' ? '🟡' : '⚪');
+            const statusText = m.last_action?.status === 'Online' ? '🟢 Online' : (m.last_action?.status === 'Idle' ? '🟡 Idle' : '⚪ Offline');
             const spyTotal = spyDatabase[m.id]?.total || statsCache[m.id]?.stats || manualStats[m.id]?.stats;
             const statsStr = spyTotal
                 ? `**${formatStatNumber(spyTotal)}** stats`
@@ -10319,14 +10349,15 @@ async function buildTargetsEmbed(apiKey) {
             const claimTag = claims[m.id] ? ` *(🎯 Claimed: ${claims[m.id].playerName})*` : '';
             const risk = riskMap.get(Number(m.id));
             const riskTag = risk ? ` · ${retalEngine.formatRiskTag(risk)}` : '';
-            return `${idx + 1}. ${onlineDot} ${UI.player(name, m.id)} — ${statsStr}${riskTag} · [⚔️](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})${claimTag}`;
+            return `${idx + 1}. [${statusText}] ${UI.player(m.name, m.id)} — ${statsStr}${riskTag} · [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})${claimTag}`;
         });
 
         return {
-            title: `🎯 ${data.name || 'Enemy'} — Attack Targets (${available.length} Available)`,
-            description: lines.join('\n'),
-            color: UI.COLORS.BRAND,
-            footer: { text: 'F.R.I.D.A.Y · 🛡️ = retal risk % · 🟢 Direct 🟡 Shrunk 🟠 Faction ⚫ Cold' }
+            title: `🕷️ ${data.name || 'Enemy'} — Attack Targets (${available.length} Available)`,
+            description: lines.join('\n') + '\n\n*🛡️ = Retaliation risk % · 🟢 Direct 🟡 Shrunk 🟠 Faction ⚫ Cold*',
+            color: UI.COLORS.TEAL,
+            footer: UI.FOOTER,
+            timestamp: new Date().toISOString()
         };
     } catch (e) {
         return { title: '🎯 Enemy Targets', description: `⚠️ Could not fetch enemy roster: ${e.message}`, color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
@@ -10468,21 +10499,22 @@ async function buildChainWatchEmbed(apiKey) {
         });
 
         const list = onlineInTorn.map(m => {
-            const dot = m.last_action?.status === 'Online' ? '🟢' : '🟡';
-            return `${dot} **${m.name}** [${m.id}] (Lvl ${m.level}) • [Profile](https://www.torn.com/profiles.php?XID=${m.id})`;
+            const statusText = m.last_action?.status === 'Online' ? '🟢 Online' : '🟡 Idle';
+            return `• [${statusText}] **${m.name}** [${m.id}] (Lvl ${m.level}) · [👤 Profile](https://www.torn.com/profiles.php?XID=${m.id})`;
         }).join("\n") || "No online members in Torn right now!";
 
         const timeout = data.chain?.timeout || 0;
         const current = data.chain?.current || 0;
 
         return {
-            title: `🔗 Online & Ready in Torn (${onlineInTorn.length} members)`,
-            description: `**Chain**: ${current} hits • **Timer**: ${Math.floor(timeout/60)}m ${timeout%60}s\n\n` + list,
-            color: UI.COLORS.INFO,
-            footer: UI.FOOTER
+            title: `🕷️ Online Fighters in Torn (${onlineInTorn.length} members)`,
+            description: `**Chain Count**: ${current} hits · **Timer**: ${Math.floor(timeout/60)}m ${timeout%60}s\n\n` + list,
+            color: UI.COLORS.TEAL,
+            footer: UI.FOOTER,
+            timestamp: new Date().toISOString()
         };
     } catch(e) {
-        return { title: "🔗 Online Fighters", description: `⚠️ Error: ${e.message}`, color: UI.COLORS.ERROR };
+        return { title: "🕷️ Online Fighters", description: `⚠️ Error: ${e.message}`, color: UI.COLORS.RED, footer: UI.FOOTER, timestamp: new Date().toISOString() };
     }
 }
 
@@ -10584,15 +10616,21 @@ async function buildOnlineRosterEmbed(apiKey) {
         });
 
         return {
-            title: `👥 ${data.name || 'Faction'} — Roster (${total} members)`,
-            description: `**Respect**: **${(data.respect || 0).toLocaleString()}** • **Rank**: **${data.rank?.name || 'Unranked'}**\n\n` +
-                         `🟢 **Online**: **${online}** (${Math.round(online/total*100)}%)\n` +
-                         `🟡 **Idle**: **${idle}**\n` +
-                         `⚪ **Offline**: **${offline}**\n\n` +
-                         `🛡️ **In Torn**: **${okayInTorn}** available\n` +
-                         `🏥 **Hospital**: **${hosp}**\n` +
-                         `✈️ **Traveling / Abroad**: **${traveling}**\n`,
-            color: UI.COLORS.INFO,
+            title: `🕷️ ${data.name || 'Faction'} — Member Roster (${total} members)`,
+            description: `**Respect**: ${(data.respect || 0).toLocaleString()} · **Rank**: ${data.rank?.name || 'Unranked'}`,
+            color: UI.COLORS.TEAL,
+            fields: [
+                {
+                    name: "📊 Activity Breakdown",
+                    value: `🟢 Online: **${online}** (${Math.round(online/total*100)}% of faction) · 🟡 Idle: **${idle}** · ⚪ Offline: **${offline}**`,
+                    inline: false
+                },
+                {
+                    name: "📍 Location & Availability",
+                    value: `🟢 Available in Torn: **${okayInTorn}** · 🔴 Hospital: **${hosp}** · ✈️ Abroad: **${traveling}**`,
+                    inline: false
+                }
+            ],
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
@@ -11508,11 +11546,20 @@ async function buildWarBountiesEmbed(apiKey) {
 async function buildInactiveMembersEmbed(apiKey) {
     if (!apiKey) return { title: "💤 Inactive Members", description: "⚠️ No Torn API key configured.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
     try {
-        let watchFactionId = discordConfig.factionId || dynamicFactionId || "52355";
-        const url = `https://api.torn.com/faction/${watchFactionId}?selections=basic&key=${apiKey}`;
+        let watchFactionId = discordConfig.factionId || dynamicFactionId || "";
+        const url = watchFactionId
+            ? `https://api.torn.com/faction/${watchFactionId}?selections=basic&key=${apiKey}`
+            : `https://api.torn.com/faction/?selections=basic&key=${apiKey}`;
         const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
         const data = await res.json();
         if (data.error) throw new Error(data.error.error || "Torn API error");
+        if (data.ID) {
+            if (!discordConfig.factionId) dynamicFactionId = String(data.ID);
+            if (!discordConfig.factionName && data.name) {
+                discordConfig.factionName = data.name;
+                UI.setFactionName(data.name);
+            }
+        }
 
         const members = data.members || {};
         const now = Math.floor(Date.now() / 1000);
@@ -12041,119 +12088,90 @@ setInterval(checkExpiredBankRequests, 2 * 60 * 1000);
 
 function buildBankRequestEmbed(req) {
     const formattedAmount = `$${Number(req.amount).toLocaleString()}`;
-    const requesterMention = `<@${req.userId}>`;
-    const tornProfile = req.tornId
-        ? `[${req.tornName || 'Unknown'} [${req.tornId}]](https://www.torn.com/profiles.php?XID=${req.tornId})`
-        : null;
+    const userField = UI.user(req.userId, req.tornName, req.tornId);
 
-    let color = UI.COLORS.ECONOMY;
-    let statusLine = `⏳ Awaiting banker — requested <t:${Math.floor(req.timestamp / 1000)}:R>`;
-    let titlePrefix = '⏳';
+    // Rule 1: Accent color = state, not feature
+    // 🟡 Gold → awaiting action / pending
+    // 🟢 Green → success / completed
+    // 🔴 Red → locked / denied / danger
+    let color = UI.COLORS.GOLD;
+    let statusText = `⏳ Pending · Awaiting banker (<t:${Math.floor(req.timestamp / 1000)}:R>)`;
+    let resultText = req.remainingBalance !== undefined && req.remainingBalance >= 0
+        ? `Faction Vault Transfer · After: $${Number(req.remainingBalance).toLocaleString()}`
+        : 'Faction Vault Transfer';
 
     if (req.status === 'verifying') {
-        color = UI.COLORS.WARNING;
-        titlePrefix = '🔄';
-        const payerMention = req.fulfilledBy ? `<@${req.fulfilledBy}>` : `@${req.fulfillerName || 'Banker'}`;
-        statusLine = `🔄 **Payment in progress by ${payerMention}** (clicked "Give Cash" <t:${Math.floor((req.fulfilledAt || req.timestamp) / 1000)}:R>)\nChecking faction transfer logs... auto-confirms when sent in Torn.`;
+        color = UI.COLORS.GOLD;
+        const payerMention = req.fulfilledBy ? `<@${req.fulfilledBy}>` : (req.fulfillerName ? `@${req.fulfillerName}` : 'Banker');
+        statusText = `⏳ Pending Verification · In progress by ${payerMention}`;
+        resultText = 'Verifying transfer via Torn faction logs...';
     } else if (req.status === 'fulfilled') {
-        color = UI.COLORS.SUCCESS;
-        titlePrefix = '✅';
+        color = UI.COLORS.GREEN;
         let fulfillerStr = "";
-        let fulfillerDisplay = null;
         if (req.fulfilledBy) {
-            fulfillerStr = `by <@${req.fulfilledBy}>`;
-            fulfillerDisplay = `<@${req.fulfilledBy}>`;
+            fulfillerStr = `<@${req.fulfilledBy}>`;
         } else if (req.fulfillerName && req.fulfillerName !== 'Banker') {
-            const idPart = req.fulfillerId ? ` [${req.fulfillerId}]` : '';
-            const linkPart = req.fulfillerId 
-                ? `[**${req.fulfillerName}**${idPart}](https://www.torn.com/profiles.php?XID=${req.fulfillerId})`
+            fulfillerStr = req.fulfillerId 
+                ? `[**${req.fulfillerName} [${req.fulfillerId}]**](https://www.torn.com/profiles.php?XID=${req.fulfillerId})`
                 : `**${req.fulfillerName}**`;
-            fulfillerStr = `by ${linkPart} *(via Torn Logs)*`;
-            fulfillerDisplay = linkPart;
         } else {
-            fulfillerStr = `via Torn Faction Logs`;
+            fulfillerStr = `Torn Faction Logs`;
         }
         const timeRef = req.fulfilledAt || req.verifiedAt || req.timestamp || Date.now();
-        statusLine = `✅ **Fulfilled** ${fulfillerStr} — <t:${Math.floor(timeRef / 1000)}:R>`;
+        statusText = `🟢 Completed · Fulfilled by ${fulfillerStr} (<t:${Math.floor(timeRef / 1000)}:R>)`;
+        resultText = req.remainingBalance !== undefined && req.remainingBalance >= 0
+            ? `Transferred in Torn · Vault After: $${Number(req.remainingBalance).toLocaleString()}`
+            : 'Transferred in Torn';
     } else if (req.status === 'cancelled') {
-        color = UI.COLORS.NEUTRAL;
-        titlePrefix = '❌';
+        color = UI.COLORS.RED;
         const cancellerStr = req.cancelledBy && req.cancelledBy !== 'system'
             ? `<@${req.cancelledBy}>` : (req.cancellerName || 'System');
-        statusLine = `❌ **Cancelled** by ${cancellerStr} — <t:${Math.floor(req.cancelledAt / 1000)}:R>`;
+        statusText = `🔴 Denied · Cancelled by ${cancellerStr} (<t:${Math.floor(req.cancelledAt / 1000)}:R>)`;
+        resultText = 'Request Cancelled';
     } else if (req.status === 'expired') {
-        color = UI.COLORS.NEUTRAL;
-        titlePrefix = '⏱️';
-        statusLine = `⏱️ **Timed out** after 60 minutes (auto-cancelled)`;
+        color = UI.COLORS.RED;
+        statusText = `🔴 Denied · Timed out after 60 minutes`;
+        resultText = 'Request Expired';
     }
 
+    // Rule 2 & 3: Action-request card structure (What → Who → Result → Status), max 5 fields
     const fields = [
         {
-            name: '💵 Amount',
-            value: `**${formattedAmount}**`,
+            name: `${UI.ICONS.VAULT} What`,
+            value: `Vault Withdrawal · **${formattedAmount}**`,
             inline: true
         },
         {
-            name: '👤 Requested By',
-            value: tornProfile ? `${requesterMention}\n└ ${tornProfile}` : requesterMention,
+            name: `${UI.ICONS.USER} Who`,
+            value: userField,
+            inline: true
+        },
+        {
+            name: `📋 Result`,
+            value: resultText,
             inline: true
         }
     ];
 
-    if (req.status === 'verifying' && (req.fulfilledBy || req.fulfillerName)) {
-        fields.push({
-            name: '🏦 Fulfilling Banker',
-            value: req.fulfilledBy ? `<@${req.fulfilledBy}>` : `@${req.fulfillerName}`,
-            inline: true
-        });
-    }
-
-    if (req.status === 'fulfilled') {
-        let val = null;
-        if (req.fulfilledBy) {
-            val = `<@${req.fulfilledBy}>`;
-        } else if (req.fulfillerName && req.fulfillerName !== 'Banker') {
-            val = req.fulfillerId 
-                ? `[**${req.fulfillerName} [${req.fulfillerId}]**](https://www.torn.com/profiles.php?XID=${req.fulfillerId})`
-                : `**${req.fulfillerName}**`;
-        }
-        if (val) {
-            fields.push({
-                name: '🏦 Fulfilled By',
-                value: val,
-                inline: true
-            });
-        }
-    }
-
-    if (req.remainingBalance !== undefined && req.remainingBalance >= 0) {
-        fields.push({
-            name: '🏦 Vault After',
-            value: `$${Number(req.remainingBalance).toLocaleString()}`,
-            inline: true
-        });
-    }
-
-    // In-game status (only show on pending/verifying)
+    // Optional in-game status field (Rule 9: status = color + text always)
     if (req.memberStatus && (req.status === 'pending' || req.status === 'verifying')) {
-        let badge = `🟢 In Torn City (${req.memberStatus.state || 'Okay'})`;
-        const state = (req.memberStatus.state || '').toLowerCase();
-        if (state.includes('travel') || state.includes('abroad')) {
-            badge = `✈️ Traveling / Abroad (${req.memberStatus.description || 'Abroad'})`;
-        } else if (state.includes('hospital')) {
-            badge = `🏥 In Hospital (${req.memberStatus.description || 'Medical'})`;
-        } else if (state.includes('jail')) {
-            badge = `🚨 In Jail (${req.memberStatus.description || 'Federal'})`;
-        }
-        fields.push({ name: '🚦 In-Game Status', value: badge, inline: false });
+        fields.push({
+            name: '🚦 In-Game Status',
+            value: UI.statusBadge(req.memberStatus.state, req.memberStatus.description),
+            inline: true
+        });
     }
 
-    fields.push({ name: '📋 Status', value: statusLine, inline: false });
+    fields.push({
+        name: `${UI.ICONS.STATUS} Status`,
+        value: statusText,
+        inline: false
+    });
 
     return {
-        title: `${titlePrefix}  Vault Request #${req.id}`,
+        title: `${UI.ICONS.BRAND} Vault Request #${req.id}`,
         color,
-        fields,
+        fields: fields.slice(0, 5), // strictly max 5 fields
         footer: UI.FOOTER,
         timestamp: new Date(req.timestamp).toISOString()
     };
@@ -12165,78 +12183,68 @@ function getPreFilledVaultUrl(tornId, amount) {
     return `https://www.torn.com/factions.php?step=your&option=give-to-user&giveMoneyTo=${id}&addMoneyTo=${id}&money=${amt}#/tab=controls&option=give-to-user&giveMoneyTo=${id}&addMoneyTo=${id}&money=${amt}`;
 }
 
+// Rule 7: BUTTON HIERARCHY
+// Row 1 = primary actions only (max 2, e.g. Confirm/Cancel).
+// Row 2 = secondary/external links, visually separated.
+// Never mix a primary action button and a link button in the same row.
 function buildBankRequestButtons(req) {
     const vaultUrl = getPreFilledVaultUrl(req.tornId, req.amount);
     const amtFmt = Number(req.amount).toLocaleString();
-    const appBaseUrl = process.env.APP_URL ? process.env.APP_URL.replace(/\/$/, '') : 'https://torn-company-app-production.up.railway.app';
-    const payUrl = `${appBaseUrl}/api/bank/pay/${req.id}`;
 
     if (req.status === 'pending') {
-        // Stacked vertically: each button in its own ActionRow
         return [
-            { type: 1, components: [
-                {
-                    type: 2,
-                    style: 5, // Direct 1-Click Vault (Claims in Discord & opens Torn Vault prefilled)
-                    label: `💸 Direct Give ($${amtFmt})`,
-                    url: payUrl
-                }
-            ]},
-            { type: 1, components: [
-                {
-                    type: 2,
-                    style: 4, // Red (Danger) - cancels the entire request
-                    custom_id: `bank_cancel_${req.id}`,
-                    label: '❌ Cancel'
-                }
-            ]}
+            {
+                type: 1,
+                components: [
+                    {
+                        type: 2,
+                        style: 5, // External link straight to Torn Vault pre-filled
+                        label: `Direct Give ($${amtFmt})`,
+                        url: vaultUrl,
+                        emoji: { name: '💸' }
+                    }
+                ]
+            },
+            {
+                type: 1,
+                components: [
+                    {
+                        type: 2,
+                        style: 4, // Red (Danger / Action)
+                        custom_id: `bank_cancel_${req.id}`,
+                        label: 'Cancel',
+                        emoji: { name: '❌' }
+                    }
+                ]
+            }
         ];
     } else if (req.status === 'verifying') {
-        // Stacked vertically: each button in its own ActionRow
-        const fulfillerLabel = req.fulfillerName ? `@${req.fulfillerName}` : 'Banker';
-        return [
-            { type: 1, components: [
-                {
-                    type: 2,
-                    style: 2, // Grey (Secondary) - disabled indicator
-                    custom_id: `bank_claimed_${req.id}`,
-                    label: `🔒 In Progress by ${fulfillerLabel}`.slice(0, 80),
-                    disabled: true
-                }
-            ]},
-            { type: 1, components: [
-                {
-                    type: 2,
-                    style: 5, // Link — opens Torn faction vault directly
-                    label: `💸 Open Vault ($${amtFmt})`,
-                    url: vaultUrl
-                }
-            ]},
-            { type: 1, components: [
-                {
-                    type: 2,
-                    style: 1, // Primary (Blue) — Manual instant log verification check
-                    custom_id: `bank_check_${req.id}`,
-                    label: '🔄 Check Logs'
-                }
-            ]},
-            { type: 1, components: [
-                {
-                    type: 2,
-                    style: 2, // Grey (Secondary) — Cancel Fulfillment only (release claim)
-                    custom_id: `bank_unclaim_${req.id}`,
-                    label: '↩️ Unclaim'
-                }
-            ]},
-            { type: 1, components: [
-                {
-                    type: 2,
-                    style: 4, // Red (Danger) — Cancel entire Request
-                    custom_id: `bank_cancel_${req.id}`,
-                    label: '❌ Cancel'
-                }
-            ]}
+        const primaryActions = [
+            {
+                type: 2,
+                style: 1, // Primary (Blue)
+                custom_id: `bank_check_${req.id}`,
+                label: 'Check Logs',
+                emoji: { name: '📋' }
+            },
+            {
+                type: 2,
+                style: 2, // Secondary (Grey)
+                custom_id: `bank_unclaim_${req.id}`,
+                label: 'Unclaim',
+                emoji: { name: '⏳' }
+            }
         ];
+        const secondaryLinks = [
+            {
+                type: 2,
+                style: 5, // External link on Row 2
+                label: `Open Torn Vault ($${amtFmt})`,
+                url: vaultUrl,
+                emoji: { name: '🏠' }
+            }
+        ];
+        return UI.buttonLayout(primaryActions, secondaryLinks);
     } else {
         // fulfilled, cancelled, expired — NO buttons at all (clean card)
         return [];
@@ -12246,18 +12254,27 @@ function buildBankRequestButtons(req) {
 let cachedFactionVault = { facId: null, data: null, timestamp: 0 };
 
 async function getFactionVaultAndMember(apiKey, interaction = null, targetQuery = null, forceFresh = false) {
-    if (!apiKey) throw new Error("No Torn API key configured.");
-    const facId = discordConfig.factionId || dynamicFactionId || 52355;
-    const url = `https://api.torn.com/faction/${facId}?selections=basic,donations&key=${apiKey}`;
+    let facId = discordConfig.factionId || dynamicFactionId || "";
+    const url = facId
+        ? `https://api.torn.com/faction/${facId}?selections=basic,donations&key=${apiKey}`
+        : `https://api.torn.com/faction/?selections=basic,donations&key=${apiKey}`;
 
     let data = null;
-    if (!forceFresh && cachedFactionVault.data && String(cachedFactionVault.facId) === String(facId) && (Date.now() - cachedFactionVault.timestamp < 10000)) {
+    if (!forceFresh && cachedFactionVault.data && facId && String(cachedFactionVault.facId) === String(facId) && (Date.now() - cachedFactionVault.timestamp < 10000)) {
         data = cachedFactionVault.data;
     } else {
         const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
         data = await res.json();
         if (data && !data.error) {
-            cachedFactionVault = { facId: String(facId), data, timestamp: Date.now() };
+            if (data.ID) {
+                facId = String(data.ID);
+                if (!discordConfig.factionId) dynamicFactionId = String(data.ID);
+                if (!discordConfig.factionName && data.name) {
+                    discordConfig.factionName = data.name;
+                    UI.setFactionName(data.name);
+                }
+            }
+            cachedFactionVault = { facId: String(facId || data.ID || ""), data, timestamp: Date.now() };
         }
     }
 
@@ -13042,13 +13059,23 @@ async function checkFactionOrganizedCrimes() {
 
     isCheckingOc = true;
     try {
-        const myFacId = String(discordConfig.factionId || dynamicFactionId || "52355");
-        const res = await fetch(`https://api.torn.com/faction/${myFacId}?selections=crimes,basic&key=${apiKey}&timestamp=${Date.now()}`, {
+        let myFacId = String(discordConfig.factionId || dynamicFactionId || "");
+        const ocUrl = myFacId
+            ? `https://api.torn.com/faction/${myFacId}?selections=crimes,basic&key=${apiKey}&timestamp=${Date.now()}`
+            : `https://api.torn.com/faction/?selections=crimes,basic&key=${apiKey}&timestamp=${Date.now()}`;
+        const res = await fetch(ocUrl, {
             signal: AbortSignal.timeout(9000)
         });
         const data = await res.json();
         if (!data || data.error || !data.crimes) return;
-        if (data.ID && String(data.ID) !== myFacId) return;
+        if (data.ID) {
+            myFacId = String(data.ID);
+            if (!discordConfig.factionId) dynamicFactionId = String(data.ID);
+            if (!discordConfig.factionName && data.name) {
+                discordConfig.factionName = data.name;
+                UI.setFactionName(data.name);
+            }
+        }
 
         const now = Math.floor(Date.now() / 1000);
         const mention = ocConfig.roleId ? `<@&${ocConfig.roleId}>` : "";
@@ -13120,7 +13147,7 @@ async function checkFactionOrganizedCrimes() {
 
                     await sendChannelMessage(botToken, channelId, {
                         title: `📋 OC Scheduled: ${crime.crime_name}`,
-                        description: `A new Organized Crime has been scheduled for **Spider-Verse**!\n\n` +
+                        description: `A new Organized Crime has been scheduled for **${discordConfig.factionName || 'the faction'}**!\n\n` +
                                      `**Target Ready Time:** ${readyTimeStr}\n` +
                                      `**Planned By:** [${plannerName}](https://www.torn.com/profiles.php?XID=${crime.planned_by})\n\n` +
                                      `**Assigned Roster:**\n${pListMarkdown}\n\n` +
@@ -13373,14 +13400,16 @@ async function checkFactionOrganizedCrimes() {
         }
 
         // ── TRIGGER 6 & 7: Missing Required Items & Low CPR Alerts (v2 API) ───────
-        const fid = discordConfig.factionId || "52355";
+        const fid = discordConfig.factionId || dynamicFactionId || myFacId || "";
         let v2Data = null;
-        try {
-            const v2Res = await fetch(`https://api.torn.com/v2/faction/${fid}/crimes?cat=available&key=${apiKey}&timestamp=${Date.now()}`, {
-                signal: AbortSignal.timeout(9000)
-            });
-            v2Data = await v2Res.json();
-        } catch(e) {}
+        if (fid) {
+            try {
+                const v2Res = await fetch(`https://api.torn.com/v2/faction/${fid}/crimes?cat=available&key=${apiKey}&timestamp=${Date.now()}`, {
+                    signal: AbortSignal.timeout(9000)
+                });
+                v2Data = await v2Res.json();
+            } catch(e) {}
+        }
 
         if (v2Data && v2Data.crimes && Array.isArray(v2Data.crimes)) {
             for (const v2Crime of v2Data.crimes) {
@@ -13792,16 +13821,39 @@ async function executeCancelRequest(reqId, interaction = null) {
     return { success: true, message: `❌ **Request #${reqId} has been cancelled (voided).** The withdrawal request is closed.` };
 }
 
-// ── 1-Click Direct Torn Vault Fulfillment Redirect ──────────────────────────
+// ── 1-Click Direct Torn Vault Fulfillment Redirect (Legacy Support) ─────────
 app.get('/api/bank/pay/:id', async (req, res) => {
     const reqId = String(req.params.id || '').trim();
-    const bankReq = bankRequests[reqId];
+    let bankReq = bankRequests[reqId];
+
     if (!bankReq) {
-        return res.redirect('https://www.torn.com/factions.php');
+        try {
+            const diskPath = path.join(__dirname, 'data', 'bank_requests.json');
+            if (fs.existsSync(diskPath)) {
+                const diskData = JSON.parse(fs.readFileSync(diskPath, 'utf8'));
+                if (diskData && diskData[reqId]) {
+                    bankReq = diskData[reqId];
+                    bankRequests[reqId] = bankReq;
+                }
+            }
+        } catch(e) {}
     }
 
-    if (bankReq.status === 'fulfilled' || bankReq.status === 'cancelled') {
-        return res.redirect('https://www.torn.com/factions.php');
+    if (!bankReq) {
+        try {
+            const AppConfig = mongoose.models.AppConfig || mongoose.model('AppConfig');
+            if (AppConfig) {
+                const master = await AppConfig.findById('master').lean();
+                if (master && master.bankRequests && master.bankRequests[reqId]) {
+                    bankReq = master.bankRequests[reqId];
+                    bankRequests[reqId] = bankReq;
+                }
+            }
+        } catch(e) {}
+    }
+
+    if (!bankReq) {
+        return res.redirect(302, 'https://www.torn.com/factions.php?step=your#/tab=controls&option=give-to-user');
     }
 
     const prefilledUrl = getPreFilledVaultUrl(bankReq.tornId, bankReq.amount);
@@ -13842,10 +13894,20 @@ async function buildVaultBalanceEmbed(apiKey, targetQuery = null, requestingUser
         return { title: "🏦 Faction Vault Balance", description: "⚠️ Torn API Key is not configured.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
     }
     try {
-        const facId = discordConfig.factionId || dynamicFactionId || 52355;
-        const url = `https://api.torn.com/faction/${facId}?selections=basic,donations&key=${apiKey}`;
+        let facId = discordConfig.factionId || dynamicFactionId || "";
+        const url = facId
+            ? `https://api.torn.com/faction/${facId}?selections=basic,donations&key=${apiKey}`
+            : `https://api.torn.com/faction/?selections=basic,donations&key=${apiKey}`;
         const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
         const data = await res.json();
+
+        if (data && !data.error && data.ID) {
+            if (!discordConfig.factionId) dynamicFactionId = String(data.ID);
+            if (!discordConfig.factionName && data.name) {
+                discordConfig.factionName = data.name;
+                UI.setFactionName(data.name);
+            }
+        }
 
         if (data.error) {
             return { title: "🏦 Faction Vault Balance", description: `⚠️ Torn API Error: ${data.error.error}`, color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
@@ -14132,18 +14194,18 @@ async function buildMissingDiscordEmbed(guild, apiKey) {
             : "";
 
         return {
-            title: `📋 ${factionName} — Discord Member Audit`,
+            title: `🕷️ ${factionName} — Discord Member Audit`,
             description: `**Faction Audit Summary:**\n` +
                          `👥 **Total Faction Members:** **${total}**\n` +
-                         `✅ **Present in Discord:** **${matched.length}** (${matchedPct}%)\n` +
-                         `⚠️ **Missing from Discord:** **${missing.length}** (${missingPct}%)${intentWarning}`,
+                         `✅ **Present in Discord:** **${matched.length}** (${matchedPct}% of roster)\n` +
+                         `⚠️ **Missing from Discord:** **${missing.length}** (${missingPct}% of roster)${intentWarning}`,
             fields: fields.slice(0, 25),
-            color: UI.COLORS.WARNING,
+            color: UI.COLORS.TEAL,
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
     } catch(e) {
-        return { title: "📋 Faction Discord Audit", description: `⚠️ Error during audit: ${e.message}`, color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
+        return { title: "🕷️ Faction Discord Audit", description: `⚠️ Error during audit: ${e.message}`, color: UI.COLORS.RED, footer: UI.FOOTER, timestamp: new Date().toISOString() };
     }
 }
 
@@ -14338,8 +14400,8 @@ async function executeVerifyWithKey(interactionOrMember, rawKey, explicitGuild =
     const playerPosition = linkRes.faction?.position || "";
     const bars = linkRes.bars;
 
-    const facId = discordConfig.factionId || dynamicFactionId || 52355;
-    const isOurFaction = (playerFactionId === 52355) || (String(playerFactionId) === String(facId));
+    const facId = discordConfig.factionId || dynamicFactionId || "";
+    const isOurFaction = Boolean(facId && String(playerFactionId) === String(facId));
 
     // Detect Leadership & Banker Roles
     let isLeader = false;
@@ -14408,16 +14470,21 @@ async function executeVerifyWithKey(interactionOrMember, rawKey, explicitGuild =
 
     // 2. Faction Member Roles (Only sync if already verified member)
     if (isOurFaction && guildMember && isAlreadyVerified) {
+        const configuredFacName = (discordConfig.factionName || '').toLowerCase().trim();
         const factionRoleId = findGuildRole(discordConfig.factionRoleId, [
+            ...(configuredFacName ? [
+                n => n === configuredFacName,
+                n => n.includes(configuredFacName)
+            ] : []),
+            n => n === 'faction member',
+            n => n === 'faction',
             n => n.includes('spider-verse'),
             n => n.includes('spider verse'),
             n => n.includes('spiderverse'),
-            n => n.includes('spdr'),
-            n => n === 'faction member',
-            n => n === 'faction'
+            n => n.includes('spdr')
         ]);
         if (factionRoleId) {
-            const res = await applyGuildMemberRole(guild, guildMember, botMember, factionRoleId, 'add', 'Faction Member (52355)');
+            const res = await applyGuildMemberRole(guild, guildMember, botMember, factionRoleId, 'add', `Faction Member (${facId || 'Faction'})`);
             if (res.success && (res.action === 'added' || res.action === 'already_had')) {
                 rolesAdded.push(`<@&${factionRoleId}>`);
             } else if (res.hierarchyError) {
@@ -14583,7 +14650,21 @@ async function executeVerifyMember(memberOrUser, guild, targetPlayerInput = null
     let tornUser = null;
     let verifiedViaGlobalLink = false;
     let verifiedViaAdminOverride = false;
-    const facId = discordConfig.factionId || dynamicFactionId || 52355;
+    let facId = discordConfig.factionId || dynamicFactionId || "";
+    if (!facId && apiKey) {
+        try {
+            const fCheck = await fetch(`https://api.torn.com/faction/?selections=basic&key=${apiKey}`, { signal: AbortSignal.timeout(5000) });
+            const fCheckData = await fCheck.json();
+            if (fCheckData && fCheckData.ID) {
+                facId = String(fCheckData.ID);
+                if (!discordConfig.factionId) dynamicFactionId = String(fCheckData.ID);
+                if (!discordConfig.factionName && fCheckData.name) {
+                    discordConfig.factionName = fCheckData.name;
+                    UI.setFactionName(fCheckData.name);
+                }
+            }
+        } catch(e) {}
+    }
 
     // ── Flow 0: Specific Player Target Specified (ID or Name) ──
     if (playerInput && apiKey) {
@@ -14720,42 +14801,13 @@ async function executeVerifyMember(memberOrUser, guild, targetPlayerInput = null
     if (!tornUser) {
         return {
             success: false,
-            title: "🛡️ Official Torn Discord Link Required",
-            description: `Hey <@${discordUserId}>! Your Discord account is not linked to your Torn City account yet.\n\n` +
-                         `**How to Verify:**\n` +
-                         `1️⃣ Join or open the **[Official Torn Discord](https://www.torn.com/discord)**.\n` +
-                         `2️⃣ Complete the official verification steps to link your Discord account.\n` +
-                         `3️⃣ Once linked, click **🛡️ Verify Me** below (or run \`/verify\`) and F.R.I.D.A.Y will sync your server nickname and unlock roles!\n\n` +
-                         `⚡ **Alternative Options:**\n` +
-                         `• **Link API Key:** Click **🔑 Link API Key** below to connect your Torn Limited API Key.\n` +
-                         `• **Manual Verification:** Ask an administrator or faction leader to verify you using \`/verify user:<@${discordUserId}> player:YourTornID\`.`,
-            color: UI.COLORS.BRAND,
-            footer: UI.FOOTER,
-            timestamp: new Date().toISOString(),
-            components: [{
-                type: 1,
-                components: [
-                    {
-                        type: 2,
-                        style: 1, // Blurple
-                        custom_id: 'btn_verify_now',
-                        label: '🛡️ Verify Me',
-                        emoji: { name: '🛡️' }
-                    },
-                    {
-                        type: 2,
-                        style: 2, // Secondary
-                        custom_id: 'btn_link_user_api_key',
-                        label: '🔑 Link API Key'
-                    },
-                    {
-                        type: 2,
-                        style: 5, // Link
-                        label: '🔗 Link at Torn.com/discord',
-                        url: 'https://www.torn.com/discord'
-                    }
-                ]
-            }]
+            ...UI.verificationCard({
+                memberId: discordUserId,
+                factionName: myFacName || discordConfig.factionName || 'Spider-Verse',
+                verifiedRoleId: discordConfig.verifiedRoleId,
+                isAwaitingAction: true
+            }),
+            components: UI.verificationButtons()
         };
     }
 
@@ -14764,7 +14816,7 @@ async function executeVerifyMember(memberOrUser, guild, targetPlayerInput = null
     const playerId = tornUser.player_id;
     const playerFactionId = tornUser.faction?.faction_id || 0;
     const playerFactionName = tornUser.faction?.faction_name || "None";
-    const isOurFaction = (playerFactionId === 52355) || (String(playerFactionId) === String(facId));
+    const isOurFaction = Boolean(facId && String(playerFactionId) === String(facId));
 
     // Detect Faction Position (Leader, Co-Leader, Banker, etc.)
     let isLeader = false;
@@ -14842,15 +14894,20 @@ async function executeVerifyMember(memberOrUser, guild, targetPlayerInput = null
         }
     }
 
-    // 2. Faction Member Role (Spider-Verse 52355)
+    // 2. Faction Member Role
     if (isOurFaction) {
+        const configuredFacName = (discordConfig.factionName || '').toLowerCase().trim();
         const factionRoleId = findGuildRole(discordConfig.factionRoleId, [
+            ...(configuredFacName ? [
+                n => n === configuredFacName,
+                n => n.includes(configuredFacName)
+            ] : []),
+            n => n === 'faction member',
+            n => n === 'faction',
             n => n.includes('spider-verse'),
             n => n.includes('spider verse'),
             n => n.includes('spiderverse'),
-            n => n.includes('spdr'),
-            n => n === 'faction member',
-            n => n === 'faction'
+            n => n.includes('spdr')
         ]);
         if (factionRoleId) {
             const res = await applyGuildMemberRole(guild, guildMember, botMember, factionRoleId, 'add', 'Faction Member');
@@ -14932,37 +14989,17 @@ async function executeVerifyMember(memberOrUser, guild, targetPlayerInput = null
         roleWarnings,
         isNewVerification: !alreadyHadVerifiedRole,
         alreadyVerified: alreadyHadVerifiedRole,
-        title: `🛡️ Verified: ${playerName} [${playerId}]`,
+        title: `🕷️ Verified: ${playerName} [${playerId}]`,
         description: verifiedViaAdminOverride
-            ? `✅ <@${discordUserId}> has been manually verified as **[${playerName} [${playerId}]](https://www.torn.com/profiles.php?XID=${playerId})**! Roles and nickname synced.`
+            ? `✅ <@${discordUserId}> [${playerId}] has been manually verified as **[${playerName}](https://www.torn.com/profiles.php?XID=${playerId})**! Roles and nickname synced.`
             : (alreadyHadVerifiedRole
-                ? `✅ <@${discordUserId}>, your verification is already up to date! Roles and nickname refreshed.`
-                : `✅ <@${discordUserId}> has been successfully verified! Full server access granted.`),
-        color: isOurFaction ? UI.COLORS.SUCCESS : UI.COLORS.INFO,
+                ? `✅ <@${discordUserId}> [${playerId}], your verification is already up to date! Roles and nickname refreshed.`
+                : `✅ <@${discordUserId}> [${playerId}] has been successfully verified! Full server access granted.`),
+        color: UI.COLORS.GREEN,
         fields,
         footer: UI.FOOTER,
         timestamp: new Date().toISOString()
     };
-
-    if (!hasLinkedKey) {
-        returnObj.components = [{
-            type: 1,
-            components: [
-                {
-                    type: 2,
-                    style: 2, // Secondary
-                    custom_id: 'btn_link_user_api_key',
-                    label: '🔑 Link API Key (Optional)'
-                },
-                {
-                    type: 2,
-                    style: 5, // Link
-                    label: '🔑 Get API Key',
-                    url: 'https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2'
-                }
-            ]
-        }];
-    }
 
     return returnObj;
 }
@@ -14972,29 +15009,55 @@ async function executeVerifyAll(guild, apiKey) {
     if (!apiKey) return { title: "🛡️ Batch Verification", description: "⚠️ Torn API Key is not configured. Please add an API key in dashboard settings.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
     if (!guild) return { title: "🛡️ Batch Verification", description: "⚠️ Must be run inside a Discord server.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
 
-    const facId = discordConfig.factionId || dynamicFactionId || 52355;
+    let facId = discordConfig.factionId || dynamicFactionId || "";
     let facData = null;
     let membersMap = {};
     try {
-        const res = await fetch(`https://api.torn.com/faction/${facId}?selections=basic,positions&key=${apiKey}`, { signal: AbortSignal.timeout(9000) });
+        const facUrl = facId
+            ? `https://api.torn.com/faction/${facId}?selections=basic,positions&key=${apiKey}`
+            : `https://api.torn.com/faction/?selections=basic,positions&key=${apiKey}`;
+        const res = await fetch(facUrl, { signal: AbortSignal.timeout(9000) });
         facData = await res.json();
+
+        if (facData && facData.error) {
+            return {
+                title: "🛡️ Batch Verification Failed",
+                description: `⚠️ Torn API Error: ${facData.error.error || JSON.stringify(facData.error)}. Please check your API key in dashboard settings.`,
+                color: UI.COLORS.ERROR,
+                footer: UI.FOOTER,
+                timestamp: new Date().toISOString()
+            };
+        }
+
         if (facData && facData.members) {
             membersMap = facData.members;
+        }
+        if (facData && facData.ID) {
+            facId = String(facData.ID);
+            if (!discordConfig.factionId) dynamicFactionId = String(facData.ID);
+            if (!discordConfig.factionName && facData.name) {
+                discordConfig.factionName = facData.name;
+                UI.setFactionName(facData.name);
+            }
         }
     } catch(e) {
         console.warn('[VerifyAll] Failed to fetch faction roster:', e.message);
     }
 
-    // Fetch all guild members safely (with timeout & cache fallback)
-    let guildMembers = null;
+    // Fetch guild members quickly without hanging (use 2.5s Promise.race timeout, fallback to cache)
+    let guildMembers = guild.members.cache;
     try {
-        guildMembers = await guild.members.fetch({ time: 10000 });
+        const fetchPromise = guild.members.fetch();
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Member fetch timeout')), 2500));
+        const fetched = await Promise.race([fetchPromise, timeoutPromise]);
+        if (fetched && fetched.size > 0) guildMembers = fetched;
     } catch(e) {
-        console.warn('[VerifyAll] guild.members.fetch error, using cache:', e.message);
         guildMembers = guild.members.cache;
     }
     if (!guildMembers || guildMembers.size === 0) {
-        guildMembers = guild.members.cache;
+        try {
+            guildMembers = await guild.members.fetch({ limit: 1000 }).catch(() => guild.members.cache);
+        } catch(e) {}
     }
 
     let botMember = guild.members.me;
@@ -15006,6 +15069,9 @@ async function executeVerifyAll(guild, apiKey) {
     let updatedCount = 0;
     let alreadySynced = 0;
     let unmatchedCount = 0;
+    let factionMatchedCount = 0;
+    let guestMatchedCount = 0;
+    const updatedMembersList = [];
     const globalRoleWarnings = new Set();
 
     const findGuildRole = (configuredId, matchers) => {
@@ -15025,13 +15091,18 @@ async function executeVerifyAll(guild, apiKey) {
         n => n === 'members'
     ]);
 
+    const configuredFacName = (discordConfig.factionName || '').toLowerCase().trim();
     const factionRoleId = findGuildRole(discordConfig.factionRoleId, [
+        ...(configuredFacName ? [
+            n => n === configuredFacName,
+            n => n.includes(configuredFacName)
+        ] : []),
+        n => n === 'faction member',
+        n => n === 'faction',
         n => n.includes('spider-verse'),
         n => n.includes('spider verse'),
         n => n.includes('spiderverse'),
-        n => n.includes('spdr'),
-        n => n === 'faction member',
-        n => n === 'faction'
+        n => n.includes('spdr')
     ]);
 
     const unverifiedRoleId = findGuildRole(discordConfig.unverifiedRoleId, [
@@ -15042,6 +15113,9 @@ async function executeVerifyAll(guild, apiKey) {
 
     const membersList = Array.from(guildMembers.values ? guildMembers.values() : guildMembers);
 
+    // Track how many live API lookups we do in this run (max 15 to stay blazing fast)
+    let apiLookupBudget = 15;
+
     for (const gm of membersList) {
         if (!gm || !gm.user || gm.user.bot) continue;
 
@@ -15049,8 +15123,15 @@ async function executeVerifyAll(guild, apiKey) {
             let matchedPlayerId = null;
             let matchedName = null;
 
-            // 1. Check userKeys
-            if (typeof userKeys !== 'undefined' && userKeys.getUserAccountStatus) {
+            // 1. Check verifiedDiscordToTorn cache
+            if (!matchedPlayerId && verifiedDiscordToTorn[gm.id]) {
+                const entry = verifiedDiscordToTorn[gm.id];
+                matchedPlayerId = typeof entry === 'object' ? String(entry.tornId) : String(entry);
+                matchedName = (typeof entry === 'object' ? entry.tornName : null) || membersMap[matchedPlayerId]?.name || null;
+            }
+
+            // 2. Check userKeys
+            if (!matchedPlayerId && typeof userKeys !== 'undefined' && userKeys.getUserAccountStatus) {
                 try {
                     const acct = userKeys.getUserAccountStatus(gm.id);
                     if (acct && acct.connected && acct.playerId) {
@@ -15060,41 +15141,80 @@ async function executeVerifyAll(guild, apiKey) {
                 } catch(e) {}
             }
 
-            // 2. Check verifiedDiscordToTorn cache
-            if (!matchedPlayerId && verifiedDiscordToTorn[gm.id]) {
-                const entry = verifiedDiscordToTorn[gm.id];
-                matchedPlayerId = typeof entry === 'object' ? String(entry.tornId) : String(entry);
-                matchedName = (typeof entry === 'object' ? entry.tornName : null) || membersMap[matchedPlayerId]?.name || null;
-            }
-
             // 3. Fast-track Owner / Admin
-            if (!matchedPlayerId && (gm.id === '992561850057240578' || gm.id === discordConfig.personalDiscordId)) {
+            if (!matchedPlayerId && (gm.id === guild.ownerId || gm.id === '992561850057240578' || (discordConfig.personalDiscordId && gm.id === discordConfig.personalDiscordId))) {
                 matchedPlayerId = '3776908';
                 matchedName = membersMap['3776908']?.name || 'Owen777';
             }
 
-            // 4. Nickname pattern matching [ID]
+            // 4. Nickname / Display Name Pattern matching [ID] or (ID)
             if (!matchedPlayerId) {
-                const nickMatch = (gm.nickname || gm.displayName || '').match(/\[(\d{5,10})\]/);
-                if (nickMatch && nickMatch[1]) {
-                    matchedPlayerId = nickMatch[1];
-                    matchedName = membersMap[matchedPlayerId]?.name || (gm.nickname || gm.displayName).replace(/\[\d+\]/g, '').trim();
+                const nickMatch = (gm.nickname || gm.displayName || '').match(/\[(\d{5,10})\]|\((\d{5,10})\)/);
+                if (nickMatch && (nickMatch[1] || nickMatch[2])) {
+                    matchedPlayerId = nickMatch[1] || nickMatch[2];
+                    matchedName = membersMap[matchedPlayerId]?.name || (gm.nickname || gm.displayName).replace(/\[\d+\]|\(\d+\)/g, '').trim();
                 }
             }
 
-            // 5. Match by exact or normalized display name against faction roster
+            // 5. Match by exact, normalized, or substring display name against faction roster
             if (!matchedPlayerId && Object.keys(membersMap).length > 0) {
-                const cleanName = (gm.displayName || gm.user.username || '').toLowerCase().trim();
+                const cleanNick = (gm.nickname || '').toLowerCase().trim();
+                const cleanDisplay = (gm.displayName || '').toLowerCase().trim();
+                const cleanUser = (gm.user?.username || '').toLowerCase().trim();
+                const cleanGlobal = (gm.user?.globalName || '').toLowerCase().trim();
+
                 const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-                const nClean = norm(cleanName);
-                const found = Object.entries(membersMap).find(([id, m]) => {
-                    const nM = norm(m.name);
-                    return m.name.toLowerCase() === cleanName || (nClean && nM && (nClean === nM || nClean.includes(nM) || nM.includes(nClean)));
-                });
-                if (found) {
-                    matchedPlayerId = found[0];
-                    matchedName = found[1].name;
+                const nNick = norm(cleanNick);
+                const nDisplay = norm(cleanDisplay);
+                const nUser = norm(cleanUser);
+                const nGlobal = norm(cleanGlobal);
+
+                for (const [id, m] of Object.entries(membersMap)) {
+                    const mLower = m.name.toLowerCase();
+                    const mNorm = norm(m.name);
+
+                    // Exact match
+                    if (cleanNick === mLower || cleanDisplay === mLower || cleanUser === mLower || cleanGlobal === mLower) {
+                        matchedPlayerId = id;
+                        matchedName = m.name;
+                        break;
+                    }
+                    // Normalized alphanumeric exact match
+                    if (mNorm && (nNick === mNorm || nDisplay === mNorm || nUser === mNorm || nGlobal === mNorm)) {
+                        matchedPlayerId = id;
+                        matchedName = m.name;
+                        break;
+                    }
+                    // Substring match: if member name is >= 3 chars and contained in nickname or display name
+                    if (mNorm.length >= 3) {
+                        if ((nNick && nNick.includes(mNorm)) || (nDisplay && nDisplay.includes(mNorm)) || (nGlobal && nGlobal.includes(mNorm))) {
+                            matchedPlayerId = id;
+                            matchedName = m.name;
+                            break;
+                        }
+                    }
                 }
+            }
+
+            // 6. Check Torn API v2 Discord link for unmatched members
+            if (!matchedPlayerId && apiKey && apiLookupBudget > 0) {
+                apiLookupBudget--;
+                try {
+                    const v2Res = await fetch(`https://api.torn.com/v2/user/${gm.id}/discord?key=${apiKey}`, { signal: AbortSignal.timeout(2500) });
+                    const v2Data = await v2Res.json();
+                    const linkedId = v2Data?.discord?.user_id || v2Data?.user_id || v2Data?.discord?.player_id;
+                    if (linkedId) {
+                        matchedPlayerId = String(linkedId);
+                        matchedName = membersMap[matchedPlayerId]?.name || null;
+                        if (!matchedName) {
+                            try {
+                                const pRes = await fetch(`https://api.torn.com/user/${matchedPlayerId}?selections=basic&key=${apiKey}`, { signal: AbortSignal.timeout(2500) });
+                                const pData = await pRes.json();
+                                if (pData && pData.name) matchedName = pData.name;
+                            } catch(e) {}
+                        }
+                    }
+                } catch(e) {}
             }
 
             // If we have an ID but still need clean name
@@ -15104,14 +15224,17 @@ async function executeVerifyAll(guild, apiKey) {
 
             if (matchedPlayerId && matchedName) {
                 const isOurFaction = Boolean(membersMap[matchedPlayerId]);
+                if (isOurFaction) factionMatchedCount++;
+                else guestMatchedCount++;
+
                 const targetNick = `${matchedName} [${matchedPlayerId}]`.slice(0, 32);
-                let changed = false;
+                let memberChanged = false;
 
                 // Sync nickname if manageable
                 if (gm.manageable && gm.nickname !== targetNick) {
                     try {
                         await gm.setNickname(targetNick, "F.R.I.D.A.Y Batch Verification");
-                        changed = true;
+                        memberChanged = true;
                     } catch(e) {}
                 }
 
@@ -15126,30 +15249,30 @@ async function executeVerifyAll(guild, apiKey) {
                                  pLower.includes('vault') ||
                                  pLower.includes('treasur');
 
-                // Role application
-                if (verifiedRoleId) {
+                // Role application: ONLY call Discord API if member DOES NOT already have the role!
+                if (verifiedRoleId && !gm.roles.cache.has(verifiedRoleId)) {
                     const res = await applyGuildMemberRole(guild, gm, botMember, verifiedRoleId, 'add', 'Batch Verified');
-                    if (res.success && res.action === 'added') changed = true;
+                    if (res.success && res.action === 'added') memberChanged = true;
                     else if (res.hierarchyError) globalRoleWarnings.add(res.reason);
                 }
-                if (isOurFaction && factionRoleId) {
+                if (isOurFaction && factionRoleId && !gm.roles.cache.has(factionRoleId)) {
                     const res = await applyGuildMemberRole(guild, gm, botMember, factionRoleId, 'add', 'Batch Faction Member');
-                    if (res.success && res.action === 'added') changed = true;
+                    if (res.success && res.action === 'added') memberChanged = true;
                     else if (res.hierarchyError) globalRoleWarnings.add(res.reason);
                 }
-                if (isOurFaction && isLeader && discordConfig.leaderRoleId) {
+                if (isOurFaction && isLeader && discordConfig.leaderRoleId && !gm.roles.cache.has(discordConfig.leaderRoleId)) {
                     const res = await applyGuildMemberRole(guild, gm, botMember, discordConfig.leaderRoleId, 'add', 'Batch Faction Leader');
-                    if (res.success && res.action === 'added') changed = true;
+                    if (res.success && res.action === 'added') memberChanged = true;
                     else if (res.hierarchyError) globalRoleWarnings.add(res.reason);
                 }
-                if (isOurFaction && isBanker && discordConfig.bankerRoleId) {
+                if (isOurFaction && isBanker && discordConfig.bankerRoleId && !gm.roles.cache.has(discordConfig.bankerRoleId)) {
                     const res = await applyGuildMemberRole(guild, gm, botMember, discordConfig.bankerRoleId, 'add', 'Batch Faction Banker');
-                    if (res.success && res.action === 'added') changed = true;
+                    if (res.success && res.action === 'added') memberChanged = true;
                     else if (res.hierarchyError) globalRoleWarnings.add(res.reason);
                 }
-                if (unverifiedRoleId) {
+                if (unverifiedRoleId && gm.roles.cache.has(unverifiedRoleId)) {
                     const res = await applyGuildMemberRole(guild, gm, botMember, unverifiedRoleId, 'remove', 'Batch Verified');
-                    if (res.success && res.action === 'removed') changed = true;
+                    if (res.success && res.action === 'removed') memberChanged = true;
                 }
 
                 verifiedDiscordToTorn[gm.id] = {
@@ -15158,14 +15281,15 @@ async function executeVerifyAll(guild, apiKey) {
                     timestamp: Date.now()
                 };
 
-                if (changed) updatedCount++;
-                else alreadySynced++;
+                if (memberChanged) {
+                    updatedCount++;
+                    updatedMembersList.push(`• **${matchedName} [${matchedPlayerId}]** (<@${gm.id}>)`);
+                } else {
+                    alreadySynced++;
+                }
             } else {
                 unmatchedCount++;
             }
-
-            // Safe delay to prevent Discord 429 rate limits during large member batches
-            await new Promise(r => setTimeout(r, 60));
 
         } catch(memberErr) {
             console.warn(`[VerifyAll] Error processing member ${gm.id}:`, memberErr.message);
@@ -15180,16 +15304,35 @@ async function executeVerifyAll(guild, apiKey) {
     if (typeof saveVerifiedDiscordUsers === 'function') {
         saveVerifiedDiscordUsers();
     }
+    if (typeof saveToMongo === 'function') {
+        try { saveToMongo(); } catch(e) {}
+    }
+
+    const totalVerified = updatedCount + alreadySynced;
+    const totalFaction = Object.keys(membersMap).length || 0;
+
+    const descLines = [
+        `Batch verification scan of **${guild.name}** finished!\n`,
+        `🛡️ **Total Verified Members:** **${totalVerified}**`,
+        `🏛️ **Faction Members in Discord:** **${factionMatchedCount}** / ${totalFaction || '—'}`,
+        '',
+        `• 🔄 **Roles / Nicknames Updated:** ${updatedCount}`,
+        `• 🔒 **Already in Sync:** ${alreadySynced}`,
+        `• ⚠️ **Unmatched / Guests:** ${unmatchedCount}`
+    ];
+
+    if (updatedMembersList.length > 0) {
+        descLines.push('', `**Recently Updated:**\n${updatedMembersList.slice(0, 8).join('\n')}${updatedMembersList.length > 8 ? `\n_...and ${updatedMembersList.length - 8} more_` : ''}`);
+    } else if (totalVerified > 0) {
+        descLines.push('', `_All ${totalVerified} verified members are already 100% up to date with their correct roles and nicknames!_`);
+    }
+
+    descLines.push('', `*Unmatched members can link at [torn.com/discord](https://www.torn.com/discord) or an admin can manually verify with \`/verify user:@member player:ID\`.*`);
 
     return {
-        title: "🛡️ Tornium Verification Audit Complete",
-        description: `Batch re-verification scan of **${guild.name}** finished!\n\n` +
-                     `✅ **Updated & Synced:** ${updatedCount} members\n` +
-                     `🔒 **Already Synced:** ${alreadySynced} members\n` +
-                     `⚠️ **Unmatched / Guests:** ${unmatchedCount} members\n\n` +
-                     `*Unmatched members can link at [torn.com/discord](https://www.torn.com/discord) or an admin can verify them directly using \`/verify user:@member player:ID\`.*` +
-                     warningText,
-        color: UI.COLORS.SUCCESS,
+        title: "🕷️ Tornium Verification Audit Complete",
+        description: descLines.join('\n') + warningText,
+        color: UI.COLORS.GREEN,
         footer: UI.FOOTER,
         timestamp: new Date().toISOString()
     };
@@ -15224,13 +15367,18 @@ async function handleGuildMemberAdd(member) {
         n => n === 'members'
     ]);
 
+    const configuredFacName = (discordConfig.factionName || '').toLowerCase().trim();
     const factionRoleId = findGuildRole(discordConfig.factionRoleId, [
+        ...(configuredFacName ? [
+            n => n === configuredFacName,
+            n => n.includes(configuredFacName)
+        ] : []),
+        n => n === 'faction member',
+        n => n === 'faction',
         n => n.includes('spider-verse'),
         n => n.includes('spider verse'),
         n => n.includes('spiderverse'),
-        n => n.includes('spdr'),
-        n => n === 'faction member',
-        n => n === 'faction'
+        n => n.includes('spdr')
     ]);
 
     const unverifiedRoleId = findGuildRole(discordConfig.unverifiedRoleId, [
@@ -15343,7 +15491,7 @@ async function handleGuildMemberAdd(member) {
         try {
             const targetChan = (verificationChannelId && guild.channels.cache.get(verificationChannelId)) || guild.systemChannel;
             if (targetChan && targetChan.isTextBased()) {
-                await targetChan.send({ content: `Welcome <@${member.id}>! 🕷️`, embeds: [sanitizeEmbed(welcomeEmbed)] });
+                await targetChan.send({ content: `Welcome <@${member.id}>! 🎉`, embeds: [sanitizeEmbed(welcomeEmbed)] });
             }
         } catch(e) {}
         return;
@@ -15357,52 +15505,12 @@ async function handleGuildMemberAdd(member) {
         await applyGuildMemberRole(guild, member, botMember, unverifiedRoleId, 'add', 'Unverified new joiner quarantine');
     }
 
-    const verifyEmbed = {
-        title: `🛡️ Welcome to ${guild.name} — Verification Required`,
-        description: `Hey <@${member.id}>, welcome!\n\n` +
-                     `🔒 **Server Access Locked**\n` +
-                     `To protect faction intel and member privacy, all channels remain locked until your Torn City identity is verified.\n\n` +
-                     `**How to Verify (Standard):**\n` +
-                     `1️⃣ Link your Discord account at **[torn.com/discord](https://www.torn.com/discord)** on the Official Torn Discord.\n` +
-                     `2️⃣ Click **🛡️ Verify Me** below — F.R.I.D.A.Y will sync your nickname to \`Name [ID]\` and unlock your roles.\n\n` +
-                     `⚡ **Optional Power-Up: Pre-Link Your API Key**\n` +
-                     `Save time later! Click **🔑 Link API Key (Optional)** below to connect your Torn **Limited Access API Key**. F.R.I.D.A.Y will securely encrypt and save it so you **never** have to enter it again for live battle stats (\`/bs\`), gym tracking, energy/nerve updates, or automated banking!`,
-        color: UI.COLORS.BRAND,
-        thumbnail: { url: "https://www.torn.com/favicon.ico" },
-        footer: UI.FOOTER,
-        timestamp: new Date().toISOString()
-    };
-
-    const verifyButtons = [{
-        type: 1,
-        components: [
-            {
-                type: 2,
-                style: 1, // Primary (Blurple)
-                custom_id: 'btn_verify_now',
-                label: '🛡️ Verify Me',
-                emoji: { name: '🛡️' }
-            },
-            {
-                type: 2,
-                style: 2, // Secondary
-                custom_id: 'btn_link_user_api_key',
-                label: '🔑 Link API Key (Optional)'
-            },
-            {
-                type: 2,
-                style: 5, // Link
-                label: '🔗 Link at Torn.com/discord',
-                url: 'https://www.torn.com/discord'
-            },
-            {
-                type: 2,
-                style: 5, // Link
-                label: '🔑 Get API Key',
-                url: 'https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2'
-            }
-        ]
-    }];
+    const verifyEmbed = UI.verificationCard({
+        memberId: member.id,
+        factionName: guild.name || discordConfig.factionName || 'Spider-Verse',
+        verifiedRoleId: discordConfig.verifiedRoleId
+    });
+    const verifyButtons = UI.verificationButtons();
 
     // Post in verification channel if available
     try {
@@ -15657,7 +15765,8 @@ async function getOcManagerDiscordUserIds() {
 
 // ── Build Official Welcome & Rules Embed (Option C) ──
 function buildWelcomeRulesEmbed(memberId = null) {
-    const title = discordConfig.welcomeRulesTitle || "📜 Welcome to the Faction & Server Rules";
+    const rawTitle = discordConfig.welcomeRulesTitle || "Welcome to the Faction & Server Rules";
+    const title = UI.ensureBrand(rawTitle);
     const rulesBody = discordConfig.welcomeRulesContent || DEFAULT_WELCOME_RULES;
     
     let description = '';
@@ -15670,7 +15779,7 @@ function buildWelcomeRulesEmbed(memberId = null) {
     return {
         title,
         description,
-        color: UI.COLORS.BRAND,
+        color: UI.COLORS.BLUE,
         footer: UI.FOOTER,
         timestamp: new Date().toISOString(),
         links: [
@@ -15941,27 +16050,31 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
             const updateHint = lastUpdatedTime ? `Updated ${lastUpdatedTime}` : 'No baseline yet — run `/bs update` to track gains';
 
             const embed = {
-                title: `📊 ${playerName} [${playerId}]`,
+                title: `🕷️ ${playerName} [${playerId}]`,
                 description: [
                     `**Total:** \`${total.toLocaleString('en-US')}\`  ·  ${archetype}  ·  ${snapshotTs}`,
                     ``,
-                    `⚔️ \`${str.toLocaleString('en-US')}\`${formatMod(modStr)} (${pctStr}%)  🛡️ \`${def.toLocaleString('en-US')}\`${formatMod(modDef)} (${pctDef}%)`,
-                    `⚡ \`${spd.toLocaleString('en-US')}\`${formatMod(modSpd)} (${pctSpd}%)  🎯 \`${dex.toLocaleString('en-US')}\`${formatMod(modDex)} (${pctDex}%)`,
+                    `⚔️ \`${str.toLocaleString('en-US')}\`${formatMod(modStr)} (${pctStr}% of build)  🛡️ \`${def.toLocaleString('en-US')}\`${formatMod(modDef)} (${pctDef}% of build)`,
+                    `⚡ \`${spd.toLocaleString('en-US')}\`${formatMod(modSpd)} (${pctSpd}% of build)  🎯 \`${dex.toLocaleString('en-US')}\`${formatMod(modDex)} (${pctDex}% of build)`,
                     ``,
                     `-# ${updateHint}`
                 ].join('\n'),
-                color: UI.COLORS.INFO,
+                color: UI.COLORS.TEAL,
                 footer: UI.FOOTER,
                 timestamp: new Date().toISOString()
             };
 
-            const actionRow = UI.actionRow(
-                UI.primaryBtn(`btn_bs_update_${playerId}`, '🔄 Update', '🔄'),
-                UI.linkBtn(`https://www.torn.com/profiles.php?XID=${playerId}`, '👤 Profile', '👤'),
-                UI.linkBtn('https://www.torn.com/gym.php', '🏋️ Gym', '🏋️')
+            const buttonRows = UI.buttonLayout(
+                [
+                    UI.primaryBtn(`btn_bs_update_${playerId}`, 'Update', '🔄')
+                ],
+                [
+                    UI.linkBtn(`https://www.torn.com/profiles.php?XID=${playerId}`, 'Profile', '👤'),
+                    UI.linkBtn('https://www.torn.com/gym.php', 'Gym', '🏋️')
+                ]
             );
 
-            return await interaction.editReply({ embeds: [sanitizeEmbed(embed)], components: [actionRow] });
+            return await interaction.editReply({ embeds: [sanitizeEmbed(embed)], components: buttonRows });
         }
 
         // 5. Update Mode: Calculate gains against previous record
@@ -16785,8 +16898,15 @@ function setupSlashBotEvents(bot, token) {
                     const reason = (interaction.fields.getTextInputValue('promo_reason') || '').trim();
 
                     const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
-                    const facId = discordConfig.factionId || dynamicFactionId || 52355;
+                    let facId = discordConfig.factionId || dynamicFactionId || null;
                     const facData = await promotionManager.getFactionData(apiKey, facId);
+                    if (facData && facData.id) {
+                        if (!discordConfig.factionId) dynamicFactionId = String(facData.id);
+                        if (!discordConfig.factionName && facData.name) {
+                            discordConfig.factionName = facData.name;
+                            UI.setFactionName(facData.name);
+                        }
+                    }
 
                     // Resolve member identity
                     let targetTornId = null;
@@ -16986,9 +17106,16 @@ function setupSlashBotEvents(bot, token) {
             if (cmd === 'promotion' && focusedOption.name === 'role') {
                 const typed = (focusedOption.value || '').toLowerCase().trim();
                 const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
-                const facId = discordConfig.factionId || dynamicFactionId || 52355;
+                let facId = discordConfig.factionId || dynamicFactionId || null;
                 try {
                     const facData = await promotionManager.getFactionData(apiKey, facId);
+                    if (facData && facData.id) {
+                        if (!discordConfig.factionId) dynamicFactionId = String(facData.id);
+                        if (!discordConfig.factionName && facData.name) {
+                            discordConfig.factionName = facData.name;
+                            UI.setFactionName(facData.name);
+                        }
+                    }
                     const requestableRoles = promotionManager.getRequestableFactionRoles(facData.positions);
                     const filtered = requestableRoles.filter(r => !typed || r.toLowerCase().includes(typed)).slice(0, 24);
                     const options = filtered.map(r => ({ name: r, value: r }));
@@ -17192,7 +17319,7 @@ function setupSlashBotEvents(bot, token) {
 
                 const claimerName = interaction.user.username;
                 const now = Date.now();
-                const facId = discordConfig.factionId || dynamicFactionId || "52355";
+                const facId = String(discordConfig.factionId || dynamicFactionId || 'default');
                 const fState = getFactionWarState(facId);
                 const existingClaim = fState.claims[targetId] || claims[targetId];
 
@@ -17245,7 +17372,7 @@ function setupSlashBotEvents(bot, token) {
             // Warboard Target Unclaim
             if (customId.startsWith('unclaim_')) {
                 const targetId = customId.replace('unclaim_', '').trim().replace(/[^0-9]/g, '');
-                const facId = discordConfig.factionId || dynamicFactionId || "52355";
+                const facId = String(discordConfig.factionId || dynamicFactionId || 'default');
                 const fState = getFactionWarState(facId);
                 delete fState.claims[targetId];
                 delete claims[targetId];
@@ -17511,26 +17638,30 @@ function setupSlashBotEvents(bot, token) {
                     : '• Confirmed available in Torn City\n• Optimal battle stats ratio';
 
                 const embed = {
-                    title: `🎯 Best Elimination Target: ${result.name} [${result.targetId}]`,
+                    title: `🕷️ Best Target: ${result.name} [${result.targetId}]`,
                     description: `Autonomous match evaluated against your live stats (**~${result.attackerBSHuman}** BS).\n\n` +
                         `**Player:** [**${result.name} [${result.targetId}]**](https://www.torn.com/profiles.php?XID=${result.targetId}) (Level ${result.level})\n` +
                         `**Opposing Team:** ⚔️ **${result.team || 'Opponent'}**\n` +
-                        `**Status:** 🟢 ${result.status} • 📍 ${result.travel}\n` +
+                        `**Status:** 🟢 ${result.status} · 📍 ${result.travel}\n` +
                         `**Battle Stats:** ~${result.targetBSHuman} (${result.difficulty})\n` +
-                        `**Fair Fight / Risk:** FF: ${result.ff ?? 'N/A'} • Risk: ${result.risk} • Match Score: **${result.score}/100**\n\n` +
+                        `**Fair Fight / Risk:** FF: ${result.ff ?? 'N/A'} · Risk: ${result.risk} · Match Score: **${result.score}/100**\n\n` +
                         `**Why this target?**\n${whyList}`,
-                    color: UI.COLORS.BRAND,
+                    color: UI.COLORS.TEAL,
                     footer: UI.FOOTER,
                     timestamp: new Date().toISOString()
                 };
 
                 const attackUrl = `https://www.torn.com/page.php?sid=attack&user2ID=${result.targetId}`;
-                const actionRow = UI.actionRow(
-                    UI.linkBtn(attackUrl, '⚔️ ATTACK NOW', '⚔️'),
-                    UI.secondaryBtn(`btn_snipe_next_${interaction.user.id}_${result.targetId}_${tier}`, '⏭️ Next Target', '⏭️')
+                const buttonRows = UI.buttonLayout(
+                    [
+                        UI.secondaryBtn(`btn_snipe_next_${interaction.user.id}_${result.targetId}_${tier}`, 'Next Target', '⏭️')
+                    ],
+                    [
+                        UI.linkBtn(attackUrl, 'Attack in Torn', '⚔️')
+                    ]
                 );
 
-                return interaction.editReply({ embeds: [sanitizeEmbed(embed)], components: [actionRow] }).catch(() => {});
+                return interaction.editReply({ embeds: [sanitizeEmbed(embed)], components: buttonRows }).catch(() => {});
             }
 
             // ── Faction Promotion User Cancellation & Recheck ──
@@ -17618,8 +17749,15 @@ function setupSlashBotEvents(bot, token) {
                 const updated = await promotionManager.reviewPromotionRequest(reqId, interaction.user.id, reviewerName, decision);
 
                 const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
-                const facId = discordConfig.factionId || dynamicFactionId || 52355;
+                let facId = discordConfig.factionId || dynamicFactionId || null;
                 const facData = await promotionManager.getFactionData(apiKey, facId);
+                if (facData && facData.id) {
+                    if (!discordConfig.factionId) dynamicFactionId = String(facData.id);
+                    if (!discordConfig.factionName && facData.name) {
+                        discordConfig.factionName = facData.name;
+                        UI.setFactionName(facData.name);
+                    }
+                }
 
                 const { embed, actionRow } = promotionManager.buildReviewedNotificationEmbed(
                     updated, decision, reviewerName, interaction.user.id, facData.positions, facData.name
@@ -17695,11 +17833,11 @@ function setupSlashBotEvents(bot, token) {
                     `🔒 **Zero Public Exposure:** Your key is entered in a private Discord popup, encrypted with **military-grade AES-256-GCM**, and stored securely. F.R.I.D.A.Y only accesses it to calculate your battle strength and check target hittability.\n\n` +
                     `Click **Link Limited Key** below:`
                 );
-                const actionRow = UI.actionRow(
-                    UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑'),
-                    UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')
+                const buttonRows = UI.buttonLayout(
+                    [UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑')],
+                    [UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')]
                 );
-                return await interaction.editReply({ embeds: [sanitizeEmbed(linkEmbed)], components: [actionRow] });
+                return await interaction.editReply({ embeds: [sanitizeEmbed(linkEmbed)], components: buttonRows });
             }
 
             const result = await findElimSnipeTargetForUser({
@@ -17739,27 +17877,32 @@ function setupSlashBotEvents(bot, token) {
                 : '• Confirmed available in Torn City\n• Optimal battle stats ratio';
 
             const embed = {
-                title: `🎯 Best Elimination Target: ${result.name} [${result.targetId}]`,
+                title: `🕷️ Best Elimination Target: ${result.name} [${result.targetId}]`,
                 description: `Autonomous match evaluated against your live stats (**~${result.attackerBSHuman}** BS).\n\n` +
                     `**Player:** [**${result.name} [${result.targetId}]**](https://www.torn.com/profiles.php?XID=${result.targetId}) (Level ${result.level})\n` +
                     `**Opposing Team:** ⚔️ **${result.team || 'Opponent'}**\n` +
-                    `**Status:** 🟢 ${result.status} • 📍 ${result.travel}\n` +
+                    `**Status:** 🟢 ${result.status} · 📍 ${result.travel}\n` +
                     `**Battle Stats:** ~${result.targetBSHuman} (${result.difficulty})\n` +
-                    `**FF / Score:** FF: ${result.ff ?? 'N/A'} • Score: **${result.score}/100**\n` +
+                    `**FF / Score:** FF: ${result.ff ?? 'N/A'} · Score: **${result.score}/100**\n` +
                     `**Retal Risk:** 🛡️ **${Math.round((result.retalRate || 0.28) * 100)}%** chance they hit back — ${retalEngine.formatRiskTag({ adjusted_rate: result.retalRate || 0.28, tier: result.retalTier || 'cold_start' })}\n\n` +
-                    `**Why this target?**\n${whyList}`,
-                color: UI.COLORS.BRAND,
-                footer: { text: 'F.R.I.D.A.Y · Score penalized by retal risk · 🟢 Direct 🟡 Shrunk 🟠 Faction ⚫ Cold' },
+                    `**Why this target?**\n${whyList}\n\n` +
+                    `*🛡️ = Retaliation risk % · 🟢 Direct 🟡 Shrunk 🟠 Faction ⚫ Cold*`,
+                color: UI.COLORS.TEAL,
+                footer: UI.FOOTER,
                 timestamp: new Date().toISOString()
             };
 
             const attackUrl = `https://www.torn.com/page.php?sid=attack&user2ID=${result.targetId}`;
-            const actionRow = UI.actionRow(
-                UI.linkBtn(attackUrl, '⚔️ ATTACK NOW', '⚔️'),
-                UI.secondaryBtn(`btn_snipe_next_${interaction.user.id}_${result.targetId}_${tier}`, '⏭️ Next Target', '⏭️')
+            const buttonRows = UI.buttonLayout(
+                [
+                    UI.secondaryBtn(`btn_snipe_next_${interaction.user.id}_${result.targetId}_${tier}`, 'Next Target', '⏭️')
+                ],
+                [
+                    UI.linkBtn(attackUrl, 'Attack in Torn', '⚔️')
+                ]
             );
 
-            return await interaction.editReply({ embeds: [sanitizeEmbed(embed)], components: [actionRow] });
+            return await interaction.editReply({ embeds: [sanitizeEmbed(embed)], components: buttonRows });
         }
 
         // ── Personal Opt-In DM Notifications (/notifications, /dmalerts) ──
@@ -17775,11 +17918,11 @@ function setupSlashBotEvents(bot, token) {
                     `🔒 **Zero Public Exposure:** Your key is encrypted with **military-grade AES-256-GCM** and only accessed to monitor your personal timers.\n\n` +
                     `Click **Link Limited Key** below:`
                 );
-                const actionRow = UI.actionRow(
-                    UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑'),
-                    UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')
+                const buttonRows = UI.buttonLayout(
+                    [UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑')],
+                    [UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')]
                 );
-                return await interaction.editReply({ embeds: [sanitizeEmbed(linkEmbed)], components: [actionRow] });
+                return await interaction.editReply({ embeds: [sanitizeEmbed(linkEmbed)], components: buttonRows });
             }
 
             const card = userAlerts.buildAlertsControlCard(interaction.user.id, {
@@ -17806,11 +17949,11 @@ function setupSlashBotEvents(bot, token) {
                     `🔒 **Private & Secure:** Your key is encrypted with **military-grade AES-256-GCM** and only accessed when you check your stats.\n\n` +
                     `Click **Link Limited Key** below:`
                 );
-                const actionRow = UI.actionRow(
-                    UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑'),
-                    UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')
+                const buttonRows = UI.buttonLayout(
+                    [UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑')],
+                    [UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')]
                 );
-                return await interaction.editReply({ embeds: [sanitizeEmbed(linkEmbed)], components: [actionRow] });
+                return await interaction.editReply({ embeds: [sanitizeEmbed(linkEmbed)], components: buttonRows });
             }
 
             const stats = await userKeys.fetchUserLiveStats(resolved.key);
@@ -17860,11 +18003,11 @@ function setupSlashBotEvents(bot, token) {
                     `🔒 **Private & Secure:** Your key is encrypted with **military-grade AES-256-GCM** and only accessed when you check your stats.\n\n` +
                     `Click **Link Limited Key** below:`
                 );
-                const actionRow = UI.actionRow(
-                    UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑'),
-                    UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')
+                const buttonRows = UI.buttonLayout(
+                    [UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑')],
+                    [UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')]
                 );
-                return await interaction.editReply({ embeds: [sanitizeEmbed(linkEmbed)], components: [actionRow] });
+                return await interaction.editReply({ embeds: [sanitizeEmbed(linkEmbed)], components: buttonRows });
             }
 
             const stats = await userKeys.fetchUserLiveStats(resolved.key, 'merits');
@@ -18081,11 +18224,11 @@ function setupSlashBotEvents(bot, token) {
                         `🔒 **Private & Secure:** Your key is encrypted with **military-grade AES-256-GCM** and only accessed when you check your stats.\n\n` +
                         `Click **Link Limited Key** below:`
                     );
-                    const actionRow = UI.actionRow(
-                        UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑'),
-                        UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')
+                    const buttonRows = UI.buttonLayout(
+                        [UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑')],
+                        [UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')]
                     );
-                    return await interaction.editReply({ embeds: [sanitizeEmbed(linkEmbed)], components: [actionRow] });
+                    return await interaction.editReply({ embeds: [sanitizeEmbed(linkEmbed)], components: buttonRows });
                 }
 
                 let userAccountData = null;
@@ -18361,8 +18504,15 @@ function setupSlashBotEvents(bot, token) {
             await interaction.deferReply({ ephemeral: true });
             try {
                 const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
-                const facId = discordConfig.factionId || dynamicFactionId || 52355;
+                let facId = discordConfig.factionId || dynamicFactionId || null;
                 const facData = await promotionManager.getFactionData(apiKey, facId);
+                if (facData && facData.id) {
+                    if (!discordConfig.factionId) dynamicFactionId = String(facData.id);
+                    if (!discordConfig.factionName && facData.name) {
+                        discordConfig.factionName = facData.name;
+                        UI.setFactionName(facData.name);
+                    }
+                }
 
                 if (!facData || !facData.positions || Object.keys(facData.positions).length === 0) {
                     return await interaction.editReply({
@@ -18614,7 +18764,7 @@ function setupSlashBotEvents(bot, token) {
 
         // ── Member Verification ──
         if (cmd === 'verify') {
-            await interaction.deferReply({ ephemeral: true });
+            await interaction.deferReply({ ephemeral: false });
             const apiKey = discordConfig.apiKey || process.env.TORN_API_KEY || getNextApiKey() || (apiPoolConfig && apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
 
             const targetUser = interaction.options.getUser('user');
@@ -18693,50 +18843,11 @@ function setupSlashBotEvents(bot, token) {
 
             const verifiedRoleId = discordConfig.verifiedRoleId || interaction.guild.roles.cache.find(r => r.name.toLowerCase() === 'verified')?.id;
 
-            const verifyCard = {
-                title: `🛡️ Identity Verification — Spider-Verse Sentinel`,
-                description: `To protect faction intel and member privacy, all channels remain locked until your Torn City identity is verified.\n\n` +
-                             `**How to Verify (Standard):**\n` +
-                             `1️⃣ Link your Discord account at **[torn.com/discord](https://www.torn.com/discord)** on the Official Torn Discord.\n` +
-                             `2️⃣ Click **🛡️ Verify Me** below — F.R.I.D.A.Y will sync your nickname to \`Name [ID]\` and unlock your roles.\n\n` +
-                             `⚡ **Optional Power-Up: Pre-Link Your API Key**\n` +
-                             `Save time later! Click **🔑 Link API Key (Optional)** below to connect your Torn **Limited Access API Key**. F.R.I.D.A.Y will securely encrypt and save it so you **never** have to enter it again for live battle stats (\`/bs\`), gym tracking, energy/nerve updates, or automated banking!`,
-                color: UI.COLORS.BRAND,
-                thumbnail: { url: "https://www.torn.com/favicon.ico" },
-                footer: UI.FOOTER,
-                timestamp: new Date().toISOString()
-            };
-
-            const buttons = [{
-                type: 1,
-                components: [
-                    {
-                        type: 2,
-                        style: 1,
-                        custom_id: 'btn_verify_now',
-                        label: '🛡️ Verify Me',
-                        emoji: { name: '🛡️' }
-                    },
-                    {
-                        type: 2,
-                        style: 2,
-                        custom_id: 'btn_link_user_api_key',
-                        label: '🔑 Link API Key (Optional)'
-                    },
-                    {
-                        type: 2,
-                        style: 5,
-                        label: '🔗 Link at Torn.com/discord',
-                        url: 'https://www.torn.com/discord'
-                    },
-                    {
-                        type: 2,
-                        style: 5,
-                        label: '🔑 Get API Key',
-                        url: 'https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2'
-                    }
-                ]
-            }];
+            const verifyCard = UI.verificationCard({
+                factionName: discordConfig.factionName || interaction.guild.name || 'Spider-Verse',
+                verifiedRoleId
+            });
+            const buttons = UI.verificationButtons();
 
             await interaction.channel.send({ embeds: [sanitizeEmbed(verifyCard)], components: buttons });
             return interaction.reply({ content: "✅ Verification card posted successfully to this channel!", ephemeral: true });
@@ -18876,18 +18987,19 @@ function setupSlashBotEvents(bot, token) {
             let sentCount = 0;
             let failedCount = 0;
 
+            const facName = discordConfig.factionName || 'Faction';
             const dmEmbed = {
-                title: "🕷️ Action Required: Update Your Spider-Verse Verification",
-                description: `Hey! F.R.I.D.A.Y has upgraded the **Spider-Verse Discord verification system** to direct **Limited API Key verification**.\n\n` +
+                title: `🛡️ Action Required: Update Your ${facName} Verification`,
+                description: `Hey! F.R.I.D.A.Y has upgraded the **${facName} Discord verification system** to direct **Limited API Key verification**.\n\n` +
                              `**Why link your key?**\n` +
                              `• ⚡ **Live Stat Tracking:** View your live Energy, Nerve, and Cooldowns inside Discord.\n` +
                              `• 🏦 **Instant Faction Banking:** Frictionless access to \`/withdraw\` and \`/balance\`.\n` +
                              `• 🔒 **Military-Grade Security:** Keys are encrypted with per-user AES-256-GCM and never shared.\n\n` +
                              `**How to upgrade in 30 seconds:**\n` +
                              `1️⃣ Generate a **Limited Access** key at [Torn Preferences](https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2).\n` +
-                             `2️⃣ In the Spider-Verse Discord server, type \`/verify\` (or click the Verify button in the verification channel).\n` +
+                             `2️⃣ In the ${facName} Discord server, type \`/verify\` (or click the Verify button in the verification channel).\n` +
                              `3️⃣ Paste your 16-character key into the pop-up!\n\n` +
-                             `Thank you for keeping our faction operations running at full power! 🕷️`,
+                             `Thank you for keeping our faction operations running at full power! 🛡️`,
                 color: UI.COLORS.BRAND,
                 footer: UI.FOOTER,
                 timestamp: new Date().toISOString()
@@ -18945,24 +19057,26 @@ function setupSlashBotEvents(bot, token) {
                              `To protect faction funds, the bot must verify your vault balance before withdrawal.\n` +
                              `Please click **🛡️ Verify Me** below (or run \`/verify\`) to link your official Torn identity, or set your server nickname to include your Torn ID in brackets (e.g. \`${interaction.user.username} [123456]\`).\n\n` +
                              `Then run \`/withdraw ${rawAmount}\` again.`,
-                    components: [{
-                        type: 1,
-                        components: [
+                    components: UI.buttonLayout(
+                        [
                             {
                                 type: 2,
                                 style: 1,
                                 custom_id: 'btn_verify_now',
-                                label: '🛡️ Verify Me',
+                                label: 'Verify Me',
                                 emoji: { name: '🛡️' }
-                            },
+                            }
+                        ],
+                        [
                             {
                                 type: 2,
                                 style: 5,
-                                label: '🔗 Link at Torn.com/discord',
-                                url: 'https://www.torn.com/discord'
+                                label: 'Link at Torn.com/discord',
+                                url: 'https://www.torn.com/discord',
+                                emoji: { name: '🕷️' }
                             }
                         ]
-                    }]
+                    )
                 });
             }
 
