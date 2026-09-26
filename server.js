@@ -33,7 +33,6 @@ const sessionManager = require('./session-manager');
 const tornApiManager = require('./torn-api-manager');
 const warboardBroadcaster = require('./warboard-broadcaster');
 const retalEngine = require('./retal_engine');
-const fridayDev = require('./friday-dev-agent');
 const promotionManager = require('./promotion-manager');
 promotionManager.initPromotionManager(null);
 
@@ -88,6 +87,7 @@ let discordConfig = {
     factionId: "",
     notificationsKilled: false,
     verificationChannelId: "",
+    notifyApiKeyLinked: false,
     unverifiedRoleId: "",
     verifiedRoleId: "",
     factionRoleId: "",
@@ -98,7 +98,6 @@ let discordConfig = {
     geminiApiKeys: [],
     geminiApiKey: "",
     openrouterApiKey: "",
-    githubToken: "",
     welcomeChannelId: "",
     postWelcomeRulesOnJoin: true,
     welcomeRulesTitle: "📜 Welcome to the Faction & Server Rules",
@@ -290,6 +289,10 @@ async function loadConfigFromMongo() {
                 if (ids.length > 0) bankRequestCounter = Math.max(bankRequestCounter, ...ids);
                 console.log(`[Mongo] Restored ${Object.keys(bankRequests).length} bank requests from MongoDB Atlas.`);
                 checkExpiredBankRequests();
+            }
+            if (saved.bugs && Array.isArray(saved.bugs)) {
+                bugsMemory = saved.bugs;
+                console.log(`[Mongo] Restored ${bugsMemory.length} bug reports from MongoDB Atlas.`);
             }
             if (saved.lastWarboardPayload && (!lastGoodWarboardPayload || !lastGoodWarboardPayload.friendly || lastGoodWarboardPayload.friendly.length === 0)) {
                 lastGoodWarboardPayload = saved.lastWarboardPayload;
@@ -895,6 +898,7 @@ function saveToMongo() {
                         userApiKeys: userKeys.exportEncryptedForMongo(),
                         battleStatsHistory: (typeof battleStatsHistory !== 'undefined' ? battleStatsHistory : {}),
                         verifiedDiscordUsers: (typeof verifiedDiscordToTorn !== 'undefined' ? verifiedDiscordToTorn : {}),
+                        bugs: (typeof bugsMemory !== 'undefined' ? bugsMemory : []),
                         updatedAt: new Date()
                     }
                 },
@@ -2350,6 +2354,31 @@ function saveOverdoseAlerts(data) {
 
 odAlertsMemory = loadOverdoseAlerts();
 
+// ─── F.R.I.D.A.Y Community Bug Tracker ──────────────────────────────────────
+const BUGS_FILE = path.join(__dirname, 'data', 'bugs.json');
+function loadBugs() {
+    try {
+        if (!fs.existsSync(path.dirname(BUGS_FILE))) {
+            fs.mkdirSync(path.dirname(BUGS_FILE), { recursive: true });
+        }
+        if (fs.existsSync(BUGS_FILE)) {
+            const raw = fs.readFileSync(BUGS_FILE, 'utf8');
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return parsed;
+        }
+    } catch (e) {}
+    return [];
+}
+function saveBugs(data) {
+    try {
+        if (!fs.existsSync(path.dirname(BUGS_FILE))) {
+            fs.mkdirSync(path.dirname(BUGS_FILE), { recursive: true });
+        }
+        fs.writeFileSync(BUGS_FILE, JSON.stringify(data, null, 2), 'utf8');
+    } catch (e) {}
+    saveToMongo();
+}
+let bugsMemory = loadBugs();
 
 // ─── Organized Crime Member Participation History ───────────────────────────
 const OC_MEMBER_HISTORY_FILE = path.join(__dirname, 'data', 'oc_member_history.json');
@@ -3342,6 +3371,9 @@ app.post('/api/save-discord-config', async (req, res) => {
             payload.verificationChannelId = rawVChan.replace(/[^0-9]/g, '');
         }
     }
+    if (payload.notifyApiKeyLinked !== undefined) {
+        payload.notifyApiKeyLinked = (payload.notifyApiKeyLinked === true || payload.notifyApiKeyLinked === 'true');
+    }
     if (payload.unverifiedRoleId !== undefined) payload.unverifiedRoleId = String(payload.unverifiedRoleId || '').replace(/[^0-9]/g, '');
     if (payload.verifiedRoleId !== undefined) payload.verifiedRoleId = String(payload.verifiedRoleId || '').replace(/[^0-9]/g, '');
     if (payload.factionRoleId !== undefined) payload.factionRoleId = String(payload.factionRoleId || '').replace(/[^0-9]/g, '');
@@ -3895,6 +3927,59 @@ app.get('/api/discord/guild-info', async (req, res) => {
 
 app.get('/api/get-market-config', (req, res) => { res.json(marketConfig); });
 app.post('/api/save-market-config', (req, res) => { marketConfig = { ...marketConfig, ...req.body }; saveMarketConfig(); res.json({ success: true }); });
+
+// ─── F.R.I.D.A.Y Community Bug Tracker Endpoints ────────────────────────────
+app.get('/api/bugs', (req, res) => {
+    res.json({ success: true, bugs: bugsMemory });
+});
+
+app.post('/api/bugs', (req, res) => {
+    const description = (req.body.description || '').trim();
+    if (!description) {
+        return res.status(400).json({ success: false, error: 'Description is required' });
+    }
+    const category = (req.body.category || 'Website / Dashboard').trim();
+    const bugId = `BUG-${Date.now().toString(36).slice(-5).toUpperCase()}`;
+    const newBug = {
+        id: bugId,
+        description,
+        category,
+        status: 'Open',
+        reportedBy: {
+            discordId: req.body.discordId || '',
+            discordTag: req.body.discordTag || req.body.reporterName || 'Web Operative',
+            discordName: req.body.reporterName || 'Web Operative',
+            tornId: req.body.tornId || '',
+            tornName: req.body.tornName || ''
+        },
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        resolutionNotes: ''
+    };
+    bugsMemory.unshift(newBug);
+    saveBugs(bugsMemory);
+    res.json({ success: true, bug: newBug });
+});
+
+app.post('/api/bugs/:id/status', (req, res) => {
+    const bugId = String(req.params.id || '').trim();
+    const bug = bugsMemory.find(b => String(b.id).toUpperCase() === bugId.toUpperCase());
+    if (!bug) return res.status(404).json({ success: false, error: 'Bug report not found' });
+    if (req.body.status) bug.status = req.body.status;
+    if (req.body.resolutionNotes !== undefined) bug.resolutionNotes = req.body.resolutionNotes;
+    bug.updatedAt = Date.now();
+    saveBugs(bugsMemory);
+    res.json({ success: true, bug });
+});
+
+app.delete('/api/bugs/:id', (req, res) => {
+    const bugId = String(req.params.id || '').trim();
+    const idx = bugsMemory.findIndex(b => String(b.id).toUpperCase() === bugId.toUpperCase());
+    if (idx === -1) return res.status(404).json({ success: false, error: 'Bug report not found' });
+    bugsMemory.splice(idx, 1);
+    saveBugs(bugsMemory);
+    res.json({ success: true });
+});
 
 app.post('/api/test-discord-alert', async (req, res) => {
     const { type, discordId, globalChannelId, globalBotToken } = req.body;
@@ -7480,7 +7565,11 @@ Your job is to jump into the conversation naturally — like an experienced, cle
    - If information is unverified, state what is known and clarify rather than guessing.
 
 4. SOUND LIKE A REAL HUMAN IN DISCORD:
-   - Quick, snappy, natural. No robotic corporate boilerplate ("As an AI...", "Hope this helps!"). Just deliver the answer with confidence and dry wit.`;
+   - Quick, snappy, natural. No robotic corporate boilerplate ("As an AI...", "Hope this helps!"). Just deliver the answer with confidence and dry wit.
+
+5. ZERO SCRIPT OR CODE MODIFICATION POWERS:
+   - You are a Discord chat companion and intel bot, NOT a developer or sysadmin. You have NO ability to change bot scripts, mute background systems, alter server settings, or modify code.
+   - If a user asks you to change the script, turn off/mute notifications, edit code, or adjust bot settings via chat, tell them with dry humor that you can't edit bot scripts or settings from chat, and suggest they use the website dashboard or check with an administrator. NEVER claim you changed or will change a script or setting!`;
 
 async function generateChatResponse(convoLines = [], hint = "", invokerName = "", replyContext = null, userAccountData = null, detectedIntent = null, userSpeech = "") {
     const key = getGeminiApiKey();
@@ -14339,27 +14428,14 @@ async function executeVerifyWithKey(interactionOrMember, rawKey, explicitGuild =
         return configuredId || null;
     };
 
-    // 1. Verified Role
-    const verifiedRoleId = findGuildRole(discordConfig.verifiedRoleId, [
-        n => n === 'verified',
-        n => n === 'verified member',
-        n => n.includes('verified'),
-        n => n === 'member',
-        n => n === 'members'
-    ]);
-    if (verifiedRoleId && guildMember) {
-        const res = await applyGuildMemberRole(guild, guildMember, botMember, verifiedRoleId, 'add', 'Torn Limited API Key Verified');
-        if (res.success && (res.action === 'added' || res.action === 'already_had')) {
-            rolesAdded.push(`<@&${verifiedRoleId}>`);
-        } else if (res.hierarchyError) {
-            roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${verifiedRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
-        } else if (res.error) {
-            roleWarnings.push(`⚠️ **Role Error:** Could not assign <@&${verifiedRoleId}>: ${res.error}`);
-        }
-    }
+    // 1. Check if user is already verified via Torn Discord
+    const isAlreadyVerified = Boolean(
+        (verifiedDiscordToTorn[discordUserId] && !verifiedDiscordToTorn[discordUserId].pendingDiscordVerify) ||
+        (verifiedRoleId && guildMember?.roles?.cache?.has(verifiedRoleId))
+    );
 
-    // 2. Faction Member Role (Spider-Verse 52355)
-    if (isOurFaction && guildMember) {
+    // 2. Faction Member Roles (Only sync if already verified member)
+    if (isOurFaction && guildMember && isAlreadyVerified) {
         const factionRoleId = findGuildRole(discordConfig.factionRoleId, [
             n => n.includes('spider-verse'),
             n => n.includes('spider verse'),
@@ -14400,39 +14476,34 @@ async function executeVerifyWithKey(interactionOrMember, rawKey, explicitGuild =
         }
     }
 
-    // 5. Remove Unverified Quarantine Role
-    if (guildMember) {
-        const unverifiedRoleId = findGuildRole(discordConfig.unverifiedRoleId, [
-            n => n === 'unverified',
-            n => n.includes('unverified'),
-            n => n === 'quarantine'
-        ]);
-        if (unverifiedRoleId) {
-            await applyGuildMemberRole(guild, guildMember, botMember, unverifiedRoleId, 'remove', 'Verified with API Key');
-        }
-    }
-
     // Cache to verifiedDiscordToTorn & Persist
     if (playerId) {
-        verifiedDiscordToTorn[discordUserId] = {
-            tornId: String(playerId),
-            tornName: playerName,
-            hasApiKey: true,
-            timestamp: Date.now()
-        };
+        if (!verifiedDiscordToTorn[discordUserId]) {
+            verifiedDiscordToTorn[discordUserId] = {
+                tornId: String(playerId),
+                tornName: playerName,
+                hasApiKey: true,
+                pendingDiscordVerify: !isAlreadyVerified,
+                timestamp: Date.now()
+            };
+        } else {
+            verifiedDiscordToTorn[discordUserId].hasApiKey = true;
+            verifiedDiscordToTorn[discordUserId].tornId = String(playerId);
+            verifiedDiscordToTorn[discordUserId].tornName = playerName;
+        }
         if (typeof saveVerifiedDiscordUsers === 'function') {
             saveVerifiedDiscordUsers();
         }
     }
 
-    // Broadcast Welcome Announcement to Verification Channel
+    // Broadcast Announcement to Verification Channel ONLY if explicitly enabled by admin
     const vChanId = discordConfig.verificationChannelId;
-    if (vChanId && guild) {
+    if (vChanId && guild && discordConfig.notifyApiKeyLinked === true) {
         try {
             const chan = guild.channels.cache.get(vChanId) || await guild.channels.fetch(vChanId).catch(() => null);
             if (chan && chan.isTextBased()) {
                 await chan.send({
-                    content: `🎉 <@${discordUserId}> has successfully verified with a Limited API Key as **[${playerName} [${playerId}]](https://www.torn.com/profiles.php?XID=${playerId})**! Full server access & live stat tracking granted.`
+                    content: `🔑 <@${discordUserId}> has successfully linked a Limited API Key as **[${playerName} [${playerId}]](https://www.torn.com/profiles.php?XID=${playerId})**! Live stat tracking & telemetry enabled.`
                 });
             }
         } catch(e) {}
@@ -14460,6 +14531,14 @@ async function executeVerifyWithKey(interactionOrMember, rawKey, explicitGuild =
         fields.push({ name: "⚠️ Action Required: Role Hierarchy", value: roleWarnings.join('\n\n'), inline: false });
     }
 
+    if (!isAlreadyVerified) {
+        fields.push({
+            name: "🛡️ Server Verification Required",
+            value: "Your API key is securely saved! To complete server verification and unlock channels, click **🛡️ Verify Me** or verify at **[torn.com/discord](https://www.torn.com/discord)**.",
+            inline: false
+        });
+    }
+
     fields.push({
         name: "🔒 Military-Grade Key Security",
         value: `Your Limited API Key is encrypted with **AES-256-GCM** using per-user authenticated tags. Your key is permanently stored and will **never** be requested again for gym stats, battle stats, or banking.`,
@@ -14476,8 +14555,8 @@ async function executeVerifyWithKey(interactionOrMember, rawKey, explicitGuild =
         isBanker,
         rolesAdded,
         roleWarnings,
-        title: `🛡️ API Key Linked: ${playerName} [${playerId}]`,
-        description: `✅ <@${discordUserId}>, your Torn Limited Access API Key has been securely linked and encrypted!\nF.R.I.D.A.Y has permanently saved your key. You will **never** have to enter your key again for live gym stats, battle stats (\`/bs\`), energy tracking, or faction banking.`,
+        title: `🔑 API Key Linked: ${playerName} [${playerId}]`,
+        description: `✅ <@${discordUserId}>, your Torn Limited Access API Key has been securely linked and encrypted!\nF.R.I.D.A.Y has permanently saved your key for live gym stats, battle stats (\`/bs\`), energy tracking, and faction banking.`,
         color: isOurFaction ? UI.COLORS.SUCCESS : UI.COLORS.INFO,
         fields,
         footer: UI.FOOTER,
@@ -14487,14 +14566,6 @@ async function executeVerifyWithKey(interactionOrMember, rawKey, explicitGuild =
 
 async function executeVerifyMember(memberOrUser, guild, arg3, arg4) {
     const discordUserId = memberOrUser.id;
-
-    // Check if user already has a linked Limited API key
-    if (userKeys && typeof userKeys.hasLinkedKey === 'function' && userKeys.hasLinkedKey(discordUserId)) {
-        const storedKey = (userKeys.getDecryptedKey && userKeys.getDecryptedKey(discordUserId)) || userKeys.resolveUserApiKey(discordUserId)?.key || userKeys.resolveUserApiKey(discordUserId);
-        if (storedKey) {
-            return await executeVerifyWithKey(memberOrUser, storedKey, guild);
-        }
-    }
 
     // Guaranteed resolution of a real GuildMember instance (Discord.js v14)
     let guildMember = null;
@@ -14675,6 +14746,7 @@ async function executeVerifyMember(memberOrUser, guild, arg3, arg4) {
     };
 
     // 1. Verified Role
+    let alreadyHadVerifiedRole = false;
     const verifiedRoleId = findGuildRole(discordConfig.verifiedRoleId, [
         n => n === 'verified',
         n => n === 'verified member',
@@ -14683,6 +14755,7 @@ async function executeVerifyMember(memberOrUser, guild, arg3, arg4) {
         n => n === 'members'
     ]);
     if (verifiedRoleId) {
+        alreadyHadVerifiedRole = Boolean(guildMember && guildMember.roles?.cache?.has(verifiedRoleId));
         const res = await applyGuildMemberRole(guild, guildMember, botMember, verifiedRoleId, 'add', 'Tornium Verified');
         if (res.success && (res.action === 'added' || res.action === 'already_had')) {
             rolesAdded.push(`<@&${verifiedRoleId}>`);
@@ -14782,8 +14855,12 @@ async function executeVerifyMember(memberOrUser, guild, arg3, arg4) {
         isBanker,
         rolesAdded,
         roleWarnings,
+        isNewVerification: !alreadyHadVerifiedRole,
+        alreadyVerified: alreadyHadVerifiedRole,
         title: `🛡️ Verified: ${playerName} [${playerId}]`,
-        description: `✅ <@${discordUserId}> has been successfully verified! Full server access granted.`,
+        description: alreadyHadVerifiedRole
+            ? `✅ <@${discordUserId}>, your verification is already up to date! Roles and nickname refreshed.`
+            : `✅ <@${discordUserId}> has been successfully verified! Full server access granted.`,
         color: isOurFaction ? UI.COLORS.SUCCESS : UI.COLORS.INFO,
         fields,
         footer: UI.FOOTER,
@@ -15926,8 +16003,7 @@ async function registerSlashCommands(token, guildId = null, options = {}) {
 
     const commands = [
         // 0. Member Verification
-        new SlashCommandBuilder().setName('verify').setDescription('Verify your Torn identity via Official Torn Discord cross-reference or Limited API Key')
-            .addStringOption(opt => opt.setName('key').setDescription('Optional 16-character Torn Limited API key to link for live stats & banking').setRequired(false)).toJSON(),
+        new SlashCommandBuilder().setName('verify').setDescription('1-click official Torn verification via Official Torn Discord cross-reference').toJSON(),
 
         new SlashCommandBuilder().setName('verifyall').setDescription('Admin: Re-verify all members in this Discord server and sync nicknames & roles').toJSON(),
 
@@ -16106,8 +16182,19 @@ async function registerSlashCommands(token, guildId = null, options = {}) {
         new SlashCommandBuilder().setName('unlinkkey').setDescription('Unlink and permanently delete your stored Torn API key from F.R.I.D.A.Y').toJSON(),
         new SlashCommandBuilder().setName('openrouter').setDescription('Admin: Set OpenRouter backup API key for unlimited AI failover')
             .addStringOption(opt => opt.setName('key').setDescription('OpenRouter API key (sk-or-...)').setRequired(true)).toJSON(),
-        new SlashCommandBuilder().setName('github').setDescription('Admin: Configure GitHub Personal Access Token for Discord DevOps deployments')
-            .addStringOption(opt => opt.setName('token').setDescription('GitHub PAT with repo (Contents: Read & write) permission').setRequired(false)).toJSON(),
+        new SlashCommandBuilder().setName('bug').setDescription('Report a bug or issue with F.R.I.D.A.Y or the website to the developer')
+            .addStringOption(opt => opt.setName('description').setDescription('Detailed description of the bug or issue encountered').setRequired(true))
+            .addStringOption(opt => opt.setName('category').setDescription('Category of the bug').setRequired(false)
+                .addChoices(
+                    { name: '🐛 General / Other', value: 'general' },
+                    { name: '🌐 Web Dashboard', value: 'website' },
+                    { name: '🤖 Discord Bot / Commands', value: 'discord' },
+                    { name: '🔔 Alerts & Notifications', value: 'alerts' },
+                    { name: '🕵️ Organized Crimes', value: 'oc' },
+                    { name: '⚔️ War & Chains', value: 'war' },
+                    { name: '🏦 Vault Banking', value: 'banking' }
+                )
+            ).toJSON(),
 
         // 19. Autonomous Elimination Target Hunter
         new SlashCommandBuilder().setName('snipe').setDescription('Autonomous Elimination Target Hunter: find beatable enemies not in hosp/traveling')
@@ -16235,16 +16322,6 @@ function setupSlashBotEvents(bot, token) {
     bot.once(Events.ClientReady, async (c) => {
         console.log(`[Slash Bot] Ready as ${c.user.tag}`);
         slashBotStarted = true;
-
-        // Auto-detect and sync GitHub deployment token from environment
-        try {
-            const detectedToken = fridayDev.resolveGitHubToken(discordConfig);
-            if (detectedToken && (!discordConfig.githubToken || discordConfig.githubToken !== detectedToken)) {
-                discordConfig.githubToken = detectedToken;
-                saveDiscordConfig();
-                console.log('[DevOps] Auto-synced GitHub deployment token from environment.');
-            }
-        } catch(e) {}
 
         // Auto-refresh any active bank requests in Discord so existing cards display stacked buttons immediately
         try {
@@ -16495,129 +16572,6 @@ function setupSlashBotEvents(bot, token) {
                         await channel.send({ content: clearReply }).catch(() => {});
                     }
                 });
-                return;
-            }
-
-            // ── In-Chat F.R.I.D.A.Y. DevOps & Code Modification Sentinel ──
-            const isDevRequest = fridayDev.detectDevRequest(userSpeech);
-            if (isDevRequest) {
-                const isDevAdmin = fridayDev.isAuthorizedDevAdmin(
-                    latestMsg?.member,
-                    latestMsg?.author,
-                    discordConfig,
-                    userKeys
-                );
-
-                if (!isDevAdmin) {
-                    const deniedEmbed = UI.permission("Administrator");
-                    deniedEmbed.description = `Hey **${primaryAuthor}**, automated bot and codebase modifications are restricted to verified faction and server administrators.`;
-                    await latestMsg.reply({
-                        embeds: [sanitizeEmbed(deniedEmbed)],
-                        allowedMentions: { repliedUser: false }
-                    }).catch(async () => {
-                        if (channel?.send) await channel.send({ embeds: [sanitizeEmbed(deniedEmbed)] }).catch(() => {});
-                    });
-                    return;
-                }
-
-                // Authorized Admin confirmed! Send status indicator
-                const ackMsg = await latestMsg.reply({
-                    embeds: [sanitizeEmbed(UI.loading("Analyzing request with F.R.I.D.A.Y. DevOps Sentinel"))],
-                    allowedMentions: { repliedUser: false }
-                }).catch(async () => {
-                    if (channel?.send) return await channel.send({ embeds: [sanitizeEmbed(UI.loading("Analyzing request with F.R.I.D.A.Y. DevOps Sentinel"))] }).catch(() => null);
-                    return null;
-                });
-
-                // Unified AI caller function — used for both vetting (short) and patch generation (long)
-                const devAiCaller = async (sys, usr) => {
-                    try {
-                        const payload = {
-                            contents: [
-                                { role: 'user', parts: [{ text: `${sys ? sys + '\n\n' : ''}${usr}` }] }
-                            ],
-                            generationConfig: {
-                                maxOutputTokens: 4096,
-                                temperature: 0.2
-                            }
-                        };
-                        const gRes = await callGeminiWithFallback(payload, null, { timeout: 45000 });
-                        if (gRes && gRes.success && gRes.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-                            return gRes.data.candidates[0].content.parts[0].text;
-                        }
-                    } catch(e) {
-                        console.warn('[DevAiCaller] Gemini fallback error:', e.message);
-                    }
-
-                    try {
-                        const orRes = await callOpenRouterFallback(sys, usr, [], { timeout: 30000 });
-                        if (orRes && orRes.success && orRes.text) {
-                            return orRes.text;
-                        }
-                    } catch(e) {
-                        console.warn('[DevAiCaller] OpenRouter fallback error:', e.message);
-                    }
-
-                    return "";
-                };
-
-                // 1. AI Intent & Vetting Check (Anti-Troll & Scope Limiter)
-                const vetting = await fridayDev.evaluateRequestWithAI(userSpeech, primaryAuthor, primaryAuthorId, devAiCaller);
-
-                if (!vetting.allowed) {
-                    const rejectPayload = fridayDev.buildRejectionCard(vetting.classification, vetting.reason, userSpeech, primaryAuthor);
-                    if (ackMsg?.edit) {
-                        await ackMsg.edit(rejectPayload).catch(() => {});
-                    } else if (channel?.send) {
-                        await channel.send(rejectPayload).catch(() => {});
-                    }
-                    return;
-                }
-
-                // 2. Generate Surgical Code Patch & Run Zero-Crash Pre-Flight Check
-                const targetFile = vetting.targetFile || 'server.js';
-                const patchResult = await fridayDev.generateAndVerifyPatch(targetFile, userSpeech, vetting.plan, devAiCaller);
-
-                if (!patchResult.success) {
-                    const errEmbed = UI.error(
-                        "Pre-Flight Safety Check Failed",
-                        `⚠️ The proposed modification could not be safely validated:\n\n**Details:** ${patchResult.error}\n\n_The production server on Railway was protected and no code was touched._`
-                    );
-                    const errPayload = { embeds: [sanitizeEmbed(errEmbed)], components: [] };
-                    if (ackPayload = ackMsg?.edit) {
-                        await ackMsg.edit(errPayload).catch(() => {});
-                    } else if (channel?.send) {
-                        await channel.send(errPayload).catch(() => {});
-                    }
-                    return;
-                }
-
-                // 3. Stage Pending Deployment & Build Interactive Approval Gate
-                const actionId = fridayDev.stagePendingDeployment(
-                    primaryAuthorId,
-                    primaryAuthor,
-                    userSpeech,
-                    vetting.plan,
-                    targetFile,
-                    patchResult.updatedContent,
-                    patchResult.diffSummary
-                );
-
-                const reviewCard = fridayDev.buildReviewCard(
-                    actionId,
-                    primaryAuthor,
-                    primaryAuthorId,
-                    userSpeech,
-                    vetting.plan,
-                    targetFile,
-                    patchResult.diffSummary
-                );
-
-                if (ackMsg?.edit) {
-                    await ackMsg.edit(reviewCard).catch(() => {});
-                } else if (channel?.send) {
-                    await channel.send(reviewCard).catch(() => {});
-                }
                 return;
             }
 
@@ -16897,7 +16851,7 @@ function setupSlashBotEvents(bot, token) {
                 const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
                 const result = await executeVerifyMember(interaction.member || interaction.user, interaction.guild, playerInput, apiKey);
 
-                if (result && result.success && interaction.guild) {
+                if (result && result.success && result.isNewVerification && interaction.guild) {
                     const vChanId = discordConfig.verificationChannelId;
                     if (vChanId) {
                         try {
@@ -16926,43 +16880,6 @@ function setupSlashBotEvents(bot, token) {
                     replyPayload.components = verifyResult.components;
                 }
                 return await interaction.editReply(replyPayload);
-            }
-
-            // ── Set GitHub Deployment Token Modal (DevOps Sentinel) ──
-            if (interaction.customId === 'modal_dev_set_github_token') {
-                await interaction.deferReply({ ephemeral: true });
-                const tokenInput = (interaction.fields.getTextInputValue('github_token_input') || '').trim();
-
-                try {
-                    const check = await fridayDev.verifyGitHubTokenWithRepo(tokenInput);
-
-                    if (!check.valid) {
-                        return await interaction.editReply({
-                            embeds: [sanitizeEmbed(UI.error(
-                                'GitHub Token Verification Failed',
-                                check.error
-                            ))]
-                        });
-                    }
-
-                    discordConfig.githubToken = tokenInput;
-                    saveDiscordConfig();
-
-                    return await interaction.editReply({
-                        embeds: [sanitizeEmbed(UI.success(
-                            '🔑 GitHub Token Configured & Verified!',
-                            `Successfully authenticated as GitHub user **@${check.user}**!\n\n` +
-                            `• **Repository:** \`hulbertowen-droid/torn-company-app\`\n` +
-                            `• **Write/Push Access:** 🟢 VERIFIED\n` +
-                            `• **Token Scopes:** \`${check.scopes}\`\n\n` +
-                            `F.R.I.D.A.Y. can now commit approved code modifications directly from Discord and trigger automatic Railway builds.`
-                        ))]
-                    });
-                } catch(e) {
-                    return await interaction.editReply({
-                        embeds: [sanitizeEmbed(UI.error('Connection Error', `Failed to contact GitHub API: ${e.message}`))]
-                    });
-                }
             }
 
             // ── Faction Promotion Pitch Submission ──
@@ -17264,142 +17181,6 @@ function setupSlashBotEvents(bot, token) {
         if (interaction.isButton()) {
             const customId = interaction.customId || '';
 
-            // ── DevOps Confirm & Deploy Button ──
-            if (customId.startsWith('btn_dev_deploy_')) {
-                const actionId = customId.replace('btn_dev_deploy_', '').trim();
-                const isDevAdmin = fridayDev.isAuthorizedDevAdmin(
-                    interaction.member,
-                    interaction.user,
-                    discordConfig,
-                    userKeys
-                );
-
-                if (!isDevAdmin) {
-                    return interaction.reply({
-                        content: "⚠️ Only a server administrator can authorize bot deployments.",
-                        ephemeral: true
-                    }).catch(() => {});
-                }
-
-                await interaction.deferUpdate().catch(() => {});
-
-                const deployResult = await fridayDev.deployToGitHub(actionId, interaction.user, discordConfig);
-
-                if (!deployResult.success) {
-                    if (deployResult.code === 'TOKEN_REQUIRED') {
-                        const tokenRow = UI.actionRow(
-                            UI.primaryBtn(`btn_dev_deploy_${actionId}`, 'Retry Deploy', '🚀'),
-                            UI.secondaryBtn('btn_dev_set_token', 'Set GitHub Token', '🔑'),
-                            UI.dangerBtn(`btn_dev_cancel_${actionId}`, 'Discard Action', '❌')
-                        );
-                        const tokenPayload = {
-                            embeds: [sanitizeEmbed(UI.warning(
-                                '🔐 GitHub Token Required',
-                                `**F.R.I.D.A.Y. is ready to deploy your code, but requires a GitHub Personal Access Token.**\n\n` +
-                                `• **Already added in Railway?** Click **Retry Deploy** below. (If Railway just restarted, the token is now loaded).\n` +
-                                `• **Need to enter it directly?** Click **Set GitHub Token** to paste your token into Discord.\n\n` +
-                                `_Token requires \`repo\` (Contents: Read & write) permissions on \`hulbertowen-droid/torn-company-app\`._`
-                            ))],
-                            components: [tokenRow]
-                        };
-                        return interaction.editReply(tokenPayload).catch(async () => {
-                            if (interaction.message?.edit) await interaction.message.edit(tokenPayload).catch(() => {});
-                        });
-                    }
-
-                    const errPayload = {
-                        embeds: [sanitizeEmbed(UI.error(
-                            'Deployment Failed',
-                            `⚠️ **Could not deploy code:** ${deployResult.error}`
-                        ))],
-                        components: []
-                    };
-                    return interaction.editReply(errPayload).catch(async () => {
-                        if (interaction.message?.edit) await interaction.message.edit(errPayload).catch(() => {});
-                    });
-                }
-
-                const successEmbed = UI.success(
-                    '🚀 Modification Committed & Deploying Live!',
-                    `**Administrator <@${interaction.user.id}> has authorized deployment to Railway.**\n\n` +
-                    `• **Commit:** [\`${deployResult.commitSha}\`](${deployResult.commitUrl})\n` +
-                    `• **Message:** \`${deployResult.message}\`\n` +
-                    `• **Status:** 🟢 Pushed to \`main\` branch. Railway auto-build triggered.\n` +
-                    `• **ETA:** Live on production in ~60–90 seconds.\n\n` +
-                    `_F.R.I.D.A.Y. will reload automatically when the new build completes._`
-                );
-
-                const successPayload = {
-                    embeds: [sanitizeEmbed(successEmbed)],
-                    components: []
-                };
-
-                return interaction.editReply(successPayload).catch(async () => {
-                    if (interaction.message?.edit) await interaction.message.edit(successPayload).catch(() => {});
-                });
-            }
-
-            // ── DevOps Cancel Button ──
-            if (customId.startsWith('btn_dev_cancel_')) {
-                const actionId = customId.replace('btn_dev_cancel_', '').trim();
-                const isDevAdmin = fridayDev.isAuthorizedDevAdmin(
-                    interaction.member,
-                    interaction.user,
-                    discordConfig,
-                    userKeys
-                );
-
-                if (!isDevAdmin) {
-                    return interaction.reply({
-                        content: "⚠️ Only a server administrator can cancel deployments.",
-                        ephemeral: true
-                    }).catch(() => {});
-                }
-
-                fridayDev.cancelDeployment(actionId);
-
-                return interaction.update({
-                    embeds: [sanitizeEmbed(UI.neutral(
-                        '❌ Modification Cancelled',
-                        `Deployment was cancelled and discarded by <@${interaction.user.id}>. No changes were committed to GitHub or Railway.`
-                    ))],
-                    components: []
-                }).catch(() => {});
-            }
-
-            // ── Set GitHub Token Modal Opener ──
-            if (customId === 'btn_dev_set_token') {
-                const isDevAdmin = fridayDev.isAuthorizedDevAdmin(
-                    interaction.member,
-                    interaction.user,
-                    discordConfig,
-                    userKeys
-                );
-
-                if (!isDevAdmin) {
-                    return interaction.reply({
-                        content: "⚠️ Only a server administrator can configure the GitHub deployment token.",
-                        ephemeral: true
-                    }).catch(() => {});
-                }
-
-                const modal = new ModalBuilder()
-                    .setCustomId('modal_dev_set_github_token')
-                    .setTitle('Configure GitHub Deployment Token');
-
-                const tokenInput = new TextInputBuilder()
-                    .setCustomId('github_token_input')
-                    .setLabel('GitHub Personal Access Token (PAT)')
-                    .setStyle(TextInputStyle.Short)
-                    .setPlaceholder('ghp_... or github_pat_...')
-                    .setMinLength(20)
-                    .setMaxLength(255)
-                    .setRequired(true);
-
-                modal.addComponents(new ActionRowBuilder().addComponents(tokenInput));
-                return await interaction.showModal(modal);
-            }
-
             // ── Link User API Key Button (Opens private Discord Modal) ──
             if (customId === 'btn_link_user_api_key') {
                 const modal = new ModalBuilder()
@@ -17432,7 +17213,7 @@ function setupSlashBotEvents(bot, token) {
                 const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
                 const result = await executeVerifyMember(interaction.member || interaction.user, interaction.guild, apiKey);
 
-                if (result && result.success && interaction.guild) {
+                if (result && result.success && result.isNewVerification && interaction.guild) {
                     const vChanId = discordConfig.verificationChannelId;
                     if (vChanId) {
                         try {
@@ -18230,87 +18011,85 @@ function setupSlashBotEvents(bot, token) {
             }
         }
 
-        // ── Configure GitHub Deployment Token Slash Command (Admin/Owner) ──
-        if (cmd === 'github') {
+        // ── Community Bug Reporter Slash Command (/bug) ──
+        if (cmd === 'bug') {
             await interaction.deferReply({ ephemeral: true });
-            const isDevAdmin = fridayDev.isAuthorizedDevAdmin(
-                interaction.member,
-                interaction.user,
-                discordConfig,
-                userKeys
+            const description = (interaction.options.getString('description') || '').trim();
+            const categoryChoice = interaction.options.getString('category') || 'general';
+            const categoryMap = {
+                'general': 'General / Other',
+                'website': 'Web Dashboard',
+                'discord': 'Discord Bot / Commands',
+                'alerts': 'Alerts & Notifications',
+                'oc': 'Organized Crimes',
+                'war': 'War & Chains',
+                'banking': 'Vault Banking'
+            };
+            const category = categoryMap[categoryChoice] || 'General / Other';
+
+            if (!description) {
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.error('Missing Description', 'Please provide a detailed description of the bug or issue encountered.'))]
+                });
+            }
+
+            // Look up reporter's linked Torn ID if available
+            let tornId = '';
+            let tornName = '';
+            try {
+                if (typeof userKeys !== 'undefined' && userKeys.hasLinkedKey && userKeys.hasLinkedKey(interaction.user.id)) {
+                    const linked = userKeys.getRecord(interaction.user.id);
+                    if (linked) {
+                        tornId = linked.playerId || '';
+                        tornName = linked.name || '';
+                    }
+                } else if (typeof verifiedDiscordToTorn !== 'undefined' && verifiedDiscordToTorn[interaction.user.id]) {
+                    tornId = verifiedDiscordToTorn[interaction.user.id].tornId || '';
+                    tornName = verifiedDiscordToTorn[interaction.user.id].tornName || '';
+                }
+            } catch(e) {}
+
+            const bugId = `BUG-${Date.now().toString(36).slice(-5).toUpperCase()}`;
+            const reporterName = interaction.member?.displayName || interaction.user?.username || 'Discord User';
+            const newBug = {
+                id: bugId,
+                description,
+                category,
+                status: 'Open',
+                reportedBy: {
+                    discordId: interaction.user.id,
+                    discordTag: interaction.user.tag || interaction.user.username,
+                    discordName: reporterName,
+                    tornId: tornId ? String(tornId) : '',
+                    tornName: tornName || ''
+                },
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                resolutionNotes: ''
+            };
+
+            if (typeof bugsMemory !== 'undefined' && Array.isArray(bugsMemory)) {
+                bugsMemory.unshift(newBug);
+                saveBugs(bugsMemory);
+            }
+
+            const reporterDisplay = tornName && tornId 
+                ? `${reporterName} (${UI.player(tornName, tornId)})`
+                : `<@${interaction.user.id}>`;
+
+            const bugEmbed = UI.success(
+                `🐛 Bug Report Logged [${bugId}]`,
+                `Thank you for reporting this issue! It has been logged to the F.R.I.D.A.Y Bug Tracker and is visible live on the web dashboard.\n\n` +
+                `• **Report ID:** \`${bugId}\`\n` +
+                `• **Category:** \`${category}\`\n` +
+                `• **Status:** \`Open\`\n` +
+                `• **Reporter:** ${reporterDisplay}\n\n` +
+                `**Issue Description:**\n${description}`
             );
 
-            if (!isDevAdmin) {
-                return await interaction.editReply({
-                    embeds: [sanitizeEmbed(UI.error('Admin Only', 'Only faction and server administrators can configure the GitHub deployment token.'))]
-                });
-            }
-
-            const inputToken = (interaction.options.getString('token') || '').trim();
-
-            // If no token provided, display status and setup instructions
-            if (!inputToken) {
-                const currentToken = fridayDev.resolveGitHubToken(discordConfig);
-                const isConfigured = Boolean(currentToken && currentToken.length > 15);
-
-                const statusEmbed = {
-                    color: isConfigured ? (UI.COLORS?.SUCCESS || 0x2ecc71) : (UI.COLORS?.WARNING || 0xf39c12),
-                    title: "🐙 GitHub DevOps Deployment Status",
-                    description: isConfigured 
-                        ? "✅ **GitHub Personal Access Token is active and configured!**\n\nF.R.I.D.A.Y. can commit approved modifications directly to `hulbertowen-droid/torn-company-app` and trigger Railway builds automatically."
-                        : "⚠️ **GitHub Personal Access Token is NOT configured.**\n\nTo enable autonomous code modifications from Discord, F.R.I.D.A.Y. needs a GitHub token to commit changes in the cloud without needing your PC.",
-                    fields: [
-                        { name: "Repository", value: "`hulbertowen-droid/torn-company-app`", inline: true },
-                        { name: "Branch", value: "`main`", inline: true },
-                        { name: "Status", value: isConfigured ? "🟢 Ready for Discord Deploys" : "🟡 Token Required", inline: true },
-                        { name: "How to Configure", value: "Run `/github token:<your_token>` or click the **Set GitHub Token** button below.", inline: false }
-                    ],
-                    footer: { text: "F.R.I.D.A.Y. DevOps Sentinel • Zero-Crash Policy" },
-                    timestamp: new Date().toISOString()
-                };
-
-                const actionRow = UI.actionRow(
-                    UI.primaryBtn('btn_dev_set_token', 'Set GitHub Token', '🔑'),
-                    UI.linkBtn('https://github.com/settings/tokens', 'Create Token on GitHub', '🌐')
-                );
-
-                return await interaction.editReply({
-                    embeds: [sanitizeEmbed(statusEmbed)],
-                    components: [actionRow]
-                });
-            }
-
-            // Verify provided token against GitHub API and repository write permissions
-            try {
-                const check = await fridayDev.verifyGitHubTokenWithRepo(inputToken);
-
-                if (!check.valid) {
-                    return await interaction.editReply({
-                        embeds: [sanitizeEmbed(UI.error(
-                            'GitHub Token Verification Failed',
-                            check.error
-                        ))]
-                    });
-                }
-
-                discordConfig.githubToken = inputToken;
-                saveDiscordConfig();
-
-                return await interaction.editReply({
-                    embeds: [sanitizeEmbed(UI.success(
-                        '🔑 GitHub Token Configured & Verified!',
-                        `Successfully authenticated as GitHub user **@${check.user}**!\n\n` +
-                        `• **Repository:** \`hulbertowen-droid/torn-company-app\`\n` +
-                        `• **Write/Push Access:** 🟢 VERIFIED\n` +
-                        `• **Token Scopes:** \`${check.scopes}\`\n\n` +
-                        `F.R.I.D.A.Y. is now fully enabled for autonomous Discord code deployments!`
-                    ))]
-                });
-            } catch (err) {
-                return await interaction.editReply({
-                    embeds: [sanitizeEmbed(UI.error('Connection Failed', `Failed to verify with GitHub: ${err.message}`))]
-                });
-            }
+            return await interaction.editReply({
+                embeds: [sanitizeEmbed(bugEmbed)]
+            });
         }
 
         // ── Tactical Torn AI Oracle (F.R.I.D.A.Y - Private Ephemeral) ──
@@ -18868,23 +18647,11 @@ function setupSlashBotEvents(bot, token) {
 
         // ── Member Verification ──
         if (cmd === 'verify') {
-            const keyArg = interaction.options.getString('key');
-            if (keyArg) {
-                await interaction.deferReply({ ephemeral: true });
-                const resultEmbed = await executeVerifyWithKey(interaction, keyArg);
-                const replyPayload = { embeds: [sanitizeEmbed(resultEmbed)] };
-                if (resultEmbed.components && resultEmbed.components.length > 0) {
-                    replyPayload.components = resultEmbed.components;
-                }
-                return interaction.editReply(replyPayload);
-            }
-
-            // Standard Verification via Official Torn Discord cross-reference (or stored key)
             await interaction.deferReply({ ephemeral: true });
             const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
             const result = await executeVerifyMember(interaction.member || interaction.user, interaction.guild, apiKey);
 
-            if (result && result.success && interaction.guild) {
+            if (result && result.success && result.isNewVerification && interaction.guild) {
                 const vChanId = discordConfig.verificationChannelId;
                 if (vChanId) {
                     try {

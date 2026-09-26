@@ -1380,6 +1380,7 @@
             <div class="nav-section-title">Intelligence & Alerts</div>
             <a href="/ai-sandbox.html" class="nav-link"><span class="nav-icon">🤖</span> <span class="nav-text">F.R.I.D.A.Y. Intel</span></a>
             <a href="/discord.html" class="nav-link active"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
+            <a href="/bugs.html" class="nav-link"><span class="nav-icon">🐛</span> <span class="nav-text">Bug Tracker</span></a>
             <a onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" class="nav-link" style="cursor:pointer; margin-top:4px;"><span class="nav-icon">⚙️</span> <span class="nav-text">Settings</span></a>
         </div>
         <div class="sidebar-footer" id="sidebar-user-footer">
@@ -2396,6 +2397,15 @@
                         <input class="field-input manual-id-input" type="text" id="faction-roleid" placeholder="Role ID for Faction Members" autocomplete="off" oninput="trackDirty();" style="display:none; margin-top:6px;">
                         <span class="field-hint">Automatically assigned if the verified Torn account belongs to your official faction ID.</span>
                     </div>
+                </div>
+
+                <!-- Optional API Key Link Channel Announcement Toggle -->
+                <div style="margin-top:14px; padding:12px 16px; background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.08); border-radius:var(--radius-md); display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                    <div>
+                        <div style="font-size:0.9em; font-weight:600; color:var(--text-primary);">📢 Announce Linked API Keys in Verification Channel</div>
+                        <div style="font-size:0.8em; color:var(--text-muted);">When off (recommended), API key linkings are quiet and private. When on, sends a public notification to #verification.</div>
+                    </div>
+                    <label class="switch"><input type="checkbox" id="notify-api-key-linked" onchange="trackDirty();"><span class="slider"></span></label>
                 </div>
 
                 <!-- Sticky Verification Card Dispatch Bar -->
@@ -3689,6 +3699,7 @@ function applyConfigToDOM(cfg) {
     if (document.getElementById('faction-roleid')) document.getElementById('faction-roleid').value = cfg.factionRoleId || localStorage.getItem('warboard_faction_roleid') || '';
     if (document.getElementById('leader-roleid')) document.getElementById('leader-roleid').value = (cfg.leaderRoleId || localStorage.getItem('warboard_leader_roleid') || '').replace(/[^0-9]/g, '');
     if (document.getElementById('guild-id-input')) document.getElementById('guild-id-input').value = (cfg.guildId || localStorage.getItem('warboard_guildid') || '').replace(/[^0-9]/g, '');
+    if (document.getElementById('notify-api-key-linked')) document.getElementById('notify-api-key-linked').checked = cfg.notifyApiKeyLinked === true;
 
     if (document.getElementById('lowCprDefaultThreshold')) {
         document.getElementById('lowCprDefaultThreshold').value = cfg.lowCprDefaultThreshold ?? 40;
@@ -3938,6 +3949,7 @@ async function saveDiscordConfig() {
             verifiedRoleId,
             factionRoleId,
             leaderRoleId,
+            notifyApiKeyLinked: document.getElementById('notify-api-key-linked')?.checked === true,
             targetOnline: document.getElementById('targetOnline').checked,
             targetLanded: document.getElementById('targetLanded').checked,
             targetOutHosp: document.getElementById('targetOutHosp').checked,

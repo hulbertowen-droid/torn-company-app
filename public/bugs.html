@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bug Tracker | Spider-Verse Command Center</title>
+    <meta name="description" content="Live Bug Tracker & Issue Management for F.R.I.D.A.Y. and Spider-Verse web apps.">
+    
+    <!-- Fonts & Core Design System -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/global.css?v=3.2.0">
+    
+    <!-- Scripts & Auth -->
+    <script src="/auth-gate.js?v=3.2.1"></script>
+    <script src="/global_settings.js?v=3.2.1"></script>
+    <script src="/global-topbar.js?v=3.2.0"></script>
+
+    <style>
+    /* ─── Bug Tracker Styles ─── */
+    .bug-controls {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 16px 20px;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+    .bug-filters-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .pill-btn {
+        padding: 6px 14px;
+        border-radius: var(--radius-full);
+        border: 1px solid var(--border-default);
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 0.8em;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        font-family: inherit;
+    }
+    .pill-btn:hover {
+        border-color: var(--accent-cobalt);
+        color: var(--accent-cobalt);
+        background: var(--bg-elevated);
+    }
+    .pill-btn.active {
+        background: var(--accent-cobalt-dim);
+        border-color: var(--accent-cobalt-border);
+        color: var(--accent-cobalt);
+    }
+    .search-input {
+        padding: 8px 14px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-default);
+        background: var(--bg-elevated);
+        color: var(--text-primary);
+        font-size: 0.88em;
+        width: 220px;
+        outline: none;
+        transition: all var(--transition-fast);
+        font-family: inherit;
+    }
+    .search-input:focus {
+        border-color: var(--accent-cobalt);
+        box-shadow: 0 0 0 3px var(--accent-cobalt-dim);
+    }
+    .cat-select {
+        padding: 8px 12px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-default);
+        background: var(--bg-elevated);
+        color: var(--text-primary);
+        font-size: 0.86em;
+        font-family: inherit;
+        cursor: pointer;
+        outline: none;
+    }
+    .btn-report {
+        padding: 9px 18px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--accent-crimson);
+        background: var(--accent-crimson);
+        color: #ffffff;
+        font-size: 0.88em;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-family: inherit;
+        box-shadow: 0 2px 8px rgba(230, 57, 70, 0.3);
+    }
+    .btn-report:hover {
+        background: #f04856;
+        box-shadow: 0 4px 14px rgba(230, 57, 70, 0.45);
+        transform: translateY(-1px);
+    }
+
+    /* KPI Grid */
+    .kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+    .kpi-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 16px 20px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        position: relative;
+        overflow: hidden;
+    }
+    .kpi-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: var(--accent-cobalt);
+    }
+    .kpi-card.crimson::before { background: var(--accent-crimson); }
+    .kpi-card.amber::before { background: var(--accent-amber); }
+    .kpi-card.emerald::before { background: var(--accent-emerald); }
+    .kpi-title {
+        font-size: 0.74em;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: var(--text-tertiary);
+        letter-spacing: 0.8px;
+    }
+    .kpi-value {
+        font-size: 1.8em;
+        font-weight: 800;
+        font-family: var(--font-mono);
+        color: var(--text-primary);
+    }
+
+    /* Bug Cards List */
+    .bug-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .bug-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 18px 22px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+        transition: border-color var(--transition-fast), transform var(--transition-fast);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .bug-card:hover {
+        border-color: var(--border-default);
+    }
+    .bug-card-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .bug-meta-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .bug-id {
+        font-family: var(--font-mono);
+        font-size: 0.85em;
+        font-weight: 800;
+        color: var(--accent-cobalt);
+        background: var(--accent-cobalt-dim);
+        border: 1px solid var(--accent-cobalt-border);
+        padding: 3px 8px;
+        border-radius: var(--radius-sm);
+    }
+    .bug-cat {
+        font-size: 0.78em;
+        font-weight: 700;
+        color: var(--text-secondary);
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        padding: 3px 10px;
+        border-radius: var(--radius-full);
+    }
+    .bug-time {
+        font-size: 0.78em;
+        color: var(--text-tertiary);
+        font-family: var(--font-mono);
+    }
+    .bug-actions-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .status-select {
+        padding: 4px 10px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-default);
+        background: var(--bg-elevated);
+        font-size: 0.8em;
+        font-weight: 700;
+        cursor: pointer;
+        outline: none;
+        font-family: inherit;
+    }
+    .status-select.open { color: var(--accent-amber); border-color: var(--accent-amber-border); }
+    .status-select.in-progress { color: var(--accent-cobalt); border-color: var(--accent-cobalt-border); }
+    .status-select.resolved { color: var(--accent-emerald); border-color: var(--accent-emerald-border); }
+    .status-select.closed { color: var(--text-tertiary); border-color: var(--border-subtle); }
+
+    .btn-delete {
+        background: transparent;
+        border: 1px solid transparent;
+        color: var(--text-tertiary);
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: var(--radius-sm);
+        font-size: 0.85em;
+        transition: all var(--transition-fast);
+    }
+    .btn-delete:hover {
+        color: var(--accent-crimson);
+        background: var(--accent-crimson-dim);
+        border-color: var(--accent-crimson-border);
+    }
+
+    .bug-desc {
+        color: var(--text-primary);
+        font-size: 0.94em;
+        line-height: 1.55;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    .bug-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        border-top: 1px solid var(--border-subtle);
+        padding-top: 10px;
+        font-size: 0.8em;
+        color: var(--text-secondary);
+    }
+    .reporter-info {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .reporter-name {
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    /* Modal Styling */
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(4px);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        padding: 16px;
+    }
+    .modal-backdrop.active {
+        display: flex;
+    }
+    .modal-window {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        width: 100%;
+        max-width: 540px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes modalPop {
+        from { opacity: 0; transform: scale(0.96) translateY(8px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .modal-header {
+        padding: 18px 24px;
+        border-bottom: 1px solid var(--border-subtle);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .modal-title {
+        font-size: 1.1em;
+        font-weight: 800;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .modal-close {
+        background: transparent;
+        border: none;
+        color: var(--text-tertiary);
+        font-size: 1.4em;
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: var(--radius-sm);
+        transition: color var(--transition-fast);
+    }
+    .modal-close:hover {
+        color: var(--text-primary);
+    }
+    .modal-body {
+        padding: 20px 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    .modal-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .modal-field label {
+        font-size: 0.78em;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: var(--text-tertiary);
+        letter-spacing: 0.6px;
+    }
+    .modal-input, .modal-textarea, .modal-select {
+        padding: 10px 14px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-default);
+        background: var(--bg-elevated);
+        color: var(--text-primary);
+        font-size: 0.9em;
+        outline: none;
+        transition: all var(--transition-fast);
+        font-family: inherit;
+    }
+    .modal-textarea {
+        min-height: 120px;
+        resize: vertical;
+        line-height: 1.5;
+    }
+    .modal-input:focus, .modal-textarea:focus, .modal-select:focus {
+        border-color: var(--accent-crimson);
+        box-shadow: 0 0 0 3px var(--accent-crimson-dim);
+    }
+    .modal-footer {
+        padding: 16px 24px;
+        border-top: 1px solid var(--border-subtle);
+        background: rgba(0, 0, 0, 0.15);
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+    .btn-modal-cancel {
+        padding: 8px 16px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-default);
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 0.86em;
+        font-weight: 600;
+        cursor: pointer;
+        font-family: inherit;
+    }
+    .btn-modal-submit {
+        padding: 8px 20px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--accent-crimson);
+        background: var(--accent-crimson);
+        color: #ffffff;
+        font-size: 0.86em;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all var(--transition-fast);
+    }
+    .btn-modal-submit:hover {
+        background: #f04856;
+    }
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: var(--text-tertiary);
+        background: var(--bg-surface);
+        border: 1px dashed var(--border-subtle);
+        border-radius: var(--radius-md);
+    }
+    .empty-icon {
+        font-size: 2.5em;
+        margin-bottom: 12px;
+        opacity: 0.7;
+    }
+    </style>
+</head>
+<body>
+    <nav class="sidebar" id="app-sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">
+                <span class="brand-icon">🕷️</span>
+                <span class="brand-text">Spider-Verse</span>
+            </div>
+            <div class="sidebar-actions">
+                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">🌗</button>
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Collapse Sidebar">☰</button>
+            </div>
+        </div>
+        <div class="nav-items">
+            <div class="nav-section-title">Live Operations</div>
+            <a href="/" class="nav-link"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
+            <a href="/chain.html" class="nav-link"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
+            <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
+            <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Faction Roster</span></a>
+            <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
+
+            <div class="nav-section-title">Tactical Desk</div>
+            <a href="/dashboard.html" class="nav-link"><span class="nav-icon">🛡️</span> <span class="nav-text">Flight & Sentinel</span></a>
+            <a href="/travel.html" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Travel Profit Desk</span></a>
+            <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market & Bazaar</span></a>
+            <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
+            <a href="/gamble.html" class="nav-link"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
+            <a href="/recruit/" class="nav-link"><span class="nav-icon">🎯</span> <span class="nav-text">Recruit Engine</span></a>
+
+            <div class="nav-section-title">Intelligence & Alerts</div>
+            <a href="/ai-sandbox.html" class="nav-link"><span class="nav-icon">🤖</span> <span class="nav-text">F.R.I.D.A.Y. Intel</span></a>
+            <a href="/discord.html" class="nav-link"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
+            <a href="/bugs.html" class="nav-link active"><span class="nav-icon">🐛</span> <span class="nav-text">Bug Tracker</span></a>
+            <a onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" class="nav-link" style="cursor:pointer; margin-top:4px;"><span class="nav-icon">⚙️</span> <span class="nav-text">Settings</span></a>
+        </div>
+        <div class="sidebar-footer" id="sidebar-user-footer">
+            <div class="sidebar-user-chip" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" style="cursor:pointer;" title="Account & API Settings">
+                <div class="sidebar-user-avatar" id="nav-user-avatar">🕷️</div>
+                <div class="sidebar-user-info">
+                    <span class="sidebar-user-name" id="nav-user-name">Tactical Operative</span>
+                    <span class="sidebar-user-faction" id="nav-user-sub">Spider-Verse [52355]</span>
+                </div>
+                <span style="color:var(--text-tertiary); font-size:0.9em;">⚙️</span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-wrapper">
+        <header class="app-topbar">
+            <div class="topbar-left">
+                <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;">☰</button>
+                <div class="topbar-crumb">
+                    <span>INTELLIGENCE & ALERTS</span> / <strong style="color:var(--text-primary);">BUG TRACKER</strong>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <div class="tct-clock-chip" title="Torn City Time (TCT)">
+                    <span class="tct-label">TCT</span>
+                    <span id="global-tct-clock">--:--:--</span>
+                </div>
+                <div class="telemetry-chip live-ws" id="global-ws-badge" title="Data Feed Status">
+                    <span class="pulse-indicator"></span>
+                    <span>ONLINE</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="page-content">
+            <!-- Header Banner -->
+            <div class="dashboard-header" style="margin-bottom:20px;">
+                <div>
+                    <h1 class="page-title" style="display:flex; align-items:center; gap:10px;">
+                        <span>🐛</span> F.R.I.D.A.Y. Community Bug Tracker
+                    </h1>
+                    <p class="page-description">
+                        Log issues encountered in Discord or on the website, monitor developer triage in real time, or submit reports via Discord using <code>/bug</code>.
+                    </p>
+                </div>
+            </div>
+
+            <!-- KPI Cards -->
+            <div class="kpi-grid">
+                <div class="kpi-card crimson">
+                    <span class="kpi-title">Total Reports</span>
+                    <span class="kpi-value" id="kpi-total">0</span>
+                </div>
+                <div class="kpi-card amber">
+                    <span class="kpi-title">Open Issues</span>
+                    <span class="kpi-value" id="kpi-open" style="color:var(--accent-amber);">0</span>
+                </div>
+                <div class="kpi-card">
+                    <span class="kpi-title">In Progress</span>
+                    <span class="kpi-value" id="kpi-inprogress" style="color:var(--accent-cobalt);">0</span>
+                </div>
+                <div class="kpi-card emerald">
+                    <span class="kpi-title">Resolved</span>
+                    <span class="kpi-value" id="kpi-resolved" style="color:var(--accent-emerald);">0</span>
+                </div>
+            </div>
+
+            <!-- Controls & Filters -->
+            <div class="bug-controls">
+                <div class="bug-filters-left">
+                    <div class="filter-pills">
+                        <button class="pill-btn active" data-status="all" onclick="setStatusFilter('all')">All</button>
+                        <button class="pill-btn" data-status="Open" onclick="setStatusFilter('Open')">Open</button>
+                        <button class="pill-btn" data-status="In Progress" onclick="setStatusFilter('In Progress')">In Progress</button>
+                        <button class="pill-btn" data-status="Resolved" onclick="setStatusFilter('Resolved')">Resolved</button>
+                        <button class="pill-btn" data-status="Closed" onclick="setStatusFilter('Closed')">Closed</button>
+                    </div>
+
+                    <select class="cat-select" id="cat-filter" onchange="renderBugs()">
+                        <option value="all">All Categories</option>
+                        <option value="Web Dashboard">Web Dashboard</option>
+                        <option value="Discord Bot / Commands">Discord Bot / Commands</option>
+                        <option value="Alerts & Notifications">Alerts & Notifications</option>
+                        <option value="Organized Crimes">Organized Crimes</option>
+                        <option value="War & Chains">War & Chains</option>
+                        <option value="Vault Banking">Vault Banking</option>
+                        <option value="General / Other">General / Other</option>
+                    </select>
+
+                    <input type="text" class="search-input" id="search-input" placeholder="Search bugs or reporter..." oninput="renderBugs()">
+                </div>
+
+                <button class="btn-report" onclick="openReportModal()">
+                    <span>➕</span> Report Bug
+                </button>
+            </div>
+
+            <!-- Bugs List Container -->
+            <div id="bug-list-container" class="bug-list">
+                <!-- Rendered dynamically -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Report Bug Modal -->
+    <div class="modal-backdrop" id="report-modal">
+        <div class="modal-window">
+            <div class="modal-header">
+                <div class="modal-title"><span>🐛</span> Submit Bug Report</div>
+                <button class="modal-close" onclick="closeReportModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-field">
+                    <label>Category</label>
+                    <select class="modal-select" id="modal-bug-category">
+                        <option value="Web Dashboard">Web Dashboard</option>
+                        <option value="Discord Bot / Commands">Discord Bot / Commands</option>
+                        <option value="Alerts & Notifications">Alerts & Notifications</option>
+                        <option value="Organized Crimes">Organized Crimes</option>
+                        <option value="War & Chains">War & Chains</option>
+                        <option value="Vault Banking">Vault Banking</option>
+                        <option value="General / Other">General / Other</option>
+                    </select>
+                </div>
+                <div class="modal-field">
+                    <label>Your Name / Torn ID (Optional)</label>
+                    <input type="text" class="modal-input" id="modal-reporter-name" placeholder="e.g. Owen777 [12345]">
+                </div>
+                <div class="modal-field">
+                    <label>Bug Description *</label>
+                    <textarea class="modal-textarea" id="modal-bug-desc" placeholder="Describe the issue clearly. What happened, what did you expect to happen, and where did it occur?"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-modal-cancel" onclick="closeReportModal()">Cancel</button>
+                <button type="button" class="btn-modal-submit" id="btn-submit-bug" onclick="submitBug()">Submit Report</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let allBugs = [];
+    let currentStatusFilter = 'all';
+
+    // Sidebar & Clock support
+    function toggleSidebar() {
+        document.getElementById('app-sidebar')?.classList.toggle('collapsed');
+    }
+    function updateTctClock() {
+        const now = new Date();
+        const el = document.getElementById('global-tct-clock');
+        if (el) {
+            el.textContent = now.toISOString().slice(11, 19);
+        }
+    }
+    setInterval(updateTctClock, 1000);
+    updateTctClock();
+
+    async function loadBugs() {
+        try {
+            const res = await fetch('/api/bugs');
+            const data = await res.json();
+            if (data.success && Array.isArray(data.bugs)) {
+                allBugs = data.bugs;
+                updateKPIs();
+                renderBugs();
+            }
+        } catch(e) {
+            console.error('Failed to load bugs:', e);
+        }
+    }
+
+    function updateKPIs() {
+        document.getElementById('kpi-total').textContent = allBugs.length;
+        document.getElementById('kpi-open').textContent = allBugs.filter(b => b.status === 'Open').length;
+        document.getElementById('kpi-inprogress').textContent = allBugs.filter(b => b.status === 'In Progress').length;
+        document.getElementById('kpi-resolved').textContent = allBugs.filter(b => b.status === 'Resolved' || b.status === 'Closed').length;
+    }
+
+    function setStatusFilter(status) {
+        currentStatusFilter = status;
+        document.querySelectorAll('.pill-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.status === status);
+        });
+        renderBugs();
+    }
+
+    function renderBugs() {
+        const container = document.getElementById('bug-list-container');
+        if (!container) return;
+
+        const catFilter = document.getElementById('cat-filter')?.value || 'all';
+        const searchQuery = (document.getElementById('search-input')?.value || '').toLowerCase().trim();
+
+        const filtered = allBugs.filter(bug => {
+            if (currentStatusFilter !== 'all' && bug.status !== currentStatusFilter) return false;
+            if (catFilter !== 'all' && bug.category !== catFilter) return false;
+            if (searchQuery) {
+                const desc = (bug.description || '').toLowerCase();
+                const id = (bug.id || '').toLowerCase();
+                const rep = (bug.reportedBy?.discordName || bug.reportedBy?.tornName || bug.reportedBy?.discordTag || '').toLowerCase();
+                if (!desc.includes(searchQuery) && !id.includes(searchQuery) && !rep.includes(searchQuery)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        if (filtered.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">🛡️</div>
+                    <h3 style="font-weight:700; color:var(--text-primary); margin-bottom:6px;">No Bugs Found</h3>
+                    <p style="font-size:0.88em;">Everything looks pristine under the current filter criteria.</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = filtered.map(bug => {
+            const dateStr = bug.createdAt ? new Date(bug.createdAt).toLocaleString() : 'Recently';
+            const reporter = bug.reportedBy || {};
+            const reporterDisplay = reporter.tornName && reporter.tornId
+                ? `<a href="https://www.torn.com/profiles.php?XID=${reporter.tornId}" target="_blank" style="color:var(--accent-cobalt); text-decoration:none; font-weight:600;">${escapeHtml(reporter.tornName)} [${reporter.tornId}]</a>`
+                : (reporter.discordTag || reporter.discordName || 'Web Operative');
+
+            const statusClass = (bug.status || 'open').toLowerCase().replace(/\s+/g, '-');
+
+            return `
+                <div class="bug-card" id="card-${bug.id}">
+                    <div class="bug-card-top">
+                        <div class="bug-meta-left">
+                            <span class="bug-id">${escapeHtml(bug.id)}</span>
+                            <span class="bug-cat">${escapeHtml(bug.category || 'General')}</span>
+                            <span class="bug-time">🕒 ${escapeHtml(dateStr)}</span>
+                        </div>
+                        <div class="bug-actions-right">
+                            <select class="status-select ${statusClass}" onchange="changeBugStatus('${bug.id}', this.value)">
+                                <option value="Open" ${bug.status === 'Open' ? 'selected' : ''}>🟡 Open</option>
+                                <option value="In Progress" ${bug.status === 'In Progress' ? 'selected' : ''}>🔵 In Progress</option>
+                                <option value="Resolved" ${bug.status === 'Resolved' ? 'selected' : ''}>🟢 Resolved</option>
+                                <option value="Closed" ${bug.status === 'Closed' ? 'selected' : ''}>⚪ Closed</option>
+                            </select>
+                            <button class="btn-delete" title="Delete Bug Report" onclick="deleteBug('${bug.id}')">🗑️</button>
+                        </div>
+                    </div>
+                    <div class="bug-desc">${escapeHtml(bug.description)}</div>
+                    <div class="bug-footer">
+                        <div class="reporter-info">
+                            <span>Reported by:</span>
+                            <span class="reporter-name">${reporterDisplay}</span>
+                        </div>
+                        ${bug.resolutionNotes ? `<div style="color:var(--accent-emerald); font-style:italic;">Notes: ${escapeHtml(bug.resolutionNotes)}</div>` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    async function changeBugStatus(bugId, newStatus) {
+        try {
+            const res = await fetch(`/api/bugs/${bugId}/status`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
+            const data = await res.json();
+            if (data.success) {
+                const b = allBugs.find(item => item.id === bugId);
+                if (b) b.status = newStatus;
+                updateKPIs();
+                renderBugs();
+            }
+        } catch(e) {
+            alert('Failed to update bug status: ' + e.message);
+        }
+    }
+
+    async function deleteBug(bugId) {
+        if (!confirm(`Are you sure you want to permanently delete bug report ${bugId}?`)) return;
+        try {
+            const res = await fetch(`/api/bugs/${bugId}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            if (data.success) {
+                allBugs = allBugs.filter(b => b.id !== bugId);
+                updateKPIs();
+                renderBugs();
+            }
+        } catch(e) {
+            alert('Failed to delete bug report: ' + e.message);
+        }
+    }
+
+    function openReportModal() {
+        document.getElementById('report-modal')?.classList.add('active');
+        document.getElementById('modal-bug-desc')?.focus();
+    }
+
+    function closeReportModal() {
+        document.getElementById('report-modal')?.classList.remove('active');
+        const desc = document.getElementById('modal-bug-desc');
+        if (desc) desc.value = '';
+    }
+
+    async function submitBug() {
+        const desc = (document.getElementById('modal-bug-desc')?.value || '').trim();
+        if (!desc) {
+            alert('Please provide a description of the bug.');
+            return;
+        }
+        const category = document.getElementById('modal-bug-category')?.value || 'Web Dashboard';
+        const reporterName = (document.getElementById('modal-reporter-name')?.value || '').trim();
+
+        const btn = document.getElementById('btn-submit-bug');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Submitting...';
+        }
+
+        try {
+            const res = await fetch('/api/bugs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    description: desc,
+                    category,
+                    reporterName
+                })
+            });
+            const data = await res.json();
+            if (data.success && data.bug) {
+                allBugs.unshift(data.bug);
+                updateKPIs();
+                renderBugs();
+                closeReportModal();
+            } else {
+                alert('Error submitting bug: ' + (data.error || 'Unknown error'));
+            }
+        } catch(e) {
+            alert('Failed to contact server: ' + e.message);
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = 'Submit Report';
+            }
+        }
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    // Initial load
+    loadBugs();
+    </script>
+</body>
+</html>
