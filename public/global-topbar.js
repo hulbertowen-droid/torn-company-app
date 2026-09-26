@@ -62,6 +62,13 @@
                     el.textContent = user.playerName.charAt(0).toUpperCase();
                 }
             });
+            if (user.factionName) {
+                document.querySelectorAll('.brand-text').forEach(el => {
+                    if (el.textContent === 'Spider-Verse' || el.textContent === 'Faction Operations' || el.textContent === 'Faction Portal') {
+                        el.textContent = user.factionName;
+                    }
+                });
+            }
         }
     }
 

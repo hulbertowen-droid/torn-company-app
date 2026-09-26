@@ -12086,94 +12086,136 @@ function checkExpiredBankRequests() {
 // Run expiry check every 2 minutes
 setInterval(checkExpiredBankRequests, 2 * 60 * 1000);
 
+function formatTimeAgo(timestamp) {
+    if (!timestamp) return 'just now';
+    const ms = typeof timestamp === 'number'
+        ? (timestamp > 1e11 ? Date.now() - timestamp : timestamp)
+        : Date.now() - new Date(timestamp).getTime();
+    const sec = Math.max(1, Math.floor(Math.abs(ms) / 1000));
+
+    if (sec < 60) {
+        return `${sec} second${sec === 1 ? '' : 's'} ago`;
+    }
+    const min = Math.floor(sec / 60);
+    if (min < 60) {
+        return `${min} minute${min === 1 ? '' : 's'} ago`;
+    }
+    const hrs = Math.floor(min / 60);
+    if (hrs < 24) {
+        return `${hrs} hour${hrs === 1 ? '' : 's'} ago`;
+    }
+    const days = Math.floor(hrs / 24);
+    return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
 function buildBankRequestEmbed(req) {
     const formattedAmount = `$${Number(req.amount).toLocaleString()}`;
-    const userField = UI.user(req.userId, req.tornName, req.tornId);
+    const name = req.tornName || req.userName || 'Member';
+    const requesterDisplay = req.tornId
+        ? `[${name} [${req.tornId}]](https://www.torn.com/profiles.php?XID=${req.tornId})`
+        : (req.userId ? `<@${req.userId}>` : name);
 
-    // Rule 1: Accent color = state, not feature
-    // 🟡 Gold → awaiting action / pending
-    // 🟢 Green → success / completed
-    // 🔴 Red → locked / denied / danger
-    let color = UI.COLORS.GOLD;
-    let statusText = `⏳ Pending · Awaiting banker (<t:${Math.floor(req.timestamp / 1000)}:R>)`;
-    let resultText = req.remainingBalance !== undefined && req.remainingBalance >= 0
-        ? `Faction Vault Transfer · After: $${Number(req.remainingBalance).toLocaleString()}`
-        : 'Faction Vault Transfer';
+    // Bug 1: Accent color = state (Amber #f0b232 for awaiting banker, Green for paid, Red for denied/cancelled)
+    let color = 0xF0B232; // Amber (#f0b232)
+    let statusFieldName = '⏳ Status';
+    let statusValue = `Awaiting banker, requested ${formatTimeAgo(req.timestamp)}`;
+    let description = `New withdrawal from ${name} for ${formattedAmount}`;
+
+    let vaultAfter = 0;
+    if (req.remainingBalance !== undefined && req.remainingBalance !== null && Number(req.remainingBalance) >= 0) {
+        vaultAfter = req.remainingBalance;
+    } else if (req.balanceAfter !== undefined && req.balanceAfter !== null) {
+        vaultAfter = req.balanceAfter;
+    } else if (req.vaultAfter !== undefined && req.vaultAfter !== null) {
+        vaultAfter = req.vaultAfter;
+    } else if (req.balanceBefore !== undefined && req.balanceBefore !== null) {
+        vaultAfter = (req.status === 'cancelled' || req.status === 'expired')
+            ? req.balanceBefore
+            : Math.max(0, req.balanceBefore - req.amount);
+    }
+    const formattedVaultAfter = `$${Number(vaultAfter).toLocaleString()}`;
 
     if (req.status === 'verifying') {
-        color = UI.COLORS.GOLD;
+        color = 0xF0B232; // Amber (#f0b232)
+        statusFieldName = '⏳ Status';
         const payerMention = req.fulfilledBy ? `<@${req.fulfilledBy}>` : (req.fulfillerName ? `@${req.fulfillerName}` : 'Banker');
-        statusText = `⏳ Pending Verification · In progress by ${payerMention}`;
-        resultText = 'Verifying transfer via Torn faction logs...';
+        statusValue = `In progress by ${payerMention}, ${formatTimeAgo(req.fulfilledAt || req.timestamp)}`;
     } else if (req.status === 'fulfilled') {
-        color = UI.COLORS.GREEN;
-        let fulfillerStr = "";
-        if (req.fulfilledBy) {
-            fulfillerStr = `<@${req.fulfilledBy}>`;
-        } else if (req.fulfillerName && req.fulfillerName !== 'Banker') {
-            fulfillerStr = req.fulfillerId 
-                ? `[**${req.fulfillerName} [${req.fulfillerId}]**](https://www.torn.com/profiles.php?XID=${req.fulfillerId})`
-                : `**${req.fulfillerName}**`;
-        } else {
-            fulfillerStr = `Torn Faction Logs`;
-        }
+        color = 0x2ECC71; // Green
+        description = `Withdrawal from ${name} for ${formattedAmount}`;
+        statusFieldName = '✔ Status';
+        const fulfillerName = req.fulfillerName || (req.fulfilledBy ? `<@${req.fulfilledBy}>` : 'Banker');
         const timeRef = req.fulfilledAt || req.verifiedAt || req.timestamp || Date.now();
-        statusText = `🟢 Completed · Fulfilled by ${fulfillerStr} (<t:${Math.floor(timeRef / 1000)}:R>)`;
-        resultText = req.remainingBalance !== undefined && req.remainingBalance >= 0
-            ? `Transferred in Torn · Vault After: $${Number(req.remainingBalance).toLocaleString()}`
-            : 'Transferred in Torn';
+        statusValue = `Paid by ${fulfillerName}, ${formatTimeAgo(timeRef)}`;
     } else if (req.status === 'cancelled') {
-        color = UI.COLORS.RED;
-        const cancellerStr = req.cancelledBy && req.cancelledBy !== 'system'
-            ? `<@${req.cancelledBy}>` : (req.cancellerName || 'System');
-        statusText = `🔴 Denied · Cancelled by ${cancellerStr} (<t:${Math.floor(req.cancelledAt / 1000)}:R>)`;
-        resultText = 'Request Cancelled';
+        color = 0xE74C3C; // Red
+        description = `Withdrawal from ${name} for ${formattedAmount}`;
+        statusFieldName = '❌ Status';
+        const cancellerName = req.cancellerName || (req.cancelledBy && req.cancelledBy !== 'system' ? `<@${req.cancelledBy}>` : 'Banker');
+        statusValue = `Denied by ${cancellerName}, ${formatTimeAgo(req.cancelledAt || req.timestamp)}`;
     } else if (req.status === 'expired') {
-        color = UI.COLORS.RED;
-        statusText = `🔴 Denied · Timed out after 60 minutes`;
-        resultText = 'Request Expired';
+        color = 0xE74C3C; // Red
+        description = `Withdrawal from ${name} for ${formattedAmount}`;
+        statusFieldName = '❌ Status';
+        statusValue = `Denied by Banker, timed out after 60 minutes`;
     }
 
-    // Rule 2 & 3: Action-request card structure (What → Who → Result → Status), max 5 fields
+    // Bug 2: Card title uses bank building icon 🏦 (hourglass ⏳ is ONLY on Status field)
+    const title = `🏦 Vault request #${req.id}`;
+
+    // Field layout and order: Amount / Requested by / Vault after / In-game status / Status
     const fields = [
         {
-            name: `${UI.ICONS.VAULT} What`,
-            value: `Vault Withdrawal · **${formattedAmount}**`,
+            name: 'Amount',
+            value: `**${formattedAmount}**`,
             inline: true
         },
         {
-            name: `${UI.ICONS.USER} Who`,
-            value: userField,
+            name: 'Requested by',
+            value: requesterDisplay,
             inline: true
         },
         {
-            name: `📋 Result`,
-            value: resultText,
+            name: 'Vault after',
+            value: formattedVaultAfter,
             inline: true
         }
     ];
 
-    // Optional in-game status field (Rule 9: status = color + text always)
+    // Bug 3: In-game status (no traffic light 🚦 icon, only status dot)
     if (req.memberStatus && (req.status === 'pending' || req.status === 'verifying')) {
+        let badge = '🟢 In Torn City (okay)';
+        const state = (req.memberStatus.state || '').toLowerCase();
+        const desc = (req.memberStatus.description || req.memberStatus.state || 'okay').toLowerCase();
+        if (state.includes('travel') || state.includes('abroad')) {
+            badge = `✈️ Traveling (${desc})`;
+        } else if (state.includes('hospital')) {
+            badge = `🔴 In Hospital (${desc})`;
+        } else if (state.includes('jail')) {
+            badge = `🔴 In Jail (${desc})`;
+        } else {
+            badge = `🟢 In Torn City (${desc})`;
+        }
         fields.push({
-            name: '🚦 In-Game Status',
-            value: UI.statusBadge(req.memberStatus.state, req.memberStatus.description),
-            inline: true
+            name: 'In-game status',
+            value: badge,
+            inline: false
         });
     }
 
     fields.push({
-        name: `${UI.ICONS.STATUS} Status`,
-        value: statusText,
+        name: statusFieldName,
+        value: statusValue,
         inline: false
     });
 
     return {
-        title: `${UI.ICONS.BRAND} Vault Request #${req.id}`,
+        title,
+        description,
         color,
-        fields: fields.slice(0, 5), // strictly max 5 fields
-        footer: UI.FOOTER,
-        timestamp: new Date(req.timestamp).toISOString()
+        fields,
+        footer: { text: 'F.R.I.D.A.Y • Spider-Verse Security Sentinel' },
+        timestamp: new Date(req.timestamp || Date.now()).toISOString()
     };
 }
 

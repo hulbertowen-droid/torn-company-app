@@ -18,16 +18,17 @@
 // ── 1. ACCENT COLORS (STATE, NOT FEATURE) ───────────────────────────────────
 const COLORS = Object.freeze({
     // Strict 5 state accent colors:
-    GOLD:    0xF1C40F, // 🟡 awaiting action / pending
+    GOLD:    0xF0B232, // 🟡 awaiting action / pending (#f0b232)
+    AMBER:   0xF0B232, // 🟡
     BLUE:    0x3498DB, // 🔵 informational / identity
     GREEN:   0x2ECC71, // 🟢 success / completed
     RED:     0xE74C3C, // 🔴 locked / denied / danger
     TEAL:    0x1ABC9C, // 🟦 neutral data report (stats, logs)
 
     // Semantic aliases strictly mapping into the 5 state colors above:
-    PENDING:   0xF1C40F, // 🟡 awaiting action / pending
-    AWAITING:  0xF1C40F, // 🟡
-    WARNING:   0xF1C40F, // 🟡
+    PENDING:   0xF0B232, // 🟡 awaiting action / pending
+    AWAITING:  0xF0B232, // 🟡
+    WARNING:   0xF0B232, // 🟡
 
     INFO:      0x3498DB, // 🔵 informational / identity
     IDENTITY:  0x3498DB, // 🔵
@@ -427,6 +428,28 @@ function paginator(page, total, baseId) {
     return actionRow(prev, pinfo, next);
 }
 
+function formatTimeAgo(dateOrMs) {
+    if (!dateOrMs) return 'just now';
+    const ms = typeof dateOrMs === 'number'
+        ? (dateOrMs > 1e11 ? Date.now() - dateOrMs : dateOrMs)
+        : Date.now() - new Date(dateOrMs).getTime();
+    const elapsed = Math.max(1, Math.floor(Math.abs(ms) / 1000));
+
+    if (elapsed < 60) {
+        return `${elapsed} second${elapsed === 1 ? '' : 's'} ago`;
+    }
+    const mins = Math.floor(elapsed / 60);
+    if (mins < 60) {
+        return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+    }
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) {
+        return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    }
+    const days = Math.floor(hours / 24);
+    return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
 module.exports = {
     COLORS, ICONS, FOOTER, FOOTER_TEXT, setFactionName,
     embed, gold, blue, green, red, teal,
@@ -436,7 +459,7 @@ module.exports = {
     statusBadge, formatStatus: statusBadge,
     actionRequestCard, reportCard, onboardingCard, verificationCard, verificationButtons, buttonLayout,
     num, money, stat,
-    tsRelative, tsShort, tsTime, msToUnix, dateToUnix,
+    tsRelative, tsShort, tsTime, msToUnix, dateToUnix, formatTimeAgo, timeAgo: formatTimeAgo,
     sep, blankField,
     primaryBtn, secondaryBtn, successBtn, dangerBtn, linkBtn, actionRow, paginator,
 };

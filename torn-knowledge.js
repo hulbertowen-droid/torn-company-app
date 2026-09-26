@@ -5,7 +5,7 @@
  * 1. Verified Torn Item Database (Candies, Boosters, Drugs, Energy Drinks, Alcohol, Medical, Special).
  * 2. Real-Time Faction Upgrades / Perks Integration:
  *    - Automatically pulls & caches live perks from Torn API /faction/?selections=basic,upgrades
- *    - Spider-Verse [52355] verified upgrades:
+ *    - Example faction verified upgrades:
  *      * Booster cooldown XV (+15 hours -> 39 hours total limit)
  *      * Candy effect X (+50% Happy gain from candy -> 150 Happy per truffle)
  *      * Travel capacity VIII (+8 travel capacity)
@@ -29,8 +29,8 @@ const FACTION_PERKS_CACHE_FILE = path.join(__dirname, 'data', 'faction_perks_cac
 
 // ── LIVE FACTION PERKS STORE (Pre-seeded with Spider-Verse verified upgrades) ──
 let liveFactionPerks = {
-    factionId: 52355,
-    factionName: "Spider-Verse",
+    factionId: null,
+    factionName: "Faction",
     tolerationHours: 15,          // Booster cooldown XV (+15 hours)
     boosterLimitHours: 39,        // 24h base + 15h perk = 39 hours max!
     voracityPercent: 50,          // Candy effect X (+50% happy)
@@ -105,8 +105,8 @@ async function fetchFactionPerks(apiKey) {
             }
 
             liveFactionPerks = {
-                factionId: data.ID || 52355,
-                factionName: data.name || "Spider-Verse",
+                factionId: data.ID || null,
+                factionName: data.name || "Faction",
                 tolerationHours: tolerationH || 15,
                 boosterLimitHours: 24 + (tolerationH || 15),
                 voracityPercent: voracityP || 50,
@@ -588,7 +588,7 @@ function calculateHappyJumpDetails(params = {}) {
             marketValue: estItemPrice
         },
         factionPerks: {
-            factionName: perks.factionName || "Spider-Verse",
+            factionName: perks.factionName || "Faction",
             tolerationHours,
             boosterLimitHours,
             voracityPercent
@@ -715,12 +715,13 @@ function buildTornKnowledgeContext(query, userAccountData = null, invokerName = 
         const itemToUse = resolvedItem || TORN_ITEMS_DB[529];
         const jump = calculateHappyJumpDetails({ itemCandidate: itemToUse, userAccountData });
 
-        context += `FACTUAL HAPPY JUMP CALCULATION FOR SPIDER-VERSE [${jump.item.name}] (Item ID ${jump.item.id}):\n`;
+        const facUpper = (jump.factionPerks.factionName || 'OUR FACTION').toUpperCase();
+        context += `FACTUAL HAPPY JUMP CALCULATION FOR ${facUpper} [${jump.item.name}] (Item ID ${jump.item.id}):\n`;
         context += `• Item: ${jump.item.name} (${jump.item.type})\n`;
         context += `• Base Happy: +${jump.item.baseHappy} Happy each\n`;
         context += `• Faction Perk (+${jump.factionPerks.voracityPercent}% Voracity): Yields +${jump.item.effectiveHappyWithPerks} Happy each\n`;
         context += `• Cooldown: ${jump.item.cooldownMinutes} minutes per item\n`;
-        context += `• SPIDER-VERSE EXACT REQUIREMENT: EXACTLY ${jump.jumpFaction.quantity} ${jump.item.name}s (${jump.jumpFaction.quantity} × 30m = ${jump.jumpFaction.totalCooldownHours} hours)\n`;
+        context += `• ${facUpper} EXACT REQUIREMENT: EXACTLY ${jump.jumpFaction.quantity} ${jump.item.name}s (${jump.jumpFaction.quantity} × 30m = ${jump.jumpFaction.totalCooldownHours} hours)\n`;
         context += `  - Happy added: +${jump.jumpFaction.happyAdded.toLocaleString()} Happy\n`;
         context += `  - Total before Ecstasy (with ~5k PI): ~${jump.jumpFaction.preEcstasyHappy.toLocaleString()} Happy\n`;
         context += `  - Total after Ecstasy (doubled): ~${jump.jumpFaction.postEcstasyHappy.toLocaleString()} Happy\n`;
@@ -801,10 +802,11 @@ function formatDeterministicCasualReply(text, invokerName = "Member") {
     if (!intent) return null;
 
     const name = invokerName || "Member";
+    const currentFac = liveFactionPerks.factionName || "the faction";
     switch (intent) {
         case 'greeting': {
             const greetings = [
-                `Hey ${name}. All systems nominal and watching over Spider-Verse. What's going on?`,
+                `Hey ${name}. All systems nominal and watching over ${currentFac}. What's going on?`,
                 `At your service, ${name}. Ready when you are.`,
                 `Hey ${name}! How's the grind treating you today?`,
                 `Good to see you, ${name}. Standing by for tactical inquiries, gym advice, or casual banter.`
@@ -812,13 +814,13 @@ function formatDeterministicCasualReply(text, invokerName = "Member") {
             return greetings[Math.floor(Math.random() * greetings.length)];
         }
         case 'checkin': {
-            return `Running at 100% tactical efficiency and keeping Spider-Verse in check. How are you holding up, ${name}?`;
+            return `Running at 100% tactical efficiency and keeping ${currentFac} in check. How are you holding up, ${name}?`;
         }
         case 'thanks': {
             return `Anytime, ${name}. Stay sharp out there.`;
         }
         case 'identity': {
-            return `I'm F.R.I.D.A.Y — tactical AI for Spider-Verse. I track war targets, calculate optimal happy jumps, monitor energy/cooldowns, and keep our faction running smoothly.`;
+            return `I'm F.R.I.D.A.Y — tactical AI for ${currentFac}. I track war targets, calculate optimal happy jumps, monitor energy/cooldowns, and keep our faction running smoothly.`;
         }
         case 'farewell': {
             return `Catch you later, ${name}. Keep your cooldowns rolling.`;
@@ -842,21 +844,27 @@ function formatDeterministicTornAnswer(query, userAccountData = null, invokerNam
         const item = resolvedItem || TORN_ITEMS_DB[529]; // Default to Bag of Chocolate Truffles
         const jump = calculateHappyJumpDetails({ itemCandidate: item, userAccountData });
 
+        const bHours = perks.boosterLimitHours || 39;
+        const facName = perks.factionName || 'our faction';
+
         if (item.id === 366) {
-            // eDVD jump in Spider-Verse (39h limit -> 6 eDVDs = 36h)
-            return `In Spider-Verse, our booster cooldown limit is **39 hours** (24h base + 15h perk). An **Erotic DVD** takes 6 hours, so you can fit **6 eDVDs** (+15,000 Happy). Popping 1 Ecstasy on a Private Island doubles you to **~40,050 Happy** for your 1,000e train!`;
+            const dvdCount = Math.floor(bHours / 6);
+            const happyPerDvd = 2500;
+            const totalDvdHappy = dvdCount * happyPerDvd;
+            const postEcstasy = (5025 + totalDvdHappy) * 2;
+            return `In ${facName}, our booster cooldown limit is **${bHours} hours** (24h base + ${perks.tolerationHours || 15}h perk). An **Erotic DVD** takes 6 hours, so you can fit **${dvdCount} eDVDs** (+${totalDvdHappy.toLocaleString()} Happy). Popping 1 Ecstasy on a Private Island doubles you to **~${postEcstasy.toLocaleString()} Happy** for your 1,000e train!`;
         }
 
         // Candy Jump (Bag of Chocolate Truffles)
         const name = item.name;
-        const qExact = jump.jumpFaction.quantity; // 78
-        const hours = jump.jumpFaction.totalCooldownHours; // 39h
-        const effHappy = jump.item.effectiveHappyWithPerks; // 150
-        const postExact = jump.jumpFaction.postEcstasyHappy.toLocaleString(); // 33,450
+        const qExact = jump.jumpFaction.quantity;
+        const hours = jump.jumpFaction.totalCooldownHours;
+        const effHappy = jump.item.effectiveHappyWithPerks;
+        const postExact = jump.jumpFaction.postEcstasyHappy.toLocaleString();
 
-        let reply = `I checked our live faction upgrades, ${invokerName}. Spider-Verse has **Booster cooldown XV (+${perks.tolerationHours} hours)**, making our faction's booster limit exactly **${hours} hours** (2,340 mins). `;
+        let reply = `I checked our live faction upgrades, ${invokerName}. ${facName} has **Booster cooldown (+${perks.tolerationHours || 15} hours)**, making our faction's booster limit exactly **${hours} hours** (${hours * 60} mins). `;
         reply += `Since **${name}** takes 30 minutes, you need **exactly ${qExact} bags** to fill our booster bar (${qExact} × 30m = ${hours}h). `;
-        reply += `With our **Candy effect X (+${perks.voracityPercent}%)** perk, each bag yields **${effHappy} Happy** (+${jump.jumpFaction.happyAdded.toLocaleString()} total). `;
+        reply += `With our **Candy effect (+${perks.voracityPercent || 50}%)** perk, each bag yields **${effHappy} Happy** (+${jump.jumpFaction.happyAdded.toLocaleString()} total). `;
         reply += `Stack 1,000e with 4 Xanax, let your drug cooldown clear to 00:00, eat your **${qExact} truffles**, then pop **1 Ecstasy** to surge to **~${postExact} Happy** before hitting the gym!`;
         return reply;
     }
@@ -871,7 +879,8 @@ function formatDeterministicTornAnswer(query, userAccountData = null, invokerNam
 
     // 3. Faction upgrades / perks query
     if (clean.includes('perk') || clean.includes('upgrade') || clean.includes('faction bonus')) {
-        return `Spider-Verse [${perks.factionId}] upgrades: Booster cooldown XV (+${perks.tolerationHours}h -> ${perks.boosterLimitHours}h max), Candy effect X (+${perks.voracityPercent}%), Travel capacity VIII (+${perks.travelCapacityBonus} items), and +5% Defense/Dexterity gym perks.`;
+        const fDisplay = perks.factionName ? `${perks.factionName} [${perks.factionId || ''}]` : 'Faction';
+        return `${fDisplay} upgrades: Booster cooldown (+${perks.tolerationHours || 15}h -> ${perks.boosterLimitHours || 39}h max), Candy effect (+${perks.voracityPercent || 50}%), Travel capacity (+${perks.travelCapacityBonus || 8} items), and +${perks.defenseGymBonus || 5}% Defense/Dexterity gym perks.`;
     }
 
     // Never return unprompted Torn stats if not a Torn inquiry

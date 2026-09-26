@@ -10,6 +10,12 @@ const SESSIONS_COL = 'web_sessions';
 /**
  * Initialize session store from MongoDB Atlas on startup
  */
+let _configuredFactionId = null;
+
+function setConfiguredFactionId(facId) {
+    if (facId) _configuredFactionId = String(facId);
+}
+
 async function initSessionStore() {
     try {
         if (mongoose.connection && mongoose.connection.readyState === 1) {
@@ -28,7 +34,7 @@ async function initSessionStore() {
                         factionId: String(doc.factionId || '0'),
                         factionName: doc.factionName || 'None',
                         factionRole: doc.factionRole || '',
-                        isSpiderVerse: String(doc.factionId || '') === '52355',
+                        isSpiderVerse: doc.isSpiderVerse !== undefined ? Boolean(doc.isSpiderVerse) : Boolean(_configuredFactionId && String(doc.factionId || '') === _configuredFactionId),
                         bars: doc.bars || null,
                         createdAt: doc.createdAt ? doc.createdAt.getTime() : Date.now(),
                         expiresAt: doc.expiresAt ? doc.expiresAt.getTime() : (Date.now() + SESSION_TTL_MS)
@@ -61,7 +67,7 @@ async function createSession(userData) {
         factionId: String(userData.factionId || '0'),
         factionName: userData.factionName || 'None',
         factionRole: userData.factionRole || '',
-        isSpiderVerse: String(userData.factionId || '') === '52355',
+        isSpiderVerse: userData.isSpiderVerse !== undefined ? Boolean(userData.isSpiderVerse) : Boolean(_configuredFactionId && String(userData.factionId || '') === _configuredFactionId),
         bars: userData.bars || null,
         createdAt: now,
         expiresAt
@@ -183,7 +189,7 @@ function resolveSessionMiddleware(userKeys) {
 }
 
 // Clean in-memory map periodically
-setInterval(() => {
+const cleanupInterval = setInterval(() => {
     const now = Date.now();
     for (const [token, sess] of sessionsMemory.entries()) {
         if (sess.expiresAt && sess.expiresAt < now) {
@@ -191,9 +197,11 @@ setInterval(() => {
         }
     }
 }, 15 * 60 * 1000);
+if (cleanupInterval.unref) cleanupInterval.unref();
 
 module.exports = {
     initSessionStore,
+    setConfiguredFactionId,
     createSession,
     getSession,
     deleteSession,

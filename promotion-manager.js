@@ -171,7 +171,7 @@ function formatPositionPerks(posObj) {
 /**
  * Fetch live faction positions & members from Torn API (cached for 5 min).
  */
-async function getFactionData(apiKey, facId = 52355, forceRefresh = false) {
+async function getFactionData(apiKey, facId = null, forceRefresh = false) {
     const now = Date.now();
     if (!forceRefresh && cachedFactionData && (now - cachedFactionTimestamp < CACHE_TTL_MS)) {
         return cachedFactionData;
@@ -182,13 +182,16 @@ async function getFactionData(apiKey, facId = 52355, forceRefresh = false) {
     }
 
     try {
-        const res = await fetch(`https://api.torn.com/faction/${facId}?selections=basic,positions&key=${apiKey}`, {
+        const url = facId
+            ? `https://api.torn.com/faction/${facId}?selections=basic,positions&key=${apiKey}`
+            : `https://api.torn.com/faction/?selections=basic,positions&key=${apiKey}`;
+        const res = await fetch(url, {
             signal: AbortSignal.timeout(8000)
         });
         const data = await res.json();
         if (data && !data.error && data.positions) {
             cachedFactionData = {
-                name: data.name || 'Spider-Verse',
+                name: data.name || 'Faction',
                 id: data.ID || facId,
                 positions: data.positions || {},
                 members: data.members || {}
@@ -413,7 +416,7 @@ function buildLeadershipNotificationEmbed(promoReq, positions, facName) {
 
     const embed = {
         title: `🎖️ New Promotion Request: ${promoReq.playerName} [${promoReq.playerId}]`,
-        description: `A faction member has requested a promotion to **${promoReq.requestedRole}** in **${facName || 'Spider-Verse'}**. Leadership can approve or deny below:`,
+        description: `A faction member has requested a promotion to **${promoReq.requestedRole}** in **${facName || 'the faction'}**. Leadership can approve or deny below:`,
         color: UI.COLORS.BRAND,
         fields,
         footer: UI.FOOTER,

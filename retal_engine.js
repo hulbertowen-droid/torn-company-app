@@ -43,8 +43,12 @@ const DEFAULT_SCALING = {
 // ── Module State ────────────────────────────────────────────────────────────
 let _getApiKey      = null;      // () => string|null
 let _db             = null;      // MongoDB Db instance
-let _ourFactionId   = 52355;     // number — Spider-Verse (52355), updated dynamically if faction changes
+let _ourFactionId   = null;      // number — updated dynamically from config or Torn API
 let _lastIngestTs   = 0;         // unix seconds of last fetched attack
+
+function setOurFactionId(facId) {
+    if (facId) _ourFactionId = Number(facId);
+}
 let _recentCodes    = new Set(); // dedup cache (last DEDUP_CACHE_SIZE attack codes)
 let _alertedAttackCodes = new Set(); // in-memory dedup for alerts
 let _onAttackAlertCallback = null;   // async callback (atkPayload) => void
@@ -299,8 +303,8 @@ async function ingestAttacks() {
 
             const attackerName = atk.attacker_name || data.members?.[atkId]?.name || '';
             const defenderName = atk.defender_name || data.members?.[defId]?.name || '';
-            const attackerFactionName = atk.attacker_factionname || (atkFac === _ourFactionId ? (data.name || 'Spider-Verse') : '');
-            const defenderFactionName = atk.defender_factionname || (defFac === _ourFactionId ? (data.name || 'Spider-Verse') : '');
+            const attackerFactionName = atk.attacker_factionname || (atkFac === _ourFactionId ? (data.name || 'Our Faction') : '');
+            const defenderFactionName = atk.defender_factionname || (defFac === _ourFactionId ? (data.name || 'Our Faction') : '');
 
             // Real-time alert check: if our faction member was attacked (not self-hit)
             if (defFac === _ourFactionId && atkId !== defId) {
@@ -1191,6 +1195,7 @@ function formatDuration(seconds) {
 
 module.exports = {
     startRetaliationEngine,
+    setOurFactionId,
     setOnAttackAlertCallback,
     getRiskScore,
     getRiskScoreBulk,

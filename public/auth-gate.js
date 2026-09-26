@@ -4,13 +4,12 @@
  * Multi-tenant, session-based Torn authentication.
  * - API keys are never stored in client-side localStorage, sessionStorage, or URLs.
  * - Authenticates with server via secure session tokens (x-session-token).
- * - Distinguishes between Spider-Verse [52355] specific modules and public Torn tools.
+ * - Distinguishes between internal faction-specific modules and public Torn tools.
  * - Never blurs or locks the site for public pages or external faction members.
  */
 (function() {
     'use strict';
 
-    const SPIDERVERSE_FACTION_ID = '52355';
     const SPIDERVERSE_PAGES = [
         '/',
         '/index.html',
@@ -460,11 +459,11 @@
         banner.className = 'sv-restricted-banner';
         banner.innerHTML = `
             <div class="sv-restricted-header">
-                <span>🔒 Spider-Verse Faction Restricted Module</span>
+                <span>🔒 Faction Restricted Module</span>
             </div>
             <div class="sv-restricted-body">
                 Hello <strong>${user.playerName} [${user.playerId}]</strong>! You are currently connected with <strong>${user.factionName || 'Factionless'} [ID: ${user.factionId || '0'}]</strong>. 
-                This tactical warboard module is dedicated to Spider-Verse [52355]. As a visitor, you have unrestricted access to all our public Torn operations tools below!
+                This tactical module is dedicated to verified faction members. As a visitor, you have unrestricted access to all our public Torn operations tools below!
             </div>
             <div class="sv-restricted-actions">
                 <a href="/dashboard.html" class="sv-restricted-btn">📊 Personal Dashboard</a>
@@ -500,9 +499,9 @@
         const badge = document.createElement('div');
         badge.id = 'sv-user-badge';
         badge.className = 'sv-badge-container';
-        const facDisplay = user.isSpiderVerse 
-            ? '<span style="color: #ff4757; font-weight:700;">🕷️ Spider-Verse [52355]</span>' 
-            : (user.factionId && user.factionId !== '0' ? `<span style="color: #00cec9;">${user.factionName} [${user.factionId}]</span>` : '<span style="color: #a4b0be;">Factionless</span>');
+        const facDisplay = user.factionId && user.factionId !== '0'
+            ? `<span style="color: #00cec9; font-weight:700;">${user.factionName || 'Faction'} [${user.factionId}]</span>`
+            : '<span style="color: #a4b0be;">Factionless</span>';
 
         badge.innerHTML = `
             <div class="sv-badge-user-info" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px;">
