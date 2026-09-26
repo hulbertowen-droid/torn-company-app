@@ -8,8 +8,9 @@ const { SlashCommandBuilder } = require('discord.js');
  */
 function buildSlashCommands() {
     return [
-        // 0. Member Verification
-        new SlashCommandBuilder().setName('verify').setDescription('1-click official Torn verification via Official Torn Discord cross-reference').toJSON(),
+        new SlashCommandBuilder().setName('verify').setDescription('Verify a Torn player identity and sync roles & nickname')
+            .addUserOption(opt => opt.setName('user').setDescription('The Discord user to verify (leave empty to verify yourself)').setRequired(false))
+            .addStringOption(opt => opt.setName('player').setDescription('Optional: Torn Player ID or Name to verify as').setRequired(false)).toJSON(),
 
         new SlashCommandBuilder().setName('verifyall').setDescription('Admin: Re-verify all members in this Discord server and sync nicknames & roles').toJSON(),
 
