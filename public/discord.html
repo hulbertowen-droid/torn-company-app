@@ -2795,10 +2795,10 @@
                             </div>
                             <div class="cmd-card-desc">Active Retaliations: Lists enemies who attacked our members within the 5-minute window.</div>
                         </div>
-                        <div class="cmd-card on" id="cmd-card-revives">
+                        <div class="cmd-card on" id="cmd-card-revive">
                             <div class="cmd-card-top">
-                                <div class="cmd-card-title"><span>💉</span><code>/revives</code></div>
-                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="revives" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                                <div class="cmd-card-title"><span>💉</span><code>/revive</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="revive" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
                             <div class="cmd-card-desc">Faction Revive Audit: Shows member breakdown across Everyone, Friends & Faction, and No One.</div>
                         </div>
@@ -3766,7 +3766,7 @@ function applyConfigToDOM(cfg) {
         .map(c => String(c).toLowerCase().trim());
     document.querySelectorAll('.cmd-toggle').forEach(chk => {
         const cmdName = (chk.dataset.cmd || '').toLowerCase().trim();
-        const isEnabled = !disabledCmds.includes(cmdName);
+        const isEnabled = !disabledCmds.includes(cmdName) && !(cmdName === 'revive' && disabledCmds.includes('revives'));
         chk.checked = isEnabled;
         const card = chk.closest('.cmd-card') || chk.closest('.trigger-row');
         if (card) card.classList.toggle('on', isEnabled);

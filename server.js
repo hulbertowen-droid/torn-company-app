@@ -16458,7 +16458,12 @@ async function registerSlashCommands(token, guildId = null, options = {}) {
 
     const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : [])
         .map(c => String(c).toLowerCase().trim());
-    const activeCommands = commands.filter(cmd => !disabledCmds.includes(cmd.name.toLowerCase()));
+    const activeCommands = commands.filter(cmd => {
+        const name = cmd.name.toLowerCase();
+        if (disabledCmds.includes(name)) return false;
+        if (name === 'revive' && disabledCmds.includes('revives')) return false;
+        return true;
+    });
 
     try {
         let applicationId = slashCommandBot?.user?.id;
@@ -18013,7 +18018,10 @@ function setupSlashBotEvents(bot, token) {
 
         const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : [])
             .map(c => String(c).toLowerCase().trim());
-        if (disabledCmds.includes(cmd) || (subcommand && disabledCmds.includes(subcommand))) {
+        const isCmdDisabled = disabledCmds.includes(cmd) || 
+            (cmd === 'revive' && disabledCmds.includes('revives')) ||
+            (subcommand && (disabledCmds.includes(subcommand) || (subcommand === 'revive' && disabledCmds.includes('revives'))));
+        if (isCmdDisabled) {
             const label = subcommand ? `/${cmd} ${subcommand}` : `/${cmd}`;
             return interaction.reply({
                 content: `⚠️ The \`${label}\` command has been disabled by faction leadership on the dashboard.`,
