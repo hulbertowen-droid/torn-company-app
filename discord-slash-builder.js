@@ -48,10 +48,31 @@ function buildSlashCommands() {
             .addStringOption(opt => opt.setName('note').setDescription('Optional emergency backup note')).toJSON(),
         new SlashCommandBuilder().setName('spy').setDescription('Look up battle stats & spy records for a player')
             .addStringOption(opt => opt.setName('target').setDescription('Torn Player ID or Name').setRequired(true)).toJSON(),
-        new SlashCommandBuilder().setName('risk').setDescription('Retaliation risk report for a target — retal rate, response time, known retaliators')
-            .addStringOption(opt => opt.setName('target').setDescription('Numeric Torn Player ID').setRequired(true)).toJSON(),
-        new SlashCommandBuilder().setName('retal').setDescription('Retaliation risk report for a target — retal rate, response time, known retaliators')
-            .addStringOption(opt => opt.setName('target').setDescription('Numeric Torn Player ID').setRequired(true)).toJSON(),
+        new SlashCommandBuilder().setName('retal').setDescription('List active retaliation targets against players who recently attacked our faction').toJSON(),
+        new SlashCommandBuilder().setName('revives').setDescription('Audit faction member revive settings: Everyone, Friends & Faction, or No One')
+            .addStringOption(opt =>
+                opt.setName('setting')
+                    .setDescription('Filter by specific revive setting')
+                    .setRequired(false)
+                    .addChoices(
+                        { name: '📋 All Settings (Overview)', value: 'all' },
+                        { name: '🟢 Everyone', value: 'everyone' },
+                        { name: '🟡 Friends & Faction', value: 'friends_faction' },
+                        { name: '🔴 No One (Off)', value: 'no_one' }
+                    )
+            ).toJSON(),
+        new SlashCommandBuilder().setName('revive').setDescription('Audit faction member revive settings: Everyone, Friends & Faction, or No One')
+            .addStringOption(opt =>
+                opt.setName('setting')
+                    .setDescription('Filter by specific revive setting')
+                    .setRequired(false)
+                    .addChoices(
+                        { name: '📋 All Settings (Overview)', value: 'all' },
+                        { name: '🟢 Everyone', value: 'everyone' },
+                        { name: '🟡 Friends & Faction', value: 'friends_faction' },
+                        { name: '🔴 No One (Off)', value: 'no_one' }
+                    )
+            ).toJSON(),
 
         // 4. Chain Management
         new SlashCommandBuilder().setName('chain').setDescription('Check live faction chain status, timer, and multiplier').toJSON(),
@@ -65,6 +86,19 @@ function buildSlashCommands() {
         new SlashCommandBuilder().setName('faction').setDescription('Faction intelligence, readiness, and management suite')
             .addSubcommand(sub => sub.setName('roster').setDescription('Live faction readiness breakdown (Online, Traveling, Hospital)'))
             .addSubcommand(sub => sub.setName('hospital').setDescription('List friendly faction members currently hospitalized'))
+            .addSubcommand(sub => sub.setName('revives').setDescription('Audit faction revive settings across Everyone, Friends & Faction, and No One')
+                .addStringOption(opt =>
+                    opt.setName('setting')
+                        .setDescription('Filter by specific revive setting')
+                        .setRequired(false)
+                        .addChoices(
+                            { name: '📋 All Settings', value: 'all' },
+                            { name: '🟢 Everyone', value: 'everyone' },
+                            { name: '🟡 Friends & Faction', value: 'friends_faction' },
+                            { name: '🔴 No One', value: 'no_one' }
+                        )
+                ))
+            .addSubcommand(sub => sub.setName('retal').setDescription('List active retaliation targets against enemies who attacked our faction'))
             .addSubcommand(sub => sub.setName('inactive').setDescription('List faction members inactive for 1+ days'))
             .addSubcommand(sub => sub.setName('notindiscord').setDescription('List faction members not in this Discord server'))
             .addSubcommand(sub => sub.setName('oc').setDescription('Summary of Organized Crimes status and ready teams'))

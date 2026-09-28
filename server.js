@@ -77,7 +77,7 @@ let discordConfig = {
     targetOutHosp: false, 
     chainUnder90: true, 
     chainMilestone: true, 
-    friendlyAttacked: false, 
+    friendlyAttacked: true, 
     medOutSniper: true,
     travelWarnings: true,
     chainWarnings: true,
@@ -699,7 +699,7 @@ discordConfig = {
     targetOutHosp: false, 
     chainUnder90: true, 
     chainMilestone: true, 
-    friendlyAttacked: false, 
+    friendlyAttacked: true, 
     medOutSniper: true,
     travelWarnings: true,
     chainWarnings: true,
@@ -1764,12 +1764,12 @@ async function handleMemberAttackedAlert(atk) {
     try {
         if (!atk) return;
         if (global.isNotificationsKilled) return;
-        if (discordConfig.friendlyAttacked === false) return;
 
         const retalTargetChannel = (discordConfig.retalChannelId && String(discordConfig.retalChannelId).trim()) 
             || "1491499332044591176" 
             || discordConfig.globalChannelId;
         if (!retalTargetChannel || !discordConfig.globalBotToken) return;
+        if (discordConfig.friendlyAttacked === false && !discordConfig.retalChannelId) return;
 
         const alertCode = String(atk.code || atk._id || '');
         if (alertCode) {
@@ -1782,15 +1782,8 @@ async function handleMemberAttackedAlert(atk) {
             }
 
             if (mongoose.connection.readyState === 1) {
-                const existing = await mongoose.connection.db.collection('attack_alerts').findOne({ _id: alertCode });
+                const existing = await mongoose.connection.db.collection('attack_alerts').findOne({ _id: alertCode, sent: true });
                 if (existing) return;
-                await mongoose.connection.db.collection('attack_alerts').insertOne({
-                    _id: alertCode,
-                    timestamp: atk.timestamp || atk.timestamp_ended,
-                    attacker_id: atk.attacker_id,
-                    defender_id: atk.defender_id,
-                    alerted_at: new Date()
-                }).catch(() => {});
             }
         }
 
@@ -1824,8 +1817,15 @@ async function handleMemberAttackedAlert(atk) {
         const result = atk.result || "Attacked";
         const isDefended = ["Lost", "Defended", "Stalemate", "Escape", "Timeout", "Interrupted"].includes(result);
 
-        const title = isDefended ? "🛡️ Faction Member Defended Attack" : "🚨 Faction Member Attacked";
-        const color = isDefended ? (UI.COLORS?.SUCCESS || 0x00b894) : (UI.COLORS?.ERROR || 0xe17055);
+        const atkTs = atk.timestamp || atk.timestamp_ended || Math.floor(Date.now() / 1000);
+        const retalExpireTs = atkTs + 300; // 5-minute retaliation window in Torn
+        const nowS = Math.floor(Date.now() / 1000);
+        const isRetalActive = nowS < retalExpireTs;
+
+        const title = isDefended 
+            ? "🛡️ Faction Member Defended Attack" 
+            : (isInternal ? "⚔️ Internal Sparring Hit" : "🚨 Faction Member Attacked — Retaliate!");
+        const color = isDefended ? (UI.COLORS?.SUCCESS || 0x2ECC71) : (UI.COLORS?.ERROR || 0xE74C3C);
 
         let desc = "";
         if (isInternal) {
@@ -1834,19 +1834,22 @@ async function handleMemberAttackedAlert(atk) {
             desc = `**${defenderName}** was attacked by an unknown assailant (**Someone** — stealthed hit).`;
         } else {
             desc = `**${defenderName}** was attacked by **${attackerName}** [${attackerId}] from \`${attackerFactionName}\`.`;
+            if (isRetalActive && !isDefended) {
+                desc += `\n-# ⚡ **Retaliation Bonus Active** — Land a counter-hit within 5 minutes for bonus respect!`;
+            }
         }
 
         const fields = [
-            { name: "Result", value: result, inline: true }
+            { name: "Result", value: `**${result}**`, inline: true }
         ];
 
-        // 1. Attacker Estimated Battle Stats (Query FF Scouter for live accurate stats!)
+        // Attacker Estimated Battle Stats (from FF Scouter or Spy DB)
         if (!isStealthed) {
             let statDisplay = "Unknown";
             const ffStats = await getPlayerStatsFromFFScouter(attackerId);
             if (ffStats) {
                 const ffPart = ffStats.fairFight ? ` (FF: ${ffStats.fairFight})` : '';
-                statDisplay = `~${ffStats.human || ffStats.total.toLocaleString()}${ffPart} [FF Scouter]`;
+                statDisplay = `~${ffStats.human || ffStats.total.toLocaleString()}${ffPart}`;
             } else {
                 const rawEst = (spyDatabase[attackerId]?.total) || (statsCache[attackerId]?.stats) || (manualStats[attackerId]?.stats) || 0;
                 if (rawEst > 0) {
@@ -1856,69 +1859,16 @@ async function handleMemberAttackedAlert(atk) {
             fields.push({ name: "Attacker Est. Stats", value: statDisplay, inline: true });
         }
 
-        // 2. Full Retaliation Risk Engine Breakdown (Always active when attacker is known)
-        if (!isStealthed) {
-            try {
-                const risk = await retalEngine.getRiskScore(attackerId, atkFac);
-                if (risk && risk.adjusted_rate !== undefined) {
-                    const riskPct = Math.round((risk.adjusted_rate || 0) * 100);
-                    const filled = Math.min(10, Math.max(0, Math.round(riskPct / 10)));
-                    const empty = Math.max(0, 10 - filled);
-                    const bar = '`' + '▓'.repeat(filled) + '░'.repeat(empty) + '`';
-
-                    fields.push({
-                        name: "🛡️ Retaliation Probability",
-                        value: `**${riskPct}%** ${bar}`,
-                        inline: true
-                    });
-
-                    fields.push({
-                        name: "🎯 Risk Confidence",
-                        value: risk.confidence_label || 'Empirical Bayes Prior (k=7)',
-                        inline: true
-                    });
-
-                    let windowStr = '⏱️ Pending more observations';
-                    if (risk.avg_response_seconds) {
-                        const avgMin = Math.round(risk.avg_response_seconds / 60);
-                        windowStr = avgMin <= 10 ? `⚡ Fast (<10m, avg ~${avgMin}m)` : `⏳ Delayed (avg ~${avgMin}m)`;
-                    }
-                    fields.push({
-                        name: "⏱️ Response Window",
-                        value: windowStr,
-                        inline: true
-                    });
-
-                    if (risk.win_loss_ratio !== null && risk.win_loss_ratio !== undefined) {
-                        const wlText = risk.win_loss_ratio < 0.5 ? 'Favors us' : risk.win_loss_ratio > 1.5 ? 'Dangerous' : 'Even';
-                        fields.push({
-                            name: "⚔️ Retal Win/Loss",
-                            value: `${risk.win_loss_ratio}:1 (${wlText})`,
-                            inline: true
-                        });
-                    }
-
-                    if (risk.retaliator_pool && risk.retaliator_pool.length > 0) {
-                        const poolLines = risk.retaliator_pool.slice(0, 3).map((r, i) => {
-                            const icon = i === 0 ? '🔴' : i === 1 ? '🟡' : '🟠';
-                            return `${icon} [Player ${r.id}](https://www.torn.com/profiles.php?XID=${r.id}) — ${r.count} confirmed retal${r.count !== 1 ? 's' : ''}`;
-                        });
-                        fields.push({
-                            name: "⚠️ Likely Retaliators",
-                            value: poolLines.join('\n'),
-                            inline: false
-                        });
-                    } else if (isInternal) {
-                        fields.push({
-                            name: "⚠️ Likely Retaliators",
-                            value: "*Internal sparring hit between faction members — no enemy retal risk.*",
-                            inline: false
-                        });
-                    }
-                }
-            } catch(e) {
-                console.warn('[Discord Retal Sentinel] Risk score calc warning:', e.message);
-            }
+        // 5-minute Retaliation Window Countdown
+        if (!isStealthed && !isInternal) {
+            const windowStr = isRetalActive
+                ? `⚡ **Active — <t:${retalExpireTs}:R>** (until <t:${retalExpireTs}:T>)`
+                : `⌛ **Expired** (<t:${retalExpireTs}:R>)`;
+            fields.push({
+                name: "⏱️ Retaliation Window",
+                value: windowStr,
+                inline: true
+            });
         }
 
         const links = [];
@@ -1961,6 +1911,23 @@ async function handleMemberAttackedAlert(atk) {
 
         console.log(`[Discord Retal Sentinel] Sending member attacked alert to channel ${retalTargetChannel}: ${desc}`);
         await sendChannelMessage(discordConfig.globalBotToken, retalTargetChannel, embed, pingStr, true);
+
+        if (mongoose.connection.readyState === 1 && alertCode) {
+            await mongoose.connection.db.collection('attack_alerts').updateOne(
+                { _id: alertCode },
+                {
+                    $set: {
+                        _id: alertCode,
+                        sent: true,
+                        timestamp: atk.timestamp || atk.timestamp_ended,
+                        attacker_id: atk.attacker_id,
+                        defender_id: atk.defender_id,
+                        alerted_at: new Date()
+                    }
+                },
+                { upsert: true }
+            ).catch(() => {});
+        }
     } catch(err) {
         console.warn('[Discord Retal Sentinel] Error sending member attacked alert:', err.message);
     }
@@ -2089,7 +2056,7 @@ setInterval(async () => {
                         }
                     }
                     
-                    if (hasBackfilledWar && isRecent) {
+                    if (isRecent) {
                         handleMemberAttackedAlert({
                             code: atk.code || atkId,
                             attacker_id: attackerId,
@@ -4057,15 +4024,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             fields: [
                 { name: "Result", value: "Hospitalized", inline: true },
                 { name: "Attacker Est. Stats", value: "~820k (FF: 3.63) [FF Scouter]", inline: true },
-                { name: "🛡️ Retaliation Probability", value: "**67%** `▓▓▓▓▓▓▓░░░`", inline: true },
-                { name: "🎯 Risk Confidence", value: "🟢 14 direct observations", inline: true },
-                { name: "⏱️ Response Window", value: "⚡ Fast (<10m, avg ~3m 42s)", inline: true },
-                { name: "⚔️ Retal Win/Loss", value: "0.35:1 (Favors us)", inline: true },
-                {
-                    name: "⚠️ Likely Retaliators",
-                    value: "🔴 [Player 123456](https://www.torn.com/profiles.php?XID=123456) — 8 confirmed retals\n🟡 [Player 789012](https://www.torn.com/profiles.php?XID=789012) — 4 confirmed retals",
-                    inline: false
-                }
+                { name: "⏱️ Retaliation Window", value: "⚡ **Active — 4m 30s left**", inline: true }
             ],
             links: [
                 { label: "⚔️ Retaliate / Attack", url: "https://www.torn.com/page.php?sid=attack&user2ID=999999" },
@@ -9151,21 +9110,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
 
         if (difficulty === 'Too Strong' && cleanTier !== 'all') continue;
 
-        // ── Retal Risk Penalty (non-blocking, uses in-memory cache) ──
-        let retalRate = 0.28; // global mean fallback
-        let retalTier = 'cold_start';
-        try {
-            const rScore = await retalEngine.getRiskScore(targetId, null);
-            if (rScore) {
-                retalRate = rScore.adjusted_rate || 0.28;
-                retalTier = rScore.tier || 'cold_start';
-            }
-        } catch(e) { /* silent — never block snipe for retal engine errors */ }
-
-        // final_score = bs_score * (1 - 0.30 * retalRate)
-        // A target with 90% retal rate loses up to 27 points from base score
-        const retalPenalty = Math.round(baseScore * 0.30 * retalRate);
-        const score = Math.min(99, Math.max(10, baseScore - retalPenalty));
+        const score = Math.min(99, Math.max(10, baseScore));
 
         scoredCandidates.push({
             id: targetId,
@@ -9178,9 +9123,7 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
             ratio,
             score,
             difficulty,
-            risk,
-            retalRate,
-            retalTier
+            risk
         });
     }
 
@@ -10336,10 +10279,6 @@ async function buildTargetsEmbed(apiKey) {
             };
         }
 
-        // Bulk-fetch retal risk scores (hits MongoDB cache, no Torn API call)
-        const riskTargets = top10.map(m => ({ id: m.id, faction_id: Number(enemyId) }));
-        const riskMap = await retalEngine.getRiskScoreBulk(riskTargets).catch(() => new Map());
-
         const lines = top10.map((m, idx) => {
             const statusText = m.last_action?.status === 'Online' ? '🟢 Online' : (m.last_action?.status === 'Idle' ? '🟡 Idle' : '⚪ Offline');
             const spyTotal = spyDatabase[m.id]?.total || statsCache[m.id]?.stats || manualStats[m.id]?.stats;
@@ -10347,14 +10286,12 @@ async function buildTargetsEmbed(apiKey) {
                 ? `**${formatStatNumber(spyTotal)}** stats`
                 : `~**${formatStatNumber(estimateStatsFromLevel(m.level))}** *(Est)*`;
             const claimTag = claims[m.id] ? ` *(🎯 Claimed: ${claims[m.id].playerName})*` : '';
-            const risk = riskMap.get(Number(m.id));
-            const riskTag = risk ? ` · ${retalEngine.formatRiskTag(risk)}` : '';
-            return `${idx + 1}. [${statusText}] ${UI.player(m.name, m.id)} — ${statsStr}${riskTag} · [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})${claimTag}`;
+            return `${idx + 1}. [${statusText}] ${UI.player(m.name, m.id)} — ${statsStr} · [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})${claimTag}`;
         });
 
         return {
             title: `🕷️ ${data.name || 'Enemy'} — Attack Targets (${available.length} Available)`,
-            description: lines.join('\n') + '\n\n*🛡️ = Retaliation risk % · 🟢 Direct 🟡 Shrunk 🟠 Faction ⚫ Cold*',
+            description: lines.join('\n'),
             color: UI.COLORS.TEAL,
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
@@ -10636,6 +10573,255 @@ async function buildOnlineRosterEmbed(apiKey) {
         };
     } catch(e) {
         return { title: "👥 Faction Roster", description: `⚠️ Error: ${e.message}`, color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
+    }
+}
+
+async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
+    const key = apiKey || getNextApiKey() || discordConfig.apiKey || TORN_API_KEY;
+    if (!key) {
+        return {
+            title: "💉 Faction Revive Settings Audit",
+            description: "⚠️ No Torn API key configured. Please configure an API key with faction access in Settings.",
+            color: UI.COLORS.ERROR,
+            footer: UI.FOOTER,
+            timestamp: new Date().toISOString()
+        };
+    }
+
+    try {
+        const res = await fetch(`https://api.torn.com/v2/faction/members?key=${encodeURIComponent(key)}`, {
+            signal: AbortSignal.timeout(9000)
+        });
+        const data = await res.json();
+
+        if (data.error) {
+            return {
+                title: "💉 Faction Revive Settings Audit",
+                description: `⚠️ Torn API Error: ${data.error.error || 'Failed to fetch members'}.\n\n*Note: A Torn API key with Faction permissions is required to inspect member revive settings.*`,
+                color: UI.COLORS.ERROR,
+                footer: UI.FOOTER,
+                timestamp: new Date().toISOString()
+            };
+        }
+
+        const members = Array.isArray(data.members) ? data.members : [];
+        if (members.length === 0) {
+            return {
+                title: "💉 Faction Revive Settings Audit",
+                description: "⚠️ No faction members returned by the API.",
+                color: UI.COLORS.WARNING,
+                footer: UI.FOOTER,
+                timestamp: new Date().toISOString()
+            };
+        }
+
+        // Group members by the 3 Torn revive settings
+        const everyone = [];
+        const friendsFaction = [];
+        const noOne = [];
+        const other = [];
+
+        for (const m of members) {
+            const setting = String(m.revive_setting || '').toLowerCase().trim();
+            if (setting === 'everyone') {
+                everyone.push(m);
+            } else if (setting.includes('friends')) {
+                friendsFaction.push(m);
+            } else if (setting === 'no one' || setting === 'nobody' || setting === 'none') {
+                noOne.push(m);
+            } else {
+                other.push(m);
+            }
+        }
+
+        const total = members.length;
+        const normFilter = String(filterSetting || 'all').toLowerCase().trim();
+
+        function appendCategoryFields(fields, titleEmoji, titleName, memberList) {
+            if (!memberList || memberList.length === 0) {
+                fields.push({
+                    name: `${titleEmoji} ${titleName} (0)`,
+                    value: '*None*',
+                    inline: false
+                });
+                return;
+            }
+
+            const formatted = memberList.map(m => {
+                const isHosp = m.status?.state === 'Hospital' || (m.status?.description || '').toLowerCase().includes('hospital');
+                const hospTag = isHosp ? ' 🏥' : '';
+                return `[${m.name} [${m.id}]](https://www.torn.com/profiles.php?XID=${m.id})${hospTag}`;
+            });
+
+            let chunk = [];
+            let chunkLen = 0;
+            let part = 1;
+
+            for (const item of formatted) {
+                const itemLen = item.length + 2;
+                if (chunkLen + itemLen > 950 && chunk.length > 0) {
+                    fields.push({
+                        name: part === 1 ? `${titleEmoji} ${titleName} (${memberList.length})` : `${titleEmoji} ${titleName} (Cont. ${part})`,
+                        value: chunk.join(', '),
+                        inline: false
+                    });
+                    chunk = [item];
+                    chunkLen = item.length;
+                    part++;
+                } else {
+                    chunk.push(item);
+                    chunkLen += itemLen;
+                }
+            }
+
+            if (chunk.length > 0) {
+                fields.push({
+                    name: part === 1 ? `${titleEmoji} ${titleName} (${memberList.length})` : `${titleEmoji} ${titleName} (Cont. ${part})`,
+                    value: chunk.join(', '),
+                    inline: false
+                });
+            }
+        }
+
+        const fields = [];
+        let description = '';
+
+        if (normFilter === 'everyone') {
+            description = `Showing all **${everyone.length}** faction members with revives set to **Everyone** (Open to all players):\n-# 🏥 = Member is currently in hospital`;
+            appendCategoryFields(fields, '🟢', 'Everyone', everyone);
+        } else if (normFilter === 'friends_faction' || normFilter === 'friends' || normFilter === 'faction') {
+            description = `Showing all **${friendsFaction.length}** faction members with revives set to **Friends & Faction** only:\n-# 🏥 = Member is currently in hospital`;
+            appendCategoryFields(fields, '🟡', 'Friends & Faction', friendsFaction);
+        } else if (normFilter === 'no_one' || normFilter === 'nobody' || normFilter === 'off') {
+            description = `Showing all **${noOne.length}** faction members with revives set to **No One** (Revives Disabled):\n-# 🏥 = Member is currently in hospital`;
+            appendCategoryFields(fields, '🔴', 'No One — Revives Off', noOne);
+        } else {
+            description = `Audit of all **${total}** faction members across the **3 Torn Revive Settings**:\n` +
+                          `• 🟢 **Everyone:** **${everyone.length}** (${Math.round((everyone.length / total) * 100)}%)\n` +
+                          `• 🟡 **Friends & Faction:** **${friendsFaction.length}** (${Math.round((friendsFaction.length / total) * 100)}%)\n` +
+                          `• 🔴 **No One (Off):** **${noOne.length}** (${Math.round((noOne.length / total) * 100)}%)\n` +
+                          `-# 🏥 = Member is currently in hospital`;
+
+            appendCategoryFields(fields, '🟢', 'Everyone', everyone);
+            appendCategoryFields(fields, '🟡', 'Friends & Faction', friendsFaction);
+            appendCategoryFields(fields, '🔴', 'No One — Revives Off', noOne);
+
+            if (other.length > 0) {
+                appendCategoryFields(fields, '⚪', 'Unknown / Other', other);
+            }
+        }
+
+        return {
+            title: `💉 Faction Revive Settings Audit`,
+            description,
+            color: UI.COLORS.BLUE,
+            fields,
+            footer: UI.FOOTER,
+            timestamp: new Date().toISOString()
+        };
+    } catch(e) {
+        return {
+            title: "💉 Faction Revive Settings Audit",
+            description: `⚠️ Error fetching revive settings: ${e.message}`,
+            color: UI.COLORS.ERROR,
+            footer: UI.FOOTER,
+            timestamp: new Date().toISOString()
+        };
+    }
+}
+
+async function buildRetaliationsEmbed(apiKey) {
+    const key = apiKey || getNextApiKey() || discordConfig.apiKey || TORN_API_KEY;
+    if (!key) {
+        return {
+            title: "⚔️ Active Retaliations",
+            description: "⚠️ No Torn API key configured.",
+            color: UI.COLORS.ERROR,
+            footer: UI.FOOTER,
+            timestamp: new Date().toISOString()
+        };
+    }
+
+    try {
+        const res = await fetch(`https://api.torn.com/faction/?selections=attacks,basic&key=${key}`, {
+            signal: AbortSignal.timeout(8000)
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error.error || "Torn API error");
+
+        const ourFacId = data.ID ? Number(data.ID) : Number(discordConfig.factionId || 0);
+        const attacks = Object.values(data.attacks || {});
+        const now = Math.floor(Date.now() / 1000);
+
+        // Find incoming attacks on our faction in the last 15 minutes
+        const incoming = attacks.filter(atk => {
+            const defFac = Number(atk.defender_faction || 0);
+            const atkId = Number(atk.attacker_id || 0);
+            const defId = Number(atk.defender_id || 0);
+            const ts = Number(atk.timestamp_ended || 0);
+            return defFac === ourFacId && atkId !== defId && (now - ts) <= 900;
+        });
+
+        const activeRetals = incoming.filter(atk => (now - atk.timestamp_ended) <= 300);
+        const expiredRetals = incoming.filter(atk => (now - atk.timestamp_ended) > 300);
+
+        if (activeRetals.length === 0 && expiredRetals.length === 0) {
+            return {
+                title: "⚔️ Retaliation Opportunities — None Active",
+                description: `✅ No faction members have been attacked in the last 15 minutes.\nYour faction has 0 pending retaliations right now.`,
+                color: UI.COLORS.SUCCESS,
+                footer: UI.FOOTER,
+                timestamp: new Date().toISOString()
+            };
+        }
+
+        const fields = [];
+        if (activeRetals.length > 0) {
+            const lines = activeRetals.map((atk, idx) => {
+                const timeLeft = Math.max(0, 300 - (now - atk.timestamp_ended));
+                const mins = Math.floor(timeLeft / 60);
+                const secs = timeLeft % 60;
+                const timeStr = `${mins}m ${secs}s`;
+                const atkLink = `https://www.torn.com/page.php?sid=attack&user2ID=${atk.attacker_id}`;
+                return `${idx + 1}. **[${atk.attacker_name || 'Attacker'} [${atk.attacker_id}]](https://www.torn.com/profiles.php?XID=${atk.attacker_id})** from \`${atk.attacker_factionname || 'Faction'}\`\n` +
+                       `   └ Hit **${atk.defender_name || atk.defender_id}** (${atk.result || 'Attacked'}) · ⏱️ **${timeStr} left**\n` +
+                       `   └ [⚔️ Retaliate Now](${atkLink}) · [👤 Profile](https://www.torn.com/profiles.php?XID=${atk.attacker_id})`;
+            });
+            fields.push({
+                name: `⚡ Active Retaliations (${activeRetals.length}) — 5m Bonus Window`,
+                value: lines.join('\n'),
+                inline: false
+            });
+        }
+
+        if (expiredRetals.length > 0 && activeRetals.length < 5) {
+            const lines = expiredRetals.slice(0, 5).map((atk, idx) => {
+                const agoMin = Math.floor((now - atk.timestamp_ended) / 60);
+                return `${idx + 1}. **[${atk.attacker_name || 'Attacker'} [${atk.attacker_id}]](https://www.torn.com/profiles.php?XID=${atk.attacker_id})** hit **${atk.defender_name}** (${atk.result}) — ⌛ *${agoMin}m ago (Expired)*`;
+            });
+            fields.push({
+                name: `⌛ Recently Expired (${expiredRetals.length})`,
+                value: lines.join('\n'),
+                inline: false
+            });
+        }
+
+        return {
+            title: `⚔️ Active Retaliation Opportunities (${activeRetals.length} Live)`,
+            description: `Enemies who attacked **${data.name || 'Spider-Verse'}** members within the 5-minute retaliation window:`,
+            color: activeRetals.length > 0 ? UI.COLORS.ERROR : UI.COLORS.NEUTRAL,
+            fields,
+            footer: UI.FOOTER,
+            timestamp: new Date().toISOString()
+        };
+    } catch(e) {
+        return {
+            title: "⚔️ Retaliation Opportunities",
+            description: `⚠️ Error fetching attacks: ${e.message}`,
+            color: UI.COLORS.ERROR,
+            footer: UI.FOOTER,
+            timestamp: new Date().toISOString()
+        };
     }
 }
 
@@ -17377,34 +17563,11 @@ function setupSlashBotEvents(bot, token) {
 
                 const attackLink = `https://www.torn.com/page.php?sid=attack&user2ID=${targetId}`;
 
-                // Fetch retal risk in parallel (non-blocking)
-                let retalBlock = '';
-                try {
-                    const rScore = await retalEngine.getRiskScore(targetId, null);
-                    if (rScore) {
-                        const pct = Math.round((rScore.adjusted_rate || 0) * 100);
-                        const pool = rScore.retaliator_pool || [];
-                        const tierLabel = rScore.confidence_label || '⚫ Cold start';
-
-                        if (pool.length > 0) {
-                            const retaliatorLines = pool.slice(0, 3).map((r, i) => {
-                                const icon = i === 0 ? '🔴' : i === 1 ? '🟡' : '🟠';
-                                const avgS = rScore.avg_response_seconds;
-                                const timeStr = avgS ? ` — hits back in ~${avgS < 60 ? avgS + 's' : Math.round(avgS/60) + 'm'} avg` : '';
-                                return `${icon} [Player ${r.id}](https://www.torn.com/profiles.php?XID=${r.id}) — ${r.count} confirmed retaliation${r.count !== 1 ? 's' : ''}${i === 0 ? timeStr : ''}`;
-                            });
-                            retalBlock = `\n\n**⚠️ Known Retaliators (${pct}% retal rate):**\n${retaliatorLines.join('\n')}\n-# ${tierLabel}`;
-                        } else {
-                            retalBlock = `\n\n🛡️ **Retal Risk: ${pct}%** — ${tierLabel}\n-# No specific retaliators on record for this target`;
-                        }
-                    }
-                } catch(e) {}
-
                 return interaction.reply({
                     embeds: [{
                         title: `🎯 Target [${targetId}] Claimed!`,
                         description: `**<@${interaction.user.id}>** has claimed **Target [${targetId}]** directly from Discord.\n\n` +
-                            `[⚔️ Launch Attack in Torn](${attackLink}) • [👤 Profile](https://www.torn.com/profiles.php?XID=${targetId})${retalBlock}`,
+                            `[⚔️ Launch Attack in Torn](${attackLink}) • [👤 Profile](https://www.torn.com/profiles.php?XID=${targetId})`,
                         color: UI.COLORS.SUCCESS, footer: UI.FOOTER,
                         timestamp: new Date().toISOString()
                     }]
@@ -17925,10 +18088,8 @@ function setupSlashBotEvents(bot, token) {
                     `**Opposing Team:** ⚔️ **${result.team || 'Opponent'}**\n` +
                     `**Status:** 🟢 ${result.status} · 📍 ${result.travel}\n` +
                     `**Battle Stats:** ~${result.targetBSHuman} (${result.difficulty})\n` +
-                    `**FF / Score:** FF: ${result.ff ?? 'N/A'} · Score: **${result.score}/100**\n` +
-                    `**Retal Risk:** 🛡️ **${Math.round((result.retalRate || 0.28) * 100)}%** chance they hit back — ${retalEngine.formatRiskTag({ adjusted_rate: result.retalRate || 0.28, tier: result.retalTier || 'cold_start' })}\n\n` +
-                    `**Why this target?**\n${whyList}\n\n` +
-                    `*🛡️ = Retaliation risk % · 🟢 Direct 🟡 Shrunk 🟠 Faction ⚫ Cold*`,
+                    `**FF / Score:** FF: ${result.ff ?? 'N/A'} · Score: **${result.score}/100**\n\n` +
+                    `**Why this target?**\n${whyList}`,
                 color: UI.COLORS.TEAL,
                 footer: UI.FOOTER,
                 timestamp: new Date().toISOString()
@@ -18479,33 +18640,10 @@ function setupSlashBotEvents(bot, token) {
             claims[targetId] = { playerName: interaction.user.username, time: Date.now() };
             const attackLink = `https://www.torn.com/page.php?sid=attack&user2ID=${targetId}`;
 
-            // Fetch retal risk in parallel (non-blocking — claim posts immediately, retal appended)
-            let retalBlock = '';
-            try {
-                const rScore = await retalEngine.getRiskScore(targetId, null);
-                if (rScore) {
-                    const pct = Math.round((rScore.adjusted_rate || 0) * 100);
-                    const pool = rScore.retaliator_pool || [];
-                    const tierLabel = rScore.confidence_label || '⚫ Cold start';
-
-                    if (pool.length > 0) {
-                        const retaliatorLines = pool.slice(0, 3).map((r, i) => {
-                            const icon = i === 0 ? '🔴' : i === 1 ? '🟡' : '🟠';
-                            const avgS = rScore.avg_response_seconds;
-                            const timeStr = avgS ? ` — hits back in ~${avgS < 60 ? avgS + 's' : Math.round(avgS/60) + 'm'} avg` : '';
-                            return `${icon} [Player ${r.id}](https://www.torn.com/profiles.php?XID=${r.id}) — ${r.count} confirmed retaliation${r.count !== 1 ? 's' : ''}${i === 0 ? timeStr : ''}`;
-                        });
-                        retalBlock = `\n\n**⚠️ Known Retaliators (${pct}% retal rate):**\n${retaliatorLines.join('\n')}\n-# ${tierLabel}`;
-                    } else {
-                        retalBlock = `\n\n🛡️ **Retal Risk: ${pct}%** — ${tierLabel}\n-# No specific retaliators on record for this target`;
-                    }
-                }
-            } catch(e) { /* silent — never block claim for retal engine errors */ }
-
             return interaction.reply({
                 embeds: [{
                     title: `🎯 Target Claimed: [${targetId}]`,
-                    description: `**<@${interaction.user.id}>** has claimed **Target [${targetId}]**.\n\n[⚔️ Launch Attack](${attackLink}) • [👤 Profile](https://www.torn.com/profiles.php?XID=${targetId})${retalBlock}`,
+                    description: `**<@${interaction.user.id}>** has claimed **Target [${targetId}]**.\n\n[⚔️ Launch Attack](${attackLink}) • [👤 Profile](https://www.torn.com/profiles.php?XID=${targetId})`,
                     color: UI.COLORS.SUCCESS, footer: UI.FOOTER, timestamp: new Date().toISOString()
                 }]
             });
@@ -19420,6 +19558,11 @@ function setupSlashBotEvents(bot, token) {
                 } else if (subcommand === 'flights') {
                     const ffKey = getGlobalFFKey() || discordConfig.ffKey;
                     embed = await buildWarFlightsEmbed(apiKey, ffKey);
+                } else if (subcommand === 'revives' || subcommand === 'revive') {
+                    const setting = interaction.options.getString('setting') || 'all';
+                    embed = await buildRevivesEmbed(apiKey, setting);
+                } else if (subcommand === 'retal' || subcommand === 'retaliate' || subcommand === 'retaliations') {
+                    embed = await buildRetaliationsEmbed(apiKey);
                 }
             }
             // ── Alert Bot Controls ──
@@ -19451,15 +19594,11 @@ function setupSlashBotEvents(bot, token) {
             } else if (cmd === 'spy') {
                 const target = interaction.options.getString('target');
                 embed = await buildSpyEmbed(target, apiKey);
-            } else if (cmd === 'risk' || cmd === 'retal' || cmd === 'retaliation') {
-                const targetId = (interaction.options.getString('target') || '').trim().replace(/[^0-9]/g, '');
-                if (!targetId) {
-                    embed = UI.warning('⚠️ Invalid Target', 'Please provide a numeric Torn Player ID.');
-                } else {
-                    const rScore = await retalEngine.getRiskScore(targetId, null);
-                    const playerName = playerNameCache[targetId] || `Player ${targetId}`;
-                    embed = retalEngine.buildRiskEmbed(rScore, playerName);
-                }
+            } else if (cmd === 'retal' || cmd === 'retaliation' || cmd === 'retaliations') {
+                embed = await buildRetaliationsEmbed(apiKey);
+            } else if (cmd === 'revives' || cmd === 'revive') {
+                const setting = interaction.options.getString('setting') || 'all';
+                embed = await buildRevivesEmbed(apiKey, setting);
             } else if (cmd === 'chain') {
                 embed = await buildChainStatusEmbed(apiKey);
             } else if (cmd === 'chainwatch') {

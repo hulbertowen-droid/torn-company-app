@@ -174,20 +174,11 @@ async function dispatchAttackAlert(doc, atkRaw = {}) {
 
     try {
         if (_db) {
-            const existing = await col('attack_alerts').findOne({ _id: code });
+            const existing = await col('attack_alerts').findOne({ _id: code, sent: true });
             if (existing) {
                 _alertedAttackCodes.add(code);
                 return;
             }
-            // Mark as alerted in MongoDB
-            await col('attack_alerts').insertOne({
-                _id: code,
-                timestamp: doc.timestamp,
-                attacker_id: doc.attacker_id,
-                defender_id: doc.defender_id,
-                direction: doc.direction,
-                alerted_at: new Date()
-            }).catch(() => {});
         }
         _alertedAttackCodes.add(code);
 
@@ -224,7 +215,7 @@ async function dispatchAttackAlert(doc, atkRaw = {}) {
 async function checkPendingRecentAlerts() {
     if (typeof _onAttackAlertCallback !== 'function' || !_db) return;
     try {
-        const cutoff = nowSecs() - 3600; // last 60 minutes
+        const cutoff = nowSecs() - 300; // last 5 minutes (active retals only!)
         const recentAttacks = await col('attack_log')
             .find({
                 defender_faction_id: _ourFactionId,
@@ -308,7 +299,7 @@ async function ingestAttacks() {
 
             // Real-time alert check: if our faction member was attacked (not self-hit)
             if (defFac === _ourFactionId && atkId !== defId) {
-                const isRecent = ts > (nowSecs() - 3600); // within last 60 mins
+                const isRecent = ts > (nowSecs() - 360); // within last 6 mins (active 5m retal)
                 if (isRecent) {
                     const tempDoc = {
                         _id: code,
