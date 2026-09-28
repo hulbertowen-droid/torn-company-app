@@ -892,6 +892,14 @@
                     <div id="discord-test-status" style="font-size:0.78em;margin-top:5px;font-weight:700;text-align:center;"></div>
                 </div>
                 <div>
+                    <label>Retaliator Alert Ping Target (Role ID, @here, @everyone, or leave blank)</label>
+                    <input type="text" id="retal-role-input" placeholder="e.g. 1491526701673349180 or @here">
+                    <label style="display:flex;align-items:center;gap:8px;font-size:0.8em;margin-top:6px;cursor:pointer;">
+                        <input type="checkbox" id="retal-ping-defender-input">
+                        <span>Also ping the attacked faction member</span>
+                    </label>
+                </div>
+                <div>
                     <label>API Calls Per Minute (Max 60)</label>
                     <input type="number" id="api-cpm" min="1" max="60" value="12" placeholder="e.g. 12 = refresh every 5s">
                 </div>
@@ -1289,6 +1297,8 @@ function openSettings() {
     document.getElementById("discord-bottoken").value = globalBotToken;
     document.getElementById("discord-channelid").value = globalChannelId.replace(/[^0-9]/g, '');
     document.getElementById("api-cpm").value = cpm;
+    document.getElementById("retal-role-input").value = localStorage.getItem("warboard_retal_roleid") || "";
+    document.getElementById("retal-ping-defender-input").checked = localStorage.getItem("warboard_retal_ping_defender") === "true";
     document.getElementById("settings-modal").style.display = "flex";
 }
 function closeSettings() { document.getElementById("settings-modal").style.display = "none"; }
@@ -1361,9 +1371,13 @@ async function saveSettings() {
     localStorage.setItem("warboard_myname", myName);
     localStorage.setItem("warboard_bottoken", globalBotToken);
     localStorage.setItem("warboard_channelid", globalChannelId);
+    const retalRoleId = document.getElementById("retal-role-input") ? document.getElementById("retal-role-input").value.trim() : "";
+    const retalPingDefender = document.getElementById("retal-ping-defender-input") ? document.getElementById("retal-ping-defender-input").checked : false;
+    localStorage.setItem("warboard_retal_roleid", retalRoleId);
+    localStorage.setItem("warboard_retal_ping_defender", retalPingDefender);
     localStorage.setItem("warboard_cpm", cpm);
     if (globalBotToken) {
-        fetch('/api/save-discord-config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ globalBotToken, globalChannelId }) }).catch(()=>{});
+        fetch('/api/save-discord-config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ globalBotToken, globalChannelId, retalRoleId, retalPingDefender }) }).catch(()=>{});
         fetch('/api/save-market-config', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ globalChannelId }) }).catch(()=>{});
     }
     knownEnemies = {};

@@ -2240,7 +2240,13 @@
                             <option value="">-- Select Role (or leave blank) --</option>
                         </select>
                         <input class="field-input manual-id-input" type="text" id="retal-roleid" placeholder="Role ID, @here, or @everyone" autocomplete="off" oninput="trackDirty();" style="display:none; margin-top:6px;">
-                        <span class="field-hint">Role to ping when retaliation targets or incoming retaliations strike (e.g. Enforcers, Hitters).</span>
+                        <span class="field-hint">Role or user to ping when retaliation opportunities strike (e.g. Enforcers, Hitters, @here, @everyone).</span>
+                        <div style="margin-top:8px;">
+                            <label style="display:flex; align-items:center; gap:8px; font-size:0.85em; cursor:pointer; color:var(--text-muted, #ccc);">
+                                <input type="checkbox" id="retal-ping-defender" onchange="trackDirty();">
+                                <span>Also ping the attacked faction member (defender)</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -3688,6 +3694,7 @@ function applyConfigToDOM(cfg) {
     if (document.getElementById('overdose-roleid')) document.getElementById('overdose-roleid').value = cfg.overdoseRoleId || localStorage.getItem('warboard_overdose_roleid') || '';
     if (document.getElementById('retal-channelid')) document.getElementById('retal-channelid').value = (cfg.retalChannelId || localStorage.getItem('warboard_retal_channelid') || '').replace(/[^0-9]/g, '');
     if (document.getElementById('retal-roleid')) document.getElementById('retal-roleid').value = cfg.retalRoleId || localStorage.getItem('warboard_retal_roleid') || '';
+    if (document.getElementById('retal-ping-defender')) document.getElementById('retal-ping-defender').checked = cfg.retalPingDefender === true || localStorage.getItem('warboard_retal_ping_defender') === 'true';
     if (document.getElementById('banking-channelid')) document.getElementById('banking-channelid').value = (cfg.bankingChannelId || localStorage.getItem('warboard_banking_channelid') || '').replace(/[^0-9]/g, '');
     if (document.getElementById('promotion-channelid')) document.getElementById('promotion-channelid').value = (cfg.promotionChannelId || localStorage.getItem('warboard_promotion_channelid') || '').replace(/[^0-9]/g, '');
     if (document.getElementById('banker-roleid')) document.getElementById('banker-roleid').value = (cfg.bankerRoleId || localStorage.getItem('warboard_banker_roleid') || '').replace(/[^0-9]/g, '');
@@ -3840,6 +3847,7 @@ async function saveDiscordConfig() {
     const overdoseRoleId = document.getElementById('overdose-roleid')?.value.trim() || '';
     const retalChannelId = (document.getElementById('retal-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const retalRoleId = document.getElementById('retal-roleid')?.value.trim() || '';
+    const retalPingDefender = document.getElementById('retal-ping-defender')?.checked ?? false;
     const bankingChannelId = (document.getElementById('banking-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const promotionChannelId = (document.getElementById('promotion-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const bankerRoleId = (document.getElementById('banker-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
@@ -3897,6 +3905,7 @@ async function saveDiscordConfig() {
     localStorage.setItem('warboard_overdose_roleid', overdoseRoleId);
     localStorage.setItem('warboard_retal_channelid', retalChannelId);
     localStorage.setItem('warboard_retal_roleid', retalRoleId);
+    localStorage.setItem('warboard_retal_ping_defender', retalPingDefender);
     localStorage.setItem('warboard_guildid', guildId);
     localStorage.setItem('warboard_banking_channelid', bankingChannelId);
     localStorage.setItem('warboard_promotion_channelid', promotionChannelId);
@@ -3930,6 +3939,7 @@ async function saveDiscordConfig() {
             overdoseRoleId,
             retalChannelId,
             retalRoleId,
+            retalPingDefender,
             bankingChannelId,
             promotionChannelId,
             bankerRoleId,

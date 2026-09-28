@@ -72,6 +72,7 @@ let discordConfig = {
     bankerRoleId: "",
     retalChannelId: "",
     retalRoleId: "",
+    retalPingDefender: false,
     targetOnline: false, 
     targetLanded: true, 
     targetOutHosp: false, 
@@ -1800,9 +1801,12 @@ async function handleMemberAttackedAlert(atk) {
         const isInternal = (myFacIdNum > 0 && atkFac === myFacIdNum && defFac === myFacIdNum);
         const isStealthed = (attackerId === "0" || !attackerId);
 
+        // Skip stealthed hits — unretaliatable because the assailant is anonymous
+        if (isStealthed) return;
+
         let attackerName = atk.attacker_name;
         if (!attackerName || attackerName === 'Unknown') {
-            attackerName = isStealthed ? "Someone (Stealthed)" : await resolvePlayerName(attackerId, `Player [${attackerId}]`);
+            attackerName = await resolvePlayerName(attackerId, `Player [${attackerId}]`);
         }
 
         let defenderName = atk.defender_name;
@@ -1820,70 +1824,54 @@ async function handleMemberAttackedAlert(atk) {
 
         const atkTs = atk.timestamp || atk.timestamp_ended || Math.floor(Date.now() / 1000);
         const retalExpireTs = atkTs + 300; // 5-minute retaliation window in Torn
-        const nowS = Math.floor(Date.now() / 1000);
-        const isRetalActive = nowS < retalExpireTs;
 
         const title = isDefended 
             ? "🛡️ Faction Member Defended Attack" 
             : (isInternal ? "⚔️ Internal Sparring Hit" : "🚨 Faction Member Attacked — Retaliate!");
         const color = isDefended ? (UI.COLORS?.SUCCESS || 0x2ECC71) : (UI.COLORS?.ERROR || 0xE74C3C);
 
-        let desc = "";
-        if (isInternal) {
-            desc = `**${defenderName}** was attacked by fellow faction member **${attackerName}** [${attackerId}] (Friendly Sparring / Test Hit).`;
-        } else if (isStealthed) {
-            desc = `**${defenderName}** was attacked by an unknown assailant (**Someone** — stealthed hit).`;
-        } else {
-            desc = `**${defenderName}** was attacked by **${attackerName}** [${attackerId}] from \`${attackerFactionName}\`.`;
-            if (isRetalActive && !isDefended) {
-                desc += `\n-# ⚡ **Retaliation Bonus Active** — Land a counter-hit within 5 minutes for bonus respect!`;
-            }
-        }
+        let desc = isInternal
+            ? `**${defenderName}** was attacked by fellow faction member **${attackerName}** [${attackerId}] (Friendly Sparring / Test Hit).`
+            : `**${defenderName}** was attacked by **${attackerName}** [${attackerId}] from \`${attackerFactionName}\`.`;
 
         const fields = [
             { name: "Result", value: `**${result}**`, inline: true }
         ];
 
         // Attacker Estimated Battle Stats (from FF Scouter or Spy DB)
-        if (!isStealthed) {
-            let statDisplay = "Unknown";
-            const ffStats = await getPlayerStatsFromFFScouter(attackerId);
-            if (ffStats) {
-                const ffPart = ffStats.fairFight ? ` (FF: ${ffStats.fairFight})` : '';
-                statDisplay = `~${ffStats.human || ffStats.total.toLocaleString()}${ffPart}`;
-            } else {
-                const rawEst = (spyDatabase[attackerId]?.total) || (statsCache[attackerId]?.stats) || (manualStats[attackerId]?.stats) || 0;
-                if (rawEst > 0) {
-                    statDisplay = `~${rawEst.toLocaleString()}`;
-                }
+        let statDisplay = "Unknown";
+        const ffStats = await getPlayerStatsFromFFScouter(attackerId);
+        if (ffStats) {
+            const ffPart = ffStats.fairFight ? ` (FF: ${ffStats.fairFight})` : '';
+            statDisplay = `~${ffStats.human || ffStats.total.toLocaleString()}${ffPart}`;
+        } else {
+            const rawEst = (spyDatabase[attackerId]?.total) || (statsCache[attackerId]?.stats) || (manualStats[attackerId]?.stats) || 0;
+            if (rawEst > 0) {
+                statDisplay = `~${rawEst.toLocaleString()}`;
             }
-            fields.push({ name: "Attacker Est. Stats", value: statDisplay, inline: true });
         }
+        fields.push({ name: "Attacker Est. Stats", value: statDisplay, inline: true });
 
-        // 5-minute Retaliation Window Countdown
-        if (!isStealthed && !isInternal) {
-            const windowStr = isRetalActive
-                ? `⚡ **Active — <t:${retalExpireTs}:R>** (until <t:${retalExpireTs}:T>)`
-                : `⌛ **Expired** (<t:${retalExpireTs}:R>)`;
+        // 5-minute Retaliation Window Live Countdown Timer
+        if (!isInternal) {
             fields.push({
                 name: "⏱️ Retaliation Window",
-                value: windowStr,
+                value: `<t:${retalExpireTs}:R>`,
                 inline: true
             });
         }
 
-        const links = [];
-        if (!isStealthed) {
-            links.push({ label: "⚔️ Retaliate / Attack", url: `https://www.torn.com/page.php?sid=attack&user2ID=${attackerId}` });
-            links.push({ label: "👤 Attacker Profile", url: `https://www.torn.com/profiles.php?XID=${attackerId}` });
-        }
+        const links = [
+            { label: "⚔️ Retaliate / Attack", url: `https://www.torn.com/page.php?sid=attack&user2ID=${attackerId}` },
+            { label: "👤 Attacker Profile", url: `https://www.torn.com/profiles.php?XID=${attackerId}` }
+        ];
         if (defenderId !== "0" && defenderId) {
             links.push({ label: "🛡️ Defender Profile", url: `https://www.torn.com/profiles.php?XID=${defenderId}` });
         }
 
-        // Ping Retaliator Role + Defender
+        // Ping Retaliator Target (configurable in website) + optional Defender
         let pingStr = "";
-        if (defenderId !== "0" && defenderId) {
+        if (discordConfig.retalPingDefender && defenderId !== "0" && defenderId) {
             const dId = await getDiscordId(defenderId);
             if (dId && /^\d{17,20}$/.test(dId)) {
                 pingStr = `<@${dId}>`;
@@ -1892,11 +1880,19 @@ async function handleMemberAttackedAlert(atk) {
 
         const roleId = discordConfig.retalRoleId;
         if (roleId && String(roleId).trim()) {
-            const numOnly = String(roleId).replace(/\D/g, '');
+            const val = String(roleId).trim();
             let rPing = "";
-            if (numOnly.length >= 15 && numOnly.length <= 22) rPing = `<@&${numOnly}>`;
-            else if (roleId === '@here' || roleId === '@everyone') rPing = roleId;
-            if (rPing) pingStr = pingStr ? `${rPing} ${pingStr}` : rPing;
+            if (val === '@here' || val === '@everyone') {
+                rPing = val;
+            } else if (val.startsWith('<@')) {
+                rPing = val;
+            } else {
+                const numOnly = val.replace(/\D/g, '');
+                if (numOnly.length >= 15 && numOnly.length <= 22) {
+                    rPing = `<@&${numOnly}>`;
+                }
+            }
+            if (rPing) pingStr = pingStr ? `${pingStr} ${rPing}` : rPing;
         }
 
         const embed = {
@@ -1905,7 +1901,6 @@ async function handleMemberAttackedAlert(atk) {
             color,
             footer: UI.FOOTER,
             timestamp: new Date().toISOString(),
-            targetId: (!isStealthed && attackerId !== "0") ? attackerId : undefined,
             fields,
             links
         };
@@ -3301,6 +3296,7 @@ app.post('/api/save-discord-config', async (req, res) => {
         }
     }
     if (payload.retalRoleId !== undefined) payload.retalRoleId = String(payload.retalRoleId || '').trim();
+    if (payload.retalPingDefender !== undefined) payload.retalPingDefender = (payload.retalPingDefender === true || payload.retalPingDefender === 'true');
 
     if (payload.ocChannelId !== undefined) {
         let rawOc = String(payload.ocChannelId || '').trim();
@@ -10590,11 +10586,25 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
     }
 
     try {
-        const facId = discordConfig.factionId || dynamicFactionId || null;
-        const facUrl = facId
-            ? `https://api.torn.com/faction/${facId}?selections=basic&key=${key}`
-            : `https://api.torn.com/faction/?selections=basic&key=${key}`;
-        const res = await fetch(facUrl, {
+        let targetFacId = discordConfig.factionId || dynamicFactionId;
+        if (!targetFacId) {
+            try {
+                const basicRes = await fetch(`https://api.torn.com/faction/?selections=basic&key=${key}`, { signal: AbortSignal.timeout(6000) });
+                const basicData = await basicRes.json();
+                if (basicData.ID) {
+                    targetFacId = String(basicData.ID);
+                    dynamicFactionId = targetFacId;
+                    if (basicData.name && !discordConfig.factionName) {
+                        discordConfig.factionName = basicData.name;
+                        UI.setFactionName(basicData.name);
+                    }
+                }
+            } catch(e) {}
+        }
+        if (!targetFacId) targetFacId = '52355';
+
+        // Fetch members via Torn v2 with explicit faction ID (returns accurate revive_setting per member)
+        const res = await fetch(`https://api.torn.com/v2/faction/${targetFacId}/members?key=${encodeURIComponent(key)}`, {
             signal: AbortSignal.timeout(9000)
         });
         const data = await res.json();
@@ -10609,11 +10619,7 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
             };
         }
 
-        // Update dynamic faction ID if not set
-        if (data.ID && !discordConfig.factionId) dynamicFactionId = String(data.ID);
-
-        // v1 returns members as object keyed by player ID — convert to array with id field
-        const members = Object.entries(data.members || {}).map(([id, m]) => ({ id: Number(id), ...m }));
+        const members = Array.isArray(data.members) ? data.members : [];
         if (members.length === 0) {
             return {
                 title: "💉 Faction Revive Settings Audit",
@@ -10625,30 +10631,14 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
         }
 
         // Group members by the 3 Torn revive settings
-        // Torn v1 API returns revive_setting as integer: 0 = Everyone, 1 = Friends & Faction, 2 = No One
-        // Some API versions return strings like 'everyone', 'friends', 'no one'
         const everyone = [];
         const friendsFaction = [];
         const noOne = [];
         const other = [];
 
         for (const m of members) {
-            const raw = m.revive_setting;
-            const numVal = Number(raw);
-            const strVal = String(raw || '').toLowerCase().trim();
-
-            // Integer format (v1 API): 0=Everyone, 1=Friends & Faction, 2=No One
-            if (!isNaN(raw) && raw !== '' && raw !== null) {
-                if (numVal === 0) {
-                    everyone.push(m);
-                } else if (numVal === 1) {
-                    friendsFaction.push(m);
-                } else if (numVal === 2) {
-                    noOne.push(m);
-                } else {
-                    other.push(m);
-                }
-            } else if (strVal === 'everyone') {
+            const strVal = String(m.revive_setting || '').toLowerCase().trim();
+            if (strVal === 'everyone') {
                 everyone.push(m);
             } else if (strVal.includes('friend') || strVal.includes('faction')) {
                 friendsFaction.push(m);
@@ -10661,6 +10651,7 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
 
         const total = members.length;
         const normFilter = String(filterSetting || 'all').toLowerCase().trim();
+        const facName = discordConfig.factionName || 'Spider-Verse';
 
         function appendCategoryFields(fields, titleEmoji, titleName, memberList) {
             if (!memberList || memberList.length === 0) {
@@ -10675,7 +10666,7 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
             const formatted = memberList.map(m => {
                 const isHosp = m.status?.state === 'Hospital' || (m.status?.description || '').toLowerCase().includes('hospital');
                 const hospTag = isHosp ? ' 🏥' : '';
-                return `[${m.name} [${m.id}]](https://www.torn.com/profiles.php?XID=${m.id})${hospTag}`;
+                return `• [${m.name}](https://www.torn.com/profiles.php?XID=${m.id}) \`[${m.id}]\`${hospTag}`;
             });
 
             let chunk = [];
@@ -10683,11 +10674,11 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
             let part = 1;
 
             for (const item of formatted) {
-                const itemLen = item.length + 2;
+                const itemLen = item.length + 1; // +1 for newline
                 if (chunkLen + itemLen > 950 && chunk.length > 0) {
                     fields.push({
                         name: part === 1 ? `${titleEmoji} ${titleName} (${memberList.length})` : `${titleEmoji} ${titleName} (Cont. ${part})`,
-                        value: chunk.join(', '),
+                        value: chunk.join('\n'),
                         inline: false
                     });
                     chunk = [item];
@@ -10702,7 +10693,7 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
             if (chunk.length > 0) {
                 fields.push({
                     name: part === 1 ? `${titleEmoji} ${titleName} (${memberList.length})` : `${titleEmoji} ${titleName} (Cont. ${part})`,
-                    value: chunk.join(', '),
+                    value: chunk.join('\n'),
                     inline: false
                 });
             }
@@ -10712,20 +10703,20 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
         let description = '';
 
         if (normFilter === 'everyone') {
-            description = `Showing all **${everyone.length}** faction members with revives set to **Everyone** (Open to all players):\n-# 🏥 = Member is currently in hospital`;
+            description = `Showing all **${everyone.length}** members in **${facName}** with revives set to **Everyone**:\n-# 🏥 = Currently hospitalized`;
             appendCategoryFields(fields, '🟢', 'Everyone', everyone);
         } else if (normFilter === 'friends_faction' || normFilter === 'friends' || normFilter === 'faction') {
-            description = `Showing all **${friendsFaction.length}** faction members with revives set to **Friends & Faction** only:\n-# 🏥 = Member is currently in hospital`;
+            description = `Showing all **${friendsFaction.length}** members in **${facName}** with revives set to **Friends & Faction**:\n-# 🏥 = Currently hospitalized`;
             appendCategoryFields(fields, '🟡', 'Friends & Faction', friendsFaction);
         } else if (normFilter === 'no_one' || normFilter === 'nobody' || normFilter === 'off') {
-            description = `Showing all **${noOne.length}** faction members with revives set to **No One** (Revives Disabled):\n-# 🏥 = Member is currently in hospital`;
+            description = `Showing all **${noOne.length}** members in **${facName}** with revives set to **No One** (Revives Off):\n-# 🏥 = Currently hospitalized`;
             appendCategoryFields(fields, '🔴', 'No One — Revives Off', noOne);
         } else {
-            description = `Audit of all **${total}** faction members across the **3 Torn Revive Settings**:\n` +
+            description = `Audit of all **${total}** faction members in **${facName}**:\n` +
                           `• 🟢 **Everyone:** **${everyone.length}** (${Math.round((everyone.length / total) * 100)}%)\n` +
                           `• 🟡 **Friends & Faction:** **${friendsFaction.length}** (${Math.round((friendsFaction.length / total) * 100)}%)\n` +
                           `• 🔴 **No One (Off):** **${noOne.length}** (${Math.round((noOne.length / total) * 100)}%)\n` +
-                          `-# 🏥 = Member is currently in hospital`;
+                          `-# 🏥 = Currently hospitalized`;
 
             appendCategoryFields(fields, '🟢', 'Everyone', everyone);
             appendCategoryFields(fields, '🟡', 'Friends & Faction', friendsFaction);
