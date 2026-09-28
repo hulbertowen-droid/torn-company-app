@@ -10574,8 +10574,17 @@ async function buildOnlineRosterEmbed(apiKey) {
 }
 
 async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
-    const key = apiKey || getNextApiKey() || discordConfig.apiKey || TORN_API_KEY;
-    if (!key) {
+    const candidateKeys = [
+        apiKey,
+        getNextApiKey(),
+        ...(apiPoolConfig && Array.isArray(apiPoolConfig.keys) ? apiPoolConfig.keys : []),
+        discordConfig.apiKey,
+        TORN_API_KEY,
+        process.env.TORN_API_KEY
+    ].filter(k => k && typeof k === 'string' && k.trim().length >= 16);
+
+    const uniqueKeys = [...new Set(candidateKeys)];
+    if (uniqueKeys.length === 0) {
         return {
             title: "💉 Faction Revive Settings Audit",
             description: "⚠️ No Torn API key configured. Please configure an API key with faction access in Settings.",
@@ -10586,63 +10595,53 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
     }
 
     try {
-        let targetFacId = discordConfig.factionId || dynamicFactionId;
-        if (!targetFacId) {
+        let targetFacId = discordConfig.factionId || dynamicFactionId || '52355';
+        let members = null;
+        let lastApiError = null;
+
+        for (const key of uniqueKeys) {
             try {
-                const basicRes = await fetch(`https://api.torn.com/faction/?selections=basic&key=${key}`, { signal: AbortSignal.timeout(6000) });
-                const basicData = await basicRes.json();
-                if (basicData.ID) {
-                    targetFacId = String(basicData.ID);
-                    dynamicFactionId = targetFacId;
-                    if (basicData.name && !discordConfig.factionName) {
-                        discordConfig.factionName = basicData.name;
-                        UI.setFactionName(basicData.name);
-                    }
+                const res = await fetch(`https://api.torn.com/v2/faction/${targetFacId}/members?key=${encodeURIComponent(key)}`, {
+                    signal: AbortSignal.timeout(9000)
+                });
+                const data = await res.json();
+                if (data && Array.isArray(data.members) && data.members.length > 0) {
+                    members = data.members;
+                    break;
+                } else if (data?.error) {
+                    lastApiError = data.error.error || 'Failed to fetch members';
                 }
-            } catch(e) {}
+            } catch(err) {
+                lastApiError = err.message;
+            }
         }
-        if (!targetFacId) targetFacId = '52355';
 
-        // Fetch members via Torn v2 with explicit faction ID (returns accurate revive_setting per member)
-        const res = await fetch(`https://api.torn.com/v2/faction/${targetFacId}/members?key=${encodeURIComponent(key)}`, {
-            signal: AbortSignal.timeout(9000)
-        });
-        const data = await res.json();
-
-        if (data.error) {
+        if (!members || members.length === 0) {
             return {
                 title: "💉 Faction Revive Settings Audit",
-                description: `⚠️ Torn API Error: ${data.error.error || 'Failed to fetch members'}.\n\n*Note: A Torn API key with Faction permissions is required to inspect member revive settings.*`,
+                description: `⚠️ Torn API Error: ${lastApiError || 'Failed to fetch faction members'}.\n\n*Note: A Torn API key with Faction permissions is required to inspect member revive settings.*`,
                 color: UI.COLORS.ERROR,
                 footer: UI.FOOTER,
                 timestamp: new Date().toISOString()
             };
         }
 
-        const members = Array.isArray(data.members) ? data.members : [];
-        if (members.length === 0) {
-            return {
-                title: "💉 Faction Revive Settings Audit",
-                description: "⚠️ No faction members returned by the API.",
-                color: UI.COLORS.WARNING,
-                footer: UI.FOOTER,
-                timestamp: new Date().toISOString()
-            };
-        }
-
-        // Group members by the 3 Torn revive settings
+        // Group members across the 3 Torn revive settings (supporting both v2 string labels and v1 integer codes)
         const everyone = [];
         const friendsFaction = [];
         const noOne = [];
         const other = [];
 
         for (const m of members) {
-            const strVal = String(m.revive_setting || '').toLowerCase().trim();
-            if (strVal === 'everyone') {
+            const raw = m.revive_setting;
+            const strVal = String(raw ?? '').toLowerCase().trim();
+            const numVal = typeof raw === 'number' ? raw : (raw !== '' && !isNaN(raw) ? Number(raw) : null);
+
+            if (strVal === 'everyone' || strVal === '0' || numVal === 0) {
                 everyone.push(m);
-            } else if (strVal.includes('friend') || strVal.includes('faction')) {
+            } else if (strVal.includes('friend') || strVal.includes('faction') || strVal === '1' || numVal === 1) {
                 friendsFaction.push(m);
-            } else if (strVal === 'no one' || strVal === 'nobody' || strVal === 'none') {
+            } else if (strVal === 'no one' || strVal === 'nobody' || strVal === 'none' || strVal === 'off' || strVal === '2' || numVal === 2) {
                 noOne.push(m);
             } else {
                 other.push(m);
@@ -10650,8 +10649,18 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
         }
 
         const total = members.length;
-        const normFilter = String(filterSetting || 'all').toLowerCase().trim();
         const facName = discordConfig.factionName || 'Spider-Verse';
+
+        // Robust filter normalization to match all slash command choices and manual inputs
+        const normFilter = String(filterSetting || 'all').toLowerCase().trim();
+        let activeFilter = 'all';
+        if (normFilter === 'everyone' || normFilter.includes('every') || normFilter === '0') {
+            activeFilter = 'everyone';
+        } else if (normFilter.includes('friend') || normFilter.includes('faction') || normFilter === '1') {
+            activeFilter = 'friends_faction';
+        } else if (normFilter.includes('no') || normFilter.includes('off') || normFilter.includes('none') || normFilter === '2') {
+            activeFilter = 'no_one';
+        }
 
         function appendCategoryFields(fields, titleEmoji, titleName, memberList) {
             if (!memberList || memberList.length === 0) {
@@ -10663,10 +10672,24 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
                 return;
             }
 
-            const formatted = memberList.map(m => {
+            // Put hospitalized members at the top so revivers immediately see who needs aid, then alphabetical
+            const sorted = [...memberList].sort((a, b) => {
+                const aHosp = a.status?.state === 'Hospital' || (a.status?.description || '').toLowerCase().includes('hospital');
+                const bHosp = b.status?.state === 'Hospital' || (b.status?.description || '').toLowerCase().includes('hospital');
+                if (aHosp && !bHosp) return -1;
+                if (!aHosp && bHosp) return 1;
+                return (a.name || '').localeCompare(b.name || '');
+            });
+
+            const hospCount = sorted.filter(m => m.status?.state === 'Hospital' || (m.status?.description || '').toLowerCase().includes('hospital')).length;
+            const hospTag = hospCount > 0 ? ` · 🏥 ${hospCount} in hosp` : '';
+
+            const formatted = sorted.map(m => {
                 const isHosp = m.status?.state === 'Hospital' || (m.status?.description || '').toLowerCase().includes('hospital');
-                const hospTag = isHosp ? ' 🏥' : '';
-                return `• [${m.name}](https://www.torn.com/profiles.php?XID=${m.id}) \`[${m.id}]\`${hospTag}`;
+                if (isHosp) {
+                    return `• 🏥 **[${m.name}](https://www.torn.com/profiles.php?XID=${m.id})** \`[${m.id}]\` *(Hospital)*`;
+                }
+                return `• [${m.name}](https://www.torn.com/profiles.php?XID=${m.id}) \`[${m.id}]\``;
             });
 
             let chunk = [];
@@ -10675,14 +10698,14 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
 
             for (const item of formatted) {
                 const itemLen = item.length + 1; // +1 for newline
-                if (chunkLen + itemLen > 950 && chunk.length > 0) {
+                if (chunkLen + itemLen > 980 && chunk.length > 0) {
                     fields.push({
-                        name: part === 1 ? `${titleEmoji} ${titleName} (${memberList.length})` : `${titleEmoji} ${titleName} (Cont. ${part})`,
+                        name: part === 1 ? `${titleEmoji} ${titleName} (${memberList.length}${hospTag})` : `${titleEmoji} ${titleName} (Cont. ${part})`,
                         value: chunk.join('\n'),
                         inline: false
                     });
                     chunk = [item];
-                    chunkLen = item.length;
+                    chunkLen = itemLen;
                     part++;
                 } else {
                     chunk.push(item);
@@ -10692,7 +10715,7 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
 
             if (chunk.length > 0) {
                 fields.push({
-                    name: part === 1 ? `${titleEmoji} ${titleName} (${memberList.length})` : `${titleEmoji} ${titleName} (Cont. ${part})`,
+                    name: part === 1 ? `${titleEmoji} ${titleName} (${memberList.length}${hospTag})` : `${titleEmoji} ${titleName} (Cont. ${part})`,
                     value: chunk.join('\n'),
                     inline: false
                 });
@@ -10701,22 +10724,31 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
 
         const fields = [];
         let description = '';
+        let color = UI.COLORS.BLUE;
 
-        if (normFilter === 'everyone') {
-            description = `Showing all **${everyone.length}** members in **${facName}** with revives set to **Everyone**:\n-# 🏥 = Currently hospitalized`;
+        if (activeFilter === 'everyone') {
+            description = `**${facName}** • Revive Settings Filter: **Everyone**\n` +
+                          `Showing all **${everyone.length}** faction members with open revives:\n-# 🏥 = Currently hospitalized in Torn`;
+            color = UI.COLORS.GREEN;
             appendCategoryFields(fields, '🟢', 'Everyone', everyone);
-        } else if (normFilter === 'friends_faction' || normFilter === 'friends' || normFilter === 'faction') {
-            description = `Showing all **${friendsFaction.length}** members in **${facName}** with revives set to **Friends & Faction**:\n-# 🏥 = Currently hospitalized`;
+        } else if (activeFilter === 'friends_faction') {
+            description = `**${facName}** • Revive Settings Filter: **Friends & Faction**\n` +
+                          `Showing all **${friendsFaction.length}** faction members with Friends & Faction revives:\n-# 🏥 = Currently hospitalized in Torn`;
+            color = UI.COLORS.GOLD;
             appendCategoryFields(fields, '🟡', 'Friends & Faction', friendsFaction);
-        } else if (normFilter === 'no_one' || normFilter === 'nobody' || normFilter === 'off') {
-            description = `Showing all **${noOne.length}** members in **${facName}** with revives set to **No One** (Revives Off):\n-# 🏥 = Currently hospitalized`;
+        } else if (activeFilter === 'no_one') {
+            description = `**${facName}** • Revive Settings Filter: **No One (Revives Off)**\n` +
+                          `Showing all **${noOne.length}** faction members with revives turned **OFF**:\n-# 🏥 = Currently hospitalized in Torn`;
+            color = UI.COLORS.RED;
             appendCategoryFields(fields, '🔴', 'No One — Revives Off', noOne);
         } else {
-            description = `Audit of all **${total}** faction members in **${facName}**:\n` +
+            description = `**${facName}** • Faction Revive Settings Audit\n` +
+                          `Audit of all **${total}** faction members across the 3 Torn revive settings:\n\n` +
                           `• 🟢 **Everyone:** **${everyone.length}** (${Math.round((everyone.length / total) * 100)}%)\n` +
                           `• 🟡 **Friends & Faction:** **${friendsFaction.length}** (${Math.round((friendsFaction.length / total) * 100)}%)\n` +
-                          `• 🔴 **No One (Off):** **${noOne.length}** (${Math.round((noOne.length / total) * 100)}%)\n` +
-                          `-# 🏥 = Currently hospitalized`;
+                          `• 🔴 **No One (Off):** **${noOne.length}** (${Math.round((noOne.length / total) * 100)}%)\n\n` +
+                          `-# Filter by setting: \`/revive setting: Everyone | Friends & Faction | No One\``;
+            color = UI.COLORS.BLUE;
 
             appendCategoryFields(fields, '🟢', 'Everyone', everyone);
             appendCategoryFields(fields, '🟡', 'Friends & Faction', friendsFaction);
@@ -10730,7 +10762,7 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
         return {
             title: `💉 Faction Revive Settings Audit`,
             description,
-            color: UI.COLORS.BLUE,
+            color,
             fields,
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
@@ -10747,7 +10779,7 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
 }
 
 async function buildRetaliationsEmbed(apiKey) {
-    const key = apiKey || getNextApiKey() || discordConfig.apiKey || TORN_API_KEY;
+    const key = apiKey || getNextApiKey() || (apiPoolConfig && Array.isArray(apiPoolConfig.keys) ? apiPoolConfig.keys[0] : null) || discordConfig.apiKey || TORN_API_KEY;
     if (!key) {
         return {
             title: "⚔️ Active Retaliations",
@@ -10775,7 +10807,7 @@ async function buildRetaliationsEmbed(apiKey) {
         const attacks = Object.values(data.attacks || {});
         const now = Math.floor(Date.now() / 1000);
 
-        // Find incoming attacks on our faction in the last 15 minutes
+        // Find incoming attacks on our faction in the last 15 minutes (skip stealthed hits)
         const incoming = attacks.filter(atk => {
             const defFac = Number(atk.defender_faction || 0);
             const atkId = Number(atk.attacker_id || 0);
@@ -10801,18 +10833,15 @@ async function buildRetaliationsEmbed(apiKey) {
         const fields = [];
         if (activeRetals.length > 0) {
             const lines = activeRetals.map((atk, idx) => {
-                const timeLeft = Math.max(0, 300 - (now - atk.timestamp_ended));
-                const mins = Math.floor(timeLeft / 60);
-                const secs = timeLeft % 60;
-                const timeStr = `${mins}m ${secs}s`;
+                const expireTs = Number(atk.timestamp_ended) + 300;
                 const atkLink = `https://www.torn.com/page.php?sid=attack&user2ID=${atk.attacker_id}`;
                 const defName = atk.defender_name || data.members?.[atk.defender_id]?.name || `Member [${atk.defender_id}]`;
                 return `${idx + 1}. **[${atk.attacker_name || 'Attacker'} [${atk.attacker_id}]](https://www.torn.com/profiles.php?XID=${atk.attacker_id})** from \`${atk.attacker_factionname || 'Faction'}\`\n` +
-                       `   └ Hit **${defName}** (${atk.result || 'Attacked'}) · ⏱️ **${timeStr} left**\n` +
+                       `   └ Hit **${defName}** (${atk.result || 'Attacked'}) · ⏱️ Window closes <t:${expireTs}:R>\n` +
                        `   └ [⚔️ Retaliate Now](${atkLink}) · [👤 Profile](https://www.torn.com/profiles.php?XID=${atk.attacker_id})`;
             });
             fields.push({
-                name: `⚡ Active Retaliations (${activeRetals.length}) — 5m Bonus Window`,
+                name: `⚡ Active Retaliations (${activeRetals.length})`,
                 value: lines.join('\n'),
                 inline: false
             });
