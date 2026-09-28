@@ -205,8 +205,9 @@ async function loadConfigFromMongo() {
         const saved = await AppConfig.findById('master').lean();
         if (saved) {
             if (saved.discordConfig) {
+                const preservedKey = discordConfig.apiKey || saved.discordConfig.apiKey || process.env.TORN_API_KEY || "";
                 discordConfig = { ...discordConfig, ...saved.discordConfig };
-                delete discordConfig.apiKey;
+                if (preservedKey) discordConfig.apiKey = preservedKey;
                 delete discordConfig.myName;
                 global.isNotificationsKilled = !!discordConfig.notificationsKilled;
 
@@ -10589,7 +10590,11 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
     }
 
     try {
-        const res = await fetch(`https://api.torn.com/v2/faction/members?key=${encodeURIComponent(key)}`, {
+        const facId = discordConfig.factionId || dynamicFactionId || null;
+        const facUrl = facId
+            ? `https://api.torn.com/faction/${facId}?selections=basic&key=${key}`
+            : `https://api.torn.com/faction/?selections=basic&key=${key}`;
+        const res = await fetch(facUrl, {
             signal: AbortSignal.timeout(9000)
         });
         const data = await res.json();
@@ -10604,7 +10609,11 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
             };
         }
 
-        const members = Array.isArray(data.members) ? data.members : [];
+        // Update dynamic faction ID if not set
+        if (data.ID && !discordConfig.factionId) dynamicFactionId = String(data.ID);
+
+        // v1 returns members as object keyed by player ID — convert to array with id field
+        const members = Object.entries(data.members || {}).map(([id, m]) => ({ id: Number(id), ...m }));
         if (members.length === 0) {
             return {
                 title: "💉 Faction Revive Settings Audit",
@@ -10616,18 +10625,34 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
         }
 
         // Group members by the 3 Torn revive settings
+        // Torn v1 API returns revive_setting as integer: 0 = Everyone, 1 = Friends & Faction, 2 = No One
+        // Some API versions return strings like 'everyone', 'friends', 'no one'
         const everyone = [];
         const friendsFaction = [];
         const noOne = [];
         const other = [];
 
         for (const m of members) {
-            const setting = String(m.revive_setting || '').toLowerCase().trim();
-            if (setting === 'everyone') {
+            const raw = m.revive_setting;
+            const numVal = Number(raw);
+            const strVal = String(raw || '').toLowerCase().trim();
+
+            // Integer format (v1 API): 0=Everyone, 1=Friends & Faction, 2=No One
+            if (!isNaN(raw) && raw !== '' && raw !== null) {
+                if (numVal === 0) {
+                    everyone.push(m);
+                } else if (numVal === 1) {
+                    friendsFaction.push(m);
+                } else if (numVal === 2) {
+                    noOne.push(m);
+                } else {
+                    other.push(m);
+                }
+            } else if (strVal === 'everyone') {
                 everyone.push(m);
-            } else if (setting.includes('friends')) {
+            } else if (strVal.includes('friend') || strVal.includes('faction')) {
                 friendsFaction.push(m);
-            } else if (setting === 'no one' || setting === 'nobody' || setting === 'none') {
+            } else if (strVal === 'no one' || strVal === 'nobody' || strVal === 'none') {
                 noOne.push(m);
             } else {
                 other.push(m);
@@ -10749,7 +10774,13 @@ async function buildRetaliationsEmbed(apiKey) {
         const data = await res.json();
         if (data.error) throw new Error(data.error.error || "Torn API error");
 
-        const ourFacId = data.ID ? Number(data.ID) : Number(discordConfig.factionId || 0);
+        if (data.ID && !discordConfig.factionId) dynamicFactionId = String(data.ID);
+        if (data.name && !discordConfig.factionName) {
+            discordConfig.factionName = data.name;
+            UI.setFactionName(data.name);
+        }
+
+        const ourFacId = data.ID ? Number(data.ID) : Number(discordConfig.factionId || dynamicFactionId || 0);
         const attacks = Object.values(data.attacks || {});
         const now = Math.floor(Date.now() / 1000);
 
@@ -10759,7 +10790,8 @@ async function buildRetaliationsEmbed(apiKey) {
             const atkId = Number(atk.attacker_id || 0);
             const defId = Number(atk.defender_id || 0);
             const ts = Number(atk.timestamp_ended || 0);
-            return defFac === ourFacId && atkId !== defId && (now - ts) <= 900;
+            const isOurDef = (ourFacId > 0 && defFac === ourFacId) || (data.members && Boolean(data.members[defId]));
+            return isOurDef && atkId !== defId && atkId > 0 && (now - ts) <= 900;
         });
 
         const activeRetals = incoming.filter(atk => (now - atk.timestamp_ended) <= 300);
@@ -10783,8 +10815,9 @@ async function buildRetaliationsEmbed(apiKey) {
                 const secs = timeLeft % 60;
                 const timeStr = `${mins}m ${secs}s`;
                 const atkLink = `https://www.torn.com/page.php?sid=attack&user2ID=${atk.attacker_id}`;
+                const defName = atk.defender_name || data.members?.[atk.defender_id]?.name || `Member [${atk.defender_id}]`;
                 return `${idx + 1}. **[${atk.attacker_name || 'Attacker'} [${atk.attacker_id}]](https://www.torn.com/profiles.php?XID=${atk.attacker_id})** from \`${atk.attacker_factionname || 'Faction'}\`\n` +
-                       `   └ Hit **${atk.defender_name || atk.defender_id}** (${atk.result || 'Attacked'}) · ⏱️ **${timeStr} left**\n` +
+                       `   └ Hit **${defName}** (${atk.result || 'Attacked'}) · ⏱️ **${timeStr} left**\n` +
                        `   └ [⚔️ Retaliate Now](${atkLink}) · [👤 Profile](https://www.torn.com/profiles.php?XID=${atk.attacker_id})`;
             });
             fields.push({
@@ -10797,7 +10830,8 @@ async function buildRetaliationsEmbed(apiKey) {
         if (expiredRetals.length > 0 && activeRetals.length < 5) {
             const lines = expiredRetals.slice(0, 5).map((atk, idx) => {
                 const agoMin = Math.floor((now - atk.timestamp_ended) / 60);
-                return `${idx + 1}. **[${atk.attacker_name || 'Attacker'} [${atk.attacker_id}]](https://www.torn.com/profiles.php?XID=${atk.attacker_id})** hit **${atk.defender_name}** (${atk.result}) — ⌛ *${agoMin}m ago (Expired)*`;
+                const defName = atk.defender_name || data.members?.[atk.defender_id]?.name || `Member [${atk.defender_id}]`;
+                return `${idx + 1}. **[${atk.attacker_name || 'Attacker'} [${atk.attacker_id}]](https://www.torn.com/profiles.php?XID=${atk.attacker_id})** hit **${defName}** (${atk.result}) — ⌛ *${agoMin}m ago (Expired)*`;
             });
             fields.push({
                 name: `⌛ Recently Expired (${expiredRetals.length})`,
@@ -10808,7 +10842,7 @@ async function buildRetaliationsEmbed(apiKey) {
 
         return {
             title: `⚔️ Active Retaliation Opportunities (${activeRetals.length} Live)`,
-            description: `Enemies who attacked **${data.name || 'Spider-Verse'}** members within the 5-minute retaliation window:`,
+            description: `Enemies who attacked **${data.name || discordConfig.factionName || 'our faction'}** members within the 5-minute retaliation window:`,
             color: activeRetals.length > 0 ? UI.COLORS.ERROR : UI.COLORS.NEUTRAL,
             fields,
             footer: UI.FOOTER,
@@ -13348,7 +13382,7 @@ async function checkFactionOrganizedCrimes() {
                     }
                 }
 
-                const memberObj = members[pId];
+                const memberObj = (data.members || {})[pId];
                 const pName = memberObj?.name || `Player [${pId}]`;
                 const pState = memberObj?.status?.state || 'Okay';
                 const pDesc = memberObj?.status?.description || '';
@@ -13369,7 +13403,7 @@ async function checkFactionOrganizedCrimes() {
                 if (crime.time_started && (now - crime.time_started < 2700)) {
                     tracker.planned = true;
                     trackerChanged = true;
-                    const plannerObj = members[String(crime.planned_by)];
+                    const plannerObj = (data.members || {})[String(crime.planned_by)];
                     const plannerName = plannerObj?.name ? `${plannerObj.name} [${crime.planned_by}]` : `Player [${crime.planned_by}]`;
                     const readyTimeStr = crime.time_ready ? `<t:${crime.time_ready}:F> (<t:${crime.time_ready}:R>)` : "Unknown";
 
@@ -13649,7 +13683,7 @@ async function checkFactionOrganizedCrimes() {
                 for (const slot of (v2Crime.slots || [])) {
                     if (!slot.user) continue;
                     const pId = slot.user.id;
-                    const pName = members[String(pId)]?.name || slot.user.name || `Player [${pId}]`;
+                    const pName = (data.members || {})[String(pId)]?.name || slot.user.name || `Player [${pId}]`;
                     const roleLabel = slot.position_info?.label || slot.position || "Team Member";
                     const profileUrl = `https://www.torn.com/profiles.php?XID=${pId}`;
 

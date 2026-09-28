@@ -260,10 +260,11 @@ async function ingestAttacks() {
             _ourFactionId = Number(data.ID);
         }
 
-        // War mode detection
-        const hasWar = data.ranked_wars && Object.keys(data.ranked_wars || {}).some(wid => {
-            const w = data.ranked_wars[wid];
-            return !w.war?.end;
+        // War mode detection (Torn v1 returns rankedwars)
+        const wars = data.rankedwars || data.ranked_wars || {};
+        const hasWar = Object.keys(wars).some(wid => {
+            const w = wars[wid];
+            return !w.war?.end || w.war?.winner === 0;
         });
         _isWarMode = !!hasWar;
 
@@ -284,21 +285,21 @@ async function ingestAttacks() {
             const defId = Number(atk.defender_id || 0);
 
             let direction = null;
-            if (_ourFactionId) {
-                if (atkFac === _ourFactionId && defFac === _ourFactionId) direction = 'internal';
-                else if (atkFac === _ourFactionId) direction = 'outgoing';
-                else if (defFac === _ourFactionId) direction = 'incoming';
-            }
+            const isOurDef = (_ourFactionId && defFac === _ourFactionId) || (data.members && Boolean(data.members[defId]));
+            const isOurAtk = (_ourFactionId && atkFac === _ourFactionId) || (data.members && Boolean(data.members[atkId]));
+            if (isOurAtk && isOurDef) direction = 'internal';
+            else if (isOurAtk) direction = 'outgoing';
+            else if (isOurDef) direction = 'incoming';
 
             if (!direction) continue; // Skip attacks not involving our faction
 
             const attackerName = atk.attacker_name || data.members?.[atkId]?.name || '';
             const defenderName = atk.defender_name || data.members?.[defId]?.name || '';
-            const attackerFactionName = atk.attacker_factionname || (atkFac === _ourFactionId ? (data.name || 'Our Faction') : '');
-            const defenderFactionName = atk.defender_factionname || (defFac === _ourFactionId ? (data.name || 'Our Faction') : '');
+            const attackerFactionName = atk.attacker_factionname || (isOurAtk ? (data.name || 'Our Faction') : '');
+            const defenderFactionName = atk.defender_factionname || (isOurDef ? (data.name || 'Our Faction') : '');
 
             // Real-time alert check: if our faction member was attacked (not self-hit)
-            if (defFac === _ourFactionId && atkId !== defId) {
+            if (isOurDef && atkId !== defId) {
                 const isRecent = ts > (nowSecs() - 360); // within last 6 mins (active 5m retal)
                 if (isRecent) {
                     const tempDoc = {
@@ -309,7 +310,7 @@ async function ingestAttacks() {
                         attacker_faction_name: attackerFactionName,
                         defender_id: defId,
                         defender_name: defenderName,
-                        defender_faction_id: defFac,
+                        defender_faction_id: defFac || _ourFactionId,
                         defender_faction_name: defenderFactionName,
                         timestamp: ts,
                         result: atk.result || 'unknown',
