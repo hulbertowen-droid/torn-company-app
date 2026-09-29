@@ -10040,11 +10040,22 @@ function sanitizeEmbed(embed) {
         sanitized.description = sanitized.description.slice(0, 3990) + "...";
     }
     if (Array.isArray(sanitized.fields)) {
-        sanitized.fields = sanitized.fields.slice(0, 25).map(f => ({
-            name: String(f.name || 'Field').slice(0, 250),
-            value: String(f.value || '-').slice(0, 1020),
-            inline: !!f.inline
-        }));
+        sanitized.fields = sanitized.fields.slice(0, 25).map(f => {
+            let val = String(f.value || '-');
+            if (val.length > 1020) {
+                const lastNewline = val.lastIndexOf('\n', 1010);
+                if (lastNewline > 150) {
+                    val = val.slice(0, lastNewline) + '\n*...[continued]*';
+                } else {
+                    val = val.slice(0, 1015) + '...';
+                }
+            }
+            return {
+                name: String(f.name || 'Field').slice(0, 250),
+                value: val,
+                inline: !!f.inline
+            };
+        });
     }
     return sanitized;
 }
@@ -10405,13 +10416,15 @@ async function buildTargetsEmbed(apiKey) {
         }
 
         const lines = top10.map((m, idx) => {
-            const statusText = m.last_action?.status === 'Online' ? '🟢 Online' : (m.last_action?.status === 'Idle' ? '🟡 Idle' : '⚪ Offline');
+            const statusDot = m.last_action?.status === 'Online' ? '🟢 ' : (m.last_action?.status === 'Idle' ? '🟡 ' : '');
             const resolved = resolvePlayerBattleStats(m.id, m.level);
-            const statsStr = !resolved.isEstimated
-                ? `**${formatStatNumber(resolved.total)}** stats`
-                : `~**${formatStatNumber(resolved.total)}** *(Est)*`;
+            let badge = '';
+            if (resolved.source === 'verified') badge = ' ✅';
+            else if (resolved.isEstimated) badge = ' *(est)*';
+
+            const statsStr = `**${formatStatNumber(resolved.total)}**${badge}`;
             const claimTag = claims[m.id] ? ` *(🎯 Claimed: ${claims[m.id].playerName})*` : '';
-            return `${idx + 1}. [${statusText}] ${UI.player(m.name, m.id)} — ${statsStr} · [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})${claimTag}`;
+            return `${idx + 1}. ${statusDot}**[${m.name}](https://www.torn.com/profiles.php?XID=${m.id})** · Lvl ${m.level} · ${statsStr} · [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})${claimTag}`;
         });
 
         return {
@@ -11752,28 +11765,62 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
             else if (idx === 1) numBadge = '🥈';
             else if (idx === 2) numBadge = '🥉';
 
-            const statusDot = m.status === 'Online' ? '🟢 ' : (m.status === 'Idle' ? '🟡 ' : '');
-            const stateBadge = m.state === 'Hospital' ? ' 🏥' : (m.state === 'Traveling' || m.state === 'Abroad' ? ' ✈️' : '');
-            
-            if (isEnemy) {
-                return `${numBadge} ${statusDot}${UI.player(m.name, m.id)} (Lvl ${m.level}) ➔ **${m.statsFormatted}**${stateBadge} • [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})`;
-            } else {
-                return `${numBadge} ${statusDot}${UI.player(m.name, m.id)} (Lvl ${m.level}) ➔ **${m.statsFormatted}**${stateBadge}`;
+            // State/Status icon - placed prominently at front
+            let stateIcon = '';
+            if (m.state === 'Hospital') stateIcon = '🏥 ';
+            else if (m.state === 'Traveling' || m.state === 'Abroad') stateIcon = '✈️ ';
+            else if (m.status === 'Online') stateIcon = '🟢 ';
+            else if (m.status === 'Idle') stateIcon = '🟡 ';
+
+            // Verified / Scouted / Estimated badge
+            let badge = '';
+            if (m.source === 'verified') {
+                badge = ' ✅';
+            } else if (m.isEstimated) {
+                badge = ' *(est)*';
             }
 
+            const statStr = `**${formatStatNumber(m.stats)}**${badge}`;
+            const playerLink = `**[${m.name}](https://www.torn.com/profiles.php?XID=${m.id})**`;
+
+            if (isEnemy) {
+                return `${numBadge} ${stateIcon}${playerLink} · Lvl ${m.level} · ${statStr} · [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})`;
+            } else {
+                return `${numBadge} ${stateIcon}${playerLink} · Lvl ${m.level} · ${statStr}`;
+            }
         });
 
+        // Dynamic Safe Chunking: Ensures no field exceeds 800 characters or 7 members
+        const maxLinesPerField = 7;
+        const maxCharsPerField = 800;
+        const chunks = [];
+        let curChunk = [];
+        let curChars = 0;
+
+        for (const line of lines) {
+            const lineLen = line.length + 1;
+            if (curChunk.length >= maxLinesPerField || (curChars + lineLen > maxCharsPerField && curChunk.length > 0)) {
+                chunks.push(curChunk);
+                curChunk = [line];
+                curChars = lineLen;
+            } else {
+                curChunk.push(line);
+                curChars += lineLen;
+            }
+        }
+        if (curChunk.length > 0) chunks.push(curChunk);
+
         const fields = [];
-        const chunkSize = 11;
-        for (let i = 0; i < lines.length; i += chunkSize) {
-            const chunk = lines.slice(i, i + chunkSize);
-            const start = i + 1;
-            const end = Math.min(i + chunkSize, lines.length);
+        let currentRank = 1;
+        chunks.forEach((chunk, chunkIdx) => {
+            const start = currentRank;
+            const end = currentRank + chunk.length - 1;
+            currentRank = end + 1;
 
             let sectionTitle = `⚔️ Main Battle Line (#${start} - #${end})`;
-            if (i === 0) {
-                sectionTitle = `👑 Heavyweights & Top Hitters (#1 - #${end})`;
-            } else if (i + chunkSize >= lines.length) {
+            if (chunkIdx === 0) {
+                sectionTitle = `👑 Heavyweights & Top Hitters (#${start} - #${end})`;
+            } else if (chunkIdx === chunks.length - 1) {
                 sectionTitle = `🛡️ Support & Reserves (#${start} - #${end})`;
             }
 
@@ -11782,13 +11829,14 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
                 value: chunk.join('\n'),
                 inline: false
             });
-        }
+        });
 
         const respectStr = Number(facData.respect || 0).toLocaleString();
         const rankStr = facData.rank?.name || 'Unranked';
         const intelNote = ffKey 
             ? `🛡️ **Intel**: FF Scouter & Live Verified DB (**${verifiedCount} / ${members.length}** verified/scouted)`
             : `⚠️ **Notice**: FF Scouter key not connected — using level baseline estimates. Connect FF Scouter in Dashboard Settings for live accuracy.`;
+        const legend = `*Legend: 🟢 Online · 🟡 Idle · ✈️ Flying · 🏥 Hospital · ✅ Verified*`;
 
         return {
             title: isEnemy 
@@ -11796,7 +11844,8 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
                 : `📊 ${facData.name || 'Faction'} — Battle Stats (${members.length} members)`,
             description: `**Rank**: **${rankStr}** • **Respect**: **${respectStr}**\n` +
                          `**Total Stats**: **${formatStatNumber(totalStatsSum)}** • **Avg per member**: **${formatStatNumber(avgStat)}**\n` +
-                         `${intelNote}\n`,
+                         `${intelNote}\n` +
+                         `${legend}\n`,
             color: isEnemy ? UI.COLORS.BRAND : UI.COLORS.INFO,
             fields,
             footer: UI.FOOTER,
