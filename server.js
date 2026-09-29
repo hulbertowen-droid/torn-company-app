@@ -6965,58 +6965,73 @@ function getFridayTornSystemPrompt() {
     const fn = discordConfig.factionName || "our faction";
     const fid = discordConfig.factionId || dynamicFactionId || "";
     const fidStr = fid ? ` [${fid}]` : "";
-    return `You are F.R.I.D.A.Y, the tactical Torn City intelligence oracle for ${fn}.
+    return `You are F.R.I.D.A.Y, the tactical Torn City intelligence advisor and operations specialist for ${fn}${fidStr}.
 
-PRIMARY PURPOSE & STRICT SCOPE:
-1. EXCLUSIVELY TORN CITY GAMEPLAY: You are strictly a Torn City game intelligence oracle. You ONLY answer questions about Torn City gameplay, training math, gym gains, battle stats, happy jumps, ranked wars, chains, crimes (Crimes 2.0 & OC 2.0), travel, items, company management, and faction rules.
-2. ABSOLUTELY NO WEBSITE / TECHNICAL DEV DISCUSSIONS: You do NOT answer questions about web development, website code, source files, HTML, CSS, JavaScript, Node.js, databases, servers, or internal app architecture. If anyone asks about website code or features, decline politely and concisely: "I am exclusively trained on Torn City gameplay, mechanics, and faction operations. For website or app technical questions, please contact leadership."
-3. SUMMARIZE THE CORE IDEA FIRST (CONCISE & ACTIONABLE):
-   - Always lead with a quick, punchy summary (1-2 sentences) giving the direct bottom-line answer.
-   - Follow with concise bullet points or step-by-step numbers for the essential facts or action items.
-   - Keep answers short, crisp, and high-yield. Avoid rambling explanations, filler phrases, or long-winded introductions.
-4. PERSONALITY & WIT (FUNNY BUT NOT OVER-THE-TOP):
-   - Deliver tactical insights with confidence, sharp intellect, and a light touch of dry wit.
-   - You can drop a subtle, clever comment or dry reality check about Torn life, but keep it understated — never clownish, cringe, or cheesy.
-   - All factual information, numbers, thresholds, and tactical instructions must remain 100% accurate, crystal-clear, and actionable.
+CORE PERSONA & TEMPERAMENT (WARM, POLITE, ENCOURAGING, AND HIGHLY SUPPORTIVE):
+1. WARM, RESPECTFUL & ENCOURAGING:
+   - You are a loyal, encouraging, and supportive teammate. You celebrate members' achievements, empower them with actionable knowledge, and treat every question with respect and warmth.
+   - ABSOLUTE BAN ON MEANNESS, ROASTING, AND SARCASM: You NEVER roast, mock, demean, patronize, or insult anyone. You are NEVER sarcastic or dismissive. If someone asks a beginner question, guide them patiently, clearly, and warmly.
+   - You speak with the sharp competence and helpful poise of Tony Stark's F.R.I.D.A.Y. mixed with the practical wisdom of a veteran Torn City leader.
+
+2. EXCLUSIVELY TORN CITY GAMEPLAY & FACTION OPERATIONS:
+   - You specialize in all aspects of Torn City gameplay: gym training math, stat curve, happy jumps, ranked warfare, chaining, Crimes 2.0 & OC 2.0, foreign travel, trading, economy, banking, stocks, and faction rules.
+   - NO WEBSITE / DEV DISCUSSIONS: If asked about website source code, HTML, CSS, JavaScript, or internal server architecture, politely decline: "I specialize exclusively in Torn City gameplay, tactical warfare, and faction operations. For web dashboard technical items, please reach out to leadership!"
+
+3. CRISP, CLEAR, AND HIGH-YIELD FORMATTING:
+   - Bottom-Line Up Front: Always lead with a clear, direct answer in the first 1-2 sentences.
+   - Follow with clean bullet points or numbered steps for the essential mechanics or action items.
+   - Keep answers easy to read on mobile and Discord — punchy, informative, and free of filler.
 
 STRICT KNOWLEDGE & SOURCING RULES:
 1. STRICTLY GROUNDED IN TORN WIKI & TORN FORUMS: You derive your Torn City game knowledge exclusively from the official Torn City Wiki (wiki.torn.com) and the official Torn City Forums (site:torn.com/forums.php) including verified community guides (such as Baldr, Vladar, Proxima, and Chedburn's official announcements).
 2. ZERO HALLUCINATIONS: If a game mechanic, weapon, item, formula, or update is NOT documented in verified Torn Wiki articles or official Torn forum threads, you MUST explicitly state: "This item or mechanic cannot be verified in official Torn Wiki or Forum records." NEVER invent fake items, weapons, or formulas.
 3. WIKI & FORUM CITATIONS: Whenever applicable, cite the relevant Torn Wiki page or forum guide/author (e.g. "Torn Wiki: Happy", "Baldr's Basic Advice", "Vladar's FF Guide", "Chedburn's OC 2.0 Announcement").
 
-FACTION OPERATIONAL DIRECTIVES (Trained Knowledge):
-- Faction: ${fn}${fidStr}.
-- Organized Crimes (OC 2.0) CPR Limits (Trained Faction Thresholds):
-  * Level 1 & Level 2: NO minimum CPR needed (0% — any member can join without restriction).
-  * Level 3 & Level 4: Around 40% and higher (40%+ required).
-  * Level 5 & Level 6: Higher than 35% (>35% required).
-  * Level 7 & Level 8: High tier (higher CPR required / leadership coordination).
-  * Inactivity policy: Members who haven't joined or participated in an OC for 24 hours receive alerts. Recruits under Torn's 3-day initial faction restriction are strictly exempt.
-  * Missing item protocol: Members missing required materials (e.g. C4, binoculars, lockpicks) should loan them from the faction armory or request from leadership.
-- Drug Overdose Protocol:
-  * Overdosing on Xanax, Ecstasy, Speed, etc., hospitalizes the player (Xanax OD lasts up to 24–72 hours, wipes energy/nerve, and adds addiction).
-  * Our bot detects overdoses automatically in real-time and alerts members with direct revive links.
-  * Members should request revives to clear long hospital times and visit Switzerland for rehab when addiction accumulates.
-- War & Chains:
-  * Chain dropping warning fires when the timer drops under 90 seconds.
-  * Bonus milestones fire at 10, 25, 50, 100, 250, 500, 1000 hits with major respect payouts.
-  * Fair Fight (FF) scales 1.00 to 3.00 based on battle stat ratios. Max respect is achieved near 3.00 FF.
-- Fast Level 15:
-  * Hit high-level inactives from Baldr's list using energy refills to unlock foreign travel for plushies/flowers ($2M-$4M daily profit).
-- Faction Happy Jump Protocols (Trained Faction Regimen):
-  * Faction Candy Perk: Our faction gives +50% Happy from candy boosters (25-happy candies yield 37 happy each; 75-happy candies yield 112 happy each).
-  * 1. Budget / Lollipop Jump (Used ~80% of the time — consistent gains every ~30 hours):
-    - Wait until at max natural energy (150e).
-    - Pop 3 Xanax in a row (as each drug cooldown clears) to reach 850 or 900 energy.
-    - When drug cooldown wears off at 850/900e, do a lollipop jump (25-happy candies giving 37 happy each with our perk) to reach ~15k Happy (depending on property).
-    - Train all 850–900e in the gym before the 15-minute tick (:00, :15, :30, :45).
-    - Frequency: Every ~30 hours based on our current booster cooldown.
-  * 2. Medium Jump (Used ~20% of the time — ~$7M cost, gives ~25k Happy):
-    - Buying Tip: Always buy candy from player Bazaars (Item Market is up to 5% more expensive).
-    - Requirements: 69 Tootsie Rolls (or similar 75-happy candies), 4 Xanax (from faction), 1 Ecstasy.
-    - How to: Empty out natural energy, take 4 Xanax over cooldowns to stack 1,000e. Wait for drug cooldown to wear off completely (crucial so you can take Ecstasy!). Eat all 69 Tootsie Rolls (giving 112 happy each with our boost), then pop 1 Ecstasy to double happy to ~25k. Dump all 1,000e into the gym before the 15-minute tick.
-    - Frequency: Every ~40 hours.
-  * 3. 99k Jump: Advanced jump using 4–5 eDVDs + 1 Ecstasy + 1,000e for stats under 400k-800k.
+VERIFIED TORN CITY GAMEPLAY MASTERY:
+1. GYM TRAINING & BATTLE STAT CURVE:
+   - Happy Linear Scaling: Happiness linearly multiplies gym stat gains up to the softcap of ~50,000,000 in a single stat.
+   - Beyond 50M: Happy gains plateau. At this stage, Energy volume (3x daily Xanax, energy refills, cans, FHCs) becomes the primary training driver.
+   - Gym Dots & Gym Unlock Sequence: Higher dot gyms provide significantly higher gains per energy spent. Specialist gyms (e.g. George's for Strength, ISO-Gym for Defense, Frontline Fitness) offer the highest stat gains for focused builds.
+   - Happy Jumps vs Regular Training:
+     * Under 400k-800k stats: Happy jumps (stacking 1,000e via Xanax + eating candies/eDVDs + Ecstasy) offer massive exponential returns.
+     * Above 800k-1M stats: Choco jumps or direct 3x Xanax + energy refill training becomes more energy-efficient and cost-effective.
+
+2. CRIMES 2.0 & ORGANIZED CRIMES 2.0 (OC 2.0):
+   - Crimes 2.0: Individual crime progression based on Skill Level (1-100), Nerve investment, and Crime Pass Rate (CPR).
+   - OC 2.0 Structure: Organized Crimes require specific team roles, equipment, and CPR levels.
+   - Faction OC CPR Guidelines:
+     * Levels 1 & 2: 0% CPR requirement (open to all members).
+     * Levels 3 & 4: ~40%+ CPR recommended.
+     * Levels 5 & 6: >35%+ CPR recommended.
+     * Levels 7 & 8: High tier, coordinated execution.
+   - Equipment: Teams require items like Binoculars, Lockpicks, Flash Grenades, Heavy Artillery, C4, etc. Members can loan items from the faction armory.
+   - Inactivity policy: Members who haven't joined or participated in an OC for 24 hours receive alerts. Recruits under Torn's 3-day initial faction restriction are strictly exempt.
+
+3. RANKED WARFARE & CHAIN MECHANICS:
+   - Fair Fight (FF) Formula: Scales between 1.00 and 3.00 based on the defender's stats relative to the attacker. Maximum respect payout is attained near 3.00 FF.
+   - Retaliation Bonus: Landing a counter-hit within 5 minutes of an enemy attacking a friendly member awards a 1.5x respect multiplier!
+   - Chain Bonus Milestones: Key respect payout spikes occur at hits 10 (1.25x), 25 (1.5x), 50 (2.0x), 100 (2.5x), 250 (3.0x), 500 (3.5x), 1,000 (4.0x), 2,500 (4.5x), 5,000 (5.0x), 10,000 (5.0x).
+   - Chain Watch Alert: Chain warning alerts trigger when timer drops below 90 seconds.
+   - War Caches: Winning ranked wars awards faction war caches (Bronze, Silver, Gold, Platinum, Diamond) containing rare weapons and armor bonuses.
+   - Medical Items: Small First Aid Kits, First Aid Kits, and Morphine reduce hospital time. Blood Bags (Intravenous Therapy education) restore 20-30% life and reduce hospital time when blood types are compatible.
+
+4. ECONOMY, BANKING & PASSIVE INCOME:
+   - City Bank: The 3-month investment offers the highest APR in Torn. Maximized with 10/10 Bank Interest merits (+50% APR) and the Torn City Bank (TCB) stock benefit block (+10% APR).
+   - Foreign Travel: Unlocked at Level 15 (fast-tracked by hitting Baldr's leveling list). Maximum suitcase capacity is achieved with a Private Island + Airstrip (+10 items), Large Suitcase (+4 items), and Faction travel perks (+8 to +10 items), yielding 29-37 items per flight.
+   - Plushie & Flower Runs: Switzerland (rehab + edelweiss), UAE/UK/Argentina/Japan/Hawaii generate $2M–$4M+ daily passive profit.
+
+5. ADDICTION & REHABILITATION:
+   - Each Xanax adds ~35-40 addiction points. Overdoses hospitalize players for 24-72h, clear energy/nerve, and add heavy addiction.
+   - High addiction triggers a severe training stat penalty (up to -20% gym gains) and increases overdose risk.
+   - Rehab: Take a flight to Switzerland to clear addiction at the Swiss Clinic ($250,000 per rehab session).
+
+6. FACTION PERKS & JUMP REGIMEN:
+   - Faction: ${fn}${fidStr}.
+   - Faction Candy Perk: +50% Happy from candy boosters (e.g. Bag of Chocolate Truffles yields 150 Happy instead of 100).
+   - Faction Booster Cooldown: Upgraded with Toleration perks allowing up to 39 hours of booster capacity (holds up to 78 bags of candies!).
+   - Budget Jump: Stack to 850/900e with 3 Xanax, eat candies to reach ~15k Happy, train before the 15m tick.
+   - Medium Jump: Stack 1,000e with 4 Xanax, let cooldown clear, eat 69 Tootsie Rolls/candies, pop 1 Ecstasy to double happy to ~25k, train before the tick.
+   - 99k Jump: Advanced jump using 4-5 eDVDs + 1 Ecstasy + 1,000e for stats under 400k-800k.
 `;
 }
 
@@ -7476,45 +7491,46 @@ async function askTornAI(message, history = [], userAccountData = null, invokerN
 // ─── F.R.I.D.A.Y Natural Conversation Responder ──────────────────────────────
 function getFridayResponderSystemPrompt() {
     const fn = discordConfig.factionName || "our faction";
-    return `You are F.R.I.D.A.Y, a sharp, witty, highly knowledgeable Torn City faction member hanging out in the ${fn} Discord server.
-Your job is to jump into the conversation naturally — like an experienced, clever teammate with authentic Torn City expertise and a great sense of humor.
+    return `You are F.R.I.D.A.Y, a warm, clever, highly knowledgeable Torn City faction companion hanging out in the ${fn} Discord server.
+Your job is to jump into the conversation naturally — like a friendly, experienced, supportive teammate with deep Torn City gameplay expertise.
 
-═══ PERSONALITY: FUNNY, WITTY, BUT NOT OVER-THE-TOP ═══
-• HUMOR STYLE (DRY WIT & PLAYFUL BANTER):
-  - You have a dry, deadpan, slightly sarcastic sense of humor.
-  - You're clever and quick-witted, like Tony Stark's F.R.I.D.A.Y. mixed with an authentic Torn City veteran.
-  - You drop sharp observations, dry reality checks, or light roasts that make people smirk.
-  - BREVITY IS WIT: 1 to 3 sentences. Keep it punchy, conversational, and direct.
+═══ PERSONALITY: WARM, SUPPORTIVE, ENCOURAGING & POLITE ═══
+• TONE & DEMEANOR:
+  - You are kind, enthusiastic, warm, and loyal to your faction teammates.
+  - STRICT ZERO-TOLERANCE ON MEANNESS & SARCASM: You NEVER insult, mock, roast, demean, belittle, or use snarky/sarcastic remarks with members. You are never rude or condescending. You are their trusted ally and supportive wingman.
+  - Celebrate wins, encourage members during gym training and ranked wars, and offer helpful tactical guidance with cheerful confidence.
+  - BREVITY: In chat banter and conversation, keep responses short and punchy (1 to 3 sentences).
 
 ═══ CONVERSATION RELEVANCE & FOCUS ═══
 • RESPOND TO THE IMMEDIATE MESSAGE:
-  - Focus strictly on what the member is saying RIGHT NOW.
+  - Focus strictly on what the member is saying right now.
   - Do NOT bring up past conversations, previous jump discussions, or old topics unless the user explicitly asks you about them.
-  - When someone greets you (e.g. "hi friday", "hey", "sup"), greet them back warmly with witty banter — do NOT recite game mechanics, numbers, or perks unprompted.
+  - When someone greets you (e.g. "hi friday", "hey", "sup"), greet them back warmly and cheerfully — do not recite game mechanics or numbers unprompted.
+  - When asked a gameplay or tactical question, give a clear, smart, and direct answer.
 
 ═══ CRITICAL TORN CITY KNOWLEDGE & ANTI-HALLUCINATION MANDATES ═══
 1. NEVER "CORRECT" VALID TORN TERMINOLOGY OR ITEMS:
-   - When a user says a Torn item name (e.g. "chocolate truffles", "tootsie rolls", "jawbreaker", "edvd"), NEVER claim they meant a different item (e.g. NEVER say "Chocolate boxes, Agent" or substitute an item).
-   - "Chocolate truffles" IS Bag of Chocolate Truffles (ID 529, Candy, +100 Happy, 30m booster cooldown).
-   - Differentiate similarly named items:
+   - When a user mentions a valid Torn item name (e.g. "chocolate truffles", "tootsie rolls", "jawbreaker", "edvd"), NEVER claim they meant a different item.
+   - "Chocolate truffles" IS Bag of Chocolate Truffles (ID 529, Candy, +100 Happy base, 30m booster cooldown).
+   - "eDVD" IS Erotic DVD (ID 366, Booster, +2,500 Happy base, 6h booster cooldown).
+   - Differentiate similarly named items accurately:
      * Bag of Chocolate Truffles (+100 Happy, 30m CD) is NOT Box of Chocolate Bars (+25 Happy) or Big Box of Chocolate Bars (+35 Happy).
      * Bag of Candy Kisses (+50 Happy) is NOT Bag of Chocolate Kisses (+25 Happy).
 
-2. GROUNDED IN PROVIDED INTEL ONLY:
-   - Base all Torn City game mechanics, item stats, and faction perk calculations strictly on the verified intel provided in the prompt context.
-   - Never guess arbitrary numbers, never hallucinate mechanics, and never invent fixed quantities.
-   - If no gameplay intel was provided in the prompt, the user is chatting casually — keep your response conversational, lighthearted, and witty.
+2. GROUNDED IN TORN GAMEPLAY INTEL:
+   - Base all Torn City mechanics, perks, and calculations on verified game data provided in the prompt context.
+   - If no gameplay intel was provided, the user is chatting casually — keep your response friendly, welcoming, and lighthearted.
 
 3. ACCOUNT-AWARE INTEL:
-   - When the player's live account data is provided in the prompt, reference their actual numbers (energy, happy, property, cooldowns).
+   - When the player's live account data is provided in the prompt, reference their real numbers (energy, happy, property, cooldowns).
    - If information is unverified, state what is known and clarify rather than guessing.
 
-4. SOUND LIKE A REAL HUMAN IN DISCORD:
-   - Quick, snappy, natural. No robotic corporate boilerplate ("As an AI...", "Hope this helps!"). Just deliver the answer with confidence and dry wit.
+4. SOUND LIKE A REAL TEAMMATE IN DISCORD:
+   - Quick, conversational, and natural. Avoid robotic corporate boilerplate ("As an AI...", "Hope this helps!").
 
 5. ZERO SCRIPT OR CODE MODIFICATION POWERS:
-   - You are a Discord chat companion and intel bot, NOT a developer or sysadmin. You have NO ability to change bot scripts, mute background systems, alter server settings, or modify code.
-   - If a user asks you to change the script, turn off/mute notifications, edit code, or adjust bot settings via chat, tell them with dry humor that you can't edit bot scripts or settings from chat, and suggest they use the website dashboard or check with an administrator. NEVER claim you changed or will change a script or setting!`;
+   - You are a Discord chat companion and tactical advisor, NOT a developer or sysadmin. You have NO ability to change bot scripts, mute background systems, alter server settings, or modify code.
+   - If a user asks you to change the script, turn off/mute notifications, edit code, or adjust bot settings via chat, tell them politely that you can't edit bot scripts or settings from chat, and suggest they use the website dashboard or check with leadership. NEVER claim you changed or will change a script or setting!`;
 }
 
 async function generateChatResponse(convoLines = [], hint = "", invokerName = "", replyContext = null, userAccountData = null, detectedIntent = null, userSpeech = "") {
@@ -9535,6 +9551,7 @@ async function fetchBulkFFScouterStats(playerIds, ffKey) {
         chunks.push(playerIds.slice(i, i + chunkSize));
     }
 
+    let updatedSpies = false;
     for (const chunk of chunks) {
         try {
             const batchStr = chunk.join(',');
@@ -9545,24 +9562,32 @@ async function fetchBulkFFScouterStats(playerIds, ffKey) {
             const data = await res.json().catch(() => null);
             if (!data) continue;
 
+            const processRecord = (id, statVal, p = {}) => {
+                if (!id || statVal <= 0) return;
+                results[id] = statVal;
+                statsCache[id] = { stats: statVal, time: Date.now() };
+
+                const existingSpy = spyDatabase[id];
+                // Update spy database if missing, has no timestamp, or is older than 3 days
+                const isStaleSpy = !existingSpy || !existingSpy.timestamp || (Date.now() - existingSpy.timestamp > 3 * 86400000);
+                if (isStaleSpy) {
+                    spyDatabase[id] = {
+                        total: statVal,
+                        strength: p.strength || existingSpy?.strength || 0,
+                        defense: p.defense || existingSpy?.defense || 0,
+                        speed: p.speed || existingSpy?.speed || 0,
+                        dexterity: p.dexterity || existingSpy?.dexterity || 0,
+                        timestamp: Date.now()
+                    };
+                    updatedSpies = true;
+                }
+            };
+
             if (Array.isArray(data)) {
                 data.forEach(p => {
                     const id = (p.player_id || p.id || '').toString();
                     const statVal = Number(p.bs_estimate || p.total || p.stats || p.estimate || 0);
-                    if (id && statVal > 0) {
-                        results[id] = statVal;
-                        statsCache[id] = { stats: statVal, time: Date.now() };
-                        if (!spyDatabase[id]) {
-                            spyDatabase[id] = {
-                                total: statVal,
-                                strength: p.strength || 0,
-                                defense: p.defense || 0,
-                                speed: p.speed || 0,
-                                dexterity: p.dexterity || 0,
-                                timestamp: Date.now()
-                            };
-                        }
-                    }
+                    processRecord(id, statVal, p);
                 });
             } else if (typeof data === 'object') {
                 const entries = Array.isArray(data.data) ? data.data : Object.entries(data);
@@ -9570,26 +9595,21 @@ async function fetchBulkFFScouterStats(playerIds, ffKey) {
                     if (Array.isArray(item)) {
                         const [id, p] = item;
                         const statVal = Number(p?.bs_estimate || p?.total || p?.stats || p || 0);
-                        if (statVal > 0) {
-                            const sId = id.toString();
-                            results[sId] = statVal;
-                            statsCache[sId] = { stats: statVal, time: Date.now() };
-                            if (!spyDatabase[sId]) spyDatabase[sId] = { total: statVal, timestamp: Date.now() };
-                        }
+                        processRecord(id?.toString(), statVal, typeof p === 'object' ? p : {});
                     } else if (item && item.player_id) {
                         const id = item.player_id.toString();
                         const statVal = Number(item.bs_estimate || item.total || item.stats || 0);
-                        if (statVal > 0) {
-                            results[id] = statVal;
-                            statsCache[id] = { stats: statVal, time: Date.now() };
-                            if (!spyDatabase[id]) spyDatabase[id] = { total: statVal, timestamp: Date.now() };
-                        }
+                        processRecord(id, statVal, item);
                     }
                 }
             }
         } catch (e) {
             console.error("[FF Scouter Stats] Batch error:", e.message);
         }
+    }
+
+    if (updatedSpies) {
+        try { saveSpyDb(); } catch(e) {}
     }
     return results;
 }
@@ -10038,6 +10058,113 @@ function formatStatNumber(num) {
     return num.toLocaleString();
 }
 
+// ── Unified Player Battle Stats Resolver ──
+// Priority: 1. Verified Live /bs Stats (Torn API) -> 2. Fresh FF Scouter Scout / Spy DB -> 3. Manual Override -> 4. Level Estimate
+function resolvePlayerBattleStats(playerId, level = 0) {
+    if (!playerId) {
+        return {
+            total: 0,
+            strength: 0,
+            defense: 0,
+            speed: 0,
+            dexterity: 0,
+            timestamp: null,
+            source: 'none',
+            isEstimated: true
+        };
+    }
+    const id = String(playerId);
+
+    // 1. Highest Priority: Verified Battle Stats from /bs update or linked player API key
+    const bRecord = (typeof battleStatsHistory !== 'undefined' && battleStatsHistory) ? battleStatsHistory[id] : null;
+    if (bRecord && bRecord.stats && bRecord.stats.total > 0) {
+        return {
+            total: bRecord.stats.total,
+            strength: bRecord.stats.strength || 0,
+            defense: bRecord.stats.defense || 0,
+            speed: bRecord.stats.speed || 0,
+            dexterity: bRecord.stats.dexterity || 0,
+            timestamp: bRecord.lastUpdated || Date.now(),
+            source: 'verified',
+            isEstimated: false
+        };
+    }
+
+    // 2. Manual Stats from Leadership Override
+    const manual = (typeof manualStats !== 'undefined' && manualStats) ? manualStats[id] : null;
+
+    // 3. Spy Database Record
+    const spy = (typeof spyDatabase !== 'undefined' && spyDatabase) ? spyDatabase[id] : null;
+
+    // 4. FF Scouter Cached Record
+    const cached = (typeof statsCache !== 'undefined' && statsCache) ? statsCache[id] : null;
+
+    let bestTotal = 0;
+    let bestSource = 'unknown';
+    let bestTimestamp = null;
+    let strength = 0, defense = 0, speed = 0, dexterity = 0;
+
+    // Evaluate Spy Database
+    if (spy && (spy.total > 0 || (spy.strength && spy.defense))) {
+        const spyTotal = spy.total || ((spy.strength || 0) + (spy.defense || 0) + (spy.speed || 0) + (spy.dexterity || 0));
+        if (spyTotal > 0) {
+            bestTotal = spyTotal;
+            bestSource = 'spy';
+            bestTimestamp = spy.timestamp || null;
+            strength = spy.strength || 0;
+            defense = spy.defense || 0;
+            speed = spy.speed || 0;
+            dexterity = spy.dexterity || 0;
+        }
+    }
+
+    // Evaluate FF Scouter Cache (takes priority if newer than spy or spy has no timestamp)
+    if (cached && cached.stats > 0) {
+        const cachedTime = cached.time || 0;
+        if (!bestTotal || (cachedTime && (!bestTimestamp || cachedTime > bestTimestamp))) {
+            bestTotal = cached.stats;
+            bestSource = 'scouted';
+            bestTimestamp = cachedTime;
+        }
+    }
+
+    // Evaluate Manual Override
+    if (manual && manual.stats > 0) {
+        const manualTime = manual.updatedAt || 0;
+        if (!bestTotal || manualTime > (bestTimestamp || 0)) {
+            bestTotal = manual.stats;
+            bestSource = 'manual';
+            bestTimestamp = manualTime || bestTimestamp;
+        }
+    }
+
+    if (bestTotal > 0) {
+        return {
+            total: bestTotal,
+            strength,
+            defense,
+            speed,
+            dexterity,
+            timestamp: bestTimestamp,
+            source: bestSource,
+            isEstimated: bestSource === 'scouted' && !strength && !defense && !speed && !dexterity
+        };
+    }
+
+    // 5. Baseline Estimate from Level
+    const est = estimateStatsFromLevel(level);
+    return {
+        total: est,
+        strength: 0,
+        defense: 0,
+        speed: 0,
+        dexterity: 0,
+        timestamp: null,
+        source: 'level_estimate',
+        isEstimated: true
+    };
+}
+
 // Helper: Resolve player's compact battle stats progression summary
 function resolvePlayerStatsProgression(pId, discordUid) {
     if (!pId) return '📊 _Unrecorded (No /bs snapshot on file)_';
@@ -10067,14 +10194,10 @@ function resolvePlayerStatsProgression(pId, discordUid) {
         return `📊 **~${totalStr} BS** *(Baseline recorded ${timeAgo})*`;
     }
 
-    if (typeof spyDatabase !== 'undefined' && spyDatabase && spyDatabase[recKey]?.total) {
-        const spyTotal = spyDatabase[recKey].total;
-        return `📊 **~${formatStatNumber(spyTotal)} BS** *(Scouted)*`;
-    }
-
-    if (typeof statsCache !== 'undefined' && statsCache && statsCache[recKey]?.stats) {
-        const cached = statsCache[recKey].stats;
-        return `📊 **~${formatStatNumber(cached)} BS** *(Estimated)*`;
+    const resolved = resolvePlayerBattleStats(pId);
+    if (resolved && resolved.total > 0 && !resolved.isEstimated) {
+        const label = resolved.source === 'spy' ? 'Scouted' : (resolved.source === 'manual' ? 'Manual' : 'Estimated');
+        return `📊 **~${formatStatNumber(resolved.total)} BS** *(${label})*`;
     }
 
     return '📊 _Unrecorded (Run `/bs` to track)_';
@@ -10243,9 +10366,14 @@ async function buildTargetsEmbed(apiKey) {
         // Bulk sync stats from FF Scouter if key is present
         const ffKey = getGlobalFFKey() || discordConfig.ffKey;
         if (ffKey && members.length > 0) {
-            const unscouted = members.map(m => m.id).filter(id => !spyDatabase[id]?.total && !statsCache[id]?.stats);
-            if (unscouted.length > 0) {
-                await fetchBulkFFScouterStats(unscouted, ffKey);
+            const needsScout = members.map(m => m.id).filter(id => {
+                const cachedTime = statsCache[id]?.time || 0;
+                const spyTime = spyDatabase[id]?.timestamp || 0;
+                const isStale = (Date.now() - cachedTime > 6 * 3600000) && (Date.now() - spyTime > 3 * 86400000);
+                return isStale || (!spyDatabase[id]?.total && !statsCache[id]?.stats);
+            });
+            if (needsScout.length > 0) {
+                await fetchBulkFFScouterStats(needsScout, ffKey);
             }
         }
 
@@ -10278,10 +10406,10 @@ async function buildTargetsEmbed(apiKey) {
 
         const lines = top10.map((m, idx) => {
             const statusText = m.last_action?.status === 'Online' ? '🟢 Online' : (m.last_action?.status === 'Idle' ? '🟡 Idle' : '⚪ Offline');
-            const spyTotal = spyDatabase[m.id]?.total || statsCache[m.id]?.stats || manualStats[m.id]?.stats;
-            const statsStr = spyTotal
-                ? `**${formatStatNumber(spyTotal)}** stats`
-                : `~**${formatStatNumber(estimateStatsFromLevel(m.level))}** *(Est)*`;
+            const resolved = resolvePlayerBattleStats(m.id, m.level);
+            const statsStr = !resolved.isEstimated
+                ? `**${formatStatNumber(resolved.total)}** stats`
+                : `~**${formatStatNumber(resolved.total)}** *(Est)*`;
             const claimTag = claims[m.id] ? ` *(🎯 Claimed: ${claims[m.id].playerName})*` : '';
             return `${idx + 1}. [${statusText}] ${UI.player(m.name, m.id)} — ${statsStr} · [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})${claimTag}`;
         });
@@ -10303,12 +10431,20 @@ async function buildSpyEmbed(targetQuery, apiKey) {
     const targetId = targetQuery.toString().trim().replace(/[^0-9]/g, "");
     const ffKey = getGlobalFFKey() || discordConfig.ffKey;
     
-    // Fetch stats from FF Scouter if not in local cache
-    if (targetId && (!spyDatabase[targetId] || !spyDatabase[targetId].total) && ffKey) {
-        await fetchBulkFFScouterStats([targetId], ffKey);
+    // Check if target needs a fresh scout from FF Scouter
+    if (targetId && ffKey) {
+        const hasFreshVerified = battleStatsHistory[targetId]?.stats?.total > 0 && (Date.now() - (battleStatsHistory[targetId].lastUpdated || 0) < 7 * 86400000);
+        if (!hasFreshVerified) {
+            const cachedTime = statsCache[targetId]?.time || 0;
+            const spyTime = spyDatabase[targetId]?.timestamp || 0;
+            const isStale = (Date.now() - cachedTime > 6 * 3600000) && (Date.now() - spyTime > 3 * 86400000);
+            if (isStale || (!spyDatabase[targetId]?.total && !statsCache[targetId]?.stats)) {
+                await fetchBulkFFScouterStats([targetId], ffKey);
+            }
+        }
     }
 
-    let spy = spyDatabase[targetId] || (statsCache[targetId]?.stats ? { total: statsCache[targetId].stats } : null);
+    const resolved = resolvePlayerBattleStats(targetId, 0);
     let playerName = getPlayerName(targetId, `Target #${targetId}`);
 
     if (apiKey && targetId && (!playerName || playerName.startsWith("Target #") || playerName.startsWith("Player #"))) {
@@ -10322,7 +10458,7 @@ async function buildSpyEmbed(targetQuery, apiKey) {
         } catch(e) {}
     }
 
-    if (!spy) {
+    if (!resolved.total || resolved.source === 'none' || resolved.source === 'level_estimate') {
         return {
             title: `🔍 ${playerName} — No Stats on Record`,
             description: `No spy data found in FF Scouter or the database for **${playerName}**.\n\n` +
@@ -10333,15 +10469,25 @@ async function buildSpyEmbed(targetQuery, apiKey) {
         };
     }
 
-    const spiedTime = spy.timestamp ? `<t:${Math.floor(spy.timestamp / 1000)}:R>` : "Verified";
-    const strVal = spy.strength ? Number(spy.strength).toLocaleString() : "Unknown";
-    const defVal = spy.defense ? Number(spy.defense).toLocaleString() : "Unknown";
-    const spdVal = spy.speed ? Number(spy.speed).toLocaleString() : "Unknown";
-    const dexVal = spy.dexterity ? Number(spy.dexterity).toLocaleString() : "Unknown";
+    let sourceLabel = "Verified";
+    if (resolved.source === 'verified') {
+        sourceLabel = resolved.timestamp ? `✅ Verified via Player Key (<t:${Math.floor(resolved.timestamp / 1000)}:R>)` : "✅ Verified via Player Key";
+    } else if (resolved.source === 'spy') {
+        sourceLabel = resolved.timestamp ? `🕵️ Spy Record (<t:${Math.floor(resolved.timestamp / 1000)}:R>)` : "🕵️ Spy Record";
+    } else if (resolved.source === 'scouted') {
+        sourceLabel = resolved.timestamp ? `📡 FF Scouter Estimate (<t:${Math.floor(resolved.timestamp / 1000)}:R>)` : "📡 FF Scouter Estimate";
+    } else if (resolved.source === 'manual') {
+        sourceLabel = resolved.timestamp ? `📝 Manual Leader Record (<t:${Math.floor(resolved.timestamp / 1000)}:R>)` : "📝 Manual Leader Record";
+    }
+
+    const strVal = resolved.strength ? Number(resolved.strength).toLocaleString() : (resolved.source === 'verified' ? '0' : 'Unknown');
+    const defVal = resolved.defense ? Number(resolved.defense).toLocaleString() : (resolved.source === 'verified' ? '0' : 'Unknown');
+    const spdVal = resolved.speed ? Number(resolved.speed).toLocaleString() : (resolved.source === 'verified' ? '0' : 'Unknown');
+    const dexVal = resolved.dexterity ? Number(resolved.dexterity).toLocaleString() : (resolved.source === 'verified' ? '0' : 'Unknown');
 
     return {
         title: `🔍 ${playerName} — Battle Stats`,
-        description: `**Total**: **${formatStatNumber(spy.total || 0)}** (${(spy.total || 0).toLocaleString()})\n**Verified**: ${spiedTime}`,
+        description: `**Total**: **${formatStatNumber(resolved.total)}** (${Number(resolved.total).toLocaleString()})\n**Source**: ${sourceLabel}`,
         color: UI.COLORS.INFO,
         fields: [
             { name: "💪 Strength", value: strVal, inline: true },
@@ -11550,21 +11696,30 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
         const ffKey = getGlobalFFKey() || discordConfig.ffKey;
         const memberIds = Object.keys(facData.members || {});
         
-        // If we have an FF Scouter key, fetch all unscouted members in bulk right now!
+        // Refresh stale or unscouted members in bulk via FF Scouter
         if (ffKey && memberIds.length > 0) {
-            const unscouted = memberIds.filter(id => !spyDatabase[id]?.total && !statsCache[id]?.stats);
-            if (unscouted.length > 0) {
-                await fetchBulkFFScouterStats(unscouted, ffKey);
+            const needsScout = memberIds.filter(id => {
+                // If member has verified stats updated within 7 days, no scout needed
+                if (battleStatsHistory[id]?.stats?.total > 0 && (Date.now() - (battleStatsHistory[id].lastUpdated || 0) < 7 * 86400000)) {
+                    return false;
+                }
+                const cachedTime = statsCache[id]?.time || 0;
+                const spyTime = spyDatabase[id]?.timestamp || 0;
+                const isStale = (Date.now() - cachedTime > 6 * 3600000) && (Date.now() - spyTime > 3 * 86400000);
+                return isStale || (!spyDatabase[id]?.total && !statsCache[id]?.stats);
+            });
+            if (needsScout.length > 0) {
+                await fetchBulkFFScouterStats(needsScout, ffKey);
             }
         }
 
         const members = Object.entries(facData.members || {}).map(([id, m]) => {
-            const rawStat = spyDatabase[id]?.total || statsCache[id]?.stats || manualStats[id]?.stats || null;
-            let numericStat = typeof rawStat === 'number' ? rawStat : (rawStat ? Number(rawStat) : 0);
-            let isEstimated = false;
-            if (!numericStat || isNaN(numericStat) || numericStat <= 0) {
-                numericStat = estimateStatsFromLevel(m.level);
-                isEstimated = true;
+            const resolved = resolvePlayerBattleStats(id, m.level);
+            let suffix = '';
+            if (resolved.isEstimated) {
+                suffix = ' *(Est)*';
+            } else if (resolved.source === 'verified') {
+                suffix = ' *(Verified)*';
             }
             return {
                 id,
@@ -11574,9 +11729,10 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
                 daysInFaction: m.days_in_faction || 0,
                 status: m.last_action?.status || 'Offline',
                 state: m.status?.state || 'Okay',
-                stats: numericStat,
-                isEstimated,
-                statsFormatted: `${formatStatNumber(numericStat)}${isEstimated ? ' *(Est)*' : ''}`
+                stats: resolved.total,
+                isEstimated: resolved.isEstimated,
+                source: resolved.source,
+                statsFormatted: `${formatStatNumber(resolved.total)}${suffix}`
             };
         });
 
@@ -11631,7 +11787,7 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
         const respectStr = Number(facData.respect || 0).toLocaleString();
         const rankStr = facData.rank?.name || 'Unranked';
         const intelNote = ffKey 
-            ? `🛡️ **Intel**: FF Scouter & Spy DB (**${verifiedCount} / ${members.length}** verified)`
+            ? `🛡️ **Intel**: FF Scouter & Live Verified DB (**${verifiedCount} / ${members.length}** verified/scouted)`
             : `⚠️ **Notice**: FF Scouter key not connected — using level baseline estimates. Connect FF Scouter in Dashboard Settings for live accuracy.`;
 
         return {
@@ -18402,69 +18558,78 @@ function setupSlashBotEvents(bot, token) {
         // ── Community Bug Reporter Slash Command (/bug) ──
         if (cmd === 'bug') {
             await interaction.deferReply({ ephemeral: true });
-            const description = (interaction.options.getString('description') || '').trim();
-            const categoryChoice = interaction.options.getString('category') || 'general';
-            const categoryMap = {
-                'general': 'General / Other',
-                'website': 'Web Dashboard',
-                'discord': 'Discord Bot / Commands',
-                'alerts': 'Alerts & Notifications',
-                'oc': 'Organized Crimes',
-                'war': 'War & Chains',
-                'banking': 'Vault Banking'
-            };
-            const category = categoryMap[categoryChoice] || 'General / Other';
-
-            if (!description) {
-                return await interaction.editReply({
-                    embeds: [sanitizeEmbed(UI.error('Missing Description', 'Please provide a detailed description of the bug or issue encountered.'))]
-                });
-            }
-
-            // Look up reporter's linked Torn ID if available
-            let tornId = '';
-            let tornName = '';
             try {
-                if (typeof userKeys !== 'undefined' && userKeys.hasLinkedKey && userKeys.hasLinkedKey(interaction.user.id)) {
-                    const linked = userKeys.getRecord(interaction.user.id);
-                    if (linked) {
-                        tornId = linked.playerId || '';
-                        tornName = linked.name || '';
-                    }
-                } else if (typeof verifiedDiscordToTorn !== 'undefined' && verifiedDiscordToTorn[interaction.user.id]) {
-                    tornId = verifiedDiscordToTorn[interaction.user.id].tornId || '';
-                    tornName = verifiedDiscordToTorn[interaction.user.id].tornName || '';
+                const description = (interaction.options.getString('description') || '').trim();
+                const categoryChoice = interaction.options.getString('category') || 'general';
+                const categoryMap = {
+                    'general': 'General / Other',
+                    'website': 'Web Dashboard',
+                    'discord': 'Discord Bot / Commands',
+                    'alerts': 'Alerts & Notifications',
+                    'oc': 'Organized Crimes',
+                    'war': 'War & Chains',
+                    'banking': 'Vault Banking'
+                };
+                const category = categoryMap[categoryChoice] || 'General / Other';
+
+                if (!description) {
+                    return await interaction.editReply({
+                        embeds: [sanitizeEmbed(UI.error('Missing Description', 'Please provide a detailed description of the bug or issue encountered.'))]
+                    });
                 }
-            } catch(e) {}
 
-            const newBug = bugManager.createBug({
-                description,
-                category,
-                reporterName,
-                discordId: interaction.user.id,
-                discordTag: interaction.user.tag || interaction.user.username,
-                tornId,
-                tornName
-            });
-            const bugId = newBug.id;
+                const reporterName = interaction.member?.displayName || interaction.user?.globalName || interaction.user?.username || 'Member';
 
-            const reporterDisplay = tornName && tornId 
-                ? `${reporterName} (${UI.player(tornName, tornId)})`
-                : `<@${interaction.user.id}>`;
+                // Look up reporter's linked Torn ID if available
+                let tornId = '';
+                let tornName = '';
+                try {
+                    if (typeof userKeys !== 'undefined' && userKeys.hasLinkedKey && userKeys.hasLinkedKey(interaction.user.id)) {
+                        const linked = userKeys.getRecord(interaction.user.id);
+                        if (linked) {
+                            tornId = linked.playerId || '';
+                            tornName = linked.name || '';
+                        }
+                    } else if (typeof verifiedDiscordToTorn !== 'undefined' && verifiedDiscordToTorn[interaction.user.id]) {
+                        tornId = verifiedDiscordToTorn[interaction.user.id].tornId || '';
+                        tornName = verifiedDiscordToTorn[interaction.user.id].tornName || '';
+                    }
+                } catch(e) {}
 
-            const bugEmbed = UI.success(
-                `🐛 Bug Report Logged [${bugId}]`,
-                `Thank you for reporting this issue! It has been logged to the F.R.I.D.A.Y Bug Tracker and is visible live on the web dashboard.\n\n` +
-                `• **Report ID:** \`${bugId}\`\n` +
-                `• **Category:** \`${category}\`\n` +
-                `• **Status:** \`Open\`\n` +
-                `• **Reporter:** ${reporterDisplay}\n\n` +
-                `**Issue Description:**\n${description}`
-            );
+                const newBug = bugManager.createBug({
+                    description,
+                    category,
+                    reporterName,
+                    discordId: interaction.user.id,
+                    discordTag: interaction.user.tag || interaction.user.username,
+                    tornId,
+                    tornName
+                });
+                const bugId = newBug.id;
 
-            return await interaction.editReply({
-                embeds: [sanitizeEmbed(bugEmbed)]
-            });
+                const reporterDisplay = tornName && tornId 
+                    ? `${reporterName} (${UI.player(tornName, tornId)})`
+                    : `<@${interaction.user.id}>`;
+
+                const bugEmbed = UI.success(
+                    `🐛 Bug Report Logged [${bugId}]`,
+                    `Thank you for reporting this issue! It has been logged to the F.R.I.D.A.Y Bug Tracker and is visible live on the web dashboard.\n\n` +
+                    `• **Report ID:** \`${bugId}\`\n` +
+                    `• **Category:** \`${category}\`\n` +
+                    `• **Status:** \`Open\`\n` +
+                    `• **Reporter:** ${reporterDisplay}\n\n` +
+                    `**Issue Description:**\n${description}`
+                );
+
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(bugEmbed)]
+                });
+            } catch (err) {
+                console.error('[Slash Bot] Error in /bug handler:', err);
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.error('Error Logging Bug', `An error occurred while logging the bug report: ${err.message || 'Unknown error'}. Please try again shortly.`))]
+                }).catch(() => {});
+            }
         }
 
         // ── Tactical Torn AI Oracle (F.R.I.D.A.Y - Private Ephemeral) ──
