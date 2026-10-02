@@ -10284,6 +10284,43 @@ function sanitizeEmbed(embed) {
     return sanitized;
 }
 
+function calculateEmbedChars(embed) {
+    if (!embed) return 0;
+    let chars = 0;
+    if (embed.title) chars += embed.title.length;
+    if (embed.description) chars += embed.description.length;
+    if (embed.footer?.text) chars += embed.footer.text.length;
+    if (embed.author?.name) chars += embed.author.name.length;
+    if (Array.isArray(embed.fields)) {
+        for (const f of embed.fields) {
+            chars += (f.name?.length || 0) + (f.value?.length || 0);
+        }
+    }
+    return chars;
+}
+
+function chunkEmbedsForDiscord(embeds, maxLimit = 5400) {
+    const chunks = [];
+    let currentChunk = [];
+    let currentTotal = 0;
+
+    for (const embed of embeds) {
+        const eChars = calculateEmbedChars(embed);
+        if (currentChunk.length > 0 && (currentTotal + eChars > maxLimit || currentChunk.length >= 10)) {
+            chunks.push(currentChunk);
+            currentChunk = [embed];
+            currentTotal = eChars;
+        } else {
+            currentChunk.push(embed);
+            currentTotal += eChars;
+        }
+    }
+    if (currentChunk.length > 0) {
+        chunks.push(currentChunk);
+    }
+    return chunks;
+}
+
 function formatStatNumber(num) {
     if (!num || isNaN(num)) return "Unknown";
     num = Number(num);
@@ -12416,6 +12453,10 @@ async function buildEnemyDossier(targetFacId, apiKey, ffKey, sort = 'strongest')
             );
 
             return {
+                overviewEmbed: cached.overviewEmbed,
+                activityEmbed,
+                warEmbed,
+                rosterEmbeds,
                 embeds: allEmbeds.map(e => sanitizeEmbed(e)),
                 components: [sortButtons]
             };
@@ -12667,6 +12708,10 @@ async function buildEnemyDossier(targetFacId, apiKey, ffKey, sort = 'strongest')
         );
 
         return {
+            overviewEmbed,
+            activityEmbed,
+            warEmbed,
+            rosterEmbeds,
             embeds: allEmbeds.map(e => sanitizeEmbed(e)),
             components: [sortButtons]
         };
@@ -18535,11 +18580,31 @@ function setupSlashBotEvents(bot, token) {
                     const sort  = parts.pop();
                     const facId = parts.join('_');
                     const result = await buildEnemyDossier(facId, apiKey, ffKey, sort);
-                    const safeEmbeds = (result.embeds || []).map(e => sanitizeEmbed(e));
-                    return await interaction.editReply({
-                        embeds: safeEmbeds,
-                        components: result.components || []
-                    }).catch(() => {});
+
+                    if (!result.rosterEmbeds) {
+                        const safeEmbeds = (result.embeds || []).map(e => sanitizeEmbed(e));
+                        return await interaction.editReply({ embeds: safeEmbeds, components: result.components || [] }).catch(() => {});
+                    }
+
+                    const headerEmbeds = [result.overviewEmbed, result.activityEmbed];
+                    if (result.warEmbed) headerEmbeds.push(result.warEmbed);
+                    const safeHeader = headerEmbeds.map(e => sanitizeEmbed(e));
+                    const safeRosters = result.rosterEmbeds.map(e => sanitizeEmbed(e));
+                    const allSafe = [...safeHeader, ...safeRosters];
+                    const totalAllChars = allSafe.reduce((sum, e) => sum + calculateEmbedChars(e), 0);
+
+                    if (totalAllChars <= 5400 && allSafe.length <= 10) {
+                        return await interaction.editReply({
+                            embeds: allSafe,
+                            components: result.components || []
+                        }).catch(() => {});
+                    } else {
+                        const rosterChunks = chunkEmbedsForDiscord(safeRosters, 5400);
+                        return await interaction.editReply({
+                            embeds: rosterChunks[0] || safeRosters,
+                            components: result.components || []
+                        }).catch(() => {});
+                    }
                 }
 
                 if (customId.startsWith('enemy_main_')) {
@@ -20740,10 +20805,41 @@ function setupSlashBotEvents(bot, token) {
                 const facIdOpt = interaction.options.getString('faction_id') || null;
                 const ffKey    = getGlobalFFKey() || discordConfig.ffKey;
                 const result   = await buildEnemyDossier(facIdOpt, apiKey, ffKey);
-                const safeEmbeds = result.embeds && result.embeds.length > 0
-                    ? result.embeds.map(e => sanitizeEmbed(e))
-                    : [sanitizeEmbed(result.embed || UI.error('Enemy Intelligence', 'No data returned.'))];
-                return await interaction.editReply({ embeds: safeEmbeds, components: result.components || [] });
+
+                if (!result.rosterEmbeds) {
+                    const safeEmbeds = (result.embeds || []).map(e => sanitizeEmbed(e));
+                    return await interaction.editReply({ embeds: safeEmbeds, components: result.components || [] });
+                }
+
+                const headerEmbeds = [result.overviewEmbed, result.activityEmbed];
+                if (result.warEmbed) headerEmbeds.push(result.warEmbed);
+                const safeHeader = headerEmbeds.map(e => sanitizeEmbed(e));
+
+                const safeRosters = result.rosterEmbeds.map(e => sanitizeEmbed(e));
+                const allSafe = [...safeHeader, ...safeRosters];
+                const totalAllChars = allSafe.reduce((sum, e) => sum + calculateEmbedChars(e), 0);
+
+                if (totalAllChars <= 5400 && allSafe.length <= 10) {
+                    return await interaction.editReply({
+                        embeds: allSafe,
+                        components: result.components || []
+                    });
+                }
+
+                await interaction.editReply({
+                    embeds: safeHeader,
+                    components: []
+                });
+
+                const rosterChunks = chunkEmbedsForDiscord(safeRosters, 5400);
+                for (let i = 0; i < rosterChunks.length; i++) {
+                    const isLast = (i === rosterChunks.length - 1);
+                    await interaction.followUp({
+                        embeds: rosterChunks[i],
+                        components: isLast ? (result.components || []) : []
+                    });
+                }
+                return;
             } else if (cmd === 'targets' || cmd === 'snipers') {
                 embed = await buildTargetsEmbed(apiKey);
             } else if (cmd === 'spy') {
@@ -20823,6 +20919,7 @@ function setupSlashBotEvents(bot, token) {
             const safeEmbed = sanitizeEmbed(embed);
             await interaction.editReply({ embeds: [safeEmbed] });
         } catch (e) {
+            console.error("[Slash Bot] Command execution error:", e);
             try {
                 if (embed) {
                     const fallbackText = formatEmbedAsMarkdown(embed);
