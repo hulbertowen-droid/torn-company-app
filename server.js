@@ -12218,15 +12218,12 @@ async function buildEnemyIntelEmbed(targetFacId, apiKey, ffKey, rosterPage = 0, 
         const totalMembers = members.length;
 
         // ── Step 5: Current status distribution ──────────────────────────────
-        let cntOkay = 0, cntHosp = 0, cntTravel = 0, cntOffline = 0;
+        let cntHosp = 0, cntTravel = 0;
         for (const m of members) {
             if (m.state === 'Hospital' || m.state === 'Jail') cntHosp++;
             else if (m.state === 'Traveling' || m.state === 'Abroad') cntTravel++;
-            else if (m.onlineStatus === 'Online' || m.onlineStatus === 'Idle') cntOkay++;
-            else cntOkay++; // Okay state but offline counts as available
         }
-        // Actually: Okay = not hosp/travel (regardless of online status)
-        cntOkay = totalMembers - cntHosp - cntTravel;
+        const cntOkay = Math.max(0, totalMembers - cntHosp - cntTravel);
 
         // Online / offline breakdown among Okay members
         let cntOnline = 0, cntIdle = 0, cntActualOffline = 0;
@@ -12324,11 +12321,14 @@ async function buildEnemyIntelEmbed(targetFacId, apiKey, ffKey, rosterPage = 0, 
                     if (!atkData.error && atkData.attacks) {
                         const counts = {};
                         for (const atk of Object.values(atkData.attacks)) {
-                            // Enemy member attacking our faction
+                            // Enemy member attacking our faction during the active war
+                            const atkTime = atk.timestamp_ended || atk.timestamp_started || atk.timestamp || 0;
+                            const isDuringWar = !activeWar?.war?.start || atkTime >= activeWar.war.start;
                             if (
                                 String(atk.attacker_faction) === resolvedEnemyId &&
                                 atk.result &&
-                                !['Lost', 'Stalemate', 'Timeout', 'Escape', 'Interrupted', 'Draw'].includes(atk.result)
+                                !['Lost', 'Stalemate', 'Timeout', 'Escape', 'Interrupted', 'Draw'].includes(atk.result) &&
+                                isDuringWar
                             ) {
                                 const id  = String(atk.attacker_id || '');
                                 const nm  = atk.attacker_name || playerNameCache[id] || `Player #${id}`;
@@ -12527,9 +12527,13 @@ function buildEnemyRosterPage(facId, facName, sorted, page, sort) {
         timestamp: new Date().toISOString()
     };
 
+    const prevBtn = UI.secondaryBtn(`enemy_roster_${facId}_${safePage - 1}_${sort}`, 'Previous', '⬅️');
+    const nextBtn = UI.secondaryBtn(`enemy_roster_${facId}_${safePage + 1}_${sort}`, 'Next', '➡️');
+    const infoBtn = { type: 2, style: 2, custom_id: 'page_info', label: `Page ${safePage} of ${totalPages}`, disabled: true };
+    if (safePage <= 1) prevBtn.disabled = true;
+    if (safePage >= totalPages) nextBtn.disabled = true;
+    const paginatorRow = UI.actionRow(prevBtn, infoBtn, nextBtn);
     const backBtn = UI.secondaryBtn(`enemy_main_${facId}`, 'Back to Summary');
-    const paginatorRow = UI.paginator(safePage, totalPages, `enemy_roster_${facId}_${sort}`);
-    // Swap the paginator's page-info button format to encode sort
     const components = [paginatorRow, UI.actionRow(backBtn)];
 
     return { embed, components };
@@ -20592,7 +20596,6 @@ function setupSlashBotEvents(bot, token) {
             else if (cmd === 'war' || cmd === 'warboard') {
                 embed = await buildWarStatusEmbed(apiKey);
             } else if (cmd === 'enemy' || cmd === 'scout') {
-                await interaction.deferReply();
                 const facIdOpt = interaction.options.getString('faction_id') || null;
                 const ffKey    = getGlobalFFKey() || discordConfig.ffKey;
                 const result   = await buildEnemyIntelEmbed(facIdOpt, apiKey, ffKey);
