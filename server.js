@@ -12080,6 +12080,461 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
     }
 }
 
+// ─── Short-lived roster cache for /enemy pagination (keyed by faction ID) ───
+const enemyRosterCache = {};
+const ENEMY_ROSTER_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * buildEnemyIntelEmbed
+ * Produces the main /enemy intelligence card embed + roster button row.
+ * @param {string|null} targetFacId  Faction ID to inspect. Auto-detected from current RW if null.
+ * @param {string} apiKey            Torn API key.
+ * @param {string|null} ffKey        FF Scouter key (optional).
+ * @param {number} rosterPage        Roster page to show (0 = main card).
+ * @param {string} rosterSort        'strongest' | 'recent'
+ * @returns {{ embed: Object, components: Object[] }}
+ */
+async function buildEnemyIntelEmbed(targetFacId, apiKey, ffKey, rosterPage = 0, rosterSort = 'strongest') {
+    if (!apiKey) {
+        return { embed: UI.error('Enemy Intelligence', '⚠️ No Torn API key configured.'), components: [] };
+    }
+    try {
+        // ── Step 1: Resolve enemy faction ID ────────────────────────────────
+        let resolvedEnemyId = targetFacId ? String(targetFacId).trim() : null;
+        let ourFacId = null;
+        let activeWar = null;
+        let warScore = null;
+
+        const ourRes = await fetch(
+            `https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`,
+            { signal: AbortSignal.timeout(9000) }
+        );
+        const ourData = await ourRes.json();
+        if (ourData.error) throw new Error(ourData.error.error || 'Torn API error');
+        ourFacId = ourData.ID?.toString();
+
+        activeWar = getActiveRankedWar(ourData);
+        let activeEnemyId = null;
+        if (activeWar && activeWar.factions) {
+            const fids = Object.keys(activeWar.factions);
+            activeEnemyId = fids.find(id => id !== ourFacId) || null;
+        }
+
+        if (!resolvedEnemyId) {
+            if (activeEnemyId) {
+                resolvedEnemyId = activeEnemyId;
+            } else if (discordConfig.enemyFacId) {
+                resolvedEnemyId = String(discordConfig.enemyFacId);
+            } else {
+                return {
+                    embed: UI.warning(
+                        'Enemy Intelligence',
+                        'No active Ranked War detected and no faction ID provided.\n\nProvide a faction ID: `/enemy faction_id:12345`'
+                    ),
+                    components: []
+                };
+            }
+        }
+
+        // Is this the actual current RW opponent?
+        const isCurrentWarOpponent = activeEnemyId && resolvedEnemyId === activeEnemyId;
+
+        if (isCurrentWarOpponent && activeWar) {
+            const ourInfo  = activeWar.factions[ourFacId];
+            const theirInfo = activeWar.factions[resolvedEnemyId];
+            if (ourInfo && theirInfo) {
+                warScore = { ours: ourInfo.score || 0, theirs: theirInfo.score || 0 };
+            }
+        }
+
+        // ── Step 2: Fetch enemy roster (with cache) ──────────────────────────
+        const now = Date.now();
+        const cacheKey = resolvedEnemyId;
+        let enemyData;
+        if (
+            enemyRosterCache[cacheKey] &&
+            now - enemyRosterCache[cacheKey].fetchedAt < ENEMY_ROSTER_CACHE_TTL_MS
+        ) {
+            enemyData = enemyRosterCache[cacheKey].data;
+        } else {
+            const enemyRes = await fetch(
+                `https://api.torn.com/faction/${resolvedEnemyId}?selections=basic&key=${apiKey}`,
+                { signal: AbortSignal.timeout(9000) }
+            );
+            enemyData = await enemyRes.json();
+            if (enemyData.error) throw new Error(enemyData.error.error || 'Error fetching enemy faction');
+            enemyRosterCache[cacheKey] = { data: enemyData, fetchedAt: now };
+        }
+
+        const facName  = enemyData.name || `Faction #${resolvedEnemyId}`;
+        const facRank  = enemyData.rank?.name || 'Unranked';
+        const facResp  = Number(enemyData.respect || 0).toLocaleString();
+        const membersRaw = enemyData.members || {};
+
+        // Cache player names
+        for (const [id, m] of Object.entries(membersRaw)) {
+            if (m.name) playerNameCache[id] = m.name;
+        }
+
+        // ── Step 3: Refresh battle stats via FF Scouter if key present ───────
+        const memberIds = Object.keys(membersRaw);
+        if (ffKey && memberIds.length > 0) {
+            const needsScout = memberIds.filter(id => {
+                if (battleStatsHistory[id]?.stats?.total > 0 &&
+                    (Date.now() - (battleStatsHistory[id].lastUpdated || 0) < 7 * 86400000)) return false;
+                const cachedTime = statsCache[id]?.time || 0;
+                const spyTime = spyDatabase[id]?.timestamp || 0;
+                const isStale = (Date.now() - cachedTime > 6 * 3600000) && (Date.now() - spyTime > 3 * 86400000);
+                return isStale || (!spyDatabase[id]?.total && !statsCache[id]?.stats);
+            });
+            if (needsScout.length > 0) {
+                await fetchBulkFFScouterStats(needsScout, ffKey);
+            }
+        }
+
+        // ── Step 4: Build member data array ──────────────────────────────────
+        const nowSec = Math.floor(Date.now() / 1000);
+        const members = memberIds.map(id => {
+            const m = membersRaw[id];
+            const resolved = resolvePlayerBattleStats(id, m.level);
+            const lastActionTs = m.last_action?.timestamp || 0;
+            const hoursSince = lastActionTs > 0 ? (nowSec - lastActionTs) / 3600 : 9999;
+            const state = m.status?.state || 'Okay';
+            const onlineStatus = m.last_action?.status || 'Offline';
+            return {
+                id,
+                name: m.name || `Player #${id}`,
+                level: m.level || 0,
+                state,
+                onlineStatus,
+                lastActionTs,
+                hoursSince,
+                stats: resolved.total,
+                isEstimated: resolved.isEstimated,
+                source: resolved.source,
+            };
+        });
+
+        const totalMembers = members.length;
+
+        // ── Step 5: Current status distribution ──────────────────────────────
+        let cntOkay = 0, cntHosp = 0, cntTravel = 0, cntOffline = 0;
+        for (const m of members) {
+            if (m.state === 'Hospital' || m.state === 'Jail') cntHosp++;
+            else if (m.state === 'Traveling' || m.state === 'Abroad') cntTravel++;
+            else if (m.onlineStatus === 'Online' || m.onlineStatus === 'Idle') cntOkay++;
+            else cntOkay++; // Okay state but offline counts as available
+        }
+        // Actually: Okay = not hosp/travel (regardless of online status)
+        cntOkay = totalMembers - cntHosp - cntTravel;
+
+        // Online / offline breakdown among Okay members
+        let cntOnline = 0, cntIdle = 0, cntActualOffline = 0;
+        for (const m of members) {
+            if (m.state !== 'Hospital' && m.state !== 'Jail' && m.state !== 'Traveling' && m.state !== 'Abroad') {
+                if (m.onlineStatus === 'Online') cntOnline++;
+                else if (m.onlineStatus === 'Idle') cntIdle++;
+                else cntActualOffline++;
+            }
+        }
+
+        // ── Step 6: Battle stats aggregates ──────────────────────────────────
+        const statsSorted = [...members].sort((a, b) => b.stats - a.stats);
+        const statsValues = statsSorted.map(m => m.stats).filter(v => v > 0);
+        const totalStatsSum = statsValues.reduce((s, v) => s + v, 0);
+        const avgStats = statsValues.length > 0 ? totalStatsSum / statsValues.length : 0;
+        let medianStats = 0;
+        if (statsValues.length > 0) {
+            const mid = Math.floor(statsValues.length / 2);
+            medianStats = statsValues.length % 2 === 0
+                ? (statsValues[mid - 1] + statsValues[mid]) / 2
+                : statsValues[mid];
+        }
+        const realDataCount  = members.filter(m => !m.isEstimated).length;
+        const top5  = statsSorted.slice(0, 5);
+        const bot5  = [...members].sort((a, b) => a.stats - b.stats).slice(0, 5);
+
+        // Stat range distribution
+        const dist = [
+            { label: '1B+',          min: 1_000_000_000, max: Infinity,       count: 0 },
+            { label: '250M – 1B',    min: 250_000_000,   max: 999_999_999,    count: 0 },
+            { label: '50M – 250M',   min: 50_000_000,    max: 249_999_999,    count: 0 },
+            { label: '10M – 50M',    min: 10_000_000,    max: 49_999_999,     count: 0 },
+            { label: '< 10M',        min: 0,             max: 9_999_999,      count: 0 },
+        ];
+        for (const m of members) {
+            for (const bucket of dist) {
+                if (m.stats >= bucket.min && m.stats <= bucket.max) { bucket.count++; break; }
+            }
+        }
+
+        // ── Step 7: 72-hour activity buckets ─────────────────────────────────
+        let act0to24 = 0, act24to48 = 0, act48to72 = 0, actOver72 = 0, actUnknown = 0;
+        let totalHours = 0, hourCount = 0;
+        const hourValues = [];
+        for (const m of members) {
+            if (m.hoursSince === 9999) { actUnknown++; continue; }
+            hourValues.push(m.hoursSince);
+            totalHours += m.hoursSince;
+            hourCount++;
+            if (m.hoursSince < 24)      act0to24++;
+            else if (m.hoursSince < 48) act24to48++;
+            else if (m.hoursSince < 72) act48to72++;
+            else                        actOver72++;
+        }
+        const avgHours = hourCount > 0 ? totalHours / hourCount : 0;
+        let medianHours = 0;
+        if (hourValues.length > 0) {
+            hourValues.sort((a, b) => a - b);
+            const mid = Math.floor(hourValues.length / 2);
+            medianHours = hourValues.length % 2 === 0
+                ? (hourValues[mid - 1] + hourValues[mid]) / 2
+                : hourValues[mid];
+        }
+        const pct = n => totalMembers > 0 ? Math.round((n / totalMembers) * 100) : 0;
+
+        // ── Step 8: War hitter data (enemy attacks against us & vice versa) ──
+        let warHitterLines = null;
+        if (isCurrentWarOpponent) {
+            const fState = getFactionWarState(ourFacId);
+            let hitterList = [];
+
+            // Try war report per-member data first (available after war ends or from some war reports)
+            const theirWarFactionData = activeWar?.factions?.[resolvedEnemyId];
+            if (theirWarFactionData?.members && Object.keys(theirWarFactionData.members).length > 0) {
+                hitterList = Object.entries(theirWarFactionData.members)
+                    .map(([id, m]) => ({
+                        id,
+                        name: m.name || playerNameCache[id] || `Player #${id}`,
+                        attacks: Number(m.attacks || 0),
+                        score: Number(m.score || 0),
+                        assists: Number(m.assists || 0)
+                    }))
+                    .filter(m => m.attacks > 0 || m.assists > 0);
+            }
+
+            // Fallback: parse data.attacks from a fresh fetch if nothing yet
+            if (hitterList.length === 0) {
+                try {
+                    const atkRes = await fetch(
+                        `https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${apiKey}`,
+                        { signal: AbortSignal.timeout(9000) }
+                    );
+                    const atkData = await atkRes.json();
+                    if (!atkData.error && atkData.attacks) {
+                        const counts = {};
+                        for (const atk of Object.values(atkData.attacks)) {
+                            // Enemy member attacking our faction
+                            if (
+                                String(atk.attacker_faction) === resolvedEnemyId &&
+                                atk.result &&
+                                !['Lost', 'Stalemate', 'Timeout', 'Escape', 'Interrupted', 'Draw'].includes(atk.result)
+                            ) {
+                                const id  = String(atk.attacker_id || '');
+                                const nm  = atk.attacker_name || playerNameCache[id] || `Player #${id}`;
+                                if (!id) continue;
+                                if (!counts[id]) counts[id] = { id, name: nm, attacks: 0, score: 0, assists: 0 };
+                                if (atk.result === 'Assist') counts[id].assists++;
+                                else counts[id].attacks++;
+                                counts[id].score += Number(atk.respect_gain || 0);
+                            }
+                        }
+                        hitterList = Object.values(counts).filter(m => m.attacks > 0 || m.assists > 0);
+                    }
+                } catch (e) { /* non-fatal, section omitted below if empty */ }
+            }
+
+            if (hitterList.length > 0) {
+                hitterList.sort((a, b) => b.attacks - a.attacks || b.score - a.score);
+                const totalEnemyAtks = hitterList.reduce((s, m) => s + m.attacks, 0);
+
+                // For each hitter, check which of our members they targeted most
+                const hitsTaken = fState.liveWarHitsTaken || {};
+
+                const top5h = hitterList.slice(0, 5);
+                warHitterLines = top5h.map((m, idx) => {
+                    const rank  = `${idx + 1}.`;
+                    const share = totalEnemyAtks > 0 ? ` (${Math.round((m.attacks / totalEnemyAtks) * 100)}%)` : '';
+                    const scoreStr  = m.score > 0 ? ` · ${m.score.toFixed(1)} pts` : '';
+                    const assistStr = m.assists > 0 ? ` + ${m.assists} assists` : '';
+                    // Find our most-hit member by this attacker — approximate via hitsTaken cross-ref
+                    // (fState tracks per-defender, not per-attacker, so we note total attacks only)
+                    return `${rank} [${m.name}](https://www.torn.com/profiles.php?XID=${m.id}) · **${m.attacks} attacks**${scoreStr}${assistStr}${share}`;
+                });
+                const totalLine = `\nTotal enemy attacks recorded: **${totalEnemyAtks.toLocaleString()}**`;
+                warHitterLines.push(totalLine);
+            }
+        }
+
+        // ── Step 9: Build roster pages (for button handler reuse) ─────────────
+        // Store sorted roster in cache for pagination
+        const sortedByStrength = [...statsSorted];
+        const sortedByRecent   = [...members].sort((a, b) => a.hoursSince - b.hoursSince);
+        enemyRosterCache[cacheKey].sortedByStrength = sortedByStrength;
+        enemyRosterCache[cacheKey].sortedByRecent   = sortedByRecent;
+
+        // ── Step 10: If rosterPage > 0, return a roster page instead ─────────
+        if (rosterPage > 0) {
+            return buildEnemyRosterPage(
+                resolvedEnemyId, facName,
+                rosterSort === 'recent' ? sortedByRecent : sortedByStrength,
+                rosterPage, rosterSort
+            );
+        }
+
+        // ── Step 11: Compose main embed fields ───────────────────────────────
+        const sourceNote = ffKey
+            ? `${realDataCount} / ${totalMembers} members with real scouted/verified data`
+            : `FF Scouter not connected — estimates based on level only`;
+
+        // Field: Current Status
+        const statusVal = [
+            `Available (Okay):    **${cntOkay}**`,
+            `Hospitalized:        **${cntHosp}**`,
+            `Traveling/Abroad:    **${cntTravel}**`,
+        ].join('\n');
+
+        // Field: Battle Stats
+        const distLines = dist.map(b => {
+            const bar = b.count > 0 ? `**${b.count}** members` : `—`;
+            return `\`${b.label.padEnd(12)}\` ${bar}`;
+        });
+        const statsVal = [
+            `Combined: ~${formatStatNumber(totalStatsSum)}`,
+            `Average:  ~${formatStatNumber(avgStats)}`,
+            `Median:   ~${formatStatNumber(medianStats)}`,
+            `Coverage: ${sourceNote}`,
+            '',
+            ...distLines
+        ].join('\n');
+
+        // Field: Strongest members
+        const strongestVal = top5.map((m, i) => {
+            const srcLabel = m.isEstimated ? ' *(est.)*' : ` *(${m.source})*`;
+            const stateStr = (m.state !== 'Okay') ? ` · ${m.state}` :
+                             (m.onlineStatus === 'Online' ? ' · Online' :
+                             (m.onlineStatus === 'Idle' ? ' · Idle' : ''));
+            return `${i + 1}. [${m.name}](https://www.torn.com/profiles.php?XID=${m.id}) · Lvl ${m.level} · ~${formatStatNumber(m.stats)}${srcLabel}${stateStr}`;
+        }).join('\n');
+
+        // Field: Weakest members
+        const weakestVal = bot5.map((m, i) => {
+            const srcLabel = m.isEstimated ? ' *(est.)*' : ` *(${m.source})*`;
+            return `${i + 1}. [${m.name}](https://www.torn.com/profiles.php?XID=${m.id}) · Lvl ${m.level} · ~${formatStatNumber(m.stats)}${srcLabel}`;
+        }).join('\n');
+
+        // Field: 72-hour activity
+        const actVal = [
+            `< 24 hours ago:    **${act0to24}** members (${pct(act0to24)}%)`,
+            `24 – 48 hours ago: **${act24to48}** members (${pct(act24to48)}%)`,
+            `48 – 72 hours ago: **${act48to72}** members (${pct(act48to72)}%)`,
+            `> 72 hours ago:    **${actOver72}** members (${pct(actOver72)}%)`,
+            '',
+            `Average last action: **${avgHours.toFixed(1)} hours ago**`,
+            `Median last action:  **${medianHours.toFixed(1)} hours ago**`,
+            '',
+            `Currently — Online: **${cntOnline}** · Idle: **${cntIdle}** · Traveling: **${cntTravel}** · Hospital: **${cntHosp}** · Offline: **${cntActualOffline}**`,
+        ].join('\n');
+
+        const fields = [
+            { name: 'Current Status', value: statusVal, inline: false },
+            { name: 'Battle Stats', value: statsVal, inline: false },
+            { name: 'Strongest Members', value: strongestVal || '—', inline: false },
+            { name: 'Weakest Members', value: weakestVal || '—', inline: false },
+            { name: '72-Hour Activity', value: actVal, inline: false },
+        ];
+
+        if (warHitterLines) {
+            fields.push({
+                name: 'War Activity — Most Active Hitters',
+                value: warHitterLines.join('\n'),
+                inline: false
+            });
+        } else if (isCurrentWarOpponent) {
+            fields.push({
+                name: 'War Activity',
+                value: 'War attack data is not yet available.',
+                inline: false
+            });
+        }
+
+        // Description header
+        let descParts = [
+            `ID: **#${resolvedEnemyId}** · Members: **${totalMembers}** · Rank: **${facRank}** · Respect: **${facResp}**`,
+        ];
+        if (warScore !== null) {
+            const us   = warScore.ours.toLocaleString();
+            const them = warScore.theirs.toLocaleString();
+            descParts.push(`Active war vs. **${ourData.name || 'your faction'}** — Score: **${them}** / ${us}`);
+        }
+
+        const embed = {
+            title: `${facName} — Enemy Intelligence`,
+            description: descParts.join('\n'),
+            color: UI.COLORS.BRAND,
+            fields,
+            footer: UI.FOOTER,
+            timestamp: new Date().toISOString()
+        };
+
+        // Roster buttons
+        const rosterTotal = Math.ceil(totalMembers / 15);
+        const components = [
+            UI.actionRow(
+                UI.secondaryBtn(`enemy_roster_${resolvedEnemyId}_1_strongest`, `Full Roster (Strongest → Weakest)`),
+                UI.secondaryBtn(`enemy_roster_${resolvedEnemyId}_1_recent`,    `Full Roster (Most Recent)`)
+            )
+        ];
+
+        return { embed, components };
+
+    } catch (e) {
+        return {
+            embed: UI.error('Enemy Intelligence', `Error: ${e.message}`),
+            components: []
+        };
+    }
+}
+
+/**
+ * buildEnemyRosterPage
+ * Returns a paginated roster embed + navigation buttons.
+ */
+function buildEnemyRosterPage(facId, facName, sorted, page, sort) {
+    const PAGE_SIZE = 15;
+    const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+    const safePage = Math.max(1, Math.min(page, totalPages));
+    const slice = sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+    const nowSec = Math.floor(Date.now() / 1000);
+
+    const lines = slice.map((m, i) => {
+        const rank = (safePage - 1) * PAGE_SIZE + i + 1;
+        const srcLabel = m.isEstimated ? '(est.)' : `(${m.source})`;
+        const stateStr = (m.state === 'Hospital' || m.state === 'Jail') ? ' · Hospital' :
+                         (m.state === 'Traveling' || m.state === 'Abroad') ? ' · Traveling' :
+                         (m.onlineStatus === 'Online' ? ' · Online' : '');
+        const lastStr = m.hoursSince < 9000 ? ` · ${m.hoursSince.toFixed(1)}h ago` : ' · Unknown';
+        return `**${rank}.** [${m.name}](https://www.torn.com/profiles.php?XID=${m.id}) · Lvl ${m.level} · ~${formatStatNumber(m.stats)} ${srcLabel}${stateStr}${lastStr}`;
+    });
+
+    const sortLabel = sort === 'recent' ? 'Most Recently Active' : 'Strongest → Weakest';
+
+    const embed = {
+        title: `${facName} — Full Roster (${sortLabel})`,
+        description: lines.join('\n') || '—',
+        color: UI.COLORS.NEUTRAL,
+        footer: { text: `Page ${safePage} of ${totalPages} · ${sorted.length} members total · ${UI.FOOTER.text}` },
+        timestamp: new Date().toISOString()
+    };
+
+    const backBtn = UI.secondaryBtn(`enemy_main_${facId}`, 'Back to Summary');
+    const paginatorRow = UI.paginator(safePage, totalPages, `enemy_roster_${facId}_${sort}`);
+    // Swap the paginator's page-info button format to encode sort
+    const components = [paginatorRow, UI.actionRow(backBtn)];
+
+    return { embed, components };
+}
+
 async function buildWarBountiesEmbed(apiKey) {
     if (!apiKey) return { title: "🎯 War Bounties", description: "⚠️ No Torn API key configured.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
     try {
@@ -17919,6 +18374,53 @@ function setupSlashBotEvents(bot, token) {
         if (interaction.isButton()) {
             const customId = interaction.customId || '';
 
+            // ── /enemy command: Full Roster Pagination ──────────────────────
+            if (customId.startsWith('enemy_roster_') || customId.startsWith('enemy_main_')) {
+                await interaction.deferUpdate().catch(() => {});
+                const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+                const ffKey  = getGlobalFFKey() || discordConfig.ffKey;
+
+                if (customId.startsWith('enemy_main_')) {
+                    // Back to main summary card
+                    const facId = customId.replace('enemy_main_', '');
+                    const result = await buildEnemyIntelEmbed(facId, apiKey, ffKey);
+                    return await interaction.editReply({
+                        embeds: [sanitizeEmbed(result.embed)],
+                        components: result.components || []
+                    }).catch(() => {});
+                }
+
+                // enemy_roster_{facId}_{page}_{sort}
+                // Strip the prefix, then split the rest
+                const stripped = customId.replace('enemy_roster_', ''); // "12345_3_strongest" or "12345_3_recent"
+                // sort is always the last segment (strongest|recent), page is second-to-last, facId is everything before
+                const parts = stripped.split('_');
+                const sort  = parts.pop();    // 'strongest' or 'recent'
+                const page  = parseInt(parts.pop(), 10) || 1;
+                const facId = parts.join('_');
+
+                // Try to serve from cache first
+                const cached = enemyRosterCache[facId];
+                if (cached && (Date.now() - cached.fetchedAt < ENEMY_ROSTER_CACHE_TTL_MS)) {
+                    const sorted = sort === 'recent' ? cached.sortedByRecent : cached.sortedByStrength;
+                    if (sorted) {
+                        const facName = cached.data?.name || `Faction #${facId}`;
+                        const result  = buildEnemyRosterPage(facId, facName, sorted, page, sort);
+                        return await interaction.editReply({
+                            embeds: [sanitizeEmbed(result.embed)],
+                            components: result.components || []
+                        }).catch(() => {});
+                    }
+                }
+
+                // Cache miss — re-fetch
+                const result = await buildEnemyIntelEmbed(facId, apiKey, ffKey, page, sort);
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(result.embed)],
+                    components: result.components || []
+                }).catch(() => {});
+            }
+
             // ── Link User API Key Button (Opens private Discord Modal) ──
             if (customId === 'btn_link_user_api_key') {
                 const modal = new ModalBuilder()
@@ -20089,6 +20591,13 @@ function setupSlashBotEvents(bot, token) {
             // ── War & Intel Commands & Legacy Backward Compatibility ──
             else if (cmd === 'war' || cmd === 'warboard') {
                 embed = await buildWarStatusEmbed(apiKey);
+            } else if (cmd === 'enemy' || cmd === 'scout') {
+                await interaction.deferReply();
+                const facIdOpt = interaction.options.getString('faction_id') || null;
+                const ffKey    = getGlobalFFKey() || discordConfig.ffKey;
+                const result   = await buildEnemyIntelEmbed(facIdOpt, apiKey, ffKey);
+                const safeEmbed = sanitizeEmbed(result.embed);
+                return await interaction.editReply({ embeds: [safeEmbed], components: result.components || [] });
             } else if (cmd === 'targets' || cmd === 'snipers') {
                 embed = await buildTargetsEmbed(apiKey);
             } else if (cmd === 'spy') {

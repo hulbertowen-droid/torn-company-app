@@ -256,7 +256,11 @@ function buildSlashCommands() {
             .addSubcommand(sub => sub.setName('view').setDescription('View your current recorded battle stats and stat distribution publicly in channel')
             ).toJSON(),
         new SlashCommandBuilder().setName('bsupdate').setDescription('Quick shortcut: Update battle stats and post publicly in channel')
-            .addStringOption(opt => opt.setName('key').setDescription('Optional: provide/link your 16-char Limited Access API key').setRequired(false)).toJSON()
+            .addStringOption(opt => opt.setName('key').setDescription('Optional: provide/link your 16-char Limited Access API key').setRequired(false)).toJSON(),
+
+        // 21. Enemy Faction Intelligence
+        new SlashCommandBuilder().setName('enemy').setDescription('Full intelligence report on an enemy faction — stats, activity, war hitters, roster')
+            .addStringOption(opt => opt.setName('faction_id').setDescription('Torn faction ID to inspect (omit to auto-detect current RW opponent)').setRequired(false)).toJSON()
     ];
 }
 
