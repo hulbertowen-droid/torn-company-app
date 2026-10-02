@@ -43,11 +43,11 @@ const DEFAULT_SCALING = {
 // ── Module State ────────────────────────────────────────────────────────────
 let _getApiKey      = null;      // () => string|null
 let _db             = null;      // MongoDB Db instance
-let _ourFactionId   = null;      // number — updated dynamically from config or Torn API
+let _ourFactionId   = 52355;     // number — default to Spider-Verse (52355)
 let _lastIngestTs   = 0;         // unix seconds of last fetched attack
 
 function setOurFactionId(facId) {
-    if (facId) _ourFactionId = Number(facId);
+    if (facId && Number(facId) > 0) _ourFactionId = Number(facId);
 }
 let _recentCodes    = new Set(); // dedup cache (last DEDUP_CACHE_SIZE attack codes)
 let _alertedAttackCodes = new Set(); // in-memory dedup for alerts
@@ -134,7 +134,21 @@ async function seedDedupCache() {
         if (recent.length > 0 && recent[0].timestamp) {
             _lastIngestTs = recent[0].timestamp;
         }
-        console.log(`[RetalEngine] Seeded dedup cache with ${_recentCodes.size} codes. Last ingest ts: ${_lastIngestTs}`);
+
+        const alerted = await col('attack_alerts')
+            .find({}, { projection: { _id: 1, hex_code: 1, attack_id: 1, comp_key: 1 } })
+            .sort({ alerted_at: -1 })
+            .limit(2000)
+            .toArray();
+
+        for (const a of alerted) {
+            if (a._id) _alertedAttackCodes.add(String(a._id));
+            if (a.hex_code) _alertedAttackCodes.add(String(a.hex_code));
+            if (a.attack_id) _alertedAttackCodes.add(String(a.attack_id));
+            if (a.comp_key) _alertedAttackCodes.add(String(a.comp_key));
+        }
+
+        console.log(`[RetalEngine] Seeded dedup cache with ${_recentCodes.size} log codes, ${_alertedAttackCodes.size} alert codes. Last ingest ts: ${_lastIngestTs}`);
     } catch(e) {
         console.warn('[RetalEngine] Dedup cache seed warning:', e.message);
     }
@@ -167,48 +181,76 @@ function setOnAttackAlertCallback(fn) {
 
 async function dispatchAttackAlert(doc, atkRaw = {}) {
     if (typeof _onAttackAlertCallback !== 'function') return;
-    const code = String(doc._id || doc.code || '');
-    if (!code) return;
+    const hexCode = String(atkRaw.code || doc.code || doc.hex_code || '').trim();
+    const idCode = String(doc.attack_id || doc._id || '').trim();
+    const primaryCode = hexCode || idCode;
+    if (!primaryCode) return;
 
-    if (_alertedAttackCodes.has(code)) return;
+    const atkTs = Number(doc.timestamp || atkRaw.timestamp_ended || 0);
+    const now = nowSecs();
+    if (atkTs > 0 && (now - atkTs >= 300)) {
+        return; // Retaliation window already expired (> 5 minutes ago)
+    }
+
+    const compKey = `hit_${doc.attacker_id}_${doc.defender_id}_${atkTs}`;
+
+    if (_alertedAttackCodes.has(compKey) ||
+        (hexCode && _alertedAttackCodes.has(hexCode)) ||
+        (idCode && _alertedAttackCodes.has(idCode))) {
+        return;
+    }
 
     try {
         if (_db) {
-            const existing = await col('attack_alerts').findOne({ _id: code, sent: true });
+            const orQueries = [
+                { comp_key: compKey },
+                ...(hexCode ? [{ _id: hexCode }, { hex_code: hexCode }, { code: hexCode }] : []),
+                ...(idCode ? [{ _id: idCode }, { attack_id: idCode }] : [])
+            ];
+            const existing = await col('attack_alerts').findOne({
+                $or: orQueries,
+                sent: true
+            });
             if (existing) {
-                _alertedAttackCodes.add(code);
+                _alertedAttackCodes.add(compKey);
+                if (hexCode) _alertedAttackCodes.add(hexCode);
+                if (idCode) _alertedAttackCodes.add(idCode);
                 return;
             }
         }
-        _alertedAttackCodes.add(code);
+        _alertedAttackCodes.add(compKey);
+        if (hexCode) _alertedAttackCodes.add(hexCode);
+        if (idCode) _alertedAttackCodes.add(idCode);
 
         // Keep _alertedAttackCodes bounded
-        if (_alertedAttackCodes.size > 5000) {
+        while (_alertedAttackCodes.size > 5000) {
             const oldest = _alertedAttackCodes.values().next().value;
             _alertedAttackCodes.delete(oldest);
         }
 
         const payload = {
-            code,
+            code: hexCode || idCode,
+            attack_id: idCode,
+            _id: idCode,
             attacker_id: doc.attacker_id,
             attacker_name: doc.attacker_name || atkRaw.attacker_name || '',
-            attacker_faction: doc.attacker_faction_id || doc.attacker_faction || 0,
-            attacker_faction_name: doc.attacker_faction_name || atkRaw.attacker_factionname || '',
+            attacker_faction: doc.attacker_faction_id || doc.attacker_faction || atkRaw.attacker_faction || 0,
+            attacker_faction_name: doc.attacker_faction_name || atkRaw.attacker_factionname || atkRaw.attacker_faction_name || '',
             defender_id: doc.defender_id,
             defender_name: doc.defender_name || atkRaw.defender_name || '',
-            defender_faction: doc.defender_faction_id || doc.defender_faction || 0,
-            defender_faction_name: doc.defender_faction_name || atkRaw.defender_factionname || '',
+            defender_faction: doc.defender_faction_id || doc.defender_faction || atkRaw.defender_faction || 0,
+            defender_faction_name: doc.defender_faction_name || atkRaw.defender_factionname || atkRaw.defender_faction_name || '',
             result: doc.result || atkRaw.result || 'Attacked',
-            timestamp: doc.timestamp,
+            timestamp: atkTs,
             respect: doc.respect || atkRaw.respect_gain || 0,
             modifiers: doc.modifiers || atkRaw.modifiers || {},
             direction: doc.direction
         };
 
-        console.log(`[RetalEngine] Dispatching alert for attack ${code}: ${payload.defender_name || payload.defender_id} attacked by ${payload.attacker_name || payload.attacker_id} (${doc.direction})`);
+        console.log(`[RetalEngine] Dispatching alert for attack ${primaryCode}: ${payload.defender_name || payload.defender_id} attacked by ${payload.attacker_name || payload.attacker_id} (${doc.direction})`);
         await _onAttackAlertCallback(payload);
     } catch(e) {
-        console.warn('[RetalEngine] Alert dispatch error for attack', code, ':', e.message);
+        console.warn('[RetalEngine] Alert dispatch error for attack', primaryCode, ':', e.message);
     }
 }
 
@@ -225,7 +267,7 @@ async function checkPendingRecentAlerts() {
             .toArray();
 
         if (recentAttacks.length > 0) {
-            console.log(`[RetalEngine] Checking ${recentAttacks.length} recent attacks from last 60m for pending alerts...`);
+            console.log(`[RetalEngine] Checking ${recentAttacks.length} recent attacks from last 5m for pending alerts...`);
             for (const doc of recentAttacks) {
                 if (doc.attacker_id && doc.defender_id && doc.attacker_id === doc.defender_id) continue;
                 await dispatchAttackAlert(doc);
@@ -244,20 +286,27 @@ async function ingestAttacks() {
 
     try {
         // Query faction attacks & basic status with timeout
-        const url = `https://api.torn.com/faction/?selections=attacks,basic&key=${apiKey}`;
+        const url = _ourFactionId
+            ? `https://api.torn.com/faction/${_ourFactionId}?selections=attacks,basic&key=${apiKey}`
+            : `https://api.torn.com/faction/?selections=attacks,basic&key=${apiKey}`;
         const res = await fetch(url, { signal: AbortSignal.timeout(9000) });
         const data = await res.json();
 
         if (data.error) {
-            if (data.error.code !== 5) { // code 5 = rate limit, keep silent
+            if (data.error.code !== 5 && data.error.code !== 7) { // code 5 = rate limit, code 7 = access denied (foreign key)
                 console.warn('[RetalEngine] Ingestion API error:', data.error.error);
             }
             return;
         }
 
-        // Dynamically resolve our faction ID
+        // Dynamically resolve our faction ID only if matching configured faction
         if (data.ID) {
-            _ourFactionId = Number(data.ID);
+            const returnedFacId = Number(data.ID);
+            if (_ourFactionId && returnedFacId !== _ourFactionId) {
+                // Key belongs to a different faction — discard payload immediately
+                return;
+            }
+            _ourFactionId = returnedFacId;
         }
 
         // War mode detection (Torn v1 returns rankedwars)
@@ -295,15 +344,17 @@ async function ingestAttacks() {
 
             const attackerName = atk.attacker_name || data.members?.[atkId]?.name || '';
             const defenderName = atk.defender_name || data.members?.[defId]?.name || '';
-            const attackerFactionName = atk.attacker_factionname || (isOurAtk ? (data.name || 'Our Faction') : '');
-            const defenderFactionName = atk.defender_factionname || (isOurDef ? (data.name || 'Our Faction') : '');
+            const attackerFactionName = atk.attacker_factionname || atk.attacker_faction_name || (isOurAtk ? (data.name || 'Spider-Verse') : '');
+            const defenderFactionName = atk.defender_factionname || atk.defender_faction_name || (isOurDef ? (data.name || 'Spider-Verse') : '');
 
             // Real-time alert check: if our faction member was attacked (not self-hit)
             if (isOurDef && atkId !== defId) {
-                const isRecent = ts > (nowSecs() - 360); // within last 6 mins (active 5m retal)
+                const isRecent = ts > (nowSecs() - 300); // active 5m retaliation window only!
                 if (isRecent) {
                     const tempDoc = {
                         _id: code,
+                        attack_id: code,
+                        code: atk.code || code,
                         attacker_id: atkId,
                         attacker_name: attackerName,
                         attacker_faction_id: atkFac,
@@ -326,6 +377,8 @@ async function ingestAttacks() {
 
             const doc = {
                 _id: code,
+                attack_id: code,
+                code: atk.code || code,
                 attacker_id: atkId,
                 attacker_name: attackerName,
                 attacker_faction_id: atkFac,

@@ -302,6 +302,12 @@ async function loadConfigFromMongo() {
             if (saved.lastWarboardPayload && (!lastGoodWarboardPayload || !lastGoodWarboardPayload.friendly || lastGoodWarboardPayload.friendly.length === 0)) {
                 lastGoodWarboardPayload = saved.lastWarboardPayload;
                 console.log(`[Mongo] Restored lastGoodWarboardPayload (${lastGoodWarboardPayload.friendly?.length || 0} members) from MongoDB Atlas.`);
+                if (lastGoodWarboardPayload?.friendly && Array.isArray(lastGoodWarboardPayload.friendly)) {
+                    for (const m of lastGoodWarboardPayload.friendly) {
+                        const mid = String(m.id || m.playerId || m._id || '');
+                        if (mid) friendlyMembersCache[mid] = m;
+                    }
+                }
             }
             if (saved.userApiKeys) {
                 userKeys.importEncryptedFromMongo(saved.userApiKeys);
@@ -680,6 +686,36 @@ async function resolvePlayerName(id, fallback = null) {
         } catch(e) {}
     }
     return fallback || `Player #${sId}`;
+}
+
+let friendlyMembersCache = {};
+const factionNameCache = {};
+
+async function resolveFactionName(facId, fallback = null) {
+    if (!facId || facId === 0 || facId === '0') return "Factionless";
+    const sId = String(facId).trim();
+    if (factionNameCache[sId]) return factionNameCache[sId];
+    const myFacIdStr = String(discordConfig.factionId || dynamicFactionId || '52355');
+    if (sId === myFacIdStr) {
+        return discordConfig.factionName || "Spider-Verse";
+    }
+    if (currentEnemyFacId && String(currentEnemyFacId) === sId && enemyFactionNameCache) {
+        return enemyFactionNameCache;
+    }
+    try {
+        const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+        if (apiKey) {
+            const res = await fetch(`https://api.torn.com/faction/${sId}?selections=basic&key=${apiKey}`, {
+                signal: AbortSignal.timeout(5000)
+            });
+            const data = await res.json();
+            if (data?.name) {
+                factionNameCache[sId] = data.name;
+                return data.name;
+            }
+        }
+    } catch(e) {}
+    return fallback || `Faction [${sId}]`;
 }
 
 let dynamicFactionId = null; 
@@ -1774,22 +1810,6 @@ async function handleMemberAttackedAlert(atk) {
         if (!retalTargetChannel || !discordConfig.globalBotToken) return;
         if (discordConfig.friendlyAttacked === false && !discordConfig.retalChannelId) return;
 
-        const alertCode = String(atk.code || atk._id || '');
-        if (alertCode) {
-            if (processedAlertedAttacks.has(alertCode)) return;
-            processedAlertedAttacks.add(alertCode);
-
-            if (processedAlertedAttacks.size > 5000) {
-                const oldest = processedAlertedAttacks.values().next().value;
-                processedAlertedAttacks.delete(oldest);
-            }
-
-            if (mongoose.connection.readyState === 1) {
-                const existing = await mongoose.connection.db.collection('attack_alerts').findOne({ _id: alertCode, sent: true });
-                if (existing) return;
-            }
-        }
-
         const attackerId = atk.attacker_id ? String(atk.attacker_id).trim() : "0";
         const defenderId = atk.defender_id ? String(atk.defender_id).trim() : "0";
         const atkFac = Number(atk.attacker_faction || atk.attacker_faction_id || 0);
@@ -1798,12 +1818,76 @@ async function handleMemberAttackedAlert(atk) {
         // Skip self attacks
         if (attackerId && defenderId && attackerId === defenderId) return;
 
-        const myFacIdNum = Number(discordConfig.factionId || dynamicFactionId || 0);
-        const isInternal = (myFacIdNum > 0 && atkFac === myFacIdNum && defFac === myFacIdNum);
         const isStealthed = (attackerId === "0" || !attackerId);
-
         // Skip stealthed hits — unretaliatable because the assailant is anonymous
         if (isStealthed) return;
+
+        const myFacIdNum = Number(discordConfig.factionId || dynamicFactionId || 52355);
+        const isInternal = (myFacIdNum > 0 && atkFac === myFacIdNum && defFac === myFacIdNum);
+
+        // Strict Faction Isolation: Ensure the defender belongs to our faction!
+        if (defFac > 0 && myFacIdNum > 0 && defFac !== myFacIdNum) {
+            return;
+        }
+        if (defenderId && defenderId !== "0" && friendlyMembersCache && Object.keys(friendlyMembersCache).length > 0) {
+            const isFriendly = Boolean(friendlyMembersCache[defenderId]) ||
+                (lastGoodWarboardPayload?.friendly?.some(m => String(m.id || m.playerId || m._id) === defenderId));
+            if (!isFriendly && defFac !== myFacIdNum) {
+                return;
+            }
+        }
+
+        const atkTs = Number(atk.timestamp || atk.timestamp_ended || Math.floor(Date.now() / 1000));
+        const nowSec = Math.floor(Date.now() / 1000);
+        const retalExpireTs = atkTs + 300; // 5-minute retaliation window in Torn
+
+        // Discard expired attacks (> 5 minutes old)
+        if (atkTs > 0 && (nowSec - atkTs >= 300)) {
+            return;
+        }
+
+        // Deterministic Composite Keys for Deduplication
+        const hexCode = atk.code ? String(atk.code).trim() : '';
+        const idCode = (atk.attack_id || atk._id || atk.id) ? String(atk.attack_id || atk._id || atk.id).trim() : '';
+        const compKey = `hit_${attackerId}_${defenderId}_${atkTs}`;
+
+        // In-memory dedup check
+        if (processedAlertedAttacks.has(compKey) ||
+            (hexCode && processedAlertedAttacks.has(hexCode)) ||
+            (idCode && processedAlertedAttacks.has(idCode))) {
+            return;
+        }
+
+        // MongoDB persistent dedup check
+        if (mongoose.connection.readyState === 1) {
+            const orQueries = [
+                { comp_key: compKey },
+                ...(hexCode ? [{ _id: hexCode }, { hex_code: hexCode }, { code: hexCode }] : []),
+                ...(idCode ? [{ _id: idCode }, { attack_id: idCode }] : [])
+            ];
+            try {
+                const existing = await mongoose.connection.db.collection('attack_alerts').findOne({
+                    $or: orQueries,
+                    sent: true
+                });
+                if (existing) {
+                    processedAlertedAttacks.add(compKey);
+                    if (hexCode) processedAlertedAttacks.add(hexCode);
+                    if (idCode) processedAlertedAttacks.add(idCode);
+                    return;
+                }
+            } catch(e) {}
+        }
+
+        // Pre-register all keys to prevent race conditions during async Discord API send
+        processedAlertedAttacks.add(compKey);
+        if (hexCode) processedAlertedAttacks.add(hexCode);
+        if (idCode) processedAlertedAttacks.add(idCode);
+
+        while (processedAlertedAttacks.size > 5000) {
+            const oldest = processedAlertedAttacks.values().next().value;
+            processedAlertedAttacks.delete(oldest);
+        }
 
         let attackerName = atk.attacker_name;
         if (!attackerName || attackerName === 'Unknown') {
@@ -1815,16 +1899,19 @@ async function handleMemberAttackedAlert(atk) {
             defenderName = await resolvePlayerName(defenderId, `Member [${defenderId}]`);
         }
 
-        let attackerFactionName = atk.attacker_faction_name || atk.attacker_factionname;
-        if (!attackerFactionName) {
-            attackerFactionName = isInternal ? (discordConfig.factionName || "Our Faction") : (atkFac ? `Faction ${atkFac}` : "Factionless");
+        let attackerFactionName = atk.attacker_faction_name || atk.attacker_factionname || atk.attackerFactionName;
+        if (!attackerFactionName || attackerFactionName === `Faction ${atkFac}` || attackerFactionName.startsWith('Faction ')) {
+            if (isInternal) {
+                attackerFactionName = discordConfig.factionName || "Spider-Verse";
+            } else if (atkFac > 0) {
+                attackerFactionName = await resolveFactionName(atkFac, `Faction [${atkFac}]`);
+            } else {
+                attackerFactionName = "Factionless";
+            }
         }
 
         const result = atk.result || "Attacked";
         const isDefended = ["Lost", "Defended", "Stalemate", "Escape", "Timeout", "Interrupted"].includes(result);
-
-        const atkTs = atk.timestamp || atk.timestamp_ended || Math.floor(Date.now() / 1000);
-        const retalExpireTs = atkTs + 300; // 5-minute retaliation window in Torn
 
         const title = isDefended 
             ? "🛡️ Faction Member Defended Attack" 
@@ -1839,16 +1926,24 @@ async function handleMemberAttackedAlert(atk) {
             { name: "Result", value: `**${result}**`, inline: true }
         ];
 
-        // Attacker Estimated Battle Stats (from FF Scouter or Spy DB)
+        // Attacker Estimated Battle Stats (from FF Scouter, Spy DB, or Battle Stats Resolver)
         let statDisplay = "Unknown";
         const ffStats = await getPlayerStatsFromFFScouter(attackerId);
-        if (ffStats) {
+        if (ffStats && (ffStats.total > 0 || ffStats.human)) {
             const ffPart = ffStats.fairFight ? ` (FF: ${ffStats.fairFight})` : '';
             statDisplay = `~${ffStats.human || ffStats.total.toLocaleString()}${ffPart}`;
         } else {
-            const rawEst = (spyDatabase[attackerId]?.total) || (statsCache[attackerId]?.stats) || (manualStats[attackerId]?.stats) || 0;
-            if (rawEst > 0) {
-                statDisplay = `~${rawEst.toLocaleString()}`;
+            const resolved = resolvePlayerBattleStats(attackerId);
+            if (resolved && resolved.total > 0) {
+                const srcLabel = resolved.source === 'verified' ? ' (Verified)' :
+                    resolved.source === 'spy' ? ' (Spy DB)' :
+                    resolved.source === 'manual' ? ' (Leadership)' : '';
+                statDisplay = `~${resolved.total.toLocaleString()}${srcLabel}`;
+            } else {
+                const rawEst = (spyDatabase[attackerId]?.total) || (statsCache[attackerId]?.stats) || (manualStats[attackerId]?.stats) || 0;
+                if (rawEst > 0) {
+                    statDisplay = `~${rawEst.toLocaleString()}`;
+                }
             }
         }
         fields.push({ name: "Attacker Est. Stats", value: statDisplay, inline: true });
@@ -1857,7 +1952,7 @@ async function handleMemberAttackedAlert(atk) {
         if (!isInternal) {
             fields.push({
                 name: "⏱️ Retaliation Window",
-                value: `<t:${retalExpireTs}:R>`,
+                value: `🟢 **Active** — <t:${retalExpireTs}:R> (<t:${retalExpireTs}:T>)`,
                 inline: true
             });
         }
@@ -1909,21 +2004,40 @@ async function handleMemberAttackedAlert(atk) {
         console.log(`[Discord Retal Sentinel] Sending member attacked alert to channel ${retalTargetChannel}: ${desc}`);
         await sendChannelMessage(discordConfig.globalBotToken, retalTargetChannel, embed, pingStr, true);
 
-        if (mongoose.connection.readyState === 1 && alertCode) {
-            await mongoose.connection.db.collection('attack_alerts').updateOne(
-                { _id: alertCode },
-                {
-                    $set: {
-                        _id: alertCode,
-                        sent: true,
-                        timestamp: atk.timestamp || atk.timestamp_ended,
-                        attacker_id: atk.attacker_id,
-                        defender_id: atk.defender_id,
-                        alerted_at: new Date()
-                    }
-                },
-                { upsert: true }
-            ).catch(() => {});
+        if (mongoose.connection.readyState === 1) {
+            const alertDoc = {
+                sent: true,
+                timestamp: atkTs,
+                attacker_id: attackerId,
+                defender_id: defenderId,
+                comp_key: compKey,
+                hex_code: hexCode || null,
+                attack_id: idCode || null,
+                alerted_at: new Date()
+            };
+            const updateOps = [];
+            if (idCode) {
+                updateOps.push(mongoose.connection.db.collection('attack_alerts').updateOne(
+                    { _id: idCode },
+                    { $set: { ...alertDoc, _id: idCode } },
+                    { upsert: true }
+                ));
+            }
+            if (hexCode && hexCode !== idCode) {
+                updateOps.push(mongoose.connection.db.collection('attack_alerts').updateOne(
+                    { _id: hexCode },
+                    { $set: { ...alertDoc, _id: hexCode } },
+                    { upsert: true }
+                ));
+            }
+            if (compKey && compKey !== idCode && compKey !== hexCode) {
+                updateOps.push(mongoose.connection.db.collection('attack_alerts').updateOne(
+                    { _id: compKey },
+                    { $set: { ...alertDoc, _id: compKey } },
+                    { upsert: true }
+                ));
+            }
+            await Promise.all(updateOps).catch(() => {});
         }
     } catch(err) {
         console.warn('[Discord Retal Sentinel] Error sending member attacked alert:', err.message);
@@ -1962,7 +2076,10 @@ setInterval(async () => {
                 UI.setFactionName(liveData.name);
             }
         }
-        watchFactionId = String(liveData.ID || watchFactionId);
+        if (liveData.members) {
+            friendlyMembersCache = liveData.members;
+        }
+        watchFactionId = String(liveData.ID || watchFactionId || '52355');
         
         let ongoingWar = getActiveRankedWar(liveData);
         if (ongoingWar && ongoingWar.war) {
@@ -2056,14 +2173,15 @@ setInterval(async () => {
                     if (isRecent) {
                         handleMemberAttackedAlert({
                             code: atk.code || atkId,
+                            attack_id: String(atkId),
                             attacker_id: attackerId,
                             attacker_name: atk.attacker_name,
                             attacker_faction: atk.attacker_faction,
-                            attacker_faction_name: atk.attacker_faction_name,
+                            attacker_faction_name: atk.attacker_factionname || atk.attacker_faction_name || '',
                             defender_id: uId,
                             defender_name: atk.defender_name,
                             defender_faction: atk.defender_faction,
-                            defender_faction_name: atk.defender_faction_name,
+                            defender_faction_name: atk.defender_factionname || atk.defender_faction_name || '',
                             result: atk.result,
                             timestamp: atk.timestamp_ended
                         }).catch(e => console.warn('[Retal Alert War] Error:', e.message));
