@@ -117,7 +117,8 @@ function buildSlashCommands() {
                     { name: '🇦🇪 UAE', value: 'UAE' },
                     { name: '🇿🇦 South Africa', value: 'South Africa' }
                 )
-            ).toJSON(),
+            )
+            .addStringOption(opt => opt.setName('enemy').setDescription('Enemy faction ID or name override (optional)')).toJSON(),
 
         // 8. Bazaar & Market
         new SlashCommandBuilder().setName('bazaar').setDescription('Check lowest Torn market price & bazaar stats for an item')
