@@ -1,10 +1,10 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chain Sentinel | Spider-Verse Command Center</title>
-    <meta name="description" content="Live Torn City chain monitor, lineup rotation engine, hit milestone ledger, and automated DIBS order sentinel.">
+    <meta name="description" content="Automatic Torn City chain lineup manager — real-time attack detection, automatic queue advancement, and faction roster eligibility tracking.">
     
     <!-- Fonts & Core Design System -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,7 +18,7 @@
     <script src="/global-topbar.js?v=3.2.0"></script>
 
     <style>
-    /* ─── Page-Specific Chain Sentinel Styling ─── */
+    /* ─── Chain Hero Card ─── */
     .chain-hero-card {
         background: linear-gradient(145deg, rgba(18, 24, 36, 0.95), rgba(12, 16, 23, 0.98));
         border: 1px solid var(--border-default);
@@ -141,7 +141,74 @@
         50% { transform: scale(1.03); opacity: 0.8; }
     }
 
-    /* Chain Lineup Styling */
+    /* ─── Auto Mode Bar ─── */
+    .auto-mode-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 24px;
+        padding: 14px 22px;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    }
+    .auto-mode-label {
+        font-size: 0.8em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .auto-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--text-tertiary);
+        transition: background 0.3s;
+        box-shadow: none;
+    }
+    .auto-indicator.active {
+        background: var(--accent-emerald);
+        box-shadow: 0 0 8px var(--accent-emerald);
+        animation: pulseDot 1.5s infinite;
+    }
+    @keyframes pulseDot {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+    .auto-mode-toggle {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        color: var(--text-secondary);
+        padding: 7px 18px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        font-size: 0.82em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        transition: all var(--transition-fast);
+        font-family: inherit;
+    }
+    .auto-mode-toggle.auto-on {
+        background: rgba(16, 185, 129, 0.12);
+        border-color: rgba(16, 185, 129, 0.4);
+        color: var(--accent-emerald);
+    }
+    .auto-mode-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    /* ─── Lineup Card (outer wrapper) ─── */
     .lineup-card {
         background: var(--bg-surface);
         border: 1px solid var(--border-subtle);
@@ -174,7 +241,7 @@
     .lineup-controls {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
         flex-wrap: wrap;
     }
     .lineup-btn {
@@ -216,14 +283,159 @@
         font-family: var(--font-mono);
     }
     .lineup-meta {
-        padding: 10px 22px;
+        padding: 8px 22px;
         background: rgba(6, 182, 212, 0.03);
         border-bottom: 1px solid var(--border-subtle);
         display: flex;
         align-items: center;
+        justify-content: flex-end;
         gap: 10px;
         font-size: 0.82em;
         color: var(--text-secondary);
+        min-height: 32px;
+    }
+
+    /* ─── Tier 1: Currently Up Card ─── */
+    .tier-up-card {
+        margin: 16px 16px 8px 16px;
+        border-radius: var(--radius-md);
+        border: 2px solid var(--accent-cyan);
+        background: rgba(6, 182, 212, 0.06);
+        overflow: hidden;
+        transition: all 0.3s;
+    }
+    .tier-up-card.unavailable {
+        border-color: var(--accent-crimson);
+        background: rgba(230, 57, 70, 0.06);
+    }
+    .tier-label {
+        padding: 6px 16px;
+        font-size: 0.68em;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+    .tier-up-card .tier-label {
+        background: rgba(6, 182, 212, 0.1);
+        color: var(--accent-cyan);
+        border-bottom: 1px solid rgba(6, 182, 212, 0.2);
+    }
+    .tier-up-card.unavailable .tier-label {
+        background: rgba(230, 57, 70, 0.1);
+        color: var(--accent-crimson);
+        border-bottom: 1px solid rgba(230, 57, 70, 0.2);
+    }
+    .tier-body {
+        padding: 14px 18px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+    .tier-position {
+        font-size: 2em;
+        font-weight: 900;
+        font-family: var(--font-mono);
+        color: var(--accent-cyan);
+        min-width: 36px;
+        text-align: center;
+    }
+    .tier-up-card.unavailable .tier-position {
+        color: var(--accent-crimson);
+    }
+    .tier-name {
+        font-size: 1.35em;
+        font-weight: 800;
+        color: var(--text-primary);
+        flex: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .tier-status-pill {
+        font-size: 0.72em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 4px 10px;
+        border-radius: var(--radius-sm);
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .pill-ok       { background: rgba(16,185,129,0.12); color: var(--accent-emerald); border: 1px solid rgba(16,185,129,0.3); }
+    .pill-idle     { background: rgba(245,158,11,0.12); color: var(--accent-amber);   border: 1px solid rgba(245,158,11,0.3); }
+    .pill-offline  { background: rgba(107,114,128,0.12); color: var(--text-tertiary); border: 1px solid rgba(107,114,128,0.2); }
+    .pill-hospital { background: rgba(230,57,70,0.12);  color: var(--accent-crimson); border: 1px solid rgba(230,57,70,0.3); }
+    .pill-travel   { background: rgba(99,102,241,0.12); color: var(--accent-cobalt);  border: 1px solid rgba(99,102,241,0.3); }
+    .pill-federal  { background: rgba(245,158,11,0.12); color: var(--accent-amber);   border: 1px solid rgba(245,158,11,0.3); }
+    .tier-actions {
+        display: flex;
+        gap: 6px;
+        flex-shrink: 0;
+    }
+    .tier-skip-btn {
+        background: rgba(245,158,11,0.12);
+        border: 1px solid rgba(245,158,11,0.35);
+        color: var(--accent-amber);
+        padding: 6px 14px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        font-size: 0.8em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        font-family: inherit;
+        transition: all var(--transition-fast);
+    }
+    .tier-skip-btn:hover { background: rgba(245,158,11,0.22); }
+    .auto-skip-countdown {
+        font-size: 0.74em;
+        color: var(--accent-crimson);
+        font-family: var(--font-mono);
+        font-weight: 800;
+    }
+
+    /* ─── Tier 2: Next Card ─── */
+    .tier-next-card {
+        margin: 0 16px 8px 16px;
+        border-radius: var(--radius-md);
+        border: 1px solid rgba(245, 158, 11, 0.35);
+        background: rgba(245, 158, 11, 0.04);
+        overflow: hidden;
+    }
+    .tier-next-card .tier-label {
+        background: rgba(245, 158, 11, 0.08);
+        color: var(--accent-amber);
+        border-bottom: 1px solid rgba(245, 158, 11, 0.15);
+        padding: 5px 16px;
+        font-size: 0.65em;
+    }
+    .tier-next-card .tier-body {
+        padding: 10px 18px;
+    }
+    .tier-next-card .tier-position {
+        font-size: 1.4em;
+        color: var(--accent-amber);
+    }
+    .tier-next-card .tier-name {
+        font-size: 1.1em;
+    }
+
+    /* ─── Queue List (compact rows) ─── */
+    .queue-section-header {
+        padding: 8px 22px;
+        font-size: 0.68em;
+        font-weight: 900;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        color: var(--text-tertiary);
+        background: var(--bg-elevated);
+        border-top: 1px solid var(--border-subtle);
+        border-bottom: 1px solid var(--border-subtle);
     }
     .lineup-list {
         list-style: none;
@@ -233,56 +445,37 @@
     .lineup-item {
         display: flex;
         align-items: center;
-        gap: 14px;
-        padding: 12px 22px;
+        gap: 12px;
+        padding: 10px 22px;
         border-bottom: 1px solid var(--border-subtle);
         transition: background var(--transition-fast);
         cursor: grab;
         position: relative;
     }
-    .lineup-item:last-child {
-        border-bottom: none;
-    }
-    .lineup-item:hover {
-        background: var(--bg-hover);
-    }
-    .lineup-item.current {
-        background: var(--accent-cyan-dim);
-        border-left: 3px solid var(--accent-cyan);
-    }
-    .lineup-item.hit-done {
-        opacity: 0.45;
-    }
-    .lineup-item.dragging {
-        opacity: 0.4;
-        background: var(--bg-elevated);
-    }
-    .lineup-item.drag-over {
-        border-top: 2px solid var(--accent-cyan);
-    }
+    .lineup-item:last-child { border-bottom: none; }
+    .lineup-item:hover { background: var(--bg-hover); }
+    .lineup-item.hit-done { opacity: 0.38; }
+    .lineup-item.dragging { opacity: 0.4; background: var(--bg-elevated); }
+    .lineup-item.drag-over { border-top: 2px solid var(--accent-cyan); }
     .lineup-slot {
-        width: 28px;
+        width: 26px;
         text-align: center;
         font-weight: 900;
-        font-size: 1em;
+        font-size: 0.88em;
         color: var(--text-tertiary);
         font-family: var(--font-mono);
         flex-shrink: 0;
     }
-    .lineup-item.current .lineup-slot {
-        color: var(--accent-cyan);
-        font-size: 1.15em;
-    }
     .lineup-drag-handle {
         color: var(--text-tertiary);
-        font-size: 1.1em;
+        font-size: 1em;
         cursor: grab;
         flex-shrink: 0;
         user-select: none;
     }
     .lineup-name {
         font-weight: 700;
-        font-size: 0.95em;
+        font-size: 0.9em;
         color: var(--text-primary);
         flex: 1;
         min-width: 0;
@@ -290,76 +483,45 @@
         overflow: hidden;
         text-overflow: ellipsis;
     }
-    .lineup-item.current .lineup-name {
-        color: var(--accent-cyan);
-    }
-    .online-dot {
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
+    .status-tag {
+        font-size: 0.68em;
+        font-weight: 800;
+        padding: 2px 7px;
+        border-radius: 3px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
         flex-shrink: 0;
-        display: inline-block;
-    }
-    .online-dot.online {
-        background: var(--accent-emerald);
-        box-shadow: 0 0 6px var(--accent-emerald);
-    }
-    .online-dot.idle {
-        background: var(--accent-amber);
-    }
-    .online-dot.offline {
-        background: var(--text-tertiary);
-    }
-    .online-label {
-        font-size: 0.74em;
-        color: var(--text-tertiary);
     }
     .lineup-remove-btn {
         background: none;
         border: none;
         color: var(--text-tertiary);
-        font-size: 1em;
+        font-size: 0.95em;
         cursor: pointer;
-        padding: 4px 6px;
+        padding: 3px 5px;
         border-radius: 4px;
         transition: all var(--transition-fast);
         flex-shrink: 0;
+        line-height: 1;
     }
-    .lineup-remove-btn:hover {
-        color: var(--accent-crimson);
-        background: var(--accent-crimson-dim);
-    }
-    .lineup-skip-btn {
-        background: var(--bg-elevated);
-        border: 1px solid var(--border-default);
-        color: var(--text-secondary);
-        font-size: 0.7em;
-        cursor: pointer;
-        padding: 3px 8px;
-        border-radius: 4px;
-        transition: all var(--transition-fast);
-        flex-shrink: 0;
-        text-transform: uppercase;
-        font-weight: 700;
-        font-family: inherit;
-    }
-    .lineup-skip-btn:hover {
-        border-color: var(--accent-amber);
-        color: var(--accent-amber);
-    }
+    .lineup-remove-btn:hover { color: var(--accent-crimson); background: var(--accent-crimson-dim); }
+    .hit-check { font-size: 0.8em; flex-shrink: 0; }
+
+    /* ─── Add Member Row ─── */
     .lineup-add-row {
-        padding: 14px 22px;
+        padding: 12px 22px;
         border-top: 1px solid var(--border-subtle);
         display: flex;
         gap: 8px;
         background: rgba(255, 255, 255, 0.01);
+        position: relative;
     }
     .lineup-add-input {
         flex: 1;
         background: var(--bg-elevated);
         border: 1px solid var(--border-default);
         color: var(--text-primary);
-        padding: 9px 14px;
+        padding: 8px 14px;
         border-radius: var(--radius-sm);
         font-size: 0.88em;
         outline: none;
@@ -373,7 +535,7 @@
         background: var(--accent-cyan-dim);
         border: 1px solid var(--accent-cyan-border);
         color: var(--accent-cyan);
-        padding: 8px 18px;
+        padding: 7px 16px;
         border-radius: var(--radius-sm);
         cursor: pointer;
         font-weight: 800;
@@ -382,16 +544,13 @@
         white-space: nowrap;
         font-family: inherit;
     }
-    .lineup-add-btn:hover {
-        background: var(--accent-cyan);
-        color: #000;
-    }
+    .lineup-add-btn:hover { background: var(--accent-cyan); color: #000; }
     .lineup-suggest {
         position: absolute;
-        left: 0;
-        right: 0;
+        left: 22px;
+        right: 22px;
         top: 100%;
-        margin-top: 4px;
+        margin-top: 2px;
         background: var(--bg-overlay);
         border: 1px solid var(--border-default);
         border-radius: var(--radius-sm);
@@ -401,7 +560,7 @@
         box-shadow: 0 10px 30px rgba(0,0,0,0.6);
     }
     .lineup-suggest-item {
-        padding: 10px 14px;
+        padding: 9px 14px;
         cursor: pointer;
         font-size: 0.88em;
         display: flex;
@@ -409,12 +568,99 @@
         gap: 8px;
         transition: background var(--transition-fast);
     }
-    .lineup-suggest-item:hover {
-        background: var(--bg-hover);
+    .lineup-suggest-item:hover { background: var(--bg-hover); color: var(--accent-cyan); }
+
+    /* ─── Online Status Dot ─── */
+    .online-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        display: inline-block;
+    }
+    .online-dot.online  { background: var(--accent-emerald); box-shadow: 0 0 5px var(--accent-emerald); }
+    .online-dot.idle    { background: var(--accent-amber); }
+    .online-dot.offline { background: var(--text-tertiary); }
+
+    /* ─── Chain Hit Log ─── */
+    .hit-log-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        margin-top: 20px;
+        overflow: hidden;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+    .hit-log-header {
+        padding: 12px 20px;
+        border-bottom: 1px solid var(--border-subtle);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: rgba(255,255,255,0.01);
+    }
+    .hit-log-title {
+        font-size: 0.88em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: var(--text-secondary);
+    }
+    .hit-log-clear {
+        background: none;
+        border: none;
+        color: var(--text-tertiary);
+        font-size: 0.72em;
+        cursor: pointer;
+        font-family: inherit;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 2px 6px;
+        border-radius: 3px;
+        transition: all var(--transition-fast);
+    }
+    .hit-log-clear:hover { color: var(--accent-crimson); }
+    .hit-log-body {
+        font-family: var(--font-mono);
+        font-size: 0.82em;
+    }
+    .hit-log-row {
+        display: grid;
+        grid-template-columns: 52px 1fr 70px;
+        gap: 10px;
+        padding: 7px 20px;
+        border-bottom: 1px solid var(--border-subtle);
+        align-items: center;
+        transition: background var(--transition-fast);
+    }
+    .hit-log-row:last-child { border-bottom: none; }
+    .hit-log-row:hover { background: var(--bg-hover); }
+    .hit-log-chain {
         color: var(--accent-cyan);
+        font-weight: 800;
+    }
+    .hit-log-name {
+        color: var(--text-primary);
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .hit-log-time {
+        color: var(--text-tertiary);
+        text-align: right;
+        font-size: 0.9em;
+    }
+    .hit-log-empty {
+        padding: 18px 20px;
+        color: var(--text-tertiary);
+        font-style: italic;
+        font-size: 0.84em;
+        text-align: center;
     }
 
-    /* Queue & Ledger Cards */
+    /* ─── Queue & Ledger Cards (unchanged) ─── */
     .queue-card, .ledger-card {
         background: var(--bg-surface);
         border: 1px solid var(--border-subtle);
@@ -452,12 +698,8 @@
         font-size: 0.88em;
         transition: background var(--transition-fast);
     }
-    .queue-row:hover {
-        background: var(--bg-hover);
-    }
-    .queue-row:last-child {
-        border-bottom: none;
-    }
+    .queue-row:hover { background: var(--bg-hover); }
+    .queue-row:last-child { border-bottom: none; }
     .queue-row-header {
         display: grid;
         grid-template-columns: 110px 1.5fr 1fr;
@@ -487,9 +729,7 @@
         border-color: var(--accent-emerald-border);
         box-shadow: 0 0 10px var(--accent-emerald-glow);
     }
-    .timer-badge.soon {
-        color: var(--accent-amber);
-    }
+    .timer-badge.soon { color: var(--accent-amber); }
     .queue-profile {
         font-weight: 700;
         color: var(--text-primary);
@@ -499,9 +739,7 @@
         align-items: center;
         gap: 8px;
     }
-    .queue-profile:hover {
-        color: var(--accent-cobalt);
-    }
+    .queue-profile:hover { color: var(--accent-cobalt); }
     .dibs-badge {
         background: var(--accent-crimson-dim);
         color: var(--accent-crimson);
@@ -536,12 +774,8 @@
         font-size: 0.88em;
         align-items: center;
     }
-    .ledger-row:hover {
-        background: var(--bg-hover);
-    }
-    .ledger-row:last-child {
-        border-bottom: none;
-    }
+    .ledger-row:hover { background: var(--bg-hover); }
+    .ledger-row:last-child { border-bottom: none; }
     .milestone-badge {
         background: var(--accent-amber-dim);
         color: var(--accent-amber);
@@ -555,7 +789,7 @@
         font-size: 0.82em;
     }
 
-    /* DIBS Guide Setup Card */
+    /* ─── DIBS Script Card ─── */
     .script-card {
         background: var(--bg-surface);
         border: 1px solid var(--border-subtle);
@@ -615,14 +849,12 @@
         transition: all var(--transition-fast);
         box-shadow: 0 2px 10px var(--accent-cobalt-glow);
     }
-    .btn-download:hover {
-        background: #4f94fc;
-        transform: translateY(-1px);
-    }
+    .btn-download:hover { background: #4f94fc; transform: translateY(-1px); }
     @media (max-width: 768px) {
         .script-steps { grid-template-columns: 1fr; }
         .chain-count { font-size: 3.5em; }
         .timer-time { font-size: 2.8em; }
+        .tier-body { flex-wrap: wrap; }
     }
     </style>
 </head>
@@ -693,46 +925,69 @@
         </header>
 
     <main class="main-content">
-        <h1>Live Chain Tracker</h1>
+        <h1>Chain Sentinel</h1>
 
         <div class="container">
+
+            <!-- ── Chain Status Hero ───────────────────────────────── -->
             <div class="chain-hero-card" id="chain-card">
                 <div class="chain-title">
                     Current Chain <span id="chain-modifier" class="badge-modifier">1.0x</span>
                 </div>
-                
                 <div class="chain-count" id="chain-display">0 / 0</div>
-                
                 <div class="progress-bar-bg">
                     <div class="progress-bar-fill" id="chain-progress-fill"></div>
                 </div>
-                
                 <div class="timer-box">
                     <div class="timer-title" id="timer-title">Time Remaining</div>
                     <div class="timer-time" id="timer-display">00:00</div>
                 </div>
-                
                 <div class="waiting-text" id="waiting-msg">WAITING FOR CHAIN TO START...</div>
             </div>
 
-
-            <!-- ── Chain Lineup ──────────────────────────────────────────── -->
+            <!-- ── Chain Lineup ─────────────────────────────────────── -->
             <div class="lineup-card">
                 <div class="lineup-header">
-                    <h3 class="lineup-title">⚡ Chain Lineup</h3>
+                    <h3 class="lineup-title">Chain Lineup</h3>
                     <div class="lineup-controls">
                         <span class="lineup-cycle-badge" id="lineup-cycle-badge">Cycle 1</span>
-                        <button class="lineup-btn" onclick="lineupCopyToChat()" title="Copy lineup as text for Torn faction chat">📋 Copy</button>
-                        <button class="lineup-btn active" id="lineup-loop-btn" onclick="lineupToggleLoop()" title="Loop back to start when everyone has hit">🔁 Loop</button>
-                        <button class="lineup-btn" onclick="lineupNext()" title="Manually advance to next person">⏭ Next</button>
-                        <button class="lineup-btn" onclick="lineupReset()" title="Clear hit marks and restart from top">↺ Reset</button>
-                        <button class="lineup-btn danger" onclick="lineupClear()" title="Remove all members">🗑 Clear</button>
+                        <button class="lineup-btn" onclick="copyFull()" title="Copy lineup as clean plain text">Copy</button>
+                        <button class="lineup-btn" onclick="copyCompact()" title="Copy compact one-line format">Copy Compact</button>
+                        <button class="lineup-btn active" id="lineup-loop-btn" onclick="lineupToggleLoop()" title="Loop back to start when everyone has hit">Loop</button>
+                        <button class="lineup-btn" onclick="lineupNext()" title="Manually advance to next person">Next</button>
+                        <button class="lineup-btn" onclick="lineupReset()" title="Clear hit marks and restart from top">Reset</button>
+                        <button class="lineup-btn danger" onclick="lineupClear()" title="Remove all members">Clear</button>
                     </div>
                 </div>
-                <div class="lineup-meta" style="justify-content:flex-end;">
+                <div class="lineup-meta">
                     <span id="lineup-status-msg"></span>
                 </div>
+
+                <!-- Auto Mode Bar -->
+                <div class="auto-mode-bar" style="margin: 12px 16px; border-radius: var(--radius-sm);">
+                    <div class="auto-mode-label">
+                        <span class="auto-indicator" id="auto-indicator"></span>
+                        <span id="auto-mode-label-text">Auto Mode: OFF</span>
+                    </div>
+                    <div class="auto-mode-controls">
+                        <button class="lineup-btn" onclick="lineupAutoFill()" title="Populate lineup with currently eligible members">Auto-Fill Eligible</button>
+                        <button class="lineup-btn" onclick="lineupImportFromChain()" title="Import from current chain attack log">Import from Chain</button>
+                        <button class="auto-mode-toggle" id="auto-mode-btn" onclick="toggleAutoMode()">Enable Auto</button>
+                    </div>
+                </div>
+
+                <!-- CURRENTLY UP -->
+                <div id="currently-up-section"></div>
+                <!-- NEXT -->
+                <div id="next-section"></div>
+
+                <!-- QUEUE header (only shown when there are queue members) -->
+                <div id="queue-section-header" class="queue-section-header" style="display:none;">Queue</div>
+
+                <!-- Queue list -->
                 <ul class="lineup-list" id="lineup-list"></ul>
+
+                <!-- Add Member -->
                 <div class="lineup-add-row" style="position:relative;">
                     <input id="lineup-add-input" class="lineup-add-input" placeholder="Type to search faction members..." autocomplete="off"
                         oninput="lineupFilterSuggest()" onkeydown="lineupAddKeydown(event)" onfocus="lineupFilterSuggest()" />
@@ -741,9 +996,21 @@
                 </div>
             </div>
 
+            <!-- ── Chain Activity Log ────────────────────────────────── -->
+            <div class="hit-log-card">
+                <div class="hit-log-header">
+                    <div class="hit-log-title">Chain Activity</div>
+                    <button class="hit-log-clear" onclick="clearHitLog()">Clear</button>
+                </div>
+                <div class="hit-log-body" id="hit-log-body">
+                    <div class="hit-log-empty">No chain hits detected yet.</div>
+                </div>
+            </div>
+
+            <!-- ── Warboard DIBS Queue ──────────────────────────────── -->
             <div class="queue-card">
                 <div class="queue-header">
-                    <h3 class="queue-title">🎯 Automatic Chain Order</h3>
+                    <h3 class="queue-title">Automatic Chain Order</h3>
                     <div style="font-size: 0.75em; color: var(--text-dim);">Live DIBS Integration</div>
                 </div>
                 <div class="queue-row-header">
@@ -756,8 +1023,9 @@
                 </div>
             </div>
 
+            <!-- ── Bonus Hit Ledger ─────────────────────────────────── -->
             <div class="ledger-card">
-                <h3>🏆 Bonus Hit Ledger</h3>
+                <h3>Bonus Hit Ledger</h3>
                 <div class="ledger-grid">
                     <div>Milestone</div>
                     <div>Player</div>
@@ -769,32 +1037,29 @@
                 </div>
             </div>
 
+            <!-- ── DIBS Script Setup ───────────────────────────────── -->
             <div class="script-card">
-                <h3>🛠️ DIBS Script Setup</h3>
-                <p style="color: var(--text-dim); font-size: 0.9em; margin-bottom: 20px;">To call dibs and appear on the Automatic Chain Order above, you need to install the Faction Dibs script into your browser or PDA.</p>
-                
-                <a href="/torn-dibs.user.js" class="btn-download" target="_blank">⬇️ Download / Install Script</a>
-                
+                <h3>DIBS Script Setup</h3>
+                <p style="color: var(--text-dim); font-size: 0.9em; margin-bottom: 20px;">To call dibs and appear on the Automatic Chain Order above, install the Faction Dibs script into your browser or PDA.</p>
+                <a href="/torn-dibs.user.js" class="btn-download" target="_blank">Download / Install Script</a>
                 <div class="script-steps" style="margin-top: 20px;">
                     <div class="script-step">
-                        <h4>🖥️ PC / Desktop (Tampermonkey)</h4>
+                        <h4>PC / Desktop (Tampermonkey)</h4>
                         <ol>
                             <li>Install the <a href="https://www.tampermonkey.net/" target="_blank">Tampermonkey extension</a> for your browser.</li>
                             <li>Click the Download button above. Tampermonkey will intercept it.</li>
                             <li>Click <strong>Install</strong> on the Tampermonkey page.</li>
                             <li>Go to Torn Faction page and click the floating <strong>DIBS SETTINGS</strong> button in the bottom left corner.</li>
-                            <li>Enter this App's URL: <code>/recruit/</code> or whatever server you are on.</li>
                         </ol>
                     </div>
                     <div class="script-step">
-                        <h4>📱 Mobile (Torn PDA)</h4>
+                        <h4>Mobile (Torn PDA)</h4>
                         <ol>
                             <li>Open Torn PDA and go to <strong>Settings -> Advanced browser settings</strong>.</li>
                             <li>Tap <strong>Manage scripts</strong>.</li>
                             <li>Tap the <strong>+</strong> button and select <strong>Import from URL</strong>.</li>
                             <li>Enter the exact URL of the script link above (long press the download button and copy link).</li>
                             <li>Save the script and enable it. Refresh the faction page.</li>
-                            <li>Tap the floating DIBS SETTINGS button to configure your server.</li>
                         </ol>
                     </div>
                 </div>
@@ -809,21 +1074,40 @@ document.addEventListener("DOMContentLoaded", function() {
     const sidebar = document.getElementById('app-sidebar');
     if (localStorage.getItem('sidebar_collapsed') === 'true') { sidebar.classList.add('collapsed'); }
 });
-
 function toggleSidebar() {
     const sidebar = document.getElementById('app-sidebar');
     sidebar.classList.toggle('collapsed');
     localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
 }
-
 function openSettings() { window.location.href = "/"; }
+</script>
 
+<script>
+// ══════════════════════════════════════════════════════════════════
+//  CHAIN SENTINEL — Unified State & Engine
+// ══════════════════════════════════════════════════════════════════
+
+// ── API key (from localStorage — established app pattern) ──────────
+const MY_KEY = localStorage.getItem('warboard_apikey') || '';
+
+// ── Milestone definitions ──────────────────────────────────────────
+const MILESTONES = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
+function getNextMilestone(c) { for (let m of MILESTONES) { if (c < m) return m; } return c + 1; }
+function getPrevMilestone(c) { let p = 0; for (let m of MILESTONES) { if (c < m) return p; p = m; } return p; }
+
+// ── Chain timer state ──────────────────────────────────────────────
+let currentSeconds = 0;
+let localTimer = null;
+let lastChainCount = -1;
+let warned90 = false;
+let isCooldown = false;
+
+// ── Audio ──────────────────────────────────────────────────────────
 let audioCtx;
 function initAudio() {
     if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
     if (audioCtx.state === 'suspended') { audioCtx.resume(); }
 }
-
 function playAlertSound() {
     try {
         if (!audioCtx) initAudio();
@@ -837,177 +1121,32 @@ function playAlertSound() {
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
         osc.connect(gain);
         gain.connect(audioCtx.destination);
-        osc.start(now);
-        osc.stop(now + 0.5);
+        osc.start(now); osc.stop(now + 0.5);
     } catch(e) {}
 }
 document.body.addEventListener('click', () => { initAudio(); }, { once: true });
 
-const myKey = localStorage.getItem("warboard_apikey") || "";
-let currentSeconds = 0;
-let localTimer = null;
-let lastChainCount = -1;
-let warned90 = false; 
-let isCooldown = false;
-
-const MILESTONES = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
-
-
-let queueInterval = null;
-let queueData = [];
-let isFetchingQueue = false;
-let lastQueueEtag = '';
-
-async function fetchWarboardQueue() {
-    if (!myKey || isFetchingQueue || document.hidden) return;
-    isFetchingQueue = true;
-    try {
-        const headers = { 'x-api-key': myKey };
-        if (lastQueueEtag) headers['If-None-Match'] = lastQueueEtag;
-        const res = await fetch(`/api/warboard`, { headers });
-        if (res.status === 304) return;
-        const etagHeader = res.headers.get('ETag');
-        if (etagHeader) lastQueueEtag = etagHeader;
-        const data = await res.json();
-        if (data.enemy) {
-            // Filter only claimed targets
-            queueData = data.enemy.filter(e => e.claimedBy);
-            
-            // Sort: Okay (ready) first, then by Hospital Time
-            queueData.sort((a, b) => {
-                if (a.state === 'Okay' && b.state !== 'Okay') return -1;
-                if (b.state === 'Okay' && a.state !== 'Okay') return 1;
-                if (a.state === 'Hospital' && b.state === 'Hospital') {
-                    return (a.until || 0) - (b.until || 0);
-                }
-                return 0; // fallback
-            });
-            
-            renderQueue();
-            try { sessionStorage.setItem('sv_cache_queue', JSON.stringify(queueData)); } catch(e) {}
-        }
-    } catch (e) {
-        console.error("Queue fetch error:", e);
-    } finally {
-        isFetchingQueue = false;
-    }
-}
-
-function renderQueue() {
-    const container = document.getElementById("queue-content");
-    if (queueData.length === 0) {
-        container.innerHTML = `<div style="text-align: center; color: var(--text-dim); padding: 30px; font-style: italic;">No targets are currently claimed. Claim someone on the Warboard!</div>`;
-        return;
-    }
-    
-    const now = Math.floor(Date.now() / 1000);
-    let newHtml = '';
-    
-    queueData.forEach(p => {
-        let statusHtml = '';
-        if (p.state === 'Okay') {
-            statusHtml = `<div class="timer-badge ready">🟢 READY</div>`;
-        } else if (p.state === 'Hospital' && p.until) {
-            let secsLeft = Math.max(0, p.until - now);
-            let m = Math.floor(secsLeft / 60);
-            let s = secsLeft % 60;
-            let timeStr = (m < 10 ? "0" + m : m) + ":" + (s < 10 ? "0" + s : s);
-            
-            let extraClass = secsLeft < 60 ? 'soon' : '';
-            statusHtml = `<div class="timer-badge ${extraClass}">${timeStr}</div>`;
-        } else {
-            statusHtml = `<div class="timer-badge">${p.state.toUpperCase()}</div>`;
-        }
-        
-        newHtml += `
-            <div class="queue-row">
-                ${statusHtml}
-                <div>
-                    <a class="queue-profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${p.name} [${p.id}]</a>
-                    <div style="font-size: 0.85em; color: var(--text-dim);">Est. Stats: ${formatEstStatsPlain(p.estStats)}</div>
-                </div>
-                <div>
-                    <div class="dibs-badge">🎯 ${p.claimedBy}</div>
-                </div>
-            </div>
-        `;
-    });
-    
-    container.innerHTML = newHtml;
-}
-
-function formatEstStatsPlain(estValue) {
-    if (!estValue || estValue === "Scanning...") return "Unknown";
-    let num = Number(estValue);
-    if (!isNaN(num)) return num.toLocaleString();
-    return estValue;
-}
-
-// Start queue loop with visibility guard
-function startQueueLoop() {
-    if (queueInterval) clearInterval(queueInterval);
-    try {
-        const cq = sessionStorage.getItem('sv_cache_queue');
-        if (cq) { queueData = JSON.parse(cq); renderQueue(); }
-    } catch(e) {}
-    fetchWarboardQueue();
-    queueInterval = setInterval(fetchWarboardQueue, 12000); // Poll every 12s
-}
-function stopQueueLoop() {
-    if (queueInterval) { clearInterval(queueInterval); queueInterval = null; }
-}
-
-document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-        stopQueueLoop();
-    } else {
-        startQueueLoop();
-    }
-});
-
-startQueueLoop();
-setInterval(renderQueue, 1000); // Re-render every 1s for countdowns
-
-
-function getNextMilestone(current) {
-    for (let m of MILESTONES) { if (current < m) return m; }
-    return current + 1;
-}
-
-function getPrevMilestone(current) {
-    let prev = 0;
-    for (let m of MILESTONES) {
-        if (current < m) return prev;
-        prev = m;
-    }
-    return prev;
-}
-
+// ── Chain timer display ────────────────────────────────────────────
 function updateTimerDisplay() {
     if (currentSeconds <= 0) {
-        document.getElementById("timer-display").innerText = "00:00";
-        document.getElementById("chain-card").classList.remove("danger");
+        document.getElementById('timer-display').innerText = '00:00';
+        document.getElementById('chain-card').classList.remove('danger');
         return;
     }
-    
-    let m = Math.floor(currentSeconds / 60);
-    let s = currentSeconds % 60;
-    let formatted = (m < 10 ? "0" + m : m) + ":" + (s < 10 ? "0" + s : s);
-    
-    document.getElementById("timer-display").innerText = formatted;
-    
+    const m = Math.floor(currentSeconds / 60);
+    const s = currentSeconds % 60;
+    document.getElementById('timer-display').innerText = (m < 10 ? '0'+m : m) + ':' + (s < 10 ? '0'+s : s);
     if (isCooldown) {
-        document.getElementById("chain-card").classList.remove("danger");
+        document.getElementById('chain-card').classList.remove('danger');
     } else {
         if (currentSeconds <= 90) {
-            document.getElementById("chain-card").classList.add("danger");
-            // Only beep if the chain is an actual chain (>=10 hits)
+            document.getElementById('chain-card').classList.add('danger');
             if (!warned90 && currentSeconds === 90 && lastChainCount >= 10) {
                 playAlertSound();
                 warned90 = true;
             }
         } else {
-            document.getElementById("chain-card").classList.remove("danger");
+            document.getElementById('chain-card').classList.remove('danger');
         }
     }
 }
@@ -1015,186 +1154,147 @@ function updateTimerDisplay() {
 function startLocalTimer() {
     if (localTimer) clearInterval(localTimer);
     localTimer = setInterval(() => {
-        if (currentSeconds > 0) {
-            currentSeconds--;
-            updateTimerDisplay();
-        }
+        if (currentSeconds > 0) { currentSeconds--; updateTimerDisplay(); }
     }, 1000);
 }
 
+// ── Chain status fetch (via server proxy) ──────────────────────────
 async function fetchChainData() {
-    if (!myKey) {
-        document.getElementById("waiting-msg").innerText = "API KEY REQUIRED. GO TO SETTINGS.";
-        document.getElementById("ledger-content").innerHTML = `<div style="text-align: center; color: var(--red); padding: 20px;">API KEY REQUIRED.</div>`;
+    if (!MY_KEY) {
+        document.getElementById('waiting-msg').innerText = 'API KEY REQUIRED. GO TO SETTINGS.';
         return;
     }
-    
     try {
-        const chainRes = await fetch(`https://api.torn.com/faction/?selections=chain&key=${myKey}`);
-        const chainData = await chainRes.json();
-        
-        if (chainData.error) {
-            document.getElementById("waiting-msg").innerText = "API ERROR: " + chainData.error.error;
-            document.getElementById("waiting-msg").style.display = "block";
-            return;
+        const r = await fetch('/api/chain/data', { headers: { 'x-api-key': MY_KEY } });
+        const data = await r.json();
+
+        // Restore faction member pool if we got members
+        if (data.members && Object.keys(data.members).length > 0) {
+            _updateFactionMemberPool(data.members);
         }
 
-        // COOLDOWN STATE
-        if (chainData.chain && chainData.chain.cooldown > 0) {
+        const chain = data.chain;
+        if (!chain) return;
+
+        // COOLDOWN
+        if (chain.cooldown > 0) {
             isCooldown = true;
-            document.getElementById("chain-display").innerText = "COOLDOWN";
-            document.getElementById("chain-modifier").style.display = "none";
-            document.getElementById("waiting-msg").innerText = "CHAIN DROPPED / ON COOLDOWN...";
-            document.getElementById("waiting-msg").style.display = "block";
-            document.getElementById("chain-progress-fill").style.width = "0%";
-            document.getElementById("timer-title").innerText = "COOLDOWN REMAINING";
-            document.getElementById("chain-card").classList.remove("danger");
-
-            if (Math.abs(chainData.chain.cooldown - currentSeconds) > 5) {
-                currentSeconds = chainData.chain.cooldown;
-            }
+            document.getElementById('chain-display').innerText = 'COOLDOWN';
+            document.getElementById('chain-modifier').style.display = 'none';
+            document.getElementById('waiting-msg').innerText = 'CHAIN DROPPED / ON COOLDOWN...';
+            document.getElementById('waiting-msg').style.display = 'block';
+            document.getElementById('chain-progress-fill').style.width = '0%';
+            document.getElementById('timer-title').innerText = 'COOLDOWN REMAINING';
+            document.getElementById('chain-card').classList.remove('danger');
+            if (Math.abs(chain.cooldown - currentSeconds) > 5) { currentSeconds = chain.cooldown; }
             updateTimerDisplay();
-        } 
-        // ACTIVE CHAIN STATE
-        else if (chainData.chain && chainData.chain.current > 0) {
+        }
+        // ACTIVE
+        else if (chain.current > 0) {
             isCooldown = false;
-            let current = chainData.chain.current;
-            let max = getNextMilestone(current);
-            let prev = getPrevMilestone(current);
-            
-            document.getElementById("chain-display").innerText = `${current} / ${max}`;
-            document.getElementById("chain-modifier").innerText = `${chainData.chain.modifier}x`;
-            document.getElementById("chain-modifier").style.display = "inline-block";
-            document.getElementById("waiting-msg").style.display = "none";
-            document.getElementById("timer-title").innerText = "TIME REMAINING";
-            
-            let progressPercent = ((current - prev) / (max - prev)) * 100;
-            document.getElementById("chain-progress-fill").style.width = `${Math.min(100, Math.max(0, progressPercent))}%`;
-            try { sessionStorage.setItem('sv_cache_chain', JSON.stringify(chainData)); } catch(e) {}
-
+            const current = chain.current;
+            const max = getNextMilestone(current);
+            const prev = getPrevMilestone(current);
+            document.getElementById('chain-display').innerText = `${current} / ${max}`;
+            document.getElementById('chain-modifier').innerText = `${chain.modifier}x`;
+            document.getElementById('chain-modifier').style.display = 'inline-block';
+            document.getElementById('waiting-msg').style.display = 'none';
+            document.getElementById('timer-title').innerText = 'TIME REMAINING';
+            const pct = ((current - prev) / (max - prev)) * 100;
+            document.getElementById('chain-progress-fill').style.width = `${Math.min(100, Math.max(0, pct))}%`;
             if (current > lastChainCount) {
-                currentSeconds = chainData.chain.timeout;
+                currentSeconds = chain.timeout;
                 lastChainCount = current;
-                warned90 = false; 
-            } else if (chainData.chain.timeout > currentSeconds + 45) {
-                currentSeconds = chainData.chain.timeout;
                 warned90 = false;
-            } else if (currentSeconds === 0 && chainData.chain.timeout > 290) {
-                // Completely ignores the ghost 17s bounce; only resurrects on fresh hits > 290s
-                currentSeconds = chainData.chain.timeout;
+            } else if (chain.timeout > currentSeconds + 45) {
+                currentSeconds = chain.timeout;
+                warned90 = false;
+            } else if (currentSeconds === 0 && chain.timeout > 290) {
+                currentSeconds = chain.timeout;
             }
-            
             updateTimerDisplay();
-        } 
-        // NO CHAIN STATE
+        }
+        // NO CHAIN
         else {
             isCooldown = false;
-            document.getElementById("chain-display").innerText = "0 / 0";
-            document.getElementById("chain-modifier").innerText = "1.0x";
-            document.getElementById("chain-modifier").style.display = "inline-block";
-            document.getElementById("chain-progress-fill").style.width = "0%";
-            document.getElementById("timer-display").innerText = "00:00";
-            document.getElementById("timer-title").innerText = "TIME REMAINING";
-            document.getElementById("waiting-msg").innerText = "WAITING FOR CHAIN TO START...";
-            document.getElementById("waiting-msg").style.display = "block";
-            document.getElementById("chain-card").classList.remove("danger");
+            document.getElementById('chain-display').innerText = '0 / 0';
+            document.getElementById('chain-modifier').innerText = '1.0x';
+            document.getElementById('chain-modifier').style.display = 'inline-block';
+            document.getElementById('chain-progress-fill').style.width = '0%';
+            document.getElementById('timer-display').innerText = '00:00';
+            document.getElementById('timer-title').innerText = 'TIME REMAINING';
+            document.getElementById('waiting-msg').innerText = 'WAITING FOR CHAIN TO START...';
+            document.getElementById('waiting-msg').style.display = 'block';
+            document.getElementById('chain-card').classList.remove('danger');
             currentSeconds = 0;
             lastChainCount = -1;
         }
-    } catch (e) {
-        console.error("Chain basic fetch failed", e);
-    }
-
-    // LEDGER FETCH
-    try {
-        const atkRes = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${myKey}`);
-        const atkData = await atkRes.json();
-        
-        if (atkData.attacks && atkData.ID) {
-            let myFacId = atkData.ID;
-            let attacks = Object.values(atkData.attacks).filter(a => a.attacker_faction === myFacId && a.chain > 0);
-            
-            attacks.sort((a, b) => b.chain - a.chain);
-            
-            let ledgerHtml = "";
-            let foundBonus = false;
-
-            for (let atk of attacks) {
-                if (MILESTONES.includes(atk.chain)) {
-                    foundBonus = true;
-                    let d = new Date(atk.timestamp_ended * 1000);
-                    let timeStr = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                    
-                    ledgerHtml += `
-                        <div class="ledger-row">
-                            <div><span class="milestone-badge">#${atk.chain}</span></div>
-                            <div>
-                                <a href="https://www.torn.com/profiles.php?XID=${atk.attacker_id}" target="_blank" style="color: var(--text-main); text-decoration: none; font-weight: bold;">
-                                    ${atk.attacker_name} [${atk.attacker_id}]
-                                </a>
-                            </div>
-                            <div>${timeStr}</div>
-                            <div style="color: var(--green);">+${atk.respect_gain} Respect</div>
-                        </div>
-                    `;
-                }
-            }
-            
-            if (foundBonus) {
-                document.getElementById("ledger-content").innerHTML = ledgerHtml;
-            } else {
-                document.getElementById("ledger-content").innerHTML = `<div style="text-align: center; color: var(--text-dim); padding: 20px; font-style: italic;">No bonus hits logged in the current chain yet.</div>`;
-            }
-        }
-    } catch (e) {
-        console.error("Ledger fetch failed", e);
-    }
+    } catch(e) { console.error('[ChainData] fetch failed:', e); }
 }
 
-if (myKey) {
+// ── Bonus Hit Ledger ───────────────────────────────────────────────
+async function fetchLedger() {
+    if (!MY_KEY) return;
     try {
-        const cc = sessionStorage.getItem('sv_cache_chain');
-        if (cc) {
-            const cd = JSON.parse(cc);
-            if (cd && cd.chain && cd.chain.current > 0) {
-                let current = cd.chain.current;
-                let max = getNextMilestone(current);
-                let prev = getPrevMilestone(current);
-                document.getElementById("chain-display").innerText = `${current} / ${max}`;
-                document.getElementById("chain-modifier").innerText = `${cd.chain.modifier}x`;
-                document.getElementById("chain-modifier").style.display = "inline-block";
-                let pct = ((current - prev) / (max - prev)) * 100;
-                document.getElementById("chain-progress-fill").style.width = `${Math.min(100, Math.max(0, pct))}%`;
-                document.getElementById("waiting-msg").style.display = "none";
-            }
+        const r = await fetch('/api/chain/attacks', { headers: { 'x-api-key': MY_KEY } });
+        const data = await r.json();
+        if (!data.attacks) return;
+        const milestoneAtks = data.attacks.filter(a => MILESTONES.includes(a.chain)).sort((a, b) => b.chain - a.chain);
+        if (!milestoneAtks.length) {
+            document.getElementById('ledger-content').innerHTML = `<div style="text-align:center;color:var(--text-dim);padding:20px;font-style:italic;">No bonus hits logged in the current chain yet.</div>`;
+            return;
         }
-    } catch(e) {}
+        document.getElementById('ledger-content').innerHTML = milestoneAtks.map(atk => {
+            const timeStr = new Date(atk.timestamp_ended * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            return `<div class="ledger-row">
+                <div><span class="milestone-badge">#${atk.chain}</span></div>
+                <div><a href="https://www.torn.com/profiles.php?XID=${atk.attacker_id}" target="_blank" style="color:var(--text-main);text-decoration:none;font-weight:bold;">${atk.attacker_name} [${atk.attacker_id}]</a></div>
+                <div>${timeStr}</div>
+                <div style="color:var(--accent-emerald);">+${atk.respect_gain} Respect</div>
+            </div>`;
+        }).join('');
+    } catch(e) { console.error('[Ledger] fetch failed:', e); }
+}
+
+// ── Boot chain polling ─────────────────────────────────────────────
+if (MY_KEY) {
     fetchChainData();
+    fetchLedger();
     startLocalTimer();
-    
-    let cpm = parseInt(localStorage.getItem("warboard_cpm")) || 12;
-    let refreshMs = Math.floor(60000 / cpm);
-    setInterval(fetchChainData, Math.max(refreshMs, 2000));
+    const cpm = parseInt(localStorage.getItem('warboard_cpm')) || 12;
+    const refreshMs = Math.max(Math.floor(60000 / cpm), 4500);
+    setInterval(fetchChainData, refreshMs);
+    setInterval(fetchLedger, 30000);
 }
 </script>
 
 <script>
 // ══════════════════════════════════════════════════════════════════
-//  CHAIN LINEUP
+//  CHAIN LINEUP — Automatic Lineup Manager
 // ══════════════════════════════════════════════════════════════════
 
-// ── State ─────────────────────────────────────────────────────────
-const LINEUP_KEY = localStorage.getItem('warboard_apikey') || localStorage.getItem('sv_session_token') || '';
-let lineupMembers    = [];   // [{ name, id, hit, skipped }]
+// ── Constants ──────────────────────────────────────────────────────
+const LINEUP_LS        = 'chain_lineup_v3';
+const AUTO_SKIP_DELAY  = 45;  // seconds before auto-skip if unavailable (configurable)
+const HIT_POLL_MS      = 4000;
+const STATUS_POLL_MS   = 60000;
+
+// ── State ──────────────────────────────────────────────────────────
+let lineupMembers    = [];  // [{ name, id, hit, skipped }]
 let lineupCurrent    = 0;
 let lineupLoop       = true;
 let lineupCycleNum   = 1;
-let onlineStatus     = {};   // { name: 'online'|'idle'|'offline' }
-let factionMemberList = [];  // [{ name, id }]
-let lineupAlertedIdx = -1;
-let lastProcessedAtks = new Set();
+let autoMode         = false;
 
-const LINEUP_LS = 'chain_lineup_v2';
+let memberStatuses   = {};  // id -> { online, state, until, lastActionTs, lastActionRelative }
+let factionMemberList = []; // [{ name, id }] for autocomplete
+let processedAtkIds  = new Set();
+let chainHitLog      = [];  // [{ chain, name, id, ts }] — most recent first
+
+let autoSkipTimer    = null;  // countdown for auto-skip
+let autoSkipSecondsLeft = 0;
+
+let lineupAlertedIdx = -1;
 
 // ── Persist ────────────────────────────────────────────────────────
 function lineupLoad() {
@@ -1204,9 +1304,11 @@ function lineupLoad() {
         lineupCurrent  = d.current  || 0;
         lineupLoop     = d.loop     !== undefined ? d.loop : true;
         lineupCycleNum = d.cycle    || 1;
-        const btn = document.getElementById('lineup-loop-btn');
-        if (btn) btn.classList.toggle('active', lineupLoop);
+        autoMode       = d.autoMode || false;
     } catch(e) {}
+    const btn = document.getElementById('lineup-loop-btn');
+    if (btn) btn.classList.toggle('active', lineupLoop);
+    _syncAutoModeUI();
 }
 
 function lineupSave() {
@@ -1214,77 +1316,162 @@ function lineupSave() {
         members: lineupMembers,
         current: lineupCurrent,
         loop:    lineupLoop,
-        cycle:   lineupCycleNum
+        cycle:   lineupCycleNum,
+        autoMode
     }));
 }
 
+// ── Member status helpers ──────────────────────────────────────────
+function _memberOnlineStatus(m) {
+    // m.last_action.status → 'Online' | 'Idle' | 'Offline'
+    return ((m.last_action || {}).status || 'Offline');
+}
+function _memberState(m) {
+    // m.status.state → 'Okay' | 'Hospital' | 'Traveling' | 'Federal' | ...
+    return ((m.status || {}).state || 'Okay');
+}
+function isMemberEligible(memberId) {
+    const st = memberStatuses[memberId];
+    if (!st) return false;  // unknown → not eligible
+    return st.online === 'Online' && st.state === 'Okay';
+}
 
-// ── Render ─────────────────────────────────────────────────────────
-function lineupRender() {
-    const ul    = document.getElementById('lineup-list');
-    const badge = document.getElementById('lineup-cycle-badge');
-    if (badge) badge.textContent = `Cycle ${lineupCycleNum}`;
-    if (!ul) return;
+function _statusPillClass(online, state) {
+    if (state === 'Hospital') return 'pill-hospital';
+    if (state === 'Traveling') return 'pill-travel';
+    if (state === 'Federal') return 'pill-federal';
+    if (online === 'Online') return 'pill-ok';
+    if (online === 'Idle') return 'pill-idle';
+    return 'pill-offline';
+}
+function _statusLabel(online, state) {
+    if (state === 'Hospital') return 'Hospital';
+    if (state === 'Traveling') return 'Traveling';
+    if (state === 'Federal') return 'Federal';
+    if (online === 'Online') return 'Online';
+    if (online === 'Idle') return 'Idle';
+    return 'Offline';
+}
+function _dotClass(online) {
+    if (online === 'Online') return 'online';
+    if (online === 'Idle') return 'idle';
+    return 'offline';
+}
 
-    if (lineupMembers.length === 0) {
-        ul.innerHTML = `<div class="lineup-empty">No members yet. Add faction members below to build the hit order.</div>`;
-        return;
+// ── Update faction member pool (called with members from /api/chain/data) ──
+function _updateFactionMemberPool(membersObj) {
+    if (!membersObj || typeof membersObj !== 'object') return;
+    const newList = [];
+    const newStatuses = {};
+    for (const [id, m] of Object.entries(membersObj)) {
+        newList.push({ name: m.name, id: parseInt(id) });
+        newStatuses[id] = {
+            online: _memberOnlineStatus(m),
+            state: _memberState(m),
+            until: (m.status || {}).until || 0,
+            lastActionTs: (m.last_action || {}).timestamp || 0,
+            lastActionRelative: (m.last_action || {}).relative || ''
+        };
     }
-
-    ul.innerHTML = '';
-    lineupMembers.forEach((m, i) => {
-        const isCurrent = (i === lineupCurrent && !m.hit);
-        const status     = onlineStatus[m.name] || 'offline';
-        const statusLbl  = status.charAt(0).toUpperCase() + status.slice(1);
-        const li         = document.createElement('li');
-        li.className = 'lineup-item' + (isCurrent ? ' current' : '') + (m.hit ? ' hit-done' : '');
-        li.dataset.idx = i;
-        li.draggable   = true;
-
-        li.innerHTML = `
-            <span class="lineup-drag-handle" title="Drag to reorder">⠿</span>
-            <span class="lineup-slot">${i + 1}</span>
-            <span class="online-dot ${status}" title="${statusLbl}"></span>
-            <span class="lineup-name">${m.name}</span>
-            <span class="online-label">${statusLbl}</span>
-            ${m.hit ? '<span class="hit-check" title="Hit detected">✅</span>' : ''}
-            ${isCurrent ? `<button class="lineup-skip-btn" onclick="lineupSkip(${i})">Skip</button>` : ''}
-            <button class="lineup-remove-btn" onclick="lineupRemove(${i})" title="Remove">✕</button>
-        `;
-
-        li.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', i); li.classList.add('dragging'); });
-        li.addEventListener('dragend',   () => li.classList.remove('dragging'));
-        li.addEventListener('dragover',  e => { e.preventDefault(); li.classList.add('drag-over'); });
-        li.addEventListener('dragleave', () => li.classList.remove('drag-over'));
-        li.addEventListener('drop', e => {
-            e.preventDefault();
-            li.classList.remove('drag-over');
-            const from = parseInt(e.dataTransfer.getData('text/plain'));
-            const to   = i;
-            if (from === to) return;
-            const moved = lineupMembers.splice(from, 1)[0];
-            lineupMembers.splice(to, 0, moved);
-            if (lineupCurrent === from) lineupCurrent = to;
-            else if (from < lineupCurrent && to >= lineupCurrent) lineupCurrent--;
-            else if (from > lineupCurrent && to <= lineupCurrent) lineupCurrent++;
-            lineupSave(); lineupRender();
-        });
-
-        ul.appendChild(li);
+    // Sort: Online → Idle → Offline → alpha
+    newList.sort((a, b) => {
+        const ord = { Online: 0, Idle: 1, Offline: 2 };
+        const oa = ord[newStatuses[a.id]?.online] ?? 2;
+        const ob = ord[newStatuses[b.id]?.online] ?? 2;
+        return oa !== ob ? oa - ob : a.name.localeCompare(b.name);
     });
-
-    const curEl = ul.querySelector('.current');
-    if (curEl) curEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    factionMemberList = newList;
+    memberStatuses = newStatuses;
+    lineupRender();
 }
 
-// ── Controls ───────────────────────────────────────────────────────
-function lineupToggleLoop() {
-    lineupLoop = !lineupLoop;
-    document.getElementById('lineup-loop-btn').classList.toggle('active', lineupLoop);
-    lineupSave();
+// ── Explicit member status poll (60s interval) ─────────────────────
+async function pollMemberStatus() {
+    if (!MY_KEY) return;
+    try {
+        const r = await fetch('/api/chain/data', { headers: { 'x-api-key': MY_KEY } });
+        const data = await r.json();
+        if (data.members) _updateFactionMemberPool(data.members);
+    } catch(e) { console.warn('[Status] poll failed:', e); }
 }
 
+// ── Hit detection (attack poll every 4s) ──────────────────────────
+async function pollAttacks() {
+    if (!MY_KEY || !lineupMembers.length) return;
+    try {
+        const r = await fetch('/api/chain/attacks', { headers: { 'x-api-key': MY_KEY } });
+        const data = await r.json();
+        if (!data.attacks || !data.factionId) return;
+
+        let advanced = false;
+        for (const atk of data.attacks) {
+            const uid = atk.code || `${atk.attacker_id}_${atk.timestamp_ended}`;
+            if (processedAtkIds.has(uid)) continue;
+            processedAtkIds.add(uid);
+
+            // Add to hit log (newest first)
+            chainHitLog.unshift({ chain: atk.chain, name: atk.attacker_name || '?', id: atk.attacker_id, ts: atk.timestamp_ended });
+            if (chainHitLog.length > 50) chainHitLog.pop();
+
+            // Match against lineup
+            const atkName = (atk.attacker_name || '').toLowerCase().trim();
+            const idx = lineupMembers.findIndex(m => m.name.toLowerCase().trim() === atkName);
+            if (idx === -1 || lineupMembers[idx].hit) continue;
+
+            lineupMembers[idx].hit = true;
+            // Auto-advance: only if this was the CURRENTLY UP slot and Auto Mode is on
+            if (autoMode && idx === lineupCurrent) {
+                lineupAdvance();
+                advanced = true;
+            } else if (!autoMode && idx === lineupCurrent) {
+                // In manual mode, still mark hit but don't auto-advance
+                advanced = true;
+            }
+        }
+
+        // Cap dedup set size
+        if (processedAtkIds.size > 800) {
+            processedAtkIds = new Set([...processedAtkIds].slice(-400));
+        }
+
+        renderHitLog();
+        if (advanced || chainHitLog.length > 0) {
+            lineupSave();
+            lineupRender();
+        }
+    } catch(e) { /* silent */ }
+}
+
+// ── Auto-skip timer logic ──────────────────────────────────────────
+function startAutoSkipTimer() {
+    clearAutoSkipTimer();
+    if (!autoMode) return;
+    const cur = lineupMembers[lineupCurrent];
+    if (!cur) return;
+    const eligible = cur.id ? isMemberEligible(String(cur.id)) : true;
+    if (eligible) return; // don't start skip timer if they're available
+
+    autoSkipSecondsLeft = AUTO_SKIP_DELAY;
+    autoSkipTimer = setInterval(() => {
+        autoSkipSecondsLeft--;
+        // Update countdown display
+        const cdEl = document.getElementById('auto-skip-cd');
+        if (cdEl) cdEl.textContent = `auto-skip in ${autoSkipSecondsLeft}s`;
+        if (autoSkipSecondsLeft <= 0) {
+            clearAutoSkipTimer();
+            lineupSkip(lineupCurrent);
+        }
+    }, 1000);
+}
+
+function clearAutoSkipTimer() {
+    if (autoSkipTimer) { clearInterval(autoSkipTimer); autoSkipTimer = null; }
+    autoSkipSecondsLeft = 0;
+}
+
+// ── Lineup advance ─────────────────────────────────────────────────
 function lineupAdvance() {
+    clearAutoSkipTimer();
     lineupCurrent++;
     if (lineupCurrent >= lineupMembers.length) {
         if (lineupLoop) {
@@ -1296,34 +1483,209 @@ function lineupAdvance() {
         }
     }
     lineupAlertedIdx = -1;
+    if (autoMode) startAutoSkipTimer();
+}
+
+// ── Render ──────────────────────────────────────────────────────────
+function lineupRender() {
+    const badge = document.getElementById('lineup-cycle-badge');
+    if (badge) badge.textContent = `Cycle ${lineupCycleNum}`;
+
+    const upSection   = document.getElementById('currently-up-section');
+    const nextSection = document.getElementById('next-section');
+    const queueHeader = document.getElementById('queue-section-header');
+    const ul          = document.getElementById('lineup-list');
+
+    if (!ul || !upSection || !nextSection) return;
+
+    if (lineupMembers.length === 0) {
+        upSection.innerHTML = '';
+        nextSection.innerHTML = '';
+        queueHeader.style.display = 'none';
+        ul.innerHTML = `<li style="padding:24px 22px;color:var(--text-tertiary);font-style:italic;font-size:0.88em;">No members yet. Add faction members below to build the hit order.</li>`;
+        return;
+    }
+
+    // ── Currently Up ──────────────────────────────────────────────
+    const curIdx = lineupCurrent < lineupMembers.length ? lineupCurrent : -1;
+    if (curIdx >= 0) {
+        const cur    = lineupMembers[curIdx];
+        const stKey  = cur.id ? String(cur.id) : null;
+        const online = stKey ? (memberStatuses[stKey]?.online || 'Offline') : 'Offline';
+        const state  = stKey ? (memberStatuses[stKey]?.state  || 'Okay')    : 'Okay';
+        const eligible = stKey ? isMemberEligible(stKey) : true;
+        const pillCls  = _statusPillClass(online, state);
+        const pillLbl  = _statusLabel(online, state);
+        const isUnavail = !eligible;
+
+        upSection.innerHTML = `
+        <div class="tier-up-card ${isUnavail ? 'unavailable' : ''}">
+            <div class="tier-label">
+                <span>Currently Up</span>
+                ${isUnavail && autoMode ? `<span class="auto-skip-countdown" id="auto-skip-cd">${autoSkipSecondsLeft > 0 ? 'auto-skip in '+autoSkipSecondsLeft+'s' : 'unavailable'}</span>` : ''}
+            </div>
+            <div class="tier-body">
+                <span class="tier-position">1</span>
+                <span class="tier-name">${_esc(cur.name)}</span>
+                ${cur.hit ? '<span style="font-size:0.85em;color:var(--accent-emerald);">HIT</span>' : ''}
+                <span class="tier-status-pill ${pillCls}">${pillLbl}</span>
+                <div class="tier-actions">
+                    <button class="tier-skip-btn" onclick="lineupSkip(${curIdx})">Skip</button>
+                    <button class="lineup-remove-btn" onclick="lineupRemove(${curIdx})" title="Remove">✕</button>
+                </div>
+            </div>
+        </div>`;
+    } else {
+        upSection.innerHTML = '';
+    }
+
+    // ── Next ──────────────────────────────────────────────────────
+    const nextIdx = curIdx >= 0 ? curIdx + 1 : -1;
+    if (nextIdx >= 0 && nextIdx < lineupMembers.length) {
+        const nxt    = lineupMembers[nextIdx];
+        const stKey  = nxt.id ? String(nxt.id) : null;
+        const online = stKey ? (memberStatuses[stKey]?.online || 'Offline') : 'Offline';
+        const state  = stKey ? (memberStatuses[stKey]?.state  || 'Okay')    : 'Okay';
+        const pillCls = _statusPillClass(online, state);
+        const pillLbl = _statusLabel(online, state);
+
+        nextSection.innerHTML = `
+        <div class="tier-next-card">
+            <div class="tier-label"><span>Next</span></div>
+            <div class="tier-body">
+                <span class="tier-position">${nextIdx + 1}</span>
+                <span class="tier-name">${_esc(nxt.name)}</span>
+                ${nxt.hit ? '<span style="font-size:0.85em;color:var(--accent-emerald);">HIT</span>' : ''}
+                <span class="tier-status-pill ${pillCls}">${pillLbl}</span>
+                <div class="tier-actions">
+                    <button class="lineup-remove-btn" onclick="lineupRemove(${nextIdx})" title="Remove">✕</button>
+                </div>
+            </div>
+        </div>`;
+    } else {
+        nextSection.innerHTML = '';
+    }
+
+    // ── Queue (remaining members) ─────────────────────────────────
+    const queueStart = nextIdx >= 0 ? nextIdx + 1 : (curIdx >= 0 ? curIdx + 1 : 0);
+    const queueItems = lineupMembers.slice(queueStart);
+
+    if (queueItems.length > 0) {
+        queueHeader.style.display = 'block';
+    } else {
+        queueHeader.style.display = 'none';
+    }
+
+    ul.innerHTML = '';
+    queueItems.forEach((m, qi) => {
+        const realIdx = queueStart + qi;
+        const stKey   = m.id ? String(m.id) : null;
+        const online  = stKey ? (memberStatuses[stKey]?.online || 'Offline') : 'Offline';
+        const state   = stKey ? (memberStatuses[stKey]?.state  || 'Okay')    : 'Okay';
+        const pillCls = _statusPillClass(online, state);
+        const pillLbl = _statusLabel(online, state);
+        const dotCls  = _dotClass(online);
+
+        const li = document.createElement('li');
+        li.className = 'lineup-item' + (m.hit ? ' hit-done' : '');
+        li.dataset.idx = realIdx;
+        li.draggable = true;
+
+        li.innerHTML = `
+            <span class="lineup-drag-handle" title="Drag to reorder">⠿</span>
+            <span class="lineup-slot">${realIdx + 1}</span>
+            <span class="online-dot ${dotCls}"></span>
+            <span class="lineup-name">${_esc(m.name)}</span>
+            ${m.hit ? '<span class="hit-check" title="Hit detected" style="color:var(--accent-emerald);font-size:0.75em;">HIT</span>' : ''}
+            <span class="status-tag ${pillCls}">${pillLbl}</span>
+            <button class="lineup-remove-btn" onclick="lineupRemove(${realIdx})" title="Remove">✕</button>
+        `;
+
+        li.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', realIdx); li.classList.add('dragging'); });
+        li.addEventListener('dragend',   () => li.classList.remove('dragging'));
+        li.addEventListener('dragover',  e => { e.preventDefault(); li.classList.add('drag-over'); });
+        li.addEventListener('dragleave', () => li.classList.remove('drag-over'));
+        li.addEventListener('drop', e => {
+            e.preventDefault();
+            li.classList.remove('drag-over');
+            const from = parseInt(e.dataTransfer.getData('text/plain'));
+            const to   = realIdx;
+            if (from === to) return;
+            const moved = lineupMembers.splice(from, 1)[0];
+            lineupMembers.splice(to, 0, moved);
+            if (lineupCurrent === from) lineupCurrent = to;
+            else if (from < lineupCurrent && to >= lineupCurrent) lineupCurrent--;
+            else if (from > lineupCurrent && to <= lineupCurrent) lineupCurrent++;
+            lineupSave(); lineupRender();
+        });
+        ul.appendChild(li);
+    });
+
+    // Scroll currently up into view
+    const curEl = document.getElementById('currently-up-section');
+    if (curEl && curEl.firstChild) curEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ── Hit Log Render ─────────────────────────────────────────────────
+function renderHitLog() {
+    const body = document.getElementById('hit-log-body');
+    if (!body) return;
+    const display = chainHitLog.slice(0, 20);
+    if (!display.length) {
+        body.innerHTML = '<div class="hit-log-empty">No chain hits detected yet.</div>';
+        return;
+    }
+    body.innerHTML = display.map(h => {
+        const d = new Date(h.ts * 1000);
+        const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        return `<div class="hit-log-row">
+            <span class="hit-log-chain">#${h.chain}</span>
+            <span class="hit-log-name">${_esc(h.name)}</span>
+            <span class="hit-log-time">${timeStr}</span>
+        </div>`;
+    }).join('');
+}
+function clearHitLog() { chainHitLog = []; renderHitLog(); }
+
+// ── Controls ───────────────────────────────────────────────────────
+function lineupToggleLoop() {
+    lineupLoop = !lineupLoop;
+    document.getElementById('lineup-loop-btn').classList.toggle('active', lineupLoop);
+    lineupSave();
 }
 
 function lineupNext() {
     if (!lineupMembers.length) return;
     lineupAdvance();
-    lineupSave(); lineupRender(); lineupCheckAlert();
+    lineupSave(); lineupRender();
 }
 
 function lineupSkip(idx) {
+    clearAutoSkipTimer();
     if (lineupMembers[idx]) lineupMembers[idx].skipped = true;
     if (lineupCurrent === idx) lineupAdvance();
-    lineupSave(); lineupRender(); lineupCheckAlert();
+    lineupSave(); lineupRender();
 }
 
 function lineupRemove(idx) {
     lineupMembers.splice(idx, 1);
     if (lineupCurrent >= lineupMembers.length) lineupCurrent = Math.max(0, lineupMembers.length - 1);
+    clearAutoSkipTimer();
+    if (autoMode) startAutoSkipTimer();
     lineupSave(); lineupRender();
 }
 
 function lineupReset() {
+    clearAutoSkipTimer();
     lineupCurrent = 0; lineupCycleNum = 1; lineupAlertedIdx = -1;
     lineupMembers.forEach(m => { m.hit = false; m.skipped = false; });
     lineupSave(); lineupRender();
+    if (autoMode) startAutoSkipTimer();
 }
 
 function lineupClear() {
     if (!confirm('Remove all members from the lineup?')) return;
+    clearAutoSkipTimer();
     lineupMembers = []; lineupCurrent = 0; lineupCycleNum = 1;
     lineupSave(); lineupRender();
 }
@@ -1361,10 +1723,9 @@ function lineupFilterSuggest() {
     const val = input.value.trim().toLowerCase();
 
     if (!factionMemberList.length) {
-        // Not loaded yet — show loading state and kick off fetch
         box.innerHTML = `<div class="lineup-suggest-item" style="color:var(--text-dim);cursor:default;">Loading members...</div>`;
         box.style.display = 'block';
-        lineupFetchMembers().then(() => lineupFilterSuggest());
+        pollMemberStatus().then(() => lineupFilterSuggest());
         return;
     }
 
@@ -1380,12 +1741,16 @@ function lineupFilterSuggest() {
     }
 
     box.innerHTML = matches.map(m => {
-        const st    = onlineStatus[m.name] || 'offline';
-        const stLbl = st.charAt(0).toUpperCase() + st.slice(1);
-        return `<div class="lineup-suggest-item" onclick="lineupAddFromSuggest('${m.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}',${m.id})">
-            <span class="online-dot ${st}"></span>
-            <span>${m.name}</span>
-            <span style="margin-left:auto;font-size:0.72em;color:var(--text-dim);">${stLbl}</span>
+        const stKey = String(m.id);
+        const online = memberStatuses[stKey]?.online || 'Offline';
+        const state  = memberStatuses[stKey]?.state  || 'Okay';
+        const pillCls = _statusPillClass(online, state);
+        const pillLbl = _statusLabel(online, state);
+        const dotCls  = _dotClass(online);
+        return `<div class="lineup-suggest-item" onclick="lineupAddFromSuggest('${_escAttr(m.name)}',${m.id})">
+            <span class="online-dot ${dotCls}"></span>
+            <span>${_esc(m.name)}</span>
+            <span class="status-tag ${pillCls}" style="margin-left:auto;">${pillLbl}</span>
         </div>`;
     }).join('');
     box.style.display = 'block';
@@ -1395,7 +1760,7 @@ function lineupAddFromSuggest(name, id) {
     lineupAdd(name, id);
     const input = document.getElementById('lineup-add-input');
     if (input) input.value = '';
-    lineupFilterSuggest(); // refresh list
+    lineupFilterSuggest();
 }
 
 document.addEventListener('click', e => {
@@ -1410,127 +1775,76 @@ function lineupSetStatus(msg) {
     const el = document.getElementById('lineup-status-msg');
     if (!el) return;
     el.textContent = msg;
-    setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 3000);
+    setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 3500);
 }
 
-// ── (alert removed — no name field) ──────────────────────────────
-function lineupCheckAlert() { /* no-op */ }
-
-// ── Hit detection (auto-advance) ───────────────────────────────────
-async function lineupDetectHits() {
-    if (!LINEUP_KEY || !lineupMembers.length) return;
-    try {
-        const res  = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${LINEUP_KEY}`);
-        const data = await res.json();
-        if (!data.attacks || !data.ID) return;
-
-        const facId  = data.ID;
-        const atks   = Object.values(data.attacks).filter(a => a.attacker_faction === facId && a.chain > 0);
-        let advanced = false;
-
-        for (const atk of atks) {
-            const uid = atk.code || (`${atk.attacker_id}_${atk.timestamp_ended}`);
-            if (lastProcessedAtks.has(uid)) continue;
-            lastProcessedAtks.add(uid);
-
-            const atkName = (atk.attacker_name || '').toLowerCase();
-            const idx = lineupMembers.findIndex(m => m.name.toLowerCase() === atkName);
-            if (idx === -1 || lineupMembers[idx].hit) continue;
-
-            lineupMembers[idx].hit = true;
-            if (idx === lineupCurrent) { lineupAdvance(); advanced = true; }
-        }
-
-        if (lastProcessedAtks.size > 600) {
-            lastProcessedAtks = new Set([...lastProcessedAtks].slice(-300));
-        }
-
-        if (advanced) { lineupSave(); lineupRender(); lineupCheckAlert(); }
-    } catch(e) { /* silent */ }
+// ── Auto Mode ──────────────────────────────────────────────────────
+function toggleAutoMode() {
+    autoMode = !autoMode;
+    _syncAutoModeUI();
+    if (autoMode) {
+        startAutoSkipTimer();
+        lineupSetStatus('Auto Mode ON — lineup will advance on confirmed chain hits.');
+    } else {
+        clearAutoSkipTimer();
+        lineupSetStatus('Auto Mode OFF — manual control.');
+    }
+    lineupSave();
+    lineupRender();
 }
 
-// ── Fetch faction members (autocomplete + online status + auto-add) ──────────
-async function lineupFetchMembers() {
-    const key = LINEUP_KEY;
-    if (!key) {
-        lineupSetStatus('No API key set — go to Settings.');
+function _syncAutoModeUI() {
+    const btn = document.getElementById('auto-mode-btn');
+    const ind = document.getElementById('auto-indicator');
+    const lbl = document.getElementById('auto-mode-label-text');
+    if (btn) { btn.textContent = autoMode ? 'Disable Auto' : 'Enable Auto'; btn.classList.toggle('auto-on', autoMode); }
+    if (ind) ind.classList.toggle('active', autoMode);
+    if (lbl) lbl.textContent = `Auto Mode: ${autoMode ? 'ON' : 'OFF'}`;
+}
+
+// ── Auto-Fill Eligible ─────────────────────────────────────────────
+function lineupAutoFill() {
+    if (!factionMemberList.length) {
+        lineupSetStatus('Member list not loaded yet. Try again in a moment.');
+        pollMemberStatus();
         return;
     }
-    try {
-        const res  = await fetch(`https://api.torn.com/faction/?selections=basic&key=${key}`);
-        const data = await res.json();
-        if (data.error) {
-            lineupSetStatus('API error: ' + data.error.error);
-            return;
-        }
-        if (!data.members) {
-            lineupSetStatus('No member data returned from API.');
-            return;
-        }
-        factionMemberList = [];
-        const ns = {};
-        for (const [id, m] of Object.entries(data.members)) {
-            factionMemberList.push({ name: m.name, id: parseInt(id) });
-            const st = ((m.last_action || {}).status || 'Offline').toLowerCase();
-            // Torn returns 'Online', 'Idle', 'Offline'
-            ns[m.name] = (st === 'online' || st === 'idle') ? st : 'offline';
-        }
-        // Sort: online → idle → offline → alpha
-        factionMemberList.sort((a, b) => {
-            const ord = { online: 0, idle: 1, offline: 2 };
-            const oa = ord[ns[a.name]] ?? 2;
-            const ob = ord[ns[b.name]] ?? 2;
-            return oa !== ob ? oa - ob : a.name.localeCompare(b.name);
-        });
-        onlineStatus = ns;
-        lineupRender();
-
-        // Auto-add online members if lineup is completely empty
-        if (lineupMembers.length === 0) {
-            const onlineMembers = factionMemberList.filter(m => ns[m.name] === 'online');
-            if (onlineMembers.length > 0) {
-                onlineMembers.forEach(m => lineupMembers.push({ name: m.name, id: m.id, hit: false, skipped: false }));
-                lineupSave();
-                lineupRender();
-                lineupSetStatus(`Auto-added ${onlineMembers.length} online member${onlineMembers.length > 1 ? 's' : ''}.`);
-            }
-        }
-    } catch(e) {
-        lineupSetStatus('Failed to fetch members: ' + e.message);
-        console.error('[Lineup] fetch error:', e);
+    const eligible = factionMemberList.filter(m => isMemberEligible(String(m.id)));
+    if (!eligible.length) {
+        lineupSetStatus('No eligible members found (Online + Okay required).');
+        return;
     }
+    let added = 0;
+    for (const m of eligible) {
+        if (!lineupMembers.some(lm => lm.name.toLowerCase() === m.name.toLowerCase())) {
+            lineupMembers.push({ name: m.name, id: m.id, hit: false, skipped: false });
+            added++;
+        }
+    }
+    lineupSave();
+    lineupRender();
+    lineupSetStatus(added > 0 ? `Added ${added} eligible member${added > 1 ? 's' : ''}.` : 'All eligible members already in lineup.');
 }
 
-// Keep old name as alias so existing calls still work
-const lineupFetchOnlineStatus = lineupFetchMembers;
-
-
-// ── Import from current chain ──────────────────────────────────────
+// ── Import from chain ──────────────────────────────────────────────
 async function lineupImportFromChain() {
-    if (!LINEUP_KEY) { lineupSetStatus('API key required.'); return; }
+    if (!MY_KEY) { lineupSetStatus('API key required.'); return; }
     lineupSetStatus('Scanning chain attacks...');
     try {
-        const res  = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${LINEUP_KEY}`);
-        const data = await res.json();
-        if (!data.attacks || !data.ID) { lineupSetStatus('No attack data found.'); return; }
-
-        const facId = data.ID;
-        // All chain attacks by THIS faction, sorted oldest → newest
-        const chainAtks = Object.values(data.attacks)
-            .filter(a => a.attacker_faction === facId && a.chain > 0)
-            .sort((a, b) => a.timestamp_ended - b.timestamp_ended);
+        const r = await fetch('/api/chain/attacks', { headers: { 'x-api-key': MY_KEY } });
+        const data = await r.json();
+        if (!data.attacks || !data.attacks.length) { lineupSetStatus('No chain hits found yet.'); return; }
 
         // Unique attackers in order of first hit
         const seen = new Set();
         const chainMembers = [];
-        for (const atk of chainAtks) {
+        const sortedAtks = [...data.attacks].sort((a, b) => a.timestamp_ended - b.timestamp_ended);
+        for (const atk of sortedAtks) {
             if (!seen.has(atk.attacker_id)) {
                 seen.add(atk.attacker_id);
                 chainMembers.push({ name: atk.attacker_name, id: atk.attacker_id });
             }
         }
-
-        if (chainMembers.length === 0) { lineupSetStatus('No chain hits found yet.'); return; }
 
         let added = 0;
         for (const m of chainMembers) {
@@ -1544,63 +1858,173 @@ async function lineupImportFromChain() {
     } catch(e) { lineupSetStatus('Error fetching chain data.'); }
 }
 
-// ── Copy lineup to clipboard (Torn chat format) ────────────────────
-function lineupCopyToChat() {
+// ── Copy Functions ─────────────────────────────────────────────────
+function copyFull() {
     if (!lineupMembers.length) { lineupSetStatus('Lineup is empty.'); return; }
-    const lines = lineupMembers.map((m, i) => {
-        const marker = i === lineupCurrent && !m.hit ? ' ← UP NEXT' : m.hit ? ' ✓' : '';
-        return `${i + 1}. ${m.name}${marker}`;
-    });
-    const header = `⚡ Chain Lineup (Cycle ${lineupCycleNum})`;
-    const text = [header, ...lines].join('\n');
+    const up   = lineupCurrent < lineupMembers.length ? lineupMembers[lineupCurrent] : null;
+    const next = lineupCurrent + 1 < lineupMembers.length ? lineupMembers[lineupCurrent + 1] : null;
+    const lines = ['CHAIN LINEUP', ''];
+    if (up)   lines.push(`UP: ${up.name}`);
+    if (next) lines.push(`NEXT: ${next.name}`);
+    lines.push('');
+    lineupMembers.forEach((m, i) => { lines.push(`${i + 1}. ${m.name}`); });
+    _copyText(lines.join('\n'), 'Lineup copied.');
+}
+
+function copyCompact() {
+    if (!lineupMembers.length) { lineupSetStatus('Lineup is empty.'); return; }
+    const up   = lineupCurrent < lineupMembers.length ? lineupMembers[lineupCurrent] : null;
+    const next = lineupCurrent + 1 < lineupMembers.length ? lineupMembers[lineupCurrent + 1] : null;
+    const queue = lineupMembers.slice(lineupCurrent + 2).map(m => m.name);
+    const parts = [];
+    if (up)          parts.push(`UP: ${up.name}`);
+    if (next)        parts.push(`NEXT: ${next.name}`);
+    if (queue.length) parts.push(`QUEUE: ${queue.join(', ')}`);
+    _copyText(parts.join(' | '), 'Compact lineup copied.');
+}
+
+function _copyText(text, successMsg) {
     navigator.clipboard.writeText(text)
-        .then(() => lineupSetStatus('📋 Copied to clipboard!'))
+        .then(() => lineupSetStatus(successMsg))
         .catch(() => {
-            // Fallback for browsers that block clipboard
             const ta = document.createElement('textarea');
             ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
             document.body.appendChild(ta); ta.focus(); ta.select();
             document.execCommand('copy');
             document.body.removeChild(ta);
-            lineupSetStatus('📋 Copied to clipboard!');
+            lineupSetStatus(successMsg);
         });
+}
+
+// ── Utility ────────────────────────────────────────────────────────
+function _esc(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _escAttr(str) {
+    return String(str || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
 }
 
 // ── Boot ───────────────────────────────────────────────────────────
 lineupLoad();
 lineupRender();
 
-if (LINEUP_KEY) {
-    lineupFetchMembers();
-    setInterval(lineupFetchMembers, 60000);  // refresh online status every 60s
-    setInterval(lineupDetectHits, 4000);      // check hits every 4s
+if (MY_KEY) {
+    // Kick off initial member status fetch
+    pollMemberStatus();
+    // Attack detection every 4s
+    setInterval(pollAttacks, HIT_POLL_MS);
+    // Member status refresh every 60s
+    setInterval(pollMemberStatus, STATUS_POLL_MS);
 }
+
+// Recheck auto-skip countdown display every second
+setInterval(() => {
+    if (autoMode && autoSkipTimer) lineupRender();
+}, 1000);
 </script>
 
 <script>
-    function toggleTheme() { 
-        document.body.classList.toggle('light-mode'); 
-        localStorage.setItem('theme', document.body.classList.contains('light-mode') ? 'light' : 'dark'); 
-    }
-    if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-mode');
-    
-    // Override toggleSidebar for mobile
-    const originalToggle = typeof toggleSidebar === 'function' ? toggleSidebar : null;
-    window.toggleSidebar = function() {
-        if (window.innerWidth <= 768) {
-            const nav = document.querySelector('.nav-items');
-            if (nav) nav.classList.toggle('mobile-open');
-        } else if (originalToggle) {
-            originalToggle();
-        } else {
-            const s = document.querySelector('.sidebar');
-            if(s) s.classList.toggle('collapsed');
+// ══════════════════════════════════════════════════════════════════
+//  WARBOARD DIBS QUEUE (unchanged)
+// ══════════════════════════════════════════════════════════════════
+let queueInterval = null;
+let queueData = [];
+let isFetchingQueue = false;
+let lastQueueEtag = '';
+
+async function fetchWarboardQueue() {
+    if (!MY_KEY || isFetchingQueue || document.hidden) return;
+    isFetchingQueue = true;
+    try {
+        const headers = { 'x-api-key': MY_KEY };
+        if (lastQueueEtag) headers['If-None-Match'] = lastQueueEtag;
+        const res = await fetch('/api/warboard', { headers });
+        if (res.status === 304) return;
+        const etagHeader = res.headers.get('ETag');
+        if (etagHeader) lastQueueEtag = etagHeader;
+        const data = await res.json();
+        if (data.enemy) {
+            queueData = data.enemy.filter(e => e.claimedBy);
+            queueData.sort((a, b) => {
+                if (a.state === 'Okay' && b.state !== 'Okay') return -1;
+                if (b.state === 'Okay' && a.state !== 'Okay') return 1;
+                if (a.state === 'Hospital' && b.state === 'Hospital') return (a.until || 0) - (b.until || 0);
+                return 0;
+            });
+            renderQueue();
+            try { sessionStorage.setItem('sv_cache_queue', JSON.stringify(queueData)); } catch(e) {}
         }
+    } catch(e) { console.error('Queue fetch error:', e); }
+    finally { isFetchingQueue = false; }
+}
+
+function renderQueue() {
+    const container = document.getElementById('queue-content');
+    if (queueData.length === 0) {
+        container.innerHTML = `<div style="text-align:center;color:var(--text-dim);padding:30px;font-style:italic;">No targets are currently claimed. Claim someone on the Warboard!</div>`;
+        return;
     }
+    const now = Math.floor(Date.now() / 1000);
+    container.innerHTML = queueData.map(p => {
+        let statusHtml = '';
+        if (p.state === 'Okay') {
+            statusHtml = `<div class="timer-badge ready">READY</div>`;
+        } else if (p.state === 'Hospital' && p.until) {
+            const secsLeft = Math.max(0, p.until - now);
+            const m = Math.floor(secsLeft / 60);
+            const s = secsLeft % 60;
+            statusHtml = `<div class="timer-badge ${secsLeft < 60 ? 'soon' : ''}">${(m<10?'0'+m:m)}:${(s<10?'0'+s:s)}</div>`;
+        } else {
+            statusHtml = `<div class="timer-badge">${(p.state||'').toUpperCase()}</div>`;
+        }
+        return `<div class="queue-row">
+            ${statusHtml}
+            <div>
+                <a class="queue-profile" href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank">${_esc(p.name)} [${p.id}]</a>
+                <div style="font-size:0.85em;color:var(--text-dim);">Est. Stats: ${p.estStats || 'Unknown'}</div>
+            </div>
+            <div><div class="dibs-badge">${_esc(p.claimedBy)}</div></div>
+        </div>`;
+    }).join('');
+}
+
+function startQueueLoop() {
+    if (queueInterval) clearInterval(queueInterval);
+    try { const cq = sessionStorage.getItem('sv_cache_queue'); if (cq) { queueData = JSON.parse(cq); renderQueue(); } } catch(e) {}
+    fetchWarboardQueue();
+    queueInterval = setInterval(fetchWarboardQueue, 12000);
+}
+function stopQueueLoop() { if (queueInterval) { clearInterval(queueInterval); queueInterval = null; } }
+
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { stopQueueLoop(); }
+    else { startQueueLoop(); }
+});
+
+startQueueLoop();
+setInterval(renderQueue, 1000);
 </script>
 
-    <script src="/global_settings.js?v=3.2.1"></script>
+<script>
+function toggleTheme() {
+    document.body.classList.toggle('light-mode');
+    localStorage.setItem('theme', document.body.classList.contains('light-mode') ? 'light' : 'dark');
+}
+if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-mode');
+
+const originalToggle = typeof toggleSidebar === 'function' ? toggleSidebar : null;
+window.toggleSidebar = function() {
+    if (window.innerWidth <= 768) {
+        const nav = document.querySelector('.nav-items');
+        if (nav) nav.classList.toggle('mobile-open');
+    } else if (originalToggle) {
+        originalToggle();
+    } else {
+        const s = document.querySelector('.sidebar');
+        if (s) s.classList.toggle('collapsed');
+    }
+};
+</script>
+
 </body>
 </html>
-
-
