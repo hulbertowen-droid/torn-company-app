@@ -2135,33 +2135,44 @@ async function lineupImportFromChain() {
 // ── Clean Copy Functions ───────────────────────────────────────────
 function copyFull() {
     if (!lineupMembers.length) { lineupSetStatus('Lineup is empty.'); return; }
-    const up   = lineupCurrent < lineupMembers.length ? lineupMembers[lineupCurrent] : null;
-    let next = null;
-    for (let i = lineupCurrent + 1; i < lineupMembers.length; i++) {
-        if (!lineupMembers[i].hit && !lineupMembers[i].skipped) { next = lineupMembers[i]; break; }
+
+    // Collect active members starting from lineupCurrent
+    const active = [];
+    for (let i = lineupCurrent; i < lineupMembers.length; i++) {
+        if (!lineupMembers[i].hit && !lineupMembers[i].skipped) {
+            active.push(lineupMembers[i]);
+        }
     }
-    const lines = ['CHAIN LINEUP', ''];
-    if (up)   lines.push(`UP: ${up.name}`);
-    if (next) lines.push(`NEXT: ${next.name}`);
-    lines.push('');
-    lineupMembers.forEach((m, i) => { lines.push(`${i + 1}. ${m.name}`); });
+    const list = active.length > 0 ? active : lineupMembers;
+
+    const lines = [];
+    if (list.length >= 1) lines.push(`UP: ${list[0].name}`);
+    if (list.length >= 2) lines.push(`NEXT: ${list[1].name}`);
+    for (let i = 2; i < list.length; i++) {
+        lines.push(`${i + 1}. ${list[i].name}`);
+    }
+
     _copyText(lines.join('\n'), 'Lineup copied.');
 }
 
 function copyCompact() {
     if (!lineupMembers.length) { lineupSetStatus('Lineup is empty.'); return; }
-    const up   = lineupCurrent < lineupMembers.length ? lineupMembers[lineupCurrent] : null;
-    let next = null;
-    let nextIdx = -1;
-    for (let i = lineupCurrent + 1; i < lineupMembers.length; i++) {
-        if (!lineupMembers[i].hit && !lineupMembers[i].skipped) { next = lineupMembers[i]; nextIdx = i; break; }
+
+    const active = [];
+    for (let i = lineupCurrent; i < lineupMembers.length; i++) {
+        if (!lineupMembers[i].hit && !lineupMembers[i].skipped) {
+            active.push(lineupMembers[i]);
+        }
     }
-    const qStart = nextIdx !== -1 ? nextIdx + 1 : lineupCurrent + 1;
-    const queue = lineupMembers.slice(qStart).map(m => m.name);
+    const list = active.length > 0 ? active : lineupMembers;
+
     const parts = [];
-    if (up)          parts.push(`UP: ${up.name}`);
-    if (next)        parts.push(`NEXT: ${next.name}`);
-    if (queue.length) parts.push(`QUEUE: ${queue.join(', ')}`);
+    if (list.length >= 1) parts.push(`UP: ${list[0].name}`);
+    if (list.length >= 2) parts.push(`NEXT: ${list[1].name}`);
+    for (let i = 2; i < list.length; i++) {
+        parts.push(`${i + 1}. ${list[i].name}`);
+    }
+
     _copyText(parts.join(' | '), 'Compact lineup copied.');
 }
 
