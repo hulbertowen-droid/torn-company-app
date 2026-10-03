@@ -21387,6 +21387,64 @@ app.get('/api/chain/attacks', async (req, res) => {
     }
 });
 
+// ── Global Chain Lineup Sync (Web App <-> Userscript <-> Faction Chat) ──
+let globalChainLineup = {
+    lineup: [],
+    targetHitTime: '3:00',
+    cycle: 1,
+    formattedCompact: '',
+    formattedFull: '',
+    updatedAt: Date.now(),
+    version: 1
+};
+
+try {
+    if (fs.existsSync('chain_lineup.json')) {
+        globalChainLineup = JSON.parse(fs.readFileSync('chain_lineup.json', 'utf8'));
+    }
+} catch (e) {}
+
+// GET /api/chain/lineup — returns current live lineup & formatted chat string
+app.get('/api/chain/lineup', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
+    res.json({
+        ok: true,
+        data: globalChainLineup
+    });
+});
+
+// POST /api/chain/lineup — updates live lineup from chain.html
+app.post('/api/chain/lineup', express.json(), (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
+    const { lineup, targetHitTime, cycle, formattedCompact, formattedFull } = req.body || {};
+    if (Array.isArray(lineup)) {
+        globalChainLineup = {
+            lineup: lineup || [],
+            targetHitTime: targetHitTime !== undefined ? targetHitTime : (globalChainLineup.targetHitTime || '3:00'),
+            cycle: cycle || 1,
+            formattedCompact: formattedCompact || '',
+            formattedFull: formattedFull || '',
+            updatedAt: Date.now(),
+            version: (globalChainLineup.version || 0) + 1
+        };
+        try {
+            fs.writeFileSync('chain_lineup.json', JSON.stringify(globalChainLineup, null, 2));
+        } catch (e) {}
+    }
+    res.json({ ok: true, version: globalChainLineup.version, updatedAt: globalChainLineup.updatedAt });
+});
+
+app.options('/api/chain/lineup', (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
+    res.sendStatus(204);
+});
+
 // ── Real-Time Streaming & Admin Telemetry Endpoints ──
 app.get('/api/warboard/stream', (req, res) => {
     warboardBroadcaster.handleSse(req, res);

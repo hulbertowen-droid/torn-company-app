@@ -1142,6 +1142,7 @@
                         </div>
                         <button class="lineup-btn" onclick="copyFull()" title="Copy lineup as clean plain text">Copy</button>
                         <button class="lineup-btn" onclick="copyCompact()" title="Copy compact one-line format">Copy Compact</button>
+                        <a href="/torn-chain-lineup.user.js" class="lineup-btn" style="background:var(--accent-emerald-bg, rgba(46,204,113,0.15)); color:var(--accent-emerald, #2ecc71); border-color:var(--accent-emerald, #2ecc71); text-decoration:none; display:inline-flex; align-items:center; gap:4px;" title="Install Tampermonkey Userscript to view floating HUD on Torn and 1-click post lineup into Faction Chat">⚡ Torn Chat Script</a>
                         <button class="lineup-btn active" id="lineup-loop-btn" onclick="lineupToggleLoop()" title="Loop back to start when everyone has hit">Loop</button>
                         <button class="lineup-btn" onclick="lineupNext()" title="Manually advance to next person">Next</button>
                         <button class="lineup-btn" onclick="lineupReset()" title="Clear hit marks and restart from top">Reset</button>
@@ -1249,6 +1250,44 @@
                             <li>Tap the <strong>+</strong> button and select <strong>Import from URL</strong>.</li>
                             <li>Enter the exact URL of the script link above (long press the download button and copy link).</li>
                             <li>Save the script and enable it. Refresh the faction page.</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Chain Lineup & Faction Chat HUD Script ──────────── -->
+            <div class="script-card" style="border-color: rgba(46,204,113,0.3); background: linear-gradient(180deg, rgba(46,204,113,0.04) 0%, var(--bg-surface) 100%);">
+                <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+                    <div>
+                        <h3 style="color:var(--accent-emerald, #2ecc71); margin-bottom:4px;">⚡ Torn Faction Chat & Floating HUD Userscript</h3>
+                        <p style="color: var(--text-dim); font-size: 0.9em; margin: 0;">Live draggable HUD on Torn.com that shows who is UP and NEXT in real-time, flashes when updated, and posts the lineup directly into Faction Chat with 1 click.</p>
+                    </div>
+                    <span style="background:var(--accent-emerald-bg, rgba(46,204,113,0.15)); color:var(--accent-emerald, #2ecc71); border:1px solid rgba(46,204,113,0.4); padding:4px 10px; border-radius:20px; font-size:0.78em; font-weight:800; text-transform:uppercase;">1-Click Faction Chat</span>
+                </div>
+                <div style="margin-top:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+                    <a href="/torn-chain-lineup.user.js" class="btn-download" style="background:#2ecc71; color:#0b1d12; box-shadow:0 2px 10px rgba(46,204,113,0.3);" target="_blank">📥 Install / Update Script</a>
+                    <button class="lineup-btn" onclick="navigator.clipboard.writeText(window.location.origin + '/torn-chain-lineup.user.js'); lineupSetStatus('Copied Userscript URL to clipboard!');" title="Copy script URL for Torn PDA">📋 Copy Script URL</button>
+                </div>
+                <div class="script-steps" style="margin-top: 20px;">
+                    <div class="script-step">
+                        <h4>PC / Desktop (Tampermonkey)</h4>
+                        <ol>
+                            <li>Ensure you have <a href="https://www.tampermonkey.net/" target="_blank">Tampermonkey</a> installed in your browser.</li>
+                            <li>Click the <strong>Install / Update Script</strong> button above.</li>
+                            <li>Tampermonkey will open and ask to install — click <strong>Install</strong>.</li>
+                            <li>Go to any <a href="https://www.torn.com" target="_blank">Torn.com</a> page. You'll see the floating <strong>CHAIN LINEUP</strong> HUD.</li>
+                            <li>Drag it to wherever you prefer on your screen (it remembers its position).</li>
+                            <li>Click <strong>📋 Post to Faction Chat</strong> to immediately insert the lineup into Faction Chat!</li>
+                        </ol>
+                    </div>
+                    <div class="script-step">
+                        <h4>Mobile (Torn PDA)</h4>
+                        <ol>
+                            <li>Click <strong>Copy Script URL</strong> above (or copy link address of the Install button).</li>
+                            <li>Open Torn PDA &rarr; <strong>Settings &rarr; Advanced browser settings</strong>.</li>
+                            <li>Tap <strong>Manage scripts</strong> &rarr; tap the <strong>+</strong> button.</li>
+                            <li>Select <strong>Import from URL</strong>, paste the link, and save.</li>
+                            <li>Enable the script and refresh Torn!</li>
                         </ol>
                     </div>
                 </div>
@@ -1530,6 +1569,42 @@ function lineupLoad() {
     const btn = document.getElementById('lineup-loop-btn');
     if (btn) btn.classList.toggle('active', lineupLoop);
     _syncAutoModeUI();
+
+    // If local storage has no lineup, attempt to pull shared server lineup
+    if (!lineupMembers || !lineupMembers.length) {
+        fetch('/api/chain/lineup')
+            .then(r => r.json())
+            .then(res => {
+                if (res?.ok && res?.data?.lineup?.length && (!lineupMembers || !lineupMembers.length)) {
+                    lineupMembers = res.data.lineup;
+                    if (res.data.targetHitTime) targetHitTime = res.data.targetHitTime;
+                    if (res.data.cycle) lineupCycleNum = res.data.cycle;
+                    _syncHitTimeUI();
+                    lineupRender();
+                }
+            })
+            .catch(() => {});
+    }
+}
+
+let _syncDebounceTimer = null;
+function syncLineupToServer() {
+    if (_syncDebounceTimer) clearTimeout(_syncDebounceTimer);
+    _syncDebounceTimer = setTimeout(() => {
+        try {
+            fetch('/api/chain/lineup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    lineup: lineupMembers,
+                    targetHitTime,
+                    cycle: lineupCycleNum,
+                    formattedCompact: typeof _generateCompactLineupText === 'function' ? _generateCompactLineupText() : '',
+                    formattedFull: typeof _generateFullLineupText === 'function' ? _generateFullLineupText() : ''
+                })
+            }).catch(() => {});
+        } catch(e) {}
+    }, 250);
 }
 
 function lineupSave() {
@@ -1542,6 +1617,7 @@ function lineupSave() {
         hitTime: targetHitTime
     }));
     localStorage.setItem('chain_hit_time', targetHitTime);
+    syncLineupToServer();
 }
 
 // ── Member status helpers ──────────────────────────────────────────
@@ -2357,9 +2433,8 @@ function _syncHitTimeUI() {
 }
 
 // ── Clean Copy Functions ───────────────────────────────────────────
-function copyFull() {
-    if (!lineupMembers.length) { lineupSetStatus('Lineup is empty.'); return; }
-
+function _generateFullLineupText() {
+    if (!lineupMembers || !lineupMembers.length) return '';
     const lines = [];
     if (targetHitTime) {
         lines.push(`HIT AT: ${targetHitTime}`);
@@ -2370,13 +2445,11 @@ function copyFull() {
     for (let i = 2; i < lineupMembers.length; i++) {
         lines.push(`${i + 1}. ${lineupMembers[i].name}`);
     }
-
-    _copyText(lines.join('\n'), 'Lineup copied.');
+    return lines.join('\n');
 }
 
-function copyCompact() {
-    if (!lineupMembers.length) { lineupSetStatus('Lineup is empty.'); return; }
-
+function _generateCompactLineupText() {
+    if (!lineupMembers || !lineupMembers.length) return '';
     const parts = [];
     if (targetHitTime) parts.push(`[HIT AT ${targetHitTime}]`);
     if (lineupMembers.length >= 1) parts.push(`UP: ${lineupMembers[0].name}`);
@@ -2384,8 +2457,17 @@ function copyCompact() {
     for (let i = 2; i < lineupMembers.length; i++) {
         parts.push(`${i + 1}. ${lineupMembers[i].name}`);
     }
+    return parts.join(' | ');
+}
 
-    _copyText(parts.join(' | '), 'Compact lineup copied.');
+function copyFull() {
+    if (!lineupMembers.length) { lineupSetStatus('Lineup is empty.'); return; }
+    _copyText(_generateFullLineupText(), 'Lineup copied.');
+}
+
+function copyCompact() {
+    if (!lineupMembers.length) { lineupSetStatus('Lineup is empty.'); return; }
+    _copyText(_generateCompactLineupText(), 'Compact lineup copied.');
 }
 
 function _copyText(text, successMsg) {
