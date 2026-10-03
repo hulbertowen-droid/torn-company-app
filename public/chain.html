@@ -2438,7 +2438,6 @@ function _generateFullLineupText() {
     const lines = [];
     if (targetHitTime) {
         lines.push(`HIT AT: ${targetHitTime}`);
-        lines.push('');
     }
     if (lineupMembers.length >= 1) lines.push(`UP: ${lineupMembers[0].name}`);
     if (lineupMembers.length >= 2) lines.push(`NEXT: ${lineupMembers[1].name}`);

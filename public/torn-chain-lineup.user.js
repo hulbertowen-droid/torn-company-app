@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Chain Lineup HUD & Faction Chat Poster
 // @namespace    https://torn-company-app-production.up.railway.app/
-// @version      1.0.0
+// @version      1.0.1
 // @description  Live floating chain lineup HUD for Torn. Shows real-time hit queue updates and 1-click posts the lineup into Faction Chat without blocking or being covered by chat windows.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -493,14 +493,28 @@
         }
     }
 
-    // ── Faction Chat Injection Logic ───────────────────────────────────
+    // Helper to generate the regular vertical format
+    function getFullLineupText(data) {
+        if (data && data.formattedFull) return data.formattedFull;
+        if (!data || !data.lineup || !data.lineup.length) return '';
+        const lines = [];
+        if (data.targetHitTime) lines.push(`HIT AT: ${data.targetHitTime}`);
+        if (data.lineup.length >= 1) lines.push(`UP: ${data.lineup[0].name}`);
+        if (data.lineup.length >= 2) lines.push(`NEXT: ${data.lineup[1].name}`);
+        for (let i = 2; i < data.lineup.length; i++) {
+            lines.push(`${i + 1}. ${data.lineup[i].name}`);
+        }
+        return lines.join('\n');
+    }
+
+    // ── Faction Chat Injection Logic (Regular Vertical Format) ────────
     function postToFactionChat() {
-        if (!lineupData || !lineupData.formattedCompact) {
+        const textToInsert = getFullLineupText(lineupData);
+        if (!textToInsert) {
             showToast('No lineup data available yet.', true);
             return;
         }
 
-        const textToInsert = lineupData.formattedCompact;
         const chatRoot = document.querySelector('#chatRoot') || document.body;
 
         // Step 1: Open Faction Chat if minimized/closed
