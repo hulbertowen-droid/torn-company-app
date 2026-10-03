@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Chain Lineup HUD & Faction Chat Poster
 // @namespace    https://torn-company-app-production.up.railway.app/
-// @version      1.0.1
+// @version      1.0.2
 // @description  Live floating chain lineup HUD for Torn. Shows real-time hit queue updates and 1-click posts the lineup into Faction Chat without blocking or being covered by chat windows.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -71,21 +71,105 @@
         .hud-title {
             display: flex;
             align-items: center;
-            gap: 6px;
-            font-size: 11px;
+            gap: 7px;
+        }
+
+        .hud-status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 9px;
             font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 12px;
             text-transform: uppercase;
-            letter-spacing: 0.6px;
+            letter-spacing: 0.5px;
+            transition: all 0.25s ease;
+            user-select: none;
+        }
+
+        .hud-status-pill.status-updated {
+            background: rgba(46, 204, 113, 0.2);
             color: #2ecc71;
+            border: 1px solid rgba(46, 204, 113, 0.5);
+        }
+
+        .hud-status-pill.status-same {
+            background: rgba(113, 128, 150, 0.2);
+            color: #a0aec0;
+            border: 1px solid rgba(113, 128, 150, 0.4);
         }
 
         .hud-dot {
             width: 7px;
             height: 7px;
             border-radius: 50%;
-            background: #2ecc71;
-            box-shadow: 0 0 8px #2ecc71;
             display: inline-block;
+            transition: all 0.25s ease;
+        }
+
+        .hud-dot.dot-updated {
+            background: #2ecc71;
+            box-shadow: 0 0 8px #2ecc71, 0 0 3px #2ecc71;
+            animation: dotPulse 1.4s infinite;
+        }
+
+        .hud-dot.dot-same {
+            background: #718096;
+            box-shadow: none;
+            animation: none;
+        }
+
+        @keyframes dotPulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.25); opacity: 0.75; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .hud-full-title {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: #e2e8f0;
+        }
+
+        .hud-min-up-text {
+            display: none;
+            font-size: 11px;
+            font-weight: 800;
+            color: #ffffff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 120px;
+        }
+
+        .hud-min-post-btn {
+            display: none;
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+            color: #0b1d12;
+            border: none;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 800;
+            cursor: pointer;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.15s ease;
+            box-shadow: 0 1px 6px rgba(46, 204, 113, 0.3);
+            white-space: nowrap;
+        }
+
+        .hud-min-post-btn:hover {
+            background: linear-gradient(135deg, #3ee083 0%, #2ecc71 100%);
+            transform: translateY(-1px);
+        }
+
+        .hud-min-post-btn:active {
+            transform: translateY(0);
         }
 
         .hud-controls {
@@ -278,12 +362,23 @@
         }
         #torn-chain-hud.minimized {
             width: auto;
+            max-width: 440px;
             border-radius: 20px;
         }
         #torn-chain-hud.minimized .hud-header {
             border-radius: 20px;
             border-bottom: none;
-            padding: 6px 12px;
+            padding: 5px 10px;
+            gap: 8px;
+        }
+        #torn-chain-hud.minimized .hud-full-title {
+            display: none;
+        }
+        #torn-chain-hud.minimized .hud-min-up-text {
+            display: inline-block;
+        }
+        #torn-chain-hud.minimized .hud-min-post-btn {
+            display: inline-flex;
         }
     `;
 
@@ -309,10 +404,15 @@
     hud.innerHTML = `
         <div class="hud-header" id="torn-hud-handle">
             <div class="hud-title">
-                <span class="hud-dot"></span>
-                <span>Chain Lineup</span>
+                <span class="hud-status-pill status-same" id="torn-hud-status-pill" title="Green: Updated | Grey: Same">
+                    <span class="hud-dot dot-same" id="torn-hud-dot"></span>
+                    <span id="torn-hud-status-text">SAME</span>
+                </span>
+                <span class="hud-full-title">Chain Lineup</span>
+                <span class="hud-min-up-text" id="torn-hud-min-up-text">UP: Loading...</span>
             </div>
             <div class="hud-controls">
+                <button class="hud-min-post-btn" id="torn-hud-min-post-btn" title="Post Lineup to Faction Chat">📋 Post</button>
                 <button class="hud-ctrl-btn" id="torn-hud-min-btn" title="Minimize / Expand">${isMinimized ? '□' : '_'}</button>
                 <button class="hud-ctrl-btn" id="torn-hud-close-btn" title="Hide HUD">✕</button>
             </div>
@@ -446,6 +546,38 @@
         } catch(e) {}
     }
 
+    // ── Live Indicator State (Green: Updated / Grey: Same) ─────────────
+    let isLineupUpdated = false;
+
+    function setUpdateStatus(updated) {
+        isLineupUpdated = updated;
+        const pill = document.getElementById('torn-hud-status-pill');
+        const dot = document.getElementById('torn-hud-dot');
+        const text = document.getElementById('torn-hud-status-text');
+        const mainPostBtn = document.getElementById('torn-hud-post-btn');
+        const minPostBtn = document.getElementById('torn-hud-min-post-btn');
+
+        if (updated) {
+            if (pill) {
+                pill.className = 'hud-status-pill status-updated';
+                pill.title = 'Updated! New hit landed or lineup changed';
+            }
+            if (dot) dot.className = 'hud-dot dot-updated';
+            if (text) text.textContent = 'UPDATED';
+            if (mainPostBtn) mainPostBtn.style.boxShadow = '0 0 15px rgba(46, 204, 113, 0.6)';
+            if (minPostBtn) minPostBtn.style.boxShadow = '0 0 10px rgba(46, 204, 113, 0.6)';
+        } else {
+            if (pill) {
+                pill.className = 'hud-status-pill status-same';
+                pill.title = 'Same — Lineup has been posted or is unchanged';
+            }
+            if (dot) dot.className = 'hud-dot dot-same';
+            if (text) text.textContent = 'SAME';
+            if (mainPostBtn) mainPostBtn.style.boxShadow = '';
+            if (minPostBtn) minPostBtn.style.boxShadow = '';
+        }
+    }
+
     // ── Update HUD UI ──────────────────────────────────────────────────
     function renderHUD(data, isNewUpdate) {
         if (!data) return;
@@ -454,6 +586,7 @@
         const targetEl = document.getElementById('torn-hud-target-time');
         const queueEl = document.getElementById('torn-hud-queue-preview');
         const badgeEl = document.getElementById('torn-hud-badge');
+        const minUpEl = document.getElementById('torn-hud-min-up-text');
 
         const lineup = data.lineup || [];
         const curUp = lineup.length >= 1 ? lineup[0].name : 'No members in lineup';
@@ -463,6 +596,7 @@
         if (upEl) upEl.textContent = curUp;
         if (nextEl) nextEl.textContent = curNext;
         if (targetEl) targetEl.textContent = hitTime ? `Hit at ${hitTime}` : 'Target';
+        if (minUpEl) minUpEl.textContent = `UP: ${curUp}`;
 
         if (queueEl) {
             if (lineup.length > 2) {
@@ -477,6 +611,7 @@
 
         // Visual flash & badge on update
         if (isNewUpdate) {
+            setUpdateStatus(true);
             hud.classList.remove('hud-pulse');
             void hud.offsetWidth; // trigger reflow
             hud.classList.add('hud-pulse');
@@ -577,11 +712,20 @@
             targetInput.focus();
             targetInput.setSelectionRange(textToInsert.length, textToInsert.length);
 
+            // Immediately set status light to Grey (SAME)!
+            setUpdateStatus(false);
+
             if (autoSendOnPost) {
                 setTimeout(() => {
-                    targetInput.dispatchEvent(new KeyboardEvent('keydown', {
-                        key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true
-                    }));
+                    const parentBox = targetInput.closest('div[class*="chat-box"], [class*="chatBox"]');
+                    const sendBtn = parentBox ? parentBox.querySelector('button[type="submit"], [class*="send"], [class*="submit"]') : null;
+                    if (sendBtn) {
+                        sendBtn.click();
+                    } else {
+                        targetInput.dispatchEvent(new KeyboardEvent('keydown', {
+                            key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true
+                        }));
+                    }
                     showToast('✓ Sent to Faction Chat!', false);
                 }, 80);
             } else {
@@ -591,7 +735,10 @@
     }
 
     const postBtn = document.getElementById('torn-hud-post-btn');
-    postBtn.addEventListener('click', postToFactionChat);
+    if (postBtn) postBtn.addEventListener('click', postToFactionChat);
+
+    const minPostBtn = document.getElementById('torn-hud-min-post-btn');
+    if (minPostBtn) minPostBtn.addEventListener('click', postToFactionChat);
 
     // ── Polling Server Lineup ──────────────────────────────────────────
     function fetchLineup() {
