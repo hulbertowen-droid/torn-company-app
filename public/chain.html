@@ -1084,11 +1084,14 @@ function openSettings() { window.location.href = "/"; }
 
 <script>
 // ══════════════════════════════════════════════════════════════════
-//  CHAIN SENTINEL — Unified State & Engine
+//  CHAIN SENTINEL — High-Performance Direct & Proxy Engine
 // ══════════════════════════════════════════════════════════════════
 
-// ── API key (from localStorage — established app pattern) ──────────
-const MY_KEY = localStorage.getItem('warboard_apikey') || '';
+// ── API Key resolution ─────────────────────────────────────────────
+function getTornApiKey() {
+    return (localStorage.getItem('warboard_apikey') || '').trim();
+}
+let MY_KEY = getTornApiKey();
 
 // ── Milestone definitions ──────────────────────────────────────────
 const MILESTONES = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
@@ -1158,22 +1161,29 @@ function startLocalTimer() {
     }, 1000);
 }
 
-// ── Chain status fetch (via server proxy) ──────────────────────────
+// ── Chain status fetch (Direct Torn API with server fallback) ───────
 async function fetchChainData() {
+    MY_KEY = getTornApiKey();
     if (!MY_KEY) {
         document.getElementById('waiting-msg').innerText = 'API KEY REQUIRED. GO TO SETTINGS.';
         return;
     }
     try {
-        const r = await fetch('/api/chain/data', { headers: { 'x-api-key': MY_KEY } });
-        const data = await r.json();
-
-        // Restore faction member pool if we got members
-        if (data.members && Object.keys(data.members).length > 0) {
-            _updateFactionMemberPool(data.members);
+        let chain = null;
+        // 1. Primary: Direct fetch to Torn API (fastest, 0 server latency, sub-second)
+        try {
+            const res = await fetch(`https://api.torn.com/faction/?selections=chain&key=${MY_KEY}`, {
+                signal: AbortSignal.timeout(4000)
+            });
+            const data = await res.json();
+            if (data && data.chain) chain = data.chain;
+        } catch(e) {
+            // Direct failed (e.g. adblock or CORS), fall back to server proxy
+            const res = await fetch('/api/chain/data', { headers: { 'x-api-key': MY_KEY } });
+            const data = await res.json();
+            if (data && data.chain) chain = data.chain;
         }
 
-        const chain = data.chain;
         if (!chain) return;
 
         // COOLDOWN
@@ -1186,10 +1196,10 @@ async function fetchChainData() {
             document.getElementById('chain-progress-fill').style.width = '0%';
             document.getElementById('timer-title').innerText = 'COOLDOWN REMAINING';
             document.getElementById('chain-card').classList.remove('danger');
-            if (Math.abs(chain.cooldown - currentSeconds) > 5) { currentSeconds = chain.cooldown; }
+            if (Math.abs(chain.cooldown - currentSeconds) > 3) { currentSeconds = chain.cooldown; }
             updateTimerDisplay();
         }
-        // ACTIVE
+        // ACTIVE CHAIN
         else if (chain.current > 0) {
             isCooldown = false;
             const current = chain.current;
@@ -1202,15 +1212,18 @@ async function fetchChainData() {
             document.getElementById('timer-title').innerText = 'TIME REMAINING';
             const pct = ((current - prev) / (max - prev)) * 100;
             document.getElementById('chain-progress-fill').style.width = `${Math.min(100, Math.max(0, pct))}%`;
-            if (current > lastChainCount) {
+
+            // ROCK-SOLID TIMER SYNCHRONIZATION:
+            // If chain count changed, a hit happened -> reset timer to API timeout immediately
+            if (current !== lastChainCount) {
                 currentSeconds = chain.timeout;
                 lastChainCount = current;
                 warned90 = false;
-            } else if (chain.timeout > currentSeconds + 45) {
-                currentSeconds = chain.timeout;
-                warned90 = false;
-            } else if (currentSeconds === 0 && chain.timeout > 290) {
-                currentSeconds = chain.timeout;
+            } else {
+                // If local countdown drifted by more than 2 seconds from Torn API, resync
+                if (Math.abs(chain.timeout - currentSeconds) > 2) {
+                    currentSeconds = chain.timeout;
+                }
             }
             updateTimerDisplay();
         }
@@ -1229,17 +1242,27 @@ async function fetchChainData() {
             currentSeconds = 0;
             lastChainCount = -1;
         }
-    } catch(e) { console.error('[ChainData] fetch failed:', e); }
+    } catch(e) { console.error('[ChainData] error:', e); }
 }
 
 // ── Bonus Hit Ledger ───────────────────────────────────────────────
 async function fetchLedger() {
+    MY_KEY = getTornApiKey();
     if (!MY_KEY) return;
     try {
-        const r = await fetch('/api/chain/attacks', { headers: { 'x-api-key': MY_KEY } });
-        const data = await r.json();
-        if (!data.attacks) return;
-        const milestoneAtks = data.attacks.filter(a => MILESTONES.includes(a.chain)).sort((a, b) => b.chain - a.chain);
+        let attacks = null;
+        try {
+            const r = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${MY_KEY}`);
+            const data = await r.json();
+            if (data && data.attacks) attacks = Object.values(data.attacks);
+        } catch(e) {
+            const r = await fetch('/api/chain/attacks', { headers: { 'x-api-key': MY_KEY } });
+            const data = await r.json();
+            if (data && data.attacks) attacks = data.attacks;
+        }
+        if (!attacks) return;
+
+        const milestoneAtks = attacks.filter(a => MILESTONES.includes(a.chain)).sort((a, b) => b.chain - a.chain);
         if (!milestoneAtks.length) {
             document.getElementById('ledger-content').innerHTML = `<div style="text-align:center;color:var(--text-dim);padding:20px;font-style:italic;">No bonus hits logged in the current chain yet.</div>`;
             return;
@@ -1261,8 +1284,8 @@ if (MY_KEY) {
     fetchChainData();
     fetchLedger();
     startLocalTimer();
-    const cpm = parseInt(localStorage.getItem('warboard_cpm')) || 12;
-    const refreshMs = Math.max(Math.floor(60000 / cpm), 4500);
+    const cpm = parseInt(localStorage.getItem('warboard_cpm')) || 15;
+    const refreshMs = Math.max(Math.floor(60000 / cpm), 3000);
     setInterval(fetchChainData, refreshMs);
     setInterval(fetchLedger, 30000);
 }
@@ -1275,9 +1298,9 @@ if (MY_KEY) {
 
 // ── Constants ──────────────────────────────────────────────────────
 const LINEUP_LS        = 'chain_lineup_v3';
-const AUTO_SKIP_DELAY  = 45;  // seconds before auto-skip if unavailable (configurable)
-const HIT_POLL_MS      = 4000;
-const STATUS_POLL_MS   = 60000;
+const AUTO_SKIP_DELAY  = 45;  // seconds before auto-skip if unavailable
+const HIT_POLL_MS      = 3500; // poll attacks every 3.5s for rapid hit detection
+const STATUS_POLL_MS   = 60000; // poll member status every 60s
 
 // ── State ──────────────────────────────────────────────────────────
 let lineupMembers    = [];  // [{ name, id, hit, skipped }]
@@ -1291,10 +1314,8 @@ let factionMemberList = []; // [{ name, id }] for autocomplete
 let processedAtkIds  = new Set();
 let chainHitLog      = [];  // [{ chain, name, id, ts }] — most recent first
 
-let autoSkipTimer    = null;  // countdown for auto-skip
+let autoSkipTimer    = null;
 let autoSkipSecondsLeft = 0;
-
-let lineupAlertedIdx = -1;
 
 // ── Persist ────────────────────────────────────────────────────────
 function lineupLoad() {
@@ -1323,16 +1344,14 @@ function lineupSave() {
 
 // ── Member status helpers ──────────────────────────────────────────
 function _memberOnlineStatus(m) {
-    // m.last_action.status → 'Online' | 'Idle' | 'Offline'
     return ((m.last_action || {}).status || 'Offline');
 }
 function _memberState(m) {
-    // m.status.state → 'Okay' | 'Hospital' | 'Traveling' | 'Federal' | ...
     return ((m.status || {}).state || 'Okay');
 }
 function isMemberEligible(memberId) {
     const st = memberStatuses[memberId];
-    if (!st) return false;  // unknown → not eligible
+    if (!st) return false;
     return st.online === 'Online' && st.state === 'Okay';
 }
 
@@ -1358,7 +1377,7 @@ function _dotClass(online) {
     return 'offline';
 }
 
-// ── Update faction member pool (called with members from /api/chain/data) ──
+// ── Update faction member pool ─────────────────────────────────────
 function _updateFactionMemberPool(membersObj) {
     if (!membersObj || typeof membersObj !== 'object') return;
     const newList = [];
@@ -1373,7 +1392,14 @@ function _updateFactionMemberPool(membersObj) {
             lastActionRelative: (m.last_action || {}).relative || ''
         };
     }
-    // Sort: Online → Idle → Offline → alpha
+    // Match ID for any lineup members that were added by name without ID
+    for (const lm of lineupMembers) {
+        if (!lm.id) {
+            const found = newList.find(m => m.name.toLowerCase() === lm.name.toLowerCase());
+            if (found) lm.id = found.id;
+        }
+    }
+
     newList.sort((a, b) => {
         const ord = { Online: 0, Idle: 1, Offline: 2 };
         const oa = ord[newStatuses[a.id]?.online] ?? 2;
@@ -1385,57 +1411,105 @@ function _updateFactionMemberPool(membersObj) {
     lineupRender();
 }
 
-// ── Explicit member status poll (60s interval) ─────────────────────
+// ── Member status polling (every 60s) ──────────────────────────────
 async function pollMemberStatus() {
+    MY_KEY = getTornApiKey();
     if (!MY_KEY) return;
     try {
-        const r = await fetch('/api/chain/data', { headers: { 'x-api-key': MY_KEY } });
-        const data = await r.json();
-        if (data.members) _updateFactionMemberPool(data.members);
+        let members = null;
+        try {
+            const res = await fetch(`https://api.torn.com/faction/?selections=basic&key=${MY_KEY}`, {
+                signal: AbortSignal.timeout(6000)
+            });
+            const data = await res.json();
+            if (data && data.members) members = data.members;
+        } catch(e) {
+            const res = await fetch('/api/chain/members', { headers: { 'x-api-key': MY_KEY } });
+            const data = await res.json();
+            if (data && data.members) members = data.members;
+        }
+        if (members) _updateFactionMemberPool(members);
     } catch(e) { console.warn('[Status] poll failed:', e); }
 }
 
-// ── Hit detection (attack poll every 4s) ──────────────────────────
+// ── Attack & Hit Detection (every 3.5s) ────────────────────────────
 async function pollAttacks() {
-    if (!MY_KEY || !lineupMembers.length) return;
+    MY_KEY = getTornApiKey();
+    if (!MY_KEY) return;
     try {
-        const r = await fetch('/api/chain/attacks', { headers: { 'x-api-key': MY_KEY } });
-        const data = await r.json();
-        if (!data.attacks || !data.factionId) return;
+        let attacks = null;
+        // 1. Direct fetch to Torn API (fast, real-time)
+        try {
+            const res = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${MY_KEY}`, {
+                signal: AbortSignal.timeout(4000)
+            });
+            const data = await res.json();
+            if (data && data.attacks) attacks = Object.values(data.attacks);
+        } catch(e) {
+            const res = await fetch('/api/chain/attacks', { headers: { 'x-api-key': MY_KEY } });
+            const data = await res.json();
+            if (data && data.attacks) attacks = data.attacks;
+        }
 
-        let advanced = false;
-        for (const atk of data.attacks) {
+        if (!attacks || !attacks.length) return;
+
+        // Filter only qualifying chain hits (chain > 0)
+        const chainAtks = attacks.filter(a => a.chain && a.chain > 0);
+        if (!chainAtks.length) return;
+
+        // Sort chronologically ascending (oldest to newest)
+        chainAtks.sort((a, b) => (a.timestamp_ended || 0) - (b.timestamp_ended || 0));
+
+        let stateChanged = false;
+
+        for (const atk of chainAtks) {
             const uid = atk.code || `${atk.attacker_id}_${atk.timestamp_ended}`;
             if (processedAtkIds.has(uid)) continue;
             processedAtkIds.add(uid);
 
-            // Add to hit log (newest first)
-            chainHitLog.unshift({ chain: atk.chain, name: atk.attacker_name || '?', id: atk.attacker_id, ts: atk.timestamp_ended });
+            // Record into live Chain Activity log (newest at top)
+            chainHitLog.unshift({
+                chain: atk.chain,
+                name: atk.attacker_name || 'Operative',
+                id: atk.attacker_id,
+                ts: atk.timestamp_ended || Math.floor(Date.now() / 1000)
+            });
             if (chainHitLog.length > 50) chainHitLog.pop();
+            renderHitLog();
 
-            // Match against lineup
+            // Match attacker name against lineup
             const atkName = (atk.attacker_name || '').toLowerCase().trim();
             const idx = lineupMembers.findIndex(m => m.name.toLowerCase().trim() === atkName);
-            if (idx === -1 || lineupMembers[idx].hit) continue;
 
-            lineupMembers[idx].hit = true;
-            // Auto-advance: only if this was the CURRENTLY UP slot and Auto Mode is on
-            if (autoMode && idx === lineupCurrent) {
-                lineupAdvance();
-                advanced = true;
-            } else if (!autoMode && idx === lineupCurrent) {
-                // In manual mode, still mark hit but don't auto-advance
-                advanced = true;
+            if (idx !== -1) {
+                // Member found in lineup!
+                lineupMembers[idx].hit = true;
+                stateChanged = true;
+
+                // In Auto Mode:
+                if (autoMode) {
+                    if (idx === lineupCurrent) {
+                        // CURRENTLY UP attacked! Advance lineup!
+                        lineupAdvance();
+                        lineupSetStatus(`${atk.attacker_name} landed chain hit #${atk.chain}! Advanced lineup.`);
+                    } else if (idx > lineupCurrent) {
+                        // Out-of-order hit! Someone later in the queue attacked
+                        lineupSetStatus(`${atk.attacker_name} hit early (#${atk.chain}). Marked as done.`);
+                        // If Currently Up has already hit or was skipped, advance past them
+                        if (lineupMembers[lineupCurrent] && lineupMembers[lineupCurrent].hit) {
+                            lineupAdvance();
+                        }
+                    }
+                }
             }
         }
 
-        // Cap dedup set size
-        if (processedAtkIds.size > 800) {
-            processedAtkIds = new Set([...processedAtkIds].slice(-400));
+        // Keep deduplication set bounded
+        if (processedAtkIds.size > 1000) {
+            processedAtkIds = new Set([...processedAtkIds].slice(-500));
         }
 
-        renderHitLog();
-        if (advanced || chainHitLog.length > 0) {
+        if (stateChanged) {
             lineupSave();
             lineupRender();
         }
@@ -1449,16 +1523,16 @@ function startAutoSkipTimer() {
     const cur = lineupMembers[lineupCurrent];
     if (!cur) return;
     const eligible = cur.id ? isMemberEligible(String(cur.id)) : true;
-    if (eligible) return; // don't start skip timer if they're available
+    if (eligible) return; // member is ready, no auto-skip needed
 
     autoSkipSecondsLeft = AUTO_SKIP_DELAY;
     autoSkipTimer = setInterval(() => {
         autoSkipSecondsLeft--;
-        // Update countdown display
         const cdEl = document.getElementById('auto-skip-cd');
         if (cdEl) cdEl.textContent = `auto-skip in ${autoSkipSecondsLeft}s`;
         if (autoSkipSecondsLeft <= 0) {
             clearAutoSkipTimer();
+            lineupSetStatus(`Auto-skipped ${cur.name} (unavailable).`);
             lineupSkip(lineupCurrent);
         }
     }, 1000);
@@ -1469,20 +1543,28 @@ function clearAutoSkipTimer() {
     autoSkipSecondsLeft = 0;
 }
 
-// ── Lineup advance ─────────────────────────────────────────────────
+// ── Smart Lineup Advance ───────────────────────────────────────────
 function lineupAdvance() {
     clearAutoSkipTimer();
     lineupCurrent++;
+
+    // Intelligently skip members who have already hit or been skipped in this cycle
+    while (lineupCurrent < lineupMembers.length && (lineupMembers[lineupCurrent].hit || lineupMembers[lineupCurrent].skipped)) {
+        lineupCurrent++;
+    }
+
+    // Check if we reached the end of the lineup
     if (lineupCurrent >= lineupMembers.length) {
         if (lineupLoop) {
             lineupCycleNum++;
             lineupCurrent = 0;
             lineupMembers.forEach(m => { m.hit = false; m.skipped = false; });
+            lineupSetStatus(`Cycle ${lineupCycleNum} started!`);
         } else {
-            lineupCurrent = lineupMembers.length; // past end — done
+            lineupCurrent = lineupMembers.length; // all done
         }
     }
-    lineupAlertedIdx = -1;
+
     if (autoMode) startAutoSkipTimer();
 }
 
@@ -1527,7 +1609,7 @@ function lineupRender() {
             <div class="tier-body">
                 <span class="tier-position">1</span>
                 <span class="tier-name">${_esc(cur.name)}</span>
-                ${cur.hit ? '<span style="font-size:0.85em;color:var(--accent-emerald);">HIT</span>' : ''}
+                ${cur.hit ? '<span style="font-size:0.85em;color:var(--accent-emerald);font-weight:900;">✓ HIT</span>' : ''}
                 <span class="tier-status-pill ${pillCls}">${pillLbl}</span>
                 <div class="tier-actions">
                     <button class="tier-skip-btn" onclick="lineupSkip(${curIdx})">Skip</button>
@@ -1536,11 +1618,23 @@ function lineupRender() {
             </div>
         </div>`;
     } else {
-        upSection.innerHTML = '';
+        upSection.innerHTML = `<div style="padding:16px 20px;color:var(--text-dim);font-style:italic;">All members completed this cycle! Turn on Loop to restart automatically.</div>`;
     }
 
     // ── Next ──────────────────────────────────────────────────────
-    const nextIdx = curIdx >= 0 ? curIdx + 1 : -1;
+    // Find next member who has not yet hit or been skipped
+    let nextIdx = -1;
+    for (let i = curIdx + 1; i < lineupMembers.length; i++) {
+        if (!lineupMembers[i].hit && !lineupMembers[i].skipped) {
+            nextIdx = i;
+            break;
+        }
+    }
+    // Fallback to curIdx + 1 if all hit
+    if (nextIdx === -1 && curIdx + 1 < lineupMembers.length) {
+        nextIdx = curIdx + 1;
+    }
+
     if (nextIdx >= 0 && nextIdx < lineupMembers.length) {
         const nxt    = lineupMembers[nextIdx];
         const stKey  = nxt.id ? String(nxt.id) : null;
@@ -1555,7 +1649,7 @@ function lineupRender() {
             <div class="tier-body">
                 <span class="tier-position">${nextIdx + 1}</span>
                 <span class="tier-name">${_esc(nxt.name)}</span>
-                ${nxt.hit ? '<span style="font-size:0.85em;color:var(--accent-emerald);">HIT</span>' : ''}
+                ${nxt.hit ? '<span style="font-size:0.85em;color:var(--accent-emerald);font-weight:900;">✓ HIT</span>' : ''}
                 <span class="tier-status-pill ${pillCls}">${pillLbl}</span>
                 <div class="tier-actions">
                     <button class="lineup-remove-btn" onclick="lineupRemove(${nextIdx})" title="Remove">✕</button>
@@ -1566,7 +1660,7 @@ function lineupRender() {
         nextSection.innerHTML = '';
     }
 
-    // ── Queue (remaining members) ─────────────────────────────────
+    // ── Queue (remaining members after nextIdx) ───────────────────
     const queueStart = nextIdx >= 0 ? nextIdx + 1 : (curIdx >= 0 ? curIdx + 1 : 0);
     const queueItems = lineupMembers.slice(queueStart);
 
@@ -1596,7 +1690,7 @@ function lineupRender() {
             <span class="lineup-slot">${realIdx + 1}</span>
             <span class="online-dot ${dotCls}"></span>
             <span class="lineup-name">${_esc(m.name)}</span>
-            ${m.hit ? '<span class="hit-check" title="Hit detected" style="color:var(--accent-emerald);font-size:0.75em;">HIT</span>' : ''}
+            ${m.hit ? '<span class="hit-check" title="Hit completed" style="color:var(--accent-emerald);font-weight:900;font-size:0.75em;">✓ HIT</span>' : ''}
             <span class="status-tag ${pillCls}">${pillLbl}</span>
             <button class="lineup-remove-btn" onclick="lineupRemove(${realIdx})" title="Remove">✕</button>
         `;
@@ -1620,10 +1714,6 @@ function lineupRender() {
         });
         ul.appendChild(li);
     });
-
-    // Scroll currently up into view
-    const curEl = document.getElementById('currently-up-section');
-    if (curEl && curEl.firstChild) curEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 // ── Hit Log Render ─────────────────────────────────────────────────
@@ -1647,7 +1737,7 @@ function renderHitLog() {
 }
 function clearHitLog() { chainHitLog = []; renderHitLog(); }
 
-// ── Controls ───────────────────────────────────────────────────────
+// ── Lineup Controls ────────────────────────────────────────────────
 function lineupToggleLoop() {
     lineupLoop = !lineupLoop;
     document.getElementById('lineup-loop-btn').classList.toggle('active', lineupLoop);
@@ -1677,7 +1767,7 @@ function lineupRemove(idx) {
 
 function lineupReset() {
     clearAutoSkipTimer();
-    lineupCurrent = 0; lineupCycleNum = 1; lineupAlertedIdx = -1;
+    lineupCurrent = 0; lineupCycleNum = 1;
     lineupMembers.forEach(m => { m.hit = false; m.skipped = false; });
     lineupSave(); lineupRender();
     if (autoMode) startAutoSkipTimer();
@@ -1723,7 +1813,7 @@ function lineupFilterSuggest() {
     const val = input.value.trim().toLowerCase();
 
     if (!factionMemberList.length) {
-        box.innerHTML = `<div class="lineup-suggest-item" style="color:var(--text-dim);cursor:default;">Loading members...</div>`;
+        box.innerHTML = `<div class="lineup-suggest-item" style="color:var(--text-dim);cursor:default;">Loading faction members...</div>`;
         box.style.display = 'block';
         pollMemberStatus().then(() => lineupFilterSuggest());
         return;
@@ -1770,21 +1860,21 @@ document.addEventListener('click', e => {
     }
 });
 
-// ── Status message ─────────────────────────────────────────────────
+// ── Status Message ─────────────────────────────────────────────────
 function lineupSetStatus(msg) {
     const el = document.getElementById('lineup-status-msg');
     if (!el) return;
     el.textContent = msg;
-    setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 3500);
+    setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 4000);
 }
 
-// ── Auto Mode ──────────────────────────────────────────────────────
+// ── Auto Mode Toggle ───────────────────────────────────────────────
 function toggleAutoMode() {
     autoMode = !autoMode;
     _syncAutoModeUI();
     if (autoMode) {
         startAutoSkipTimer();
-        lineupSetStatus('Auto Mode ON — lineup will advance on confirmed chain hits.');
+        lineupSetStatus('Auto Mode ON — lineup will automatically advance on confirmed hits.');
     } else {
         clearAutoSkipTimer();
         lineupSetStatus('Auto Mode OFF — manual control.');
@@ -1805,7 +1895,7 @@ function _syncAutoModeUI() {
 // ── Auto-Fill Eligible ─────────────────────────────────────────────
 function lineupAutoFill() {
     if (!factionMemberList.length) {
-        lineupSetStatus('Member list not loaded yet. Try again in a moment.');
+        lineupSetStatus('Member list loading. Try again in a few seconds.');
         pollMemberStatus();
         return;
     }
@@ -1823,23 +1913,36 @@ function lineupAutoFill() {
     }
     lineupSave();
     lineupRender();
-    lineupSetStatus(added > 0 ? `Added ${added} eligible member${added > 1 ? 's' : ''}.` : 'All eligible members already in lineup.');
+    lineupSetStatus(added > 0 ? `Added ${added} eligible member${added > 1 ? 's' : ''}.` : 'All eligible members are already in the lineup.');
 }
 
-// ── Import from chain ──────────────────────────────────────────────
+// ── Import from chain attacks ──────────────────────────────────────
 async function lineupImportFromChain() {
+    MY_KEY = getTornApiKey();
     if (!MY_KEY) { lineupSetStatus('API key required.'); return; }
     lineupSetStatus('Scanning chain attacks...');
     try {
-        const r = await fetch('/api/chain/attacks', { headers: { 'x-api-key': MY_KEY } });
-        const data = await r.json();
-        if (!data.attacks || !data.attacks.length) { lineupSetStatus('No chain hits found yet.'); return; }
+        let attacks = null;
+        try {
+            const r = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${MY_KEY}`);
+            const data = await r.json();
+            if (data && data.attacks) attacks = Object.values(data.attacks);
+        } catch(e) {
+            const r = await fetch('/api/chain/attacks', { headers: { 'x-api-key': MY_KEY } });
+            const data = await r.json();
+            if (data && data.attacks) attacks = data.attacks;
+        }
+
+        if (!attacks || !attacks.length) { lineupSetStatus('No attacks found in current log.'); return; }
+
+        const chainAtks = attacks.filter(a => a.chain && a.chain > 0);
+        if (!chainAtks.length) { lineupSetStatus('No chain attacks found.'); return; }
 
         // Unique attackers in order of first hit
         const seen = new Set();
         const chainMembers = [];
-        const sortedAtks = [...data.attacks].sort((a, b) => a.timestamp_ended - b.timestamp_ended);
-        for (const atk of sortedAtks) {
+        chainAtks.sort((a, b) => a.timestamp_ended - b.timestamp_ended);
+        for (const atk of chainAtks) {
             if (!seen.has(atk.attacker_id)) {
                 seen.add(atk.attacker_id);
                 chainMembers.push({ name: atk.attacker_name, id: atk.attacker_id });
@@ -1854,15 +1957,18 @@ async function lineupImportFromChain() {
             }
         }
         lineupSave(); lineupRender();
-        lineupSetStatus(added > 0 ? `Imported ${added} member${added > 1 ? 's' : ''} from chain.` : 'All chain members already in lineup.');
+        lineupSetStatus(added > 0 ? `Imported ${added} member${added > 1 ? 's' : ''} from chain hits.` : 'All chain hitters already in lineup.');
     } catch(e) { lineupSetStatus('Error fetching chain data.'); }
 }
 
-// ── Copy Functions ─────────────────────────────────────────────────
+// ── Clean Copy Functions ───────────────────────────────────────────
 function copyFull() {
     if (!lineupMembers.length) { lineupSetStatus('Lineup is empty.'); return; }
     const up   = lineupCurrent < lineupMembers.length ? lineupMembers[lineupCurrent] : null;
-    const next = lineupCurrent + 1 < lineupMembers.length ? lineupMembers[lineupCurrent + 1] : null;
+    let next = null;
+    for (let i = lineupCurrent + 1; i < lineupMembers.length; i++) {
+        if (!lineupMembers[i].hit && !lineupMembers[i].skipped) { next = lineupMembers[i]; break; }
+    }
     const lines = ['CHAIN LINEUP', ''];
     if (up)   lines.push(`UP: ${up.name}`);
     if (next) lines.push(`NEXT: ${next.name}`);
@@ -1874,8 +1980,13 @@ function copyFull() {
 function copyCompact() {
     if (!lineupMembers.length) { lineupSetStatus('Lineup is empty.'); return; }
     const up   = lineupCurrent < lineupMembers.length ? lineupMembers[lineupCurrent] : null;
-    const next = lineupCurrent + 1 < lineupMembers.length ? lineupMembers[lineupCurrent + 1] : null;
-    const queue = lineupMembers.slice(lineupCurrent + 2).map(m => m.name);
+    let next = null;
+    let nextIdx = -1;
+    for (let i = lineupCurrent + 1; i < lineupMembers.length; i++) {
+        if (!lineupMembers[i].hit && !lineupMembers[i].skipped) { next = lineupMembers[i]; nextIdx = i; break; }
+    }
+    const qStart = nextIdx !== -1 ? nextIdx + 1 : lineupCurrent + 1;
+    const queue = lineupMembers.slice(qStart).map(m => m.name);
     const parts = [];
     if (up)          parts.push(`UP: ${up.name}`);
     if (next)        parts.push(`NEXT: ${next.name}`);
@@ -1896,7 +2007,7 @@ function _copyText(text, successMsg) {
         });
 }
 
-// ── Utility ────────────────────────────────────────────────────────
+// ── Utilities ──────────────────────────────────────────────────────
 function _esc(str) {
     return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
@@ -1909,17 +2020,22 @@ lineupLoad();
 lineupRender();
 
 if (MY_KEY) {
-    // Kick off initial member status fetch
+    // Initial fetch of members
     pollMemberStatus();
-    // Attack detection every 4s
+    // Poll attacks every 3.5s for real-time hit detection
     setInterval(pollAttacks, HIT_POLL_MS);
-    // Member status refresh every 60s
+    // Refresh member status every 60s
     setInterval(pollMemberStatus, STATUS_POLL_MS);
 }
 
-// Recheck auto-skip countdown display every second
+// Update auto-skip countdown display
 setInterval(() => {
-    if (autoMode && autoSkipTimer) lineupRender();
+    if (autoMode && autoSkipTimer) {
+        const cdEl = document.getElementById('auto-skip-cd');
+        if (cdEl && autoSkipSecondsLeft > 0) {
+            cdEl.textContent = `auto-skip in ${autoSkipSecondsLeft}s`;
+        }
+    }
 }, 1000);
 </script>
 

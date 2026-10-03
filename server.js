@@ -21280,26 +21280,56 @@ app.post('/api/turbo/stop', (req, res) => {
 });
 
 // ── Chain Proxy Endpoints ─────────────────────────────────────────────────────
-// These keep the user's Torn API key server-side (forwarded as x-api-key header).
-// A lightweight per-user in-memory cache prevents multi-tab API hammering.
+// Fast, lightweight proxies for chain status, members, and attacks.
+// Uses short in-memory cache to prevent redundant simultaneous queries.
 
-const chainDataCache = new Map();   // key -> { data, ts }
-const chainAtksCache = new Map();   // key -> { data, ts }
-const CHAIN_DATA_TTL = 4500;        // 4.5s — chain status
-const CHAIN_ATKS_TTL = 3500;        // 3.5s — attacks (slightly faster for hit detection)
+const chainDataCache = new Map();
+const chainAtksCache = new Map();
+const chainMembersCache = new Map();
 
+// GET /api/chain/data — lightweight: returns ONLY chain status
 app.get('/api/chain/data', async (req, res) => {
-    const userKey = req.userTornKey || req.headers['x-api-key'];
+    const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
     if (!userKey || userKey === 'null' || !userKey.trim()) {
         return res.status(401).json({ error: 'No API key provided.' });
     }
-    const cacheKey = userKey.trim().slice(-8); // partial key as cache identifier
+    const cleanKey = userKey.trim();
+    const cacheKey = cleanKey.slice(-8);
     const cached = chainDataCache.get(cacheKey);
-    if (cached && (Date.now() - cached.ts) < CHAIN_DATA_TTL) {
+    if (cached && (Date.now() - cached.ts) < 2500) {
         return res.json(cached.data);
     }
     try {
-        const r = await fetch(`https://api.torn.com/faction/?selections=basic,chain&key=${userKey.trim()}`, {
+        const r = await fetch(`https://api.torn.com/faction/?selections=chain&key=${cleanKey}`, {
+            signal: AbortSignal.timeout(5000)
+        });
+        const data = await r.json();
+        if (data && data.error) {
+            return res.status(400).json({ error: data.error.error || 'Torn API error', code: data.error.code });
+        }
+        const payload = { chain: data.chain || null };
+        chainDataCache.set(cacheKey, { data: payload, ts: Date.now() });
+        return res.json(payload);
+    } catch (err) {
+        if (cached) return res.json(cached.data);
+        return res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/chain/members — returns faction member roster with online/hospital/traveling statuses
+app.get('/api/chain/members', async (req, res) => {
+    const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    if (!userKey || userKey === 'null' || !userKey.trim()) {
+        return res.status(401).json({ error: 'No API key provided.' });
+    }
+    const cleanKey = userKey.trim();
+    const cacheKey = cleanKey.slice(-8);
+    const cached = chainMembersCache.get(cacheKey);
+    if (cached && (Date.now() - cached.ts) < 30000) {
+        return res.json(cached.data);
+    }
+    try {
+        const r = await fetch(`https://api.torn.com/faction/?selections=basic&key=${cleanKey}`, {
             signal: AbortSignal.timeout(8000)
         });
         const data = await r.json();
@@ -21309,51 +21339,40 @@ app.get('/api/chain/data', async (req, res) => {
         const payload = {
             factionId: data.ID || null,
             factionName: data.name || null,
-            members: data.members || {},
-            chain: data.chain || null
+            members: data.members || {}
         };
-        chainDataCache.set(cacheKey, { data: payload, ts: Date.now() });
-        // Evict old entries
-        if (chainDataCache.size > 50) {
-            const oldest = [...chainDataCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0];
-            if (oldest) chainDataCache.delete(oldest[0]);
-        }
+        chainMembersCache.set(cacheKey, { data: payload, ts: Date.now() });
         return res.json(payload);
     } catch (err) {
-        if (cached) return res.json(cached.data); // serve stale on error
+        if (cached) return res.json(cached.data);
         return res.status(500).json({ error: err.message });
     }
 });
 
+// GET /api/chain/attacks — returns qualifying chain attacks (chain > 0)
 app.get('/api/chain/attacks', async (req, res) => {
-    const userKey = req.userTornKey || req.headers['x-api-key'];
+    const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
     if (!userKey || userKey === 'null' || !userKey.trim()) {
         return res.status(401).json({ error: 'No API key provided.' });
     }
-    const cacheKey = userKey.trim().slice(-8);
+    const cleanKey = userKey.trim();
+    const cacheKey = cleanKey.slice(-8);
     const cached = chainAtksCache.get(cacheKey);
-    if (cached && (Date.now() - cached.ts) < CHAIN_ATKS_TTL) {
+    if (cached && (Date.now() - cached.ts) < 2500) {
         return res.json(cached.data);
     }
     try {
-        const r = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${userKey.trim()}`, {
-            signal: AbortSignal.timeout(8000)
+        const r = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${cleanKey}`, {
+            signal: AbortSignal.timeout(6000)
         });
         const data = await r.json();
         if (data && data.error) {
             return res.status(400).json({ error: data.error.error || 'Torn API error', code: data.error.code });
         }
-        const facId = data.ID || null;
-        // Return only chain attacks by this faction to minimize payload
-        const attacks = data.attacks ? Object.values(data.attacks).filter(a =>
-            a.attacker_faction === facId && a.chain > 0
-        ) : [];
-        const payload = { factionId: facId, attacks };
+        // Return all attacks with chain > 0 (qualifying chain hits)
+        const attacks = data.attacks ? Object.values(data.attacks).filter(a => a.chain && a.chain > 0) : [];
+        const payload = { attacks };
         chainAtksCache.set(cacheKey, { data: payload, ts: Date.now() });
-        if (chainAtksCache.size > 50) {
-            const oldest = [...chainAtksCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0];
-            if (oldest) chainAtksCache.delete(oldest[0]);
-        }
         return res.json(payload);
     } catch (err) {
         if (cached) return res.json(cached.data);
