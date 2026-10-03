@@ -1595,10 +1595,9 @@ async function pollMemberStatus() {
 // ── Attack & Hit Detection (every 3.5s) ────────────────────────────
 async function pollAttacks() {
     MY_KEY = getTornApiKey();
-    if (!MY_KEY) return;
+    if (!MY_KEY || !lineupMembers.length) return;
     try {
         let attacks = null;
-        // 1. Direct fetch to Torn API (fast, real-time)
         try {
             const res = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${MY_KEY}`, {
                 signal: AbortSignal.timeout(4000)
@@ -1613,11 +1612,9 @@ async function pollAttacks() {
 
         if (!attacks || !attacks.length) return;
 
-        // Filter only qualifying chain hits (chain > 0)
         const chainAtks = attacks.filter(a => a.chain && a.chain > 0);
         if (!chainAtks.length) return;
 
-        // Sort chronologically ascending (oldest to newest)
         chainAtks.sort((a, b) => (a.timestamp_ended || 0) - (b.timestamp_ended || 0));
 
         let stateChanged = false;
@@ -1627,7 +1624,7 @@ async function pollAttacks() {
             if (processedAtkIds.has(uid)) continue;
             processedAtkIds.add(uid);
 
-            // Record into live Chain Activity log (newest at top)
+            // Record into live Chain Activity log
             chainHitLog.unshift({
                 chain: atk.chain,
                 name: atk.attacker_name || 'Operative',
@@ -1637,34 +1634,33 @@ async function pollAttacks() {
             if (chainHitLog.length > 50) chainHitLog.pop();
             renderHitLog();
 
-            // Match attacker name against lineup
+            // Match attacker against lineup
             const atkName = (atk.attacker_name || '').toLowerCase().trim();
             const idx = lineupMembers.findIndex(m => m.name.toLowerCase().trim() === atkName);
 
             if (idx !== -1) {
-                // Member found in lineup!
-                lineupMembers[idx].hit = true;
                 stateChanged = true;
 
-                // In Auto Mode:
                 if (autoMode) {
-                    if (idx === lineupCurrent) {
-                        // CURRENTLY UP attacked! Advance lineup!
-                        lineupAdvance();
-                        lineupSetStatus(`${atk.attacker_name} landed chain hit #${atk.chain}! Advanced lineup.`);
-                    } else if (idx > lineupCurrent) {
-                        // Out-of-order hit! Someone later in the queue attacked
-                        lineupSetStatus(`${atk.attacker_name} hit early (#${atk.chain}). Marked as done.`);
-                        // If Currently Up has already hit or was skipped, advance past them
-                        if (lineupMembers[lineupCurrent] && lineupMembers[lineupCurrent].hit) {
-                            lineupAdvance();
-                        }
+                    // CONVEYOR ROTATION: Move the hitter to the bottom of the queue!
+                    const [hitter] = lineupMembers.splice(idx, 1);
+                    hitter.hit = true;
+                    lineupMembers.push(hitter);
+
+                    if (idx === 0) {
+                        lineupSetStatus(`${atk.attacker_name} landed hit #${atk.chain}! Moved to bottom.`);
+                    } else {
+                        lineupSetStatus(`${atk.attacker_name} landed hit #${atk.chain} (early)! Moved to bottom.`);
                     }
+                    clearAutoSkipTimer();
+                    startAutoSkipTimer();
+                } else {
+                    // Manual mode: just mark hit
+                    lineupMembers[idx].hit = true;
                 }
             }
         }
 
-        // Keep deduplication set bounded
         if (processedAtkIds.size > 1000) {
             processedAtkIds = new Set([...processedAtkIds].slice(-500));
         }
@@ -1679,11 +1675,11 @@ async function pollAttacks() {
 // ── Auto-skip timer logic ──────────────────────────────────────────
 function startAutoSkipTimer() {
     clearAutoSkipTimer();
-    if (!autoMode) return;
-    const cur = lineupMembers[lineupCurrent];
+    if (!autoMode || !lineupMembers.length) return;
+    const cur = lineupMembers[0]; // Slot 0 is always Currently Up
     if (!cur) return;
     const eligible = cur.id ? isMemberEligible(String(cur.id)) : true;
-    if (eligible) return; // member is ready, no auto-skip needed
+    if (eligible) return;
 
     autoSkipSecondsLeft = AUTO_SKIP_DELAY;
     autoSkipTimer = setInterval(() => {
@@ -1692,8 +1688,8 @@ function startAutoSkipTimer() {
         if (cdEl) cdEl.textContent = `auto-skip in ${autoSkipSecondsLeft}s`;
         if (autoSkipSecondsLeft <= 0) {
             clearAutoSkipTimer();
-            lineupSetStatus(`Auto-skipped ${cur.name} (unavailable).`);
-            lineupSkip(lineupCurrent);
+            lineupSetStatus(`Auto-skipped ${cur.name} (unavailable) — moved to bottom.`);
+            lineupSkip(0);
         }
     }, 1000);
 }
@@ -1701,31 +1697,6 @@ function startAutoSkipTimer() {
 function clearAutoSkipTimer() {
     if (autoSkipTimer) { clearInterval(autoSkipTimer); autoSkipTimer = null; }
     autoSkipSecondsLeft = 0;
-}
-
-// ── Smart Lineup Advance ───────────────────────────────────────────
-function lineupAdvance() {
-    clearAutoSkipTimer();
-    lineupCurrent++;
-
-    // Intelligently skip members who have already hit or been skipped in this cycle
-    while (lineupCurrent < lineupMembers.length && (lineupMembers[lineupCurrent].hit || lineupMembers[lineupCurrent].skipped)) {
-        lineupCurrent++;
-    }
-
-    // Check if we reached the end of the lineup
-    if (lineupCurrent >= lineupMembers.length) {
-        if (lineupLoop) {
-            lineupCycleNum++;
-            lineupCurrent = 0;
-            lineupMembers.forEach(m => { m.hit = false; m.skipped = false; });
-            lineupSetStatus(`Cycle ${lineupCycleNum} started!`);
-        } else {
-            lineupCurrent = lineupMembers.length; // all done
-        }
-    }
-
-    if (autoMode) startAutoSkipTimer();
 }
 
 // ── Reorder Helpers ────────────────────────────────────────────────
@@ -1737,25 +1708,20 @@ function lineupMove(from, to) {
     const [moved] = lineupMembers.splice(from, 1);
     lineupMembers.splice(to, 0, moved);
 
-    // Keep lineupCurrent in sync
-    if (lineupCurrent === from) {
-        lineupCurrent = to;
-    } else if (from < lineupCurrent && to >= lineupCurrent) {
-        lineupCurrent--;
-    } else if (from > lineupCurrent && to <= lineupCurrent) {
-        lineupCurrent++;
-    }
+    clearAutoSkipTimer();
+    if (autoMode) startAutoSkipTimer();
 
     lineupSave();
     lineupRender();
 }
 
 function lineupMakeCurrent(idx) {
-    if (idx < 0 || idx >= lineupMembers.length) return;
-    if (idx === lineupCurrent) return;
-
+    if (idx <= 0 || idx >= lineupMembers.length) return;
     const [moved] = lineupMembers.splice(idx, 1);
-    lineupMembers.splice(lineupCurrent, 0, moved);
+    lineupMembers.unshift(moved); // Put right at position 0 (Currently Up)
+
+    clearAutoSkipTimer();
+    if (autoMode) startAutoSkipTimer();
 
     lineupSave();
     lineupRender();
@@ -1764,21 +1730,16 @@ function lineupMakeCurrent(idx) {
 
 function lineupSwapUpNext() {
     if (lineupMembers.length < 2) return;
-    const curIdx = lineupCurrent;
-    let nextIdx = -1;
-    for (let i = curIdx + 1; i < lineupMembers.length; i++) {
-        if (!lineupMembers[i].hit && !lineupMembers[i].skipped) { nextIdx = i; break; }
-    }
-    if (nextIdx === -1 && curIdx + 1 < lineupMembers.length) nextIdx = curIdx + 1;
-    if (nextIdx === -1) return;
+    const temp = lineupMembers[0];
+    lineupMembers[0] = lineupMembers[1];
+    lineupMembers[1] = temp;
 
-    const temp = lineupMembers[curIdx];
-    lineupMembers[curIdx] = lineupMembers[nextIdx];
-    lineupMembers[nextIdx] = temp;
+    clearAutoSkipTimer();
+    if (autoMode) startAutoSkipTimer();
 
     lineupSave();
     lineupRender();
-    lineupSetStatus(`Swapped ${lineupMembers[curIdx].name} and ${lineupMembers[nextIdx].name}.`);
+    lineupSetStatus(`Swapped ${lineupMembers[0].name} and ${lineupMembers[1].name}.`);
 }
 
 function lineupPromptMove(idx) {
@@ -1815,80 +1776,66 @@ function lineupRender() {
         return;
     }
 
-    // ── Currently Up ──────────────────────────────────────────────
-    const curIdx = lineupCurrent < lineupMembers.length ? lineupCurrent : -1;
-    if (curIdx >= 0) {
-        const cur    = lineupMembers[curIdx];
-        const stKey  = cur.id ? String(cur.id) : null;
-        const online = stKey ? (memberStatuses[stKey]?.online || 'Offline') : 'Offline';
-        const state  = stKey ? (memberStatuses[stKey]?.state  || 'Okay')    : 'Okay';
-        const eligible = stKey ? isMemberEligible(stKey) : true;
-        const pillCls  = _statusPillClass(online, state);
-        const pillLbl  = _statusLabel(online, state);
-        const isUnavail = !eligible;
+    // ── Currently Up: ALWAYS slot 0 ──────────────────────────────
+    const cur = lineupMembers[0];
+    const stKey0  = cur.id ? String(cur.id) : null;
+    const online0 = stKey0 ? (memberStatuses[stKey0]?.online || 'Offline') : 'Offline';
+    const state0  = stKey0 ? (memberStatuses[stKey0]?.state  || 'Okay')    : 'Okay';
+    const eligible0 = stKey0 ? isMemberEligible(stKey0) : true;
+    const pillCls0  = _statusPillClass(online0, state0);
+    const pillLbl0  = _statusLabel(online0, state0);
+    const isUnavail0 = !eligible0;
 
-        upSection.innerHTML = `
-        <div class="tier-up-card ${isUnavail ? 'unavailable' : ''}" id="tier-up-dropzone"
-            ondragover="event.preventDefault(); this.classList.add('drag-over');"
-            ondragleave="this.classList.remove('drag-over');"
-            ondrop="event.preventDefault(); this.classList.remove('drag-over'); const f = parseInt(event.dataTransfer.getData('text/plain')); if (!isNaN(f) && f !== ${curIdx}) lineupMakeCurrent(f);">
-            <div class="tier-label">
-                <span>Currently Up</span>
-                ${isUnavail && autoMode ? `<span class="auto-skip-countdown" id="auto-skip-cd">${autoSkipSecondsLeft > 0 ? 'auto-skip in '+autoSkipSecondsLeft+'s' : 'unavailable'}</span>` : ''}
+    upSection.innerHTML = `
+    <div class="tier-up-card ${isUnavail0 ? 'unavailable' : ''}" id="tier-up-dropzone"
+        ondragover="event.preventDefault(); this.classList.add('drag-over');"
+        ondragleave="this.classList.remove('drag-over');"
+        ondrop="event.preventDefault(); this.classList.remove('drag-over'); const f = parseInt(event.dataTransfer.getData('text/plain')); if (!isNaN(f) && f !== 0) lineupMakeCurrent(f);">
+        <div class="tier-label">
+            <span>Currently Up</span>
+            ${isUnavail0 && autoMode ? `<span class="auto-skip-countdown" id="auto-skip-cd">${autoSkipSecondsLeft > 0 ? 'auto-skip in '+autoSkipSecondsLeft+'s' : 'unavailable'}</span>` : ''}
+        </div>
+        <div class="tier-body">
+            <span class="tier-position lineup-slot-clickable" onclick="lineupPromptMove(0)" title="Click to jump to custom position">1</span>
+            <span class="tier-name">${_esc(cur.name)}</span>
+            ${cur.hit ? '<span style="font-size:0.85em;color:var(--accent-emerald);font-weight:900;">✓ HIT</span>' : ''}
+            <span class="tier-status-pill ${pillCls0}">${pillLbl0}</span>
+            ${targetHitTime ? `<span class="hit-time-badge ${(currentSeconds > 0 && currentSeconds <= parseTimeToSeconds(targetHitTime)) ? 'in-window' : ''}">${(currentSeconds > 0 && currentSeconds <= parseTimeToSeconds(targetHitTime)) ? '🎯 HIT NOW ('+targetHitTime+')' : 'Hit at '+targetHitTime}</span>` : ''}
+            <div class="tier-actions">
+                ${lineupMembers.length > 1 ? '<button class="tier-action-btn" onclick="lineupSwapUpNext()" title="Swap with Next (slot #2)">⇄ Swap Next</button>' : ''}
+                ${lineupMembers.length > 1 ? '<button class="tier-action-btn" onclick="lineupMove(0, 1)" title="Move down to Next position">▼ Down</button>' : ''}
+                ${lineupMembers.length > 2 ? '<button class="tier-action-btn" onclick="lineupMove(0, lineupMembers.length - 1)" title="Send to very bottom of queue">⏬ Bottom</button>' : ''}
+                <button class="tier-skip-btn" onclick="lineupSkip(0)" title="Skip this player (moves to bottom)">Skip</button>
+                <button class="lineup-remove-btn" onclick="lineupRemove(0)" title="Remove completely">✕</button>
             </div>
-            <div class="tier-body">
-                <span class="tier-position lineup-slot-clickable" onclick="lineupPromptMove(${curIdx})" title="Click to jump to custom position">1</span>
-                <span class="tier-name">${_esc(cur.name)}</span>
-                ${cur.hit ? '<span style="font-size:0.85em;color:var(--accent-emerald);font-weight:900;">✓ HIT</span>' : ''}
-                <span class="tier-status-pill ${pillCls}">${pillLbl}</span>
-                ${targetHitTime ? `<span class="hit-time-badge ${(currentSeconds > 0 && currentSeconds <= parseTimeToSeconds(targetHitTime)) ? 'in-window' : ''}">${(currentSeconds > 0 && currentSeconds <= parseTimeToSeconds(targetHitTime)) ? '🎯 HIT NOW ('+targetHitTime+')' : 'Hit at '+targetHitTime}</span>` : ''}
-                <div class="tier-actions">
-                    <button class="tier-action-btn" onclick="lineupSwapUpNext()" title="Swap with Next (position #2)">⇄ Swap Next</button>
-                    <button class="tier-action-btn" onclick="lineupMove(${curIdx}, ${curIdx + 1})" title="Move down 1 position" ${curIdx >= lineupMembers.length - 1 ? 'disabled' : ''}>▼ Down</button>
-                    <button class="tier-skip-btn" onclick="lineupSkip(${curIdx})" title="Skip this player">Skip</button>
-                    <button class="lineup-remove-btn" onclick="lineupRemove(${curIdx})" title="Remove">✕</button>
-                </div>
-            </div>
-        </div>`;
-    } else {
-        upSection.innerHTML = `<div style="padding:16px 20px;color:var(--text-dim);font-style:italic;">All members completed this cycle! Turn on Loop to restart automatically.</div>`;
-    }
+        </div>
+    </div>`;
 
-    // ── Next ──────────────────────────────────────────────────────
-    let nextIdx = -1;
-    for (let i = curIdx + 1; i < lineupMembers.length; i++) {
-        if (!lineupMembers[i].hit && !lineupMembers[i].skipped) {
-            nextIdx = i;
-            break;
-        }
-    }
-    if (nextIdx === -1 && curIdx + 1 < lineupMembers.length) {
-        nextIdx = curIdx + 1;
-    }
-
-    if (nextIdx >= 0 && nextIdx < lineupMembers.length) {
-        const nxt    = lineupMembers[nextIdx];
-        const stKey  = nxt.id ? String(nxt.id) : null;
-        const online = stKey ? (memberStatuses[stKey]?.online || 'Offline') : 'Offline';
-        const state  = stKey ? (memberStatuses[stKey]?.state  || 'Okay')    : 'Okay';
-        const pillCls = _statusPillClass(online, state);
-        const pillLbl = _statusLabel(online, state);
+    // ── Next: ALWAYS slot 1 (if available) ────────────────────────
+    if (lineupMembers.length >= 2) {
+        const nxt = lineupMembers[1];
+        const stKey1  = nxt.id ? String(nxt.id) : null;
+        const online1 = stKey1 ? (memberStatuses[stKey1]?.online || 'Offline') : 'Offline';
+        const state1  = stKey1 ? (memberStatuses[stKey1]?.state  || 'Okay')    : 'Okay';
+        const pillCls1 = _statusPillClass(online1, state1);
+        const pillLbl1 = _statusLabel(online1, state1);
 
         nextSection.innerHTML = `
         <div class="tier-next-card" id="tier-next-dropzone"
             ondragover="event.preventDefault(); this.classList.add('drag-over');"
             ondragleave="this.classList.remove('drag-over');"
-            ondrop="event.preventDefault(); this.classList.remove('drag-over'); const f = parseInt(event.dataTransfer.getData('text/plain')); if (!isNaN(f) && f !== ${nextIdx}) lineupMove(f, ${nextIdx});">
+            ondrop="event.preventDefault(); this.classList.remove('drag-over'); const f = parseInt(event.dataTransfer.getData('text/plain')); if (!isNaN(f) && f !== 1) lineupMove(f, 1);">
             <div class="tier-label"><span>Next</span></div>
             <div class="tier-body">
-                <span class="tier-position lineup-slot-clickable" onclick="lineupPromptMove(${nextIdx})" title="Click to jump to custom position">${nextIdx + 1}</span>
+                <span class="tier-position lineup-slot-clickable" onclick="lineupPromptMove(1)" title="Click to jump to custom position">2</span>
                 <span class="tier-name">${_esc(nxt.name)}</span>
                 ${nxt.hit ? '<span style="font-size:0.85em;color:var(--accent-emerald);font-weight:900;">✓ HIT</span>' : ''}
-                <span class="tier-status-pill ${pillCls}">${pillLbl}</span>
+                <span class="tier-status-pill ${pillCls1}">${pillLbl1}</span>
                 <div class="tier-actions">
-                    <button class="promote-btn" onclick="lineupMakeCurrent(${nextIdx})" title="Make Currently Up (promote to #1)">▲ Make Up</button>
-                    <button class="tier-action-btn" onclick="lineupMove(${nextIdx}, ${nextIdx + 1})" title="Move down 1 position" ${nextIdx >= lineupMembers.length - 1 ? 'disabled' : ''}>▼ Down</button>
-                    <button class="lineup-remove-btn" onclick="lineupRemove(${nextIdx})" title="Remove">✕</button>
+                    <button class="promote-btn" onclick="lineupMakeCurrent(1)" title="Make Currently Up (#1)">▲ Make Up</button>
+                    ${lineupMembers.length > 2 ? '<button class="tier-action-btn" onclick="lineupMove(1, 2)" title="Move down into Queue">▼ Down</button>' : ''}
+                    ${lineupMembers.length > 2 ? '<button class="tier-action-btn" onclick="lineupMove(1, lineupMembers.length - 1)" title="Send to very bottom">⏬ Bottom</button>' : ''}
+                    <button class="lineup-remove-btn" onclick="lineupRemove(1)" title="Remove completely">✕</button>
                 </div>
             </div>
         </div>`;
@@ -1896,9 +1843,8 @@ function lineupRender() {
         nextSection.innerHTML = '';
     }
 
-    // ── Queue (remaining members) ─────────────────────────────────
-    const queueStart = nextIdx >= 0 ? nextIdx + 1 : (curIdx >= 0 ? curIdx + 1 : 0);
-    const queueItems = lineupMembers.slice(queueStart);
+    // ── Queue: Slots 2, 3, 4... (all remaining members) ───────────
+    const queueItems = lineupMembers.slice(2);
 
     if (queueItems.length > 0) {
         queueHeader.style.display = 'block';
@@ -1908,7 +1854,7 @@ function lineupRender() {
 
     ul.innerHTML = '';
     queueItems.forEach((m, qi) => {
-        const realIdx = queueStart + qi;
+        const realIdx = 2 + qi;
         const stKey   = m.id ? String(m.id) : null;
         const online  = stKey ? (memberStatuses[stKey]?.online || 'Offline') : 'Offline';
         const state   = stKey ? (memberStatuses[stKey]?.state  || 'Okay')    : 'Okay';
@@ -1929,11 +1875,11 @@ function lineupRender() {
             ${m.hit ? '<span class="hit-check" title="Hit completed" style="color:var(--accent-emerald);font-weight:900;font-size:0.75em;">✓ HIT</span>' : ''}
             <span class="status-tag ${pillCls}">${pillLbl}</span>
             <div class="move-btn-group">
-                <button class="move-btn" onclick="lineupMove(${realIdx}, ${realIdx - 1})" title="Move Up 1 slot" ${realIdx <= 0 ? 'disabled' : ''}>▲</button>
+                <button class="move-btn" onclick="lineupMove(${realIdx}, ${realIdx - 1})" title="Move Up 1 slot (moves into Next if at #3)">▲</button>
                 <button class="move-btn" onclick="lineupMove(${realIdx}, ${realIdx + 1})" title="Move Down 1 slot" ${realIdx >= lineupMembers.length - 1 ? 'disabled' : ''}>▼</button>
             </div>
-            <button class="promote-btn" onclick="lineupMakeCurrent(${realIdx})" title="Promote to Currently Up (#1)">▲▲ Up</button>
-            <button class="lineup-remove-btn" onclick="lineupRemove(${realIdx})" title="Remove">✕</button>
+            <button class="promote-btn" onclick="lineupMakeCurrent(${realIdx})" title="Promote straight to Currently Up (#1)">▲▲ Up</button>
+            <button class="lineup-remove-btn" onclick="lineupRemove(${realIdx})" title="Remove completely">✕</button>
         `;
 
         li.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', realIdx); li.classList.add('dragging'); });
@@ -1982,38 +1928,55 @@ function lineupToggleLoop() {
 
 function lineupNext() {
     if (!lineupMembers.length) return;
-    lineupAdvance();
-    lineupSave(); lineupRender();
+    // Move top guy to bottom
+    const [shifted] = lineupMembers.splice(0, 1);
+    lineupMembers.push(shifted);
+    clearAutoSkipTimer();
+    if (autoMode) startAutoSkipTimer();
+    lineupSave();
+    lineupRender();
+    lineupSetStatus(`Advanced: ${shifted.name} moved to bottom.`);
 }
 
 function lineupSkip(idx) {
+    if (!lineupMembers.length) return;
+    const targetIdx = (idx !== undefined && idx >= 0 && idx < lineupMembers.length) ? idx : 0;
+    const [skipped] = lineupMembers.splice(targetIdx, 1);
+    lineupMembers.push(skipped);
     clearAutoSkipTimer();
-    if (lineupMembers[idx]) lineupMembers[idx].skipped = true;
-    if (lineupCurrent === idx) lineupAdvance();
-    lineupSave(); lineupRender();
+    if (autoMode) startAutoSkipTimer();
+    lineupSave();
+    lineupRender();
+    lineupSetStatus(`Skipped ${skipped.name} — moved to bottom.`);
 }
 
 function lineupRemove(idx) {
-    lineupMembers.splice(idx, 1);
-    if (lineupCurrent >= lineupMembers.length) lineupCurrent = Math.max(0, lineupMembers.length - 1);
+    if (idx < 0 || idx >= lineupMembers.length) return;
+    const [removed] = lineupMembers.splice(idx, 1);
     clearAutoSkipTimer();
     if (autoMode) startAutoSkipTimer();
-    lineupSave(); lineupRender();
+    lineupSave();
+    lineupRender();
+    lineupSetStatus(`Removed ${removed.name} from lineup.`);
 }
 
 function lineupReset() {
     clearAutoSkipTimer();
-    lineupCurrent = 0; lineupCycleNum = 1;
+    lineupCycleNum = 1;
     lineupMembers.forEach(m => { m.hit = false; m.skipped = false; });
-    lineupSave(); lineupRender();
+    lineupSave();
+    lineupRender();
     if (autoMode) startAutoSkipTimer();
+    lineupSetStatus('Reset all hit marks.');
 }
 
 function lineupClear() {
     if (!confirm('Remove all members from the lineup?')) return;
     clearAutoSkipTimer();
-    lineupMembers = []; lineupCurrent = 0; lineupCycleNum = 1;
-    lineupSave(); lineupRender();
+    lineupMembers = [];
+    lineupCycleNum = 1;
+    lineupSave();
+    lineupRender();
 }
 
 // ── Add Member ─────────────────────────────────────────────────────
@@ -2024,7 +1987,9 @@ function lineupAdd(name, id) {
         lineupSetStatus(`${name} is already in the lineup.`); return;
     }
     lineupMembers.push({ name, id: id || null, hit: false, skipped: false });
-    lineupSave(); lineupRender(); lineupSetStatus(`Added ${name}.`);
+    lineupSave();
+    lineupRender();
+    lineupSetStatus(`Added ${name}.`);
 }
 
 function lineupAddFromInput() {
@@ -2110,7 +2075,7 @@ function toggleAutoMode() {
     _syncAutoModeUI();
     if (autoMode) {
         startAutoSkipTimer();
-        lineupSetStatus('Auto Mode ON — lineup will automatically advance on confirmed hits.');
+        lineupSetStatus('Auto Mode ON — lineup rotates automatically when players hit.');
     } else {
         clearAutoSkipTimer();
         lineupSetStatus('Auto Mode OFF — manual control.');
@@ -2174,7 +2139,6 @@ async function lineupImportFromChain() {
         const chainAtks = attacks.filter(a => a.chain && a.chain > 0);
         if (!chainAtks.length) { lineupSetStatus('No chain attacks found.'); return; }
 
-        // Unique attackers in order of first hit
         const seen = new Set();
         const chainMembers = [];
         chainAtks.sort((a, b) => a.timestamp_ended - b.timestamp_ended);
@@ -2192,7 +2156,8 @@ async function lineupImportFromChain() {
                 added++;
             }
         }
-        lineupSave(); lineupRender();
+        lineupSave();
+        lineupRender();
         lineupSetStatus(added > 0 ? `Imported ${added} member${added > 1 ? 's' : ''} from chain hits.` : 'All chain hitters already in lineup.');
     } catch(e) { lineupSetStatus('Error fetching chain data.'); }
 }
@@ -2260,45 +2225,29 @@ function _syncHitTimeUI() {
 function copyFull() {
     if (!lineupMembers.length) { lineupSetStatus('Lineup is empty.'); return; }
 
-    const active = [];
-    for (let i = lineupCurrent; i < lineupMembers.length; i++) {
-        if (!lineupMembers[i].hit && !lineupMembers[i].skipped) {
-            active.push(lineupMembers[i]);
-        }
-    }
-    const list = active.length > 0 ? active : lineupMembers;
-
     const lines = [];
     if (targetHitTime) {
         lines.push(`HIT AT: ${targetHitTime}`);
         lines.push('');
     }
-    if (list.length >= 1) lines.push(`UP: ${list[0].name}`);
-    if (list.length >= 2) lines.push(`NEXT: ${list[1].name}`);
-    for (let i = 2; i < list.length; i++) {
-        lines.push(`${i + 1}. ${list[i].name}`);
+    if (lineupMembers.length >= 1) lines.push(`UP: ${lineupMembers[0].name}`);
+    if (lineupMembers.length >= 2) lines.push(`NEXT: ${lineupMembers[1].name}`);
+    for (let i = 2; i < lineupMembers.length; i++) {
+        lines.push(`${i + 1}. ${lineupMembers[i].name}`);
     }
 
-    _copyText(lines.join('\n'), 'Lineup copied with hit time.');
+    _copyText(lines.join('\n'), 'Lineup copied.');
 }
 
 function copyCompact() {
     if (!lineupMembers.length) { lineupSetStatus('Lineup is empty.'); return; }
 
-    const active = [];
-    for (let i = lineupCurrent; i < lineupMembers.length; i++) {
-        if (!lineupMembers[i].hit && !lineupMembers[i].skipped) {
-            active.push(lineupMembers[i]);
-        }
-    }
-    const list = active.length > 0 ? active : lineupMembers;
-
     const parts = [];
     if (targetHitTime) parts.push(`[HIT AT ${targetHitTime}]`);
-    if (list.length >= 1) parts.push(`UP: ${list[0].name}`);
-    if (list.length >= 2) parts.push(`NEXT: ${list[1].name}`);
-    for (let i = 2; i < list.length; i++) {
-        parts.push(`${i + 1}. ${list[i].name}`);
+    if (lineupMembers.length >= 1) parts.push(`UP: ${lineupMembers[0].name}`);
+    if (lineupMembers.length >= 2) parts.push(`NEXT: ${lineupMembers[1].name}`);
+    for (let i = 2; i < lineupMembers.length; i++) {
+        parts.push(`${i + 1}. ${lineupMembers[i].name}`);
     }
 
     _copyText(parts.join(' | '), 'Compact lineup copied.');
