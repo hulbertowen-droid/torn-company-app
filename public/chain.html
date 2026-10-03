@@ -238,6 +238,51 @@
         gap: 8px;
         font-weight: 800;
     }
+    
+    .hit-time-control {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        padding: 3px 8px;
+        border-radius: var(--radius-sm);
+    }
+    .hit-time-select {
+        background: transparent;
+        border: none;
+        color: var(--accent-cyan);
+        font-weight: 800;
+        font-size: 0.82em;
+        font-family: var(--font-mono);
+        outline: none;
+        cursor: pointer;
+        padding: 2px;
+    }
+    .hit-time-select option {
+        background: var(--bg-surface);
+        color: var(--text-primary);
+    }
+    .hit-time-badge {
+        background: rgba(6, 182, 212, 0.12);
+        border: 1px solid var(--accent-cyan-border);
+        color: var(--accent-cyan);
+        font-size: 0.72em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        padding: 4px 8px;
+        border-radius: var(--radius-sm);
+        white-space: nowrap;
+        font-family: var(--font-mono);
+    }
+    .hit-time-badge.in-window {
+        background: rgba(16, 185, 129, 0.18);
+        border-color: rgba(16, 185, 129, 0.5);
+        color: var(--accent-emerald);
+        animation: pulseHeartbeat 1.5s infinite;
+    }
+
     .lineup-controls {
         display: flex;
         align-items: center;
@@ -1047,6 +1092,20 @@
                     <h3 class="lineup-title">Chain Lineup</h3>
                     <div class="lineup-controls">
                         <span class="lineup-cycle-badge" id="lineup-cycle-badge">Cycle 1</span>
+                        <div class="hit-time-control" title="Target timer to hit during chain (e.g. 3:00)">
+                            <span style="font-size:0.75em; font-weight:800; text-transform:uppercase; color:var(--text-secondary); letter-spacing:0.5px;">Hit At:</span>
+                            <select id="lineup-hit-time" onchange="updateHitTime()" class="hit-time-select">
+                                <option value="">None</option>
+                                <option value="3:30">3:30</option>
+                                <option value="3:00" selected>3:00</option>
+                                <option value="2:30">2:30</option>
+                                <option value="2:00">2:00</option>
+                                <option value="1:30">1:30</option>
+                                <option value="1:00">1:00</option>
+                                <option value="custom">Custom...</option>
+                            </select>
+                            <input id="lineup-hit-time-custom" type="text" placeholder="e.g. 2:15" style="display:none; width:62px; background:var(--bg-elevated); border:1px solid var(--accent-cyan-border); color:var(--text-primary); padding:2px 6px; border-radius:var(--radius-sm); font-size:0.8em; font-family:var(--font-mono); outline:none;" onchange="updateCustomHitTime()" onblur="updateCustomHitTime()" />
+                        </div>
                         <button class="lineup-btn" onclick="copyFull()" title="Copy lineup as clean plain text">Copy</button>
                         <button class="lineup-btn" onclick="copyCompact()" title="Copy compact one-line format">Copy Compact</button>
                         <button class="lineup-btn active" id="lineup-loop-btn" onclick="lineupToggleLoop()" title="Loop back to start when everyone has hit">Loop</button>
@@ -1404,6 +1463,7 @@ let lineupCurrent    = 0;
 let lineupLoop       = true;
 let lineupCycleNum   = 1;
 let autoMode         = false;
+let targetHitTime    = localStorage.getItem('chain_hit_time') || '3:00';
 
 let memberStatuses   = {};  // id -> { online, state, until, lastActionTs, lastActionRelative }
 let factionMemberList = []; // [{ name, id }] for autocomplete
@@ -1422,6 +1482,8 @@ function lineupLoad() {
         lineupLoop     = d.loop     !== undefined ? d.loop : true;
         lineupCycleNum = d.cycle    || 1;
         autoMode       = d.autoMode || false;
+        targetHitTime  = d.hitTime  !== undefined ? d.hitTime : (localStorage.getItem('chain_hit_time') || '3:00');
+        _syncHitTimeUI();
     } catch(e) {}
     const btn = document.getElementById('lineup-loop-btn');
     if (btn) btn.classList.toggle('active', lineupLoop);
@@ -1434,8 +1496,10 @@ function lineupSave() {
         current: lineupCurrent,
         loop:    lineupLoop,
         cycle:   lineupCycleNum,
-        autoMode
+        autoMode,
+        hitTime: targetHitTime
     }));
+    localStorage.setItem('chain_hit_time', targetHitTime);
 }
 
 // ── Member status helpers ──────────────────────────────────────────
@@ -1777,6 +1841,7 @@ function lineupRender() {
                 <span class="tier-name">${_esc(cur.name)}</span>
                 ${cur.hit ? '<span style="font-size:0.85em;color:var(--accent-emerald);font-weight:900;">✓ HIT</span>' : ''}
                 <span class="tier-status-pill ${pillCls}">${pillLbl}</span>
+                ${targetHitTime ? `<span class="hit-time-badge ${(currentSeconds > 0 && currentSeconds <= parseTimeToSeconds(targetHitTime)) ? 'in-window' : ''}">${(currentSeconds > 0 && currentSeconds <= parseTimeToSeconds(targetHitTime)) ? '🎯 HIT NOW ('+targetHitTime+')' : 'Hit at '+targetHitTime}</span>` : ''}
                 <div class="tier-actions">
                     <button class="tier-action-btn" onclick="lineupSwapUpNext()" title="Swap with Next (position #2)">⇄ Swap Next</button>
                     <button class="tier-action-btn" onclick="lineupMove(${curIdx}, ${curIdx + 1})" title="Move down 1 position" ${curIdx >= lineupMembers.length - 1 ? 'disabled' : ''}>▼ Down</button>
@@ -2132,11 +2197,69 @@ async function lineupImportFromChain() {
     } catch(e) { lineupSetStatus('Error fetching chain data.'); }
 }
 
+// ── Target Hit Time Functions ──────────────────────────────────────
+function parseTimeToSeconds(timeStr) {
+    if (!timeStr || typeof timeStr !== 'string') return 0;
+    const parts = timeStr.trim().split(':');
+    if (parts.length === 2) {
+        return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
+    }
+    return parseInt(timeStr, 10) || 0;
+}
+
+function updateHitTime() {
+    const sel = document.getElementById('lineup-hit-time');
+    const custom = document.getElementById('lineup-hit-time-custom');
+    if (!sel) return;
+    if (sel.value === 'custom') {
+        if (custom) {
+            custom.style.display = 'inline-block';
+            custom.focus();
+            if (targetHitTime && !['3:30','3:00','2:30','2:00','1:30','1:00',''].includes(targetHitTime)) {
+                custom.value = targetHitTime;
+            }
+        }
+    } else {
+        if (custom) custom.style.display = 'none';
+        targetHitTime = sel.value;
+        lineupSave();
+        lineupRender();
+        lineupSetStatus(targetHitTime ? `Target hit time set to ${targetHitTime}.` : 'Hit time cleared.');
+    }
+}
+
+function updateCustomHitTime() {
+    const custom = document.getElementById('lineup-hit-time-custom');
+    if (!custom || !custom.value.trim()) return;
+    targetHitTime = custom.value.trim();
+    lineupSave();
+    lineupRender();
+    lineupSetStatus(`Custom hit time set to ${targetHitTime}.`);
+}
+
+function _syncHitTimeUI() {
+    const sel = document.getElementById('lineup-hit-time');
+    const custom = document.getElementById('lineup-hit-time-custom');
+    if (!sel) return;
+    if (['', '3:30', '3:00', '2:30', '2:00', '1:30', '1:00'].includes(targetHitTime)) {
+        sel.value = targetHitTime;
+        if (custom) custom.style.display = 'none';
+    } else if (targetHitTime) {
+        sel.value = 'custom';
+        if (custom) {
+            custom.style.display = 'inline-block';
+            custom.value = targetHitTime;
+        }
+    } else {
+        sel.value = '';
+        if (custom) custom.style.display = 'none';
+    }
+}
+
 // ── Clean Copy Functions ───────────────────────────────────────────
 function copyFull() {
     if (!lineupMembers.length) { lineupSetStatus('Lineup is empty.'); return; }
 
-    // Collect active members starting from lineupCurrent
     const active = [];
     for (let i = lineupCurrent; i < lineupMembers.length; i++) {
         if (!lineupMembers[i].hit && !lineupMembers[i].skipped) {
@@ -2146,13 +2269,17 @@ function copyFull() {
     const list = active.length > 0 ? active : lineupMembers;
 
     const lines = [];
+    if (targetHitTime) {
+        lines.push(`HIT AT: ${targetHitTime}`);
+        lines.push('');
+    }
     if (list.length >= 1) lines.push(`UP: ${list[0].name}`);
     if (list.length >= 2) lines.push(`NEXT: ${list[1].name}`);
     for (let i = 2; i < list.length; i++) {
         lines.push(`${i + 1}. ${list[i].name}`);
     }
 
-    _copyText(lines.join('\n'), 'Lineup copied.');
+    _copyText(lines.join('\n'), 'Lineup copied with hit time.');
 }
 
 function copyCompact() {
@@ -2167,6 +2294,7 @@ function copyCompact() {
     const list = active.length > 0 ? active : lineupMembers;
 
     const parts = [];
+    if (targetHitTime) parts.push(`[HIT AT ${targetHitTime}]`);
     if (list.length >= 1) parts.push(`UP: ${list[0].name}`);
     if (list.length >= 2) parts.push(`NEXT: ${list[1].name}`);
     for (let i = 2; i < list.length; i++) {
