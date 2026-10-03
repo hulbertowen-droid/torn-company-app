@@ -372,6 +372,102 @@
     .pill-hospital { background: rgba(230,57,70,0.12);  color: var(--accent-crimson); border: 1px solid rgba(230,57,70,0.3); }
     .pill-travel   { background: rgba(99,102,241,0.12); color: var(--accent-cobalt);  border: 1px solid rgba(99,102,241,0.3); }
     .pill-federal  { background: rgba(245,158,11,0.12); color: var(--accent-amber);   border: 1px solid rgba(245,158,11,0.3); }
+    
+    .move-btn-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 2px 4px;
+        flex-shrink: 0;
+    }
+    .move-btn {
+        background: none;
+        border: none;
+        color: var(--text-tertiary);
+        font-size: 0.85em;
+        cursor: pointer;
+        padding: 4px 7px;
+        border-radius: 3px;
+        line-height: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all var(--transition-fast);
+        font-weight: 800;
+        user-select: none;
+    }
+    .move-btn:hover:not(:disabled) {
+        color: var(--accent-cyan);
+        background: var(--accent-cyan-dim);
+    }
+    .move-btn:disabled {
+        opacity: 0.25;
+        cursor: not-allowed;
+    }
+    .promote-btn {
+        background: rgba(6, 182, 212, 0.08);
+        border: 1px solid var(--accent-cyan-border);
+        color: var(--accent-cyan);
+        font-size: 0.72em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        padding: 4px 8px;
+        border-radius: 3px;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        line-height: 1;
+        font-family: inherit;
+    }
+    .promote-btn:hover {
+        background: var(--accent-cyan);
+        color: #000;
+    }
+    .tier-action-btn {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        color: var(--text-secondary);
+        font-size: 0.76em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        padding: 5px 10px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-family: inherit;
+        line-height: 1;
+    }
+    .tier-action-btn:hover {
+        color: var(--accent-cyan);
+        border-color: var(--accent-cyan);
+        background: var(--bg-hover);
+    }
+    .tier-up-card.drag-over, .tier-next-card.drag-over {
+        border-color: var(--accent-cyan) !important;
+        box-shadow: 0 0 15px var(--accent-cyan-glow);
+    }
+    .lineup-slot-clickable {
+        cursor: pointer;
+        border-radius: 3px;
+        transition: all var(--transition-fast);
+    }
+    .lineup-slot-clickable:hover {
+        background: var(--accent-cyan-dim);
+        color: var(--accent-cyan);
+    }
+
     .tier-actions {
         display: flex;
         gap: 6px;
@@ -1568,6 +1664,73 @@ function lineupAdvance() {
     if (autoMode) startAutoSkipTimer();
 }
 
+// ── Reorder Helpers ────────────────────────────────────────────────
+function lineupMove(from, to) {
+    if (from < 0 || from >= lineupMembers.length) return;
+    if (to < 0 || to >= lineupMembers.length) return;
+    if (from === to) return;
+
+    const [moved] = lineupMembers.splice(from, 1);
+    lineupMembers.splice(to, 0, moved);
+
+    // Keep lineupCurrent in sync
+    if (lineupCurrent === from) {
+        lineupCurrent = to;
+    } else if (from < lineupCurrent && to >= lineupCurrent) {
+        lineupCurrent--;
+    } else if (from > lineupCurrent && to <= lineupCurrent) {
+        lineupCurrent++;
+    }
+
+    lineupSave();
+    lineupRender();
+}
+
+function lineupMakeCurrent(idx) {
+    if (idx < 0 || idx >= lineupMembers.length) return;
+    if (idx === lineupCurrent) return;
+
+    const [moved] = lineupMembers.splice(idx, 1);
+    lineupMembers.splice(lineupCurrent, 0, moved);
+
+    lineupSave();
+    lineupRender();
+    lineupSetStatus(`Promoted ${moved.name} to Currently Up!`);
+}
+
+function lineupSwapUpNext() {
+    if (lineupMembers.length < 2) return;
+    const curIdx = lineupCurrent;
+    let nextIdx = -1;
+    for (let i = curIdx + 1; i < lineupMembers.length; i++) {
+        if (!lineupMembers[i].hit && !lineupMembers[i].skipped) { nextIdx = i; break; }
+    }
+    if (nextIdx === -1 && curIdx + 1 < lineupMembers.length) nextIdx = curIdx + 1;
+    if (nextIdx === -1) return;
+
+    const temp = lineupMembers[curIdx];
+    lineupMembers[curIdx] = lineupMembers[nextIdx];
+    lineupMembers[nextIdx] = temp;
+
+    lineupSave();
+    lineupRender();
+    lineupSetStatus(`Swapped ${lineupMembers[curIdx].name} and ${lineupMembers[nextIdx].name}.`);
+}
+
+function lineupPromptMove(idx) {
+    const m = lineupMembers[idx];
+    if (!m) return;
+    const raw = prompt(`Move "${m.name}" to position (1 - ${lineupMembers.length}):`, String(idx + 1));
+    if (!raw) return;
+    const targetPos = parseInt(raw, 10);
+    if (isNaN(targetPos) || targetPos < 1 || targetPos > lineupMembers.length) {
+        alert(`Please enter a valid number between 1 and ${lineupMembers.length}.`);
+        return;
+    }
+    lineupMove(idx, targetPos - 1);
+    lineupSetStatus(`Moved ${m.name} to position #${targetPos}.`);
+}
+
 // ── Render ──────────────────────────────────────────────────────────
 function lineupRender() {
     const badge = document.getElementById('lineup-cycle-badge');
@@ -1601,18 +1764,23 @@ function lineupRender() {
         const isUnavail = !eligible;
 
         upSection.innerHTML = `
-        <div class="tier-up-card ${isUnavail ? 'unavailable' : ''}">
+        <div class="tier-up-card ${isUnavail ? 'unavailable' : ''}" id="tier-up-dropzone"
+            ondragover="event.preventDefault(); this.classList.add('drag-over');"
+            ondragleave="this.classList.remove('drag-over');"
+            ondrop="event.preventDefault(); this.classList.remove('drag-over'); const f = parseInt(event.dataTransfer.getData('text/plain')); if (!isNaN(f) && f !== ${curIdx}) lineupMakeCurrent(f);">
             <div class="tier-label">
                 <span>Currently Up</span>
                 ${isUnavail && autoMode ? `<span class="auto-skip-countdown" id="auto-skip-cd">${autoSkipSecondsLeft > 0 ? 'auto-skip in '+autoSkipSecondsLeft+'s' : 'unavailable'}</span>` : ''}
             </div>
             <div class="tier-body">
-                <span class="tier-position">1</span>
+                <span class="tier-position lineup-slot-clickable" onclick="lineupPromptMove(${curIdx})" title="Click to jump to custom position">1</span>
                 <span class="tier-name">${_esc(cur.name)}</span>
                 ${cur.hit ? '<span style="font-size:0.85em;color:var(--accent-emerald);font-weight:900;">✓ HIT</span>' : ''}
                 <span class="tier-status-pill ${pillCls}">${pillLbl}</span>
                 <div class="tier-actions">
-                    <button class="tier-skip-btn" onclick="lineupSkip(${curIdx})">Skip</button>
+                    <button class="tier-action-btn" onclick="lineupSwapUpNext()" title="Swap with Next (position #2)">⇄ Swap Next</button>
+                    <button class="tier-action-btn" onclick="lineupMove(${curIdx}, ${curIdx + 1})" title="Move down 1 position" ${curIdx >= lineupMembers.length - 1 ? 'disabled' : ''}>▼ Down</button>
+                    <button class="tier-skip-btn" onclick="lineupSkip(${curIdx})" title="Skip this player">Skip</button>
                     <button class="lineup-remove-btn" onclick="lineupRemove(${curIdx})" title="Remove">✕</button>
                 </div>
             </div>
@@ -1622,7 +1790,6 @@ function lineupRender() {
     }
 
     // ── Next ──────────────────────────────────────────────────────
-    // Find next member who has not yet hit or been skipped
     let nextIdx = -1;
     for (let i = curIdx + 1; i < lineupMembers.length; i++) {
         if (!lineupMembers[i].hit && !lineupMembers[i].skipped) {
@@ -1630,7 +1797,6 @@ function lineupRender() {
             break;
         }
     }
-    // Fallback to curIdx + 1 if all hit
     if (nextIdx === -1 && curIdx + 1 < lineupMembers.length) {
         nextIdx = curIdx + 1;
     }
@@ -1644,14 +1810,19 @@ function lineupRender() {
         const pillLbl = _statusLabel(online, state);
 
         nextSection.innerHTML = `
-        <div class="tier-next-card">
+        <div class="tier-next-card" id="tier-next-dropzone"
+            ondragover="event.preventDefault(); this.classList.add('drag-over');"
+            ondragleave="this.classList.remove('drag-over');"
+            ondrop="event.preventDefault(); this.classList.remove('drag-over'); const f = parseInt(event.dataTransfer.getData('text/plain')); if (!isNaN(f) && f !== ${nextIdx}) lineupMove(f, ${nextIdx});">
             <div class="tier-label"><span>Next</span></div>
             <div class="tier-body">
-                <span class="tier-position">${nextIdx + 1}</span>
+                <span class="tier-position lineup-slot-clickable" onclick="lineupPromptMove(${nextIdx})" title="Click to jump to custom position">${nextIdx + 1}</span>
                 <span class="tier-name">${_esc(nxt.name)}</span>
                 ${nxt.hit ? '<span style="font-size:0.85em;color:var(--accent-emerald);font-weight:900;">✓ HIT</span>' : ''}
                 <span class="tier-status-pill ${pillCls}">${pillLbl}</span>
                 <div class="tier-actions">
+                    <button class="promote-btn" onclick="lineupMakeCurrent(${nextIdx})" title="Make Currently Up (promote to #1)">▲ Make Up</button>
+                    <button class="tier-action-btn" onclick="lineupMove(${nextIdx}, ${nextIdx + 1})" title="Move down 1 position" ${nextIdx >= lineupMembers.length - 1 ? 'disabled' : ''}>▼ Down</button>
                     <button class="lineup-remove-btn" onclick="lineupRemove(${nextIdx})" title="Remove">✕</button>
                 </div>
             </div>
@@ -1660,7 +1831,7 @@ function lineupRender() {
         nextSection.innerHTML = '';
     }
 
-    // ── Queue (remaining members after nextIdx) ───────────────────
+    // ── Queue (remaining members) ─────────────────────────────────
     const queueStart = nextIdx >= 0 ? nextIdx + 1 : (curIdx >= 0 ? curIdx + 1 : 0);
     const queueItems = lineupMembers.slice(queueStart);
 
@@ -1687,11 +1858,16 @@ function lineupRender() {
 
         li.innerHTML = `
             <span class="lineup-drag-handle" title="Drag to reorder">⠿</span>
-            <span class="lineup-slot">${realIdx + 1}</span>
+            <span class="lineup-slot lineup-slot-clickable" onclick="lineupPromptMove(${realIdx})" title="Click to jump to custom position">${realIdx + 1}</span>
             <span class="online-dot ${dotCls}"></span>
             <span class="lineup-name">${_esc(m.name)}</span>
             ${m.hit ? '<span class="hit-check" title="Hit completed" style="color:var(--accent-emerald);font-weight:900;font-size:0.75em;">✓ HIT</span>' : ''}
             <span class="status-tag ${pillCls}">${pillLbl}</span>
+            <div class="move-btn-group">
+                <button class="move-btn" onclick="lineupMove(${realIdx}, ${realIdx - 1})" title="Move Up 1 slot" ${realIdx <= 0 ? 'disabled' : ''}>▲</button>
+                <button class="move-btn" onclick="lineupMove(${realIdx}, ${realIdx + 1})" title="Move Down 1 slot" ${realIdx >= lineupMembers.length - 1 ? 'disabled' : ''}>▼</button>
+            </div>
+            <button class="promote-btn" onclick="lineupMakeCurrent(${realIdx})" title="Promote to Currently Up (#1)">▲▲ Up</button>
             <button class="lineup-remove-btn" onclick="lineupRemove(${realIdx})" title="Remove">✕</button>
         `;
 
@@ -1704,13 +1880,8 @@ function lineupRender() {
             li.classList.remove('drag-over');
             const from = parseInt(e.dataTransfer.getData('text/plain'));
             const to   = realIdx;
-            if (from === to) return;
-            const moved = lineupMembers.splice(from, 1)[0];
-            lineupMembers.splice(to, 0, moved);
-            if (lineupCurrent === from) lineupCurrent = to;
-            else if (from < lineupCurrent && to >= lineupCurrent) lineupCurrent--;
-            else if (from > lineupCurrent && to <= lineupCurrent) lineupCurrent++;
-            lineupSave(); lineupRender();
+            if (isNaN(from) || from === to) return;
+            lineupMove(from, to);
         });
         ul.appendChild(li);
     });
