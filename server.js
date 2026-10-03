@@ -2078,6 +2078,9 @@ setInterval(async () => {
         }
         if (liveData.members) {
             friendlyMembersCache = liveData.members;
+            if (discordConfig.alertOverdose !== false) {
+                checkFactionOverdoses(liveData.members, watchFactionId, liveData.name);
+            }
         }
         watchFactionId = String(liveData.ID || watchFactionId || '52355');
         
@@ -3077,7 +3080,7 @@ setInterval(async () => {
             }
         }
     } catch (err) {}
-}, 30000);
+}, 10000);
 
 let companyHistory = [];
 try { if (fs.existsSync('company_history.json')) companyHistory = JSON.parse(fs.readFileSync('company_history.json')); } catch(e) {}
@@ -6345,6 +6348,10 @@ app.get('/api/warboard', async (req, res) => {
             const isTraveling = m.status?.state === "Traveling" || m.status?.description?.includes("Traveling");
             if (isTraveling) { if (!flightCache[id] || (Date.now() - flightCache[id].time) > 30000) { if (isPremium && !flightQueue.has(id)) flightQueue.set(id, ffKey); } }
         });
+
+        if (myData.members && discordConfig.alertOverdose !== false) {
+            checkFactionOverdoses(myData.members, myFactionId, myData.name);
+        }
 
         const parseMembers = (data, isEnemy = false) => {
             if (!data.members) return [];
@@ -21296,7 +21303,7 @@ app.get('/api/chain/data', async (req, res) => {
     const cleanKey = userKey.trim();
     const cacheKey = cleanKey.slice(-8);
     const cached = chainDataCache.get(cacheKey);
-    if (cached && (Date.now() - cached.ts) < 2500) {
+    if (cached && (Date.now() - cached.ts) < 1200) {
         return res.json(cached.data);
     }
     try {
@@ -21358,7 +21365,7 @@ app.get('/api/chain/attacks', async (req, res) => {
     const cleanKey = userKey.trim();
     const cacheKey = cleanKey.slice(-8);
     const cached = chainAtksCache.get(cacheKey);
-    if (cached && (Date.now() - cached.ts) < 2500) {
+    if (cached && (Date.now() - cached.ts) < 1000) {
         return res.json(cached.data);
     }
     try {
