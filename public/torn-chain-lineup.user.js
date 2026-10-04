@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         Spider-Verse Chain Manager (Standalone)
 // @namespace    https://torn-company-app-production.up.railway.app/
-// @version      2.0.1
-// @description  Fully standalone chain lineup manager on Torn. Direct API hits, faction member search, auto-advance on hits, 1-click faction chat posting. No external server needed.
+// @version      2.0.2
+// @description  Fully standalone chain lineup manager on Torn. Direct API hits, faction member search, auto-advance on hits, 1-click faction chat posting. Runs on faction pages only.
 // @author       Spider-Verse
-// @match        https://www.torn.com/*
+// @match        https://www.torn.com/factions.php*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
 // @grant        GM_setValue
@@ -21,14 +21,20 @@
     'use strict';
 
     // ══════════════════════════════════════════════════════════════
+    //  STRICT PAGE FILTER: ONLY RUN ON FACTION PAGES
+    // ══════════════════════════════════════════════════════════════
+    if (!window.location.pathname.includes('factions.php')) {
+        return;
+    }
+
+    // ══════════════════════════════════════════════════════════════
     //  CONSTANTS & STATE
     // ══════════════════════════════════════════════════════════════
     const LS_KEY_POS      = 'sv_chain_mgr_pos';
     const LS_KEY_APIKEY   = 'sv_chain_apikey';
     const LS_KEY_MEMBERS  = 'sv_chain_members_cache';
-    const HIT_POLL_MS     = 1500;
-    const STATUS_POLL_MS  = 60000;
-    const CHAIN_POLL_MS   = 2000;
+    const FAST_POLL_MS    = 1000;  // 1-second unified poll for attacks & chain
+    const STATUS_POLL_MS  = 60000; // 60s for member online/offline status
 
     let apiKey         = GM_getValue('sv_apikey', '') || localStorage.getItem(LS_KEY_APIKEY) || '';
     let lineup         = [];          // [{name, id, hit, skipped}]
@@ -42,7 +48,7 @@
     let factionMembers = [];         // [{id, name, online, state, lastActionTs}]
     let memberStatuses = {};         // id -> {online, state}
     let processedAtkIds = new Set();
-    let lastChainCount  = 0;
+    let isFirstPoll     = true;      // true until first attack snapshot is cached
     let autoSkipTimer   = null;
     let autoSkipLeft    = 0;
     let isMinimized     = GM_getValue('sv_min', false);
@@ -51,8 +57,7 @@
     let isUpdated       = false;     // green/grey light
     let timerInterval   = null;
 
-    let pollAtkInterval     = null;
-    let pollChainInterval   = null;
+    let pollInterval        = null;
     let pollMembersInterval = null;
 
     // ══════════════════════════════════════════════════════════════
@@ -102,14 +107,14 @@
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  TORN API
+    //  TORN API (LIGHTNING FAST 1.0s UNIFIED CALL)
     // ══════════════════════════════════════════════════════════════
     function tornGet(path, cb) {
         if (!apiKey) return cb(new Error('No API key'), null);
         GM_xmlhttpRequest({
             method: 'GET',
             url: `https://api.torn.com${path}&key=${apiKey}`,
-            timeout: 7000,
+            timeout: 6000,
             onload(res) {
                 try {
                     const d = JSON.parse(res.responseText);
@@ -124,7 +129,7 @@
     function handleMembersResponse(d) {
         if (!d || !d.members) return;
         factionMembers = Object.entries(d.members).map(([id, m]) => ({
-            id: parseInt(id),
+            id: parseInt(id, 10),
             name: m.name,
             online: (m.last_action || {}).status || 'Offline',
             state: (m.status || {}).state || 'Okay',
@@ -143,60 +148,106 @@
         renderLineup();
     }
 
-    function fetchChain() {
-        tornGet('/faction/?selections=chain', (err, d) => {
+    // Verify if an attacker matches the player who is CURRENTLY UP (position 0)
+    function isCurrentUp(atk) {
+        if (!lineup.length) return false;
+        const up = lineup[0];
+        const upId = up.id ? String(up.id) : null;
+        const atkId = atk.attacker_id ? String(atk.attacker_id) : null;
+        if (upId && atkId && upId === atkId) return true;
+
+        const upName = (up.name || '').trim().toLowerCase();
+        const atkName = (atk.attacker_name || '').trim().toLowerCase();
+        if (upName && atkName && upName === atkName) return true;
+
+        return false;
+    }
+
+    // Unified 1.0s Polling: both attacks and chain in a single API call
+    function pollChainAndAttacks() {
+        if (!apiKey) return;
+
+        tornGet('/faction/?selections=attacks,chain', (err, d) => {
             if (err || !d) return;
+
+            // 1. Process Live Chain Status
             const chain = d.chain || {};
-            const prev = chainCount;
             chainCount   = chain.current || 0;
             chainTimeout = chain.timeout || 0;
             chainActive  = chainCount > 0;
 
-            if (chainCount > prev && prev > 0) {
-                pollAttacks();
-            }
-            lastChainCount = chainCount;
-            renderChainBar();
-        });
-    }
+            // 2. Process Attacks
+            if (d.attacks) {
+                const rawAtks = Object.values(d.attacks);
+                const chainAtks = rawAtks
+                    .filter(a => a.chain && a.chain > 0)
+                    .sort((a, b) => (b.timestamp_ended || 0) - (a.timestamp_ended || 0));
 
-    function pollAttacks() {
-        tornGet('/faction/?selections=attacks', (err, d) => {
-            if (err || !d || !d.attacks) return;
-            const attacks = Object.values(d.attacks)
-                .filter(a => a.chain && a.chain > 0)
-                .sort((a, b) => b.timestamp_ended - a.timestamp_ended);
-
-            let stateChanged = false;
-            for (const atk of attacks) {
-                const id = atk.code || (atk.attacker_id + '_' + atk.timestamp_ended);
-                if (processedAtkIds.has(id)) continue;
-                processedAtkIds.add(id);
-                if (processedAtkIds.size > 400) {
-                    const arr = [...processedAtkIds];
-                    processedAtkIds = new Set(arr.slice(arr.length - 200));
+                // On first run, snapshot existing attack IDs so we don't trigger old hits
+                if (isFirstPoll) {
+                    for (const atk of chainAtks) {
+                        const id = atk.code || `${atk.attacker_id}_${atk.timestamp_ended}`;
+                        processedAtkIds.add(id);
+                    }
+                    isFirstPoll = false;
+                    renderChainBar();
+                    return;
                 }
 
-                const attackerId = String(atk.attacker_id || '');
-                if (!attackerId) continue;
+                let orderChanged = false;
 
-                const idx = lineup.findIndex(m => String(m.id) === attackerId || m.name === atk.attacker_name);
-                if (idx === -1) continue;
+                for (const atk of chainAtks) {
+                    const id = atk.code || `${atk.attacker_id}_${atk.timestamp_ended}`;
+                    if (processedAtkIds.has(id)) continue;
+                    processedAtkIds.add(id);
 
-                const [hit] = lineup.splice(idx, 1);
-                hit.hit = true;
-                lineup.push(hit);
-                stateChanged = true;
+                    if (processedAtkIds.size > 500) {
+                        const arr = [...processedAtkIds];
+                        processedAtkIds = new Set(arr.slice(arr.length - 250));
+                    }
 
-                clearAutoSkip();
-                if (autoMode) startAutoSkip();
-            }
+                    // STRICT VERIFICATION: ONLY the player currently UP can advance the lineup!
+                    if (isCurrentUp(atk)) {
+                        // The person UP made the hit! Advance the lineup to next!
+                        const [hitter] = lineup.splice(0, 1);
+                        hitter.hit = true;
+                        lineup.push(hitter);
+                        orderChanged = true;
+                        cycleNum++;
 
-            if (stateChanged) {
-                cycleNum++;
-                setUpdated(true);
-                save();
-                renderLineup();
+                        flashStatus(`✓ ${atk.attacker_name} landed hit #${atk.chain}! Next UP: ${lineup[0].name}`, false);
+                        clearAutoSkip();
+                        if (autoMode) startAutoSkip();
+                    } else {
+                        // Someone else hit (e.g. John 2 hit while John 1 was UP)
+                        // John 1 STAYS UP! Lineup does NOT rotate!
+                        const attackerId = atk.attacker_id ? String(atk.attacker_id) : null;
+                        const attackerName = (atk.attacker_name || '').trim().toLowerCase();
+
+                        // Mark hit flag on attacker's card if they are in queue, without reordering
+                        const otherIdx = lineup.findIndex((m, idx) => idx > 0 && (
+                            (m.id && attackerId && String(m.id) === attackerId) ||
+                            (m.name && m.name.trim().toLowerCase() === attackerName)
+                        ));
+
+                        if (otherIdx !== -1) {
+                            lineup[otherIdx].hit = true;
+                        }
+
+                        if (lineup.length > 0) {
+                            flashStatus(`Hit #${atk.chain} by ${atk.attacker_name} (${lineup[0].name} is still UP)`, false);
+                        }
+                    }
+                }
+
+                if (orderChanged) {
+                    setUpdated(true);
+                    save();
+                    renderLineup();
+                } else {
+                    renderChainBar();
+                }
+            } else {
                 renderChainBar();
             }
         });
@@ -211,12 +262,13 @@
 
     function startBackgroundPolling() {
         if (!apiKey) return;
-        if (pollAtkInterval) clearInterval(pollAtkInterval);
-        if (pollChainInterval) clearInterval(pollChainInterval);
+        if (pollInterval) clearInterval(pollInterval);
         if (pollMembersInterval) clearInterval(pollMembersInterval);
 
-        pollAtkInterval = setInterval(pollAttacks, HIT_POLL_MS);
-        pollChainInterval = setInterval(fetchChain, CHAIN_POLL_MS);
+        pollChainAndAttacks();
+        fetchFactionMembers();
+
+        pollInterval = setInterval(pollChainAndAttacks, FAST_POLL_MS);
         pollMembersInterval = setInterval(fetchFactionMembers, STATUS_POLL_MS);
     }
 
@@ -266,7 +318,6 @@
                     if (d.members) {
                         handleMembersResponse(d);
                     }
-                    fetchChain();
                     startBackgroundPolling();
 
                 } catch(err) {
@@ -460,16 +511,29 @@
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  STATUS LIGHT (UPDATED / SAME)
+    //  STATUS LIGHT (UPDATED / SAME) & MINIMIZED PILL UP TEXT
     // ══════════════════════════════════════════════════════════════
+    function updateMinDisplay() {
+        const minUp = document.getElementById('sv-min-up');
+        if (!minUp) return;
+        if (lineup.length > 0) {
+            minUp.textContent = `UP: ${lineup[0].name}`;
+            minUp.title = `Currently Up: ${lineup[0].name}${lineup.length > 1 ? ' | Next: ' + lineup[1].name : ''}`;
+        } else {
+            minUp.textContent = 'No lineup';
+            minUp.title = '';
+        }
+    }
+
     function setUpdated(val) {
         isUpdated = val;
         const pill   = document.getElementById('sv-status-pill');
         const dot    = document.getElementById('sv-status-dot');
         const txt    = document.getElementById('sv-status-txt');
-        const minUp  = document.getElementById('sv-min-up');
         const minBtn = document.getElementById('sv-min-post-btn');
         const mainBtn= document.getElementById('sv-post-btn');
+
+        updateMinDisplay();
 
         if (val) {
             if (pill) { pill.className = 'sv-status-pill sv-updated'; pill.title = 'Lineup updated! New hit detected.'; }
@@ -484,7 +548,6 @@
             if (mainBtn) mainBtn.style.boxShadow = '';
             if (minBtn)  minBtn.style.boxShadow  = '';
         }
-        if (minUp) minUp.textContent = lineup.length ? `UP: ${lineup[0].name}` : 'No lineup';
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -501,7 +564,7 @@
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  LOCAL TIMER
+    //  LOCAL TIMER DISPLAY
     // ══════════════════════════════════════════════════════════════
     function startLocalTimer() {
         if (timerInterval) clearInterval(timerInterval);
@@ -646,6 +709,8 @@
     }
 
     function renderLineup() {
+        updateMinDisplay();
+
         const container = document.getElementById('sv-lineup-container');
         if (!container) return;
 
@@ -950,7 +1015,7 @@
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  EVENT LISTENERS & DELEGATION (NO INLINE ONCLICK)
+    //  EVENT LISTENERS & DELEGATION
     // ══════════════════════════════════════════════════════════════
     function wireEvents(hud) {
         // Dragging HUD handle
@@ -985,11 +1050,12 @@
             GM_setValue(LS_KEY_POS, { top: Math.round(r.top), right: Math.round(window.innerWidth - r.right) });
         });
 
-        // Header buttons
+        // Header minimize & close buttons
         document.getElementById('sv-min-btn').addEventListener('click', () => {
             isMinimized = !isMinimized;
             hud.classList.toggle('sv-minimized', isMinimized);
             document.getElementById('sv-min-btn').textContent = isMinimized ? '□' : '─';
+            updateMinDisplay(); // ensure fresh UP name is shown immediately
             GM_setValue('sv_min', isMinimized);
         });
 
@@ -1227,11 +1293,11 @@
         overflow: hidden;
         transition: border-color 0.3s, box-shadow 0.3s;
     }
-    #sv-chain-hud.sv-minimized { width: auto; max-width: 460px; border-radius: 24px; max-height: none; }
+    #sv-chain-hud.sv-minimized { width: auto; max-width: 480px; border-radius: 24px; max-height: none; }
     #sv-chain-hud.sv-minimized .sv-body { display: none; }
-    #sv-chain-hud.sv-minimized .sv-header { border-radius: 24px; border-bottom: none; }
+    #sv-chain-hud.sv-minimized .sv-header { border-radius: 24px; border-bottom: none; padding: 6px 12px; }
     #sv-chain-hud.sv-minimized .sv-title-text { display: none; }
-    #sv-chain-hud.sv-minimized .sv-min-up { display: inline-block; }
+    #sv-chain-hud.sv-minimized .sv-min-up { display: inline-block; font-size: 11px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
     #sv-chain-hud.sv-minimized .sv-min-post-btn { display: inline-flex; }
 
     .sv-header {
@@ -1247,7 +1313,7 @@
     }
     .sv-title { display: flex; align-items: center; gap: 7px; overflow: hidden; }
     .sv-title-text { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: #e2e8f0; white-space: nowrap; }
-    .sv-min-up { display: none; font-size: 11px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+    .sv-min-up { display: none; }
     .sv-hdr-controls { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
 
     .sv-status-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 12px; font-size: 9px; font-weight: 800; letter-spacing: 0.5px; cursor: default; transition: all 0.2s; }
@@ -1400,8 +1466,6 @@
     startLocalTimer();
 
     if (apiKey) {
-        fetchChain();
-        fetchFactionMembers();
         startBackgroundPolling();
     }
 
