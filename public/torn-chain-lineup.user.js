@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Spider-Verse Chain Manager (Standalone)
 // @namespace    https://torn-company-app-production.up.railway.app/
-// @version      2.1.0
-// @description  Professional standalone chain lineup manager on Torn. Direct API hits, intelligent readiness detection, auto-advance, 1-click faction chat posting. Runs on faction pages only.
+// @version      2.2.0
+// @description  Professional standalone chain lineup manager on Torn. Direct API hits, intelligent readiness detection, auto-advance, 1-click faction chat posting with auto-send. Runs on faction pages only.
 // @author       Spider-Verse
 // @match        https://www.torn.com/factions.php*
 // @grant        GM_xmlhttpRequest
@@ -42,6 +42,7 @@
     let cycleNum       = 1;
     let loopMode       = true;
     let autoMode       = false;
+    let autoSendOnPost = GM_getValue('sv_autosend', false);
     let chainTimeout   = 0;          // seconds left on timer
     let chainCount     = 0;          // current chain count
     let chainActive    = false;
@@ -64,7 +65,8 @@
     //  PERSISTENCE
     // ══════════════════════════════════════════════════════════════
     function save() {
-        GM_setValue('sv_state', JSON.stringify({ lineup, targetHitTime, cycleNum, loopMode, autoMode }));
+        GM_setValue('sv_state', JSON.stringify({ lineup, targetHitTime, cycleNum, loopMode, autoMode, autoSendOnPost }));
+        GM_setValue('sv_autosend', autoSendOnPost);
         if (apiKey) {
             syncToServer();
         }
@@ -74,12 +76,17 @@
         try {
             const raw = GM_getValue('sv_state', '{}');
             const d = JSON.parse(raw);
-            if (d.lineup)                 lineup        = d.lineup;
+            if (d.lineup)                 lineup         = d.lineup;
             if (d.targetHitTime !== undefined) targetHitTime = d.targetHitTime;
-            if (d.cycleNum)               cycleNum      = d.cycleNum;
-            if (d.loopMode !== undefined) loopMode      = d.loopMode;
-            if (d.autoMode !== undefined) autoMode      = d.autoMode;
+            if (d.cycleNum)               cycleNum       = d.cycleNum;
+            if (d.loopMode !== undefined) loopMode       = d.loopMode;
+            if (d.autoMode !== undefined) autoMode       = d.autoMode;
+            if (d.autoSendOnPost !== undefined) autoSendOnPost = d.autoSendOnPost;
         } catch(e) {}
+
+        if (GM_getValue('sv_autosend', null) !== null) {
+            autoSendOnPost = GM_getValue('sv_autosend', false);
+        }
 
         try {
             const cm = localStorage.getItem(LS_KEY_MEMBERS) || GM_getValue(LS_KEY_MEMBERS, '[]');
@@ -762,7 +769,33 @@
             target.setSelectionRange(text.length, text.length);
 
             setUpdated(false);
-            flashStatus('✓ Lineup inserted — press Enter to send!', false);
+
+            if (autoSendOnPost) {
+                // Allow Torn's React state to register the input value before firing send
+                setTimeout(() => {
+                    const parentBox = target.closest('div[class*="chat-box"], [class*="chatBox"], [class*="dialogue"], [class*="chat"], form');
+                    const sendBtn = parentBox ? parentBox.querySelector('button[type="submit"], [class*="send"], [class*="submit"], button[aria-label*="send" i], [class*="chat-box-button"]') : null;
+
+                    if (sendBtn) {
+                        sendBtn.click();
+                    }
+
+                    // Keyboard Enter event simulation
+                    target.dispatchEvent(new KeyboardEvent('keydown', {
+                        key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true
+                    }));
+                    target.dispatchEvent(new KeyboardEvent('keypress', {
+                        key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true
+                    }));
+                    target.dispatchEvent(new KeyboardEvent('keyup', {
+                        key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true
+                    }));
+
+                    flashStatus('✓ Lineup posted & sent to Faction Chat!', false);
+                }, 100);
+            } else {
+                flashStatus('✓ Lineup inserted — press Enter to send!', false);
+            }
         }, 150);
     }
 
@@ -1158,6 +1191,10 @@
                     <input type="checkbox" id="sv-auto-chk" ${autoMode ? 'checked' : ''} />
                     Auto
                 </label>
+                <label class="sv-toggle-lbl sv-toggle-autosend" title="Auto-Send: automatically sends message immediately when you click Post Chat">
+                    <input type="checkbox" id="sv-autosend-chk" ${autoSendOnPost ? 'checked' : ''} />
+                    Auto-Send
+                </label>
             </div>
 
             <!-- 4. STATUS FEEDBACK BAR -->
@@ -1285,6 +1322,12 @@
             else startAutoSkip();
             save();
             renderLineup();
+        });
+
+        document.getElementById('sv-autosend-chk').addEventListener('change', e => {
+            autoSendOnPost = e.target.checked;
+            save();
+            flashStatus(autoSendOnPost ? 'Auto-send enabled: posts will send immediately.' : 'Auto-send disabled.', false);
         });
 
         // Hit time dropdown & custom
@@ -1596,8 +1639,11 @@
     }
     .sv-select option { background: #0d1117; color: #c9d1d9; }
 
-    .sv-toggle-lbl { display: flex; align-items: center; gap: 3px; font-size: 10px; color: #8b949e; cursor: pointer; font-weight: 600; }
+    .sv-toggle-lbl { display: flex; align-items: center; gap: 3px; font-size: 10px; color: #8b949e; cursor: pointer; font-weight: 600; transition: color 0.15s; }
+    .sv-toggle-lbl:hover { color: #f0f6fc; }
     .sv-toggle-lbl input { cursor: pointer; margin: 0; accent-color: #2ecc71; }
+    .sv-toggle-autosend { color: #79c0ff; }
+    .sv-toggle-autosend input { accent-color: #388bfd; }
 
     .sv-status-bar { padding: 2px 10px; min-height: 16px; font-size: 10.5px; }
 
