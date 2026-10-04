@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Spider-Verse Chain Manager (Standalone)
 // @namespace    https://torn-company-app-production.up.railway.app/
-// @version      2.2.0
-// @description  Professional standalone chain lineup manager on Torn. Direct API hits, intelligent readiness detection, auto-advance, 1-click faction chat posting with auto-send. Runs on faction pages only.
+// @version      2.3.0
+// @description  Professional standalone chain lineup manager on Torn. Direct API hits, mobile touch optimization, compact mobile layout, intelligent readiness detection, auto-advance, 1-click chat auto-send. Runs on faction pages only.
 // @author       Spider-Verse
 // @match        https://www.torn.com/factions.php*
 // @grant        GM_xmlhttpRequest
@@ -1126,7 +1126,20 @@
     //  BUILD HUD DOM
     // ══════════════════════════════════════════════════════════════
     function buildHUD() {
-        const savedPos = GM_getValue(LS_KEY_POS, { top: 80, right: 20 });
+        const isMobile = window.innerWidth <= 600;
+        let savedPos = GM_getValue(LS_KEY_POS, null);
+
+        if (!savedPos) {
+            savedPos = isMobile ? { top: 48, right: 6 } : { top: 80, right: 20 };
+        } else {
+            // Keep on screen if viewport is smaller (e.g. mobile)
+            const hudEstWidth = isMobile ? 295 : 350;
+            const maxRight = Math.max(4, window.innerWidth - hudEstWidth - 4);
+            const maxTop = Math.max(4, window.innerHeight - 80);
+            savedPos.right = Math.min(Math.max(4, savedPos.right || 0), maxRight);
+            savedPos.top = Math.min(Math.max(4, savedPos.top || 0), maxTop);
+        }
+
         const hud = document.createElement('div');
         hud.id = 'sv-chain-hud';
         if (isMinimized) hud.classList.add('sv-minimized');
@@ -1253,37 +1266,60 @@
     //  EVENT LISTENERS & DELEGATION
     // ══════════════════════════════════════════════════════════════
     function wireEvents(hud) {
-        // Dragging HUD handle
+        // Dragging HUD handle (Touch + Mouse Support)
         const handle = document.getElementById('sv-handle');
         let dragging = false, sx = 0, sy = 0, il = 0, it = 0;
 
-        handle.addEventListener('mousedown', e => {
-            if (e.target.closest('.sv-hdr-controls')) return;
+        function startDrag(clientX, clientY, target) {
+            if (target.closest('.sv-hdr-controls')) return;
             dragging = true;
-            sx = e.clientX; sy = e.clientY;
+            sx = clientX; sy = clientY;
             const r = hud.getBoundingClientRect();
             il = r.left; it = r.top;
             hud.style.right = 'auto';
             hud.style.left  = `${il}px`;
             hud.style.top   = `${it}px`;
             document.body.style.userSelect = 'none';
-        });
+        }
 
-        window.addEventListener('mousemove', e => {
+        function moveDrag(clientX, clientY) {
             if (!dragging) return;
-            const nl = Math.max(8, Math.min(window.innerWidth  - hud.offsetWidth  - 8, il + (e.clientX - sx)));
-            const nt = Math.max(8, Math.min(window.innerHeight - hud.offsetHeight - 8, it + (e.clientY - sy)));
+            const pad = 4;
+            const maxL = Math.max(pad, window.innerWidth - hud.offsetWidth - pad);
+            const maxT = Math.max(pad, window.innerHeight - hud.offsetHeight - pad);
+            const nl = Math.max(pad, Math.min(maxL, il + (clientX - sx)));
+            const nt = Math.max(pad, Math.min(maxT, it + (clientY - sy)));
             hud.style.left = `${nl}px`;
             hud.style.top  = `${nt}px`;
-        });
+        }
 
-        window.addEventListener('mouseup', () => {
+        function endDrag() {
             if (!dragging) return;
             dragging = false;
             document.body.style.userSelect = '';
             const r = hud.getBoundingClientRect();
-            GM_setValue(LS_KEY_POS, { top: Math.round(r.top), right: Math.round(window.innerWidth - r.right) });
-        });
+            GM_setValue(LS_KEY_POS, { top: Math.round(r.top), right: Math.max(0, Math.round(window.innerWidth - r.right)) });
+        }
+
+        handle.addEventListener('mousedown', e => startDrag(e.clientX, e.clientY, e.target));
+        window.addEventListener('mousemove', e => moveDrag(e.clientX, e.clientY));
+        window.addEventListener('mouseup', endDrag);
+
+        handle.addEventListener('touchstart', e => {
+            if (e.touches && e.touches.length === 1) {
+                startDrag(e.touches[0].clientX, e.touches[0].clientY, e.target);
+            }
+        }, { passive: true });
+
+        window.addEventListener('touchmove', e => {
+            if (dragging && e.touches && e.touches.length === 1) {
+                if (e.cancelable) e.preventDefault();
+                moveDrag(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        }, { passive: false });
+
+        window.addEventListener('touchend', endDrag);
+        window.addEventListener('touchcancel', endDrag);
 
         // Header minimize & close buttons
         document.getElementById('sv-min-btn').addEventListener('click', () => {
@@ -1789,6 +1825,228 @@
         display: flex; align-items: center; gap: 5px; padding: 6px 10px 8px;
         background: rgba(227, 179, 65, 0.06); border-top: 1px solid rgba(227, 179, 65, 0.2);
         flex-wrap: wrap;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       MOBILE RESPONSIVE & COMPACT OPTIMIZATIONS (< 600px)
+       ══════════════════════════════════════════════════════════════ */
+    @media (max-width: 600px) {
+        #sv-chain-hud {
+            width: min(295px, calc(100vw - 12px));
+            max-height: 78vh;
+            border-radius: 8px;
+            font-size: 10px;
+        }
+
+        #sv-chain-hud.sv-minimized {
+            max-width: 210px;
+            border-radius: 16px;
+        }
+        #sv-chain-hud.sv-minimized .sv-header {
+            padding: 3px 8px;
+        }
+        #sv-chain-hud.sv-minimized .sv-min-up {
+            font-size: 9.5px;
+            max-width: 105px;
+        }
+        #sv-chain-hud.sv-minimized .sv-min-post-btn {
+            padding: 2px 6px;
+            font-size: 9px;
+        }
+
+        .sv-header {
+            padding: 4px 8px;
+            gap: 5px;
+            touch-action: none;
+        }
+        .sv-title {
+            gap: 4px;
+        }
+        .sv-title-text {
+            font-size: 10px;
+        }
+        .sv-status-pill {
+            padding: 1px 4px;
+            font-size: 8px;
+        }
+        .sv-ctrl-btn {
+            padding: 2px 4px;
+            font-size: 10px;
+        }
+
+        /* Top Chain Stat Bar */
+        .sv-chain-bar {
+            padding: 5px 8px;
+        }
+        .sv-stat-grid {
+            grid-template-columns: 1.25fr 0.9fr 1.05fr 0.8fr;
+            gap: 3px;
+        }
+        .sv-stat-box {
+            padding: 3px 2px;
+            border-radius: 4px;
+        }
+        .sv-timer-num {
+            font-size: 16px;
+        }
+        .sv-stat-num {
+            font-size: 11.5px;
+        }
+        .sv-stat-lbl {
+            font-size: 7px;
+            letter-spacing: 0.3px;
+            margin-top: 1px;
+        }
+        .sv-meta-num {
+            font-size: 9.5px;
+        }
+
+        /* Controls Rows */
+        .sv-controls-row {
+            padding: 4px 6px;
+            gap: 3px;
+        }
+        .sv-controls-row2 {
+            padding-bottom: 4px;
+            gap: 2px;
+        }
+        .sv-ctrl-label {
+            font-size: 9px;
+        }
+        .sv-select, .sv-input-sm {
+            padding: 2px 4px;
+            font-size: 9.5px;
+        }
+        .sv-btn {
+            padding: 2px 5px;
+            font-size: 9.5px;
+            border-radius: 3px;
+        }
+        .sv-btn-xs {
+            font-size: 8.5px;
+            padding: 1px 4px;
+        }
+        .sv-toggle-lbl {
+            font-size: 8.5px;
+            gap: 2px;
+        }
+
+        /* Lineup Summary */
+        .sv-lineup-summary {
+            padding: 2px 6px 4px;
+            gap: 2px;
+        }
+        .sv-summary-chip {
+            padding: 1px 3px;
+            font-size: 7.5px;
+        }
+
+        /* Cards */
+        .sv-tier-card {
+            margin: 3px 6px;
+            border-radius: 5px;
+        }
+        .sv-tier-header {
+            padding: 3px 6px 1px;
+        }
+        .sv-tier-tag {
+            font-size: 8px;
+        }
+        .sv-tier-body {
+            padding: 2px 6px 4px;
+        }
+        .sv-player-row {
+            gap: 5px;
+        }
+        .sv-pos-num {
+            width: 15px;
+            height: 15px;
+            font-size: 8.5px;
+        }
+        .sv-player-name {
+            font-size: 11.5px;
+        }
+        .sv-hit-now-badge {
+            font-size: 8.5px;
+            padding: 1px 4px;
+        }
+        .sv-readiness-row {
+            font-size: 8px;
+        }
+        .sv-tier-actions {
+            margin-top: 3px;
+            gap: 2px;
+        }
+
+        /* Queue */
+        .sv-queue-header {
+            font-size: 8px;
+            padding: 4px 6px 1px;
+        }
+        .sv-queue-row {
+            padding: 3px 6px;
+            gap: 4px;
+        }
+        .sv-q-pos {
+            width: 14px;
+            height: 14px;
+            font-size: 8px;
+        }
+        .sv-q-name {
+            font-size: 10.5px;
+        }
+        .sv-q-readiness {
+            font-size: 7.5px;
+        }
+        .sv-q-actions {
+            gap: 2px;
+        }
+
+        /* Add Row & Suggest */
+        .sv-add-row {
+            padding: 4px 6px 3px;
+            gap: 3px;
+        }
+        .sv-add-input {
+            padding: 3px 6px;
+            font-size: 10px;
+        }
+        .sv-add-btn {
+            padding: 3px 7px;
+            font-size: 10px;
+        }
+        .sv-suggest {
+            max-height: 160px;
+            left: 6px;
+            right: 6px;
+        }
+        .sv-suggest-item {
+            padding: 4px 6px;
+        }
+        .sv-suggest-name {
+            font-size: 10.5px;
+        }
+        .sv-suggest-status {
+            font-size: 8px;
+        }
+
+        /* Quick Row */
+        .sv-quick-row {
+            padding: 3px 6px 5px;
+            gap: 2px;
+        }
+        .sv-quick-row .sv-btn {
+            font-size: 9px;
+            padding: 2px 5px;
+        }
+
+        /* Touch interaction polish */
+        .sv-btn:active {
+            transform: scale(0.96);
+        }
+        * {
+            -webkit-tap-highlight-color: transparent;
+        }
     }
     `;
 
