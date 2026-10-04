@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Spider-Verse Chain Manager (Standalone)
 // @namespace    https://torn-company-app-production.up.railway.app/
-// @version      2.0.0
+// @version      2.0.1
 // @description  Fully standalone chain lineup manager on Torn. Direct API hits, faction member search, auto-advance on hits, 1-click faction chat posting. No external server needed.
 // @author       Spider-Verse
 // @match        https://www.torn.com/*
@@ -9,6 +9,7 @@
 // @grant        GM_addStyle
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @grant        unsafeWindow
 // @connect      api.torn.com
 // @connect      torn-company-app-production.up.railway.app
 // @run-at       document-end
@@ -22,7 +23,6 @@
     // ══════════════════════════════════════════════════════════════
     //  CONSTANTS & STATE
     // ══════════════════════════════════════════════════════════════
-    const LS_KEY          = 'sv_chain_mgr_v2';
     const LS_KEY_POS      = 'sv_chain_mgr_pos';
     const LS_KEY_APIKEY   = 'sv_chain_apikey';
     const LS_KEY_MEMBERS  = 'sv_chain_members_cache';
@@ -30,16 +30,16 @@
     const STATUS_POLL_MS  = 60000;
     const CHAIN_POLL_MS   = 2000;
 
-    let apiKey        = GM_getValue('sv_apikey', '') || localStorage.getItem(LS_KEY_APIKEY) || '';
-    let lineup        = [];          // [{name, id, hit, skipped}]
-    let targetHitTime = '3:00';
-    let cycleNum      = 1;
-    let loopMode      = true;
-    let autoMode      = false;
-    let chainTimeout  = 0;          // seconds left on timer
-    let chainCount    = 0;          // current chain count
-    let chainActive   = false;
-    let factionMembers = [];         // [{id, name, status, lastAction}]
+    let apiKey         = GM_getValue('sv_apikey', '') || localStorage.getItem(LS_KEY_APIKEY) || '';
+    let lineup         = [];          // [{name, id, hit, skipped}]
+    let targetHitTime  = '3:00';
+    let cycleNum       = 1;
+    let loopMode       = true;
+    let autoMode       = false;
+    let chainTimeout   = 0;          // seconds left on timer
+    let chainCount     = 0;          // current chain count
+    let chainActive    = false;
+    let factionMembers = [];         // [{id, name, online, state, lastActionTs}]
     let memberStatuses = {};         // id -> {online, state}
     let processedAtkIds = new Set();
     let lastChainCount  = 0;
@@ -51,12 +51,15 @@
     let isUpdated       = false;     // green/grey light
     let timerInterval   = null;
 
+    let pollAtkInterval     = null;
+    let pollChainInterval   = null;
+    let pollMembersInterval = null;
+
     // ══════════════════════════════════════════════════════════════
-    //  PERSIST
+    //  PERSISTENCE
     // ══════════════════════════════════════════════════════════════
     function save() {
         GM_setValue('sv_state', JSON.stringify({ lineup, targetHitTime, cycleNum, loopMode, autoMode }));
-        // Also push to server for other tools if key exists
         if (apiKey) {
             syncToServer();
         }
@@ -66,16 +69,19 @@
         try {
             const raw = GM_getValue('sv_state', '{}');
             const d = JSON.parse(raw);
-            if (d.lineup)       lineup        = d.lineup;
+            if (d.lineup)                 lineup        = d.lineup;
             if (d.targetHitTime !== undefined) targetHitTime = d.targetHitTime;
-            if (d.cycleNum)     cycleNum      = d.cycleNum;
-            if (d.loopMode !== undefined) loopMode = d.loopMode;
-            if (d.autoMode !== undefined) autoMode = d.autoMode;
+            if (d.cycleNum)               cycleNum      = d.cycleNum;
+            if (d.loopMode !== undefined) loopMode      = d.loopMode;
+            if (d.autoMode !== undefined) autoMode      = d.autoMode;
         } catch(e) {}
-        // Load cached faction members
+
         try {
             const cm = localStorage.getItem(LS_KEY_MEMBERS) || GM_getValue(LS_KEY_MEMBERS, '[]');
             factionMembers = JSON.parse(cm) || [];
+            for (const m of factionMembers) {
+                memberStatuses[String(m.id)] = { online: m.online, state: m.state };
+            }
         } catch(e) {}
     }
 
@@ -96,14 +102,14 @@
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  TORN API CALLS
+    //  TORN API
     // ══════════════════════════════════════════════════════════════
     function tornGet(path, cb) {
-        if (!apiKey) return cb(null, null);
+        if (!apiKey) return cb(new Error('No API key'), null);
         GM_xmlhttpRequest({
             method: 'GET',
             url: `https://api.torn.com${path}&key=${apiKey}`,
-            timeout: 6000,
+            timeout: 7000,
             onload(res) {
                 try {
                     const d = JSON.parse(res.responseText);
@@ -115,17 +121,38 @@
         });
     }
 
+    function handleMembersResponse(d) {
+        if (!d || !d.members) return;
+        factionMembers = Object.entries(d.members).map(([id, m]) => ({
+            id: parseInt(id),
+            name: m.name,
+            online: (m.last_action || {}).status || 'Offline',
+            state: (m.status || {}).state || 'Okay',
+            lastActionTs: (m.last_action || {}).timestamp || 0
+        })).sort((a, b) => a.name.localeCompare(b.name));
+
+        try {
+            localStorage.setItem(LS_KEY_MEMBERS, JSON.stringify(factionMembers));
+            GM_setValue(LS_KEY_MEMBERS, JSON.stringify(factionMembers));
+        } catch(e) {}
+
+        for (const m of factionMembers) {
+            memberStatuses[String(m.id)] = { online: m.online, state: m.state };
+        }
+        renderSuggest();
+        renderLineup();
+    }
+
     function fetchChain() {
         tornGet('/faction/?selections=chain', (err, d) => {
             if (err || !d) return;
             const chain = d.chain || {};
             const prev = chainCount;
-            chainCount  = chain.current || 0;
+            chainCount   = chain.current || 0;
             chainTimeout = chain.timeout || 0;
             chainActive  = chainCount > 0;
 
             if (chainCount > prev && prev > 0) {
-                // Chain increased => a hit happened => immediately poll attacks
                 pollAttacks();
             }
             lastChainCount = chainCount;
@@ -153,11 +180,9 @@
                 const attackerId = String(atk.attacker_id || '');
                 if (!attackerId) continue;
 
-                // Find in lineup
                 const idx = lineup.findIndex(m => String(m.id) === attackerId || m.name === atk.attacker_name);
                 if (idx === -1) continue;
 
-                // Move to bottom
                 const [hit] = lineup.splice(idx, 1);
                 hit.hit = true;
                 lineup.push(hit);
@@ -179,27 +204,82 @@
 
     function fetchFactionMembers() {
         tornGet('/faction/?selections=basic', (err, d) => {
-            if (err || !d || !d.members) return;
-            factionMembers = Object.entries(d.members).map(([id, m]) => ({
-                id: parseInt(id),
-                name: m.name,
-                online: (m.last_action || {}).status || 'Offline',
-                state: (m.status || {}).state || 'Okay',
-                lastActionTs: (m.last_action || {}).timestamp || 0
-            })).sort((a, b) => a.name.localeCompare(b.name));
+            if (err || !d) return;
+            handleMembersResponse(d);
+        });
+    }
 
-            // Cache
-            try {
-                localStorage.setItem(LS_KEY_MEMBERS, JSON.stringify(factionMembers));
-                GM_setValue(LS_KEY_MEMBERS, JSON.stringify(factionMembers));
-            } catch(e) {}
+    function startBackgroundPolling() {
+        if (!apiKey) return;
+        if (pollAtkInterval) clearInterval(pollAtkInterval);
+        if (pollChainInterval) clearInterval(pollChainInterval);
+        if (pollMembersInterval) clearInterval(pollMembersInterval);
 
-            // Update member statuses
-            for (const m of factionMembers) {
-                memberStatuses[String(m.id)] = { online: m.online, state: m.state };
+        pollAtkInterval = setInterval(pollAttacks, HIT_POLL_MS);
+        pollChainInterval = setInterval(fetchChain, CHAIN_POLL_MS);
+        pollMembersInterval = setInterval(fetchFactionMembers, STATUS_POLL_MS);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  API KEY SAVING & VALIDATION
+    // ══════════════════════════════════════════════════════════════
+    function saveApiKey() {
+        const inp = document.getElementById('sv-apikey-input');
+        const val = (inp?.value || '').trim();
+        if (!val) {
+            flashStatus('Please enter an API key.', true);
+            return;
+        }
+
+        flashStatus('Validating API key with Torn...', false);
+        const saveBtn = document.getElementById('sv-apikey-save-btn');
+        if (saveBtn) {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+        }
+
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: `https://api.torn.com/faction/?selections=basic&key=${val}`,
+            timeout: 9000,
+            onload(res) {
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = 'Save Key';
+                }
+                try {
+                    const d = JSON.parse(res.responseText);
+                    if (d && d.error) {
+                        flashStatus(`Error (${d.error.code}): ${d.error.error}`, true);
+                        return;
+                    }
+
+                    apiKey = val;
+                    GM_setValue('sv_apikey', apiKey);
+                    try { localStorage.setItem(LS_KEY_APIKEY, apiKey); } catch(e) {}
+
+                    const row = document.getElementById('sv-apikey-row');
+                    if (row) row.style.display = 'none';
+
+                    flashStatus(`✓ Connected to ${d.name || 'Faction'}!`, false);
+
+                    if (d.members) {
+                        handleMembersResponse(d);
+                    }
+                    fetchChain();
+                    startBackgroundPolling();
+
+                } catch(err) {
+                    flashStatus('Invalid response from Torn API.', true);
+                }
+            },
+            onerror() {
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = 'Save Key';
+                }
+                flashStatus('Network error verifying key.', true);
             }
-            renderSuggest();
-            renderLineup();
         });
     }
 
@@ -233,71 +313,98 @@
         name = (name || '').trim();
         if (!name) return;
         if (lineup.some(m => m.name.toLowerCase() === name.toLowerCase())) {
-            flashStatus(`${name} already in lineup.`); return;
+            flashStatus(`${name} is already in the lineup.`, true);
+            return;
         }
         lineup.push({ name, id: id || null, hit: false, skipped: false });
-        save(); renderLineup();
-        flashStatus(`Added ${name}.`);
+        save();
+        renderLineup();
+        flashStatus(`Added ${name}.`, false);
     }
 
     function removeMember(idx) {
         if (idx < 0 || idx >= lineup.length) return;
         const [r] = lineup.splice(idx, 1);
-        save(); renderLineup();
-        flashStatus(`Removed ${r.name}.`);
+        save();
+        renderLineup();
+        flashStatus(`Removed ${r.name}.`, false);
     }
 
     function moveMember(from, to) {
-        if (from === to) return;
+        if (from === to || from < 0 || to < 0 || from >= lineup.length || to >= lineup.length) return;
         const item = lineup.splice(from, 1)[0];
         lineup.splice(to, 0, item);
-        save(); renderLineup();
+        save();
+        renderLineup();
+    }
+
+    function promptMove(idx) {
+        const m = lineup[idx];
+        if (!m) return;
+        const raw = prompt(`Move "${m.name}" to position (1-${lineup.length}):`, String(idx + 1));
+        if (!raw) return;
+        const pos = parseInt(raw, 10) - 1;
+        if (isNaN(pos) || pos < 0 || pos >= lineup.length) return;
+        moveMember(idx, pos);
     }
 
     function skipMember(idx) {
+        if (idx < 0 || idx >= lineup.length) return;
         const [s] = lineup.splice(idx, 1);
         lineup.push(s);
-        save(); renderLineup();
-        clearAutoSkip(); if (autoMode) startAutoSkip();
-        flashStatus(`Skipped ${s.name}.`);
+        save();
+        renderLineup();
+        clearAutoSkip();
+        if (autoMode) startAutoSkip();
+        flashStatus(`Skipped ${s.name}.`, false);
     }
 
     function makeCurrent(idx) {
+        if (idx <= 0 || idx >= lineup.length) return;
         const item = lineup.splice(idx, 1)[0];
         lineup.unshift(item);
-        save(); renderLineup();
-        flashStatus(`${item.name} moved to Currently Up.`);
+        save();
+        renderLineup();
+        flashStatus(`${item.name} moved to Currently Up.`, false);
     }
 
     function swapTopTwo() {
         if (lineup.length < 2) return;
         [lineup[0], lineup[1]] = [lineup[1], lineup[0]];
-        save(); renderLineup();
-        flashStatus(`Swapped ${lineup[0].name} and ${lineup[1].name}.`);
+        save();
+        renderLineup();
+        flashStatus(`Swapped ${lineup[0].name} and ${lineup[1].name}.`, false);
     }
 
     function nextTurn() {
         if (!lineup.length) return;
         const [s] = lineup.splice(0, 1);
         lineup.push(s);
-        clearAutoSkip(); if (autoMode) startAutoSkip();
-        save(); renderLineup();
-        flashStatus(`Advanced: ${s.name} moved to bottom.`);
+        clearAutoSkip();
+        if (autoMode) startAutoSkip();
+        save();
+        renderLineup();
+        flashStatus(`Advanced: ${s.name} moved to bottom.`, false);
     }
 
     function resetHits() {
         lineup.forEach(m => { m.hit = false; m.skipped = false; });
         cycleNum = 1;
-        save(); renderLineup();
-        clearAutoSkip(); if (autoMode) startAutoSkip();
-        flashStatus('Hit marks cleared.');
+        save();
+        renderLineup();
+        clearAutoSkip();
+        if (autoMode) startAutoSkip();
+        flashStatus('Hit marks cleared.', false);
     }
 
     function clearAll() {
         if (!confirm('Remove all members from the lineup?')) return;
-        lineup = []; cycleNum = 1;
-        save(); renderLineup();
+        lineup = [];
+        cycleNum = 1;
+        save();
+        renderLineup();
         clearAutoSkip();
+        flashStatus('Lineup cleared.', false);
     }
 
     function autoFill() {
@@ -305,7 +412,10 @@
             const st = memberStatuses[String(m.id)];
             return st && st.online === 'Online' && st.state === 'Okay';
         });
-        if (!eligible.length) { flashStatus('No eligible (Online+Okay) members found.'); return; }
+        if (!eligible.length) {
+            flashStatus('No eligible (Online + Okay) members found.', true);
+            return;
+        }
         let added = 0;
         for (const m of eligible) {
             if (!lineup.some(lm => lm.name.toLowerCase() === m.name.toLowerCase())) {
@@ -313,8 +423,9 @@
                 added++;
             }
         }
-        save(); renderLineup();
-        flashStatus(added > 0 ? `Added ${added} eligible member${added > 1 ? 's' : ''}.` : 'All eligible already in lineup.');
+        save();
+        renderLineup();
+        flashStatus(added > 0 ? `Added ${added} eligible member${added > 1 ? 's' : ''}.` : 'All eligible already in lineup.', false);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -331,7 +442,7 @@
                 clearAutoSkip();
                 if (lineup.length > 0) {
                     skipMember(0);
-                    flashStatus(`Auto-skipped ${lineup[lineup.length-1].name} (unavailable).`);
+                    flashStatus(`Auto-skipped ${lineup[lineup.length-1].name} (timeout).`, false);
                 }
             }
         }, 1000);
@@ -349,16 +460,16 @@
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  STATUS LIGHT
+    //  STATUS LIGHT (UPDATED / SAME)
     // ══════════════════════════════════════════════════════════════
     function setUpdated(val) {
         isUpdated = val;
-        const pill = document.getElementById('sv-status-pill');
-        const dot  = document.getElementById('sv-status-dot');
-        const txt  = document.getElementById('sv-status-txt');
-        const minUp = document.getElementById('sv-min-up');
+        const pill   = document.getElementById('sv-status-pill');
+        const dot    = document.getElementById('sv-status-dot');
+        const txt    = document.getElementById('sv-status-txt');
+        const minUp  = document.getElementById('sv-min-up');
         const minBtn = document.getElementById('sv-min-post-btn');
-        const mainBtn = document.getElementById('sv-post-btn');
+        const mainBtn= document.getElementById('sv-post-btn');
 
         if (val) {
             if (pill) { pill.className = 'sv-status-pill sv-updated'; pill.title = 'Lineup updated! New hit detected.'; }
@@ -380,16 +491,17 @@
     //  STATUS MESSAGE FLASH
     // ══════════════════════════════════════════════════════════════
     let _statusTimer = null;
-    function flashStatus(msg) {
+    function flashStatus(msg, isError) {
         const el = document.getElementById('sv-status-msg');
         if (!el) return;
         el.textContent = msg;
+        el.style.color = isError ? '#e74c3c' : '#2ecc71';
         if (_statusTimer) clearTimeout(_statusTimer);
-        _statusTimer = setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 4000);
+        _statusTimer = setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 5000);
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  TIMER DISPLAY
+    //  LOCAL TIMER
     // ══════════════════════════════════════════════════════════════
     function startLocalTimer() {
         if (timerInterval) clearInterval(timerInterval);
@@ -409,31 +521,32 @@
     function parseTimeToSecs(str) {
         if (!str) return 0;
         const p = str.split(':');
-        return (parseInt(p[0]) || 0) * 60 + (parseInt(p[1]) || 0);
+        return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  FACTION CHAT INJECTION
+    //  FACTION CHAT POSTING
     // ══════════════════════════════════════════════════════════════
     function postToChat() {
         const text = _buildFullText();
-        if (!text) { flashStatus('Lineup is empty.'); return; }
+        if (!text) { flashStatus('Lineup is empty.', true); return; }
 
         const chatRoot = document.querySelector('#chatRoot') || document.body;
 
-        // Try to open faction chat if not open
         const tabs = chatRoot.querySelectorAll('button, div[role="button"], [class*="tab"], [class*="chat-tab"]');
         for (const tab of tabs) {
             if (/faction/i.test(tab.textContent || '') || /faction/i.test(tab.getAttribute('aria-label') || '')) {
-                tab.click(); break;
+                tab.click();
+                break;
             }
         }
 
         setTimeout(() => {
             const inputs = chatRoot.querySelectorAll('textarea, input[type="text"]');
             let target = null;
-            if (inputs.length === 1) { target = inputs[0]; }
-            else if (inputs.length > 1) {
+            if (inputs.length === 1) {
+                target = inputs[0];
+            } else if (inputs.length > 1) {
                 for (const inp of inputs) {
                     const box = inp.closest('div[class*="chat-box"], [class*="chatBox"]');
                     if (box && /faction/i.test(box.textContent || '')) { target = inp; break; }
@@ -443,7 +556,7 @@
 
             if (!target) {
                 navigator.clipboard.writeText(text).catch(() => {});
-                flashStatus('Chat not found — copied to clipboard!');
+                flashStatus('Chat not open — copied to clipboard!', false);
                 return;
             }
 
@@ -458,19 +571,23 @@
             target.setSelectionRange(text.length, text.length);
 
             setUpdated(false);
-            flashStatus('✓ Lineup inserted — press Enter to send!');
+            flashStatus('✓ Lineup inserted — press Enter to send!', false);
         }, 150);
     }
 
     function copyToClipboard(type) {
         const text = type === 'compact' ? _buildCompactText() : _buildFullText();
-        if (!text) { flashStatus('Lineup is empty.'); return; }
-        navigator.clipboard.writeText(text).then(() => flashStatus('Copied!')).catch(() => {
+        if (!text) { flashStatus('Lineup is empty.', true); return; }
+        navigator.clipboard.writeText(text).then(() => flashStatus('Copied!', false)).catch(() => {
             const ta = document.createElement('textarea');
-            ta.value = text; ta.style.cssText = 'position:fixed;opacity:0';
-            document.body.appendChild(ta); ta.focus(); ta.select();
-            document.execCommand('copy'); document.body.removeChild(ta);
-            flashStatus('Copied!');
+            ta.value = text;
+            ta.style.cssText = 'position:fixed;opacity:0';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            flashStatus('Copied!', false);
         });
     }
 
@@ -484,7 +601,7 @@
         const timerSecs = chainTimeout;
         const targetSecs = parseTimeToSecs(targetHitTime);
         const inWindow = targetHitTime && timerSecs > 0 && timerSecs <= targetSecs;
-        const pct90 = timerSecs > 0 && timerSecs <= 54; // 90% warning zone
+        const pct90 = timerSecs > 0 && timerSecs <= 54;
 
         let timerColor = '#2ecc71';
         if (pct90) timerColor = '#e74c3c';
@@ -513,7 +630,7 @@
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  RENDER: LINEUP CARDS
+    //  RENDER: LINEUP
     // ══════════════════════════════════════════════════════════════
     function statusPillHtml(id) {
         const st = memberStatuses[String(id)];
@@ -533,7 +650,7 @@
         if (!container) return;
 
         if (!lineup.length) {
-            container.innerHTML = `<div style="padding:20px;text-align:center;color:#4a5568;font-style:italic;font-size:12px;">No members yet — add faction members below.</div>`;
+            container.innerHTML = `<div style="padding:20px;text-align:center;color:#4a5568;font-style:italic;font-size:12px;">No members in lineup yet — add faction members below.</div>`;
             renderChainBar();
             return;
         }
@@ -543,80 +660,69 @@
 
         let html = '';
 
-        // CURRENTLY UP
+        // CURRENTLY UP (0)
         const up = lineup[0];
         html += `
-        <div class="sv-tier-card sv-up-card" draggable="true" data-idx="0"
-            ondragover="event.preventDefault();this.classList.add('sv-drag-over')"
-            ondragleave="this.classList.remove('sv-drag-over')"
-            ondrop="event.preventDefault();this.classList.remove('sv-drag-over');window.svMgr.drop(0,event)">
+        <div class="sv-tier-card sv-up-card" draggable="true" data-idx="0">
             <div class="sv-tier-label">
                 <span>Currently Up</span>
                 ${autoMode ? `<span style="font-size:9px;color:#f39c12;" id="sv-autoskip-cd">${autoSkipLeft > 0 ? `auto-skip in ${autoSkipLeft}s` : ''}</span>` : ''}
             </div>
             <div class="sv-tier-body">
-                <span class="sv-pos sv-pos-clickable" onclick="window.svMgr.promptMove(0)" title="Click to jump">1</span>
+                <span class="sv-pos sv-pos-clickable" data-action="prompt-move" data-idx="0" title="Click to jump position">1</span>
                 <span class="sv-name">${esc(up.name)}</span>
                 ${up.hit ? '<span style="color:#2ecc71;font-size:11px;font-weight:900;">✓ HIT</span>' : ''}
                 ${statusPillHtml(up.id)}
                 ${targetHitTime ? `<span class="sv-hit-badge ${inWindow ? 'sv-hit-now' : ''}">${inWindow ? `🎯 HIT NOW` : `Hit at ${targetHitTime}`}</span>` : ''}
                 <div class="sv-tier-actions">
-                    ${lineup.length > 1 ? `<button class="sv-btn" onclick="window.svMgr.swapTop()">⇄ Swap</button>` : ''}
-                    ${lineup.length > 1 ? `<button class="sv-btn" onclick="window.svMgr.move(0,1)">▼ Down</button>` : ''}
-                    ${lineup.length > 2 ? `<button class="sv-btn" onclick="window.svMgr.move(0,lineup.length-1)">⏬ Bottom</button>` : ''}
-                    <button class="sv-btn sv-btn-skip" onclick="window.svMgr.skip(0)">Skip</button>
-                    <button class="sv-btn sv-btn-rm" onclick="window.svMgr.remove(0)">✕</button>
+                    ${lineup.length > 1 ? `<button class="sv-btn" data-action="swap-top" title="Swap with Next">⇄ Swap</button>` : ''}
+                    ${lineup.length > 1 ? `<button class="sv-btn" data-action="move" data-from="0" data-to="1">▼ Down</button>` : ''}
+                    ${lineup.length > 2 ? `<button class="sv-btn" data-action="move" data-from="0" data-to="${lineup.length-1}">⏬ Bottom</button>` : ''}
+                    <button class="sv-btn sv-btn-skip" data-action="skip" data-idx="0">Skip</button>
+                    <button class="sv-btn sv-btn-rm" data-action="remove" data-idx="0">✕</button>
                 </div>
             </div>
         </div>`;
 
-        // NEXT
+        // NEXT (1)
         if (lineup.length >= 2) {
             const nx = lineup[1];
             html += `
-            <div class="sv-tier-card sv-next-card" draggable="true" data-idx="1"
-                ondragover="event.preventDefault();this.classList.add('sv-drag-over')"
-                ondragleave="this.classList.remove('sv-drag-over')"
-                ondrop="event.preventDefault();this.classList.remove('sv-drag-over');window.svMgr.drop(1,event)">
+            <div class="sv-tier-card sv-next-card" draggable="true" data-idx="1">
                 <div class="sv-tier-label"><span>Next</span></div>
                 <div class="sv-tier-body">
-                    <span class="sv-pos sv-pos-clickable" onclick="window.svMgr.promptMove(1)" title="Click to jump">2</span>
+                    <span class="sv-pos sv-pos-clickable" data-action="prompt-move" data-idx="1" title="Click to jump position">2</span>
                     <span class="sv-name">${esc(nx.name)}</span>
                     ${nx.hit ? '<span style="color:#2ecc71;font-size:11px;font-weight:900;">✓</span>' : ''}
                     ${statusPillHtml(nx.id)}
                     <div class="sv-tier-actions">
-                        <button class="sv-btn" onclick="window.svMgr.makeCurrent(1)">▲ Make Up</button>
-                        <button class="sv-btn" onclick="window.svMgr.swapTop()" title="Swap with UP">⇄ Swap Up</button>
-                        ${lineup.length > 2 ? `<button class="sv-btn" onclick="window.svMgr.move(1,2)">▼ Down</button>` : ''}
-                        <button class="sv-btn sv-btn-skip" onclick="window.svMgr.skip(1)">Skip</button>
-                        <button class="sv-btn sv-btn-rm" onclick="window.svMgr.remove(1)">✕</button>
+                        <button class="sv-btn" data-action="make-current" data-idx="1">▲ Make Up</button>
+                        <button class="sv-btn" data-action="swap-top" title="Swap with UP">⇄ Swap Up</button>
+                        ${lineup.length > 2 ? `<button class="sv-btn" data-action="move" data-from="1" data-to="2">▼ Down</button>` : ''}
+                        <button class="sv-btn sv-btn-skip" data-action="skip" data-idx="1">Skip</button>
+                        <button class="sv-btn sv-btn-rm" data-action="remove" data-idx="1">✕</button>
                     </div>
                 </div>
             </div>`;
         }
 
-        // QUEUE
+        // QUEUE (2+)
         if (lineup.length > 2) {
-            html += `<div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:#4a5568;padding:6px 12px 2px 12px;">Queue</div>`;
+            html += `<div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:#4a5568;padding:6px 12px 2px 12px;">Queue (${lineup.length - 2})</div>`;
             for (let i = 2; i < lineup.length; i++) {
                 const m = lineup[i];
                 html += `
-                <div class="sv-queue-row" draggable="true" data-idx="${i}"
-                    ondragstart="event.dataTransfer.setData('text/plain','${i}');this.classList.add('sv-dragging')"
-                    ondragend="this.classList.remove('sv-dragging')"
-                    ondragover="event.preventDefault();this.classList.add('sv-drag-over')"
-                    ondragleave="this.classList.remove('sv-drag-over')"
-                    ondrop="event.preventDefault();this.classList.remove('sv-drag-over');window.svMgr.drop(${i},event)">
-                    <span class="sv-q-pos sv-pos-clickable" onclick="window.svMgr.promptMove(${i})" title="Click to jump">${i + 1}</span>
+                <div class="sv-queue-row" draggable="true" data-idx="${i}">
+                    <span class="sv-q-pos sv-pos-clickable" data-action="prompt-move" data-idx="${i}" title="Click to jump position">${i + 1}</span>
                     <span class="sv-q-name">${esc(m.name)}</span>
                     ${m.hit ? '<span style="color:#2ecc71;font-size:10px;font-weight:900;">✓</span>' : ''}
                     ${statusPillHtml(m.id)}
                     <div class="sv-q-actions">
-                        <button class="sv-btn sv-btn-xs" onclick="window.svMgr.makeCurrent(${i})" title="Make Currently Up">▲▲</button>
-                        <button class="sv-btn sv-btn-xs" onclick="window.svMgr.move(${i},${i}-1)" title="Move up one">▲</button>
-                        <button class="sv-btn sv-btn-xs" onclick="window.svMgr.move(${i},${i}+1)" title="Move down one">▼</button>
-                        <button class="sv-btn sv-btn-xs sv-btn-skip" onclick="window.svMgr.skip(${i})">Skip</button>
-                        <button class="sv-btn sv-btn-xs sv-btn-rm" onclick="window.svMgr.remove(${i})">✕</button>
+                        <button class="sv-btn sv-btn-xs" data-action="make-current" data-idx="${i}" title="Make Currently Up">▲▲</button>
+                        <button class="sv-btn sv-btn-xs" data-action="move" data-from="${i}" data-to="${i-1}" title="Move up one">▲</button>
+                        <button class="sv-btn sv-btn-xs" data-action="move" data-from="${i}" data-to="${Math.min(lineup.length-1, i+1)}" title="Move down one">▼</button>
+                        <button class="sv-btn sv-btn-xs sv-btn-skip" data-action="skip" data-idx="${i}">Skip</button>
+                        <button class="sv-btn sv-btn-xs sv-btn-rm" data-action="remove" data-idx="${i}">✕</button>
                     </div>
                 </div>`;
             }
@@ -627,7 +733,7 @@
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  RENDER: MEMBER SEARCH SUGGEST
+    //  RENDER: SEARCH SUGGESTIONS
     // ══════════════════════════════════════════════════════════════
     function renderSuggest() {
         const box = document.getElementById('sv-suggest');
@@ -672,7 +778,7 @@
 
                 const pillHtml = statusPillHtml(m.id);
                 return `<div class="sv-suggest-item ${idx === suggestSelected ? 'sv-suggest-sel' : ''}"
-                    onclick="window.svMgr.addFromSuggest('${escAttr(m.name)}',${m.id})">
+                    data-action="add-suggest" data-name="${escAttr(m.name)}" data-id="${m.id}" data-sidx="${idx}">
                     <span style="width:6px;height:6px;border-radius:50%;background:${dotColor};display:inline-block;flex-shrink:0;"></span>
                     <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${nameHtml}</span>
                     ${pillHtml}
@@ -680,15 +786,49 @@
             }).join('');
     }
 
+    function addFromInput() {
+        const inp = document.getElementById('sv-add-input');
+        if (!inp) return;
+        const val = inp.value.trim();
+        if (!val) return;
+
+        const box = document.getElementById('sv-suggest');
+        const items = box ? box.querySelectorAll('.sv-suggest-item') : [];
+        if (items.length && suggestSelected >= 0 && items[suggestSelected]) {
+            const name = items[suggestSelected].dataset.name;
+            const id = parseInt(items[suggestSelected].dataset.id, 10) || null;
+            addMember(name, id);
+        } else {
+            const match = factionMembers.find(m => m.name.toLowerCase() === val.toLowerCase()) ||
+                          factionMembers.find(m => m.name.toLowerCase().startsWith(val.toLowerCase()));
+            addMember(match ? match.name : val, match ? match.id : null);
+        }
+
+        inp.value = '';
+        if (box) box.style.display = 'none';
+        suggestSelected = -1;
+        searchQuery = '';
+    }
+
+    function addFromSuggest(name, id) {
+        addMember(name, id);
+        const inp = document.getElementById('sv-add-input');
+        if (inp) { inp.value = ''; inp.focus(); }
+        const box = document.getElementById('sv-suggest');
+        if (box) box.style.display = 'none';
+        suggestSelected = -1;
+        searchQuery = '';
+    }
+
     // ══════════════════════════════════════════════════════════════
     //  HELPERS
     // ══════════════════════════════════════════════════════════════
     function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-    function escAttr(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+    function escAttr(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/"/g,'&quot;').replace(/'/g,"&#39;"); }
     function escRe(s) { return s.replace(/[-\/\\^$*+?.()|[\]{}]/g,'\\$&'); }
 
     // ══════════════════════════════════════════════════════════════
-    //  BUILD HUD
+    //  BUILD HUD DOM
     // ══════════════════════════════════════════════════════════════
     function buildHUD() {
         const savedPos = GM_getValue(LS_KEY_POS, { top: 80, right: 20 });
@@ -707,11 +847,11 @@
                     <span id="sv-status-txt">SAME</span>
                 </span>
                 <span class="sv-title-text">⛓ Chain Manager</span>
-                <span class="sv-min-up" id="sv-min-up">${lineup.length ? 'UP: '+lineup[0].name : 'No lineup'}</span>
+                <span class="sv-min-up" id="sv-min-up">${lineup.length ? 'UP: ' + esc(lineup[0].name) : 'No lineup'}</span>
             </div>
             <div class="sv-hdr-controls">
                 <button class="sv-min-post-btn" id="sv-min-post-btn" title="Post to Faction Chat">📋 Post</button>
-                <button class="sv-ctrl-btn" id="sv-min-btn" title="Minimize">${isMinimized ? '□' : '─'}</button>
+                <button class="sv-ctrl-btn" id="sv-min-btn" title="Minimize / Expand">${isMinimized ? '□' : '─'}</button>
                 <button class="sv-ctrl-btn" id="sv-close-btn" title="Close">✕</button>
             </div>
         </div>
@@ -722,11 +862,11 @@
             <!-- CHAIN BAR -->
             <div id="sv-chain-bar" class="sv-chain-bar"></div>
 
-            <!-- TOP CONTROLS -->
+            <!-- CONTROLS ROW 1 -->
             <div class="sv-controls-row">
                 <div class="sv-hit-time-row">
                     <span style="font-size:10px;color:#718096;white-space:nowrap;">Hit at:</span>
-                    <select id="sv-hit-time-sel" class="sv-select" onchange="window.svMgr.setHitTime(this.value)">
+                    <select id="sv-hit-time-sel" class="sv-select">
                         <option value="">None</option>
                         <option value="3:30">3:30</option>
                         <option value="3:00">3:00</option>
@@ -736,60 +876,56 @@
                         <option value="1:00">1:00</option>
                         <option value="custom">Custom…</option>
                     </select>
-                    <input id="sv-hit-time-custom" class="sv-input-sm" type="text" placeholder="2:15" style="display:none;width:48px;" onchange="window.svMgr.setCustomHitTime(this.value)" />
+                    <input id="sv-hit-time-custom" class="sv-input-sm" type="text" placeholder="2:15" style="display:none;width:48px;" />
                 </div>
-                <button class="sv-btn sv-btn-green" onclick="window.svMgr.postChat()" id="sv-post-btn" title="Post vertical lineup to Faction Chat">📋 Post Chat</button>
-                <button class="sv-btn" onclick="window.svMgr.copy()" title="Copy lineup (vertical)">Copy</button>
-                <button class="sv-btn" onclick="window.svMgr.copy('compact')" title="Copy compact one-liner">Compact</button>
+                <button class="sv-btn sv-btn-green" id="sv-post-btn" title="Post vertical lineup to Faction Chat">📋 Post Chat</button>
+                <button class="sv-btn" id="sv-copy-btn" title="Copy lineup (vertical)">Copy</button>
+                <button class="sv-btn" id="sv-copy-compact-btn" title="Copy compact one-liner">Compact</button>
             </div>
 
+            <!-- CONTROLS ROW 2 -->
             <div class="sv-controls-row sv-controls-row2">
-                <button class="sv-btn" onclick="window.svMgr.next()" title="Advance to next manually">Next ▶</button>
-                <button class="sv-btn" onclick="window.svMgr.resetHits()" title="Clear all hit marks">Reset</button>
-                <button class="sv-btn sv-btn-danger" onclick="window.svMgr.clearAll()">Clear All</button>
+                <button class="sv-btn" id="sv-next-btn" title="Advance to next manually">Next ▶</button>
+                <button class="sv-btn" id="sv-reset-btn" title="Clear all hit marks">Reset</button>
+                <button class="sv-btn sv-btn-danger" id="sv-clear-btn" title="Remove all members">Clear All</button>
                 <label class="sv-toggle-lbl" title="Loop queue after everyone hits">
-                    <input type="checkbox" id="sv-loop-chk" ${loopMode ? 'checked' : ''} onchange="window.svMgr.setLoop(this.checked)" />
+                    <input type="checkbox" id="sv-loop-chk" ${loopMode ? 'checked' : ''} />
                     Loop
                 </label>
                 <label class="sv-toggle-lbl" title="Auto-detect hits and rotate lineup automatically">
-                    <input type="checkbox" id="sv-auto-chk" ${autoMode ? 'checked' : ''} onchange="window.svMgr.setAuto(this.checked)" />
+                    <input type="checkbox" id="sv-auto-chk" ${autoMode ? 'checked' : ''} />
                     Auto
                 </label>
             </div>
 
-            <!-- STATUS MSG -->
+            <!-- STATUS MSG BAR -->
             <div class="sv-status-bar"><span id="sv-status-msg"></span></div>
 
             <!-- LINEUP CARDS -->
             <div id="sv-lineup-container"></div>
 
-            <!-- ADD MEMBER -->
+            <!-- ADD MEMBER ROW -->
             <div class="sv-add-row" style="position:relative;">
-                <input id="sv-add-input" class="sv-add-input" placeholder="Type to search faction members…" autocomplete="off"
-                    oninput="window.svMgr.onSearchInput(this.value)"
-                    onkeydown="window.svMgr.onSearchKey(event)"
-                    onfocus="window.svMgr.showSuggest()" />
-                <button class="sv-add-btn" onclick="window.svMgr.addFromInput()">+ Add</button>
+                <input id="sv-add-input" class="sv-add-input" placeholder="Type to search faction members…" autocomplete="off" />
+                <button class="sv-add-btn" id="sv-add-btn">+ Add</button>
                 <div id="sv-suggest" class="sv-suggest" style="display:none;"></div>
             </div>
 
-            <!-- QUICK ACTIONS -->
+            <!-- QUICK ACTIONS ROW -->
             <div class="sv-quick-row">
-                <button class="sv-btn sv-btn-sm" onclick="window.svMgr.autoFill()" title="Add all Online+Okay members">Auto-Fill</button>
-                <button class="sv-btn sv-btn-sm" onclick="window.svMgr.refreshMembers()" title="Refresh faction member list from Torn API">↻ Refresh Members</button>
+                <button class="sv-btn sv-btn-sm" id="sv-autofill-btn" title="Add all Online + Okay members">Auto-Fill</button>
+                <button class="sv-btn sv-btn-sm" id="sv-refresh-btn" title="Refresh faction member list from Torn API">↻ Refresh Members</button>
+                <button class="sv-btn sv-btn-sm" id="sv-key-toggle-btn" title="View or change Torn API Key" style="margin-left:auto;">⚙ Key</button>
             </div>
 
-            <!-- API KEY SETUP (if no key) -->
-            <div id="sv-apikey-row" class="sv-apikey-row" style="${apiKey ? 'display:none' : ''}">
-                <span style="font-size:11px;color:#f39c12;">⚠ API Key needed for live features</span>
-                <input id="sv-apikey-input" class="sv-input-sm" type="password" placeholder="Your Torn API key…" style="flex:1;min-width:0;" />
-                <button class="sv-btn sv-btn-green" onclick="window.svMgr.saveApiKey()">Save Key</button>
+            <!-- API KEY SETUP ROW -->
+            <div id="sv-apikey-row" class="sv-apikey-row" style="${apiKey ? 'display:none;' : ''}">
+                <div style="width:100%;font-size:11px;color:#f39c12;margin-bottom:2px;font-weight:700;">🔑 Enter Torn API Key (Faction / Minimal)</div>
+                <input id="sv-apikey-input" class="sv-input-sm" type="password" placeholder="Paste your Torn API key here…" value="${escAttr(apiKey)}" style="flex:1;min-width:0;" />
+                <button class="sv-btn sv-btn-green" id="sv-apikey-save-btn">Save Key</button>
             </div>
 
         </div>
-
-        <!-- TOAST -->
-        <div class="sv-toast" id="sv-toast"></div>
         `;
 
         document.body.appendChild(hud);
@@ -799,136 +935,6 @@
         return hud;
     }
 
-    // ══════════════════════════════════════════════════════════════
-    //  HUD CONTROLLER (exposed globally for inline onclick)
-    // ══════════════════════════════════════════════════════════════
-    window.svMgr = {
-        add:           (name, id)  => addMember(name, id),
-        remove:        (idx)       => removeMember(idx),
-        move:          (from, to)  => { moveMember(from, to); renderLineup(); },
-        skip:          (idx)       => skipMember(idx),
-        makeCurrent:   (idx)       => makeCurrent(idx),
-        swapTop:       ()          => swapTopTwo(),
-        next:          ()          => nextTurn(),
-        resetHits:     ()          => resetHits(),
-        clearAll:      ()          => clearAll(),
-        autoFill:      ()          => autoFill(),
-        postChat:      ()          => postToChat(),
-        copy:          (type)      => copyToClipboard(type),
-        promptMove:    (idx)       => {
-            const m = lineup[idx];
-            if (!m) return;
-            const raw = prompt(`Move "${m.name}" to position (1-${lineup.length}):`, String(idx + 1));
-            if (!raw) return;
-            const pos = parseInt(raw, 10) - 1;
-            if (isNaN(pos) || pos < 0 || pos >= lineup.length) return;
-            moveMember(idx, pos);
-            renderLineup();
-        },
-        drop:          (toIdx, ev) => {
-            const fromIdx = parseInt(ev.dataTransfer.getData('text/plain'));
-            if (!isNaN(fromIdx) && fromIdx !== toIdx) moveMember(fromIdx, toIdx);
-            renderLineup();
-        },
-        setHitTime:    (val) => {
-            if (val === 'custom') {
-                const c = document.getElementById('sv-hit-time-custom');
-                if (c) { c.style.display = 'inline-block'; c.focus(); }
-                return;
-            }
-            const c = document.getElementById('sv-hit-time-custom');
-            if (c) c.style.display = 'none';
-            targetHitTime = val;
-            save(); renderLineup(); renderChainBar();
-        },
-        setCustomHitTime: (val) => {
-            targetHitTime = val;
-            save(); renderLineup(); renderChainBar();
-        },
-        setLoop:       (v) => { loopMode = v; save(); },
-        setAuto:       (v) => { autoMode = v; if (!v) clearAutoSkip(); else startAutoSkip(); save(); },
-        showSuggest:   () => {
-            const box = document.getElementById('sv-suggest');
-            if (box) box.style.display = 'block';
-            if (!factionMembers.length) fetchFactionMembers();
-            renderSuggest();
-        },
-        onSearchInput: (val) => {
-            searchQuery = val;
-            suggestSelected = -1;
-            const box = document.getElementById('sv-suggest');
-            if (box) box.style.display = 'block';
-            if (!factionMembers.length) fetchFactionMembers();
-            renderSuggest();
-        },
-        onSearchKey:   (e) => {
-            const box = document.getElementById('sv-suggest');
-            const items = box ? box.querySelectorAll('.sv-suggest-item') : [];
-            if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                suggestSelected = Math.min(suggestSelected + 1, items.length - 1);
-                renderSuggest();
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                suggestSelected = Math.max(suggestSelected - 1, -1);
-                renderSuggest();
-            } else if (e.key === 'Enter') {
-                e.preventDefault();
-                if (suggestSelected >= 0 && items[suggestSelected]) {
-                    items[suggestSelected].click();
-                } else {
-                    window.svMgr.addFromInput();
-                }
-            } else if (e.key === 'Escape') {
-                if (box) box.style.display = 'none';
-            }
-        },
-        addFromInput:  () => {
-            const inp = document.getElementById('sv-add-input');
-            if (!inp) return;
-            const val = inp.value.trim();
-            if (!val) return;
-            const box = document.getElementById('sv-suggest');
-            const items = box ? box.querySelectorAll('.sv-suggest-item') : [];
-            if (items.length && suggestSelected >= 0) { items[suggestSelected].click(); return; }
-            const match = factionMembers.find(m => m.name.toLowerCase() === val.toLowerCase()) ||
-                          factionMembers.find(m => m.name.toLowerCase().startsWith(val.toLowerCase()));
-            addMember(match ? match.name : val, match ? match.id : null);
-            inp.value = '';
-            if (box) box.style.display = 'none';
-            suggestSelected = -1;
-        },
-        addFromSuggest: (name, id) => {
-            addMember(name, id);
-            const inp = document.getElementById('sv-add-input');
-            if (inp) { inp.value = ''; inp.focus(); }
-            const box = document.getElementById('sv-suggest');
-            if (box) box.style.display = 'none';
-            suggestSelected = -1;
-            searchQuery = '';
-        },
-        refreshMembers: () => {
-            if (!apiKey) { flashStatus('Add an API key first.'); return; }
-            flashStatus('Refreshing member list…');
-            fetchFactionMembers();
-        },
-        saveApiKey: () => {
-            const inp = document.getElementById('sv-apikey-input');
-            if (!inp || !inp.value.trim()) return;
-            apiKey = inp.value.trim();
-            GM_setValue('sv_apikey', apiKey);
-            localStorage.setItem(LS_KEY_APIKEY, apiKey);
-            const row = document.getElementById('sv-apikey-row');
-            if (row) row.style.display = 'none';
-            flashStatus('API key saved! Fetching data…');
-            fetchChain();
-            fetchFactionMembers();
-        }
-    };
-
-    // ══════════════════════════════════════════════════════════════
-    //  HIT TIME UI SYNC
-    // ══════════════════════════════════════════════════════════════
     function _syncHitTimeUI() {
         const sel = document.getElementById('sv-hit-time-sel');
         const custom = document.getElementById('sv-hit-time-custom');
@@ -944,7 +950,262 @@
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  CSS
+    //  EVENT LISTENERS & DELEGATION (NO INLINE ONCLICK)
+    // ══════════════════════════════════════════════════════════════
+    function wireEvents(hud) {
+        // Dragging HUD handle
+        const handle = document.getElementById('sv-handle');
+        let dragging = false, sx = 0, sy = 0, il = 0, it = 0;
+
+        handle.addEventListener('mousedown', e => {
+            if (e.target.closest('.sv-hdr-controls')) return;
+            dragging = true;
+            sx = e.clientX; sy = e.clientY;
+            const r = hud.getBoundingClientRect();
+            il = r.left; it = r.top;
+            hud.style.right = 'auto';
+            hud.style.left  = `${il}px`;
+            hud.style.top   = `${it}px`;
+            document.body.style.userSelect = 'none';
+        });
+
+        window.addEventListener('mousemove', e => {
+            if (!dragging) return;
+            const nl = Math.max(8, Math.min(window.innerWidth  - hud.offsetWidth  - 8, il + (e.clientX - sx)));
+            const nt = Math.max(8, Math.min(window.innerHeight - hud.offsetHeight - 8, it + (e.clientY - sy)));
+            hud.style.left = `${nl}px`;
+            hud.style.top  = `${nt}px`;
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (!dragging) return;
+            dragging = false;
+            document.body.style.userSelect = '';
+            const r = hud.getBoundingClientRect();
+            GM_setValue(LS_KEY_POS, { top: Math.round(r.top), right: Math.round(window.innerWidth - r.right) });
+        });
+
+        // Header buttons
+        document.getElementById('sv-min-btn').addEventListener('click', () => {
+            isMinimized = !isMinimized;
+            hud.classList.toggle('sv-minimized', isMinimized);
+            document.getElementById('sv-min-btn').textContent = isMinimized ? '□' : '─';
+            GM_setValue('sv_min', isMinimized);
+        });
+
+        document.getElementById('sv-close-btn').addEventListener('click', () => {
+            hud.style.display = 'none';
+        });
+
+        document.getElementById('sv-post-btn').addEventListener('click', postToChat);
+        document.getElementById('sv-min-post-btn').addEventListener('click', postToChat);
+
+        // Copy buttons
+        document.getElementById('sv-copy-btn').addEventListener('click', () => copyToClipboard('full'));
+        document.getElementById('sv-copy-compact-btn').addEventListener('click', () => copyToClipboard('compact'));
+
+        // Control buttons
+        document.getElementById('sv-next-btn').addEventListener('click', nextTurn);
+        document.getElementById('sv-reset-btn').addEventListener('click', resetHits);
+        document.getElementById('sv-clear-btn').addEventListener('click', clearAll);
+
+        // Checkboxes
+        document.getElementById('sv-loop-chk').addEventListener('change', e => {
+            loopMode = e.target.checked;
+            save();
+        });
+
+        document.getElementById('sv-auto-chk').addEventListener('change', e => {
+            autoMode = e.target.checked;
+            if (!autoMode) clearAutoSkip();
+            else startAutoSkip();
+            save();
+            renderLineup();
+        });
+
+        // Hit time dropdown & custom
+        const hitSel = document.getElementById('sv-hit-time-sel');
+        const customInp = document.getElementById('sv-hit-time-custom');
+        hitSel.addEventListener('change', () => {
+            if (hitSel.value === 'custom') {
+                customInp.style.display = 'inline-block';
+                customInp.focus();
+            } else {
+                customInp.style.display = 'none';
+                targetHitTime = hitSel.value;
+                save();
+                renderLineup();
+                renderChainBar();
+            }
+        });
+        customInp.addEventListener('change', () => {
+            targetHitTime = customInp.value.trim();
+            save();
+            renderLineup();
+            renderChainBar();
+        });
+
+        // Quick actions
+        document.getElementById('sv-autofill-btn').addEventListener('click', autoFill);
+        document.getElementById('sv-refresh-btn').addEventListener('click', () => {
+            if (!apiKey) { flashStatus('Enter an API key first.', true); return; }
+            flashStatus('Refreshing member list from Torn…', false);
+            fetchFactionMembers();
+        });
+
+        // Toggle API key row
+        document.getElementById('sv-key-toggle-btn').addEventListener('click', () => {
+            const row = document.getElementById('sv-apikey-row');
+            if (!row) return;
+            const isHidden = row.style.display === 'none';
+            row.style.display = isHidden ? 'flex' : 'none';
+            if (isHidden) {
+                const inp = document.getElementById('sv-apikey-input');
+                if (inp) inp.focus();
+            }
+        });
+
+        // Save API key
+        const saveKeyBtn = document.getElementById('sv-apikey-save-btn');
+        if (saveKeyBtn) saveKeyBtn.addEventListener('click', saveApiKey);
+
+        const apiKeyInput = document.getElementById('sv-apikey-input');
+        if (apiKeyInput) {
+            apiKeyInput.addEventListener('keydown', e => {
+                if (e.key === 'Enter') saveApiKey();
+            });
+        }
+
+        // Add Member search input & button
+        const addInp = document.getElementById('sv-add-input');
+        const addBtn = document.getElementById('sv-add-btn');
+        const suggestBox = document.getElementById('sv-suggest');
+
+        addBtn.addEventListener('click', addFromInput);
+
+        addInp.addEventListener('focus', () => {
+            suggestBox.style.display = 'block';
+            if (!factionMembers.length && apiKey) fetchFactionMembers();
+            renderSuggest();
+        });
+
+        addInp.addEventListener('input', e => {
+            searchQuery = e.target.value;
+            suggestSelected = -1;
+            suggestBox.style.display = 'block';
+            if (!factionMembers.length && apiKey) fetchFactionMembers();
+            renderSuggest();
+        });
+
+        addInp.addEventListener('keydown', e => {
+            const items = suggestBox ? suggestBox.querySelectorAll('.sv-suggest-item') : [];
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                suggestSelected = Math.min(suggestSelected + 1, items.length - 1);
+                renderSuggest();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                suggestSelected = Math.max(suggestSelected - 1, -1);
+                renderSuggest();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (suggestSelected >= 0 && items[suggestSelected]) {
+                    const name = items[suggestSelected].dataset.name;
+                    const id = parseInt(items[suggestSelected].dataset.id, 10) || null;
+                    addFromSuggest(name, id);
+                } else {
+                    addFromInput();
+                }
+            } else if (e.key === 'Escape') {
+                suggestBox.style.display = 'none';
+            }
+        });
+
+        // Close suggestions on outside click
+        document.addEventListener('click', e => {
+            if (!e.target.closest('.sv-add-row')) {
+                if (suggestBox) suggestBox.style.display = 'none';
+            }
+        });
+
+        // ── EVENT DELEGATION for Lineup Card Buttons & Suggest items ──
+        hud.addEventListener('click', e => {
+            // Suggestion click
+            const suggestItem = e.target.closest('[data-action="add-suggest"]');
+            if (suggestItem) {
+                const name = suggestItem.dataset.name;
+                const id = parseInt(suggestItem.dataset.id, 10) || null;
+                addFromSuggest(name, id);
+                return;
+            }
+
+            // Card / Queue action buttons
+            const actBtn = e.target.closest('[data-action]');
+            if (!actBtn) return;
+
+            const action = actBtn.dataset.action;
+            const idx    = parseInt(actBtn.dataset.idx, 10);
+            const from   = parseInt(actBtn.dataset.from, 10);
+            const to     = parseInt(actBtn.dataset.to, 10);
+
+            if (action === 'skip' && !isNaN(idx)) {
+                skipMember(idx);
+            } else if (action === 'remove' && !isNaN(idx)) {
+                removeMember(idx);
+            } else if (action === 'swap-top') {
+                swapTopTwo();
+            } else if (action === 'make-current' && !isNaN(idx)) {
+                makeCurrent(idx);
+            } else if (action === 'move' && !isNaN(from) && !isNaN(to)) {
+                moveMember(from, to);
+            } else if (action === 'prompt-move' && !isNaN(idx)) {
+                promptMove(idx);
+            }
+        });
+
+        // ── DRAG AND DROP REORDERING DELEGATION ──
+        hud.addEventListener('dragstart', e => {
+            const card = e.target.closest('[data-idx]');
+            if (card) {
+                e.dataTransfer.setData('text/plain', card.dataset.idx);
+                card.classList.add('sv-dragging');
+            }
+        });
+
+        hud.addEventListener('dragend', e => {
+            const card = e.target.closest('[data-idx]');
+            if (card) card.classList.remove('sv-dragging');
+        });
+
+        hud.addEventListener('dragover', e => {
+            const card = e.target.closest('[data-idx]');
+            if (card) {
+                e.preventDefault();
+                card.classList.add('sv-drag-over');
+            }
+        });
+
+        hud.addEventListener('dragleave', e => {
+            const card = e.target.closest('[data-idx]');
+            if (card) card.classList.remove('sv-drag-over');
+        });
+
+        hud.addEventListener('drop', e => {
+            const card = e.target.closest('[data-idx]');
+            if (card) {
+                e.preventDefault();
+                card.classList.remove('sv-drag-over');
+                const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
+                const toIdx   = parseInt(card.dataset.idx, 10);
+                if (!isNaN(fromIdx) && !isNaN(toIdx) && fromIdx !== toIdx) {
+                    moveMember(fromIdx, toIdx);
+                }
+            }
+        });
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    //  CSS STYLES
     // ══════════════════════════════════════════════════════════════
     const css = `
     #sv-chain-hud {
@@ -986,7 +1247,7 @@
     }
     .sv-title { display: flex; align-items: center; gap: 7px; overflow: hidden; }
     .sv-title-text { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; color: #e2e8f0; white-space: nowrap; }
-    .sv-min-up { display: none; font-size: 11px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+    .sv-min-up { display: none; font-size: 11px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
     .sv-hdr-controls { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
 
     .sv-status-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 12px; font-size: 9px; font-weight: 800; letter-spacing: 0.5px; cursor: default; transition: all 0.2s; }
@@ -1026,7 +1287,7 @@
     }
     .sv-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
     .sv-btn-green { background: rgba(46,204,113,0.18); border-color: rgba(46,204,113,0.4); color: #2ecc71; }
-    .sv-btn-green:hover { background: rgba(46,204,113,0.28); }
+    .sv-btn-green:hover { background: rgba(46,204,113,0.28); color: #3ee083; }
     .sv-btn-danger { background: rgba(231,76,60,0.15); border-color: rgba(231,76,60,0.35); color: #e74c3c; }
     .sv-btn-danger:hover { background: rgba(231,76,60,0.25); }
     .sv-btn-skip { background: rgba(243,156,18,0.12); border-color: rgba(243,156,18,0.3); color: #f39c12; }
@@ -1043,7 +1304,7 @@
     .sv-toggle-lbl { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #a0aec0; cursor: pointer; }
     .sv-toggle-lbl input { cursor: pointer; margin: 0; accent-color: #2ecc71; }
 
-    .sv-status-bar { padding: 2px 12px 4px; min-height: 18px; font-size: 11px; color: #2ecc71; }
+    .sv-status-bar { padding: 3px 12px; min-height: 18px; font-size: 11px; }
 
     /* Cards */
     .sv-tier-card {
@@ -1095,9 +1356,9 @@
     .sv-add-input:focus { border-color: rgba(46,204,113,0.5); }
     .sv-add-input::placeholder { color: #4a5568; }
     .sv-add-btn { background: rgba(46,204,113,0.18); border: 1px solid rgba(46,204,113,0.4); color: #2ecc71; padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 800; cursor: pointer; white-space: nowrap; }
-    .sv-add-btn:hover { background: rgba(46,204,113,0.28); }
+    .sv-add-btn:hover { background: rgba(46,204,113,0.28); color: #3ee083; }
 
-    /* Suggest */
+    /* Suggest box */
     .sv-suggest {
         position: absolute; bottom: calc(100% + 6px); left: 0; right: 0;
         background: rgba(10,14,23,0.99); border: 1px solid rgba(255,255,255,0.12);
@@ -1111,14 +1372,14 @@
     .sv-suggest-item:hover, .sv-suggest-sel { background: rgba(46,204,113,0.12); }
 
     /* Quick actions */
-    .sv-quick-row { display: flex; gap: 5px; padding: 4px 10px 8px; }
+    .sv-quick-row { display: flex; gap: 5px; padding: 4px 10px 8px; align-items: center; }
 
-    /* API key */
-    .sv-apikey-row { display: flex; align-items: center; gap: 6px; padding: 6px 10px 8px; background: rgba(243,156,18,0.06); border-top: 1px solid rgba(243,156,18,0.2); flex-wrap: wrap; }
-
-    /* Toast */
-    .sv-toast { position: absolute; bottom: -34px; left: 50%; transform: translateX(-50%); background: #10b981; color: #fff; font-size: 11px; font-weight: 700; padding: 5px 12px; border-radius: 5px; box-shadow: 0 4px 14px rgba(0,0,0,0.45); white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.2s, transform 0.2s; z-index: 100000001; }
-    .sv-toast.sv-show { opacity: 1; transform: translateX(-50%) translateY(4px); }
+    /* API key row */
+    .sv-apikey-row {
+        display: flex; align-items: center; gap: 6px; padding: 8px 10px;
+        background: rgba(243,156,18,0.08); border-top: 1px solid rgba(243,156,18,0.25);
+        flex-wrap: wrap;
+    }
     `;
 
     if (typeof GM_addStyle === 'function') {
@@ -1130,83 +1391,21 @@
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  DRAG SETUP
-    // ══════════════════════════════════════════════════════════════
-    function wireDrag(hud) {
-        const handle = document.getElementById('sv-handle');
-        let dragging = false, sx = 0, sy = 0, il = 0, it = 0;
-
-        handle.addEventListener('mousedown', e => {
-            if (e.target.closest('.sv-hdr-controls')) return;
-            dragging = true;
-            sx = e.clientX; sy = e.clientY;
-            const r = hud.getBoundingClientRect();
-            il = r.left; it = r.top;
-            hud.style.right = 'auto';
-            hud.style.left  = `${il}px`;
-            hud.style.top   = `${it}px`;
-            document.body.style.userSelect = 'none';
-        });
-        window.addEventListener('mousemove', e => {
-            if (!dragging) return;
-            const nl = Math.max(8, Math.min(window.innerWidth  - hud.offsetWidth  - 8, il + (e.clientX - sx)));
-            const nt = Math.max(8, Math.min(window.innerHeight - hud.offsetHeight - 8, it + (e.clientY - sy)));
-            hud.style.left = `${nl}px`;
-            hud.style.top  = `${nt}px`;
-        });
-        window.addEventListener('mouseup', () => {
-            if (!dragging) return;
-            dragging = false;
-            document.body.style.userSelect = '';
-            const r = hud.getBoundingClientRect();
-            GM_setValue(LS_KEY_POS, { top: Math.round(r.top), right: Math.round(window.innerWidth - r.right) });
-        });
-    }
-
-    // ══════════════════════════════════════════════════════════════
-    //  MINIMIZE / CLOSE
-    // ══════════════════════════════════════════════════════════════
-    function wireControls(hud) {
-        document.getElementById('sv-min-btn').addEventListener('click', () => {
-            isMinimized = !isMinimized;
-            hud.classList.toggle('sv-minimized', isMinimized);
-            document.getElementById('sv-min-btn').textContent = isMinimized ? '□' : '─';
-            GM_setValue('sv_min', isMinimized);
-        });
-        document.getElementById('sv-close-btn').addEventListener('click', () => {
-            hud.style.display = 'none';
-        });
-        document.getElementById('sv-post-btn').addEventListener('click', postToChat);
-        document.getElementById('sv-min-post-btn').addEventListener('click', postToChat);
-
-        // Close suggest on outside click
-        document.addEventListener('click', e => {
-            if (!e.target.closest('.sv-add-row')) {
-                const b = document.getElementById('sv-suggest');
-                if (b) b.style.display = 'none';
-            }
-        });
-    }
-
-    // ══════════════════════════════════════════════════════════════
     //  BOOT
     // ══════════════════════════════════════════════════════════════
     load();
     const hud = buildHUD();
-    wireDrag(hud);
-    wireControls(hud);
+    wireEvents(hud);
     setUpdated(false);
     startLocalTimer();
 
     if (apiKey) {
         fetchChain();
         fetchFactionMembers();
-        setInterval(pollAttacks,  HIT_POLL_MS);
-        setInterval(fetchChain,   CHAIN_POLL_MS);
-        setInterval(fetchFactionMembers, STATUS_POLL_MS);
+        startBackgroundPolling();
     }
 
-    // Allow lineup to be seeded from the Spider-Verse web app if local is empty
+    // Seed from Railway server if local queue is empty
     if (!lineup.length) {
         try {
             GM_xmlhttpRequest({
