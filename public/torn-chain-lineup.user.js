@@ -50,6 +50,7 @@
     let memberStatuses = {};         // id -> {online, state, until, lastActionTs}
     let processedAtkIds = new Set();
     let isFirstPoll     = true;      // snapshot initial attacks
+    let hasAttacksAccess= true;      // true if key has Limited+ / Faction AA; false for Public keys
     let autoSkipTimer   = null;
     let autoSkipLeft    = 0;
     let isMinimized     = GM_getValue('sv_min', false);
@@ -181,91 +182,108 @@
         return false;
     }
 
-    // Unified 1.0s Polling: both attacks and chain in a single API call
+    // Unified 1.0s Polling: polls attacks + chain for Limited keys, or chain-only for Public keys
     function pollChainAndAttacks() {
         if (!apiKey) return;
 
-        tornGet('/faction/?selections=attacks,chain', (err, d) => {
-            if (err || !d) return;
+        const path = hasAttacksAccess
+            ? '/faction/?selections=attacks,chain'
+            : '/faction/?selections=chain';
 
-            // 1. Process Live Chain Status
-            const chain = d.chain || {};
-            chainCount   = chain.current || 0;
-            chainTimeout = chain.timeout || 0;
-            chainActive  = chainCount > 0;
-
-            // 2. Process Attacks
-            if (d.attacks) {
-                const rawAtks = Object.values(d.attacks);
-                const chainAtks = rawAtks
-                    .filter(a => a.chain && a.chain > 0)
-                    .sort((a, b) => (b.timestamp_ended || 0) - (a.timestamp_ended || 0));
-
-                if (isFirstPoll) {
-                    for (const atk of chainAtks) {
-                        const id = atk.code || `${atk.attacker_id}_${atk.timestamp_ended}`;
-                        processedAtkIds.add(id);
-                    }
-                    isFirstPoll = false;
-                    renderChainBar();
-                    return;
+        tornGet(path, (err, d) => {
+            if (err) {
+                // If Torn rejected attacks due to insufficient permission (e.g. Public Key or lacks Faction AA)
+                if (hasAttacksAccess && (err.code === 16 || err.code === 7 || (err.error && /access|permission/i.test(err.error)))) {
+                    hasAttacksAccess = false;
+                    flashStatus('Public Key active: Live timer & lineup working (Limited key needed for auto hit-detection).', false);
+                    tornGet('/faction/?selections=chain', (err2, d2) => {
+                        if (!err2 && d2) handleChainResponse(d2);
+                    });
                 }
+                return;
+            }
 
-                let orderChanged = false;
+            if (!d) return;
+            handleChainResponse(d);
+        });
+    }
 
+    function handleChainResponse(d) {
+        // 1. Process Live Chain Status (Works with BOTH Public and Limited keys)
+        const chain = d.chain || {};
+        chainCount   = chain.current || 0;
+        chainTimeout = chain.timeout || 0;
+        chainActive  = chainCount > 0;
+
+        // 2. Process Attacks (Only available on Limited keys with Faction AA)
+        if (d.attacks) {
+            const rawAtks = Object.values(d.attacks);
+            const chainAtks = rawAtks
+                .filter(a => a.chain && a.chain > 0)
+                .sort((a, b) => (b.timestamp_ended || 0) - (a.timestamp_ended || 0));
+
+            if (isFirstPoll) {
                 for (const atk of chainAtks) {
                     const id = atk.code || `${atk.attacker_id}_${atk.timestamp_ended}`;
-                    if (processedAtkIds.has(id)) continue;
                     processedAtkIds.add(id);
+                }
+                isFirstPoll = false;
+                renderChainBar();
+                return;
+            }
 
-                    if (processedAtkIds.size > 500) {
-                        const arr = [...processedAtkIds];
-                        processedAtkIds = new Set(arr.slice(arr.length - 250));
-                    }
+            let orderChanged = false;
 
-                    // STRICT VERIFICATION: ONLY currently UP player advances lineup
-                    if (isCurrentUp(atk)) {
-                        const [hitter] = lineup.splice(0, 1);
-                        hitter.hit = true;
-                        lineup.push(hitter);
-                        orderChanged = true;
-                        cycleNum++;
+            for (const atk of chainAtks) {
+                const id = atk.code || `${atk.attacker_id}_${atk.timestamp_ended}`;
+                if (processedAtkIds.has(id)) continue;
+                processedAtkIds.add(id);
 
-                        flashStatus(`✓ ${atk.attacker_name} landed hit #${atk.chain}! Next UP: ${lineup[0].name}`, false);
-                        clearAutoSkip();
-                        if (autoMode) startAutoSkip();
-                    } else {
-                        // Someone else hit (e.g. John 2 hit while John 1 was UP)
-                        // John 1 STAYS UP! Lineup does NOT rotate!
-                        const attackerId = atk.attacker_id ? String(atk.attacker_id) : null;
-                        const attackerName = (atk.attacker_name || '').trim().toLowerCase();
-
-                        const otherIdx = lineup.findIndex((m, idx) => idx > 0 && (
-                            (m.id && attackerId && String(m.id) === attackerId) ||
-                            (m.name && m.name.trim().toLowerCase() === attackerName)
-                        ));
-
-                        if (otherIdx !== -1) {
-                            lineup[otherIdx].hit = true;
-                        }
-
-                        if (lineup.length > 0) {
-                            flashStatus(`Hit #${atk.chain} by ${atk.attacker_name} (${lineup[0].name} is still UP)`, false);
-                        }
-                    }
+                if (processedAtkIds.size > 500) {
+                    const arr = [...processedAtkIds];
+                    processedAtkIds = new Set(arr.slice(arr.length - 250));
                 }
 
-                if (orderChanged) {
-                    setUpdated(true);
-                    save();
-                    renderLineup();
+                // STRICT VERIFICATION: ONLY currently UP player advances lineup
+                if (isCurrentUp(atk)) {
+                    const [hitter] = lineup.splice(0, 1);
+                    hitter.hit = true;
+                    lineup.push(hitter);
+                    orderChanged = true;
+                    cycleNum++;
+
+                    flashStatus(`✓ ${atk.attacker_name} landed hit #${atk.chain}! Next UP: ${lineup[0].name}`, false);
+                    clearAutoSkip();
+                    if (autoMode) startAutoSkip();
                 } else {
-                    renderChainBar();
+                    const attackerId = atk.attacker_id ? String(atk.attacker_id) : null;
+                    const attackerName = (atk.attacker_name || '').trim().toLowerCase();
+
+                    const otherIdx = lineup.findIndex((m, idx) => idx > 0 && (
+                        (m.id && attackerId && String(m.id) === attackerId) ||
+                        (m.name && m.name.trim().toLowerCase() === attackerName)
+                    ));
+
+                    if (otherIdx !== -1) {
+                        lineup[otherIdx].hit = true;
+                    }
+
+                    if (lineup.length > 0) {
+                        flashStatus(`Hit #${atk.chain} by ${atk.attacker_name} (${lineup[0].name} is still UP)`, false);
+                    }
                 }
+            }
+
+            if (orderChanged) {
+                setUpdated(true);
+                save();
+                renderLineup();
             } else {
                 renderChainBar();
             }
-        });
+        } else {
+            renderChainBar();
+        }
     }
 
     function fetchFactionMembers() {
