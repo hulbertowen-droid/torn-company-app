@@ -1040,7 +1040,7 @@ function formatEmbedAsMarkdown(embed, ping = "") {
     if (embed.fields && Array.isArray(embed.fields)) {
         for (const f of embed.fields) {
             if (f.name && f.value) {
-                lines.push(`> **${f.name}**: ${f.value}`);
+                lines.push(`> **${f.name}**:\n${f.value}`);
             }
         }
     }
@@ -10288,6 +10288,12 @@ function sanitizeEmbed(embed) {
             };
         });
     }
+    // Ensure overall embed does not exceed Discord's strict 6000 character limit
+    const totalChars = calculateEmbedChars(sanitized);
+    if (totalChars > 5800 && sanitized.description && sanitized.description.length > 2000) {
+        const excess = totalChars - 5750;
+        sanitized.description = sanitized.description.slice(0, Math.max(500, sanitized.description.length - excess)) + '\n*...[continued in next card]*';
+    }
     return sanitized;
 }
 
@@ -11930,7 +11936,9 @@ async function buildBazaarEmbed(itemQuery, apiKey) {
 }
 
 async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
-    if (!apiKey) return { title: "📊 Faction Battle Stats", description: "⚠️ No Torn API key configured.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
+    if (!apiKey) {
+        return [ UI.error("Faction Battle Stats", "⚠️ No Torn API key configured.") ];
+    }
     try {
         const choice = String(factionChoice || '').toLowerCase().trim();
         let isEnemy = (choice !== 'friendly' && choice !== 'our' && choice !== 'ours' && !choice.includes('friendly') && !choice.includes('our'));
@@ -11950,13 +11958,13 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
                 detectedEnemy = discordConfig.enemyFacId;
             }
             if (!detectedEnemy) {
-                return {
+                return [ {
                     title: "📊 Enemy Battle Stats",
                     description: "🕊️ **No Active Ranked War**\n\nYour faction is not currently in a ranked war, and no enemy faction is configured.\n\n*Enemy battle stats and scout records are automatically pulled when a Ranked War begins.*",
                     color: UI.COLORS.INFO,
                     footer: UI.FOOTER,
                     timestamp: new Date().toISOString()
-                };
+                } ];
             }
             facId = detectedEnemy;
         } else {
@@ -11980,7 +11988,6 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
         // Refresh stale or unscouted members in bulk via FF Scouter
         if (ffKey && memberIds.length > 0) {
             const needsScout = memberIds.filter(id => {
-                // If member has verified stats updated within 7 days, no scout needed
                 if (battleStatsHistory[id]?.stats?.total > 0 && (Date.now() - (battleStatsHistory[id].lastUpdated || 0) < 7 * 86400000)) {
                     return false;
                 }
@@ -11996,12 +12003,6 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
 
         const members = Object.entries(facData.members || {}).map(([id, m]) => {
             const resolved = resolvePlayerBattleStats(id, m.level);
-            let suffix = '';
-            if (resolved.isEstimated) {
-                suffix = ' *(Est)*';
-            } else if (resolved.source === 'verified') {
-                suffix = ' *(Verified)*';
-            }
             return {
                 id,
                 name: m.name || `Player #${id}`,
@@ -12010,22 +12011,61 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
                 daysInFaction: m.days_in_faction || 0,
                 status: m.last_action?.status || 'Offline',
                 state: m.status?.state || 'Okay',
-                stats: resolved.total,
+                stats: resolved.total || 0,
                 isEstimated: resolved.isEstimated,
-                source: resolved.source,
-                statsFormatted: `${formatStatNumber(resolved.total)}${suffix}`
+                source: resolved.source
             };
         });
 
+        if (members.length === 0) {
+            return [ {
+                title: isEnemy ? `📊 ${facData.name || 'Enemy'} — Battle Stats` : `📊 ${facData.name || 'Faction'} — Battle Stats`,
+                description: "⚠️ No members found in faction.",
+                color: UI.COLORS.WARNING,
+                footer: UI.FOOTER,
+                timestamp: new Date().toISOString()
+            } ];
+        }
+
+        // Sort strongest to weakest (level as secondary tie-breaker)
         members.sort((a, b) => b.stats - a.stats || b.level - a.level);
 
+        // Calculate aggregate statistics & tier distribution
         let totalStatsSum = 0;
         let verifiedCount = 0;
+        let onlineCount = 0;
+        let idleCount = 0;
+        let hospCount = 0;
+        let flyingCount = 0;
+        let offlineCount = 0;
+        let titanCount = 0;  // >50M
+        let heavyCount = 0;  // 10M-50M
+        let coreCount = 0;   // 1M-10M
+        let lightCount = 0;  // <1M
+
         members.forEach(m => {
             totalStatsSum += m.stats;
             if (!m.isEstimated) verifiedCount++;
+
+            if (m.state === 'Hospital' || m.state === 'Jail') hospCount++;
+            else if (m.state === 'Traveling' || m.state === 'Abroad') flyingCount++;
+            else if (m.status === 'Online') onlineCount++;
+            else if (m.status === 'Idle') idleCount++;
+            else offlineCount++;
+
+            if (m.stats >= 50000000) titanCount++;
+            else if (m.stats >= 10000000) heavyCount++;
+            else if (m.stats >= 1000000) coreCount++;
+            else lightCount++;
         });
+
         const avgStat = members.length > 0 ? totalStatsSum / members.length : 0;
+        const midIdx = Math.floor(members.length / 2);
+        const medianStat = members.length === 0 ? 0 : (
+            members.length % 2 !== 0 
+                ? members[midIdx].stats 
+                : (members[midIdx - 1].stats + members[midIdx].stats) / 2
+        );
 
         const lines = members.map((m, idx) => {
             let numBadge = `\`${(idx + 1).toString().padStart(2, '0')}.\``;
@@ -12033,9 +12073,9 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
             else if (idx === 1) numBadge = '🥈';
             else if (idx === 2) numBadge = '🥉';
 
-            // State/Status icon - placed prominently at front
-            let stateIcon = '';
-            if (m.state === 'Hospital') stateIcon = '🏥 ';
+            // State/Status icon - every single row has a 1-emoji icon for vertical column alignment
+            let stateIcon = '⚪ ';
+            if (m.state === 'Hospital' || m.state === 'Jail') stateIcon = '🏥 ';
             else if (m.state === 'Traveling' || m.state === 'Abroad') stateIcon = '✈️ ';
             else if (m.status === 'Online') stateIcon = '🟢 ';
             else if (m.status === 'Idle') stateIcon = '🟡 ';
@@ -12049,7 +12089,8 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
             }
 
             const statStr = `**${formatStatNumber(m.stats)}**${badge}`;
-            const playerLink = `**[${m.name}](https://www.torn.com/profiles.php?XID=${m.id})**`;
+            const cleanName = String(m.name).replace(/[\[\]]/g, '');
+            const playerLink = `**[${cleanName}](https://www.torn.com/profiles.php?XID=${m.id})**`;
 
             if (isEnemy) {
                 return `${numBadge} ${stateIcon}${playerLink} · Lvl ${m.level} · ${statStr} · [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})`;
@@ -12058,69 +12099,84 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
             }
         });
 
-        // Dynamic Safe Chunking: Ensures no field exceeds 800 characters or 7 members
-        const maxLinesPerField = 7;
-        const maxCharsPerField = 800;
-        const chunks = [];
-        let curChunk = [];
-        let curChars = 0;
-
-        for (const line of lines) {
-            const lineLen = line.length + 1;
-            if (curChunk.length >= maxLinesPerField || (curChars + lineLen > maxCharsPerField && curChunk.length > 0)) {
-                chunks.push(curChunk);
-                curChunk = [line];
-                curChars = lineLen;
-            } else {
-                curChunk.push(line);
-                curChars += lineLen;
-            }
-        }
-        if (curChunk.length > 0) chunks.push(curChunk);
-
-        const fields = [];
-        let currentRank = 1;
-        chunks.forEach((chunk, chunkIdx) => {
-            const start = currentRank;
-            const end = currentRank + chunk.length - 1;
-            currentRank = end + 1;
-
-            let sectionTitle = `⚔️ Main Battle Line (#${start} - #${end})`;
-            if (chunkIdx === 0) {
-                sectionTitle = `👑 Heavyweights & Top Hitters (#${start} - #${end})`;
-            } else if (chunkIdx === chunks.length - 1) {
-                sectionTitle = `🛡️ Support & Reserves (#${start} - #${end})`;
-            }
-
-            fields.push({
-                name: sectionTitle,
-                value: chunk.join('\n'),
-                inline: false
-            });
-        });
-
         const respectStr = Number(facData.respect || 0).toLocaleString();
         const rankStr = facData.rank?.name || 'Unranked';
+        const pctVerified = Math.round((verifiedCount / members.length) * 100);
         const intelNote = ffKey 
-            ? `🛡️ **Intel**: FF Scouter & Live Verified DB (**${verifiedCount} / ${members.length}** verified/scouted)`
-            : `⚠️ **Notice**: FF Scouter key not connected — using level baseline estimates. Connect FF Scouter in Dashboard Settings for live accuracy.`;
-        const legend = `*Legend: 🟢 Online · 🟡 Idle · ✈️ Flying · 🏥 Hospital · ✅ Verified*`;
+            ? `🛡️ **Intel**: FF Scouter & Verified DB (**${verifiedCount}/${members.length}** · **${pctVerified}%** verified/scouted)`
+            : `⚠️ **Notice**: FF Scouter key not linked — estimates based on level baselines.`;
+        const legend = `*Legend: 🟢 Online · 🟡 Idle · ✈️ Flying · 🏥 Hosp · ⚪ Offline · ✅ Verified*`;
 
-        return {
+        const topThreatCount = Math.min(5, members.length);
+        const topThreatLines = lines.slice(0, topThreatCount);
+
+        const overviewEmbed = {
             title: isEnemy 
-                ? `📊 ${facData.name || 'Enemy'} — Battle Stats (${members.length} members)`
-                : `📊 ${facData.name || 'Faction'} — Battle Stats (${members.length} members)`,
-            description: `**Rank**: **${rankStr}** • **Respect**: **${respectStr}**\n` +
-                         `**Total Stats**: **${formatStatNumber(totalStatsSum)}** • **Avg per member**: **${formatStatNumber(avgStat)}**\n` +
+                ? `⚔️ ${facData.name || 'Enemy'} — Battle Stats & Intelligence`
+                : `🛡️ ${facData.name || 'Faction'} — Battle Stats & Roster`,
+            description: `🏆 **Rank**: **${rankStr}** • 🎖️ **Respect**: **${respectStr}** • 👥 **Members**: **${members.length}**\n` +
+                         `📊 **Total Stats**: **${formatStatNumber(totalStatsSum)}** • 📈 **Avg**: **${formatStatNumber(avgStat)}** • 🎯 **Median**: **${formatStatNumber(medianStat)}**\n` +
                          `${intelNote}\n` +
-                         `${legend}\n`,
+                         `${legend}`,
             color: isEnemy ? UI.COLORS.BRAND : UI.COLORS.INFO,
-            fields,
+            fields: [
+                {
+                    name: '📈 Stat Tiers & Distribution',
+                    value: `👑 **Titan (>50M)**: **${titanCount}**  •  ⚔️ **Heavy (10M–50M)**: **${heavyCount}**\n` +
+                           `🥊 **Core (1M–10M)**: **${coreCount}**  •  🛡️ **Light (<1M)**: **${lightCount}**`,
+                    inline: false
+                },
+                {
+                    name: '🟢 Live Readiness',
+                    value: `🟢 **${onlineCount}** Online  •  🟡 **${idleCount}** Idle  •  ✈️ **${flyingCount}** Abroad  •  🏥 **${hospCount}** Hosp  •  ⚪ **${offlineCount}** Offline`,
+                    inline: false
+                },
+                {
+                    name: `👑 Top Hitters & Heavyweights (#01 – #${String(topThreatCount).padStart(2, '0')})`,
+                    value: topThreatLines.join('\n'),
+                    inline: false
+                }
+            ],
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
         };
+
+        const resultEmbeds = [ overviewEmbed ];
+
+        // Build paginated roster cards for remaining members (#06 and beyond)
+        if (members.length > 5) {
+            const remaining = lines.slice(5);
+            const ROSTER_PAGE_SIZE = 20;
+            const totalRosterPages = Math.ceil(remaining.length / ROSTER_PAGE_SIZE);
+
+            for (let p = 0; p < totalRosterPages; p++) {
+                const chunk = remaining.slice(p * ROSTER_PAGE_SIZE, (p + 1) * ROSTER_PAGE_SIZE);
+                const startRank = 6 + (p * ROSTER_PAGE_SIZE);
+                const endRank = startRank + chunk.length - 1;
+
+                let cardTitle = isEnemy 
+                    ? `⚔️ ${facData.name || 'Enemy'} — Battle Line (#${String(startRank).padStart(2, '0')} - #${String(endRank).padStart(2, '0')})`
+                    : `🛡️ ${facData.name || 'Faction'} — Battle Line (#${String(startRank).padStart(2, '0')} - #${String(endRank).padStart(2, '0')})`;
+
+                if (endRank === members.length && totalRosterPages > 1) {
+                    cardTitle = isEnemy
+                        ? `🛡️ ${facData.name || 'Enemy'} — Support & Reserves (#${String(startRank).padStart(2, '0')} - #${String(endRank).padStart(2, '0')})`
+                        : `🛡️ ${facData.name || 'Faction'} — Support & Reserves (#${String(startRank).padStart(2, '0')} - #${String(endRank).padStart(2, '0')})`;
+                }
+
+                resultEmbeds.push({
+                    title: cardTitle,
+                    description: chunk.join('\n'),
+                    color: isEnemy ? UI.COLORS.BRAND : UI.COLORS.INFO,
+                    footer: UI.FOOTER,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        }
+
+        return resultEmbeds;
     } catch(e) {
-        return { title: "📊 Battle Stats", description: `⚠️ Error: ${e.message}`, color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
+        return [ { title: "📊 Battle Stats", description: `⚠️ Error: ${e.message}`, color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() } ];
     }
 }
 
@@ -20897,23 +20953,58 @@ function setupSlashBotEvents(bot, token) {
                 return await interaction.editReply({ content: "⚠️ Command not recognized." });
             }
 
-            const safeEmbed = sanitizeEmbed(embed);
-            await interaction.editReply({ embeds: [safeEmbed] });
+            // Support single embed, array of embeds, or { embeds, components }
+            let embedsToSend = [];
+            let componentsToSend = [];
+            if (Array.isArray(embed)) {
+                embedsToSend = embed;
+            } else if (embed && Array.isArray(embed.embeds)) {
+                embedsToSend = embed.embeds;
+                componentsToSend = embed.components || [];
+            } else if (embed) {
+                embedsToSend = [embed];
+                componentsToSend = embed.components || [];
+            }
+
+            const safeEmbeds = embedsToSend.map(e => sanitizeEmbed(e)).filter(Boolean);
+            if (safeEmbeds.length === 0) {
+                return await interaction.editReply({ content: "⚠️ No content generated." });
+            }
+
+            const totalChars = safeEmbeds.reduce((sum, e) => sum + calculateEmbedChars(e), 0);
+
+            if (totalChars <= 5400 && safeEmbeds.length <= 10) {
+                await interaction.editReply({
+                    embeds: safeEmbeds,
+                    components: componentsToSend
+                });
+            } else {
+                const chunks = chunkEmbedsForDiscord(safeEmbeds, 5400);
+                for (let i = 0; i < chunks.length; i++) {
+                    const isFirst = (i === 0);
+                    const isLast = (i === chunks.length - 1);
+                    if (isFirst) {
+                        await interaction.editReply({
+                            embeds: chunks[i],
+                            components: isLast ? componentsToSend : []
+                        });
+                    } else {
+                        await interaction.followUp({
+                            embeds: chunks[i],
+                            components: isLast ? componentsToSend : []
+                        });
+                    }
+                }
+            }
         } catch (e) {
             console.error("[Slash Bot] Command execution error:", e);
             try {
-                if (embed) {
-                    const fallbackText = formatEmbedAsMarkdown(embed);
-                    const safeText = fallbackText.length > 1950 ? (fallbackText.slice(0, 1940) + "\n*...[truncated]*") : fallbackText;
-                    await interaction.editReply({ content: safeText });
-                } else {
-                    await interaction.editReply({
-                        embeds: [sanitizeEmbed(UI.error(
-                            '❌ Command Error',
-                            'An error occurred while processing this command. Please try again in a moment.'
-                        ))]
-                    });
-                }
+                await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.error(
+                        '❌ Command Error',
+                        `An error occurred while executing this command: ${e.message || 'Unknown error'}`
+                    ))]
+                });
             } catch(err2) {
                 console.error("[Slash Bot] Failed to reply:", err2.message);
             }
