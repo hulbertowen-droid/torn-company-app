@@ -1,5 +1,5 @@
 /**
- * Instant Navigation & Prefetching Engine for Spider-Verse Operations Portal
+ * Instant Navigation & Prefetching Engine for FactionOS Portal
  * Pre-warms cache and prefetches tabs on hover/touch so switching is instantaneous (< 20ms).
  */
 (function() {

@@ -517,7 +517,7 @@
         if (logoutLink) {
             logoutLink.addEventListener('click', (e) => {
                 e.preventDefault();
-                if (confirm('Log out of Torn Operations Hub?')) {
+                if (confirm('Log out of FactionOS?')) {
                     logout();
                 }
             });
@@ -553,7 +553,7 @@
             <div class="sv-auth-card">
                 ${allowClose ? '<button class="sv-auth-close-btn" id="sv-modal-close">&times;</button>' : ''}
                 <img src="/friday_avatar.jpg" alt="Portal Sentinel" class="sv-auth-avatar" onerror="this.src='/favicon.ico'">
-                <div class="sv-auth-title">🕷️ Torn Operations Hub</div>
+                <div class="sv-auth-title">🕷️ FactionOS</div>
                 <div class="sv-auth-subtitle">Connect Your Torn Account</div>
                 <p class="sv-auth-desc">
                     Enter your Torn API Key to access personal analytics, market tracking, and tactical modules. 

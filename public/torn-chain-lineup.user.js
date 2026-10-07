@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         Spider-Verse Chain Manager (Standalone)
+// @name         FactionOS Chain Manager (Standalone)
 // @namespace    https://torn-company-app-production.up.railway.app/
 // @version      2.3.0
 // @description  Professional standalone chain lineup manager on Torn. Direct API hits, mobile touch optimization, compact mobile layout, intelligent readiness detection, auto-advance, 1-click chat auto-send. Runs on faction pages only.
-// @author       Spider-Verse
+// @author       FactionOS
 // @match        https://www.torn.com/factions.php*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
@@ -1172,7 +1172,7 @@
                     <span class="sv-dot sv-dot-grey" id="sv-status-dot"></span>
                     <span id="sv-status-txt">SAME</span>
                 </span>
-                <span class="sv-title-text">⛓ Chain Manager</span>
+                <span class="sv-title-text">⛓ FactionOS Chain Manager</span>
                 <span class="sv-min-up" id="sv-min-up">${lineup.length ? 'UP: ' + esc(lineup[0].name) : 'No lineup'}</span>
             </div>
             <div class="sv-hdr-controls">
