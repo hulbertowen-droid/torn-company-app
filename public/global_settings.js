@@ -224,13 +224,46 @@ window.openGlobalSettings = async function() {
     injectGlobalSettings();
     const modal = document.getElementById('global-settings-modal');
     modal.style.display = 'flex';
-    document.getElementById('gs-api-key').value = localStorage.getItem('warboard_apikey') || "";
-    document.getElementById('gs-ff-key').value = localStorage.getItem('warboard_ffkey') || "";
-    document.getElementById('gs-ts-key').value = localStorage.getItem('warboard_tskey') || "";
-    document.getElementById('gs-enemy-id').value = localStorage.getItem('warboard_enemyId') || "";
-    document.getElementById('gs-my-name').value = localStorage.getItem('warboard_myname') || "";
-    document.getElementById('gs-discord-webhook').value = localStorage.getItem('warboard_discord') || "";
-    document.getElementById('gs-api-cpm').value = localStorage.getItem('warboard_cpm') || "12";
+
+    let apiKey = localStorage.getItem('warboard_apikey') || "";
+    let ffKey = localStorage.getItem('warboard_ffkey') || "";
+    let tsKey = localStorage.getItem('warboard_tskey') || "";
+    let enemyFacId = localStorage.getItem('warboard_enemyId') || "";
+    let myName = localStorage.getItem('warboard_myname') || "";
+    let discord = localStorage.getItem('warboard_discord') || "";
+    let cpm = localStorage.getItem('warboard_cpm') || "12";
+
+    // Restore from server if client localStorage is empty (e.g. mobile or new browser session)
+    try {
+        const sRes = await fetch('/api/global-settings');
+        if (sRes.ok) {
+            const sData = await sRes.json();
+            if (!apiKey && sData.apiKey) {
+                apiKey = sData.apiKey;
+                localStorage.setItem('warboard_apikey', apiKey);
+            }
+            if (!ffKey && sData.ffKey) {
+                ffKey = sData.ffKey;
+                localStorage.setItem('warboard_ffkey', ffKey);
+            }
+            if (!tsKey && sData.tsKey) {
+                tsKey = sData.tsKey;
+                localStorage.setItem('warboard_tskey', tsKey);
+            }
+            if (!enemyFacId && sData.enemyFacId) {
+                enemyFacId = sData.enemyFacId;
+                localStorage.setItem('warboard_enemyId', enemyFacId);
+            }
+        }
+    } catch(e) {}
+
+    document.getElementById('gs-api-key').value = apiKey;
+    document.getElementById('gs-ff-key').value = ffKey;
+    document.getElementById('gs-ts-key').value = tsKey;
+    document.getElementById('gs-enemy-id').value = enemyFacId;
+    document.getElementById('gs-my-name').value = myName;
+    document.getElementById('gs-discord-webhook').value = discord;
+    document.getElementById('gs-api-cpm').value = cpm;
 
     const statusText = document.getElementById('gs-status-text');
     const token = localStorage.getItem('sv_session_token');
@@ -296,12 +329,30 @@ window.saveGlobalSettings = async function() {
     }
 
     // Save client preferences
-    localStorage.setItem('warboard_ffkey', ffKey);
-    localStorage.setItem('warboard_tskey', tsKey);
-    localStorage.setItem('warboard_enemyId', enemyFacId);
-    localStorage.setItem('warboard_myname', myName);
-    localStorage.setItem('warboard_discord', discord);
-    localStorage.setItem('warboard_cpm', cpm);
+    if (ffKey) localStorage.setItem('warboard_ffkey', ffKey);
+    if (tsKey) localStorage.setItem('warboard_tskey', tsKey);
+    if (enemyFacId) localStorage.setItem('warboard_enemyId', enemyFacId);
+    if (myName) localStorage.setItem('warboard_myname', myName);
+    if (discord) localStorage.setItem('warboard_discord', discord);
+    if (cpm) localStorage.setItem('warboard_cpm', cpm);
+
+    // Sync to backend server so discordConfig and other tools always preserve the keys
+    try {
+        await fetch('/api/sync-configs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiKey, ffKey, tsKey, enemyFacId, myName, cpm })
+        });
+        if (apiKey || ffKey) {
+            await fetch('/api/save-discord-config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ apiKey, ffKey, enemyFacId })
+            });
+        }
+    } catch(e) {
+        console.warn('Backend sync warning:', e.message);
+    }
 
     closeGlobalSettings();
     window.location.reload();

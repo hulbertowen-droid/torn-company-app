@@ -3817,11 +3817,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         try { sessionStorage.setItem('sv_cache_discord_cfg', JSON.stringify(cfg)); } catch(e) {}
         applyConfigToDOM(cfg);
 
+        // Restore keys into localStorage if missing
+        if (cfg.apiKey && !localStorage.getItem('warboard_apikey')) localStorage.setItem('warboard_apikey', cfg.apiKey);
+        if (cfg.ffKey && !localStorage.getItem('warboard_ffkey')) localStorage.setItem('warboard_ffkey', cfg.ffKey);
+        if (cfg.enemyFacId && !localStorage.getItem('warboard_enemyId')) localStorage.setItem('warboard_enemyId', cfg.enemyFacId);
+
+        if (!localStorage.getItem('warboard_apikey') || !localStorage.getItem('warboard_ffkey')) {
+            try {
+                const gRes = await fetch('/api/global-settings');
+                const gData = await gRes.json();
+                if (gData && gData.success) {
+                    if (gData.apiKey && !localStorage.getItem('warboard_apikey')) localStorage.setItem('warboard_apikey', gData.apiKey);
+                    if (gData.ffKey && !localStorage.getItem('warboard_ffkey')) localStorage.setItem('warboard_ffkey', gData.ffKey);
+                    if (gData.enemyFacId && !localStorage.getItem('warboard_enemyId')) localStorage.setItem('warboard_enemyId', gData.enemyFacId);
+                }
+            } catch(ge) {}
+        }
+
         const localFfKey = localStorage.getItem('warboard_ffkey') || '';
         const localEnemyId = localStorage.getItem('warboard_enemyId') || '';
         const localApiKey = localStorage.getItem('warboard_apikey') || '';
-        if (localFfKey || localEnemyId || localApiKey) {
-            fetch('/api/save-discord-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ apiKey: localApiKey, ffKey: localFfKey, enemyFacId: localEnemyId }) }).catch(() => {});
+        const syncPayload = {};
+        if (localApiKey) syncPayload.apiKey = localApiKey;
+        if (localFfKey) syncPayload.ffKey = localFfKey;
+        if (localEnemyId) syncPayload.enemyFacId = localEnemyId;
+        if (Object.keys(syncPayload).length > 0) {
+            fetch('/api/save-discord-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(syncPayload) }).catch(() => {});
         }
     } catch (e) {
         setConnectionStatus(false);
@@ -3926,9 +3947,6 @@ async function saveDiscordConfig() {
 
     try {
         const payload = {
-            apiKey: myKey,
-            ffKey: localStorage.getItem('warboard_ffkey') || '',
-            enemyFacId: localStorage.getItem('warboard_enemyId') || '',
             globalBotToken: botToken,
             globalChannelId: channelId,
             personalDiscordId: discordId,
@@ -3991,6 +4009,13 @@ async function saveDiscordConfig() {
                 .map(el => (el.dataset.cmd || '').toLowerCase().trim())
                 .filter(Boolean),
         };
+
+        const curApiKey = localStorage.getItem('warboard_apikey') || myKey;
+        if (curApiKey) payload.apiKey = curApiKey;
+        const curFfKey = localStorage.getItem('warboard_ffkey') || '';
+        if (curFfKey) payload.ffKey = curFfKey;
+        const curEnemyId = localStorage.getItem('warboard_enemyId') || '';
+        if (curEnemyId) payload.enemyFacId = curEnemyId;
 
         const res = await fetch('/api/save-discord-config', {
             method: 'POST',

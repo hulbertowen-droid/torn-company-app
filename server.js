@@ -207,8 +207,10 @@ async function loadConfigFromMongo() {
         if (saved) {
             if (saved.discordConfig) {
                 const preservedKey = discordConfig.apiKey || saved.discordConfig.apiKey || process.env.TORN_API_KEY || "";
+                const preservedFfKey = discordConfig.ffKey || saved.discordConfig.ffKey || process.env.FF_SCOUTER_KEY || process.env.FF_KEY || "";
                 discordConfig = { ...discordConfig, ...saved.discordConfig };
                 if (preservedKey) discordConfig.apiKey = preservedKey;
+                if (preservedFfKey) discordConfig.ffKey = preservedFfKey;
                 delete discordConfig.myName;
                 global.isNotificationsKilled = !!discordConfig.notificationsKilled;
 
@@ -3494,6 +3496,16 @@ app.post('/api/save-discord-config', async (req, res) => {
     if (payload.disabledCommands !== undefined && Array.isArray(payload.disabledCommands)) {
         payload.disabledCommands = payload.disabledCommands.map(c => String(c).toLowerCase().trim()).filter(Boolean);
     }
+
+    // Safeguard apiKey and ffKey so empty payload strings never wipe out existing keys!
+    if (payload.apiKey && typeof payload.apiKey === 'string' && payload.apiKey.trim().length > 5) {
+        discordConfig.apiKey = payload.apiKey.trim();
+    }
+    if (payload.ffKey && typeof payload.ffKey === 'string' && payload.ffKey.trim().length > 5) {
+        discordConfig.ffKey = payload.ffKey.trim();
+    }
+    delete payload.apiKey;
+    delete payload.ffKey;
 
     discordConfig = { ...discordConfig, ...payload }; 
     if (discordConfig.apiKey) {
@@ -6913,6 +6925,13 @@ app.post('/api/sync-configs', (req, res) => {
     if (oc) { ocConfig = { ...ocConfig, ...oc }; saveOcConfig(); }
     if (market) { marketConfig = { ...marketConfig, ...market }; saveMarketConfig(); }
     
+    if (apiKey && typeof apiKey === 'string' && apiKey.trim().length > 5) {
+        discordConfig.apiKey = apiKey.trim();
+        if (!apiPoolConfig.keys.includes(discordConfig.apiKey)) {
+            apiPoolConfig.keys.push(discordConfig.apiKey);
+            saveApiPool();
+        }
+    }
     if (globalBotToken) discordConfig.globalBotToken = String(globalBotToken).trim();
     if (globalChannelId) {
         const cleanChan = String(globalChannelId).trim();
@@ -6921,12 +6940,26 @@ app.post('/api/sync-configs', (req, res) => {
         }
     }
     if (enemyFacId) discordConfig.enemyFacId = enemyFacId;
-    if (ffKey) discordConfig.ffKey = ffKey;
-    if (tsKey) discordConfig.tsKey = tsKey;
+    if (ffKey && typeof ffKey === 'string' && ffKey.trim().length > 5) discordConfig.ffKey = ffKey.trim();
+    if (tsKey && typeof tsKey === 'string' && tsKey.trim().length > 5) discordConfig.tsKey = tsKey.trim();
+    if (myName) discordConfig.myName = myName.trim();
     if (cpm) discordConfig.cpm = cpm;
     
     saveDiscordConfig();
     res.json({ success: true });
+});
+
+app.get('/api/global-settings', (req, res) => {
+    res.json({
+        success: true,
+        apiKey: discordConfig.apiKey || "",
+        ffKey: discordConfig.ffKey || "",
+        tsKey: discordConfig.tsKey || "",
+        enemyFacId: discordConfig.enemyFacId || "",
+        myName: discordConfig.myName || "",
+        discord: discordConfig.globalChannelId || "",
+        cpm: discordConfig.cpm || "12"
+    });
 });
 
 app.get('/api/company-config', (req, res) => {
@@ -9648,18 +9681,45 @@ function slashNameToCountry(name) {
 }
 
 // Format duration in human-readable Torn style: e.g. ~1 hour and 36 minutes, ~24 minutes
-function formatHumanDuration(totalMins) {
+// Format duration in human-readable Torn style: e.g. ~1 hour and 36 minutes, ~24 minutes (or exact without ~ when confirmed via player API key)
+function formatHumanDuration(totalMins, isExact = false) {
     const minsNum = Number(totalMins);
-    if (!Number.isFinite(minsNum) || minsNum <= 0) return "Landing now";
+    if (!Number.isFinite(minsNum) || minsNum <= 0) return "Landing now!";
+    const prefix = isExact ? "" : "~";
     if (minsNum < 60) {
-        return `~${minsNum} minute${minsNum !== 1 ? 's' : ''}`;
+        return `${prefix}${minsNum} minute${minsNum !== 1 ? 's' : ''}`;
     }
     const hrs = Math.floor(minsNum / 60);
     const remainingMins = minsNum % 60;
     const hrStr = `${hrs} hour${hrs !== 1 ? 's' : ''}`;
-    if (remainingMins === 0) return `~${hrStr}`;
+    if (remainingMins === 0) return `${prefix}${hrStr}`;
     const minStr = `${remainingMins} minute${remainingMins !== 1 ? 's' : ''}`;
-    return `~${hrStr} and ${minStr}`;
+    return `${prefix}${hrStr} and ${minStr}`;
+}
+
+// Live Member Travel Cache (15s TTL) using connected player API keys
+const memberTravelCache = new Map();
+
+async function getMemberTravelData(playerId, userKey) {
+    if (!playerId || !userKey) return null;
+    const cached = memberTravelCache.get(String(playerId));
+    if (cached && (Date.now() < cached.expiresAt)) {
+        return cached.travel;
+    }
+    try {
+        const res = await fetch(`https://api.torn.com/user/?selections=travel&key=${encodeURIComponent(userKey)}`, {
+            signal: AbortSignal.timeout(5000)
+        });
+        const data = await res.json();
+        if (data && data.travel) {
+            memberTravelCache.set(String(playerId), {
+                travel: data.travel,
+                expiresAt: Date.now() + 15000
+            });
+            return data.travel;
+        }
+    } catch (e) {}
+    return null;
 }
 
 // Helper to get active FF Scouter API key
@@ -9844,43 +9904,189 @@ async function getPlayerFlightFromFFScouter(targetId, ffKey) {
 
 
 
-// Resolve flight duration using ONLY FF Scouter API (or Torn API) - No custom guessing math
-function resolveFlightDuration(m, id, now, ffFlightMap = {}) {
-    // 1. Live FF Scouter API response (the exact midpoint between earliest and latest arrival)
-    const ffFlight = ffFlightMap[id] || flightCache[id];
-    const arrivalTarget = Number(ffFlight?.midpoint || ffFlight?.landingTime || 0);
+// Resolve flight duration using connected Torn API key, FF Scouter API, or intelligent country flight estimation
+function resolveFlightDuration(m, id, now, ffFlightMap = {}, country = "", userTravelMap = {}) {
+    const state = (m.status?.state || "").trim();
+    const desc = (m.status?.description || "").toLowerCase();
+    const details = (m.status?.details || "").toLowerCase();
+    const fullStatus = `${state.toLowerCase()} ${desc} ${details}`;
 
+    // Determine direction from status text initially
+    let defaultDirection = 'back';
+    const hasToIndicator = desc.includes("to ") || desc.includes("heading to") || desc.includes("flying to") || desc.includes("traveling to");
+    const hasBackIndicator = desc.includes("from ") || desc.includes("returning") || desc.includes("back from") || desc.includes("leaving") || desc.includes("to torn");
+
+    if (hasToIndicator && !desc.includes("to torn")) {
+        defaultDirection = 'to';
+    } else if (hasBackIndicator || desc.includes("to torn")) {
+        defaultDirection = 'back';
+    } else if (desc.includes("to ") && !desc.includes("torn")) {
+        defaultDirection = 'to';
+    } else {
+        defaultDirection = 'back';
+    }
+
+    // 1. DIRECT CONNECTED USER API KEY (100% exact & verified, no estimation ~)
+    const userTravel = userTravelMap[String(id)] || userTravelMap[id];
+    if (userTravel) {
+        const dest = (userTravel.destination || "").trim();
+        const isToCountry = matchesCountry(dest, country);
+        const flightDirection = isToCountry ? 'to' : 'back';
+        const timeLeft = Number(userTravel.time_left || 0);
+        const arrivalTs = Number(userTravel.timestamp || (now + timeLeft));
+
+        if (timeLeft <= 0 || now >= arrivalTs) {
+            return {
+                landingStr: "Landing now!",
+                until: now,
+                isExact: true,
+                isLanded: true,
+                flightDirection,
+                destinationMatches: isToCountry || matchesCountry(fullStatus, country)
+            };
+        }
+
+        const diffMins = Math.max(1, Math.ceil(timeLeft / 60));
+        const landingStr = timeLeft <= 60 ? "Landing now!" : formatHumanDuration(diffMins, true);
+
+        return {
+            landingStr,
+            until: arrivalTs,
+            isExact: true,
+            isLanded: false,
+            flightDirection,
+            destinationMatches: isToCountry || matchesCountry(fullStatus, country)
+        };
+    }
+
+    // 2. FF SCOUTER FLIGHT DATA
+    const ffFlight = ffFlightMap[String(id)] || ffFlightMap[id] || flightCache[String(id)] || flightCache[id];
+    const ffDest = (ffFlight?.destination || "").toLowerCase();
+    const ffOrig = (ffFlight?.origin || "").toLowerCase();
+    let flightDirection = defaultDirection;
+
+    if (matchesCountry(ffDest, country)) {
+        flightDirection = 'to';
+    } else if (matchesCountry(ffOrig, country) || (ffDest === "torn" && matchesCountry(fullStatus, country))) {
+        flightDirection = 'back';
+    }
+
+    const arrivalTarget = Number(ffFlight?.midpoint || ffFlight?.landingTime || 0);
     if (arrivalTarget > 0) {
-        if (arrivalTarget > now) {
-            const diffMins = Math.max(1, Math.ceil((arrivalTarget - now) / 60));
-            return { landingStr: formatHumanDuration(diffMins), until: arrivalTarget };
+        if (arrivalTarget <= now) {
+            return {
+                landingStr: "Landing now!",
+                until: arrivalTarget,
+                isExact: false,
+                isLanded: true,
+                flightDirection,
+                destinationMatches: matchesCountry(fullStatus, country) || matchesCountry(ffDest, country) || matchesCountry(ffOrig, country)
+            };
         } else {
-            return { landingStr: "Landing now!", until: arrivalTarget };
+            const diffMins = Math.max(1, Math.ceil((arrivalTarget - now) / 60));
+            const landingStr = diffMins <= 1 ? "Landing now!" : formatHumanDuration(diffMins, false);
+            return {
+                landingStr,
+                until: arrivalTarget,
+                isExact: false,
+                isLanded: false,
+                flightDirection,
+                destinationMatches: matchesCountry(fullStatus, country) || matchesCountry(ffDest, country) || matchesCountry(ffOrig, country)
+            };
         }
     }
 
-    // 2. Direct Torn API status.until timestamp (if available)
+    // 3. DIRECT TORN API status.until timestamp (if available)
     const until = Number(m.status?.until || 0);
     if (until > 0) {
-        if (until > now) {
-            const diffMins = Math.max(1, Math.ceil((until - now) / 60));
-            return { landingStr: formatHumanDuration(diffMins), until };
+        if (until <= now) {
+            return {
+                landingStr: "Landing now!",
+                until,
+                isExact: false,
+                isLanded: true,
+                flightDirection,
+                destinationMatches: matchesCountry(fullStatus, country)
+            };
         } else {
-            return { landingStr: "Landing now!", until };
+            const diffMins = Math.max(1, Math.ceil((until - now) / 60));
+            const landingStr = diffMins <= 1 ? "Landing now!" : formatHumanDuration(diffMins, false);
+            return {
+                landingStr,
+                until,
+                isExact: false,
+                isLanded: false,
+                flightDirection,
+                destinationMatches: matchesCountry(fullStatus, country)
+            };
         }
     }
 
-    // 3. No estimates available from FF Scouter or Torn API — no guessing math
-    return { landingStr: "Flight in progress", until: 0 };
+    // 4. INTELLIGENT FLIGHT ESTIMATION (Using Country Flight Data & Last Action instead of blank "Flight in progress")
+    const countryData = COUNTRY_FLIGHT_DATA[country];
+    if (countryData) {
+        const totalFlightSec = countryData.airstripSec || countryData.midpointSec || 7200;
+        const lastAction = Number(m.last_action?.timestamp || 0);
+        const elapsedSec = (lastAction > 0 && lastAction <= now) ? (now - lastAction) : 0;
+
+        if (elapsedSec > 0 && elapsedSec < totalFlightSec + 180) {
+            const remainingSec = Math.max(0, totalFlightSec - elapsedSec);
+            if (remainingSec <= 60) {
+                return {
+                    landingStr: "Landing now!",
+                    until: now,
+                    isExact: false,
+                    isLanded: true,
+                    flightDirection,
+                    destinationMatches: matchesCountry(fullStatus, country)
+                };
+            } else {
+                const diffMins = Math.ceil(remainingSec / 60);
+                return {
+                    landingStr: formatHumanDuration(diffMins, false),
+                    until: now + remainingSec,
+                    isExact: false,
+                    isLanded: false,
+                    flightDirection,
+                    destinationMatches: matchesCountry(fullStatus, country)
+                };
+            }
+        } else if (elapsedSec >= totalFlightSec + 180) {
+            // Elapsed time well exceeds flight duration -> player has arrived
+            return {
+                landingStr: "Landing now!",
+                until: now,
+                isExact: false,
+                isLanded: true,
+                flightDirection,
+                destinationMatches: matchesCountry(fullStatus, country)
+            };
+        } else {
+            // Fresh flight: estimate standard flight midpoint for this destination
+            const diffMins = countryData.airstripMins || 60;
+            return {
+                landingStr: formatHumanDuration(diffMins, false),
+                until: now + (diffMins * 60),
+                isExact: false,
+                isLanded: false,
+                flightDirection,
+                destinationMatches: matchesCountry(fullStatus, country)
+            };
+        }
+    }
+
+    return {
+        landingStr: "~45 minutes",
+        until: now + 2700,
+        isExact: false,
+        isLanded: false,
+        flightDirection,
+        destinationMatches: matchesCountry(fullStatus, country)
+    };
 }
 
-
-
-
-
-
 // Robust member travel classifier for a specific country
-function categorizeTravelers(membersObj, country, now, ffFlightMap = {}) {
+function categorizeTravelers(membersObj, country, now, ffFlightMap = {}, userTravelMap = {}) {
     const inCountry = [];
     const flyingTo = [];
     const flyingBack = [];
@@ -9896,17 +10102,13 @@ function categorizeTravelers(membersObj, country, now, ffFlightMap = {}) {
         const details = (m.status?.details || "").toLowerCase();
         const fullStatus = `${state.toLowerCase()} ${desc} ${details}`;
 
-        // Must match the country query
-        if (!matchesCountry(fullStatus, country)) continue;
-
-        const { landingStr, until } = resolveFlightDuration(m, id, now, ffFlightMap, country);
-
         const isTraveling = state === "Traveling" || 
                             desc.includes("travel") || 
                             desc.includes("plane") || 
                             desc.includes("flight") || 
                             desc.includes("flying") || 
-                            desc.includes("returning");
+                            desc.includes("returning") ||
+                            desc.includes("to torn");
 
         const isAbroad = (state === "Abroad" || state === "Hospital" || desc.startsWith("in ") || desc.startsWith("at ") || desc.includes("hospital")) && !isTraveling;
 
@@ -9933,44 +10135,37 @@ function categorizeTravelers(membersObj, country, now, ffFlightMap = {}) {
             continue;
         }
 
-        const ffFlight = ffFlightMap[id] || flightCache[id];
-        const ffDest = (ffFlight?.destination || "").toLowerCase();
-        const ffOrig = (ffFlight?.origin || "").toLowerCase();
+        const travelInfo = resolveFlightDuration(m, id, now, ffFlightMap, country, userTravelMap);
+        const { landingStr, until, isExact, isLanded, flightDirection, destinationMatches } = travelInfo;
 
-        if (isTraveling) {
-            // Check FF Scouter direct flight data first if available
-            let isTo = false;
-            let isBack = false;
+        // Check if traveler is relevant to this destination country
+        if (!matchesCountry(fullStatus, country) && !destinationMatches) {
+            continue;
+        }
 
-            if (matchesCountry(ffDest, country)) {
-                isTo = true;
-            } else if (matchesCountry(ffOrig, country) || (ffDest === "torn" && matchesCountry(fullStatus, country))) {
-                isBack = true;
-            } else {
-                // Parse Torn status descriptions
-                const hasToIndicator = desc.includes("to ") || desc.includes("heading to") || desc.includes("flying to") || desc.includes("traveling to");
-                const hasBackIndicator = desc.includes("from ") || desc.includes("returning") || desc.includes("back from") || desc.includes("leaving") || desc.includes("to torn");
-
-                if (hasToIndicator && !desc.includes("to torn")) {
-                    isTo = true;
-                } else if (hasBackIndicator || desc.includes("to torn")) {
-                    isBack = true;
-                } else if (desc.includes("to ") && !desc.includes("torn")) {
-                    isTo = true;
-                } else {
-                    isBack = true;
-                }
+        // 2. Handle landed status
+        if (isLanded) {
+            // If flying TO country and landed -> they are now IN the country!
+            if (flightDirection === 'to') {
+                const onlineStr = m.last_action?.status === "Online" ? " 🟢" : (m.last_action?.status === "Idle" ? " 🟡" : " ⚫");
+                inCountry.push({
+                    name: m.name,
+                    id,
+                    onlineStr,
+                    status: m.last_action?.status || "Offline",
+                    isHospital: false
+                });
             }
+            // If flying BACK to Torn and landed -> they are back in Torn! Do not include in overseas list.
+            continue;
+        }
 
-            if (isTo && !isBack) {
-                flyingTo.push({ name: m.name, id, landingStr, until });
-                continue;
-            } else if (isBack) {
-                flyingBack.push({ name: m.name, id, landingStr, until });
-                continue;
+        // 3. Active flight in progress
+        if (isTraveling || until > now) {
+            if (flightDirection === 'to') {
+                flyingTo.push({ name: m.name, id, landingStr, until, isExact });
             } else {
-                flyingBack.push({ name: m.name, id, landingStr, until });
-                continue;
+                flyingBack.push({ name: m.name, id, landingStr, until, isExact });
             }
         }
     }
@@ -10108,37 +10303,60 @@ async function buildCountryStatusEmbed(country, apiKey, targetEnemyOverride = nu
             }
         }
 
-        // 3. Collect traveling members for FF Scouter lookup
-        const travelingIds = [];
+        // 3. Collect traveling members for live checks
+        const friendlyTravelingIds = [];
+        const enemyTravelingIds = [];
 
         for (const [id, m] of Object.entries(facData.members || {})) {
             const full = `${m.status?.state || ''} ${m.status?.description || ''} ${m.status?.details || ''}`.toLowerCase();
-            if (matchesCountry(full, country) && (m.status?.state === 'Traveling' || full.includes('travel') || full.includes('plane') || full.includes('flight') || full.includes('returning'))) {
-                travelingIds.push(id);
+            if (matchesCountry(full, country) || full.includes('returning') || full.includes('to torn')) {
+                if (m.status?.state === 'Traveling' || full.includes('travel') || full.includes('plane') || full.includes('flight') || full.includes('returning')) {
+                    friendlyTravelingIds.push(id);
+                }
             }
         }
         if (enemyData?.members) {
             for (const [id, m] of Object.entries(enemyData.members)) {
                 const full = `${m.status?.state || ''} ${m.status?.description || ''} ${m.status?.details || ''}`.toLowerCase();
-                if (matchesCountry(full, country) && (m.status?.state === 'Traveling' || full.includes('travel') || full.includes('plane') || full.includes('flight') || full.includes('returning'))) {
-                    travelingIds.push(id);
+                if (matchesCountry(full, country) || full.includes('returning') || full.includes('to torn')) {
+                    if (m.status?.state === 'Traveling' || full.includes('travel') || full.includes('plane') || full.includes('flight') || full.includes('returning')) {
+                        enemyTravelingIds.push(id);
+                    }
                 }
             }
         }
 
-        // 4. Fetch FF Scouter estimates in parallel
-        const ffFlightMap = {};
-        if (ffKey && travelingIds.length > 0) {
+        // 4. Fetch exact flight times directly via connected player API keys
+        const userTravelMap = {};
+        if (friendlyTravelingIds.length > 0 && typeof userKeys !== 'undefined' && userKeys.resolveUserApiKeyByTornId) {
             await Promise.all(
-                travelingIds.slice(0, 25).map(async (id) => {
+                friendlyTravelingIds.slice(0, 30).map(async (id) => {
+                    const resolved = userKeys.resolveUserApiKeyByTornId(id);
+                    if (resolved && resolved.key) {
+                        const trav = await getMemberTravelData(id, resolved.key);
+                        if (trav) userTravelMap[id] = trav;
+                    }
+                })
+            );
+        }
+
+        // 5. Fetch FF Scouter estimates in parallel for members without a direct key and enemy targets
+        const ffFlightMap = {};
+        const needFfScouter = [
+            ...friendlyTravelingIds.filter(id => !userTravelMap[id]),
+            ...enemyTravelingIds
+        ];
+        if (ffKey && needFfScouter.length > 0) {
+            await Promise.all(
+                needFfScouter.slice(0, 25).map(async (id) => {
                     const fl = await getPlayerFlightFromFFScouter(id, ffKey);
                     if (fl) ffFlightMap[id] = fl;
                 })
             );
         }
 
-        const friendlyTravel = categorizeTravelers(facData.members, country, now, ffFlightMap);
-        const enemyTravel = enemyData?.members ? categorizeTravelers(enemyData.members, country, now, ffFlightMap) : { inCountry: [], flyingTo: [], flyingBack: [], total: 0 };
+        const friendlyTravel = categorizeTravelers(facData.members, country, now, ffFlightMap, userTravelMap);
+        const enemyTravel = enemyData?.members ? categorizeTravelers(enemyData.members, country, now, ffFlightMap, {}) : { inCountry: [], flyingTo: [], flyingBack: [], total: 0 };
 
         const fields = [];
 
@@ -10234,9 +10452,7 @@ async function buildCountryStatusEmbed(country, apiKey, targetEnemyOverride = nu
             }
         }
 
-        if (ffKey && lastFFScouterError) {
-            desc += `\n⚠️ **FF Scouter Notice**: ${lastFFScouterError}`;
-        }
+        // FF Scouter subscription notices omitted from public embed to keep travel intel clean
 
         return {
             title: `${emoji} ${country} — Live Travel Intel`,
