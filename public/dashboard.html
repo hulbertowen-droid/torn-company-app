@@ -430,47 +430,142 @@
             </div>
         </div>
 
-        <!-- WAR BOUNTY TRACKER FULL WIDTH -->
-        <div class="card span-full" id="war-bounty-card" style="margin-bottom:18px;">
-            <div class="card-header" style="flex-wrap:wrap;gap:10px;">
-                <div style="display:flex;align-items:center;gap:10px;">
-                    <div class="card-title" style="color:var(--red);">🎯 War Bounty Tracker</div>
-                    <span id="bounty-war-badge" style="background:rgba(255,71,87,0.12);color:var(--red);padding:2px 8px;border-radius:12px;font-size:0.72em;font-weight:700;border:1px solid rgba(255,71,87,0.3);">War Period</span>
+                <!-- FACTION BOUNTY SENTINEL (MULTI-KEY BOUNTY & TARGET TRACKER) -->
+        <div class="card span-full" id="faction-bounty-card" style="margin-bottom:18px; border: 1px solid rgba(255, 71, 87, 0.35);">
+            <div class="card-header" style="flex-wrap:wrap; gap:12px;">
+                <div>
+                    <div class="card-title" style="color:var(--red, #ff4757); display:flex; align-items:center; gap:8px;">
+                        <span>🎯 Faction Bounty Sentinel</span>
+                        <span id="bounty-threat-badge" style="font-size:0.68em; background:rgba(255,71,87,0.15); color:var(--red, #ff4757); border:1px solid rgba(255,71,87,0.3); padding:2px 8px; border-radius:12px; font-weight:700;">Scanning Active Threats...</span>
+                        <span id="bounty-keys-badge" style="font-size:0.68em; background:rgba(0,206,201,0.12); color:var(--teal, #00cec9); border:1px solid rgba(0,206,201,0.3); padding:2px 8px; border-radius:12px; font-weight:700;">🔑 Multi-Key Sync</span>
+                    </div>
+                    <div style="font-size:0.78em; color:var(--text-dim, #8b949e); margin-top:2px;">
+                        Live network intelligence powered by connected faction member APIs — tracking active bounties on our roster and all bounties placed.
+                    </div>
                 </div>
-                <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;font-size:0.82em;">
-                    <div>💰 <span style="color:var(--text-dim);">Spent in War:</span> <strong id="bounty-total-spent" style="color:var(--green);font-size:1.05em;">$0</strong></div>
-                    <div>✅ <span style="color:var(--text-dim);">Claimed (Hosp'd):</span> <strong id="bounty-total-claimed" style="color:var(--red);font-size:1.05em;">0</strong></div>
-                    <div>⏳ <span style="color:var(--text-dim);">Still Active:</span> <strong id="bounty-active-count" style="color:var(--gold);font-size:1.05em;">0</strong></div>
-                    <div>📊 <span style="color:var(--text-dim);">Lifetime Placed:</span> <strong id="bounty-lifetime-placed" style="color:var(--teal);">0</strong></div>
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <div class="filter-chips" style="display:flex; gap:6px; flex-wrap:wrap;" id="bounty-main-tabs">
+                        <button class="filter-chip active" id="btn-tab-threats" onclick="switchBountyMainTab('threats')">🚨 Bounties on Roster (<span id="count-tab-threats">0</span>)</button>
+                        <button class="filter-chip" id="btn-tab-placers" onclick="switchBountyMainTab('placers')">🏹 Bounties Placed (<span id="count-tab-placers">0</span>)</button>
+                        <button class="filter-chip" id="btn-tab-claims" onclick="switchBountyMainTab('claims')">⚡ Activity Feed</button>
+                    </div>
+                    <button class="refresh-btn" onclick="loadFactionBountiesSentinel(true)" id="btn-refresh-bounties" style="padding:6px 12px; font-size:0.8em;">↻ Re-Scan</button>
                 </div>
             </div>
-            <div class="card-body" style="padding:16px 20px;">
-                <div style="display:grid;grid-template-columns: 1fr 1.2fr; gap:16px;">
-                    <!-- LEFT: Bounties Placed This War -->
-                    <div>
-                        <div style="font-size:0.78em;font-weight:800;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px;letter-spacing:0.5px;">🎯 Bounties Placed This War</div>
-                        <div style="display:flex;align-items:center;gap:14px;padding:14px 16px;background:var(--item);border-radius:10px;border:1px solid rgba(255,71,87,0.2);margin-bottom:10px;">
-                            <div style="font-size:3em;font-weight:900;color:var(--red);line-height:1;" id="bounty-placed-big">0</div>
-                            <div>
-                                <div style="font-size:0.85em;font-weight:700;color:var(--text-main);">Bounties Placed</div>
-                                <div style="font-size:0.75em;color:var(--text-dim);">During Current War Period</div>
+
+            <!-- KPI Summary Bar (6 High Impact Tiles) -->
+            <div class="card-body" style="padding:16px 18px 8px 18px;">
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-bottom:14px;">
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
+                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">🏹 Bounties Placed</div>
+                        <div style="font-size:1.55em; font-weight:900; color:var(--teal, #00cec9); margin-top:2px;" id="kpi-bounties-placed">—</div>
+                        <div style="font-size:0.72em; color:var(--text-dim);" id="kpi-bounties-spent">$0 spent</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
+                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">🚨 Active on Roster</div>
+                        <div style="font-size:1.55em; font-weight:900; color:var(--red, #ff4757); margin-top:2px;" id="kpi-bounties-active-us">—</div>
+                        <div style="font-size:0.72em; color:var(--gold, #ffa502);" id="kpi-bounties-active-sub">0 members hunted</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
+                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">💰 Total Bounty on Heads</div>
+                        <div style="font-size:1.55em; font-weight:900; color:var(--gold, #ffa502); margin-top:2px;" id="kpi-bounties-active-val">$0</div>
+                        <div style="font-size:0.72em; color:var(--text-dim);">Live pool on us</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
+                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">👑 Top Bounty Placer</div>
+                        <div style="font-size:1.25em; font-weight:900; color:var(--blue, #58a6ff); margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" id="kpi-bounties-top-placer">—</div>
+                        <div style="font-size:0.72em; color:var(--green, #2ed573);" id="kpi-bounties-top-placer-sub">0 placed</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
+                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">🎯 #1 Most Hunted</div>
+                        <div style="font-size:1.25em; font-weight:900; color:var(--red, #ff4757); margin-top:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" id="kpi-bounties-top-hunted">—</div>
+                        <div style="font-size:0.72em; color:var(--text-dim);" id="kpi-bounties-top-hunted-sub">Most bounties on them</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
+                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">🔑 Faction API Sync</div>
+                        <div style="font-size:1.55em; font-weight:900; color:var(--teal, #00cec9); margin-top:2px;" id="kpi-bounties-sync-count">—</div>
+                        <div style="font-size:0.72em; color:var(--text-dim);" id="kpi-bounties-sync-sub">Connected Keys</div>
+                    </div>
+                </div>
+
+                <!-- Sub-toolbar: Search + Secondary Filter Chips -->
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px; background:rgba(0,0,0,0.15); padding:8px 12px; border-radius:8px;">
+                    <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;" id="bounty-subfilters-row">
+                        <span style="font-size:0.75em; color:var(--text-dim); text-transform:uppercase; font-weight:700; margin-right:4px;">View:</span>
+                        <button class="filter-chip active" id="chip-filter-all" onclick="setBountyRosterFilter('all')">👥 All Members (<span id="subfilter-all-count">0</span>)</button>
+                        <button class="filter-chip" id="chip-filter-active" onclick="setBountyRosterFilter('active')">🚨 Has Active Bounty (<span id="subfilter-active-count">0</span>)</button>
+                        <button class="filter-chip" id="chip-filter-targeted" onclick="setBountyRosterFilter('targeted')">🏆 Most Targeted All-Time</button>
+                    </div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <input type="text" id="bounty-search" placeholder="🔍 Search member..." oninput="renderBountyCurrentView()" style="background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 12px; border-radius:6px; font-size:0.82em; width:170px;">
+                    </div>
+                </div>
+
+                <!-- VIEW 1: Bounties Placed ON Faction Members (Threat Roster) -->
+                <div id="bounty-view-threats">
+                    <div class="scrollable" style="max-height:440px; overflow-x:auto; border:1px solid var(--border); border-radius:8px;">
+                        <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.82em;" id="bounty-threats-table">
+                            <thead style="background:var(--card, #0d1117); position:sticky; top:0; z-index:2; border-bottom:1px solid var(--border);">
+                                <tr style="border-bottom:1px solid var(--border); color:var(--text-dim); font-size:0.9em; text-transform:uppercase; letter-spacing:0.5px;">
+                                    <th style="padding:10px 10px; width:45px; text-align:center;">#</th>
+                                    <th style="padding:10px 12px;">Faction Member</th>
+                                    <th style="padding:10px 10px; text-align:center;">Active Bounties</th>
+                                    <th style="padding:10px 12px;">Reward on Head</th>
+                                    <th style="padding:10px 12px;">Who Placed Them</th>
+                                    <th style="padding:10px 12px;">Career Targeted</th>
+                                    <th style="padding:10px 10px; text-align:center;">Key Sync</th>
+                                    <th style="padding:10px 12px; text-align:right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bounty-threats-tbody">
+                                <tr><td colspan="8" style="text-align:center; padding:24px; color:var(--text-dim);">Connecting to Faction Bounty Sentinel...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- VIEW 2: Bounties Placed by Faction Members (Placers Leaderboard) -->
+                <div id="bounty-view-placers" style="display:none;">
+                    <div class="scrollable" style="max-height:440px; overflow-x:auto; border:1px solid var(--border); border-radius:8px;">
+                        <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.82em;" id="bounty-placers-table">
+                            <thead style="background:var(--card, #0d1117); position:sticky; top:0; z-index:2; border-bottom:1px solid var(--border);">
+                                <tr style="border-bottom:1px solid var(--border); color:var(--text-dim); font-size:0.9em; text-transform:uppercase; letter-spacing:0.5px;">
+                                    <th style="padding:10px 10px; width:45px; text-align:center;">#</th>
+                                    <th style="padding:10px 14px;">Member (Placer)</th>
+                                    <th style="padding:10px 12px; text-align:center;">Bounties Placed</th>
+                                    <th style="padding:10px 12px;">Total Cash Spent</th>
+                                    <th style="padding:10px 12px;">Avg Bounty Size</th>
+                                    <th style="padding:10px 10px; text-align:center;">Key Status</th>
+                                    <th style="padding:10px 14px; text-align:right;">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bounty-placers-tbody">
+                                <tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-dim);">Loading placers data...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- VIEW 3: Live Claims / Hospitalizations Feed -->
+                <div id="bounty-view-claims" style="display:none;">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+                        <div>
+                            <div style="font-size:0.78em; font-weight:800; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px; letter-spacing:0.5px;">⚡ Recent Bounty Hospitalizations</div>
+                            <div id="bounty-feed-claims" style="display:flex; flex-direction:column; gap:6px; max-height:360px; overflow-y:auto;">
+                                <div class="empty-state" style="padding:16px;">No recent claim events found.</div>
                             </div>
                         </div>
-                        <div style="font-size:0.78em;font-weight:800;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px;letter-spacing:0.5px;">📋 Who You Placed On</div>
-                        <div id="bounty-placed-list" style="display:flex;flex-direction:column;gap:5px;max-height:150px;overflow-y:auto;">
-                            <div class="empty-state" style="padding:10px;">No placed bounty events found.</div>
-                        </div>
-                    </div>
-                    <!-- RIGHT: Recent Claims Live Feed -->
-                    <div>
-                        <div style="font-size:0.78em;font-weight:800;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px;letter-spacing:0.5px;">⚡ Recent Bounty Hospitalizations</div>
-                        <div id="bounty-recent-claims" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;">
-                            <div class="empty-state" style="padding:16px;">Listening for bounty events...</div>
+                        <div>
+                            <div style="font-size:0.78em; font-weight:800; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px; letter-spacing:0.5px;">🎯 Recent Placed Events</div>
+                            <div id="bounty-feed-placed" style="display:flex; flex-direction:column; gap:6px; max-height:360px; overflow-y:auto;">
+                                <div class="empty-state" style="padding:16px;">No recent placement events recorded.</div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+
 
         <!-- WAR FLIGHT & FARM SENTINEL (PAST WARS AIRTIME & DEFENSE AUDIT) -->
         <div class="card span-full" id="war-sentinel-card" style="margin-bottom:18px; border: 1px solid rgba(0,206,201,0.25);">
@@ -787,7 +882,7 @@ async function loadAll() {
             sessionStorage.setItem('sv_cache_wars', JSON.stringify(wars));
         } catch(e) {}
         renderAll(dash, wars);
-        loadWarBounties();
+        loadFactionBountiesSentinel();
         initSentinel();
         document.getElementById('last-updated').innerText = 'Updated ' + new Date().toLocaleTimeString();
     } catch(e) {
@@ -795,89 +890,387 @@ async function loadAll() {
     }
 }
 
-async function loadWarBounties() {
+// ── Faction Bounty Sentinel State & Functions ──────────────────────────────
+let factionBountyData = null;
+let currentBountyMainTab = 'threats';
+let currentBountyRosterFilter = 'all';
+
+async function loadFactionBountiesSentinel(force = false) {
+    if (!myKey) return;
+    const threatBadge = document.getElementById('bounty-threat-badge');
+    const refreshBtn = document.getElementById('btn-refresh-bounties');
+    if (threatBadge) threatBadge.innerText = 'Scanning Network...';
+    if (refreshBtn) refreshBtn.disabled = true;
+
     try {
-        const res = await fetch('/api/war-bounties', { headers: { 'x-api-key': myKey } });
+        const url = `/api/faction-bounties-sentinel?${force ? 'force=true' : ''}`;
+        const res = await fetch(url, { headers: { 'x-api-key': myKey } });
         const data = await res.json();
-        if (!data.success) return;
 
-        const spentEl = document.getElementById('bounty-total-spent');
-        const claimedEl = document.getElementById('bounty-total-claimed');
-        const lifeEl = document.getElementById('bounty-lifetime-placed');
-        const warBadge = document.getElementById('bounty-war-badge');
-
-        if (spentEl) spentEl.innerText = `$${(data.totalCashSpent || 0).toLocaleString()}`;
-        if (claimedEl) claimedEl.innerText = `${data.totalBountiesClaimed || 0}`;
-        const activeEl = document.getElementById('bounty-active-count');
-        if (activeEl) activeEl.innerText = `${data.activeBountiesCount || 0}`;
-        if (lifeEl) lifeEl.innerText = (data.lifetimePlaced || 0).toLocaleString();
-
-        if (warBadge) {
-            warBadge.innerText = data.warTitle || (data.warActive ? '⚡ Active Ranked War' : 'Last War Period');
-            warBadge.style.color = data.warActive ? 'var(--red)' : 'var(--gold)';
+        if (!data || !data.success) {
+            console.warn('[Bounty Sentinel] Load failed:', data?.error);
+            if (threatBadge) threatBadge.innerText = 'Sync Error';
+            return;
         }
 
-        // Bounties Placed in War — big number
-        const placedBig = document.getElementById('bounty-placed-big');
-        if (placedBig) {
-            const count = data.bountiesPlacedInWar || data.totalBountiesClaimed || 0;
-            placedBig.innerText = count;
-        }
-
-        // Who you placed on list
-        const placedList = document.getElementById('bounty-placed-list');
-        if (placedList) {
-            const placed = data.placedOnLeaderboard || [];
-            if (placed.length === 0) {
-                // Fall back to top targets from claims
-                const targets = data.topTargets || [];
-                if (targets.length === 0) {
-                    placedList.innerHTML = `<div class="empty-state" style="padding:10px;">No placed bounty data available yet.</div>`;
-                } else {
-                    placedList.innerHTML = targets.slice(0, 5).map(t => `
-                    <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--item);border-radius:7px;font-size:0.83em;">
-                        <a href="https://www.torn.com/profiles.php?XID=${t.id}" target="_blank" style="color:var(--text-main);font-weight:700;text-decoration:none;">🎯 ${t.name}</a>
-                        <span style="color:var(--red);font-weight:800;">${t.count}×</span>
-                    </div>`).join('');
-                }
-            } else {
-                placedList.innerHTML = placed.slice(0, 5).map(t => `
-                <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--item);border-radius:7px;font-size:0.83em;">
-                    <a href="https://www.torn.com/profiles.php?XID=${t.id}" target="_blank" style="color:var(--text-main);font-weight:700;text-decoration:none;">🎯 ${t.name}</a>
-                    <div style="display:flex;gap:8px;align-items:center;">
-                        <span style="color:var(--red);font-weight:800;">${t.count}×</span>
-                        <span style="color:var(--green);font-size:0.9em;">$${(t.totalSpent || 0).toLocaleString()}</span>
-                    </div>
-                </div>`).join('');
-            }
-        }
-
-        // Recent Claims
-        const claimsList = document.getElementById('bounty-recent-claims');
-        if (claimsList) {
-            const claims = data.recentClaims || [];
-            if (claims.length === 0) {
-                claimsList.innerHTML = `<div class="empty-state" style="padding:16px;">No bounty claims found in recent logs.</div>`;
-            } else {
-                claimsList.innerHTML = claims.slice(0, 6).map(c => {
-                    const timeStr = new Date(c.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    return `
-                    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--item);border-radius:8px;border:1px solid rgba(255,255,255,0.04);font-size:0.84em;">
-                        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:8px;">
-                            <strong style="color:var(--red);">🎯 ${c.targetName}</strong> <span style="color:var(--text-dim);">by ${c.hunterName}</span>
-                        </div>
-                        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-                            <span style="color:var(--green);font-weight:800;">+$${(c.amount || 0).toLocaleString()}</span>
-                            <span style="color:var(--text-dim);font-size:0.8em;">${timeStr}</span>
-                        </div>
-                    </div>`;
-                }).join('');
-            }
-        }
-    } catch(e) {
-        console.error("Failed to load war bounties:", e);
+        factionBountyData = data;
+        renderBountySentinelData(data);
+    } catch (e) {
+        console.error('[Bounty Sentinel] Error:', e);
+        if (threatBadge) threatBadge.innerText = 'Offline';
+    } finally {
+        if (refreshBtn) refreshBtn.disabled = false;
     }
 }
+
+// Backwards-compatible alias for any callers
+function loadWarBounties() {
+    loadFactionBountiesSentinel(false);
+}
+
+function renderBountySentinelData(data) {
+    const summary = data.summary || {};
+    const allMembers = data.allMembers || [];
+    const placers = data.placersLeaderboard || [];
+
+    // 1. Update Badges
+    const threatBadge = document.getElementById('bounty-threat-badge');
+    if (threatBadge) {
+        if (summary.totalActiveBountiesOnFaction > 0) {
+            threatBadge.innerText = `🚨 ${summary.totalActiveBountiesOnFaction} Active Bounty${summary.totalActiveBountiesOnFaction > 1 ? 'ies' : ''} on ${summary.membersWithActiveBounties} Member${summary.membersWithActiveBounties > 1 ? 's' : ''}`;
+            threatBadge.style.background = 'rgba(255, 71, 87, 0.2)';
+            threatBadge.style.color = 'var(--red, #ff4757)';
+            threatBadge.style.borderColor = 'rgba(255, 71, 87, 0.4)';
+        } else {
+            threatBadge.innerText = '🛡️ Roster Clean (0 Active)';
+            threatBadge.style.background = 'rgba(46, 213, 115, 0.15)';
+            threatBadge.style.color = 'var(--green, #2ed573)';
+            threatBadge.style.borderColor = 'rgba(46, 213, 115, 0.3)';
+        }
+    }
+
+    const keysBadge = document.getElementById('bounty-keys-badge');
+    if (keysBadge) {
+        keysBadge.innerText = `🔑 ${data.connectedKeysCount || 0} API Keys Active`;
+    }
+
+    // 2. Update KPI Cards
+    const kpiPlaced = document.getElementById('kpi-bounties-placed');
+    if (kpiPlaced) kpiPlaced.innerText = (summary.totalBountiesPlacedByFaction || 0).toLocaleString();
+
+    const kpiSpent = document.getElementById('kpi-bounties-spent');
+    if (kpiSpent) kpiSpent.innerText = `$${(summary.totalCashSpentOnBounties || 0).toLocaleString()} spent`;
+
+    const kpiActiveUs = document.getElementById('kpi-bounties-active-us');
+    if (kpiActiveUs) {
+        kpiActiveUs.innerText = summary.totalActiveBountiesOnFaction || 0;
+        kpiActiveUs.style.color = (summary.totalActiveBountiesOnFaction > 0) ? 'var(--red, #ff4757)' : 'var(--green, #2ed573)';
+    }
+
+    const kpiActiveSub = document.getElementById('kpi-bounties-active-sub');
+    if (kpiActiveSub) {
+        kpiActiveSub.innerText = `${summary.membersWithActiveBounties || 0} hunted member${(summary.membersWithActiveBounties || 0) === 1 ? '' : 's'}`;
+    }
+
+    const kpiActiveVal = document.getElementById('kpi-bounties-active-val');
+    if (kpiActiveVal) kpiActiveVal.innerText = `$${(summary.totalActiveBountyValue || 0).toLocaleString()}`;
+
+    const kpiTopPlacer = document.getElementById('kpi-bounties-top-placer');
+    const kpiTopPlacerSub = document.getElementById('kpi-bounties-top-placer-sub');
+    if (kpiTopPlacer) {
+        kpiTopPlacer.innerText = summary.topPlacer ? summary.topPlacer.name : 'None';
+    }
+    if (kpiTopPlacerSub) {
+        kpiTopPlacerSub.innerText = summary.topPlacer ? `${summary.topPlacer.count} placed ($${(summary.topPlacer.spent || 0).toLocaleString()})` : 'No bounties placed';
+    }
+
+    const kpiTopHunted = document.getElementById('kpi-bounties-top-hunted');
+    const kpiTopHuntedSub = document.getElementById('kpi-bounties-top-hunted-sub');
+    if (kpiTopHunted) {
+        kpiTopHunted.innerText = summary.topTargeted ? summary.topTargeted.name : 'None';
+    }
+    if (kpiTopHuntedSub) {
+        if (summary.topTargeted && summary.topTargeted.activeCount > 0) {
+            kpiTopHuntedSub.innerText = `🚨 ${summary.topTargeted.activeCount} active ($${(summary.topTargeted.activeReward || 0).toLocaleString()})`;
+            kpiTopHuntedSub.style.color = 'var(--red, #ff4757)';
+        } else if (summary.topTargeted) {
+            kpiTopHuntedSub.innerText = `${summary.topTargeted.lifetimeReceived || 0} career bounties on them`;
+            kpiTopHuntedSub.style.color = 'var(--text-dim, #8b949e)';
+        }
+    }
+
+    const kpiSyncCount = document.getElementById('kpi-bounties-sync-count');
+    if (kpiSyncCount) kpiSyncCount.innerText = `${data.connectedKeysCount || 0} / ${data.totalMembers || allMembers.length}`;
+
+    // Tab counts
+    const activeMembersCount = allMembers.filter(m => m.activeBountiesCount > 0).length;
+    const tabThreatsCount = document.getElementById('count-tab-threats');
+    if (tabThreatsCount) tabThreatsCount.innerText = activeMembersCount > 0 ? `${activeMembersCount} Hunted` : `${allMembers.length}`;
+
+    const tabPlacersCount = document.getElementById('count-tab-placers');
+    if (tabPlacersCount) tabPlacersCount.innerText = `${placers.length}`;
+
+    const subfilterAllCount = document.getElementById('subfilter-all-count');
+    if (subfilterAllCount) subfilterAllCount.innerText = `${allMembers.length}`;
+
+    const subfilterActiveCount = document.getElementById('subfilter-active-count');
+    if (subfilterActiveCount) subfilterActiveCount.innerText = `${activeMembersCount}`;
+
+    renderBountyCurrentView();
+}
+
+function switchBountyMainTab(tab) {
+    currentBountyMainTab = tab;
+    document.querySelectorAll('#bounty-main-tabs .filter-chip').forEach(b => b.classList.remove('active'));
+    const activeBtn = document.getElementById(`btn-tab-${tab}`);
+    if (activeBtn) activeBtn.classList.add('active');
+
+    const viewThreats = document.getElementById('bounty-view-threats');
+    const viewPlacers = document.getElementById('bounty-view-placers');
+    const viewClaims = document.getElementById('bounty-view-claims');
+    const subfiltersRow = document.getElementById('bounty-subfilters-row');
+
+    if (viewThreats) viewThreats.style.display = (tab === 'threats') ? 'block' : 'none';
+    if (viewPlacers) viewPlacers.style.display = (tab === 'placers') ? 'block' : 'none';
+    if (viewClaims) viewClaims.style.display = (tab === 'claims') ? 'block' : 'none';
+
+    if (subfiltersRow) {
+        subfiltersRow.style.display = (tab === 'threats') ? 'flex' : 'none';
+    }
+
+    renderBountyCurrentView();
+}
+
+function setBountyRosterFilter(filter) {
+    currentBountyRosterFilter = filter;
+    document.querySelectorAll('#bounty-subfilters-row .filter-chip').forEach(b => b.classList.remove('active'));
+    const btn = document.getElementById(`chip-filter-${filter}`);
+    if (btn) btn.classList.add('active');
+    renderBountyCurrentView();
+}
+
+function renderBountyCurrentView() {
+    if (!factionBountyData) return;
+    const searchVal = (document.getElementById('bounty-search')?.value || '').toLowerCase().trim();
+
+    if (currentBountyMainTab === 'threats') {
+        renderBountyThreatsTable(searchVal);
+    } else if (currentBountyMainTab === 'placers') {
+        renderBountyPlacersTable(searchVal);
+    } else if (currentBountyMainTab === 'claims') {
+        renderBountyClaimsFeed();
+    }
+}
+
+function renderBountyThreatsTable(searchVal = '') {
+    const tbody = document.getElementById('bounty-threats-tbody');
+    if (!tbody || !factionBountyData) return;
+
+    let list = [...(factionBountyData.allMembers || [])];
+
+    if (currentBountyRosterFilter === 'active') {
+        list = list.filter(m => m.activeBountiesCount > 0);
+    } else if (currentBountyRosterFilter === 'targeted') {
+        list.sort((a, b) => (b.lifetimeReceived || 0) - (a.lifetimeReceived || 0) || (b.lifetimeReceivedValue || 0) - (a.lifetimeReceivedValue || 0));
+    }
+
+    if (searchVal) {
+        list = list.filter(m => m.name.toLowerCase().includes(searchVal) || String(m.id).includes(searchVal));
+    }
+
+    if (list.length === 0) {
+        if (currentBountyRosterFilter === 'active') {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:32px; color:var(--green, #2ed573);">
+                <div style="font-size:1.5em; margin-bottom:6px;">🛡️ Safe & Sound</div>
+                <div style="color:var(--text-main); font-weight:700;">No active bounties currently on any faction members!</div>
+                <div style="color:var(--text-dim); font-size:0.85em; margin-top:4px;">Switch to "All Members" to see full career threat rankings across the faction.</div>
+            </td></tr>`;
+        } else {
+            tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color:var(--text-dim);">No faction members matching "${searchVal}".</td></tr>`;
+        }
+        return;
+    }
+
+    tbody.innerHTML = list.map((m, idx) => {
+        const hasActive = m.activeBountiesCount > 0;
+        const activeBadge = hasActive
+            ? `<span style="background:rgba(255,71,87,0.18); color:var(--red, #ff4757); border:1px solid rgba(255,71,87,0.4); padding:3px 9px; border-radius:12px; font-weight:800; font-size:0.82em; display:inline-block; white-space:nowrap;">🚨 ${m.activeBountiesCount} Active</span>`
+            : `<span style="background:rgba(46,213,115,0.08); color:var(--text-dim); border:1px solid rgba(255,255,255,0.06); padding:2px 8px; border-radius:12px; font-size:0.75em;">✓ Clean</span>`;
+
+        const rewardStr = hasActive
+            ? `<strong style="color:var(--gold, #ffa502); font-size:1.02em;">$${m.activeBountyTotalReward.toLocaleString()}</strong>`
+            : `<span style="color:var(--text-dim);">$0</span>`;
+
+        let placersDetails = '<span style="color:var(--text-dim); font-size:0.8em;">None</span>';
+        if (hasActive && m.activeBounties && m.activeBounties.length > 0) {
+            const placersSummary = {};
+            for (const b of m.activeBounties) {
+                const name = b.listerName || (b.isAnonymous ? 'Anonymous' : 'Someone');
+                if (!placersSummary[name]) placersSummary[name] = { count: 0, reward: 0 };
+                placersSummary[name].count++;
+                placersSummary[name].reward += (b.reward || 0);
+            }
+            placersDetails = Object.entries(placersSummary).map(([placerName, info]) => {
+                const isAnon = placerName.toLowerCase().includes('anonymous');
+                const badgeColor = isAnon ? 'var(--text-dim)' : 'var(--red, #ff4757)';
+                return `<div style="font-size:0.78em; line-height:1.3; white-space:nowrap;">
+                    <span style="color:${badgeColor}; font-weight:700;">${placerName}</span>: <span style="color:var(--gold, #ffa502);">${info.count > 1 ? info.count + '× ' : ''}$${info.reward.toLocaleString()}</span>
+                </div>`;
+            }).join('');
+        }
+
+        const careerStr = (m.lifetimeReceived > 0)
+            ? `<div style="line-height:1.2;">
+                <strong>${m.lifetimeReceived.toLocaleString()}</strong> <span style="font-size:0.75em; color:var(--text-dim);">bounties</span>
+                ${m.lifetimeReceivedValue > 0 ? `<div style="font-size:0.75em; color:var(--teal, #00cec9);">$${m.lifetimeReceivedValue.toLocaleString()}</div>` : ''}
+              </div>`
+            : `<span style="color:var(--text-dim); font-size:0.8em;">0</span>`;
+
+        const keySyncBadge = m.hasConnectedKey
+            ? `<span title="Verified with player API key" style="color:var(--teal, #00cec9); font-size:0.8em; font-weight:700;">🔒 Live Sync</span>`
+            : `<span title="Public board sync" style="color:var(--text-dim); font-size:0.75em;">🌐 Board</span>`;
+
+        const isHosp = m.status?.state === 'Hospital';
+        const isAbroad = m.status?.state === 'Abroad';
+        const isTraveling = m.status?.state === 'Traveling';
+        let statusTag = '';
+        if (isHosp) {
+            statusTag = `<span style="background:rgba(255,71,87,0.15); color:var(--red, #ff4757); padding:1px 6px; border-radius:4px; font-size:0.72em; font-weight:700;">HOSP</span>`;
+        } else if (isAbroad || isTraveling) {
+            statusTag = `<span style="background:rgba(88,166,255,0.15); color:var(--blue, #58a6ff); padding:1px 6px; border-radius:4px; font-size:0.72em; font-weight:700;">✈️ ${m.status?.description || 'Abroad'}</span>`;
+        }
+
+        const medal = idx === 0 ? '🥇' : (idx === 1 ? '🥈' : (idx === 2 ? '🥉' : `${idx + 1}`));
+        const rowBg = hasActive ? 'background:rgba(255,71,87,0.03);' : '';
+
+        return `
+        <tr style="border-bottom:1px solid var(--border); ${rowBg}">
+            <td style="padding:10px 10px; text-align:center; font-weight:800; color:var(--text-dim); font-size:0.85em;">${medal}</td>
+            <td style="padding:10px 12px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-main); font-weight:700; text-decoration:none; font-size:0.95em;">
+                        ${m.name}
+                    </a>
+                    <span style="font-size:0.75em; color:var(--text-dim);">[${m.id}]</span>
+                    <span style="font-size:0.75em; color:var(--text-dim);">Lvl ${m.level}</span>
+                    ${statusTag}
+                </div>
+                <div style="font-size:0.75em; color:var(--text-dim); margin-top:2px;">
+                    ${m.position || 'Member'} &bull; ${m.lastAction?.status || 'Offline'} (${m.lastAction?.relative || ''})
+                </div>
+            </td>
+            <td style="padding:10px 10px; text-align:center;">${activeBadge}</td>
+            <td style="padding:10px 12px;">${rewardStr}</td>
+            <td style="padding:10px 12px;">${placersDetails}</td>
+            <td style="padding:10px 12px;">${careerStr}</td>
+            <td style="padding:10px 10px; text-align:center;">${keySyncBadge}</td>
+            <td style="padding:10px 12px; text-align:right;">
+                <div style="display:inline-flex; gap:6px; align-items:center;">
+                    <a href="https://www.torn.com/bounties.php?p=add&XID=${m.id}&amount=150000" target="_blank" class="filter-chip" style="background:rgba(255,71,87,0.12); border-color:var(--red, #ff4757); color:var(--red, #ff4757); padding:2px 8px; font-size:0.72em; text-decoration:none;" title="Add/Counter Bounty">🎯 Bounty</a>
+                    <a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" class="filter-chip" style="padding:2px 8px; font-size:0.72em; text-decoration:none;" title="View Profile">👤 Profile</a>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function renderBountyPlacersTable(searchVal = '') {
+    const tbody = document.getElementById('bounty-placers-tbody');
+    if (!tbody || !factionBountyData) return;
+
+    let placers = [...(factionBountyData.placersLeaderboard || [])];
+
+    if (searchVal) {
+        placers = placers.filter(p => p.name.toLowerCase().includes(searchVal) || String(p.id).includes(searchVal));
+    }
+
+    if (placers.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-dim);">No faction members have placed bounties yet or recorded in network.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = placers.map((p, idx) => {
+        const medal = idx === 0 ? '👑 #1' : (idx === 1 ? '🥈 #2' : (idx === 2 ? '🥉 #3' : `#${idx + 1}`));
+        const avgBounty = p.lifetimePlaced > 0 ? Math.round(p.totalSpent / p.lifetimePlaced) : 0;
+        const keySync = p.hasConnectedKey
+            ? `<span style="color:var(--teal, #00cec9); font-weight:700; font-size:0.78em;">🔒 Connected</span>`
+            : `<span style="color:var(--text-dim); font-size:0.75em;">Pending Key</span>`;
+
+        return `
+        <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:10px 10px; text-align:center; font-weight:800; color:var(--text-dim);">${medal}</td>
+            <td style="padding:10px 14px;">
+                <a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank" style="color:var(--text-main); font-weight:700; text-decoration:none; font-size:0.95em;">
+                    ${p.name}
+                </a>
+                <span style="font-size:0.75em; color:var(--text-dim); margin-left:4px;">[${p.id}] &bull; Lvl ${p.level}</span>
+            </td>
+            <td style="padding:10px 12px; text-align:center;">
+                <strong style="color:var(--teal, #00cec9); font-size:1.05em;">${p.lifetimePlaced.toLocaleString()}</strong>
+            </td>
+            <td style="padding:10px 12px;">
+                <strong style="color:var(--green, #2ed573);">$${(p.totalSpent || 0).toLocaleString()}</strong>
+            </td>
+            <td style="padding:10px 12px; color:var(--text-dim);">
+                $${avgBounty.toLocaleString()}
+            </td>
+            <td style="padding:10px 10px; text-align:center;">${keySync}</td>
+            <td style="padding:10px 14px; text-align:right;">
+                <a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank" class="filter-chip" style="padding:2px 8px; font-size:0.72em; text-decoration:none;">👤 Profile</a>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function renderBountyClaimsFeed() {
+    const claimsEl = document.getElementById('bounty-feed-claims');
+    const placedEl = document.getElementById('bounty-feed-placed');
+    if (!factionBountyData) return;
+
+    const claims = factionBountyData.recentClaims || [];
+    const placed = factionBountyData.recentPlaced || [];
+
+    if (claimsEl) {
+        if (claims.length === 0) {
+            claimsEl.innerHTML = '<div class="empty-state" style="padding:16px;">No recent bounty claims found.</div>';
+        } else {
+            claimsEl.innerHTML = claims.slice(0, 10).map(c => {
+                const timeStr = c.timestamp ? new Date(c.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                return `
+                <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--item); border-radius:8px; border:1px solid rgba(255,255,255,0.04); font-size:0.84em;">
+                    <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;">
+                        <strong style="color:var(--red, #ff4757);">🎯 ${c.targetName}</strong> <span style="color:var(--text-dim);">by ${c.hunterName}</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                        <span style="color:var(--green, #2ed573); font-weight:800;">+$${(c.amount || 0).toLocaleString()}</span>
+                        <span style="color:var(--text-dim); font-size:0.8em;">${timeStr}</span>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+    }
+
+    if (placedEl) {
+        if (placed.length === 0) {
+            placedEl.innerHTML = '<div class="empty-state" style="padding:16px;">No recent placement events recorded.</div>';
+        } else {
+            placedEl.innerHTML = placed.slice(0, 10).map(p => {
+                const timeStr = p.timestamp ? new Date(p.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                return `
+                <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--item); border-radius:8px; border:1px solid rgba(255,255,255,0.04); font-size:0.84em;">
+                    <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;">
+                        <strong style="color:var(--teal, #00cec9);">🎯 Target #${p.targetId}</strong> <span style="color:var(--text-dim);">${p.targetName || ''}</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                        <span style="color:var(--gold, #ffa502); font-weight:800;">$${(p.amount || 0).toLocaleString()}</span>
+                        <span style="color:var(--text-dim); font-size:0.8em;">${timeStr}</span>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+    }
+}
+
 
 let sentinelData = null;
 let activeSentinelFilter = 'all';

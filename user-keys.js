@@ -988,6 +988,26 @@ function getAllLinkedDiscordIds() {
     return ids;
 }
 
+function getAllConnectedMembers() {
+    const map = new Map();
+    for (const [k, rec] of userKeysStore.entries()) {
+        if (!rec || !rec.tornId) continue;
+        const tid = Number(rec.tornId);
+        if (map.has(tid)) continue;
+        const key = decryptKey(rec);
+        if (key) {
+            map.set(tid, {
+                tornId: tid,
+                playerName: rec.playerName,
+                key,
+                discordUserId: rec.discordUserId || (k.startsWith('torn:') ? null : k),
+                linkedAt: rec.linkedAt
+            });
+        }
+    }
+    return Array.from(map.values());
+}
+
 // Initialize on require
 loadKeysFromDisk();
 
@@ -1004,6 +1024,7 @@ module.exports = {
     hasLinkedKey,
     getDecryptedKey,
     getAllLinkedDiscordIds,
+    getAllConnectedMembers,
     sanitizeErrorMessage,
     fetchUserLiveStats,
     detectUserAccountIntent,
