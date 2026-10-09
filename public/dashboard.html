@@ -1249,6 +1249,102 @@ function renderBountyThreatsTable(searchVal = '') {
     }).join('');
 }
 
+function togglePlacerTargets(memberId) {
+    const el = document.getElementById('extra-targets-' + memberId);
+    const btn = document.getElementById('btn-targets-' + memberId);
+    if (!el || !btn) return;
+    if (el.style.display === 'none' || !el.style.display) {
+        el.style.display = 'flex';
+        btn.innerHTML = '▲ Show less';
+    } else {
+        el.style.display = 'none';
+        const moreCount = el.getAttribute('data-count') || '';
+        btn.innerHTML = `+${moreCount} more targets`;
+    }
+}
+
+function showPlacerTargetsModal(memberId) {
+    if (!factionBountyData) return;
+    const placer = (factionBountyData.placersLeaderboard || []).find(p => String(p.id) === String(memberId));
+    if (!placer) return;
+
+    let modalEl = document.getElementById('placer-targets-modal');
+    if (!modalEl) {
+        modalEl = document.createElement('div');
+        modalEl.id = 'placer-targets-modal';
+        modalEl.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.78); z-index:99999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(4px);';
+        modalEl.innerHTML = `
+            <div style="background:var(--card, #161b22); border:1px solid var(--border, rgba(255,255,255,0.1)); border-radius:12px; width:90%; max-width:640px; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 12px 36px rgba(0,0,0,0.6);">
+                <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;">
+                    <div>
+                        <h3 id="ptm-title" style="margin:0; font-size:1.15em; font-weight:800; color:var(--text-main);">🎯 Bounties Placed by Member</h3>
+                        <div id="ptm-subtitle" style="font-size:0.8em; color:var(--text-dim); margin-top:3px;">War Period Target Audit</div>
+                    </div>
+                    <button onclick="document.getElementById('placer-targets-modal').style.display='none'" style="background:none; border:none; color:var(--text-dim); font-size:1.4em; cursor:pointer; line-height:1;">&times;</button>
+                </div>
+                <div id="ptm-body" style="padding:16px 20px; overflow-y:auto; flex:1;"></div>
+                <div style="padding:12px 20px; border-top:1px solid var(--border); text-align:right;">
+                    <button onclick="document.getElementById('placer-targets-modal').style.display='none'" class="filter-chip" style="cursor:pointer; padding:6px 14px;">Close</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modalEl);
+        modalEl.addEventListener('click', (e) => {
+            if (e.target === modalEl) modalEl.style.display = 'none';
+        });
+    }
+
+    document.getElementById('ptm-title').innerHTML = `🎯 Bounties Placed by <span style="color:var(--teal, #00cec9);">${placer.name}</span> [${placer.id}]`;
+    document.getElementById('ptm-subtitle').innerHTML = `${placer.bountiesPlacedInWar} total bounties placed &bull; $${(placer.spentInWar || 0).toLocaleString()} spent in this war period`;
+
+    const targets = placer.targets || [];
+    const ptmBody = document.getElementById('ptm-body');
+    if (targets.length === 0) {
+        ptmBody.innerHTML = '<div style="color:var(--text-dim); text-align:center; padding:24px;">No target breakdowns recorded for this member.</div>';
+    } else {
+        ptmBody.innerHTML = `
+            <table style="width:100%; border-collapse:collapse; font-size:0.88em;">
+                <thead>
+                    <tr style="border-bottom:1px solid var(--border); color:var(--text-dim); text-align:left; font-size:0.8em; text-transform:uppercase;">
+                        <th style="padding:8px 6px;">Target</th>
+                        <th style="padding:8px 6px; text-align:center;">Bounties</th>
+                        <th style="padding:8px 6px;">Total Reward</th>
+                        <th style="padding:8px 6px;">Status / Hunter</th>
+                        <th style="padding:8px 6px; text-align:right;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${targets.map(t => {
+                        const amt = (t.totalAmount || t.amount || 0).toLocaleString();
+                        const huntersStr = (t.hunters && t.hunters.length > 0)
+                            ? `<span style="color:var(--text-main);">Claimed by ${t.hunters.join(', ')}</span>`
+                            : (t.isLiveActive ? '<span style="color:var(--red, #ff4757); font-weight:700;">⚡ Active on Board</span>' : '<span style="color:var(--green, #2ed573);">Claimed</span>');
+                        return `
+                        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                            <td style="padding:9px 6px;">
+                                <a href="https://www.torn.com/profiles.php?XID=${t.targetId}" target="_blank" style="color:var(--text-main); font-weight:700; text-decoration:none;">
+                                    ${t.targetName}
+                                </a>
+                                <span style="font-size:0.8em; color:var(--text-dim); margin-left:4px;">[${t.targetId}]</span>
+                            </td>
+                            <td style="padding:9px 6px; text-align:center; font-weight:700; color:var(--teal, #00cec9);">
+                                ${t.count || 1}×
+                            </td>
+                            <td style="padding:9px 6px; font-weight:700; color:var(--gold, #ffa502);">$${amt}</td>
+                            <td style="padding:9px 6px; font-size:0.85em;">${huntersStr}</td>
+                            <td style="padding:9px 6px; text-align:right;">
+                                <a href="https://www.torn.com/profiles.php?XID=${t.targetId}" target="_blank" class="filter-chip" style="padding:2px 8px; font-size:0.75em; text-decoration:none;">👤 Profile</a>
+                            </td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
+    }
+
+    modalEl.style.display = 'flex';
+}
+
 function renderBountyPlacersTable(searchVal = '') {
     const tbody = document.getElementById('bounty-placers-tbody');
     if (!tbody || !factionBountyData) return;
@@ -1271,10 +1367,43 @@ function renderBountyPlacersTable(searchVal = '') {
             ? `<span style="color:var(--teal, #00cec9); font-weight:700; font-size:0.78em;">🔒 Connected</span>`
             : `<span style="color:var(--text-dim); font-size:0.75em;">Pending Key</span>`;
 
-        let targetsStr = '<span style="color:var(--text-dim); font-size:0.8em;">None listed</span>';
+        let targetsMarkup = '<span style="color:var(--text-dim); font-size:0.8em;">None listed</span>';
         if (p.targets && p.targets.length > 0) {
-            targetsStr = p.targets.slice(0, 3).map(t => `<a href="https://www.torn.com/profiles.php?XID=${t.targetId}" target="_blank" style="color:var(--text-main); text-decoration:none; font-weight:600; font-size:0.8em;">${t.targetName}</a> <span style="color:var(--gold, #ffa502); font-size:0.75em;">($${(t.amount || 0).toLocaleString()})</span>`).join(', ');
-            if (p.targets.length > 3) targetsStr += ` <span style="color:var(--text-dim); font-size:0.75em;">(+${p.targets.length - 3} more)</span>`;
+            const formatBadge = (t) => {
+                const countBadge = (t.count && t.count > 1) ? `<span style="background:rgba(255,255,255,0.12); padding:1px 5px; border-radius:8px; font-size:0.82em; font-weight:800; margin-right:3px;">${t.count}×</span>` : '';
+                const amtFormatted = `$${(t.totalAmount || t.amount || 0).toLocaleString()}`;
+                const hunterInfo = (t.hunters && t.hunters.length > 0) ? `Claimed by ${t.hunters.join(', ')}` : (t.isLiveActive ? '⚡ Active on bounty board' : 'Claimed');
+                const statusTag = t.isLiveActive
+                    ? `<span style="color:var(--red, #ff4757); font-weight:800; margin-left:4px;" title="Active on Board">⚡</span>`
+                    : `<span style="color:var(--green, #2ed573); margin-left:4px;" title="${hunterInfo}">✓</span>`;
+
+                return `<span style="display:inline-flex; align-items:center; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:6px; padding:2px 7px; margin:2px 3px 2px 0; font-size:0.8em; white-space:nowrap;" title="${hunterInfo}">
+                    ${countBadge}
+                    <a href="https://www.torn.com/profiles.php?XID=${t.targetId}" target="_blank" style="color:var(--text-main); font-weight:700; text-decoration:none; margin-right:4px;">${t.targetName}</a>
+                    <span style="color:var(--gold, #ffa502);">${amtFormatted}</span>
+                    ${statusTag}
+                </span>`;
+            };
+
+            const previewLimit = 4;
+            const previewBadges = p.targets.slice(0, previewLimit).map(formatBadge).join('');
+            if (p.targets.length > previewLimit) {
+                const hiddenBadges = p.targets.slice(previewLimit).map(formatBadge).join('');
+                const remainingCount = p.targets.length - previewLimit;
+                targetsMarkup = `
+                    <div style="display:flex; flex-wrap:wrap; align-items:center; gap:2px;">
+                        ${previewBadges}
+                        <button type="button" onclick="togglePlacerTargets('${p.id}')" id="btn-targets-${p.id}" class="filter-chip" style="padding:2px 8px; font-size:0.75em; cursor:pointer; background:rgba(88,166,255,0.15); border-color:var(--blue, #58a6ff); color:var(--blue, #58a6ff); font-weight:700; margin:2px 0;">
+                            +${remainingCount} more targets
+                        </button>
+                    </div>
+                    <div id="extra-targets-${p.id}" data-count="${remainingCount}" style="display:none; flex-wrap:wrap; align-items:center; gap:2px; margin-top:4px; padding-top:4px; border-top:1px dashed rgba(255,255,255,0.08);">
+                        ${hiddenBadges}
+                    </div>
+                `;
+            } else {
+                targetsMarkup = `<div style="display:flex; flex-wrap:wrap; align-items:center; gap:2px;">${previewBadges}</div>`;
+            }
         }
 
         return `
@@ -1295,12 +1424,15 @@ function renderBountyPlacersTable(searchVal = '') {
             <td style="padding:10px 12px; color:var(--text-dim);">
                 $${avgBounty.toLocaleString()}
             </td>
-            <td style="padding:10px 14px;">
-                ${targetsStr}
+            <td style="padding:10px 14px; max-width:440px;">
+                ${targetsMarkup}
             </td>
             <td style="padding:10px 10px; text-align:center;">${keySync}</td>
             <td style="padding:10px 14px; text-align:right;">
-                <a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank" class="filter-chip" style="padding:2px 8px; font-size:0.72em; text-decoration:none;">👤 Profile</a>
+                <div style="display:inline-flex; gap:6px; align-items:center;">
+                    ${p.targets && p.targets.length > 0 ? `<button onclick="showPlacerTargetsModal('${p.id}')" class="filter-chip" style="padding:2px 8px; font-size:0.72em; cursor:pointer;" title="Audit all bountied targets">🎯 Targets (${p.targets.length})</button>` : ''}
+                    <a href="https://www.torn.com/profiles.php?XID=${p.id}" target="_blank" class="filter-chip" style="padding:2px 8px; font-size:0.72em; text-decoration:none;">👤 Profile</a>
+                </div>
             </td>
         </tr>`;
     }).join('');

@@ -7868,16 +7868,57 @@ app.get('/api/weav3r-price/:itemId', async (req, res) => {
 // ─── War Bounty Tracker ────────────────────────────────────────────────────────
 const WAR_BOUNTIES_FILE = path.join(__dirname, 'data', 'war_bounties.json');
 
+function sanitizeWarBountiesHistory(data) {
+    if (!data) return;
+    if (data.events) {
+        for (const [k, ev] of Object.entries(data.events)) {
+            // Fix: If event text indicates member placed bounty and hunter claimed it, target is victim NOT member
+            if (ev && ev.rawText && /earned your.*bounty reward/i.test(ev.rawText)) {
+                const playerLinks = [...ev.rawText.matchAll(/profiles\.php\?XID=(\d+)[^>]*>([^<]+)<\/a>/g)];
+                let actualTargetId = null, actualTargetName = null;
+                let actualHunterId = null, actualHunterName = null;
+                if (playerLinks.length >= 2) {
+                    actualHunterId = Number(playerLinks[0][1]);
+                    actualHunterName = playerLinks[0][2];
+                    actualTargetId = Number(playerLinks[1][1]);
+                    actualTargetName = playerLinks[1][2];
+                } else if (playerLinks.length === 1) {
+                    actualTargetId = Number(playerLinks[0][1]);
+                    actualTargetName = playerLinks[0][2];
+                }
+                if (actualTargetId && ev.targetId !== actualTargetId) {
+                    ev.targetId = actualTargetId;
+                    ev.targetName = actualTargetName;
+                }
+                if (actualHunterName && (!ev.hunterName || ev.hunterName === 'Anonymous')) {
+                    ev.hunterId = actualHunterId;
+                    ev.hunterName = actualHunterName;
+                }
+            }
+        }
+    }
+    if (data.onMembers) {
+        for (const [k, om] of Object.entries(data.onMembers)) {
+            // Clean up false entries where member was placer rather than target
+            if (om && om.rawText && /earned your.*bounty reward/i.test(om.rawText)) {
+                delete data.onMembers[k];
+            }
+        }
+    }
+}
+
 function loadWarBountiesHistory() {
     try {
         if (!fs.existsSync(path.dirname(WAR_BOUNTIES_FILE))) {
             fs.mkdirSync(path.dirname(WAR_BOUNTIES_FILE), { recursive: true });
         }
         if (fs.existsSync(WAR_BOUNTIES_FILE)) {
-            return JSON.parse(fs.readFileSync(WAR_BOUNTIES_FILE, 'utf8'));
+            const data = JSON.parse(fs.readFileSync(WAR_BOUNTIES_FILE, 'utf8'));
+            sanitizeWarBountiesHistory(data);
+            return data;
         }
     } catch(e) {}
-    return { events: {} };
+    return { events: {}, placed: {}, onMembers: {} };
 }
 
 function saveWarBountiesHistory(data) {
@@ -8199,6 +8240,8 @@ app.get('/api/faction-bounties-sentinel', async (req, res) => {
         const warEnd = (selectedWar && selectedWar.end && !selectedWar.isOngoing) ? selectedWar.end : Math.floor(now / 1000);
         const isOngoingWar = selectedWar ? selectedWar.isOngoing : false;
         const warId = selectedWar ? selectedWar.id : 'unknown';
+        const WAR_PREP_BUFFER_SEC = 1800; // 30-min window for pre-war prep bounties placed right before start
+        const effectiveWarStart = warStart ? (warStart - WAR_PREP_BUFFER_SEC) : warStart;
 
         // Check in-memory cache for this specific war
         const cacheKey = `${factionId}_${warId}`;
@@ -8237,8 +8280,8 @@ app.get('/api/faction-bounties-sentinel', async (req, res) => {
                 if (!targetId || !members[targetId]) continue;
 
                 const postedTs = Number(b.posted || b.timestamp || 0);
-                // Strict war-period filter: must be posted during or after war start!
-                if (postedTs && postedTs < warStart) continue;
+                // Strict war-period filter: must be posted during or after war start (with prep buffer)!
+                if (postedTs && postedTs < effectiveWarStart) continue;
 
                 if (!activeBountiesByTarget[targetId]) activeBountiesByTarget[targetId] = [];
                 const isAnon = !!b.anonymous || !b.lister_id || b.lister_id === 0;
@@ -8322,29 +8365,105 @@ app.get('/api/faction-bounties-sentinel', async (req, res) => {
                         } catch (e1) {}
                     }
 
-                    // Parse each event for war-window bounties
+                    // Parse each event for war-window bounties (with pre-war prep buffer)
                     for (const ev of evList) {
                         const text = ev.event || ev.message || ev.text || '';
                         const ts = Number(ev.timestamp) || 0;
-                        if (!text || ts < warStart || (warEnd && ts > warEnd)) continue;
+                        if (!text || ts < effectiveWarStart || (warEnd && ts > warEnd)) continue;
                         if (!/bount/i.test(text)) continue;
 
-                        const amountMatch = text.match(/\$([0-9,]+)\s+bounty/i) || text.match(/bounty\s+(?:reward\s+)?(?:of\s+)?\$([0-9,]+)/i);
-                        const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, '')) : 0;
+                        const amountMatch = text.match(/\$([0-9,]+)/i);
+                        const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, ''), 10) : 0;
                         const playerLinks = [...text.matchAll(/profiles\.php\?XID=(\d+)[^>]*>([^<]+)<\/a>/g)];
 
-                        const isPlacedByMember = /you placed a?\s*bounty/i.test(text) ||
-                                                 /you placed a?\s*\$[0-9,]+\s+bounty/i.test(text) ||
-                                                 (text.toLowerCase().includes('you placed') && text.toLowerCase().includes('bounty'));
-                        
-                        const isClaimOfMyBounty = text.includes('bounty reward') && (text.includes('bounty you placed') || /claimed the.*bounty you placed/i.test(text));
+                        // Precise event classifications
+                        const isPlacedOnMember = /has placed a bounty on you/i.test(text) || /placed a bounty on you/i.test(text);
+                        const isHospitalizedForBounty = (/hospitalized you/i.test(text) || /attacked you/i.test(text) || /you were hospitalized/i.test(text)) && /bounty/i.test(text);
+                        const isMyBountyClaimed = /earned your.*bounty reward/i.test(text) || /collected.*bounty you placed/i.test(text) || /claimed.*bounty you placed/i.test(text);
+                        const isPlacedByMember = /you placed a?\s*bounty/i.test(text) || /you placed a?\s*\$[0-9,]+\s+bounty/i.test(text) || (text.toLowerCase().includes('you placed') && text.toLowerCase().includes('bounty'));
 
-                        const isClaimOnMember = (text.includes('bounty') && (text.includes('hospitalized') || text.includes('attacked'))) ||
-                                                /bounty.*(?:on you|collected on you)/i.test(text);
+                        if (isPlacedOnMember) {
+                            let placerName = 'Someone (Anonymous)', placerId = null;
+                            if (playerLinks.length > 0) {
+                                placerId = Number(playerLinks[0][1]);
+                                placerName = playerLinks[0][2];
+                            }
+                            const omKey = `placed_on_${ts}_${cm.tornId}_${placerId || 'anon'}_${amount}`;
+                            bountyHistory.onMembers[omKey] = {
+                                key: omKey,
+                                warId,
+                                targetId: cm.tornId,
+                                targetName: cm.playerName,
+                                placerId,
+                                placerName,
+                                reward: amount,
+                                posted: ts,
+                                isAnonymous: !placerId,
+                                rawText: text
+                            };
+                        } else if (isHospitalizedForBounty) {
+                            let hunterName = 'Someone', hunterId = null;
+                            if (playerLinks.length > 0) {
+                                hunterId = Number(playerLinks[0][1]);
+                                hunterName = playerLinks[0][2];
+                            }
+                            const hcKey = `hosp_claim_${ts}_${cm.tornId}_${hunterId || 'anon'}_${amount}`;
+                            bountyHistory.events[hcKey] = {
+                                key: hcKey,
+                                warId,
+                                timestamp: ts,
+                                targetId: cm.tornId,
+                                targetName: cm.playerName,
+                                hunterId,
+                                hunterName,
+                                amount,
+                                rawText: text
+                            };
+                        } else if (isMyBountyClaimed) {
+                            let hunterName = 'Someone', hunterId = null;
+                            let targetName = 'Unknown Target', targetId = null;
+                            if (playerLinks.length >= 2) {
+                                hunterId = Number(playerLinks[0][1]);
+                                hunterName = playerLinks[0][2];
+                                targetId = Number(playerLinks[1][1]);
+                                targetName = playerLinks[1][2];
+                            } else if (playerLinks.length === 1) {
+                                targetId = Number(playerLinks[0][1]);
+                                targetName = playerLinks[0][2];
+                            }
 
-                        const isGeneralClaim = text.includes('bounty reward');
+                            const pKey = `placed_${ts}_${cm.tornId}_${targetId || 'unknown'}_${amount}`;
+                            bountyHistory.placed[pKey] = {
+                                key: pKey,
+                                warId,
+                                timestamp: ts,
+                                placerId: cm.tornId,
+                                placerName: cm.playerName,
+                                targetId,
+                                targetName,
+                                amount,
+                                hunterId,
+                                hunterName,
+                                isClaimed: true,
+                                rawText: text
+                            };
 
-                        if (isPlacedByMember) {
+                            const cKey = `claim_${ts}_${targetId || 'unknown'}_${amount}`;
+                            bountyHistory.events[cKey] = {
+                                key: cKey,
+                                warId,
+                                timestamp: ts,
+                                placerId: cm.tornId,
+                                placerName: cm.playerName,
+                                hunterId,
+                                hunterName,
+                                targetId,
+                                targetName,
+                                amount,
+                                isClaimed: true,
+                                rawText: text
+                            };
+                        } else if (isPlacedByMember) {
                             let targetName = 'Unknown Target', targetId = null;
                             if (playerLinks.length > 0) {
                                 targetId = Number(playerLinks[playerLinks.length - 1][1]);
@@ -8363,74 +8482,6 @@ app.get('/api/faction-bounties-sentinel', async (req, res) => {
                                 rawText: text
                             };
                         }
-
-                        if (isClaimOfMyBounty) {
-                            let targetName = 'Unknown Target', targetId = null;
-                            let hunterName = 'Anonymous', hunterId = null;
-                            if (playerLinks.length >= 2) {
-                                hunterId = Number(playerLinks[0][1]); hunterName = playerLinks[0][2];
-                                targetId = Number(playerLinks[1][1]); targetName = playerLinks[1][2];
-                            } else if (playerLinks.length === 1) {
-                                targetId = Number(playerLinks[0][1]); targetName = playerLinks[0][2];
-                            }
-                            const cKey = `claim_${ts}_${targetId}_${amount}`;
-                            bountyHistory.events[cKey] = {
-                                key: cKey,
-                                warId,
-                                timestamp: ts,
-                                placerId: cm.tornId,
-                                placerName: cm.playerName,
-                                hunterId,
-                                hunterName,
-                                targetId,
-                                targetName,
-                                amount,
-                                rawText: text
-                            };
-                        }
-
-                        if (isClaimOnMember) {
-                            let hunterName = 'Anonymous', hunterId = null;
-                            if (playerLinks.length > 0) {
-                                hunterId = Number(playerLinks[0][1]);
-                                hunterName = playerLinks[0][2];
-                            }
-                            const ocKey = `hosp_claim_${ts}_${cm.tornId}_${amount}`;
-                            bountyHistory.events[ocKey] = {
-                                key: ocKey,
-                                warId,
-                                timestamp: ts,
-                                targetId: cm.tornId,
-                                targetName: cm.playerName,
-                                hunterId,
-                                hunterName,
-                                amount,
-                                rawText: text
-                            };
-                        } else if (isGeneralClaim && !isPlacedByMember && !isClaimOfMyBounty) {
-                            let hunterName = 'Anonymous', hunterId = null;
-                            let targetName = 'Unknown Target', targetId = null;
-                            if (playerLinks.length >= 2) {
-                                hunterId = Number(playerLinks[0][1]); hunterName = playerLinks[0][2];
-                                targetId = Number(playerLinks[1][1]); targetName = playerLinks[1][2];
-                            } else if (playerLinks.length === 1) {
-                                targetId = Number(playerLinks[0][1]); targetName = playerLinks[0][2];
-                            }
-                            if (targetId) {
-                                const gcKey = `claim_${ts}_${targetId}_${amount}`;
-                                bountyHistory.events[gcKey] = {
-                                    key: gcKey,
-                                    warId,
-                                    timestamp: ts,
-                                    hunterId,
-                                    hunterName,
-                                    targetId,
-                                    targetName,
-                                    amount,
-                                    rawText: text
-                                };
-                            }
-                        }
                     }
 
                     // B. If War is Ongoing, check member's currently listed active bounties
@@ -8441,9 +8492,16 @@ app.get('/api/faction-bounties-sentinel', async (req, res) => {
                             });
                             const bData = await bRes.json();
                             if (bData && Array.isArray(bData.bounties)) {
+                                // Clear stale active_placed entries for this member so claimed ones don't linger
+                                for (const k of Object.keys(bountyHistory.placed)) {
+                                    if (k.startsWith('active_placed_') && bountyHistory.placed[k].placerId === cm.tornId) {
+                                        delete bountyHistory.placed[k];
+                                    }
+                                }
+
                                 for (const b of bData.bounties) {
                                     const postedTs = Number(b.posted || b.timestamp || 0);
-                                    if (postedTs && postedTs < warStart) continue;
+                                    if (postedTs && postedTs < effectiveWarStart) continue;
 
                                     const targetId = Number(b.target || b.target_id || 0);
                                     const amount = Number(b.reward || b.bounty || 0);
@@ -8478,12 +8536,12 @@ app.get('/api/faction-bounties-sentinel', async (req, res) => {
         // Save accumulated history
         saveWarBountiesHistory(bountyHistory);
 
-        // 7. Aggregate War-Scoped Placed Bounties (Who placed them & how many during this war)
+        // 7. Aggregate War-Scoped Placed Bounties (Who placed them & detailed targets breakdown)
         const warPlacedByMember = {};
         const rawPlacedEvents = Object.values(bountyHistory.placed || {});
         for (const p of rawPlacedEvents) {
             const ts = Number(p.timestamp) || 0;
-            const inWindow = (ts >= warStart && (!warEnd || ts <= warEnd)) || (p.warId === warId);
+            const inWindow = (ts >= effectiveWarStart && (!warEnd || ts <= warEnd)) || (p.warId === warId);
             if (!inWindow) continue;
 
             const pId = Number(p.placerId);
@@ -8495,20 +8553,40 @@ app.get('/api/faction-bounties-sentinel', async (req, res) => {
                     name: members[pId]?.name || p.placerName || `Member #${pId}`,
                     count: 0,
                     totalSpent: 0,
-                    targets: []
+                    targets: [],
+                    targetMap: {}
                 };
             }
             warPlacedByMember[pId].count++;
             warPlacedByMember[pId].totalSpent += Number(p.amount || 0);
-            if (p.targetName && !warPlacedByMember[pId].targets.some(t => t.targetId === p.targetId && t.amount === p.amount)) {
-                warPlacedByMember[pId].targets.push({
+
+            // Group targets cleanly by targetId
+            const tKey = p.targetId ? String(p.targetId) : (p.targetName || 'unknown');
+            if (!warPlacedByMember[pId].targetMap[tKey]) {
+                warPlacedByMember[pId].targetMap[tKey] = {
                     targetId: p.targetId,
-                    targetName: p.targetName,
-                    amount: p.amount,
-                    timestamp: ts,
-                    isLiveActive: !!p.isLiveActive
-                });
+                    targetName: p.targetName || `Target #${p.targetId}`,
+                    count: 0,
+                    totalAmount: 0,
+                    isLiveActive: false,
+                    isClaimed: false,
+                    hunters: []
+                };
             }
+            const tb = warPlacedByMember[pId].targetMap[tKey];
+            tb.count++;
+            tb.totalAmount += Number(p.amount || 0);
+            if (p.isLiveActive) tb.isLiveActive = true;
+            if (p.isClaimed) tb.isClaimed = true;
+            if (p.hunterName && p.hunterName !== 'Unknown' && !tb.hunters.includes(p.hunterName)) {
+                tb.hunters.push(p.hunterName);
+            }
+        }
+
+        // Finalize sorted targets list for each placer
+        for (const p of Object.values(warPlacedByMember)) {
+            p.targets = Object.values(p.targetMap).sort((a, b) => b.count - a.count || b.totalAmount - a.totalAmount);
+            delete p.targetMap;
         }
 
         // Build Placers Leaderboard (Ranked by who placed the most in this war)
@@ -8552,11 +8630,11 @@ app.get('/api/faction-bounties-sentinel', async (req, res) => {
             }
         }
 
-        // B. Historical onMembers records from this war (for past wars or saved live detections)
+        // B. Historical onMembers records from this war
         const rawOnMembers = Object.values(bountyHistory.onMembers || {});
         for (const om of rawOnMembers) {
             const ts = Number(om.posted || om.timestamp) || 0;
-            const inWindow = (ts >= warStart && (!warEnd || ts <= warEnd)) || (om.warId === warId);
+            const inWindow = (ts >= effectiveWarStart && (!warEnd || ts <= warEnd)) || (om.warId === warId);
             if (!inWindow) continue;
 
             const tId = Number(om.targetId);
@@ -8568,7 +8646,7 @@ app.get('/api/faction-bounties-sentinel', async (req, res) => {
 
             warBountiesOnMember[tId].count++;
             warBountiesOnMember[tId].totalReward += Number(om.reward || 0);
-            const pName = om.listerName || (om.isAnonymous ? 'Anonymous' : 'Someone');
+            const pName = om.listerName || om.placerName || (om.isAnonymous ? 'Anonymous' : 'Someone');
             if (!warBountiesOnMember[tId].placers[pName]) {
                 warBountiesOnMember[tId].placers[pName] = { count: 0, reward: 0, isAnonymous: om.isAnonymous };
             }
@@ -8576,15 +8654,23 @@ app.get('/api/faction-bounties-sentinel', async (req, res) => {
             warBountiesOnMember[tId].placers[pName].reward += Number(om.reward || 0);
         }
 
-        // C. Bounties claimed on our members in this war
+        // C. Bounties claimed on our members in this war (MUST NOT count bounties our members placed on enemies!)
         const rawClaimEvents = Object.values(bountyHistory.events || {});
         for (const ev of rawClaimEvents) {
             const ts = Number(ev.timestamp) || 0;
-            const inWindow = (ts >= warStart && (!warEnd || ts <= warEnd)) || (ev.warId === warId);
+            const inWindow = (ts >= effectiveWarStart && (!warEnd || ts <= warEnd)) || (ev.warId === warId);
             if (!inWindow) continue;
+
+            // Bounties placed BY our members that hunters claimed are NOT claims on our members!
+            if (ev.rawText && /earned your.*bounty reward/i.test(ev.rawText)) {
+                continue;
+            }
 
             const tId = Number(ev.targetId);
             if (!tId || !warBountiesOnMember[tId]) continue;
+
+            // Placer cannot be target (prevent self-attribution)
+            if (ev.placerId && Number(ev.placerId) === tId) continue;
 
             warBountiesOnMember[tId].count++;
             warBountiesOnMember[tId].totalReward += Number(ev.amount || 0);
@@ -8608,11 +8694,12 @@ app.get('/api/faction-bounties-sentinel', async (req, res) => {
         // D. Placements targeting our members
         for (const p of rawPlacedEvents) {
             const ts = Number(p.timestamp) || 0;
-            const inWindow = (ts >= warStart && (!warEnd || ts <= warEnd)) || (p.warId === warId);
+            const inWindow = (ts >= effectiveWarStart && (!warEnd || ts <= warEnd)) || (p.warId === warId);
             if (!inWindow) continue;
 
             const tId = Number(p.targetId);
             if (!tId || !warBountiesOnMember[tId]) continue;
+            if (p.placerId && Number(p.placerId) === tId) continue; // Cannot be placed on self!
 
             const alreadyCounted = warBountiesOnMember[tId].claims.some(c => c.timestamp === ts && c.amount === p.amount) ||
                                    warBountiesOnMember[tId].activeBounties.some(ab => ab.posted === ts && ab.reward === p.amount);
@@ -8708,11 +8795,11 @@ app.get('/api/faction-bounties-sentinel', async (req, res) => {
         } : null;
 
         const warEvents = Object.values(bountyHistory.events || {})
-            .filter(e => (Number(e.timestamp) >= warStart && (!warEnd || Number(e.timestamp) <= warEnd)) || (e.warId === warId))
+            .filter(e => (Number(e.timestamp) >= effectiveWarStart && (!warEnd || Number(e.timestamp) <= warEnd)) || (e.warId === warId))
             .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
         const warPlaced = Object.values(bountyHistory.placed || {})
-            .filter(e => (Number(e.timestamp) >= warStart && (!warEnd || Number(e.timestamp) <= warEnd)) || (e.warId === warId))
+            .filter(e => (Number(e.timestamp) >= effectiveWarStart && (!warEnd || Number(e.timestamp) <= warEnd)) || (e.warId === warId))
             .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
         const payload = {
