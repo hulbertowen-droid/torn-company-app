@@ -430,46 +430,63 @@
             </div>
         </div>
 
-                <!-- FACTION BOUNTY SENTINEL (MULTI-KEY BOUNTY & TARGET TRACKER) -->
+                <!-- FACTION BOUNTY SENTINEL (WAR-SCOPED MULTI-KEY BOUNTY & TARGET TRACKER) -->
         <div class="card span-full" id="faction-bounty-card" style="margin-bottom:18px; border: 1px solid rgba(255, 71, 87, 0.35);">
             <div class="card-header" style="flex-wrap:wrap; gap:12px;">
                 <div>
                     <div class="card-title" style="color:var(--red, #ff4757); display:flex; align-items:center; gap:8px;">
                         <span>🎯 Faction Bounty Sentinel</span>
-                        <span id="bounty-threat-badge" style="font-size:0.68em; background:rgba(255,71,87,0.15); color:var(--red, #ff4757); border:1px solid rgba(255,71,87,0.3); padding:2px 8px; border-radius:12px; font-weight:700;">Scanning Active Threats...</span>
+                        <span id="bounty-threat-badge" style="font-size:0.68em; background:rgba(255,71,87,0.15); color:var(--red, #ff4757); border:1px solid rgba(255,71,87,0.3); padding:2px 8px; border-radius:12px; font-weight:700;">Scanning War Threats...</span>
                         <span id="bounty-keys-badge" style="font-size:0.68em; background:rgba(0,206,201,0.12); color:var(--teal, #00cec9); border:1px solid rgba(0,206,201,0.3); padding:2px 8px; border-radius:12px; font-weight:700;">🔑 Multi-Key Sync</span>
                     </div>
                     <div style="font-size:0.78em; color:var(--text-dim, #8b949e); margin-top:2px;">
-                        Live network intelligence powered by connected faction member APIs — tracking active bounties on our roster and all bounties placed.
+                        Ranked war intelligence powered by connected faction member APIs — tracking bounties placed and bounties on roster strictly during each war's time period.
                     </div>
                 </div>
                 <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="font-size:0.75em; color:var(--text-dim); text-transform:uppercase; font-weight:700;">War Period:</span>
+                        <select id="bounty-war-select" aria-label="Select War Period" onchange="onBountyWarChange()" style="min-width:220px; background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 10px; border-radius:6px; font-size:0.82em;">
+                            <option value="">Loading wars...</option>
+                        </select>
+                    </div>
                     <div class="filter-chips" style="display:flex; gap:6px; flex-wrap:wrap;" id="bounty-main-tabs">
                         <button class="filter-chip active" id="btn-tab-threats" onclick="switchBountyMainTab('threats')">🚨 Bounties on Roster (<span id="count-tab-threats">0</span>)</button>
                         <button class="filter-chip" id="btn-tab-placers" onclick="switchBountyMainTab('placers')">🏹 Bounties Placed (<span id="count-tab-placers">0</span>)</button>
-                        <button class="filter-chip" id="btn-tab-claims" onclick="switchBountyMainTab('claims')">⚡ Activity Feed</button>
+                        <button class="filter-chip" id="btn-tab-claims" onclick="switchBountyMainTab('claims')">⚡ War Activity Feed</button>
                     </div>
                     <button class="refresh-btn" onclick="loadFactionBountiesSentinel(true)" id="btn-refresh-bounties" style="padding:6px 12px; font-size:0.8em;">↻ Re-Scan</button>
                 </div>
             </div>
 
-            <!-- KPI Summary Bar (6 High Impact Tiles) -->
+            <!-- War Period Status Ribbon -->
+            <div id="bounty-war-ribbon" style="background:rgba(0,0,0,0.2); padding:10px 18px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; font-size:0.82em;">
+                <div id="bounty-war-summary" style="color:var(--text-main); font-weight:600;">
+                    ⚔️ War Window: <span id="bounty-war-title" style="color:var(--red, #ff4757);">Scanning Ranked War...</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <span id="bounty-war-dates" style="font-size:0.78em; color:var(--text-dim);">—</span>
+                    <span id="bounty-war-status-badge" style="font-size:0.72em; padding:2px 8px; border-radius:10px; font-weight:700; background:rgba(0,206,201,0.15); color:var(--teal, #00cec9); border:1px solid rgba(0,206,201,0.3);">War Period Active</span>
+                </div>
+            </div>
+
+            <!-- KPI Summary Bar (6 High Impact Tiles strictly for this war) -->
             <div class="card-body" style="padding:16px 18px 8px 18px;">
                 <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; margin-bottom:14px;">
                     <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
                         <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">🏹 Bounties Placed</div>
                         <div style="font-size:1.55em; font-weight:900; color:var(--teal, #00cec9); margin-top:2px;" id="kpi-bounties-placed">—</div>
-                        <div style="font-size:0.72em; color:var(--text-dim);" id="kpi-bounties-spent">$0 spent</div>
+                        <div style="font-size:0.72em; color:var(--text-dim);" id="kpi-bounties-spent">$0 spent in war</div>
                     </div>
                     <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
-                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">🚨 Active on Roster</div>
+                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">🚨 Bounties on Roster</div>
                         <div style="font-size:1.55em; font-weight:900; color:var(--red, #ff4757); margin-top:2px;" id="kpi-bounties-active-us">—</div>
-                        <div style="font-size:0.72em; color:var(--gold, #ffa502);" id="kpi-bounties-active-sub">0 members hunted</div>
+                        <div style="font-size:0.72em; color:var(--gold, #ffa502);" id="kpi-bounties-active-sub">0 members hunted in war</div>
                     </div>
                     <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
-                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">💰 Total Bounty on Heads</div>
+                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">💰 Bounty Pool on Heads</div>
                         <div style="font-size:1.55em; font-weight:900; color:var(--gold, #ffa502); margin-top:2px;" id="kpi-bounties-active-val">$0</div>
-                        <div style="font-size:0.72em; color:var(--text-dim);">Live pool on us</div>
+                        <div style="font-size:0.72em; color:var(--text-dim);" id="kpi-bounties-val-sub">Total on roster in war</div>
                     </div>
                     <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
                         <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">👑 Top Bounty Placer</div>
@@ -493,8 +510,8 @@
                     <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;" id="bounty-subfilters-row">
                         <span style="font-size:0.75em; color:var(--text-dim); text-transform:uppercase; font-weight:700; margin-right:4px;">View:</span>
                         <button class="filter-chip active" id="chip-filter-all" onclick="setBountyRosterFilter('all')">👥 All Members (<span id="subfilter-all-count">0</span>)</button>
-                        <button class="filter-chip" id="chip-filter-active" onclick="setBountyRosterFilter('active')">🚨 Has Active Bounty (<span id="subfilter-active-count">0</span>)</button>
-                        <button class="filter-chip" id="chip-filter-targeted" onclick="setBountyRosterFilter('targeted')">🏆 Most Targeted All-Time</button>
+                        <button class="filter-chip" id="chip-filter-hunted" onclick="setBountyRosterFilter('hunted')">🚨 Hunted This War (<span id="subfilter-hunted-count">0</span>)</button>
+                        <button class="filter-chip" id="chip-filter-active" onclick="setBountyRosterFilter('active')">⚡ Live Active (<span id="subfilter-active-count">0</span>)</button>
                     </div>
                     <div style="display:flex; gap:8px; align-items:center;">
                         <input type="text" id="bounty-search" placeholder="🔍 Search member..." oninput="renderBountyCurrentView()" style="background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 12px; border-radius:6px; font-size:0.82em; width:170px;">
@@ -509,10 +526,10 @@
                                 <tr style="border-bottom:1px solid var(--border); color:var(--text-dim); font-size:0.9em; text-transform:uppercase; letter-spacing:0.5px;">
                                     <th style="padding:10px 10px; width:45px; text-align:center;">#</th>
                                     <th style="padding:10px 12px;">Faction Member</th>
-                                    <th style="padding:10px 10px; text-align:center;">Active Bounties</th>
-                                    <th style="padding:10px 12px;">Reward on Head</th>
-                                    <th style="padding:10px 12px;">Who Placed Them</th>
-                                    <th style="padding:10px 12px;">Career Targeted</th>
+                                    <th style="padding:10px 10px; text-align:center;">Bounties on Head (War)</th>
+                                    <th style="padding:10px 12px;">Total Value on Head</th>
+                                    <th style="padding:10px 12px;">Who Placed Them (War)</th>
+                                    <th style="padding:10px 12px;">Status &amp; Live Bounties</th>
                                     <th style="padding:10px 10px; text-align:center;">Key Sync</th>
                                     <th style="padding:10px 12px; text-align:right;">Actions</th>
                                 </tr>
@@ -532,15 +549,16 @@
                                 <tr style="border-bottom:1px solid var(--border); color:var(--text-dim); font-size:0.9em; text-transform:uppercase; letter-spacing:0.5px;">
                                     <th style="padding:10px 10px; width:45px; text-align:center;">#</th>
                                     <th style="padding:10px 14px;">Member (Placer)</th>
-                                    <th style="padding:10px 12px; text-align:center;">Bounties Placed</th>
+                                    <th style="padding:10px 12px; text-align:center;">Bounties Placed in War</th>
                                     <th style="padding:10px 12px;">Total Cash Spent</th>
                                     <th style="padding:10px 12px;">Avg Bounty Size</th>
+                                    <th style="padding:10px 14px;">Targets Bountied in War</th>
                                     <th style="padding:10px 10px; text-align:center;">Key Status</th>
                                     <th style="padding:10px 14px; text-align:right;">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="bounty-placers-tbody">
-                                <tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-dim);">Loading placers data...</td></tr>
+                                <tr><td colspan="8" style="text-align:center; padding:24px; color:var(--text-dim);">Loading placers data...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -550,22 +568,21 @@
                 <div id="bounty-view-claims" style="display:none;">
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
                         <div>
-                            <div style="font-size:0.78em; font-weight:800; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px; letter-spacing:0.5px;">⚡ Recent Bounty Hospitalizations</div>
+                            <div style="font-size:0.78em; font-weight:800; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px; letter-spacing:0.5px;">⚡ War Bounty Claims &amp; Hospitalizations</div>
                             <div id="bounty-feed-claims" style="display:flex; flex-direction:column; gap:6px; max-height:360px; overflow-y:auto;">
-                                <div class="empty-state" style="padding:16px;">No recent claim events found.</div>
+                                <div class="empty-state" style="padding:16px;">No bounty claim events found for this war.</div>
                             </div>
                         </div>
                         <div>
-                            <div style="font-size:0.78em; font-weight:800; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px; letter-spacing:0.5px;">🎯 Recent Placed Events</div>
+                            <div style="font-size:0.78em; font-weight:800; text-transform:uppercase; color:var(--text-dim); margin-bottom:8px; letter-spacing:0.5px;">🎯 Bounties Placed During War</div>
                             <div id="bounty-feed-placed" style="display:flex; flex-direction:column; gap:6px; max-height:360px; overflow-y:auto;">
-                                <div class="empty-state" style="padding:16px;">No recent placement events recorded.</div>
+                                <div class="empty-state" style="padding:16px;">No placement events recorded for this war.</div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-
 
         <!-- WAR FLIGHT & FARM SENTINEL (PAST WARS AIRTIME & DEFENSE AUDIT) -->
         <div class="card span-full" id="war-sentinel-card" style="margin-bottom:18px; border: 1px solid rgba(0,206,201,0.25);">
@@ -890,20 +907,32 @@ async function loadAll() {
     }
 }
 
-// ── Faction Bounty Sentinel State & Functions ──────────────────────────────
+// ── Faction Bounty Sentinel State & Functions (Scoped to War Periods) ────────
 let factionBountyData = null;
 let currentBountyMainTab = 'threats';
 let currentBountyRosterFilter = 'all';
+let selectedBountyWarId = '';
 
-async function loadFactionBountiesSentinel(force = false) {
+async function loadFactionBountiesSentinel(force = false, warId = null) {
     if (!myKey) return;
     const threatBadge = document.getElementById('bounty-threat-badge');
     const refreshBtn = document.getElementById('btn-refresh-bounties');
     if (threatBadge) threatBadge.innerText = 'Scanning Network...';
     if (refreshBtn) refreshBtn.disabled = true;
 
+    if (warId !== null && warId !== undefined) {
+        selectedBountyWarId = String(warId);
+    } else if (!selectedBountyWarId) {
+        const selectEl = document.getElementById('bounty-war-select');
+        if (selectEl && selectEl.value) selectedBountyWarId = selectEl.value;
+    }
+
     try {
-        const url = `/api/faction-bounties-sentinel?${force ? 'force=true' : ''}`;
+        const params = new URLSearchParams();
+        if (force) params.append('force', 'true');
+        if (selectedBountyWarId) params.append('warId', selectedBountyWarId);
+
+        const url = `/api/faction-bounties-sentinel?${params.toString()}`;
         const res = await fetch(url, { headers: { 'x-api-key': myKey } });
         const data = await res.json();
 
@@ -923,6 +952,13 @@ async function loadFactionBountiesSentinel(force = false) {
     }
 }
 
+function onBountyWarChange() {
+    const selectEl = document.getElementById('bounty-war-select');
+    if (!selectEl) return;
+    selectedBountyWarId = selectEl.value;
+    loadFactionBountiesSentinel(false, selectedBountyWarId);
+}
+
 // Backwards-compatible alias for any callers
 function loadWarBounties() {
     loadFactionBountiesSentinel(false);
@@ -933,16 +969,60 @@ function renderBountySentinelData(data) {
     const allMembers = data.allMembers || [];
     const placers = data.placersLeaderboard || [];
 
-    // 1. Update Badges
+    // 1. Populate War Dropdown Selector if available
+    const warSelect = document.getElementById('bounty-war-select');
+    if (warSelect && data.availableWars && data.availableWars.length > 0) {
+        const currentSelected = data.selectedWar?.id || warSelect.value || selectedBountyWarId;
+        const currentOptions = Array.from(warSelect.options).map(o => o.value);
+        const optionsNeedUpdate = currentOptions.length !== data.availableWars.length || !currentOptions.includes(String(currentSelected));
+        if (optionsNeedUpdate) {
+            warSelect.innerHTML = data.availableWars.map(w => {
+                const statusTxt = w.isOngoing ? 'Active War' : `${new Date(w.start * 1000).toLocaleDateString()}`;
+                return `<option value="${w.id}" ${String(w.id) === String(currentSelected) ? 'selected' : ''}>vs ${w.enemy} (${statusTxt})</option>`;
+            }).join('');
+        }
+        if (data.selectedWar?.id) {
+            warSelect.value = String(data.selectedWar.id);
+            selectedBountyWarId = String(data.selectedWar.id);
+        }
+    }
+
+    // 2. Update War Status Ribbon
+    const warTitleEl = document.getElementById('bounty-war-title');
+    if (warTitleEl) {
+        warTitleEl.innerText = data.selectedWar ? `vs ${data.selectedWar.enemy} (${data.selectedWar.isOngoing ? 'Active Ranked War' : 'Ranked War Archive'})` : 'Ranked War Window';
+    }
+    const warDatesEl = document.getElementById('bounty-war-dates');
+    if (warDatesEl && summary.warStart) {
+        const startStr = new Date(summary.warStart * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const endStr = summary.isOngoing ? 'Present (Ongoing)' : new Date(summary.warEnd * 1000).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        warDatesEl.innerText = `⏱️ ${startStr} → ${endStr}`;
+    }
+    const warBadgeEl = document.getElementById('bounty-war-status-badge');
+    if (warBadgeEl) {
+        if (summary.isOngoing) {
+            warBadgeEl.innerText = '🔴 LIVE ACTIVE WAR';
+            warBadgeEl.style.background = 'rgba(255, 71, 87, 0.2)';
+            warBadgeEl.style.color = 'var(--red, #ff4757)';
+            warBadgeEl.style.borderColor = 'rgba(255, 71, 87, 0.4)';
+        } else {
+            warBadgeEl.innerText = '🏁 COMPLETED WAR';
+            warBadgeEl.style.background = 'rgba(88, 166, 255, 0.15)';
+            warBadgeEl.style.color = 'var(--blue, #58a6ff)';
+            warBadgeEl.style.borderColor = 'rgba(88, 166, 255, 0.3)';
+        }
+    }
+
+    // 3. Update Threat Badges
     const threatBadge = document.getElementById('bounty-threat-badge');
     if (threatBadge) {
-        if (summary.totalActiveBountiesOnFaction > 0) {
-            threatBadge.innerText = `🚨 ${summary.totalActiveBountiesOnFaction} Active Bounty${summary.totalActiveBountiesOnFaction > 1 ? 'ies' : ''} on ${summary.membersWithActiveBounties} Member${summary.membersWithActiveBounties > 1 ? 's' : ''}`;
+        if (summary.totalBountiesOnFactionInWar > 0) {
+            threatBadge.innerText = `🚨 ${summary.totalBountiesOnFactionInWar} War Bounty${summary.totalBountiesOnFactionInWar > 1 ? 'ies' : ''} on ${summary.membersHuntedInWar} Member${summary.membersHuntedInWar > 1 ? 's' : ''}`;
             threatBadge.style.background = 'rgba(255, 71, 87, 0.2)';
             threatBadge.style.color = 'var(--red, #ff4757)';
             threatBadge.style.borderColor = 'rgba(255, 71, 87, 0.4)';
         } else {
-            threatBadge.innerText = '🛡️ Roster Clean (0 Active)';
+            threatBadge.innerText = '🛡️ Roster Clean (0 War Bounties)';
             threatBadge.style.background = 'rgba(46, 213, 115, 0.15)';
             threatBadge.style.color = 'var(--green, #2ed573)';
             threatBadge.style.borderColor = 'rgba(46, 213, 115, 0.3)';
@@ -954,26 +1034,26 @@ function renderBountySentinelData(data) {
         keysBadge.innerText = `🔑 ${data.connectedKeysCount || 0} API Keys Active`;
     }
 
-    // 2. Update KPI Cards
+    // 4. Update KPI Cards strictly scoped to this war period
     const kpiPlaced = document.getElementById('kpi-bounties-placed');
-    if (kpiPlaced) kpiPlaced.innerText = (summary.totalBountiesPlacedByFaction || 0).toLocaleString();
+    if (kpiPlaced) kpiPlaced.innerText = (summary.totalBountiesPlacedInWar || 0).toLocaleString();
 
     const kpiSpent = document.getElementById('kpi-bounties-spent');
-    if (kpiSpent) kpiSpent.innerText = `$${(summary.totalCashSpentOnBounties || 0).toLocaleString()} spent`;
+    if (kpiSpent) kpiSpent.innerText = `$${(summary.totalCashSpentInWar || 0).toLocaleString()} spent in war`;
 
     const kpiActiveUs = document.getElementById('kpi-bounties-active-us');
     if (kpiActiveUs) {
-        kpiActiveUs.innerText = summary.totalActiveBountiesOnFaction || 0;
-        kpiActiveUs.style.color = (summary.totalActiveBountiesOnFaction > 0) ? 'var(--red, #ff4757)' : 'var(--green, #2ed573)';
+        kpiActiveUs.innerText = summary.totalBountiesOnFactionInWar || 0;
+        kpiActiveUs.style.color = (summary.totalBountiesOnFactionInWar > 0) ? 'var(--red, #ff4757)' : 'var(--green, #2ed573)';
     }
 
     const kpiActiveSub = document.getElementById('kpi-bounties-active-sub');
     if (kpiActiveSub) {
-        kpiActiveSub.innerText = `${summary.membersWithActiveBounties || 0} hunted member${(summary.membersWithActiveBounties || 0) === 1 ? '' : 's'}`;
+        kpiActiveSub.innerText = `${summary.membersHuntedInWar || 0} members hunted in war`;
     }
 
     const kpiActiveVal = document.getElementById('kpi-bounties-active-val');
-    if (kpiActiveVal) kpiActiveVal.innerText = `$${(summary.totalActiveBountyValue || 0).toLocaleString()}`;
+    if (kpiActiveVal) kpiActiveVal.innerText = `$${(summary.totalBountyValueOnFactionInWar || 0).toLocaleString()}`;
 
     const kpiTopPlacer = document.getElementById('kpi-bounties-top-placer');
     const kpiTopPlacerSub = document.getElementById('kpi-bounties-top-placer-sub');
@@ -990,11 +1070,11 @@ function renderBountySentinelData(data) {
         kpiTopHunted.innerText = summary.topTargeted ? summary.topTargeted.name : 'None';
     }
     if (kpiTopHuntedSub) {
-        if (summary.topTargeted && summary.topTargeted.activeCount > 0) {
-            kpiTopHuntedSub.innerText = `🚨 ${summary.topTargeted.activeCount} active ($${(summary.topTargeted.activeReward || 0).toLocaleString()})`;
+        if (summary.topTargeted && summary.topTargeted.count > 0) {
+            kpiTopHuntedSub.innerText = `🚨 ${summary.topTargeted.count} on head ($${(summary.topTargeted.reward || 0).toLocaleString()})`;
             kpiTopHuntedSub.style.color = 'var(--red, #ff4757)';
-        } else if (summary.topTargeted) {
-            kpiTopHuntedSub.innerText = `${summary.topTargeted.lifetimeReceived || 0} career bounties on them`;
+        } else {
+            kpiTopHuntedSub.innerText = 'No bounties on roster';
             kpiTopHuntedSub.style.color = 'var(--text-dim, #8b949e)';
         }
     }
@@ -1002,10 +1082,12 @@ function renderBountySentinelData(data) {
     const kpiSyncCount = document.getElementById('kpi-bounties-sync-count');
     if (kpiSyncCount) kpiSyncCount.innerText = `${data.connectedKeysCount || 0} / ${data.totalMembers || allMembers.length}`;
 
-    // Tab counts
-    const activeMembersCount = allMembers.filter(m => m.activeBountiesCount > 0).length;
+    // 5. Update Tab Counts
+    const activeLiveMembersCount = allMembers.filter(m => m.activeBountiesCount > 0).length;
+    const huntedInWarCount = allMembers.filter(m => m.bountiesOnMemberInWar > 0).length;
+
     const tabThreatsCount = document.getElementById('count-tab-threats');
-    if (tabThreatsCount) tabThreatsCount.innerText = activeMembersCount > 0 ? `${activeMembersCount} Hunted` : `${allMembers.length}`;
+    if (tabThreatsCount) tabThreatsCount.innerText = huntedInWarCount > 0 ? `${huntedInWarCount} Hunted` : `${allMembers.length}`;
 
     const tabPlacersCount = document.getElementById('count-tab-placers');
     if (tabPlacersCount) tabPlacersCount.innerText = `${placers.length}`;
@@ -1013,8 +1095,11 @@ function renderBountySentinelData(data) {
     const subfilterAllCount = document.getElementById('subfilter-all-count');
     if (subfilterAllCount) subfilterAllCount.innerText = `${allMembers.length}`;
 
+    const subfilterHuntedCount = document.getElementById('subfilter-hunted-count');
+    if (subfilterHuntedCount) subfilterHuntedCount.innerText = `${huntedInWarCount}`;
+
     const subfilterActiveCount = document.getElementById('subfilter-active-count');
-    if (subfilterActiveCount) subfilterActiveCount.innerText = `${activeMembersCount}`;
+    if (subfilterActiveCount) subfilterActiveCount.innerText = `${activeLiveMembersCount}`;
 
     renderBountyCurrentView();
 }
@@ -1068,10 +1153,10 @@ function renderBountyThreatsTable(searchVal = '') {
 
     let list = [...(factionBountyData.allMembers || [])];
 
-    if (currentBountyRosterFilter === 'active') {
+    if (currentBountyRosterFilter === 'hunted') {
+        list = list.filter(m => m.bountiesOnMemberInWar > 0);
+    } else if (currentBountyRosterFilter === 'active') {
         list = list.filter(m => m.activeBountiesCount > 0);
-    } else if (currentBountyRosterFilter === 'targeted') {
-        list.sort((a, b) => (b.lifetimeReceived || 0) - (a.lifetimeReceived || 0) || (b.lifetimeReceivedValue || 0) - (a.lifetimeReceivedValue || 0));
     }
 
     if (searchVal) {
@@ -1079,11 +1164,11 @@ function renderBountyThreatsTable(searchVal = '') {
     }
 
     if (list.length === 0) {
-        if (currentBountyRosterFilter === 'active') {
+        if (currentBountyRosterFilter === 'hunted' || currentBountyRosterFilter === 'active') {
             tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:32px; color:var(--green, #2ed573);">
                 <div style="font-size:1.5em; margin-bottom:6px;">🛡️ Safe & Sound</div>
-                <div style="color:var(--text-main); font-weight:700;">No active bounties currently on any faction members!</div>
-                <div style="color:var(--text-dim); font-size:0.85em; margin-top:4px;">Switch to "All Members" to see full career threat rankings across the faction.</div>
+                <div style="color:var(--text-main); font-weight:700;">No members matching this bounty filter in this war period!</div>
+                <div style="color:var(--text-dim); font-size:0.85em; margin-top:4px;">Switch to "All Members" to see full roster rankings.</div>
             </td></tr>`;
         } else {
             tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color:var(--text-dim);">No faction members matching "${searchVal}".</td></tr>`;
@@ -1092,39 +1177,29 @@ function renderBountyThreatsTable(searchVal = '') {
     }
 
     tbody.innerHTML = list.map((m, idx) => {
-        const hasActive = m.activeBountiesCount > 0;
-        const activeBadge = hasActive
-            ? `<span style="background:rgba(255,71,87,0.18); color:var(--red, #ff4757); border:1px solid rgba(255,71,87,0.4); padding:3px 9px; border-radius:12px; font-weight:800; font-size:0.82em; display:inline-block; white-space:nowrap;">🚨 ${m.activeBountiesCount} Active</span>`
-            : `<span style="background:rgba(46,213,115,0.08); color:var(--text-dim); border:1px solid rgba(255,255,255,0.06); padding:2px 8px; border-radius:12px; font-size:0.75em;">✓ Clean</span>`;
+        const hasWarBounties = m.bountiesOnMemberInWar > 0;
+        const warBountyBadge = hasWarBounties
+            ? `<span style="background:rgba(255,71,87,0.18); color:var(--red, #ff4757); border:1px solid rgba(255,71,87,0.4); padding:3px 9px; border-radius:12px; font-weight:800; font-size:0.82em; display:inline-block; white-space:nowrap;">🚨 ${m.bountiesOnMemberInWar} War Bounty${m.bountiesOnMemberInWar > 1 ? 'ies' : ''}</span>`
+            : `<span style="background:rgba(46,213,115,0.08); color:var(--green, #2ed573); border:1px solid rgba(46,213,115,0.2); padding:2px 8px; border-radius:12px; font-size:0.75em; font-weight:600;">✓ 0 (Clean)</span>`;
 
-        const rewardStr = hasActive
-            ? `<strong style="color:var(--gold, #ffa502); font-size:1.02em;">$${m.activeBountyTotalReward.toLocaleString()}</strong>`
+        const rewardStr = hasWarBounties
+            ? `<strong style="color:var(--gold, #ffa502); font-size:1.02em;">$${m.bountyValueInWar.toLocaleString()}</strong>`
             : `<span style="color:var(--text-dim);">$0</span>`;
 
         let placersDetails = '<span style="color:var(--text-dim); font-size:0.8em;">None</span>';
-        if (hasActive && m.activeBounties && m.activeBounties.length > 0) {
-            const placersSummary = {};
-            for (const b of m.activeBounties) {
-                const name = b.listerName || (b.isAnonymous ? 'Anonymous' : 'Someone');
-                if (!placersSummary[name]) placersSummary[name] = { count: 0, reward: 0 };
-                placersSummary[name].count++;
-                placersSummary[name].reward += (b.reward || 0);
-            }
-            placersDetails = Object.entries(placersSummary).map(([placerName, info]) => {
-                const isAnon = placerName.toLowerCase().includes('anonymous');
-                const badgeColor = isAnon ? 'var(--text-dim)' : 'var(--red, #ff4757)';
+        if (m.placers && m.placers.length > 0) {
+            placersDetails = m.placers.map(p => {
+                const badgeColor = p.isAnonymous ? 'var(--text-dim)' : 'var(--red, #ff4757)';
                 return `<div style="font-size:0.78em; line-height:1.3; white-space:nowrap;">
-                    <span style="color:${badgeColor}; font-weight:700;">${placerName}</span>: <span style="color:var(--gold, #ffa502);">${info.count > 1 ? info.count + '× ' : ''}$${info.reward.toLocaleString()}</span>
+                    <span style="color:${badgeColor}; font-weight:700;">${p.name}</span>: <span style="color:var(--gold, #ffa502);">${p.count > 1 ? p.count + '× ' : ''}$${p.reward.toLocaleString()}</span>
                 </div>`;
             }).join('');
         }
 
-        const careerStr = (m.lifetimeReceived > 0)
-            ? `<div style="line-height:1.2;">
-                <strong>${m.lifetimeReceived.toLocaleString()}</strong> <span style="font-size:0.75em; color:var(--text-dim);">bounties</span>
-                ${m.lifetimeReceivedValue > 0 ? `<div style="font-size:0.75em; color:var(--teal, #00cec9);">$${m.lifetimeReceivedValue.toLocaleString()}</div>` : ''}
-              </div>`
-            : `<span style="color:var(--text-dim); font-size:0.8em;">0</span>`;
+        let activeLiveTag = '<span style="color:var(--text-dim); font-size:0.75em;">No active</span>';
+        if (m.activeBountiesCount > 0) {
+            activeLiveTag = `<span style="background:rgba(255,71,87,0.22); color:var(--red, #ff4757); border:1px solid rgba(255,71,87,0.5); padding:2px 7px; border-radius:10px; font-weight:800; font-size:0.75em;">⚡ ${m.activeBountiesCount} Live ($${m.activeBountyTotalReward.toLocaleString()})</span>`;
+        }
 
         const keySyncBadge = m.hasConnectedKey
             ? `<span title="Verified with player API key" style="color:var(--teal, #00cec9); font-size:0.8em; font-weight:700;">🔒 Live Sync</span>`
@@ -1140,8 +1215,8 @@ function renderBountyThreatsTable(searchVal = '') {
             statusTag = `<span style="background:rgba(88,166,255,0.15); color:var(--blue, #58a6ff); padding:1px 6px; border-radius:4px; font-size:0.72em; font-weight:700;">✈️ ${m.status?.description || 'Abroad'}</span>`;
         }
 
-        const medal = idx === 0 ? '🥇' : (idx === 1 ? '🥈' : (idx === 2 ? '🥉' : `${idx + 1}`));
-        const rowBg = hasActive ? 'background:rgba(255,71,87,0.03);' : '';
+        const medal = idx === 0 ? '🥇 #1' : (idx === 1 ? '🥈 #2' : (idx === 2 ? '🥉 #3' : `#${idx + 1}`));
+        const rowBg = hasWarBounties ? 'background:rgba(255,71,87,0.03);' : '';
 
         return `
         <tr style="border-bottom:1px solid var(--border); ${rowBg}">
@@ -1159,10 +1234,10 @@ function renderBountyThreatsTable(searchVal = '') {
                     ${m.position || 'Member'} &bull; ${m.lastAction?.status || 'Offline'} (${m.lastAction?.relative || ''})
                 </div>
             </td>
-            <td style="padding:10px 10px; text-align:center;">${activeBadge}</td>
+            <td style="padding:10px 10px; text-align:center;">${warBountyBadge}</td>
             <td style="padding:10px 12px;">${rewardStr}</td>
             <td style="padding:10px 12px;">${placersDetails}</td>
-            <td style="padding:10px 12px;">${careerStr}</td>
+            <td style="padding:10px 12px;">${activeLiveTag}</td>
             <td style="padding:10px 10px; text-align:center;">${keySyncBadge}</td>
             <td style="padding:10px 12px; text-align:right;">
                 <div style="display:inline-flex; gap:6px; align-items:center;">
@@ -1185,16 +1260,22 @@ function renderBountyPlacersTable(searchVal = '') {
     }
 
     if (placers.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-dim);">No faction members have placed bounties yet or recorded in network.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color:var(--text-dim);">No faction members placed bounties during this war period.</td></tr>`;
         return;
     }
 
     tbody.innerHTML = placers.map((p, idx) => {
         const medal = idx === 0 ? '👑 #1' : (idx === 1 ? '🥈 #2' : (idx === 2 ? '🥉 #3' : `#${idx + 1}`));
-        const avgBounty = p.lifetimePlaced > 0 ? Math.round(p.totalSpent / p.lifetimePlaced) : 0;
+        const avgBounty = p.bountiesPlacedInWar > 0 ? Math.round(p.spentInWar / p.bountiesPlacedInWar) : 0;
         const keySync = p.hasConnectedKey
             ? `<span style="color:var(--teal, #00cec9); font-weight:700; font-size:0.78em;">🔒 Connected</span>`
             : `<span style="color:var(--text-dim); font-size:0.75em;">Pending Key</span>`;
+
+        let targetsStr = '<span style="color:var(--text-dim); font-size:0.8em;">None listed</span>';
+        if (p.targets && p.targets.length > 0) {
+            targetsStr = p.targets.slice(0, 3).map(t => `<a href="https://www.torn.com/profiles.php?XID=${t.targetId}" target="_blank" style="color:var(--text-main); text-decoration:none; font-weight:600; font-size:0.8em;">${t.targetName}</a> <span style="color:var(--gold, #ffa502); font-size:0.75em;">($${(t.amount || 0).toLocaleString()})</span>`).join(', ');
+            if (p.targets.length > 3) targetsStr += ` <span style="color:var(--text-dim); font-size:0.75em;">(+${p.targets.length - 3} more)</span>`;
+        }
 
         return `
         <tr style="border-bottom:1px solid var(--border);">
@@ -1206,13 +1287,16 @@ function renderBountyPlacersTable(searchVal = '') {
                 <span style="font-size:0.75em; color:var(--text-dim); margin-left:4px;">[${p.id}] &bull; Lvl ${p.level}</span>
             </td>
             <td style="padding:10px 12px; text-align:center;">
-                <strong style="color:var(--teal, #00cec9); font-size:1.05em;">${p.lifetimePlaced.toLocaleString()}</strong>
+                <strong style="color:var(--teal, #00cec9); font-size:1.05em;">${p.bountiesPlacedInWar.toLocaleString()}</strong>
             </td>
             <td style="padding:10px 12px;">
-                <strong style="color:var(--green, #2ed573);">$${(p.totalSpent || 0).toLocaleString()}</strong>
+                <strong style="color:var(--green, #2ed573);"><span style="color:var(--text-dim);">$</span>${(p.spentInWar || 0).toLocaleString()}</strong>
             </td>
             <td style="padding:10px 12px; color:var(--text-dim);">
                 $${avgBounty.toLocaleString()}
+            </td>
+            <td style="padding:10px 14px;">
+                ${targetsStr}
             </td>
             <td style="padding:10px 10px; text-align:center;">${keySync}</td>
             <td style="padding:10px 14px; text-align:right;">
@@ -1232,14 +1316,14 @@ function renderBountyClaimsFeed() {
 
     if (claimsEl) {
         if (claims.length === 0) {
-            claimsEl.innerHTML = '<div class="empty-state" style="padding:16px;">No recent bounty claims found.</div>';
+            claimsEl.innerHTML = '<div class="empty-state" style="padding:16px;">No recent bounty claims found for this war.</div>';
         } else {
-            claimsEl.innerHTML = claims.slice(0, 10).map(c => {
+            claimsEl.innerHTML = claims.slice(0, 15).map(c => {
                 const timeStr = c.timestamp ? new Date(c.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
                 return `
                 <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--item); border-radius:8px; border:1px solid rgba(255,255,255,0.04); font-size:0.84em;">
                     <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;">
-                        <strong style="color:var(--red, #ff4757);">🎯 ${c.targetName}</strong> <span style="color:var(--text-dim);">by ${c.hunterName}</span>
+                        <strong style="color:var(--red, #ff4757);">🎯 ${c.targetName}</strong> <span style="color:var(--text-dim);">claimed by ${c.hunterName}</span>
                     </div>
                     <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
                         <span style="color:var(--green, #2ed573); font-weight:800;">+$${(c.amount || 0).toLocaleString()}</span>
@@ -1252,14 +1336,15 @@ function renderBountyClaimsFeed() {
 
     if (placedEl) {
         if (placed.length === 0) {
-            placedEl.innerHTML = '<div class="empty-state" style="padding:16px;">No recent placement events recorded.</div>';
+            placedEl.innerHTML = '<div class="empty-state" style="padding:16px;">No recent placement events recorded for this war.</div>';
         } else {
-            placedEl.innerHTML = placed.slice(0, 10).map(p => {
+            placedEl.innerHTML = placed.slice(0, 15).map(p => {
                 const timeStr = p.timestamp ? new Date(p.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                const placerStr = p.placerName ? `by ${p.placerName}` : '';
                 return `
                 <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--item); border-radius:8px; border:1px solid rgba(255,255,255,0.04); font-size:0.84em;">
                     <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;">
-                        <strong style="color:var(--teal, #00cec9);">🎯 Target #${p.targetId}</strong> <span style="color:var(--text-dim);">${p.targetName || ''}</span>
+                        <strong style="color:var(--teal, #00cec9);">🎯 ${p.targetName || `Target #${p.targetId}`}</strong> <span style="color:var(--text-dim);">${placerStr}</span>
                     </div>
                     <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
                         <span style="color:var(--gold, #ffa502); font-weight:800;">$${(p.amount || 0).toLocaleString()}</span>
@@ -1270,8 +1355,6 @@ function renderBountyClaimsFeed() {
         }
     }
 }
-
-
 let sentinelData = null;
 let activeSentinelFilter = 'all';
 let sentinelInitialized = false;
