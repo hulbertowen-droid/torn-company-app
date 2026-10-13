@@ -139,6 +139,7 @@ let userTracking = {};
 let apiPoolConfig = {};
 let bankRequests = {};
 let bankRequestCounter = 1000;
+const bankRequestFulfillLocks = new Set();
 let verifiedDiscordToTorn = {};
 let inactivityAlertsMemory = { alerts: {}, initialized: false };
 let odAlertsMemory = { alerts: {}, initialized: false };
@@ -14479,32 +14480,31 @@ function buildBankRequestButtons(req) {
     const amtFmt = Number(req.amount).toLocaleString();
 
     if (req.status === 'pending') {
-        return [
+        const primaryActions = [
             {
-                type: 1,
-                components: [
-                    {
-                        type: 2,
-                        style: 5, // External link straight to Torn Vault pre-filled
-                        label: `Direct Give ($${amtFmt})`,
-                        url: vaultUrl,
-                        emoji: { name: '💸' }
-                    }
-                ]
+                type: 2,
+                style: 3, // Green (Success) - interactive button to claim and fulfill
+                custom_id: `bank_pay_${req.id}`,
+                label: `💸 Fulfill ($${amtFmt})`
             },
             {
-                type: 1,
-                components: [
-                    {
-                        type: 2,
-                        style: 4, // Red (Danger / Action)
-                        custom_id: `bank_cancel_${req.id}`,
-                        label: 'Cancel',
-                        emoji: { name: '❌' }
-                    }
-                ]
+                type: 2,
+                style: 4, // Red (Danger / Action)
+                custom_id: `bank_cancel_${req.id}`,
+                label: 'Cancel',
+                emoji: { name: '❌' }
             }
         ];
+        const secondaryLinks = [
+            {
+                type: 2,
+                style: 5, // External link on Row 2 straight to Torn Vault pre-filled
+                label: `Direct Vault Link ($${amtFmt})`,
+                url: vaultUrl,
+                emoji: { name: '🔗' }
+            }
+        ];
+        return UI.buttonLayout(primaryActions, secondaryLinks);
     } else if (req.status === 'verifying') {
         const primaryActions = [
             {
@@ -15902,54 +15902,99 @@ setInterval(checkFactionOrganizedCrimes, 180000); // 3 minutes (conserves bandwi
 setTimeout(checkFactionOrganizedCrimes, 90000); // First fire 90s after startup (staggered from other watchers)
 
 async function executeFulfillRequest(reqId, interaction) {
-    const req = bankRequests[reqId];
-    if (!req) {
-        return { success: false, message: "⚠️ Bank request not found or expired." };
+    const isLockedByCaller = bankRequestFulfillLocks.has(reqId);
+    if (!isLockedByCaller) {
+        bankRequestFulfillLocks.add(reqId);
     }
 
-    // Check banker role permission if configured
-    if (discordConfig.bankerRoleId && interaction.member?.roles?.cache) {
-        const hasRole = interaction.member.roles.cache.has(discordConfig.bankerRoleId) ||
-                        interaction.member.permissions?.has?.('Administrator');
-        if (!hasRole) {
-            return { success: false, message: `⚠️ Only members with the <@&${discordConfig.bankerRoleId}> role can fulfill bank requests.` };
+    try {
+        const req = bankRequests[reqId];
+        if (!req) {
+            return { success: false, message: "⚠️ Bank request not found or expired." };
         }
-    }
 
-    // Check status
-    if (req.status !== 'pending' && req.status !== 'verifying') {
-        if (req.status === 'fulfilled') {
-            return { success: false, message: `⚠️ Request **#${reqId}** was already fulfilled by <@${req.fulfilledBy}> (<t:${Math.floor(req.fulfilledAt / 1000)}:R>).` };
-        } else {
-            return { success: false, message: `⚠️ Request **#${reqId}** is no longer pending (status: **${req.status}**).` };
+        // Check banker role permission if configured
+        if (discordConfig.bankerRoleId && interaction?.member?.roles?.cache) {
+            const hasRole = interaction.member.roles.cache.has(discordConfig.bankerRoleId) ||
+                            interaction.member.permissions?.has?.('Administrator');
+            if (!hasRole) {
+                return { success: false, message: `⚠️ Only members with the <@&${discordConfig.bankerRoleId}> role can fulfill bank requests.` };
+            }
         }
-    }
 
-    // Prevent anyone else from claiming if already in progress by another banker
-    if (req.status === 'verifying' && req.fulfilledBy && req.fulfilledBy !== interaction.user.id) {
-        return { success: false, message: `⚠️ <@${req.fulfilledBy}> has already clicked Give Cash for this request and is currently fulfilling it!` };
-    }
+        // Check status
+        if (req.status !== 'pending' && req.status !== 'verifying') {
+            if (req.status === 'fulfilled') {
+                return { success: false, message: `⚠️ Request **#${reqId}** was already fulfilled by <@${req.fulfilledBy}> (<t:${Math.floor((req.fulfilledAt || req.verifiedAt || Date.now()) / 1000)}:R>).` };
+            } else {
+                return { success: false, message: `⚠️ Request **#${reqId}** is no longer pending (status: **${req.status}**).` };
+            }
+        }
 
-    const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
-    const amtFmt = Number(req.amount).toLocaleString();
-    const prefilledUrl = getPreFilledVaultUrl(req.tornId, req.amount);
+        // Prevent anyone else from claiming if already in progress by another banker
+        if (req.status === 'verifying' && req.fulfilledBy && req.fulfilledBy !== interaction?.user?.id) {
+            return { success: false, message: `⚠️ <@${req.fulfilledBy}> has already claimed this request and is currently fulfilling it!` };
+        }
 
-    // Set fulfilledBy & fulfilledAt BEFORE checking logs so the log cutoff is accurate
-    req.fulfilledBy = interaction.user.id;
-    req.fulfillerName = interaction.user.username;
-    req.fulfilledAt = Date.now();
+        const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+        const amtFmt = Number(req.amount).toLocaleString();
+        const prefilledUrl = getPreFilledVaultUrl(req.tornId, req.amount);
 
-    const check = await checkFactionLogForPayment(req, apiKey);
+        // Immediately update state synchronously before awaiting Torn API logs
+        if (req.status === 'pending') {
+            req.status = 'verifying';
+            req.fulfilledBy = interaction?.user?.id;
+            req.fulfillerName = interaction?.user?.username;
+            req.fulfilledAt = Date.now();
+            saveBankRequests();
+        }
 
-    if (check.verified) {
-        req.status = 'fulfilled';
-        req.verifiedAt = Date.now();
+        const check = await checkFactionLogForPayment(req, apiKey);
+
+        if (check.verified) {
+            req.status = 'fulfilled';
+            req.verifiedAt = Date.now();
+            if (!req.fulfilledAt) req.fulfilledAt = Date.now();
+            if (!req.fulfillerName && check.bankerName) req.fulfillerName = check.bankerName;
+            saveBankRequests();
+
+            if ((!interaction || !interaction.message) && req.channelId && req.messageId) {
+                try {
+                    const client = interaction?.client || slashCommandBot;
+                    const targetChan = client?.channels?.cache?.get(req.channelId)
+                        || await client?.channels?.fetch(req.channelId).catch(() => null);
+                    const targetMsg = targetChan && await targetChan.messages.fetch(req.messageId).catch(() => null);
+                    if (targetMsg) {
+                        await targetMsg.edit({
+                            embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
+                            components: buildBankRequestButtons(req)
+                        }).catch(() => {});
+                    }
+                } catch(e) {}
+            }
+
+            try {
+                const client = interaction?.client || slashCommandBot;
+                const user = await client?.users?.fetch(req.userId).catch(() => null);
+                if (user) await user.send(`✅ Your vault withdrawal of **$${Number(req.amount).toLocaleString()}** has been confirmed by @${req.fulfillerName || 'a Banker'}! Spend or deposit quickly to stay safe!`).catch(() => {});
+            } catch(e) {}
+
+            return {
+                success: true,
+                verified: true,
+                message: `✅ **Verified in Torn Faction Logs!**\nPayment of **$${Number(req.amount).toLocaleString()}** to **${req.tornName || req.userName} [${req.tornId}]** confirmed. Request **#${req.id}** is now fulfilled.`
+            };
+        }
+
+        // Not verified yet — ensure state is verifying and start poller
+        req.status = 'verifying';
         saveBankRequests();
 
         if ((!interaction || !interaction.message) && req.channelId && req.messageId) {
             try {
-                const targetChan = interaction.client.channels.cache.get(req.channelId)
-                    || await interaction.client.channels.fetch(req.channelId).catch(() => null);
+                const client = interaction?.client || slashCommandBot;
+                const targetChan = client?.channels?.cache?.get(req.channelId)
+                    || await client?.channels?.fetch(req.channelId).catch(() => null);
                 const targetMsg = targetChan && await targetChan.messages.fetch(req.messageId).catch(() => null);
                 if (targetMsg) {
                     await targetMsg.edit({
@@ -15960,140 +16005,132 @@ async function executeFulfillRequest(reqId, interaction) {
             } catch(e) {}
         }
 
-        try {
-            const user = await interaction.client.users.fetch(req.userId).catch(() => null);
-            if (user) await user.send(`✅ Your vault withdrawal of **$${Number(req.amount).toLocaleString()}** has been confirmed by @${req.fulfillerName}! Spend or deposit quickly to stay safe!`).catch(() => {});
-        } catch(e) {}
+        // Start background poller (5 minutes)
+        const client = interaction?.client || slashCommandBot;
+        if (client) {
+            verifyBankPayment(req, apiKey, client).catch(() => {});
+        }
 
         return {
             success: true,
-            verified: true,
-            message: `✅ **Verified in Torn Faction Logs!**\nPayment of **$${Number(req.amount).toLocaleString()}** to **${req.tornName || req.userName} [${req.tornId}]** confirmed. Request **#${req.id}** is now fulfilled.`
+            verified: false,
+            message: `💸 **You claimed Vault Request #${req.id} ($${amtFmt}) for ${req.tornName || req.userName}!**\n\n` +
+                     `1. Click here to open the Torn Vault with pre-filled recipient and amount:\n` +
+                     `👉 **[💸 Open Pre-filled Vault in Torn ($${amtFmt})](${prefilledUrl})**\n\n` +
+                     `2. Complete the cash transfer in Torn.\n\n` +
+                     `• The bot is watching faction logs and will **automatically mark this fulfilled** once Torn registers the transfer (up to 5 minutes).\n` +
+                     `• If you need to cancel this fulfillment, click **"⏳ Unclaim"** on the message to release it for another banker.`
         };
+    } finally {
+        if (!isLockedByCaller) {
+            bankRequestFulfillLocks.delete(reqId);
+        }
     }
-
-    // Not verified yet — transition to verifying state, update public message immediately
-    req.status = 'verifying';
-    saveBankRequests();
-
-    if ((!interaction || !interaction.message) && req.channelId && req.messageId) {
-        try {
-            const targetChan = interaction.client.channels.cache.get(req.channelId)
-                || await interaction.client.channels.fetch(req.channelId).catch(() => null);
-            const targetMsg = targetChan && await targetChan.messages.fetch(req.messageId).catch(() => null);
-            if (targetMsg) {
-                await targetMsg.edit({
-                    embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
-                    components: buildBankRequestButtons(req)
-                }).catch(() => {});
-            }
-        } catch(e) {}
-    }
-
-    // Start background poller (5 minutes)
-    verifyBankPayment(req, apiKey, interaction.client).catch(() => {});
-
-    return {
-        success: true,
-        verified: false,
-        message: `💸 **You claimed Vault Request #${req.id} ($${amtFmt}) for ${req.tornName || req.userName}!**\n\n` +
-                 `1. Click here to open the Torn Vault with pre-filled recipient and amount:\n` +
-                 `👉 **[💸 Open Pre-filled Vault in Torn ($${amtFmt})](${prefilledUrl})**\n\n` +
-                 `2. Complete the cash transfer in Torn.\n\n` +
-                 `• The bot is watching faction logs and will **automatically mark this fulfilled** once Torn registers the transfer (up to 5 minutes).\n` +
-                 `• If you need to cancel this fulfillment, click **"↩️ Cancel Fulfillment (Unclaim)"** on the message to release it for another banker.`
-    };
 }
 
 async function executeUnclaimFulfillment(reqId, interaction) {
-    const req = bankRequests[reqId];
-    if (!req) {
-        return { success: false, message: "⚠️ Bank request not found or expired." };
+    const isLockedByCaller = bankRequestFulfillLocks.has(reqId);
+    if (!isLockedByCaller) {
+        bankRequestFulfillLocks.add(reqId);
     }
 
-    if (req.status !== 'verifying') {
-        if (req.status === 'pending') {
-            return { success: false, message: `⚠️ Request **#${reqId}** is already open and not currently claimed.` };
-        } else {
-            return { success: false, message: `⚠️ Request **#${reqId}** cannot be unclaimed because it is already **${req.status}**.` };
+    try {
+        const req = bankRequests[reqId];
+        if (!req) {
+            return { success: false, message: "⚠️ Bank request not found or expired." };
+        }
+
+        if (req.status !== 'verifying') {
+            if (req.status === 'pending') {
+                return { success: false, message: `⚠️ Request **#${reqId}** is already open and not currently claimed.` };
+            } else {
+                return { success: false, message: `⚠️ Request **#${reqId}** cannot be unclaimed because it is already **${req.status}**.` };
+            }
+        }
+
+        const isClaimer = (interaction.user.id === req.fulfilledBy);
+        const isAdmin = interaction.member?.permissions?.has?.('Administrator');
+
+        if (!isClaimer && !isAdmin) {
+            return { 
+                success: false, 
+                message: `⚠️ Only <@${req.fulfilledBy}> (who claimed this request) or an Administrator can cancel this fulfillment.` 
+            };
+        }
+
+        req.status = 'pending';
+        req.fulfilledBy = null;
+        req.fulfillerName = null;
+        req.fulfilledAt = null;
+        saveBankRequests();
+
+        if ((!interaction || !interaction.message) && req.channelId && req.messageId) {
+            try {
+                const client = interaction?.client || slashCommandBot;
+                const targetChan = client?.channels?.cache?.get(req.channelId)
+                    || await client?.channels?.fetch(req.channelId).catch(() => null);
+                if (targetChan) {
+                    const targetMsg = await targetChan.messages.fetch(req.messageId).catch(() => null);
+                    if (targetMsg) {
+                        await targetMsg.edit({
+                            embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
+                            components: buildBankRequestButtons(req)
+                        }).catch(() => {});
+                    }
+                }
+            } catch(e) {}
+        }
+
+        return { 
+            success: true, 
+            message: `↩️ **Fulfillment cancelled.** You stepped down from Request **#${reqId}**. It is now released and open for any banker to fulfill.` 
+        };
+    } finally {
+        if (!isLockedByCaller) {
+            bankRequestFulfillLocks.delete(reqId);
         }
     }
-
-    const isClaimer = (interaction.user.id === req.fulfilledBy);
-    const isBankerOrAdmin = (!discordConfig.bankerRoleId) ||
-        (interaction.member?.roles?.cache?.has(discordConfig.bankerRoleId)) ||
-        (interaction.member?.permissions?.has?.('Administrator'));
-
-    if (!isClaimer && !isBankerOrAdmin) {
-        return { 
-            success: false, 
-            message: `⚠️ Only <@${req.fulfilledBy}> (who clicked Give Cash) or a banker/admin can cancel this fulfillment.` 
-        };
-    }
-
-    req.status = 'pending';
-    req.fulfilledBy = null;
-    req.fulfillerName = null;
-    req.fulfilledAt = null;
-    saveBankRequests();
-
-    if ((!interaction || !interaction.message) && req.channelId && req.messageId) {
-        try {
-            const targetChan = interaction.client.channels.cache.get(req.channelId)
-                || await interaction.client.channels.fetch(req.channelId).catch(() => null);
-            if (targetChan) {
-                const targetMsg = await targetChan.messages.fetch(req.messageId).catch(() => null);
-                if (targetMsg) {
-                    await targetMsg.edit({
-                        embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
-                        components: buildBankRequestButtons(req)
-                    }).catch(() => {});
-                }
-            }
-        } catch(e) {}
-    }
-
-    return { 
-        success: true, 
-        message: `↩️ **Fulfillment cancelled.** You stepped down from Request **#${reqId}**. It is now released and open for any banker to fulfill.` 
-    };
 }
 
 async function executeCancelRequest(reqId, interaction = null) {
-    const req = bankRequests[reqId];
-    if (!req) {
-        return { success: false, message: "⚠️ Bank request not found or expired." };
+    const isLockedByCaller = bankRequestFulfillLocks.has(reqId);
+    if (!isLockedByCaller) {
+        bankRequestFulfillLocks.add(reqId);
     }
 
-    const isRequester = (interaction?.user?.id === req.userId);
-    const isBankerOrAdmin = (!discordConfig.bankerRoleId) ||
-        (interaction?.member?.roles?.cache?.has(discordConfig.bankerRoleId)) ||
-        (interaction?.member?.permissions?.has?.('Administrator'));
-    if (!isRequester && !isBankerOrAdmin) {
-        return { success: false, message: `⚠️ Only <@${req.userId}> (the requester) or a banker/admin can cancel this request.` };
-    }
+    try {
+        const req = bankRequests[reqId];
+        if (!req) {
+            return { success: false, message: "⚠️ Bank request not found or expired." };
+        }
 
-    if (req.status !== 'pending' && req.status !== 'verifying') {
-        return { success: false, message: `⚠️ Request **#${reqId}** is already ${req.status}.` };
-    }
+        const isRequester = (interaction?.user?.id === req.userId);
+        const isBankerOrAdmin = (!discordConfig.bankerRoleId) ||
+            (interaction?.member?.roles?.cache?.has(discordConfig.bankerRoleId)) ||
+            (interaction?.member?.permissions?.has?.('Administrator'));
+        if (!isRequester && !isBankerOrAdmin) {
+            return { success: false, message: `⚠️ Only <@${req.userId}> (the requester) or a banker/admin can cancel this request.` };
+        }
 
-    req.status = 'cancelled';
-    req.cancelledBy = interaction?.user?.id || 'system';
-    req.cancellerName = interaction?.user?.username || 'System';
-    req.cancelledAt = Date.now();
-    saveBankRequests();
+        if (req.status !== 'pending' && req.status !== 'verifying') {
+            return { success: false, message: `⚠️ Request **#${reqId}** is already ${req.status}.` };
+        }
 
-    const updatedEmbed = buildBankRequestEmbed(req);
-    const updatedButtons = buildBankRequestButtons(req);
+        req.status = 'cancelled';
+        req.cancelledBy = interaction?.user?.id || 'system';
+        req.cancellerName = interaction?.user?.username || 'System';
+        req.cancelledAt = Date.now();
+        saveBankRequests();
 
-    if ((!interaction || !interaction.message) && req.channelId && req.messageId) {
-        try {
-            const client = interaction?.client || slashCommandBot;
-            if (client) {
-                const targetChan = client.channels.cache.get(req.channelId)
-                    || await client.channels.fetch(req.channelId).catch(() => null);
-                if (targetChan) {
-                    const targetMsg = await targetChan.messages.fetch(req.messageId).catch(() => null);
+        const updatedEmbed = buildBankRequestEmbed(req);
+        const updatedButtons = buildBankRequestButtons(req);
+
+        if ((!interaction || !interaction.message) && req.channelId && req.messageId) {
+            try {
+                const client = interaction?.client || slashCommandBot;
+                if (client) {
+                    const targetChan = client.channels.cache.get(req.channelId)
+                        || await client.channels.fetch(req.channelId).catch(() => null);
                     if (targetMsg) {
                         await targetMsg.edit({
                             embeds: [sanitizeEmbed(updatedEmbed)],
@@ -16101,11 +16138,15 @@ async function executeCancelRequest(reqId, interaction = null) {
                         }).catch(() => {});
                     }
                 }
-            }
-        } catch(e) {}
-    }
+            } catch(e) {}
+        }
 
-    return { success: true, message: `❌ **Request #${reqId} has been cancelled (voided).** The withdrawal request is closed.` };
+        return { success: true, message: `❌ **Request #${reqId} has been cancelled (voided).** The withdrawal request is closed.` };
+    } finally {
+        if (!isLockedByCaller) {
+            bankRequestFulfillLocks.delete(reqId);
+        }
+    }
 }
 
 // ── 1-Click Direct Torn Vault Fulfillment Redirect (Legacy Support) ─────────
@@ -16146,30 +16187,37 @@ app.get('/api/bank/pay/:id', async (req, res) => {
     const prefilledUrl = getPreFilledVaultUrl(bankReq.tornId, bankReq.amount);
 
     if (bankReq.status === 'pending') {
-        bankReq.status = 'verifying';
-        bankReq.fulfilledAt = Date.now();
-        saveBankRequests();
-
-        if (bankReq.channelId && bankReq.messageId && slashCommandBot?.isReady?.()) {
+        if (!bankRequestFulfillLocks.has(reqId)) {
+            bankRequestFulfillLocks.add(reqId);
             try {
-                const targetChan = slashCommandBot.channels.cache.get(bankReq.channelId)
-                    || await slashCommandBot.channels.fetch(bankReq.channelId).catch(() => null);
-                if (targetChan) {
-                    const targetMsg = await targetChan.messages.fetch(bankReq.messageId).catch(() => null);
-                    if (targetMsg) {
-                        await targetMsg.edit({
-                            embeds: [sanitizeEmbed(buildBankRequestEmbed(bankReq))],
-                            components: buildBankRequestButtons(bankReq)
-                        }).catch(() => {});
-                    }
-                }
-            } catch(e) {}
-        }
+                bankReq.status = 'verifying';
+                bankReq.fulfilledAt = Date.now();
+                saveBankRequests();
 
-        const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
-        const botInstance = slashCommandBot?.isReady?.() ? slashCommandBot : null;
-        if (apiKey && botInstance) {
-            verifyBankPayment(bankReq, apiKey, botInstance).catch(() => {});
+                if (bankReq.channelId && bankReq.messageId && slashCommandBot?.isReady?.()) {
+                    try {
+                        const targetChan = slashCommandBot.channels.cache.get(bankReq.channelId)
+                            || await slashCommandBot.channels.fetch(bankReq.channelId).catch(() => null);
+                        if (targetChan) {
+                            const targetMsg = await targetChan.messages.fetch(bankReq.messageId).catch(() => null);
+                            if (targetMsg) {
+                                await targetMsg.edit({
+                                    embeds: [sanitizeEmbed(buildBankRequestEmbed(bankReq))],
+                                    components: buildBankRequestButtons(bankReq)
+                                }).catch(() => {});
+                            }
+                        }
+                    } catch(e) {}
+                }
+
+                const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+                const botInstance = slashCommandBot?.isReady?.() ? slashCommandBot : null;
+                if (apiKey && botInstance) {
+                    verifyBankPayment(bankReq, apiKey, botInstance).catch(() => {});
+                }
+            } finally {
+                bankRequestFulfillLocks.delete(reqId);
+            }
         }
     }
 
@@ -19838,20 +19886,85 @@ function setupSlashBotEvents(bot, token) {
             // ── Bank: Verify & Fulfill ──
             if (customId.startsWith('bank_pay_')) {
                 const reqId = customId.replace('bank_pay_', '').trim();
-                await interaction.deferUpdate().catch(() => {});
-                const res = await executeFulfillRequest(reqId, interaction);
-                if (!res.success) {
-                    return interaction.followUp({ content: res.message, ephemeral: true }).catch(() => {});
-                }
-                const updatedReq = bankRequests[reqId];
-                if (updatedReq) {
-                    await interaction.editReply({
-                        embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
-                        components: buildBankRequestButtons(updatedReq)
+
+                // Concurrency lock check
+                if (bankRequestFulfillLocks.has(reqId)) {
+                    return interaction.reply({
+                        content: `⚠️ Another banker is currently processing request #${reqId}! Please wait a moment.`,
+                        ephemeral: true
                     }).catch(() => {});
                 }
-                if (res.message) {
-                    await interaction.followUp({ content: res.message, ephemeral: true }).catch(() => {});
+
+                const req = bankRequests[reqId];
+                if (!req) {
+                    return interaction.reply({ content: `⚠️ Bank request #${reqId} not found or expired.`, ephemeral: true }).catch(() => {});
+                }
+
+                // Check banker role permission if configured
+                if (discordConfig.bankerRoleId && interaction.member?.roles?.cache) {
+                    const hasRole = interaction.member.roles.cache.has(discordConfig.bankerRoleId) ||
+                                    interaction.member.permissions?.has?.('Administrator');
+                    if (!hasRole) {
+                        return interaction.reply({
+                            content: `⚠️ Only members with the <@&${discordConfig.bankerRoleId}> role can fulfill bank requests.`,
+                            ephemeral: true
+                        }).catch(() => {});
+                    }
+                }
+
+                // Strictly validate status
+                if (req.status !== 'pending' && req.status !== 'verifying') {
+                    const statusMsg = req.status === 'fulfilled'
+                        ? `⚠️ Request **#${reqId}** was already fulfilled by <@${req.fulfilledBy}>!`
+                        : `⚠️ Request **#${reqId}** is no longer pending (status: **${req.status}**).`;
+                    return interaction.reply({ content: statusMsg, ephemeral: true }).catch(() => {});
+                }
+
+                if (req.status === 'verifying' && req.fulfilledBy && req.fulfilledBy !== interaction.user.id) {
+                    return interaction.reply({
+                        content: `⚠️ <@${req.fulfilledBy}> has already claimed this request and is currently fulfilling it!`,
+                        ephemeral: true
+                    }).catch(() => {});
+                }
+
+                // ACQUIRE LOCK SYNCHRONOUSLY
+                bankRequestFulfillLocks.add(reqId);
+
+                try {
+                    // IMMEDIATELY TRANSITION STATE SYNCHRONOUSLY BEFORE ANY ASYNC CALL
+                    if (req.status === 'pending') {
+                        req.status = 'verifying';
+                        req.fulfilledBy = interaction.user.id;
+                        req.fulfillerName = interaction.user.username;
+                        req.fulfilledAt = Date.now();
+                        saveBankRequests();
+                    }
+
+                    // IMMEDIATELY UPDATE DISCORD MESSAGE IN THE CHANNEL
+                    // This turns the button to "In progress by @Banker" with Check Logs & Unclaim,
+                    // instantly removing the green "Fulfill" button for everyone in Discord!
+                    await interaction.update({
+                        embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
+                        components: buildBankRequestButtons(req)
+                    }).catch(() => interaction.deferUpdate().catch(() => {}));
+
+                    // Now proceed to log verification & background polling
+                    const res = await executeFulfillRequest(reqId, interaction);
+
+                    // If verified during the check, update the message to fulfilled
+                    const updatedReq = bankRequests[reqId];
+                    if (updatedReq && updatedReq.status === 'fulfilled') {
+                        await interaction.editReply({
+                            embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
+                            components: buildBankRequestButtons(updatedReq)
+                        }).catch(() => {});
+                    }
+
+                    if (res && res.message) {
+                        await interaction.followUp({ content: res.message, ephemeral: true }).catch(() => {});
+                    }
+                } finally {
+                    bankRequestFulfillLocks.delete(reqId);
                 }
                 return;
             }
@@ -19859,17 +19972,49 @@ function setupSlashBotEvents(bot, token) {
             // ── Bank: Instant Log Verification Check ──
             if (customId.startsWith('bank_check_')) {
                 const reqId = customId.replace('bank_check_', '').trim();
-                await interaction.deferUpdate().catch(() => {});
-                const res = await executeFulfillRequest(reqId, interaction);
-                const updatedReq = bankRequests[reqId];
-                if (updatedReq) {
-                    await interaction.editReply({
-                        embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
-                        components: buildBankRequestButtons(updatedReq)
+
+                if (bankRequestFulfillLocks.has(reqId)) {
+                    return interaction.reply({
+                        content: `⚠️ Another banker is currently processing request #${reqId}! Please wait a moment.`,
+                        ephemeral: true
                     }).catch(() => {});
                 }
-                if (res.message) {
-                    await interaction.followUp({ content: res.message, ephemeral: true }).catch(() => {});
+
+                const currentReq = bankRequests[reqId];
+                if (currentReq) {
+                    if (currentReq.status !== 'verifying') {
+                        const msg = currentReq.status === 'fulfilled'
+                            ? `⚠️ Request #${reqId} was already fulfilled by <@${currentReq.fulfilledBy}>!`
+                            : `⚠️ Request #${reqId} is not in verifying status (current: ${currentReq.status}).`;
+                        return interaction.reply({ content: msg, ephemeral: true }).catch(() => {});
+                    }
+                    if (currentReq.fulfilledBy && currentReq.fulfilledBy !== interaction.user.id && !interaction.member?.permissions?.has?.('Administrator')) {
+                        return interaction.reply({
+                            content: `⚠️ <@${currentReq.fulfilledBy}> is currently fulfilling this request!`,
+                            ephemeral: true
+                        }).catch(() => {});
+                    }
+                }
+
+                bankRequestFulfillLocks.add(reqId);
+                try {
+                    await interaction.deferUpdate().catch(() => {});
+                    const res = await executeFulfillRequest(reqId, interaction);
+                    const updatedReq = bankRequests[reqId];
+                    if (updatedReq) {
+                        await interaction.editReply({
+                            embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
+                            components: buildBankRequestButtons(updatedReq)
+                        }).catch(() => {});
+                    }
+                    if (res && res.message) {
+                        const replyMsg = res.verified
+                            ? res.message
+                            : `⚠️ Payment of **$${Number(updatedReq?.amount || 0).toLocaleString()}** has not appeared in faction logs yet. If you just sent it, please allow ~15-30 seconds for Torn's logs to update.`;
+                        await interaction.followUp({ content: replyMsg, ephemeral: true }).catch(() => {});
+                    }
+                } finally {
+                    bankRequestFulfillLocks.delete(reqId);
                 }
                 return;
             }
@@ -19877,17 +20022,33 @@ function setupSlashBotEvents(bot, token) {
             // ── Bank: Cancel Fulfillment (Unclaim / Revert) ──
             if (customId.startsWith('bank_unclaim_') || customId.startsWith('bank_revert_')) {
                 const reqId = customId.replace('bank_unclaim_', '').replace('bank_revert_', '').trim();
-                await interaction.deferUpdate().catch(() => {});
-                const res = await executeUnclaimFulfillment(reqId, interaction);
-                if (!res.success) {
-                    return interaction.followUp({ content: res.message, ephemeral: true }).catch(() => {});
-                }
-                const updatedReq = bankRequests[reqId];
-                if (updatedReq) {
-                    return interaction.editReply({
-                        embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
-                        components: buildBankRequestButtons(updatedReq)
+
+                if (bankRequestFulfillLocks.has(reqId)) {
+                    return interaction.reply({
+                        content: `⚠️ Request #${reqId} is currently being processed. Please wait a moment.`,
+                        ephemeral: true
                     }).catch(() => {});
+                }
+
+                bankRequestFulfillLocks.add(reqId);
+                try {
+                    await interaction.deferUpdate().catch(() => {});
+                    const res = await executeUnclaimFulfillment(reqId, interaction);
+                    if (!res.success) {
+                        return interaction.followUp({ content: res.message, ephemeral: true }).catch(() => {});
+                    }
+                    const updatedReq = bankRequests[reqId];
+                    if (updatedReq) {
+                        await interaction.editReply({
+                            embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
+                            components: buildBankRequestButtons(updatedReq)
+                        }).catch(() => {});
+                    }
+                    if (res.message) {
+                        await interaction.followUp({ content: res.message, ephemeral: true }).catch(() => {});
+                    }
+                } finally {
+                    bankRequestFulfillLocks.delete(reqId);
                 }
                 return;
             }
@@ -19900,20 +20061,33 @@ function setupSlashBotEvents(bot, token) {
             // ── Bank Request Cancel (Entire Request Void) ──
             if (customId.startsWith('bank_cancel_')) {
                 const reqId = customId.replace('bank_cancel_', '').trim();
-                await interaction.deferUpdate().catch(() => {});
-                const res = await executeCancelRequest(reqId, interaction);
-                if (!res.success) {
-                    return interaction.followUp({ content: res.message, ephemeral: true }).catch(() => {});
-                }
-                const updatedReq = bankRequests[reqId];
-                if (updatedReq) {
-                    await interaction.editReply({
-                        embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
-                        components: buildBankRequestButtons(updatedReq)
+
+                if (bankRequestFulfillLocks.has(reqId)) {
+                    return interaction.reply({
+                        content: `⚠️ Request #${reqId} is currently being processed. Please wait a moment.`,
+                        ephemeral: true
                     }).catch(() => {});
                 }
-                if (res.message) {
-                    await interaction.followUp({ content: res.message, ephemeral: true }).catch(() => {});
+
+                bankRequestFulfillLocks.add(reqId);
+                try {
+                    await interaction.deferUpdate().catch(() => {});
+                    const res = await executeCancelRequest(reqId, interaction);
+                    if (!res.success) {
+                        return interaction.followUp({ content: res.message, ephemeral: true }).catch(() => {});
+                    }
+                    const updatedReq = bankRequests[reqId];
+                    if (updatedReq) {
+                        await interaction.editReply({
+                            embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
+                            components: buildBankRequestButtons(updatedReq)
+                        }).catch(() => {});
+                    }
+                    if (res.message) {
+                        await interaction.followUp({ content: res.message, ephemeral: true }).catch(() => {});
+                    }
+                } finally {
+                    bankRequestFulfillLocks.delete(reqId);
                 }
                 return;
             }
