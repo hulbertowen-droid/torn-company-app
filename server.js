@@ -40,8 +40,10 @@ const promotionManager = require('./promotion-manager');
 promotionManager.initPromotionManager(null);
 
 
-// Hardcoded MongoDB URI to bypass Render settings
-process.env.MONGODB_URI = "mongodb+srv://WarBoard:WarBoardPass123@cluster0.iwnnnj3.mongodb.net/?appName=Cluster0";
+// Check required environment configuration
+if (!process.env.MONGODB_URI) {
+    console.error("[CRITICAL] MONGODB_URI environment variable is not set!");
+}
 
 const mongoose = require('mongoose');
 
@@ -167,7 +169,10 @@ const AppConfig = mongoose.model('AppConfig', configSchema, 'app_configs');
 global.mongoConnectionError = null;
 let mongoRetryTimeout = null;
 function connectMongo() {
-    if (!process.env.MONGODB_URI) return;
+    if (!process.env.MONGODB_URI) {
+        console.error("[CRITICAL] MONGODB_URI environment variable is not set!");
+        return;
+    }
     mongoose.connect(process.env.MONGODB_URI)
         .then(async () => {
             console.log("[MongoDB] Connected to MongoDB Atlas successfully");
@@ -4011,40 +4016,7 @@ app.get('/api/get-market-config', (req, res) => { res.json(marketConfig); });
 app.post('/api/save-market-config', (req, res) => { marketConfig = { ...marketConfig, ...req.body }; saveMarketConfig(); res.json({ success: true }); });
 
 // ─── F.R.I.D.A.Y Community Bug Tracker Endpoints ────────────────────────────
-app.get('/api/bugs', (req, res) => {
-    res.json({ success: true, bugs: bugManager.getAllBugs() });
-});
-
-app.post('/api/bugs', (req, res) => {
-    const description = (req.body.description || '').trim();
-    if (!description) {
-        return res.status(400).json({ success: false, error: 'Description is required' });
-    }
-    const newBug = bugManager.createBug({
-        description,
-        category: req.body.category,
-        reporterName: req.body.reporterName,
-        discordId: req.body.discordId,
-        discordTag: req.body.discordTag,
-        tornId: req.body.tornId,
-        tornName: req.body.tornName
-    });
-    res.json({ success: true, bug: newBug });
-});
-
-app.post('/api/bugs/:id/status', (req, res) => {
-    const bugId = String(req.params.id || '').trim();
-    const bug = bugManager.updateBugStatus(bugId, req.body.status, req.body.resolutionNotes);
-    if (!bug) return res.status(404).json({ success: false, error: 'Bug report not found' });
-    res.json({ success: true, bug });
-});
-
-app.delete('/api/bugs/:id', (req, res) => {
-    const bugId = String(req.params.id || '').trim();
-    const success = bugManager.deleteBug(bugId);
-    if (!success) return res.status(404).json({ success: false, error: 'Bug report not found' });
-    res.json({ success: true });
-});
+app.use('/api/bugs', require('./routes/bugs'));
 
 app.post('/api/test-discord-alert', async (req, res) => {
     const { type, discordId, globalChannelId, globalBotToken } = req.body;
@@ -6512,163 +6484,10 @@ app.get('/api/warboard', async (req, res) => {
     }
 });
 // ── Universal Torn Web Session & Authentication Engine ─────────────────────
-
-// POST /api/auth/connect — Authenticate any Torn API key, encrypt it in the server vault, and issue a session token
-app.post('/api/auth/connect', async (req, res) => {
-    try {
-        const apiKey = String(req.body.apiKey || req.headers['x-api-key'] || '').trim().replace(/['"\s]/g, '');
-        if (!apiKey || apiKey.length < 16) {
-            return res.status(400).json({ success: false, error: "Valid Torn API Key required (16 characters)." });
-        }
-
-        const tornRes = await fetch(`https://api.torn.com/user/?selections=profile,bars&key=${apiKey}&timestamp=${Date.now()}`, {
-            signal: AbortSignal.timeout(10000)
-        });
-        const data = await tornRes.json();
-
-        if (data.error) {
-            const errCode = data.error.code;
-            const errMsg = data.error.error || "Unknown Torn API error";
-            if (errCode === 2) return res.status(400).json({ success: false, error: "Incorrect or invalid Torn API key." });
-            if (errCode === 7) return res.status(400).json({ success: false, error: "Access level too low. Key must have at least Public or Limited Access." });
-            return res.status(400).json({ success: false, error: `Torn API error [${errCode}]: ${errMsg}` });
-        }
-
-        if (!data.player_id) {
-            return res.status(400).json({ success: false, error: "Unable to retrieve player profile with this key." });
-        }
-
-        const playerId = data.player_id;
-        const playerName = data.name || `Player #${playerId}`;
-        const userFacId = String(data.faction?.faction_id || '0');
-        const userFacName = data.faction?.faction_name || 'None';
-        const userFacRole = data.faction?.position || '';
-        const targetFaction = String(discordConfig.factionId || adminFactionId || dynamicFactionId || '');
-        const isSpiderVerse = Boolean(targetFaction ? (userFacId === targetFaction) : (userFacId && userFacId !== '0'));
-
-        // Securely encrypt and store the key in vault under torn:<id>
-        await userKeys.linkUserApiKeyByTornId(playerId, apiKey);
-
-        // Generate cryptographically secure session
-        const session = await sessionManager.createSession({
-            playerId,
-            playerName,
-            level: data.level || 1,
-            factionId: userFacId,
-            factionName: userFacName,
-            factionRole: userFacRole,
-            isSpiderVerse,
-            bars: {
-                energy: data.energy || null,
-                nerve: data.nerve || null,
-                happy: data.happy || null,
-                life: data.life || null
-            }
-        });
-
-        // Return session token and user info ONLY — NEVER return the raw API key!
-        return res.json({
-            success: true,
-            sessionToken: session.token,
-            user: {
-                playerId,
-                playerName,
-                level: session.level,
-                factionId: userFacId,
-                factionName: userFacName,
-                factionRole: userFacRole,
-                isSpiderVerse,
-                bars: session.bars
-            }
-        });
-    } catch (err) {
-        return res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-// GET /api/auth/me — Check current authenticated session
-app.get('/api/auth/me', (req, res) => {
-    if (!req.userSession) {
-        return res.json({ authenticated: false, message: "No active session" });
-    }
-    return res.json({
-        authenticated: true,
-        user: {
-            playerId: req.userSession.playerId,
-            playerName: req.userSession.playerName,
-            level: req.userSession.level,
-            factionId: req.userSession.factionId,
-            factionName: req.userSession.factionName,
-            factionRole: req.userSession.factionRole,
-            isSpiderVerse: req.userSession.isSpiderVerse,
-            bars: req.userSession.bars
-        }
-    });
-});
-
-// POST /api/auth/logout — Invalidate current session
-app.post('/api/auth/logout', async (req, res) => {
-    const token = sessionManager.extractTokenFromRequest(req);
-    if (token) {
-        await sessionManager.deleteSession(token);
-    }
-    return res.json({ success: true });
-});
-
-// Backwards-compatible /api/auth/verify-faction-access
-app.post('/api/auth/verify-faction-access', async (req, res) => {
-    try {
-        const apiKey = String(req.body.apiKey || '').trim();
-        if (!apiKey) return res.status(400).json({ success: false, authorized: false, reason: "Torn API Key is required." });
-
-        const targetFactionId = String(discordConfig.factionId || adminFactionId || dynamicFactionId || '');
-        const targetFactionName = discordConfig.factionName || 'the faction';
-
-        const tornRes = await fetch(`https://api.torn.com/user/?selections=profile,bars&key=${apiKey}&timestamp=${Date.now()}`, {
-            signal: AbortSignal.timeout(9000)
-        });
-        const data = await tornRes.json();
-
-        if (data.error) {
-            return res.status(400).json({ success: false, authorized: false, reason: data.error.error || "Invalid Torn API key." });
-        }
-
-        const userFacId = String(data.faction?.faction_id || '0');
-        const userFacName = data.faction?.faction_name || 'None';
-        const isMember = Boolean(targetFactionId ? (userFacId === targetFactionId) : (userFacId && userFacId !== '0'));
-
-        // Automatically create and link session
-        await userKeys.linkUserApiKeyByTornId(data.player_id, apiKey);
-        const session = await sessionManager.createSession({
-            playerId: data.player_id,
-            playerName: data.name,
-            level: data.level || 1,
-            factionId: userFacId,
-            factionName: userFacName,
-            factionRole: data.faction?.position || '',
-            isSpiderVerse: isMember,
-            bars: { energy: data.energy, nerve: data.nerve, happy: data.happy, life: data.life }
-        });
-
-        return res.json({
-            success: true,
-            authorized: isMember,
-            sessionToken: session.token,
-            isSpiderVerse: isMember,
-            reason: isMember ? undefined : `You are currently in "${userFacName}" [ID: ${userFacId}]. Only active members of ${targetFactionName} [${targetFactionId || 'Configured Faction'}] are authorized for faction-specific tools.`,
-            player: {
-                id: data.player_id,
-                name: data.name,
-                level: data.level,
-                role: data.faction?.position || 'Member',
-                factionId: userFacId,
-                factionName: userFacName
-            }
-        });
-    } catch(err) {
-        return res.status(500).json({ success: false, authorized: false, reason: err.message });
-    }
-});
+const sessionRoutes = require('./routes/session');
+sessionRoutes.setTargetFactionGetter(() => String(discordConfig.factionId || adminFactionId || dynamicFactionId || ''));
+app.use('/api/session', sessionRoutes);
+app.use('/api/auth', sessionRoutes);
 
 // ── Organized Crime (OC) Configuration & Testing ────────────────────────────
 app.get('/api/oc-config', (req, res) => {
@@ -7852,6 +7671,10 @@ app.post('/api/ai/chat', async (req, res) => {
         res.status(500).json({ success: false, error: err.message });
     }
 });
+
+const bazaarRoutes = require('./routes/bazaar');
+const { fetchWeav3rMarketplace } = bazaarRoutes;
+app.use('/api/bazaar', bazaarRoutes);
 
 app.get('/api/weav3r-price/:itemId', async (req, res) => {
     const { itemId } = req.params;
@@ -12899,22 +12722,6 @@ async function buildStocksEmbed(countryInput, apiKey) {
             timestamp: new Date().toISOString()
         };
     }
-}
-
-async function fetchWeav3rMarketplace(itemId) {
-    if (!itemId) return null;
-    try {
-        const res = await fetch(`https://weav3r.dev/api/marketplace/${itemId}`, {
-            signal: AbortSignal.timeout(6000),
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
-        });
-        if (res.status === 200) {
-            return await res.json();
-        }
-    } catch(e) {
-        console.warn(`[Weav3r.dev] Error fetching marketplace for #${itemId}:`, e.message);
-    }
-    return null;
 }
 
 async function buildBazaarEmbed(itemQuery, apiKey) {

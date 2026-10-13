@@ -20,12 +20,16 @@ const TORN_BASE = 'https://api.torn.com';
 const KEYS_FILE = path.join(__dirname, 'data', 'user_api_keys.json');
 
 // Derive a 32-byte encryption key for AES-256-GCM
+let hasLoggedSecretWarning = false;
 function getMasterEncryptionKey() {
-    const rawSecret = process.env.APP_SECRET ||
-                      process.env.ENCRYPTION_KEY ||
-                      process.env.MONGODB_URI ||
-                      process.env.GLOBAL_BOT_TOKEN ||
-                      'friday-spider-verse-super-secret-key-2026';
+    let rawSecret = process.env.APP_SECRET || process.env.ENCRYPTION_KEY;
+    if (!rawSecret) {
+        if (!hasLoggedSecretWarning) {
+            console.warn("[SECURITY WARNING] APP_SECRET is not set in environment variables! Using fallback key.");
+            hasLoggedSecretWarning = true;
+        }
+        rawSecret = 'friday-spider-verse-super-secret-key-2026';
+    }
     return crypto.scryptSync(rawSecret, 'salt-spider-verse-friday', 32);
 }
 
