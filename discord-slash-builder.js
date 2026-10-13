@@ -8,6 +8,18 @@ const { SlashCommandBuilder } = require('discord.js');
  */
 function buildSlashCommands() {
     return [
+        new SlashCommandBuilder().setName('tutorial').setDescription('Quick guide to all active bot commands enabled for the faction')
+            .addStringOption(opt => opt.setName('category').setDescription('Filter by command category (optional)').setRequired(false)
+                .addChoices(
+                    { name: '⚔️ War & Combat', value: 'war' },
+                    { name: '⛓️ Chains & Organized Crimes', value: 'chain' },
+                    { name: '🛡️ Faction & Roster', value: 'faction' },
+                    { name: '👤 Personal Stats, Vault & Alerts', value: 'personal' },
+                    { name: '🛒 Market, Travel & Misc', value: 'market' },
+                    { name: '⚙️ Verification & Setup (Admin)', value: 'admin' }
+                )
+            ).toJSON(),
+
         new SlashCommandBuilder().setName('verify').setDescription('Verify a Torn player identity and sync roles & nickname')
             .addUserOption(opt => opt.setName('user').setDescription('The Discord user to verify (leave empty to verify yourself)').setRequired(false))
             .addStringOption(opt => opt.setName('player').setDescription('Optional: Torn Player ID or Name to verify as').setRequired(false)).toJSON(),

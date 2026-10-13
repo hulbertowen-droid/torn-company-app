@@ -2710,6 +2710,27 @@
                             </div>
                             <div class="cmd-card-desc">Admin: Post permanent interactive verification card.</div>
                         </div>
+                        <div class="cmd-card on" id="cmd-card-tutorial">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>📖</span><code>/tutorial</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="tutorial" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Quick guide to all active bot commands enabled for the faction.</div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-migrationstatus">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>📊</span><code>/migrationstatus</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="migrationstatus" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Leadership: Check progress of members linking Limited API keys.</div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-remindkeys">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>📩</span><code>/remindkeys</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="remindkeys" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Admin: Send polite DM reminders to unlinked members.</div>
+                        </div>
                     </div>
                 </div>
 
@@ -2807,6 +2828,13 @@
                                 <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="revive" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
                             <div class="cmd-card-desc">Faction Revive Audit: Shows member breakdown across Everyone, Friends & Faction, and No One.</div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-enemy">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>🕵️</span><code>/enemy</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="enemy" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Full breakdown of enemy faction roster, hospital timers & stats.</div>
                         </div>
                     </div>
                 </div>
@@ -2920,6 +2948,13 @@
                             </div>
                             <div class="cmd-card-desc">Audit war flight uptime and travel sentinel.</div>
                         </div>
+                        <div class="cmd-card on" id="cmd-card-promotion">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>🎖️</span><code>/promotion</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="promotion" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Submit request for a new faction role.</div>
+                        </div>
                     </div>
                 </div>
 
@@ -3025,6 +3060,20 @@
                             </div>
                             <div class="cmd-card-desc">Quick shortcut: Update battle stats and calculate training gains.</div>
                         </div>
+                        <div class="cmd-card on" id="cmd-card-notifications">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>🔔</span><code>/notifications</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="notifications" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Configure personal Discord DM alerts (energy, travel, hosp).</div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-dmalerts">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>📬</span><code>/dmalerts</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="dmalerts" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Quick shortcut to manage personal Discord DM alerts.</div>
+                        </div>
                     </div>
                 </div>
 
@@ -3052,6 +3101,34 @@
                                 <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="resume" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
                             <div class="cmd-card-desc">Quick shortcut to re-enable automated notifications.</div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-ask">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>🧠</span><code>/ask</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="ask" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Ask F.R.I.D.A.Y questions about Torn mechanics & wiki guides.</div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-respond">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>💬</span><code>/respond</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="respond" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">AI chiming in naturally to recent Discord conversation.</div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-conversation">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>🗣️</span><code>/conversation</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="conversation" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Toggle continuous conversational AI mode in channel.</div>
+                        </div>
+                        <div class="cmd-card on" id="cmd-card-bug">
+                            <div class="cmd-card-top">
+                                <div class="cmd-card-title"><span>🐛</span><code>/bug</code></div>
+                                <label class="switch-sm"><input type="checkbox" class="cmd-toggle" data-cmd="bug" checked onchange="onCommandToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="cmd-card-desc">Send bug report straight to the dashboard.</div>
                         </div>
                     </div>
                 </div>
@@ -3651,7 +3728,7 @@ function setAllCommands(enable) {
 }
 
 function setEssentialCommands() {
-    const essentials = ['verify', 'verifyall', 'postverify', 'withdraw', 'balance', 'war', 'targets', 'chain', 'oc', 'faction', 'hospital', 'roster', 'payout', 'profile'];
+    const essentials = ['tutorial', 'verify', 'verifyall', 'postverify', 'withdraw', 'balance', 'war', 'targets', 'chain', 'oc', 'faction', 'hospital', 'roster', 'payout', 'profile'];
     document.querySelectorAll('.cmd-toggle').forEach(chk => {
         const cmd = (chk.dataset.cmd || '').toLowerCase().trim();
         const enable = essentials.includes(cmd);
@@ -4044,6 +4121,9 @@ async function saveDiscordConfig() {
             updateInviteLink();
             calculateSetupProgress();
             showToast('Settings & active slash commands saved successfully!', 'success');
+            if (botToken || initialConfigSnapshot?.hasBotToken) {
+                registerSlashCommands().catch(() => {});
+            }
         } else {
             throw new Error(data.error || 'Server rejected config');
         }

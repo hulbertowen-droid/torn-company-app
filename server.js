@@ -3531,9 +3531,12 @@ app.post('/api/save-discord-config', async (req, res) => {
     }
     saveDiscordConfig(); 
 
-    // Auto-start slash command bot whenever a bot token is saved
+    // Auto-start slash command bot and re-sync active slash commands whenever config is saved
     if (discordConfig.globalBotToken && discordConfig.globalBotToken.trim().length > 20) {
         startSlashCommandBot(discordConfig.globalBotToken.trim()).catch(() => {});
+        registerSlashCommands(discordConfig.globalBotToken.trim(), discordConfig.guildId).catch(err => {
+            console.warn('[Slash Bot] Auto re-sync on save failed:', err.message);
+        });
     }
 
     res.json({ success: true, disabledCommands: discordConfig.disabledCommands || [] }); 
@@ -18506,6 +18509,102 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
     }
 }
 
+// ─── Active Command Tutorial Catalog & Descriptions ──────────────────────────
+const TUTORIAL_CATALOG = [
+    {
+        key: 'admin',
+        title: '🛡️ Verification & Setup',
+        commands: [
+            { name: 'verify', text: '`/verify` — Links your Torn account to Discord and sets your nickname and roles.' },
+            { name: 'linkkey', text: '`/linkkey` — Privately saves your Torn Limited API key so the bot can track your bars and stats.' },
+            { name: 'unlinkkey', text: '`/unlinkkey` — Deletes your saved Torn API key from the bot.' },
+            { name: 'verifyall', text: '`/verifyall` — Re-checks and updates roles for everyone in the server (Admin).' },
+            { name: 'postverify', text: '`/postverify` — Drops a verification button in the channel for new members (Admin).' },
+            { name: 'migrationstatus', text: '`/migrationstatus` — Shows how many members have verified and linked keys so far (Leadership).' },
+            { name: 'remindkeys', text: '`/remindkeys` — DMs unverified members a quick reminder to link up (Admin).' }
+        ]
+    },
+    {
+        key: 'war',
+        title: '⚔️ War & Combat',
+        commands: [
+            { name: 'war', text: '`/war` — Shows the live ranked war score, lead, and top hitters.' },
+            { name: 'targets', text: '`/targets` — Lists enemies who are out of the hospital and ready to hit right now.' },
+            { name: 'claim', text: '`/claim` — Calls dibs on an enemy target ID so faction mates don\'t double-hit.' },
+            { name: 'unclaim', text: '`/unclaim` — Drops your claim on a target so someone else can take them.' },
+            { name: 'sos', text: '`/sos` — Calls for backup on a tough target you\'re fighting.' },
+            { name: 'spy', text: '`/spy` — Pulls known battle stats and spy reports for any player.' },
+            { name: 'retal', text: '`/retal` — Shows enemies who recently hit us and how much time is left to retaliate.' },
+            { name: 'snipe', text: '`/snipe` — Finds beatable targets around your stat range.' },
+            { name: 'elim', text: '`/elim` — Alias for `/snipe` to find beatable targets around your stats.' },
+            { name: 'enemy', text: '`/enemy` — Pulls a full breakdown of an enemy faction\'s roster, hospital timers, flyers, and stats.' },
+            { name: 'bounties', text: '`/bounties` — Checks active war bounties placed on enemies or faction mates.' },
+            { name: 'flights', text: '`/flights` — Shows who is flying right now and when enemies are landing.' }
+        ]
+    },
+    {
+        key: 'chain',
+        title: '⛓️ Chains & Organized Crimes',
+        commands: [
+            { name: 'chain', text: '`/chain` — Checks the live chain count, timer, and bonus multiplier.' },
+            { name: 'chainwatch', text: '`/chainwatch` — Shows who is watching the chain and whether drop alerts are on.' },
+            { name: 'oc', text: '`/oc` — Shows which Organized Crimes are ready to launch and who is holding up a team.' },
+            { name: 'myoc', text: '`/myoc` — Checks the timer and status of your own Organized Crime.' }
+        ]
+    },
+    {
+        key: 'faction',
+        title: '👥 Faction & Roster',
+        commands: [
+            { name: 'faction', text: '`/faction` — All-in-one command for checking the roster, hospital, revives, retals, inactives, OCs, payouts, MVPs, stats, bounties, and flights.' },
+            { name: 'roster', text: '`/roster` — Shows who in the faction is online, idle, flying, or in the hospital.' },
+            { name: 'hospital', text: '`/hospital` — Lists faction mates currently in the hospital and when they get out.' },
+            { name: 'revive', text: '`/revive` — Checks which members have their revives open or locked down.' },
+            { name: 'inactive', text: '`/inactive` — Lists members who haven\'t logged in for a day or more.' },
+            { name: 'notindiscord', text: '`/notindiscord` — Lists faction members who still haven\'t joined the Discord server.' },
+            { name: 'mvp', text: '`/mvp` — Shows the leaderboard of top war hitters.' },
+            { name: 'stats', text: '`/stats` — Compares battle stats across the faction roster.' },
+            { name: 'promotion', text: '`/promotion` — Puts in a request for a new faction role.' }
+        ]
+    },
+    {
+        key: 'personal',
+        title: '👤 Personal Stats, Vault & Alerts',
+        commands: [
+            { name: 'profile', text: '`/profile` — Pulls up a player\'s Torn profile, status, and basic info.' },
+            { name: 'energy', text: '`/energy` — Checks your current energy, nerve, happy, life, and cooldowns.' },
+            { name: 'bars', text: '`/bars` — Shortcut to check your energy, nerve, happy, life, and cooldowns.' },
+            { name: 'merits', text: '`/merits` — Shows where your Torn merits are spent.' },
+            { name: 'bs', text: '`/bs` — Logs your current battle stats and tracks your training gains over time.' },
+            { name: 'bsupdate', text: '`/bsupdate` — Shortcut to update your battle stats and see recent gains.' },
+            { name: 'donator', text: '`/donator` — Checks if a player has active Donator or Subscriber status.' },
+            { name: 'balance', text: '`/balance` — Checks your faction vault balance and donations.' },
+            { name: 'withdraw', text: '`/withdraw` — Asks a banker for a cash payout from the faction vault.' },
+            { name: 'payout', text: '`/payout` — Checks how much war pay you\'re owed.' },
+            { name: 'notifications', text: '`/notifications` — Lets you pick which alerts the bot DMs you about.' },
+            { name: 'dmalerts', text: '`/dmalerts` — Shortcut to change your personal DM alert settings.' }
+        ]
+    },
+    {
+        key: 'market',
+        title: '🛒 Market, Travel & Misc',
+        commands: [
+            { name: 'bazaar', text: '`/bazaar` — Checks the cheapest market and bazaar prices for any item.' },
+            { name: 'travel', text: '`/travel` — Checks overseas item stock and enemy landing times.' },
+            { name: 'stocks', text: '`/stocks` — Quick check on overseas plushie and flower stock.' },
+            { name: 'alerts', text: '`/alerts` — Checks, pauses, or resumes automated faction alerts in Discord.' },
+            { name: 'pause', text: '`/pause` — Shortcut to pause automated faction alerts.' },
+            { name: 'resume', text: '`/resume` — Shortcut to turn automated faction alerts back on.' },
+            { name: 'giveaway', text: '`/giveaway` — Starts a giveaway in the channel with a countdown timer.' },
+            { name: 'ask', text: '`/ask` — Ask the bot a quick question about Torn mechanics or faction info.' },
+            { name: 'respond', text: '`/respond` — Have the bot jump into the current chat conversation.' },
+            { name: 'conversation', text: '`/conversation` — Turns continuous chat mode on or off in the channel.' },
+            { name: 'openrouter', text: '`/openrouter` — Sets a backup AI key for the bot (Admin).' },
+            { name: 'bug', text: '`/bug` — Sends a bug report straight to the dashboard.' }
+        ]
+    }
+];
+
 let lastSlashRegisterTime = 0;
 async function registerSlashCommands(token, guildId = null, options = {}) {
     const rest = new REST({ version: '10' }).setToken(token);
@@ -20168,6 +20267,103 @@ function setupSlashBotEvents(bot, token) {
         }
 
         const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+
+        // ── Active Command Tutorial & Guide (/tutorial) ──
+        if (cmd === 'tutorial') {
+            await interaction.deferReply({ ephemeral: true });
+
+            const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : [])
+                .map(c => String(c).toLowerCase().trim());
+
+            const isCmdEnabled = (cmdName) => {
+                const c = String(cmdName || '').toLowerCase().trim();
+                if (disabledCmds.includes(c)) return false;
+                if (c === 'revive' && disabledCmds.includes('revives')) return false;
+                return true;
+            };
+
+            const requestedCategory = (interaction.options.getString('category') || '').toLowerCase().trim();
+
+            const activeCategories = [];
+            for (const cat of TUTORIAL_CATALOG) {
+                if (requestedCategory && requestedCategory !== 'all') {
+                    const matchesCategory = (cat.key === requestedCategory) ||
+                        (requestedCategory === 'admin' && cat.key === 'admin') ||
+                        (requestedCategory === 'setup' && cat.key === 'admin');
+                    if (!matchesCategory) continue;
+                }
+                const enabledInCat = cat.commands.filter(c => isCmdEnabled(c.name));
+                if (enabledInCat.length > 0) {
+                    activeCategories.push({
+                        title: cat.title,
+                        lines: enabledInCat.map(c => `• ${c.text}`)
+                    });
+                }
+            }
+
+            if (activeCategories.length === 0) {
+                return await interaction.editReply({
+                    embeds: [sanitizeEmbed(UI.warning(
+                        '📖 Bot Command Guide',
+                        `No commands are currently enabled${requestedCategory ? ` in the \`${requestedCategory}\` category` : ''}. Commands can be enabled by leadership in the FactionOS Discord Settings.`
+                    ))]
+                });
+            }
+
+            // Convert category blocks into fields (safely splitting if any single category exceeds 1024 chars)
+            const buildCategoryFields = (categories) => {
+                const fields = [];
+                for (const cat of categories) {
+                    let currentVal = '';
+                    let partIdx = 1;
+                    for (const line of cat.lines) {
+                        if (currentVal.length + line.length + 1 > 1024) {
+                            fields.push({
+                                name: partIdx === 1 ? cat.title : `${cat.title} (cont.)`,
+                                value: currentVal.trim()
+                            });
+                            currentVal = line + '\n';
+                            partIdx++;
+                        } else {
+                            currentVal += line + '\n';
+                        }
+                    }
+                    if (currentVal.trim()) {
+                        fields.push({
+                            name: partIdx === 1 ? cat.title : `${cat.title} (cont.)`,
+                            value: currentVal.trim()
+                        });
+                    }
+                }
+                return fields;
+            };
+
+            if (activeCategories.length <= 3) {
+                const fields = buildCategoryFields(activeCategories);
+                const guideEmbed = UI.info(
+                    '📖 F.R.I.D.A.Y. Command Guide',
+                    'Here are the active faction bot commands enabled on the dashboard. Use `/tutorial [category]` to filter by section.',
+                    fields
+                );
+                return await interaction.editReply({ embeds: [sanitizeEmbed(guideEmbed)] });
+            }
+
+            const mid = Math.ceil(activeCategories.length / 2);
+            const part1 = activeCategories.slice(0, mid);
+            const part2 = activeCategories.slice(mid);
+
+            const embed1 = UI.info(
+                '📖 F.R.I.D.A.Y. Command Guide (Part 1)',
+                'Here are the active faction bot commands enabled on the dashboard. Use `/tutorial [category]` to filter by section.',
+                buildCategoryFields(part1)
+            );
+            const embed2 = UI.info(
+                '📖 F.R.I.D.A.Y. Command Guide (Part 2)',
+                'Faction management, personal vitals, vault banking, and market tools.',
+                buildCategoryFields(part2)
+            );
+            return await interaction.editReply({ embeds: [sanitizeEmbed(embed1), sanitizeEmbed(embed2)] });
+        }
 
         // ── Autonomous Elimination Target Hunter (/snipe, /elim) ──
         if (cmd === 'snipe' || cmd === 'elim') {
