@@ -22,6 +22,17 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 require('dotenv').config();
+try {
+    const recruitEnvPath = path.join(__dirname, 'recruit', '.env');
+    if (fs.existsSync(recruitEnvPath)) {
+        require('dotenv').config({ path: recruitEnvPath });
+    }
+} catch(e) {}
+
+const FALLBACK_MONGODB_URI = "mongodb+srv://WarBoard:WarBoardPass123@cluster0.iwnnnj3.mongodb.net/?appName=Cluster0";
+if (!process.env.MONGODB_URI) {
+    process.env.MONGODB_URI = process.env.MONGO_URI || FALLBACK_MONGODB_URI;
+}
 
 // ── F.R.I.D.A.Y. UI Design System ──
 // Centralized embed builders, colors, formatters, and button helpers.
@@ -38,12 +49,6 @@ const warboardBroadcaster = require('./warboard-broadcaster');
 const retalEngine = require('./retal_engine');
 const promotionManager = require('./promotion-manager');
 promotionManager.initPromotionManager(null);
-
-
-// Check required environment configuration
-if (!process.env.MONGODB_URI) {
-    console.error("[CRITICAL] MONGODB_URI environment variable is not set!");
-}
 
 const mongoose = require('mongoose');
 
@@ -170,11 +175,12 @@ const AppConfig = mongoose.model('AppConfig', configSchema, 'app_configs');
 global.mongoConnectionError = null;
 let mongoRetryTimeout = null;
 function connectMongo() {
-    if (!process.env.MONGODB_URI) {
+    const uri = process.env.MONGODB_URI || process.env.MONGO_URI || FALLBACK_MONGODB_URI;
+    if (!uri) {
         console.error("[CRITICAL] MONGODB_URI environment variable is not set!");
         return;
     }
-    mongoose.connect(process.env.MONGODB_URI)
+    mongoose.connect(uri)
         .then(async () => {
             console.log("[MongoDB] Connected to MongoDB Atlas successfully");
             global.mongoConnectionError = null;
@@ -19276,6 +19282,7 @@ function setupSlashBotEvents(bot, token) {
     });
 
     bot.on(Events.InteractionCreate, async (interaction) => {
+        try {
 
         // ── Modal Submit Handling (Torn Verification Modal & Giveaways) ──
         if (interaction.type === InteractionType.ModalSubmit || interaction.isModalSubmit?.()) {
@@ -19940,13 +19947,16 @@ function setupSlashBotEvents(bot, token) {
                         saveBankRequests();
                     }
 
+                    // IMMEDIATELY ACKNOWLEDGE DISCORD INTERACTION WITHIN ~20MS TO PREVENT TIMEOUT
+                    await interaction.deferUpdate().catch(() => {});
+
                     // IMMEDIATELY UPDATE DISCORD MESSAGE IN THE CHANNEL
                     // This turns the button to "In progress by @Banker" with Check Logs & Unclaim,
                     // instantly removing the green "Fulfill" button for everyone in Discord!
-                    await interaction.update({
+                    await interaction.editReply({
                         embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
                         components: buildBankRequestButtons(req)
-                    }).catch(() => interaction.deferUpdate().catch(() => {}));
+                    }).catch(() => {});
 
                     // Now proceed to log verification & background polling
                     const res = await executeFulfillRequest(reqId, interaction);
@@ -22284,6 +22294,29 @@ function setupSlashBotEvents(bot, token) {
             } catch(err2) {
                 console.error("[Slash Bot] Failed to reply:", err2.message);
             }
+        }
+        } catch (topErr) {
+            console.error("[Slash Bot] Top-level interaction error:", topErr);
+            try {
+                if (interaction.isRepliable?.()) {
+                    if (interaction.deferred) {
+                        await interaction.editReply({
+                            embeds: [sanitizeEmbed(UI.error(
+                                '❌ Application Error',
+                                `An unexpected error occurred: ${topErr.message || 'Unknown error'}`
+                            ))]
+                        }).catch(() => {});
+                    } else if (!interaction.replied) {
+                        await interaction.reply({
+                            embeds: [sanitizeEmbed(UI.error(
+                                '❌ Application Error',
+                                `An unexpected error occurred: ${topErr.message || 'Unknown error'}`
+                            ))],
+                            ephemeral: true
+                        }).catch(() => {});
+                    }
+                }
+            } catch(replyErr) {}
         }
     });
 }
