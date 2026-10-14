@@ -1136,9 +1136,10 @@ function renderMiniHud(data) {
 }
 
 async function loadWarboardBounties() {
-    if (!myKey && !localStorage.getItem("sv_session_token")) return;
     try {
-        const res = await fetch('/api/war-bounties', { headers: { 'x-api-key': myKey } });
+        const headers = {};
+        if (myKey) headers['x-api-key'] = myKey;
+        const res = await fetch('/api/war-bounties', { headers });
         const data = await res.json();
         if (!data.success) return;
 
@@ -1572,10 +1573,13 @@ let isFetchingWarboard = false;
 let lastWarboardEtag = '';
 
 async function fetchWarboard() {
-    if (!myKey || isFetchingWarboard || document.hidden) return;
+    if (isFetchingWarboard || document.hidden) return;
     isFetchingWarboard = true;
     try {
-        const reqHeaders = { 'x-api-key': myKey, 'x-enemy-id': enemyFacId, 'x-ff-key': ffKey };
+        const reqHeaders = {};
+        if (myKey) reqHeaders['x-api-key'] = myKey;
+        if (enemyFacId) reqHeaders['x-enemy-id'] = enemyFacId;
+        if (ffKey) reqHeaders['x-ff-key'] = ffKey;
         const myFacOverride = localStorage.getItem("warboard_myFactionId") || "";
         if (myFacOverride) reqHeaders['x-faction-id'] = myFacOverride;
         if (lastWarboardEtag) reqHeaders['If-None-Match'] = lastWarboardEtag;
@@ -2563,14 +2567,11 @@ window.addEventListener('DOMContentLoaded', async () => {
             globalChannelId = data.globalChannelId;
         }
 
-        if (myKey) {
-            closeSettings();
-            startPolling();
-        } else {
-            openSettings();
-        }
+        closeSettings();
+        startPolling();
     } catch(e) {
-        if (myKey) startPolling(); else openSettings();
+        closeSettings();
+        startPolling();
     }
 });
 </script>

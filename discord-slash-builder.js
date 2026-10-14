@@ -262,13 +262,16 @@ function buildSlashCommands() {
 
         // 20. Battle Stats Manual Update & Training Progress Tracker (/bs, /bsupdate)
         new SlashCommandBuilder().setName('bs').setDescription('Track Torn battle stats and training gains (like TornStats)')
-            .addSubcommand(sub => sub.setName('update').setDescription('Fetch live battle stats, record training progress, and post publicly in channel')
-                .addStringOption(opt => opt.setName('key').setDescription('Optional: provide/link your 16-char Limited Access API key').setRequired(false))
+            .addSubcommand(sub => sub.setName('update').setDescription('Fetch battle stats, record training progress, and post publicly in channel')
+                .addStringOption(opt => opt.setName('player').setDescription('Optional: Torn Player Name or ID (defaults to you)').setRequired(false))
+                .addStringOption(opt => opt.setName('stats').setDescription('Optional: manual stats (e.g. 500k, 250k, 100k, 100k or 15m)').setRequired(false))
             )
-            .addSubcommand(sub => sub.setName('view').setDescription('View your current recorded battle stats and stat distribution publicly in channel')
+            .addSubcommand(sub => sub.setName('view').setDescription('View recorded battle stats and stat distribution publicly in channel')
+                .addStringOption(opt => opt.setName('player').setDescription('Optional: Torn Player Name or ID (defaults to you)').setRequired(false))
             ).toJSON(),
         new SlashCommandBuilder().setName('bsupdate').setDescription('Quick shortcut: Update battle stats and post publicly in channel')
-            .addStringOption(opt => opt.setName('key').setDescription('Optional: provide/link your 16-char Limited Access API key').setRequired(false)).toJSON(),
+            .addStringOption(opt => opt.setName('player').setDescription('Optional: Torn Player Name or ID (defaults to you)').setRequired(false))
+            .addStringOption(opt => opt.setName('stats').setDescription('Optional: manual stats (e.g. 500k, 250k, 100k, 100k or 15m)').setRequired(false)).toJSON(),
 
         // 21. Enemy Faction Intelligence
         new SlashCommandBuilder().setName('enemy').setDescription('Full intelligence report on an enemy faction — stats, activity, war hitters, roster')

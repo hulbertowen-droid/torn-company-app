@@ -6184,6 +6184,9 @@ function sendWarboardResponse(req, res, payload) {
         if (req.headers['if-none-match'] === etag) {
             return res.status(304).end();
         }
+        if (warboardBroadcaster && payload && !payload.error && payload.friendly) {
+            try { warboardBroadcaster.broadcast('warboard_update', payload); } catch(be) {}
+        }
         return res.type('application/json').send(jsonStr);
     } catch(e) {
         return res.json(payload);
@@ -6194,11 +6197,11 @@ app.get('/api/warboard', async (req, res) => {
     if (global.isTurboMining) return res.json({ error: "Turbo Mining Mode is active. Live Warboard is paused." });
     try {
         let userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
-        if ((!userKey || userKey === "null" || userKey.trim() === "") && (req.userSession?.isSpiderVerse || req.userSession?.factionId === '52355')) {
-            userKey = TORN_API_KEY || getNextApiKey();
+        if (!userKey || userKey === "null" || userKey.trim() === "") {
+            userKey = TORN_API_KEY || discordConfig.apiKey || getNextApiKey();
         }
         if (!userKey || userKey === "null" || userKey.trim() === "") {
-            return res.status(401).json({ error: "Please authenticate to view your faction warboard." });
+            return res.status(503).json({ error: "No faction API key available on server. Please configure an API key." });
         }
         const ffKey = (req.headers['x-ff-key'] || req.query.ffKey) && (req.headers['x-ff-key'] || req.query.ffKey) !== "null" && (req.headers['x-ff-key'] || req.query.ffKey) !== "" ? (req.headers['x-ff-key'] || req.query.ffKey) : null;
         await verifySubscription(userKey);
@@ -6284,7 +6287,7 @@ app.get('/api/warboard', async (req, res) => {
         }
 
         let enemyId = (req.headers['x-enemy-id'] || req.query.enemyFaction) || null;
-        if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
+        if (!enemyId) enemyId = autoDetectEnemyFaction(myData, true);
         let enemyDataResult = { members: {} };
         if (enemyId) { 
             enemyDataResult = await cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey() || userKey || TORN_API_KEY}`, `enemy_faction_${enemyId}`, 2500); 
@@ -7824,8 +7827,11 @@ function saveWarBountiesHistory(data) {
 }
 
 app.get('/api/war-bounties', async (req, res) => {
-    const apiKey = req.headers['x-api-key'] || req.query.apiKey;
-    if (!apiKey || apiKey === "null" || apiKey.trim() === "") return res.status(401).json({ error: "API Key required" });
+    let apiKey = req.headers['x-api-key'] || req.query.apiKey;
+    if (!apiKey || apiKey === "null" || apiKey.trim() === "") {
+        apiKey = TORN_API_KEY || discordConfig.apiKey || getNextApiKey();
+    }
+    if (!apiKey || apiKey === "null" || apiKey.trim() === "") return res.status(503).json({ error: "No API Key configured on server" });
 
     try {
         // 1. Fetch current ranked war details
@@ -18403,82 +18409,230 @@ function getStatArchetype(str, def, spd, dex) {
 }
 
 async function handleBattleStatsUpdate(interaction, options = {}) {
-    const { forceUpdate = true, keyInput = null, isPublic = true, isButton = false } = options;
+    const { forceUpdate = true, targetPlayerId = null, targetPlayerName = null, statsInput = null, isPublic = true } = options;
 
     try {
         if (!interaction.deferred && !interaction.replied) {
-            await interaction.deferReply({ ephemeral: false }).catch(() => {});
+            if (interaction.isButton()) {
+                await interaction.deferUpdate().catch(() => {});
+            } else {
+                await interaction.deferReply({ ephemeral: !isPublic }).catch(() => {});
+            }
         }
 
         const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
 
-        // 1. If keyInput is provided, attempt to link it directly
-        if (keyInput) {
-            const cleanKey = keyInput.trim();
-            if (cleanKey.length !== 16 || !/^[a-zA-Z0-9]+$/.test(cleanKey)) {
-                return await interaction.editReply({
-                    embeds: [sanitizeEmbed(UI.error('Invalid API Key', 'Torn API keys must be exactly 16 alphanumeric characters.'))]
-                });
-            }
-            const linkRes = await userKeys.linkUserApiKey(interaction.user.id, cleanKey);
-            if (!linkRes.success) {
-                return await interaction.editReply({
-                    embeds: [sanitizeEmbed(UI.error('Key Linking Failed', `⚠️ **Could not link API key:** ${linkRes.error}\n\nPlease verify your key at [Torn Preferences](https://www.torn.com/preferences.php#tab=api) and ensure it has **Limited Access**.`))]
-                });
+        // 1. Resolve Target Player Identity (NO PERSONAL API KEY REQUIRED)
+        let playerId = targetPlayerId ? String(targetPlayerId).trim() : null;
+        let playerName = targetPlayerName || null;
+
+        // Check command options
+        if (!playerId) {
+            const playerOption = interaction.options?.getString?.('player') || interaction.options?.getString?.('member');
+            if (playerOption) {
+                const cleanTarget = playerOption.trim();
+                const numericMatch = cleanTarget.match(/\d{5,10}/);
+                if (numericMatch) {
+                    playerId = numericMatch[0];
+                } else {
+                    for (const [, v] of Object.entries(verifiedDiscordToTorn)) {
+                        if (v && v.tornName && v.tornName.toLowerCase() === cleanTarget.toLowerCase()) {
+                            playerId = String(v.tornId);
+                            playerName = v.tornName;
+                            break;
+                        }
+                    }
+                }
             }
         }
 
-        // 2. Resolve user's API key
-        const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username);
-        if (!resolved) {
-            const linkEmbed = UI.warning(
-                '🔑 Torn Limited API Key Required',
-                `Hey **${invokerName}**, to look up your live battle stats and track your training gains, you need to link your Torn **Limited Access API Key**.\n\n` +
-                `🔒 **Zero Public Exposure:** Your key is encrypted with **military-grade AES-256-GCM** and stored in secure memory/database. F.R.I.D.A.Y only accesses it to calculate your stats.\n\n` +
-                `Provide it privately via \`/linkkey\` or click **Link Limited Key** below:`
-            );
-            const actionRow = UI.actionRow(
-                UI.primaryBtn('btn_link_user_api_key', 'Link Limited API Key', '🔑'),
-                UI.linkBtn('https://www.torn.com/preferences.php#tab=api?step=addNewKey&title=FRIDAY&type=2', 'Create Key on Torn', '🌐')
-            );
-            return await interaction.editReply({ embeds: [sanitizeEmbed(linkEmbed)], components: [actionRow] });
+        // Check user mention option
+        if (!playerId) {
+            const targetUser = interaction.options?.getUser?.('user');
+            if (targetUser && verifiedDiscordToTorn[targetUser.id]) {
+                const v = verifiedDiscordToTorn[targetUser.id];
+                playerId = String(typeof v === 'object' ? v.tornId : v);
+                if (typeof v === 'object' && v.tornName) playerName = v.tornName;
+            }
         }
 
-        // 3. Fetch live profile and battlestats from Torn API
-        let rawData = null;
-        try {
-            const url = `https://api.torn.com/user/?selections=profile,battlestats&key=${resolved.key}`;
-            const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-            rawData = await res.json();
-        } catch(e) {
+        // Check invoker's verified identity
+        if (!playerId && verifiedDiscordToTorn[interaction.user.id]) {
+            const v = verifiedDiscordToTorn[interaction.user.id];
+            playerId = String(typeof v === 'object' ? v.tornId : v);
+            if (typeof v === 'object' && v.tornName) playerName = v.tornName;
+        }
+
+        // Check userKeys store
+        if (!playerId && typeof userKeys !== 'undefined' && userKeys.resolveUserApiKey) {
+            const keyRecord = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username);
+            if (keyRecord && keyRecord.playerId) {
+                playerId = String(keyRecord.playerId);
+                playerName = keyRecord.playerName || playerName;
+            }
+        }
+
+        // Check Discord nickname/displayName for [1234567]
+        if (!playerId && interaction.member?.displayName) {
+            const match = interaction.member.displayName.match(/\[(\d+)\]|\((\d+)\)/);
+            if (match) playerId = match[1] || match[2];
+        }
+
+        // Admin fast-track for Owen
+        if (!playerId && (interaction.user.id === '992561850057240578' || interaction.user.id === discordConfig.personalDiscordId)) {
+            playerId = '3776908';
+            playerName = 'Owen777';
+        }
+
+        if (!playerId) {
             return await interaction.editReply({
-                embeds: [sanitizeEmbed(UI.error('Connection Failed', `Could not reach Torn API: ${e.message}. Please try again in a moment.`))]
+                embeds: [sanitizeEmbed(UI.warning(
+                    '👤 Player Identity Required',
+                    `Hey **${invokerName}**, F.R.I.D.A.Y couldn't determine which Torn player to look up.\n\n` +
+                    `• Run </verify:0> once to link your Discord account to your Torn identity, or\n` +
+                    `• Specify your player ID directly: \`/bs update player:<YourID>\``
+                ))]
             });
         }
 
-        if (!rawData || rawData.error || !rawData.player_id) {
-            const errDetail = rawData?.error?.error || 'Unknown Torn API error';
-            return await interaction.editReply({
-                embeds: [sanitizeEmbed(UI.error('Fetch Failed', `⚠️ Torn API returned: ${errDetail}\n\nIf you recently rotated your key, please update it with \`/linkkey\`.`))]
-            });
+        const resolvedKeyRecord = typeof userKeys !== 'undefined' && userKeys.resolveUserApiKey 
+            ? userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username)
+            : null;
+
+        // 2. Resolve Battle Stats & Profile (NO PERSONAL API KEY REQUIRED)
+        let str = 0, def = 0, spd = 0, dex = 0, total = 0;
+        let modStr = 0, modDef = 0, modSpd = 0, modDex = 0;
+        let statSource = 'none';
+
+        // Check if manual stats were supplied: e.g. stats:"500k, 250k, 100k, 100k" or stats:"15m"
+        const manualInput = statsInput || interaction.options?.getString?.('stats');
+        if (manualInput) {
+            const raw = manualInput.trim();
+            const parts = raw.split(/[\s,+/]+/).filter(Boolean);
+            if (parts.length >= 4) {
+                str = parseAmount(parts[0]) || 0;
+                def = parseAmount(parts[1]) || 0;
+                spd = parseAmount(parts[2]) || 0;
+                dex = parseAmount(parts[3]) || 0;
+                total = str + def + spd + dex;
+                statSource = 'manual';
+            } else if (parts.length === 1) {
+                const pTot = parseAmount(parts[0]);
+                if (pTot > 0) {
+                    total = pTot;
+                    str = Math.round(total / 4);
+                    def = Math.round(total / 4);
+                    spd = Math.round(total / 4);
+                    dex = Math.max(0, total - str - def - spd);
+                    statSource = 'manual';
+                }
+            }
         }
 
-        const playerId = rawData.player_id;
-        const playerName = rawData.name || invokerName;
-        const str = Number(rawData.strength || 0);
-        const def = Number(rawData.defense || 0);
-        const spd = Number(rawData.speed || 0);
-        const dex = Number(rawData.dexterity || 0);
-        const total = Number(rawData.total || (str + def + spd + dex));
-        const modStr = Number(rawData.strength_modifier || 0);
-        const modDef = Number(rawData.defense_modifier || 0);
-        const modSpd = Number(rawData.speed_modifier || 0);
-        const modDex = Number(rawData.dexterity_modifier || 0);
+        // A. If user voluntarily linked their key and it matches this player, fetch direct live battlestats
+        if ((!total || total === 0) && resolvedKeyRecord && resolvedKeyRecord.key && String(resolvedKeyRecord.playerId) === String(playerId)) {
+            try {
+                const url = `https://api.torn.com/user/?selections=profile,battlestats&key=${resolvedKeyRecord.key}`;
+                const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+                const rawData = await res.json();
+                if (rawData && !rawData.error && rawData.player_id) {
+                    if (rawData.name) playerName = rawData.name;
+                    str = Number(rawData.strength || 0);
+                    def = Number(rawData.defense || 0);
+                    spd = Number(rawData.speed || 0);
+                    dex = Number(rawData.dexterity || 0);
+                    total = Number(rawData.total || (str + def + spd + dex));
+                    modStr = Number(rawData.strength_modifier || 0);
+                    modDef = Number(rawData.defense_modifier || 0);
+                    modSpd = Number(rawData.speed_modifier || 0);
+                    modDex = Number(rawData.dexterity_modifier || 0);
+                    statSource = 'live_api';
+                }
+            } catch(e) {}
+        }
 
+        // B. Fetch profile using pooled key for exact Name if missing
+        const poolKey = getNextApiKey() || discordConfig.apiKey || TORN_API_KEY;
+        if (poolKey && (!playerName || playerName === 'Member')) {
+            try {
+                const pRes = await fetch(`https://api.torn.com/user/${playerId}?selections=profile&key=${poolKey}`, { signal: AbortSignal.timeout(6000) });
+                const pData = await pRes.json();
+                if (pData && !pData.error && pData.name) {
+                    playerName = pData.name;
+                }
+            } catch(e) {}
+        }
+        if (!playerName) playerName = invokerName;
+
+        // C. FFScouter (Primary source for battle stats across the faction)
+        if (!total || total === 0) {
+            try {
+                const ffStats = await getPlayerStatsFromFFScouter(playerId);
+                if (ffStats && (ffStats.total > 0 || (ffStats.strength && ffStats.defense))) {
+                    str = Number(ffStats.strength || 0);
+                    def = Number(ffStats.defense || 0);
+                    spd = Number(ffStats.speed || 0);
+                    dex = Number(ffStats.dexterity || 0);
+                    total = Number(ffStats.total || (str + def + spd + dex));
+                    statSource = 'ffscouter';
+                }
+            } catch(e) {}
+        }
+
+        // D. Spy Database
+        if (!total || total === 0) {
+            const spy = (typeof spyDatabase !== 'undefined' && spyDatabase) ? spyDatabase[String(playerId)] : null;
+            if (spy && (spy.total > 0 || (spy.strength && spy.defense))) {
+                str = Number(spy.strength || 0);
+                def = Number(spy.defense || 0);
+                spd = Number(spy.speed || 0);
+                dex = Number(spy.dexterity || 0);
+                total = Number(spy.total || (str + def + spd + dex));
+                statSource = 'spy_db';
+            }
+        }
+
+        // E. Unified resolvePlayerBattleStats
+        if (!total || total === 0) {
+            const resolvedStats = resolvePlayerBattleStats(playerId);
+            if (resolvedStats && resolvedStats.total > 0) {
+                str = Number(resolvedStats.strength || 0);
+                def = Number(resolvedStats.defense || 0);
+                spd = Number(resolvedStats.speed || 0);
+                dex = Number(resolvedStats.dexterity || 0);
+                total = Number(resolvedStats.total || (str + def + spd + dex));
+                statSource = resolvedStats.source || 'cache';
+            }
+        }
+
+        // F. Existing history record
         const recordKey = String(playerId);
-        const prevRecord = battleStatsHistory[recordKey];
+        const prevRecord = (typeof battleStatsHistory !== 'undefined' && battleStatsHistory) ? battleStatsHistory[recordKey] : null;
 
-        // 4. View Mode: show existing record or current stats without recording new baseline
+        if (!total || total === 0) {
+            if (prevRecord && prevRecord.stats && prevRecord.stats.total > 0) {
+                str = Number(prevRecord.stats.strength || 0);
+                def = Number(prevRecord.stats.defense || 0);
+                spd = Number(prevRecord.stats.speed || 0);
+                dex = Number(prevRecord.stats.dexterity || 0);
+                total = Number(prevRecord.stats.total || (str + def + spd + dex));
+                statSource = 'history';
+            }
+        }
+
+        // If STILL no battle stats found anywhere:
+        if (!total || total === 0) {
+            return await interaction.editReply({
+                embeds: [sanitizeEmbed(UI.info(
+                    `📊 No Battle Stats Recorded: ${playerName} [${playerId}]`,
+                    `No battle stats scout records or gym baselines are on file for **${playerName} [${playerId}]** yet.\n\n` +
+                    `• Use \`/spy target:${playerId}\` to scout their stats via FFScouter, or\n` +
+                    `• Enter baseline stats with \`/bs update stats:<str>, <def>, <spd>, <dex>\` (e.g. \`/bs update stats:500k, 250k, 100k, 100k\`)`
+                ))]
+            });
+        }
+
+        // 3. View Mode: show existing record or current stats without recording new baseline
         if (!forceUpdate) {
             const lastUpdatedTime = prevRecord?.lastUpdated ? formatTimeSince(Date.now() - prevRecord.lastUpdated) : null;
             const safeTotal = total > 0 ? total : 1;
@@ -18490,7 +18644,7 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
 
             const archetype = getStatArchetype(str, def, spd, dex);
             const snapshotTs = prevRecord?.lastUpdated ? `<t:${Math.floor(prevRecord.lastUpdated / 1000)}:R>` : 'Live';
-            const updateHint = lastUpdatedTime ? `Updated ${lastUpdatedTime}` : 'No baseline yet — run `/bs update` to track gains';
+            const updateHint = lastUpdatedTime ? `Updated ${lastUpdatedTime}` : 'Run `/bs update` to record a new baseline and track gains';
 
             const embed = {
                 title: `🕷️ ${playerName} [${playerId}]`,
@@ -18520,7 +18674,7 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
             return await interaction.editReply({ embeds: [sanitizeEmbed(embed)], components: buttonRows });
         }
 
-        // 5. Update Mode: Calculate gains against previous record
+        // 4. Update Mode: Calculate gains against previous record
         let diffStr = 0, diffDef = 0, diffSpd = 0, diffDex = 0, diffTotal = 0;
         let hasPrevious = false;
         let elapsedMs = 0;
@@ -18539,34 +18693,33 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
 
         let descMessage = '';
         if (!hasPrevious) {
-            descMessage = `**Your stats have been updated!**\n` +
-                `🎉 Your initial battle stats baseline has been recorded! Run \`/bs update\` again after training to track your stat gains.\n\n` +
+            descMessage = `**Stats baseline recorded!** Run \`/bs update\` again after gym training to track your stat gains.\n\n` +
                 `**Total Battle Stats:** **\`${total.toLocaleString('en-US')}\`**`;
         } else {
             const gainsParts = [];
-            if (diffStr > 0) gainsParts.push(`**${diffStr.toLocaleString('en-US')}** strength`);
-            if (diffDef > 0) gainsParts.push(`**${diffDef.toLocaleString('en-US')}** defense`);
-            if (diffSpd > 0) gainsParts.push(`**${diffSpd.toLocaleString('en-US')}** speed`);
-            if (diffDex > 0) gainsParts.push(`**${diffDex.toLocaleString('en-US')}** dexterity`);
+            if (diffStr > 0) gainsParts.push(`**+${diffStr.toLocaleString('en-US')}** strength`);
+            if (diffDef > 0) gainsParts.push(`**+${diffDef.toLocaleString('en-US')}** defense`);
+            if (diffSpd > 0) gainsParts.push(`**+${diffSpd.toLocaleString('en-US')}** speed`);
+            if (diffDex > 0) gainsParts.push(`**+${diffDex.toLocaleString('en-US')}** dexterity`);
 
             if (gainsParts.length > 0) {
                 const gainsStr = gainsParts.join(', ');
-                const totalStr = `**${diffTotal.toLocaleString('en-US')}**`;
-                descMessage = `**Your stats have been updated!** You have gained ${gainsStr} since your last manual update **${timeAgo}**. You have gained a total of ${totalStr} stats.\n\n` +
+                const totalStr = `**+${diffTotal.toLocaleString('en-US')}**`;
+                descMessage = `**Training gains recorded!** You gained ${gainsStr} since your last update **${timeAgo}** (total **${totalStr}** stats).\n\n` +
                     `**Total Battle Stats:** **\`${total.toLocaleString('en-US')}\`**`;
             } else if (diffTotal === 0) {
-                descMessage = `**Your stats have been updated!** No stat gains recorded since your last manual update **${timeAgo}**.\n\n` +
+                descMessage = `**Stats synced!** No change in total stats since your last update **${timeAgo}**.\n\n` +
                     `**Total Battle Stats:** **\`${total.toLocaleString('en-US')}\`**`;
             } else if (diffTotal < 0) {
-                descMessage = `**Your stats have been updated!** Your total stats decreased by **${Math.abs(diffTotal).toLocaleString('en-US')}** since your last manual update **${timeAgo}** (likely due to an overdose or debuff).\n\n` +
+                descMessage = `**Stats updated!** Your total stats decreased by **${Math.abs(diffTotal).toLocaleString('en-US')}** since your last update **${timeAgo}** (likely due to an overdose or debuff).\n\n` +
                     `**Total Battle Stats:** **\`${total.toLocaleString('en-US')}\`**`;
             } else {
-                descMessage = `**Your stats have been updated!** You have gained a total of **${diffTotal.toLocaleString('en-US')}** stats since your last manual update **${timeAgo}**.\n\n` +
+                descMessage = `**Stats updated!** Gained **+${diffTotal.toLocaleString('en-US')}** stats since your last update **${timeAgo}**.\n\n` +
                     `**Total Battle Stats:** **\`${total.toLocaleString('en-US')}\`**`;
             }
         }
 
-        // 6. Save update to history
+        // 5. Save update to history
         if (!battleStatsHistory[recordKey]) {
             battleStatsHistory[recordKey] = {
                 playerId,
@@ -18620,7 +18773,7 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
 
         saveBattleStatsHistory();
 
-        // 7. Render response embed
+        // 6. Render response embed
         const safeTotal = total > 0 ? total : 1;
         const pctStr = ((str / safeTotal) * 100).toFixed(1);
         const pctDef = ((def / safeTotal) * 100).toFixed(1);
@@ -18634,8 +18787,9 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
         const totalDiffTag = diffTotal > 0 ? ` \`[+${diffTotal.toLocaleString('en-US')} total gain]\`` : '';
 
         const formatMod = (m) => m > 0 ? ` (+${m}%)` : (m < 0 ? ` (${m}%)` : '');
-
         const archetype = getStatArchetype(str, def, spd, dex);
+
+        const sourceLabel = statSource === 'live_api' ? '⚡ Live Torn API' : (statSource === 'ffscouter' ? '📡 FF Scouter' : (statSource === 'spy_db' ? '🕵️ Spy DB' : (statSource === 'manual' ? '📝 Manual Input' : '💾 Database Baseline')));
 
         const embed = {
             title: `📊 ${playerName} [${playerId}]`,
@@ -18645,6 +18799,7 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
                 `⚔️ \`${str.toLocaleString('en-US')}\`${formatMod(modStr)} (${pctStr}%)${strDiffTag}  🛡️ \`${def.toLocaleString('en-US')}\`${formatMod(modDef)} (${pctDef}%)${defDiffTag}`,
                 `⚡ \`${spd.toLocaleString('en-US')}\`${formatMod(modSpd)} (${pctSpd}%)${spdDiffTag}  🎯 \`${dex.toLocaleString('en-US')}\`${formatMod(modDex)} (${pctDex}%)${dexDiffTag}`,
                 ``,
+                `*Source: ${sourceLabel}*`,
                 descMessage ? `-# ${descMessage.replace(/\*\*/g, '').replace(/\n/g, ' ').substring(0, 200)}` : `-# Stats recorded.`
             ].join('\n'),
             color: (diffTotal > 0 || !hasPrevious) ? UI.COLORS.SUCCESS : UI.COLORS.BRAND,
@@ -18652,9 +18807,19 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
             timestamp: new Date().toISOString()
         };
 
+        const buttonRows = UI.buttonLayout(
+            [
+                UI.primaryBtn(`btn_bs_update_${playerId}`, 'Update', '🔄')
+            ],
+            [
+                UI.linkBtn(`https://www.torn.com/profiles.php?XID=${playerId}`, 'Profile', '👤'),
+                UI.linkBtn('https://www.torn.com/gym.php', 'Gym', '🏋️')
+            ]
+        );
+
         return await interaction.editReply({
             embeds: [sanitizeEmbed(embed)],
-            components: []
+            components: buttonRows
         });
 
     } catch(err) {
@@ -19988,7 +20153,13 @@ function setupSlashBotEvents(bot, token) {
 
             // ── Battle Stats Quick Update Button ──
             if (customId.startsWith('btn_bs_update')) {
-                await handleBattleStatsUpdate(interaction, { forceUpdate: true, isButton: false, isPublic: true });
+                const targetPlayerId = customId.replace('btn_bs_update_', '').replace(/[^0-9]/g, '');
+                await handleBattleStatsUpdate(interaction, {
+                    forceUpdate: true,
+                    targetPlayerId: targetPlayerId || null,
+                    isButton: true,
+                    isPublic: true
+                });
                 return;
             }
 
@@ -20544,6 +20715,10 @@ function setupSlashBotEvents(bot, token) {
                 return;
             }
 
+            // Safety fallback: ensure any unhandled button is acknowledged immediately so Discord never times out
+            if (!interaction.deferred && !interaction.replied) {
+                await interaction.deferUpdate().catch(() => {});
+            }
             return;
         }
 
@@ -20566,11 +20741,40 @@ function setupSlashBotEvents(bot, token) {
             }).catch(() => {});
         }
 
+        // Define safeReply helper so command handlers work seamlessly whether deferred or not
+        const safeReply = async (payload) => {
+            try {
+                if (interaction.deferred || interaction.replied) {
+                    return await interaction.editReply(payload);
+                }
+                return await interaction.reply(payload);
+            } catch (err) {
+                try {
+                    return await interaction.followUp(payload);
+                } catch(e) {
+                    return null;
+                }
+            }
+        };
+
+        // Immediate Deferral: Discord requires acknowledgment within 3,000ms.
+        // Acknowledge immediately at the entry point of slash commands (except modal triggers like /giveaway with no args).
+        const wantsModal = (cmd === 'giveaway') && (!interaction.options?.getString?.('prize') || !interaction.options?.getString?.('duration'));
+        if (!wantsModal && !interaction.deferred && !interaction.replied) {
+            const ephemeralCmds = new Set([
+                'withdraw', 'promotion', 'notifications', 'dmalerts',
+                'linkkey', 'unlinkkey', 'openrouter', 'bug', 'tutorial',
+                'snipe', 'elim', 'remindkeys'
+            ]);
+            const isEphemeral = ephemeralCmds.has(cmd);
+            await interaction.deferReply({ ephemeral: isEphemeral }).catch(() => {});
+        }
+
         const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
 
         // ── Active Command Tutorial & Guide (/tutorial) ──
         if (cmd === 'tutorial') {
-            await interaction.deferReply({ ephemeral: true });
+            if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: true }).catch(() => {});
 
             const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : [])
                 .map(c => String(c).toLowerCase().trim());
@@ -20667,7 +20871,7 @@ function setupSlashBotEvents(bot, token) {
 
         // ── Autonomous Elimination Target Hunter (/snipe, /elim) ──
         if (cmd === 'snipe' || cmd === 'elim') {
-            await interaction.deferReply({ ephemeral: true });
+            if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: true }).catch(() => {});
             const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
             const tier = (interaction.options.getString('tier') || 'manageable').toLowerCase();
 
@@ -20752,7 +20956,7 @@ function setupSlashBotEvents(bot, token) {
 
         // ── Personal Opt-In DM Notifications (/notifications, /dmalerts) ──
         if (cmd === 'notifications' || cmd === 'dmalerts') {
-            await interaction.deferReply({ ephemeral: true });
+            if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: true }).catch(() => {});
             const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
             const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username);
 
@@ -20783,7 +20987,7 @@ function setupSlashBotEvents(bot, token) {
 
         // ── Personal Live Energy, Bars & Cooldowns ──
         if (cmd === 'energy' || cmd === 'bars') {
-            await interaction.deferReply({ ephemeral: true });
+            if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: true }).catch(() => {});
             const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
             const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username);
 
@@ -20837,7 +21041,7 @@ function setupSlashBotEvents(bot, token) {
 
         // ── Personal Live Merits Slash Command ──
         if (cmd === 'merits') {
-            await interaction.deferReply({ ephemeral: true });
+            if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: true }).catch(() => {});
             const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
             const resolved = userKeys.resolveUserApiKey(interaction.user.id, invokerName, interaction.user.username);
 
@@ -20880,7 +21084,7 @@ function setupSlashBotEvents(bot, token) {
 
         // ── Link Limited API Key Slash Command ──
         if (cmd === 'linkkey') {
-            await interaction.deferReply({ ephemeral: true });
+            if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: true }).catch(() => {});
             const inputKey = (interaction.options.getString('key') || '').trim();
             const verifyResult = await executeVerifyWithKey(interaction, inputKey);
             const replyPayload = { embeds: [sanitizeEmbed(verifyResult)] };
@@ -20896,12 +21100,12 @@ function setupSlashBotEvents(bot, token) {
         if (cmd === 'unlinkkey') {
             const deleted = userKeys.unlinkUserApiKey(interaction.user.id);
             if (deleted) {
-                return await interaction.reply({
+                return await safeReply({
                     embeds: [sanitizeEmbed(UI.success('Key Unlinked', '🔒 Your stored API key has been permanently deleted from F.R.I.D.A.Y storage.'))],
                     ephemeral: true
                 });
             } else {
-                return await interaction.reply({
+                return await safeReply({
                     embeds: [sanitizeEmbed(UI.info('No Key Found', 'You do not have a linked API key stored.'))],
                     ephemeral: true
                 });
@@ -20911,10 +21115,12 @@ function setupSlashBotEvents(bot, token) {
         // ── Battle Stats Manual Update & Progression Tracker (/bs, /bsupdate) ──
         if (cmd === 'bs' || cmd === 'bsupdate') {
             const forceUpdate = (cmd === 'bsupdate') || (!subcommand || subcommand === 'update');
-            const keyOption = interaction.options?.getString?.('key');
+            const targetPlayerId = interaction.options?.getString?.('player') || null;
+            const statsInput = interaction.options?.getString?.('stats') || null;
             await handleBattleStatsUpdate(interaction, {
                 forceUpdate,
-                keyInput: keyOption,
+                targetPlayerId,
+                statsInput,
                 isPublic: true
             });
             return;
@@ -20922,7 +21128,7 @@ function setupSlashBotEvents(bot, token) {
 
         // ── Set OpenRouter Backup Key Slash Command (Admin/Owner) ──
         if (cmd === 'openrouter') {
-            await interaction.deferReply({ ephemeral: true });
+            if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: true }).catch(() => {});
             const isAdmin = interaction.member?.permissions?.has?.('Administrator') ||
                             userKeys.isOwnerUser(interaction.user.id, interaction.member?.displayName, interaction.user.username);
             if (!isAdmin) {
@@ -20981,7 +21187,7 @@ function setupSlashBotEvents(bot, token) {
 
         // ── Community Bug Reporter Slash Command (/bug) ──
         if (cmd === 'bug') {
-            await interaction.deferReply({ ephemeral: true });
+            if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: true }).catch(() => {});
             try {
                 const description = (interaction.options.getString('description') || '').trim();
                 const categoryChoice = interaction.options.getString('category') || 'general';
@@ -21060,10 +21266,12 @@ function setupSlashBotEvents(bot, token) {
         if (cmd === 'ask') {
             const question = (interaction.options.getString('question') || '').trim();
             if (!question) {
-                return interaction.reply({ content: "⚠️ Please provide a question.", ephemeral: true });
+                return await safeReply({ content: "⚠️ Please provide a question.", ephemeral: true });
             }
 
-            await interaction.deferReply({ ephemeral: true });
+            if (!interaction.deferred && !interaction.replied) {
+                await interaction.deferReply({ ephemeral: true }).catch(() => {});
+            }
 
             try {
                 const invokerName = interaction.member?.displayName || interaction.user?.username || 'Member';
@@ -21140,7 +21348,7 @@ function setupSlashBotEvents(bot, token) {
             const hint = (interaction.options.getString('hint') || '').trim();
             const invokerName = interaction.member?.displayName || interaction.user?.username || "";
 
-            await interaction.deferReply(); // Public reply in channel so she joins the group
+            if (!interaction.deferred && !interaction.replied) await interaction.deferReply().catch(() => {}); // Public reply in channel so she joins the group
 
             try {
                 const convoLines = [];
@@ -21208,7 +21416,7 @@ function setupSlashBotEvents(bot, token) {
         if (cmd === 'conversation') {
             const action = interaction.options.getString('action');
             const isStatus = action === 'status';
-            await interaction.deferReply({ ephemeral: isStatus }).catch(() => {});
+            if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: isStatus }).catch(() => {});
 
             try {
                 const chanId = interaction.channelId;
@@ -21287,11 +21495,11 @@ function setupSlashBotEvents(bot, token) {
         // Direct actions (Claim / Unclaim / SOS)
         if (cmd === 'claim') {
             const targetId = (interaction.options.getString('target') || '').trim().replace(/[^0-9]/g, '');
-            if (!targetId) return interaction.reply({ content: '⚠️ Please provide a numeric Torn Player ID.', ephemeral: true });
+            if (!targetId) return await safeReply({ content: '⚠️ Please provide a numeric Torn Player ID.', ephemeral: true });
             claims[targetId] = { playerName: interaction.user.username, time: Date.now() };
             const attackLink = `https://www.torn.com/page.php?sid=attack&user2ID=${targetId}`;
 
-            return interaction.reply({
+            return await safeReply({
                 embeds: [{
                     title: `🎯 Target Claimed: [${targetId}]`,
                     description: `**<@${interaction.user.id}>** has claimed **Target [${targetId}]**.\n\n[⚔️ Launch Attack](${attackLink}) • [👤 Profile](https://www.torn.com/profiles.php?XID=${targetId})`,
@@ -21302,9 +21510,9 @@ function setupSlashBotEvents(bot, token) {
 
         if (cmd === 'unclaim') {
             const targetId = (interaction.options.getString('target') || '').trim().replace(/[^0-9]/g, "");
-            if (!targetId) return interaction.reply({ content: "⚠️ Please provide a numeric Torn Player ID.", ephemeral: true });
+            if (!targetId) return await safeReply({ content: "⚠️ Please provide a numeric Torn Player ID.", ephemeral: true });
             delete claims[targetId];
-            return interaction.reply({
+            return await safeReply({
                 embeds: [{
                     title: `🔓 Claim Released: [${targetId}]`,
                     description: `Target **[${targetId}]** is now unclaimed and available for anyone.`,
@@ -21318,10 +21526,10 @@ function setupSlashBotEvents(bot, token) {
         if (cmd === 'sos') {
             const targetId = (interaction.options.getString('target') || '').trim().replace(/[^0-9]/g, "");
             const note = interaction.options.getString('note') || 'Backup needed immediately!';
-            if (!targetId) return interaction.reply({ content: "⚠️ Please provide a numeric Torn Player ID.", ephemeral: true });
+            if (!targetId) return await safeReply({ content: "⚠️ Please provide a numeric Torn Player ID.", ephemeral: true });
             backups[targetId] = { playerName: interaction.user.username, time: Date.now() };
             const attackLink = `https://www.torn.com/page.php?sid=attack&user2ID=${targetId}`;
-            return interaction.reply({
+            return await safeReply({
                 content: `🚨 **EMERGENCY BACKUP REQUESTED!**`,
                 embeds: [{
                     title: `🚨 SOS BACKUP: Target [${targetId}]`,
@@ -21332,7 +21540,7 @@ function setupSlashBotEvents(bot, token) {
 
         // ── Faction Promotion Request Slash Command ──
         if (cmd === 'promotion') {
-            await interaction.deferReply({ ephemeral: true });
+            if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: true }).catch(() => {});
             try {
                 const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
                 let facId = discordConfig.factionId || dynamicFactionId || null;
@@ -21595,7 +21803,7 @@ function setupSlashBotEvents(bot, token) {
 
         // ── Member Verification ──
         if (cmd === 'verify') {
-            await interaction.deferReply({ ephemeral: false });
+            if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: false }).catch(() => {});
             const apiKey = discordConfig.apiKey || process.env.TORN_API_KEY || getNextApiKey() || (apiPoolConfig && apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
 
             const targetUser = interaction.options.getUser('user');
@@ -21657,19 +21865,19 @@ function setupSlashBotEvents(bot, token) {
                                  (interaction.user.id === '992561850057240578') ||
                                  (discordConfig.personalDiscordId && interaction.user.id === discordConfig.personalDiscordId);
             if (!isAuthorized) {
-                return interaction.reply({ content: "⚠️ Only Server Administrators or Faction Leadership can run `/verifyall`.", ephemeral: true });
+                return await safeReply({ content: "⚠️ Only Server Administrators or Faction Leadership can run `/verifyall`.", ephemeral: true });
             }
-            await interaction.deferReply({ ephemeral: false });
+            if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: false }).catch(() => {});
             const apiKey = discordConfig.apiKey || process.env.TORN_API_KEY || getNextApiKey() || (apiPoolConfig && apiPoolConfig.keys && apiPoolConfig.keys[0]) || "";
             const resultEmbed = await executeVerifyAll(interaction.guild, apiKey);
-            return interaction.editReply({ embeds: [sanitizeEmbed(resultEmbed)] });
+            return await safeReply({ embeds: [sanitizeEmbed(resultEmbed)] });
         }
 
         if (cmd === 'postverify') {
             const isAuthorized = interaction.member?.permissions?.has?.('Administrator') ||
                                  (discordConfig.bankerRoleId && interaction.member?.roles?.cache?.has?.(discordConfig.bankerRoleId));
             if (!isAuthorized) {
-                return interaction.reply({ content: "⚠️ Only Server Administrators can post the verification card.", ephemeral: true });
+                return await safeReply({ content: "⚠️ Only Server Administrators can post the verification card.", ephemeral: true });
             }
 
             const verifiedRoleId = discordConfig.verifiedRoleId || interaction.guild.roles.cache.find(r => r.name.toLowerCase() === 'verified')?.id;
@@ -21681,7 +21889,7 @@ function setupSlashBotEvents(bot, token) {
             const buttons = UI.verificationButtons();
 
             await interaction.channel.send({ embeds: [sanitizeEmbed(verifyCard)], components: buttons });
-            return interaction.reply({ content: "✅ Verification card posted successfully to this channel!", ephemeral: true });
+            return await safeReply({ content: "✅ Verification card posted successfully to this channel!", ephemeral: true });
         }
 
         // ── Verification Migration Status (Leadership Command) ──
@@ -21691,10 +21899,10 @@ function setupSlashBotEvents(bot, token) {
                                  (discordConfig.bankerRoleId && interaction.member?.roles?.cache?.has?.(discordConfig.bankerRoleId)) ||
                                  (interaction.user.id === '992561850057240578' || interaction.user.id === discordConfig.personalDiscordId);
             if (!isAuthorized) {
-                return interaction.reply({ content: "⚠️ Only Server Administrators or Leadership can run `/migrationstatus`.", ephemeral: true });
+                return await safeReply({ content: "⚠️ Only Server Administrators or Leadership can run `/migrationstatus`.", ephemeral: true });
             }
 
-            await interaction.deferReply({ ephemeral: false });
+            if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: false }).catch(() => {});
 
             let guildMembers = null;
             try {
@@ -21766,11 +21974,11 @@ function setupSlashBotEvents(bot, token) {
                                  (discordConfig.leaderRoleId && interaction.member?.roles?.cache?.has?.(discordConfig.leaderRoleId)) ||
                                  (interaction.user.id === '992561850057240578' || interaction.user.id === discordConfig.personalDiscordId);
             if (!isAuthorized) {
-                return interaction.reply({ content: "⚠️ Only Server Administrators or Leadership can run `/remindkeys`.", ephemeral: true });
+                return await safeReply({ content: "⚠️ Only Server Administrators or Leadership can run `/remindkeys`.", ephemeral: true });
             }
 
             const isDryRun = interaction.options.getBoolean('dryrun') ?? false;
-            await interaction.deferReply({ ephemeral: true });
+            if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: true }).catch(() => {});
 
             let guildMembers = null;
             try {
@@ -21860,7 +22068,7 @@ function setupSlashBotEvents(bot, token) {
         // Direct handling for /withdraw with STRICT OVERDRAFT PROTECTION
         if (cmd === 'withdraw') {
             // IMMEDIATELY acknowledge Discord interaction within <20ms to guarantee zero timeouts
-            await interaction.deferReply({ ephemeral: true }).catch(() => {});
+            if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: true }).catch(() => {});
 
             const rawAmount = interaction.options.getString('amount');
             const amount = parseAmount(rawAmount);
@@ -22172,8 +22380,10 @@ function setupSlashBotEvents(bot, token) {
             return await interaction.showModal(modal);
         }
 
-        // Defer reply for commands that make API calls
-        try { await interaction.deferReply(); } catch (e) { return; }
+        // Defer reply for commands that make API calls (if not already deferred)
+        if (!interaction.deferred && !interaction.replied) {
+            try { await interaction.deferReply(); } catch (e) {}
+        }
 
         let embed = null;
 
