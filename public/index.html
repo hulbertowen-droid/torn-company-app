@@ -1657,43 +1657,86 @@ async function fetchWarboard() {
                 `;
             }
         } else {
-            // 🟢 PEACETIME STANDBY & HYBRID RECAP MODE
-            if (heroTitle) heroTitle.innerText = myFaction?.name ? `${myFaction.name} [${myFaction.id || ''}]` : 'Spider-Verse';
-            if (heroSub) heroSub.innerText = "Peacetime Standby • Faction Operations & Last War Performance Showcase";
-            if (warBadge) {
-                warBadge.className = "war-badge peace";
-                warBadge.innerText = "🟢 STANDBY";
-            }
-            if (peacetimeScoutBar) peacetimeScoutBar.style.display = "block";
-            if (scouterCurrentTarget) {
-                const scoutTargetName = data.warInfo?.scoutedEnemy?.name || (recentWar ? recentWar.enemyName : 'None');
-                const scoutTargetId = data.warInfo?.scoutedEnemy?.id || (recentWar ? recentWar.enemyId : '');
-                scouterCurrentTarget.innerText = `${scoutTargetName} [${scoutTargetId}]`;
-            }
-            if (enemyCardTitle) {
-                const sName = data.warInfo?.scoutedEnemy?.name || (recentWar ? recentWar.enemyName : 'Opponent');
-                enemyCardTitle.innerHTML = `🔴 Opponent Scouter <span style="font-size:0.75em;color:var(--text-dim);font-weight:600;">(${sName})</span>`;
-            }
-
-            if (scoreBlock) {
-                if (recentWar) {
+            // 🟢 PEACETIME STANDBY & HYBRID RECAP MODE OR ⏳ UPCOMING WAR PREPARATION
+            const upcomingWar = data.warInfo?.upcomingWar;
+            if (upcomingWar) {
+                const uEnemy = upcomingWar.enemyFaction || {};
+                if (heroTitle) heroTitle.innerText = `${myFaction?.name || 'Spider-Verse'} vs ${uEnemy.name || 'Opponent'}`;
+                const secsUntil = Math.max(0, (upcomingWar.start || 0) - now);
+                const hLeft = Math.floor(secsUntil / 3600);
+                const mLeft = Math.floor((secsUntil % 3600) / 60);
+                const countdown = hLeft > 24 ? `${Math.floor(hLeft/24)}d ${hLeft%24}h` : `${hLeft}h ${mLeft}m`;
+                if (heroSub) heroSub.innerText = `⚔️ Ranked War Scheduled • Starts in ${countdown} • Target: ${(upcomingWar.target || 0).toLocaleString()} pts • Pre-War Intel Active`;
+                if (warBadge) {
+                    warBadge.className = "war-badge upcoming";
+                    warBadge.style.background = "rgba(255,165,2,0.15)";
+                    warBadge.style.color = "var(--gold)";
+                    warBadge.style.borderColor = "rgba(255,165,2,0.4)";
+                    warBadge.innerText = "⏳ WAR SCHEDULED";
+                }
+                if (peacetimeScoutBar) peacetimeScoutBar.style.display = "block";
+                if (scouterCurrentTarget) {
+                    scouterCurrentTarget.innerText = `${uEnemy.name || 'Opponent'} [${uEnemy.id || ''}]`;
+                }
+                if (enemyCardTitle) {
+                    enemyCardTitle.innerHTML = `🔴 Opponent Roster <span style="font-size:0.75em;color:var(--text-dim);font-weight:600;">(${uEnemy.name || 'Opponent'} [${uEnemy.id || ''}])</span>`;
+                }
+                if (scoreBlock) {
                     scoreBlock.style.display = "flex";
-                    const outcomeColor = recentWar.isWon ? "var(--green)" : "var(--red)";
-                    const outcomeTag = recentWar.isWon ? "🏆 VICTORY" : "DEFEAT";
                     scoreBlock.innerHTML = `
-                        <div style="display:flex;align-items:center;gap:14px;background:rgba(255,255,255,0.03);padding:10px 18px;border-radius:10px;border:1px solid var(--border);width:100%;justify-content:space-between;flex-wrap:wrap;">
+                        <div style="display:flex;align-items:center;gap:14px;background:rgba(255,165,2,0.06);padding:10px 18px;border-radius:10px;border:1px solid rgba(255,165,2,0.3);width:100%;justify-content:space-between;flex-wrap:wrap;">
                             <div style="display:flex;align-items:center;gap:12px;">
-                                <span style="font-size:1.6em;">${recentWar.isWon ? '🏆' : '⚔️'}</span>
+                                <span style="font-size:1.6em;">⏳</span>
                                 <div>
-                                    <div style="font-size:0.88em;font-weight:800;color:var(--text-main);">LAST WAR: vs ${recentWar.enemyName} (${recentWar.ourScore.toLocaleString()} - ${recentWar.theirScore.toLocaleString()})</div>
-                                    <div style="font-size:0.74em;color:${outcomeColor};font-weight:700;margin-top:2px;">${outcomeTag} • +${(recentWar.margin || 0).toLocaleString()} pts Margin • ${recentWar.audited ? `${recentWar.totalHitsMade} hits made` : 'Completed War'}</div>
+                                    <div style="font-size:0.88em;font-weight:800;color:var(--gold);">UPCOMING WAR: vs ${uEnemy.name || 'Opponent'} [${uEnemy.id || ''}]</div>
+                                    <div style="font-size:0.74em;color:var(--text-dim);font-weight:600;margin-top:2px;">Starts in ${countdown} • Target: ${(upcomingWar.target || 0).toLocaleString()} pts • ${enemies.length} Opponent Targets Loaded for Pre-War Scouting</div>
                                 </div>
                             </div>
-                            <a href="/dashboard.html" style="background:rgba(0,206,201,0.12);color:var(--teal);border:1px solid var(--teal);padding:5px 12px;border-radius:6px;font-size:0.75em;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">📊 Full War Sentinel Audit &rarr;</a>
+                            <div style="font-size:0.78em;color:var(--teal);font-weight:700;">Pre-War Scouting Active</div>
                         </div>
                     `;
-                } else {
-                    scoreBlock.style.display = "none";
+                }
+            } else {
+                if (heroTitle) heroTitle.innerText = myFaction?.name ? `${myFaction.name} [${myFaction.id || ''}]` : 'Spider-Verse';
+                if (heroSub) heroSub.innerText = "Peacetime Standby • Faction Operations & Last War Performance Showcase";
+                if (warBadge) {
+                    warBadge.className = "war-badge peace";
+                    warBadge.style.background = "";
+                    warBadge.style.color = "";
+                    warBadge.style.borderColor = "";
+                    warBadge.innerText = "🟢 STANDBY";
+                }
+                if (peacetimeScoutBar) peacetimeScoutBar.style.display = "block";
+                if (scouterCurrentTarget) {
+                    const scoutTargetName = data.warInfo?.scoutedEnemy?.name || (recentWar ? recentWar.enemyName : 'None');
+                    const scoutTargetId = data.warInfo?.scoutedEnemy?.id || (recentWar ? recentWar.enemyId : '');
+                    scouterCurrentTarget.innerText = `${scoutTargetName} [${scoutTargetId}]`;
+                }
+                if (enemyCardTitle) {
+                    const sName = data.warInfo?.scoutedEnemy?.name || (recentWar ? recentWar.enemyName : 'Opponent');
+                    enemyCardTitle.innerHTML = `🔴 Opponent Scouter <span style="font-size:0.75em;color:var(--text-dim);font-weight:600;">(${sName})</span>`;
+                }
+
+                if (scoreBlock) {
+                    if (recentWar) {
+                        scoreBlock.style.display = "flex";
+                        const outcomeColor = recentWar.isWon ? "var(--green)" : "var(--red)";
+                        const outcomeTag = recentWar.isWon ? "🏆 VICTORY" : "DEFEAT";
+                        scoreBlock.innerHTML = `
+                            <div style="display:flex;align-items:center;gap:14px;background:rgba(255,255,255,0.03);padding:10px 18px;border-radius:10px;border:1px solid var(--border);width:100%;justify-content:space-between;flex-wrap:wrap;">
+                                <div style="display:flex;align-items:center;gap:12px;">
+                                    <span style="font-size:1.6em;">${recentWar.isWon ? '🏆' : '⚔️'}</span>
+                                    <div>
+                                        <div style="font-size:0.88em;font-weight:800;color:var(--text-main);">LAST WAR: vs ${recentWar.enemyName} (${recentWar.ourScore.toLocaleString()} - ${recentWar.theirScore.toLocaleString()})</div>
+                                        <div style="font-size:0.74em;color:${outcomeColor};font-weight:700;margin-top:2px;">${outcomeTag} • +${(recentWar.margin || 0).toLocaleString()} pts Margin • ${recentWar.audited ? `${recentWar.totalHitsMade} hits made` : 'Completed War'}</div>
+                                    </div>
+                                </div>
+                                <a href="/dashboard.html" style="background:rgba(0,206,201,0.12);color:var(--teal);border:1px solid var(--teal);padding:5px 12px;border-radius:6px;font-size:0.75em;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">📊 Full War Sentinel Audit &rarr;</a>
+                            </div>
+                        `;
+                    } else {
+                        scoreBlock.style.display = "none";
+                    }
                 }
             }
         }

@@ -602,9 +602,22 @@ function getFactionWarState(facId) {
 
 function getActiveRankedWar(data) {
     if (!data || !data.rankedwars) return null;
+    const nowSec = Math.floor(Date.now() / 1000);
     for (let warId in data.rankedwars) {
         let w = data.rankedwars[warId];
-        if (w && w.war && (w.war.winner === 0 || !w.war.winner) && (!w.war.end || w.war.end === 0)) {
+        if (w && w.war && (w.war.winner === 0 || !w.war.winner) && (!w.war.end || w.war.end === 0) && (w.war.start && w.war.start <= nowSec)) {
+            return w;
+        }
+    }
+    return null;
+}
+
+function getUpcomingRankedWar(data) {
+    if (!data || !data.rankedwars) return null;
+    const nowSec = Math.floor(Date.now() / 1000);
+    for (let warId in data.rankedwars) {
+        let w = data.rankedwars[warId];
+        if (w && w.war && (w.war.winner === 0 || !w.war.winner) && (!w.war.end || w.war.end === 0) && (w.war.start && w.war.start > nowSec)) {
             return w;
         }
     }
@@ -3289,6 +3302,12 @@ function autoDetectEnemyFaction(data, allowPeacetimeFallback = false) {
         const activeWar = getActiveRankedWar(data);
         if (activeWar && activeWar.factions) {
             const factions = Object.keys(activeWar.factions || {});
+            const enemy = factions.find(id => id !== myId);
+            if (enemy) return enemy;
+        }
+        const upcomingWar = getUpcomingRankedWar(data);
+        if (upcomingWar && upcomingWar.factions) {
+            const factions = Object.keys(upcomingWar.factions || {});
             const enemy = factions.find(id => id !== myId);
             if (enemy) return enemy;
         }
@@ -6174,7 +6193,10 @@ function sendWarboardResponse(req, res, payload) {
 app.get('/api/warboard', async (req, res) => {
     if (global.isTurboMining) return res.json({ error: "Turbo Mining Mode is active. Live Warboard is paused." });
     try {
-        const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+        let userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+        if ((!userKey || userKey === "null" || userKey.trim() === "") && (req.userSession?.isSpiderVerse || req.userSession?.factionId === '52355')) {
+            userKey = TORN_API_KEY || getNextApiKey();
+        }
         if (!userKey || userKey === "null" || userKey.trim() === "") {
             return res.status(401).json({ error: "Please authenticate to view your faction warboard." });
         }
@@ -6191,7 +6213,7 @@ app.get('/api/warboard', async (req, res) => {
         if (requestedFacId) {
             targetMyFacId = requestedFacId.toString();
             myData = await cachedTornFetch(`https://api.torn.com/faction/${targetMyFacId}?selections=basic,rankedwars,attacks&key=${userKey}`, `my_faction_${targetMyFacId}_${userKey}`, 2500);
-            if (myData && myData.error && (myData.error.code === 6 || myData.error.code === 7)) {
+            if (myData && myData.error && (myData.error.code === 6 || myData.error.code === 7 || myData.error.code === 16)) {
                 myData = await cachedTornFetch(`https://api.torn.com/faction/${targetMyFacId}?selections=basic,rankedwars&key=${userKey}`, `my_faction_basic_${targetMyFacId}_${userKey}`, 2500);
             }
         }
@@ -6199,8 +6221,24 @@ app.get('/api/warboard', async (req, res) => {
         // Step 2: If no explicit faction requested or fetch failed, query user's personal /faction/ endpoint.
         if (!myData || myData.error) {
             myData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${userKey}`, `my_faction_personal_${userKey}`, 2500);
+            if (myData && myData.error && (myData.error.code === 6 || myData.error.code === 7 || myData.error.code === 16)) {
+                myData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`, `my_faction_personal_basic_${userKey}`, 2500);
+            }
             if (myData && myData.ID) {
                 targetMyFacId = myData.ID.toString();
+            }
+        }
+
+        // Step 2.5: Resilient server-key fallback for authenticated faction members
+        const resolvedFacId = myData?.ID ? myData.ID.toString() : (targetMyFacId || req.userSession?.factionId || discordConfig.factionId || dynamicFactionId || '52355');
+        if ((!myData || myData.error || !myData.members || Object.keys(myData.members).length === 0) && resolvedFacId) {
+            const poolKey = getNextApiKey() || TORN_API_KEY;
+            if (poolKey) {
+                const pooledData = await cachedTornFetch(`https://api.torn.com/faction/${resolvedFacId}?selections=basic,rankedwars&key=${poolKey}`, `my_faction_pooled_${resolvedFacId}`, 2500);
+                if (pooledData && !pooledData.error && pooledData.members && Object.keys(pooledData.members).length > 0) {
+                    myData = pooledData;
+                    targetMyFacId = resolvedFacId;
+                }
             }
         }
 
@@ -6249,22 +6287,34 @@ app.get('/api/warboard', async (req, res) => {
         if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
         let enemyDataResult = { members: {} };
         if (enemyId) { 
-            enemyDataResult = await cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${userKey || getNextApiKey()}`, `enemy_faction_${enemyId}`, 2500); 
+            enemyDataResult = await cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey() || userKey || TORN_API_KEY}`, `enemy_faction_${enemyId}`, 2500); 
         }
 
-        let activeWar = null;
+        const nowSec = Math.floor(Date.now() / 1000);
+        let liveWar = null;
+        let upcomingWar = null;
         if (myData.rankedwars) {
-            activeWar = Object.values(myData.rankedwars).find(w => w.war && w.war.winner === 0);
+            for (let [wId, w] of Object.entries(myData.rankedwars)) {
+                if (w && w.war && (w.war.winner === 0 || !w.war.winner) && (!w.war.end || w.war.end === 0)) {
+                    if (w.war.start && w.war.start <= nowSec) {
+                        liveWar = { id: wId, ...w };
+                    } else if (w.war.start && w.war.start > nowSec) {
+                        upcomingWar = { id: wId, ...w };
+                    }
+                }
+            }
         }
+        let activeWar = liveWar;
         let myWarMembers = activeWar && myData.ID ? (activeWar.factions[myData.ID.toString()]?.members || {}) : {};
         let enemyWarMembers = activeWar && enemyId ? (activeWar.factions[enemyId]?.members || {}) : {};
 
-        // Peacetime: Extract most recent completed ranked war
+        // Peacetime / Pre-War: Extract most recent completed ranked war
         let recentWarInfo = null;
         let recentWarMembers = {};
         if (!activeWar && myData.rankedwars) {
             const sortedWars = Object.entries(myData.rankedwars)
                 .map(([wId, wData]) => ({ id: wId, ...wData }))
+                .filter(w => w.war && w.war.winner && w.war.winner > 0)
                 .sort((a, b) => (b.war?.start || 0) - (a.war?.start || 0));
 
             if (sortedWars.length > 0) {
@@ -6280,7 +6330,7 @@ app.get('/api/warboard', async (req, res) => {
 
                 recentWarInfo = {
                     id: rw.id,
-                    enemyName: enemyDataResult?.name || (enemyIdFromWar && rw.factions[enemyIdFromWar]?.name ? rw.factions[enemyIdFromWar].name : 'Enemy Faction'),
+                    enemyName: (enemyIdFromWar && rw.factions[enemyIdFromWar]?.name ? rw.factions[enemyIdFromWar].name : (enemyDataResult?.name || 'Enemy Faction')),
                     enemyId: enemyIdFromWar,
                     ourScore,
                     theirScore,
@@ -6455,6 +6505,16 @@ app.get('/api/warboard', async (req, res) => {
                 }
             } : {
                 active: false,
+                upcomingWar: upcomingWar ? {
+                    id: upcomingWar.id,
+                    start: upcomingWar.war?.start || 0,
+                    target: upcomingWar.war?.target || 0,
+                    enemyFaction: {
+                        id: enemyId,
+                        name: enemyDataResult?.name || (upcomingWar.factions && enemyId && upcomingWar.factions[enemyId]?.name) || "Opponent Faction",
+                        memberCount: Object.keys(enemyDataResult?.members || {}).length
+                    }
+                } : null,
                 myFaction: {
                     id: myData?.ID || myFacId,
                     name: myData?.name || (myData?.ID ? "Faction #" + myData.ID : (discordConfig.factionName || "Our Faction")),
@@ -11271,6 +11331,29 @@ async function buildWarStatusEmbed(apiKey) {
 
         const activeWar = getActiveRankedWar(facData);
         if (!activeWar || !activeWar.factions) {
+            const upcomingWar = getUpcomingRankedWar(facData);
+            if (upcomingWar && upcomingWar.factions) {
+                const fids = Object.keys(upcomingWar.factions || {});
+                const ourFid = fids.find(id => id.toString() === facData.ID?.toString()) || fids[0];
+                const enemyFid = fids.find(id => id !== ourFid) || fids[1];
+                const ourInfo = upcomingWar.factions?.[ourFid] || {};
+                const enemyInfo = upcomingWar.factions?.[enemyFid] || {};
+                const enemyName = enemyInfo.name || `Faction #${enemyFid}`;
+                const ourName = ourInfo.name || facData.name || "Spider-Verse";
+                const startTs = upcomingWar.war?.start || 0;
+                const targetScore = (upcomingWar.war?.target || 0).toLocaleString();
+
+                return {
+                    title: "⏳ Upcoming Faction Ranked War",
+                    description: `⚔️ **${ourName}** vs **${enemyName}** [${enemyFid}]\n\n` +
+                                 `• **Scheduled Start:** <t:${startTs}:R> (<t:${startTs}:F>)\n` +
+                                 `• **Target Score:** \`${targetScore}\` points\n\n` +
+                                 `*Combat has not begun yet. Use </targets:0> to scout enemy battle stats, check their online times, and coordinate pre-war claims!*`,
+                    color: UI.COLORS.WARNING,
+                    footer: UI.FOOTER,
+                    timestamp: new Date().toISOString()
+                };
+            }
             return {
                 title: "⚔️ Faction Ranked War",
                 description: `🕊️ **No Active Ranked War**\n\n**${facData.name || 'Your faction'}** is not currently in an active ranked war.\n\n*When your faction enters a Ranked War, live war scores, leads, progress bars, and top hitters will appear here automatically.*`,
@@ -11393,16 +11476,18 @@ async function buildTargetsEmbed(apiKey) {
         if (facData.error) throw new Error(facData.error.error || "Torn API error");
 
         const activeWar = getActiveRankedWar(facData);
-        if (!activeWar || !activeWar.factions) {
+        const upcomingWar = !activeWar ? getUpcomingRankedWar(facData) : null;
+        const targetWar = activeWar || upcomingWar;
+        if (!targetWar || !targetWar.factions) {
             return {
                 title: "🎯 Enemy Targets",
-                description: `🕊️ **No Active Ranked War**\n\n**${facData.name || 'Your faction'}** is not currently in an active ranked war.\n\n*Enemy priority targets, snipers, and hosp-releases activate automatically when a Ranked War begins.*`,
+                description: `🕊️ **No Active Ranked War**\n\n**${facData.name || 'Your faction'}** is not currently in an active or scheduled ranked war.\n\n*Enemy priority targets, snipers, and hosp-releases activate automatically when a Ranked War is scheduled or begins.*`,
                 color: UI.COLORS.INFO,
                 footer: UI.FOOTER
             };
         }
 
-        const fids = Object.keys(activeWar.factions || {});
+        const fids = Object.keys(targetWar.factions || {});
         const enemyId = fids.find(id => id !== facData.ID?.toString()) || discordConfig.enemyFacId;
         if (!enemyId) {
             return {
