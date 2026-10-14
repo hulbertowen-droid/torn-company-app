@@ -331,6 +331,11 @@ async function loadConfigFromMongo() {
             }
             if (saved.battleStatsHistory) {
                 battleStatsHistory = { ...(battleStatsHistory || {}), ...(saved.battleStatsHistory || {}) };
+                try {
+                    const dataDir = path.join(__dirname, 'data');
+                    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+                    fs.writeFileSync(BATTLESTATS_HISTORY_FILE, JSON.stringify(battleStatsHistory, null, 2), 'utf8');
+                } catch(e) {}
                 console.log(`[Mongo] Restored battle stats history for ${Object.keys(battleStatsHistory).filter(k => !k.startsWith('discord_')).length} player(s) from MongoDB Atlas.`);
             }
             if (saved.verifiedDiscordUsers) {
@@ -962,35 +967,36 @@ function saveToMongo() {
     mongoSaveTimeout = setTimeout(() => {
         mongoSaveTimeout = null;
         if (mongoose.connection.readyState === 1) {
+            const setPayload = {
+                discordConfig,
+                companyConfig,
+                ocConfig,
+                marketConfig,
+                spyDatabase,
+                userTracking,
+                apiPoolConfig,
+                bankRequests,
+                inactivityAlerts: inactivityAlertsMemory,
+                odAlerts: odAlertsMemory,
+                ocAlertTracker: (typeof ocAlertTracker !== 'undefined' ? ocAlertTracker : {}),
+                ocMemory: (typeof ocMemory !== 'undefined' ? ocMemory : {}),
+                ocMemberHistory: (typeof ocMemberHistory !== 'undefined' ? ocMemberHistory : {}),
+                giveaways: (typeof activeGiveaways !== 'undefined' ? activeGiveaways : {}),
+                warFlightArchive,
+                warAuditArchive,
+                lastWarboardPayload: lastGoodWarboardPayload,
+                userApiKeys: userKeys.exportEncryptedForMongo(),
+                userAlertPrefs: userAlerts.exportPrefsForMongo(),
+                verifiedDiscordUsers: (typeof verifiedDiscordToTorn !== 'undefined' ? verifiedDiscordToTorn : {}),
+                bugs: (typeof bugsMemory !== 'undefined' ? bugsMemory : []),
+                updatedAt: new Date()
+            };
+            if (typeof battleStatsHistory !== 'undefined' && battleStatsHistory && Object.keys(battleStatsHistory).length > 0) {
+                setPayload.battleStatsHistory = battleStatsHistory;
+            }
             AppConfig.updateOne(
                 { _id: 'master' },
-                {
-                    $set: {
-                        discordConfig,
-                        companyConfig,
-                        ocConfig,
-                        marketConfig,
-                        spyDatabase,
-                        userTracking,
-                        apiPoolConfig,
-                        bankRequests,
-                        inactivityAlerts: inactivityAlertsMemory,
-                        odAlerts: odAlertsMemory,
-                        ocAlertTracker: (typeof ocAlertTracker !== 'undefined' ? ocAlertTracker : {}),
-                        ocMemory: (typeof ocMemory !== 'undefined' ? ocMemory : {}),
-                        ocMemberHistory: (typeof ocMemberHistory !== 'undefined' ? ocMemberHistory : {}),
-                        giveaways: (typeof activeGiveaways !== 'undefined' ? activeGiveaways : {}),
-                        warFlightArchive,
-                        warAuditArchive,
-                        lastWarboardPayload: lastGoodWarboardPayload,
-                        userApiKeys: userKeys.exportEncryptedForMongo(),
-                        userAlertPrefs: userAlerts.exportPrefsForMongo(),
-                        battleStatsHistory: (typeof battleStatsHistory !== 'undefined' ? battleStatsHistory : {}),
-                        verifiedDiscordUsers: (typeof verifiedDiscordToTorn !== 'undefined' ? verifiedDiscordToTorn : {}),
-                        bugs: (typeof bugsMemory !== 'undefined' ? bugsMemory : []),
-                        updatedAt: new Date()
-                    }
-                },
+                { $set: setPayload },
                 { upsert: true }
             ).catch(e => console.error('[Mongo] Config save error:', e.message));
         }
@@ -18490,7 +18496,32 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
         const modDex = Number(rawData.dexterity_modifier || 0);
 
         const recordKey = String(playerId);
-        const prevRecord = battleStatsHistory[recordKey];
+        let prevRecord = battleStatsHistory[recordKey];
+        if (!prevRecord && interaction.user?.id) {
+            const mappedId = battleStatsHistory['discord_' + interaction.user.id];
+            if (mappedId && battleStatsHistory[String(mappedId)]) {
+                prevRecord = battleStatsHistory[String(mappedId)];
+            }
+        }
+        if (!prevRecord && interaction.user?.id) {
+            for (const [k, rec] of Object.entries(battleStatsHistory)) {
+                if (k.startsWith('discord_')) continue;
+                if (rec && String(rec.discordUserId) === String(interaction.user.id)) {
+                    prevRecord = rec;
+                    break;
+                }
+            }
+        }
+        if (!prevRecord && playerName) {
+            const cleanTarget = String(playerName).replace(/\[.*?\]|\(.*?\)/g, '').trim().toLowerCase();
+            for (const [k, rec] of Object.entries(battleStatsHistory)) {
+                if (k.startsWith('discord_')) continue;
+                if (rec && rec.playerName && String(rec.playerName).replace(/\[.*?\]|\(.*?\)/g, '').trim().toLowerCase() === cleanTarget) {
+                    prevRecord = rec;
+                    break;
+                }
+            }
+        }
 
         // 4. View Mode: show existing record or current stats without recording new baseline
         if (!forceUpdate) {
@@ -18586,7 +18617,7 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
                 playerId,
                 playerName,
                 discordUserId: interaction.user.id,
-                history: []
+                history: (prevRecord?.history && Array.isArray(prevRecord.history)) ? [...prevRecord.history] : []
             };
         }
         if (!Array.isArray(battleStatsHistory[recordKey].history)) {

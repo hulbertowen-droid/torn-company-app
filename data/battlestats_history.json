@@ -1,0 +1,1571 @@
+{
+  "2431425": {
+    "playerId": 2431425,
+    "playerName": "Krp2Nyt",
+    "discordUserId": "240539999718735872",
+    "history": [
+      {
+        "timestamp": 1791374740788,
+        "strength": 24419,
+        "defense": 34050,
+        "speed": 22863,
+        "dexterity": 22508,
+        "total": 103840,
+        "gains": {
+          "strength": 2092,
+          "defense": 3504,
+          "speed": 2241,
+          "dexterity": 2047,
+          "total": 9884
+        }
+      },
+      {
+        "timestamp": 1790825559542,
+        "strength": 21769,
+        "defense": 29711,
+        "speed": 18932,
+        "dexterity": 20122,
+        "total": 90534,
+        "gains": {
+          "strength": 2650,
+          "defense": 4339,
+          "speed": 3931,
+          "dexterity": 2386,
+          "total": 13306
+        }
+      },
+      {
+        "timestamp": 1790568283873,
+        "strength": 21248,
+        "defense": 28705,
+        "speed": 18656,
+        "dexterity": 19864,
+        "total": 88473,
+        "gains": {
+          "strength": 521,
+          "defense": 1006,
+          "speed": 276,
+          "dexterity": 258,
+          "total": 2061
+        }
+      },
+      {
+        "timestamp": 1790309348066,
+        "strength": 19255,
+        "defense": 26571,
+        "speed": 16366,
+        "dexterity": 16714,
+        "total": 78906,
+        "gains": {
+          "strength": 1993,
+          "defense": 2134,
+          "speed": 2290,
+          "dexterity": 3150,
+          "total": 9567
+        }
+      },
+      {
+        "timestamp": 1789971391633,
+        "strength": 16481,
+        "defense": 21409,
+        "speed": 16136,
+        "dexterity": 16714,
+        "total": 70740,
+        "gains": {
+          "strength": 2774,
+          "defense": 5162,
+          "speed": 230,
+          "dexterity": 0,
+          "total": 8166
+        }
+      }
+    ],
+    "lastUpdated": 1791924863637,
+    "stats": {
+      "strength": 26511,
+      "defense": 37554,
+      "speed": 25104,
+      "dexterity": 24555,
+      "total": 113724,
+      "modifiers": {
+        "strength": 3,
+        "defense": 6,
+        "speed": 3,
+        "dexterity": 3
+      }
+    }
+  },
+  "2540508": {
+    "playerId": 2540508,
+    "playerName": "Djappe",
+    "discordUserId": "1280692517184209021",
+    "history": [
+      {
+        "timestamp": 1790378588952,
+        "strength": 100285,
+        "defense": 14268,
+        "speed": 99031,
+        "dexterity": 14166,
+        "total": 227750,
+        "gains": {
+          "strength": 0,
+          "defense": 5076,
+          "speed": 47033,
+          "dexterity": 14888,
+          "total": 66997
+        }
+      }
+    ],
+    "lastUpdated": 1791949101402,
+    "stats": {
+      "strength": 100285,
+      "defense": 19344,
+      "speed": 146064,
+      "dexterity": 29054,
+      "total": 294747,
+      "modifiers": {
+        "strength": 0,
+        "defense": 0,
+        "speed": 1,
+        "dexterity": 0
+      }
+    }
+  },
+  "2597068": {
+    "playerId": 2597068,
+    "playerName": "OGRapidz",
+    "discordUserId": "1196310862252757003",
+    "history": [],
+    "lastUpdated": 1790437524381,
+    "stats": {
+      "strength": 7028718,
+      "defense": 5212541,
+      "speed": 6013659,
+      "dexterity": 7034998,
+      "total": 25289916,
+      "modifiers": {
+        "strength": 20,
+        "defense": 23,
+        "speed": 32,
+        "dexterity": 28
+      }
+    }
+  },
+  "3490493": {
+    "playerId": 3490493,
+    "playerName": "MF_Pikle",
+    "discordUserId": "771109062918144071",
+    "history": [
+      {
+        "timestamp": 1791885031830,
+        "strength": 10087344,
+        "defense": 1011683,
+        "speed": 5137029,
+        "dexterity": 9577767,
+        "total": 25813823,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 64011,
+          "total": 64011
+        }
+      },
+      {
+        "timestamp": 1791681467158,
+        "strength": 10087344,
+        "defense": 1011683,
+        "speed": 5137029,
+        "dexterity": 8438856,
+        "total": 24674912,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 1138911,
+          "total": 1138911
+        }
+      },
+      {
+        "timestamp": 1791644550527,
+        "strength": 10087344,
+        "defense": 1011683,
+        "speed": 5137029,
+        "dexterity": 8089971,
+        "total": 24326027,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 348885,
+          "total": 348885
+        }
+      },
+      {
+        "timestamp": 1791596211555,
+        "strength": 10087344,
+        "defense": 1011683,
+        "speed": 5137029,
+        "dexterity": 7947361,
+        "total": 24183417,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 142610,
+          "total": 142610
+        }
+      },
+      {
+        "timestamp": 1791135655478,
+        "strength": 10087344,
+        "defense": 1010167,
+        "speed": 5137029,
+        "dexterity": 6927115,
+        "total": 23161655,
+        "gains": {
+          "strength": 0,
+          "defense": 1516,
+          "speed": 0,
+          "dexterity": 1020246,
+          "total": 1021762
+        }
+      },
+      {
+        "timestamp": 1790885676921,
+        "strength": 10087344,
+        "defense": 1004119,
+        "speed": 5137029,
+        "dexterity": 6640342,
+        "total": 22868834,
+        "gains": {
+          "strength": 0,
+          "defense": 6048,
+          "speed": 0,
+          "dexterity": 286773,
+          "total": 292821
+        }
+      },
+      {
+        "timestamp": 1790692819666,
+        "strength": 10087344,
+        "defense": 1004119,
+        "speed": 5137029,
+        "dexterity": 6225142,
+        "total": 22453634,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 415200,
+          "total": 415200
+        }
+      },
+      {
+        "timestamp": 1790561362801,
+        "strength": 10087344,
+        "defense": 1004119,
+        "speed": 5137029,
+        "dexterity": 5758360,
+        "total": 21986852,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 466782,
+          "total": 466782
+        }
+      },
+      {
+        "timestamp": 1790371487452,
+        "strength": 10087344,
+        "defense": 1004119,
+        "speed": 5137029,
+        "dexterity": 5207769,
+        "total": 21436261,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 550591,
+          "total": 550591
+        }
+      }
+    ],
+    "lastUpdated": 1791946454724,
+    "stats": {
+      "strength": 10087344,
+      "defense": 1011683,
+      "speed": 5137029,
+      "dexterity": 9641778,
+      "total": 25877834,
+      "modifiers": {
+        "strength": 17,
+        "defense": 17,
+        "speed": 18,
+        "dexterity": 117
+      }
+    }
+  },
+  "3776908": {
+    "playerId": 3776908,
+    "playerName": "Owen777",
+    "discordUserId": "992561850057240578",
+    "history": [
+      {
+        "timestamp": 1791948944878,
+        "strength": 175432,
+        "defense": 208125,
+        "speed": 201589,
+        "dexterity": 295004,
+        "total": 880150,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 0,
+          "total": 0
+        }
+      },
+      {
+        "timestamp": 1791948940224,
+        "strength": 175432,
+        "defense": 208125,
+        "speed": 201589,
+        "dexterity": 295004,
+        "total": 880150,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 0,
+          "total": 0
+        }
+      },
+      {
+        "timestamp": 1791948939037,
+        "strength": 175432,
+        "defense": 208125,
+        "speed": 201589,
+        "dexterity": 295004,
+        "total": 880150,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 0,
+          "total": 0
+        }
+      },
+      {
+        "timestamp": 1791948933722,
+        "strength": 175432,
+        "defense": 208125,
+        "speed": 201589,
+        "dexterity": 295004,
+        "total": 880150,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 0,
+          "total": 0
+        }
+      },
+      {
+        "timestamp": 1791948924038,
+        "strength": 175432,
+        "defense": 208125,
+        "speed": 201589,
+        "dexterity": 295004,
+        "total": 880150,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 0,
+          "total": 0
+        }
+      },
+      {
+        "timestamp": 1791947861311,
+        "strength": 0,
+        "defense": 0,
+        "speed": 0,
+        "dexterity": 0,
+        "total": 938600,
+        "gains": {
+          "strength": 175432,
+          "defense": 208125,
+          "speed": 201589,
+          "dexterity": 295004,
+          "total": -58450
+        }
+      },
+      {
+        "timestamp": 1791745027120,
+        "strength": 175432,
+        "defense": 208125,
+        "speed": 201589,
+        "dexterity": 295004,
+        "total": 880150,
+        "gains": {
+          "strength": -175432,
+          "defense": -208125,
+          "speed": -201589,
+          "dexterity": -295004,
+          "total": 58450
+        }
+      },
+      {
+        "timestamp": 1790635571803,
+        "strength": 172542,
+        "defense": 208125,
+        "speed": 181063,
+        "dexterity": 295004,
+        "total": 856734,
+        "gains": {
+          "strength": 2890,
+          "defense": 0,
+          "speed": 20526,
+          "dexterity": 0,
+          "total": 23416
+        }
+      },
+      {
+        "timestamp": 1790437239091,
+        "strength": 172542,
+        "defense": 208125,
+        "speed": 181063,
+        "dexterity": 295004,
+        "total": 856734,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 0,
+          "total": 0
+        }
+      },
+      {
+        "timestamp": 1790283032153,
+        "strength": 171159,
+        "defense": 208125,
+        "speed": 171038,
+        "dexterity": 295004,
+        "total": 845326,
+        "gains": {
+          "strength": 1383,
+          "defense": 0,
+          "speed": 10025,
+          "dexterity": 0,
+          "total": 11408
+        }
+      },
+      {
+        "timestamp": 1790203401982,
+        "strength": 171159,
+        "defense": 208125,
+        "speed": 171038,
+        "dexterity": 293959,
+        "total": 844281,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 1045,
+          "total": 1045
+        }
+      },
+      {
+        "timestamp": 1790203386111,
+        "strength": 171159,
+        "defense": 208125,
+        "speed": 171038,
+        "dexterity": 293959,
+        "total": 844281,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 0,
+          "total": 0
+        }
+      },
+      {
+        "timestamp": 1790023942685,
+        "strength": 171159,
+        "defense": 205081,
+        "speed": 171038,
+        "dexterity": 269652,
+        "total": 816930,
+        "gains": {
+          "strength": 0,
+          "defense": 3044,
+          "speed": 0,
+          "dexterity": 24307,
+          "total": 27351
+        }
+      },
+      {
+        "timestamp": 1790023788247,
+        "strength": 171159,
+        "defense": 205081,
+        "speed": 171038,
+        "dexterity": 269540,
+        "total": 816818,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 112,
+          "total": 112
+        }
+      },
+      {
+        "timestamp": 1789958900775,
+        "strength": 171159,
+        "defense": 205081,
+        "speed": 171038,
+        "dexterity": 269540,
+        "total": 816818,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 0,
+          "total": 0
+        }
+      },
+      {
+        "timestamp": 1789958886280,
+        "strength": 171159,
+        "defense": 205081,
+        "speed": 171038,
+        "dexterity": 269540,
+        "total": 816818,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 0,
+          "total": 0
+        }
+      },
+      {
+        "timestamp": 1789958873229,
+        "strength": 171159,
+        "defense": 205081,
+        "speed": 171038,
+        "dexterity": 269540,
+        "total": 816818,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 0,
+          "total": 0
+        }
+      }
+    ],
+    "lastUpdated": 1791948945301,
+    "stats": {
+      "strength": 175432,
+      "defense": 208125,
+      "speed": 201589,
+      "dexterity": 295004,
+      "total": 880150,
+      "modifiers": {
+        "strength": 2,
+        "defense": 2,
+        "speed": 11,
+        "dexterity": -1
+      }
+    }
+  },
+  "4074607": {
+    "playerId": 4074607,
+    "playerName": "neonguts",
+    "discordUserId": "1488893530331156481",
+    "history": [
+      {
+        "timestamp": 1790347048770,
+        "strength": 43996,
+        "defense": 68356,
+        "speed": 67113,
+        "dexterity": 46474,
+        "total": 225939,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 0,
+          "total": 0
+        }
+      }
+    ],
+    "lastUpdated": 1790347082273,
+    "stats": {
+      "strength": 43996,
+      "defense": 68356,
+      "speed": 67113,
+      "dexterity": 46474,
+      "total": 225939,
+      "modifiers": {
+        "strength": 8,
+        "defense": 3,
+        "speed": 8,
+        "dexterity": 2
+      }
+    }
+  },
+  "4088688": {
+    "playerId": 4088688,
+    "playerName": "OmarRamadan",
+    "discordUserId": "603003841973190667",
+    "history": [
+      {
+        "timestamp": 1790512253657,
+        "strength": 167633,
+        "defense": 139225,
+        "speed": 173228,
+        "dexterity": 150305,
+        "total": 630391,
+        "gains": {
+          "strength": 0,
+          "defense": 10107,
+          "speed": 0,
+          "dexterity": 0,
+          "total": 10107
+        }
+      }
+    ],
+    "lastUpdated": 1790883883453,
+    "stats": {
+      "strength": 167633,
+      "defense": 149332,
+      "speed": 173228,
+      "dexterity": 150305,
+      "total": 640498,
+      "modifiers": {
+        "strength": -5,
+        "defense": -7,
+        "speed": -7,
+        "dexterity": -5
+      }
+    }
+  },
+  "4208316": {
+    "playerId": 4208316,
+    "playerName": "NeoEquinoX",
+    "discordUserId": "1111567210666790972",
+    "history": [
+      {
+        "timestamp": 1791296293888,
+        "strength": 173006,
+        "defense": 151010,
+        "speed": 154895,
+        "dexterity": 150401,
+        "total": 629312,
+        "gains": {
+          "strength": 1240,
+          "defense": 3248,
+          "speed": 27852,
+          "dexterity": 0,
+          "total": 32340
+        }
+      },
+      {
+        "timestamp": 1791208681055,
+        "strength": 173006,
+        "defense": 151010,
+        "speed": 150316,
+        "dexterity": 149298,
+        "total": 623630,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 4579,
+          "dexterity": 1103,
+          "total": 5682
+        }
+      },
+      {
+        "timestamp": 1790377959288,
+        "strength": 143358,
+        "defense": 146179,
+        "speed": 146763,
+        "dexterity": 135081,
+        "total": 571381,
+        "gains": {
+          "strength": 29648,
+          "defense": 4831,
+          "speed": 3553,
+          "dexterity": 14217,
+          "total": 52249
+        }
+      }
+    ],
+    "lastUpdated": 1791807784341,
+    "stats": {
+      "strength": 174246,
+      "defense": 154258,
+      "speed": 182747,
+      "dexterity": 150401,
+      "total": 661652,
+      "modifiers": {
+        "strength": 2,
+        "defense": 2,
+        "speed": 2,
+        "dexterity": 2
+      }
+    }
+  },
+  "4288192": {
+    "playerId": 4288192,
+    "playerName": "JoshuaCZ",
+    "discordUserId": "1350580100868997231",
+    "history": [],
+    "lastUpdated": 1791250927869,
+    "stats": {
+      "strength": 180127,
+      "defense": 113701,
+      "speed": 19514,
+      "dexterity": 4127,
+      "total": 317469,
+      "modifiers": {
+        "strength": -21,
+        "defense": -21,
+        "speed": -27,
+        "dexterity": -27
+      }
+    }
+  },
+  "4324643": {
+    "playerId": 4324643,
+    "playerName": "JDG1991",
+    "discordUserId": "158431719395950592",
+    "history": [
+      {
+        "timestamp": 1791688391510,
+        "strength": 50306,
+        "defense": 26391,
+        "speed": 51171,
+        "dexterity": 45812,
+        "total": 173680,
+        "gains": {
+          "strength": 1459,
+          "defense": 1471,
+          "speed": 896,
+          "dexterity": 1128,
+          "total": 4954
+        }
+      },
+      {
+        "timestamp": 1791170761845,
+        "strength": 44024,
+        "defense": 24840,
+        "speed": 42331,
+        "dexterity": 41875,
+        "total": 153070,
+        "gains": {
+          "strength": 6282,
+          "defense": 1551,
+          "speed": 8840,
+          "dexterity": 3937,
+          "total": 20610
+        }
+      },
+      {
+        "timestamp": 1790524805022,
+        "strength": 37155,
+        "defense": 22662,
+        "speed": 34331,
+        "dexterity": 33647,
+        "total": 127795,
+        "gains": {
+          "strength": 6869,
+          "defense": 2178,
+          "speed": 8000,
+          "dexterity": 8228,
+          "total": 25275
+        }
+      },
+      {
+        "timestamp": 1790304736030,
+        "strength": 33793,
+        "defense": 20331,
+        "speed": 31091,
+        "dexterity": 31731,
+        "total": 116946,
+        "gains": {
+          "strength": 3362,
+          "defense": 2331,
+          "speed": 3240,
+          "dexterity": 1916,
+          "total": 10849
+        }
+      },
+      {
+        "timestamp": 1790108704173,
+        "strength": 32102,
+        "defense": 17476,
+        "speed": 30234,
+        "dexterity": 29951,
+        "total": 109763,
+        "gains": {
+          "strength": 1691,
+          "defense": 2855,
+          "speed": 857,
+          "dexterity": 1780,
+          "total": 7183
+        }
+      }
+    ],
+    "lastUpdated": 1791906113612,
+    "stats": {
+      "strength": 51765,
+      "defense": 27862,
+      "speed": 52067,
+      "dexterity": 46940,
+      "total": 178634,
+      "modifiers": {
+        "strength": -3,
+        "defense": -7,
+        "speed": -17,
+        "dexterity": 12
+      }
+    }
+  },
+  "4332864": {
+    "playerId": 4332864,
+    "playerName": "Nekkerino",
+    "discordUserId": "246989032465235968",
+    "history": [
+      {
+        "timestamp": 1791350437529,
+        "strength": 104041,
+        "defense": 100189,
+        "speed": 121686,
+        "dexterity": 100629,
+        "total": 426545,
+        "gains": {
+          "strength": 24602,
+          "defense": 0,
+          "speed": 7752,
+          "dexterity": 0,
+          "total": 32354
+        }
+      },
+      {
+        "timestamp": 1790438323049,
+        "strength": 71437,
+        "defense": 100189,
+        "speed": 73203,
+        "dexterity": 100629,
+        "total": 345458,
+        "gains": {
+          "strength": 32604,
+          "defense": 0,
+          "speed": 48483,
+          "dexterity": 0,
+          "total": 81087
+        }
+      }
+    ],
+    "lastUpdated": 1791920268951,
+    "stats": {
+      "strength": 128643,
+      "defense": 100189,
+      "speed": 129438,
+      "dexterity": 100629,
+      "total": 458899,
+      "modifiers": {
+        "strength": -25,
+        "defense": -27,
+        "speed": -25,
+        "dexterity": -27
+      }
+    }
+  },
+  "4336918": {
+    "playerId": 4336918,
+    "playerName": "Pupulyte",
+    "discordUserId": "601441085142597651",
+    "history": [
+      {
+        "timestamp": 1791401280578,
+        "strength": 69417,
+        "defense": 39039,
+        "speed": 83259,
+        "dexterity": 75962,
+        "total": 267677,
+        "gains": {
+          "strength": 6766,
+          "defense": 1480,
+          "speed": 18970,
+          "dexterity": 0,
+          "total": 27216
+        }
+      },
+      {
+        "timestamp": 1790966788420,
+        "strength": 52786,
+        "defense": 36652,
+        "speed": 83259,
+        "dexterity": 75962,
+        "total": 248659,
+        "gains": {
+          "strength": 16631,
+          "defense": 2387,
+          "speed": 0,
+          "dexterity": 0,
+          "total": 19018
+        }
+      }
+    ],
+    "lastUpdated": 1791865533016,
+    "stats": {
+      "strength": 76183,
+      "defense": 40519,
+      "speed": 102229,
+      "dexterity": 75962,
+      "total": 294893,
+      "modifiers": {
+        "strength": 0,
+        "defense": 2,
+        "speed": 0,
+        "dexterity": 2
+      }
+    }
+  },
+  "4375258": {
+    "playerId": 4375258,
+    "playerName": "Bosep",
+    "discordUserId": "221737492599144450",
+    "history": [],
+    "lastUpdated": 1791791474247,
+    "stats": {
+      "strength": 22579,
+      "defense": 15304,
+      "speed": 16900,
+      "dexterity": 13820,
+      "total": 68603,
+      "modifiers": {
+        "strength": 0,
+        "defense": 0,
+        "speed": 16,
+        "dexterity": 0
+      }
+    }
+  },
+  "4431321": {
+    "playerId": 4431321,
+    "playerName": "syncooo",
+    "discordUserId": "596833701719965707",
+    "history": [
+      {
+        "timestamp": 1791293519561,
+        "strength": 11066,
+        "defense": 4194,
+        "speed": 15967,
+        "dexterity": 8953,
+        "total": 40180,
+        "gains": {
+          "strength": 0,
+          "defense": 2505,
+          "speed": 403,
+          "dexterity": 0,
+          "total": 2908
+        }
+      },
+      {
+        "timestamp": 1790795822536,
+        "strength": 9617,
+        "defense": 3254,
+        "speed": 10336,
+        "dexterity": 8953,
+        "total": 32160,
+        "gains": {
+          "strength": 1449,
+          "defense": 940,
+          "speed": 5631,
+          "dexterity": 0,
+          "total": 8020
+        }
+      },
+      {
+        "timestamp": 1790635624596,
+        "strength": 5751,
+        "defense": 3254,
+        "speed": 10336,
+        "dexterity": 8953,
+        "total": 28294,
+        "gains": {
+          "strength": 3866,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 0,
+          "total": 3866
+        }
+      },
+      {
+        "timestamp": 1790493468618,
+        "strength": 5751,
+        "defense": 3254,
+        "speed": 10336,
+        "dexterity": 4976,
+        "total": 24317,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 3977,
+          "total": 3977
+        }
+      },
+      {
+        "timestamp": 1790445609908,
+        "strength": 4555,
+        "defense": 3254,
+        "speed": 10336,
+        "dexterity": 4976,
+        "total": 23121,
+        "gains": {
+          "strength": 1196,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 0,
+          "total": 1196
+        }
+      },
+      {
+        "timestamp": 1790351642139,
+        "strength": 4555,
+        "defense": 3254,
+        "speed": 8994,
+        "dexterity": 4976,
+        "total": 21779,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 1342,
+          "dexterity": 0,
+          "total": 1342
+        }
+      },
+      {
+        "timestamp": 1790284233938,
+        "strength": 4349,
+        "defense": 3254,
+        "speed": 8994,
+        "dexterity": 4094,
+        "total": 20691,
+        "gains": {
+          "strength": 206,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 882,
+          "total": 1088
+        }
+      },
+      {
+        "timestamp": 1790107739535,
+        "strength": 4349,
+        "defense": 3254,
+        "speed": 7260,
+        "dexterity": 3818,
+        "total": 18681,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 1734,
+          "dexterity": 276,
+          "total": 2010
+        }
+      },
+      {
+        "timestamp": 1790028070483,
+        "strength": 3864,
+        "defense": 2748,
+        "speed": 7260,
+        "dexterity": 3818,
+        "total": 17690,
+        "gains": {
+          "strength": 485,
+          "defense": 506,
+          "speed": 0,
+          "dexterity": 0,
+          "total": 991
+        }
+      }
+    ],
+    "lastUpdated": 1791577975707,
+    "stats": {
+      "strength": 11066,
+      "defense": 6699,
+      "speed": 16370,
+      "dexterity": 8953,
+      "total": 43088,
+      "modifiers": {
+        "strength": 3,
+        "defense": 9,
+        "speed": 7,
+        "dexterity": 4
+      }
+    }
+  },
+  "4432366": {
+    "playerId": 4432366,
+    "playerName": "sergiossoto",
+    "discordUserId": "542618245681905665",
+    "history": [],
+    "lastUpdated": 1790242084006,
+    "stats": {
+      "strength": 7452,
+      "defense": 6540,
+      "speed": 9233,
+      "dexterity": 9924,
+      "total": 33149,
+      "modifiers": {
+        "strength": 0,
+        "defense": 0,
+        "speed": 1,
+        "dexterity": 0
+      }
+    }
+  },
+  "4460876": {
+    "playerId": 4460876,
+    "playerName": "Essential_Salt",
+    "discordUserId": "1553551743395041331",
+    "history": [
+      {
+        "timestamp": 1791812160292,
+        "strength": 19480,
+        "defense": 19877,
+        "speed": 13165,
+        "dexterity": 20058,
+        "total": 72580,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 3408,
+          "dexterity": 0,
+          "total": 3408
+        }
+      },
+      {
+        "timestamp": 1791686598141,
+        "strength": 19480,
+        "defense": 19877,
+        "speed": 10074,
+        "dexterity": 20058,
+        "total": 69489,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 3091,
+          "dexterity": 0,
+          "total": 3091
+        }
+      },
+      {
+        "timestamp": 1791374262723,
+        "strength": 19480,
+        "defense": 19877,
+        "speed": 10019,
+        "dexterity": 11955,
+        "total": 61331,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 55,
+          "dexterity": 8103,
+          "total": 8158
+        }
+      },
+      {
+        "timestamp": 1791167308374,
+        "strength": 19480,
+        "defense": 19581,
+        "speed": 10019,
+        "dexterity": 5528,
+        "total": 54608,
+        "gains": {
+          "strength": 0,
+          "defense": 296,
+          "speed": 0,
+          "dexterity": 6427,
+          "total": 6723
+        }
+      }
+    ],
+    "lastUpdated": 1791904813036,
+    "stats": {
+      "strength": 19480,
+      "defense": 19877,
+      "speed": 16573,
+      "dexterity": 20058,
+      "total": 75988,
+      "modifiers": {
+        "strength": 6,
+        "defense": 3,
+        "speed": 3,
+        "dexterity": 6
+      }
+    }
+  },
+  "4461236": {
+    "playerId": 4461236,
+    "playerName": "TiGeek",
+    "discordUserId": "542065225336225797",
+    "history": [
+      {
+        "timestamp": 1790693321980,
+        "strength": 6163,
+        "defense": 6164,
+        "speed": 6171,
+        "dexterity": 6162,
+        "total": 24660,
+        "gains": {
+          "strength": 2650,
+          "defense": 2636,
+          "speed": 2650,
+          "dexterity": 2653,
+          "total": 10589
+        }
+      }
+    ],
+    "lastUpdated": 1791292688845,
+    "stats": {
+      "strength": 8813,
+      "defense": 8800,
+      "speed": 8821,
+      "dexterity": 8815,
+      "total": 35249,
+      "modifiers": {
+        "strength": -24,
+        "defense": -24,
+        "speed": -24,
+        "dexterity": -24
+      }
+    }
+  },
+  "4498137": {
+    "playerId": 4498137,
+    "playerName": "Mr-William",
+    "discordUserId": "1553434967634354206",
+    "history": [
+      {
+        "timestamp": 1791824158693,
+        "strength": 3535,
+        "defense": 3277,
+        "speed": 3428,
+        "dexterity": 3449,
+        "total": 13689,
+        "gains": {
+          "strength": 257,
+          "defense": 238,
+          "speed": 394,
+          "dexterity": 354,
+          "total": 1243
+        }
+      },
+      {
+        "timestamp": 1791646306204,
+        "strength": 2965,
+        "defense": 2848,
+        "speed": 2850,
+        "dexterity": 2848,
+        "total": 11511,
+        "gains": {
+          "strength": 570,
+          "defense": 429,
+          "speed": 578,
+          "dexterity": 601,
+          "total": 2178
+        }
+      },
+      {
+        "timestamp": 1791299093646,
+        "strength": 2507,
+        "defense": 2508,
+        "speed": 2538,
+        "dexterity": 2502,
+        "total": 10055,
+        "gains": {
+          "strength": 458,
+          "defense": 340,
+          "speed": 312,
+          "dexterity": 346,
+          "total": 1456
+        }
+      },
+      {
+        "timestamp": 1791208499488,
+        "strength": 2161,
+        "defense": 2210,
+        "speed": 2214,
+        "dexterity": 2145,
+        "total": 8730,
+        "gains": {
+          "strength": 346,
+          "defense": 298,
+          "speed": 324,
+          "dexterity": 357,
+          "total": 1325
+        }
+      },
+      {
+        "timestamp": 1791137262369,
+        "strength": 1860,
+        "defense": 1763,
+        "speed": 1770,
+        "dexterity": 1779,
+        "total": 7172,
+        "gains": {
+          "strength": 301,
+          "defense": 447,
+          "speed": 444,
+          "dexterity": 366,
+          "total": 1558
+        }
+      },
+      {
+        "timestamp": 1790890097320,
+        "strength": 1473,
+        "defense": 1479,
+        "speed": 1488,
+        "dexterity": 1463,
+        "total": 5903,
+        "gains": {
+          "strength": 387,
+          "defense": 284,
+          "speed": 282,
+          "dexterity": 316,
+          "total": 1269
+        }
+      },
+      {
+        "timestamp": 1790807580459,
+        "strength": 1328,
+        "defense": 1281,
+        "speed": 1293,
+        "dexterity": 1273,
+        "total": 5175,
+        "gains": {
+          "strength": 145,
+          "defense": 198,
+          "speed": 195,
+          "dexterity": 190,
+          "total": 728
+        }
+      },
+      {
+        "timestamp": 1790714280727,
+        "strength": 1055,
+        "defense": 1038,
+        "speed": 1090,
+        "dexterity": 1049,
+        "total": 4232,
+        "gains": {
+          "strength": 273,
+          "defense": 243,
+          "speed": 203,
+          "dexterity": 224,
+          "total": 943
+        }
+      }
+    ],
+    "lastUpdated": 1791908658666,
+    "stats": {
+      "strength": 3792,
+      "defense": 3515,
+      "speed": 3822,
+      "dexterity": 3803,
+      "total": 14932,
+      "modifiers": {
+        "strength": 6,
+        "defense": 6,
+        "speed": 6,
+        "dexterity": 6
+      }
+    }
+  },
+  "4502194": {
+    "playerId": 4502194,
+    "playerName": "pr0cess",
+    "discordUserId": "885376512046551070",
+    "history": [
+      {
+        "timestamp": 1791751322180,
+        "strength": 7696,
+        "defense": 7576,
+        "speed": 7630,
+        "dexterity": 7524,
+        "total": 30426,
+        "gains": {
+          "strength": 696,
+          "defense": 678,
+          "speed": 689,
+          "dexterity": 672,
+          "total": 2735
+        }
+      },
+      {
+        "timestamp": 1791631007175,
+        "strength": 7083,
+        "defense": 7008,
+        "speed": 7031,
+        "dexterity": 6963,
+        "total": 28085,
+        "gains": {
+          "strength": 613,
+          "defense": 568,
+          "speed": 599,
+          "dexterity": 561,
+          "total": 2341
+        }
+      },
+      {
+        "timestamp": 1791353465504,
+        "strength": 6529,
+        "defense": 6430,
+        "speed": 6482,
+        "dexterity": 6034,
+        "total": 25475,
+        "gains": {
+          "strength": 554,
+          "defense": 578,
+          "speed": 549,
+          "dexterity": 929,
+          "total": 2610
+        }
+      },
+      {
+        "timestamp": 1791272248935,
+        "strength": 5955,
+        "defense": 5899,
+        "speed": 5984,
+        "dexterity": 6034,
+        "total": 23872,
+        "gains": {
+          "strength": 574,
+          "defense": 531,
+          "speed": 498,
+          "dexterity": 0,
+          "total": 1603
+        }
+      },
+      {
+        "timestamp": 1790718838160,
+        "strength": 4950,
+        "defense": 4904,
+        "speed": 4924,
+        "dexterity": 4999,
+        "total": 19777,
+        "gains": {
+          "strength": 1005,
+          "defense": 995,
+          "speed": 1060,
+          "dexterity": 1035,
+          "total": 4095
+        }
+      },
+      {
+        "timestamp": 1790133164611,
+        "strength": 4087,
+        "defense": 4098,
+        "speed": 4064,
+        "dexterity": 4127,
+        "total": 16376,
+        "gains": {
+          "strength": 863,
+          "defense": 806,
+          "speed": 860,
+          "dexterity": 872,
+          "total": 3401
+        }
+      },
+      {
+        "timestamp": 1790128474164,
+        "strength": 4087,
+        "defense": 4098,
+        "speed": 4064,
+        "dexterity": 4127,
+        "total": 16376,
+        "gains": {
+          "strength": 0,
+          "defense": 0,
+          "speed": 0,
+          "dexterity": 0,
+          "total": 0
+        }
+      },
+      {
+        "timestamp": 1790045921129,
+        "strength": 2993,
+        "defense": 3018,
+        "speed": 2977,
+        "dexterity": 3056,
+        "total": 12044,
+        "gains": {
+          "strength": 1094,
+          "defense": 1080,
+          "speed": 1087,
+          "dexterity": 1071,
+          "total": 4332
+        }
+      },
+      {
+        "timestamp": 1789975152559,
+        "strength": 2965,
+        "defense": 3018,
+        "speed": 2973,
+        "dexterity": 3056,
+        "total": 12012,
+        "gains": {
+          "strength": 28,
+          "defense": 0,
+          "speed": 4,
+          "dexterity": 0,
+          "total": 32
+        }
+      }
+    ],
+    "lastUpdated": 1791853690831,
+    "stats": {
+      "strength": 8392,
+      "defense": 8254,
+      "speed": 8319,
+      "dexterity": 8196,
+      "total": 33161,
+      "modifiers": {
+        "strength": 0,
+        "defense": 0,
+        "speed": 0,
+        "dexterity": 0
+      }
+    }
+  },
+  "discord_992561850057240578": 3776908,
+  "discord_240539999718735872": 2431425,
+  "discord_885376512046551070": 4502194,
+  "discord_596833701719965707": 4431321,
+  "discord_158431719395950592": 4324643,
+  "discord_542618245681905665": 4432366,
+  "discord_1488893530331156481": 4074607,
+  "discord_771109062918144071": 3490493,
+  "discord_1111567210666790972": 4208316,
+  "discord_1280692517184209021": 2540508,
+  "discord_1196310862252757003": 2597068,
+  "discord_246989032465235968": 4332864,
+  "discord_603003841973190667": 4088688,
+  "discord_542065225336225797": 4461236,
+  "discord_1553434967634354206": 4498137,
+  "discord_601441085142597651": 4336918,
+  "discord_1553551743395041331": 4460876,
+  "discord_1350580100868997231": 4288192,
+  "discord_221737492599144450": 4375258
+}
