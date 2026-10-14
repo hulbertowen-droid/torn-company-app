@@ -14482,47 +14482,45 @@ function getPreFilledVaultUrl(tornId, amount) {
 // Row 2 = secondary/external links, visually separated.
 // Never mix a primary action button and a link button in the same row.
 function buildBankRequestButtons(req) {
-    const vaultUrl = getPreFilledVaultUrl(req.tornId, req.amount);
     const amtFmt = Number(req.amount).toLocaleString();
+    // Fulfill link goes through our server so we can claim the request, then redirect to Torn vault
+    const fulfillViaServer = `https://torn-company-app-production.up.railway.app/api/bank/pay/${req.id}`;
 
     if (req.status === 'pending') {
-        const primaryActions = [
-            {
-                type: 2,
-                style: 3, // Green (Success) - interactive button to claim and fulfill
-                custom_id: `bank_pay_${req.id}`,
-                label: `💸 Fulfill ($${amtFmt})`
-            },
-            {
-                type: 2,
-                style: 4, // Red (Danger / Action)
-                custom_id: `bank_cancel_${req.id}`,
-                label: 'Cancel',
-                emoji: { name: '❌' }
-            }
-        ];
-        const secondaryLinks = [
-            {
-                type: 2,
-                style: 5, // External link on Row 2 straight to Torn Vault pre-filled
-                label: `Direct Vault Link ($${amtFmt})`,
-                url: vaultUrl,
-                emoji: { name: '🔗' }
-            }
-        ];
-        return UI.buttonLayout(primaryActions, secondaryLinks);
-    } else if (req.status === 'verifying') {
-        // When fulfilling, ONLY have the Open Torn Vault button directly to pre-filled vault
+        // Row 1: [💸 Fulfill ($amt) — URL link to server redirect] [❌ Cancel — interactive]
         return [
             {
                 type: 1,
                 components: [
                     {
                         type: 2,
-                        style: 5, // Link button directly to Torn Vault
-                        label: `Open Torn Vault ($${amtFmt})`,
-                        url: vaultUrl,
-                        emoji: { name: '🏠' }
+                        style: 5, // URL link — opens browser, server claims & redirects to Torn vault
+                        label: `💸 Fulfill ($${amtFmt})`,
+                        url: fulfillViaServer,
+                        emoji: { name: '💸' }
+                    },
+                    {
+                        type: 2,
+                        style: 4, // Red (Danger / Action)
+                        custom_id: `bank_cancel_${req.id}`,
+                        label: 'Cancel',
+                        emoji: { name: '❌' }
+                    }
+                ]
+            }
+        ];
+    } else if (req.status === 'verifying') {
+        // Verifying: ONLY an Unclaim button (restricted to the claiming banker via Isolation Guard)
+        return [
+            {
+                type: 1,
+                components: [
+                    {
+                        type: 2,
+                        style: 2, // Grey (Secondary)
+                        custom_id: `bank_unclaim_${req.id}`,
+                        label: '⏳ Unclaim',
+                        emoji: { name: '↩️' }
                     }
                 ]
             }
@@ -16151,9 +16149,14 @@ async function executeCancelRequest(reqId, interaction = null) {
     }
 }
 
-// ── 1-Click Direct Torn Vault Fulfillment Redirect (Legacy Support) ─────────
+// ── 1-Click Direct Torn Vault Fulfillment Redirect ──────────────────────────
+// The "Fulfill" button in Discord is a URL link (style 5) pointing here.
+// This route: 1) claims the request (pending → verifying), 2) records the banker,
+// 3) updates the Discord message, 4) starts background verification,
+// 5) redirects the banker's browser to the pre-filled Torn vault page.
 app.get('/api/bank/pay/:id', async (req, res) => {
     const reqId = String(req.params.id || '').trim();
+    const bankerDiscordId = String(req.query.banker || '').trim() || null;
     let bankReq = bankRequests[reqId];
 
     if (!bankReq) {
@@ -16194,6 +16197,19 @@ app.get('/api/bank/pay/:id', async (req, res) => {
             try {
                 bankReq.status = 'verifying';
                 bankReq.fulfilledAt = Date.now();
+
+                // Record the banker who clicked the Fulfill link
+                if (bankerDiscordId) {
+                    bankReq.fulfilledBy = bankerDiscordId;
+                    // Resolve username via bot if available
+                    if (slashCommandBot?.isReady?.()) {
+                        try {
+                            const bankerUser = await slashCommandBot.users.fetch(bankerDiscordId).catch(() => null);
+                            if (bankerUser) bankReq.fulfillerName = bankerUser.username;
+                        } catch(e) {}
+                    }
+                }
+
                 saveBankRequests();
 
                 if (bankReq.channelId && bankReq.messageId && slashCommandBot?.isReady?.()) {
