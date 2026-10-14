@@ -1499,7 +1499,9 @@ function startPolling() {
     if (document.hidden) return;
     if (fetchTimer) clearInterval(fetchTimer);
     let refreshMs = Math.max(3000, Math.floor(60000 / cpm));
-    fetchWarboard(); startRefreshProgressBar(refreshMs);
+    connectRealTimeStream();
+    fetchWarboard();
+    startRefreshProgressBar(refreshMs);
     fetchTimer = setInterval(() => {
         if (document.hidden) {
             stopPolling();
@@ -1568,9 +1570,307 @@ function getStatusPillClass(p) {
     return "offline";
 }
 
-// ─── Main Fetch ───────────────────────────────────────────────────────────────
+// ─── Main Fetch & Warboard Rendering Engine ──────────────────────────────────
 let isFetchingWarboard = false;
 let lastWarboardEtag = '';
+
+function renderWarboardPayload(data) {
+    if (!data) return;
+    
+    if (data.error) {
+        console.warn("Warboard API notice:", data.error);
+        if (currentFriendlyData.length === 0) {
+            const fList = document.getElementById("friendly-list");
+            if (fList) fList.innerHTML = `<div style="color:var(--red);padding:20px;font-weight:700;text-align:center;">${data.error}</div>`;
+        }
+        return;
+    }
+
+    if (!data.friendly || !Array.isArray(data.friendly) || (data.friendly.length === 0 && currentFriendlyData.length > 0)) {
+        console.warn("Transient empty data received from API — preserving existing board state");
+        return;
+    }
+
+    currentFriendlyData = data.friendly;
+    currentWarboardData = data;
+    const enemies = data.enemy || [];
+    const now = Math.floor(Date.now() / 1000);
+    const updatedEl = document.getElementById("last-updated");
+    if (updatedEl) updatedEl.innerText = `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}`;
+
+    // Update War Hero Header Strip
+    const heroTitle = document.getElementById("war-hero-title");
+    const heroSub = document.getElementById("war-hero-sub");
+    const scoreBlock = document.getElementById("war-score-block");
+    const warBadge = document.getElementById("war-status-badge");
+    const peacetimeScoutBar = document.getElementById("peacetime-scout-bar");
+    const enemyCardTitle = document.getElementById("enemy-card-title");
+    const scouterCurrentTarget = document.getElementById("scouter-current-target");
+
+    const isWarActive = data.warInfo && data.warInfo.active;
+    const recentWar = data.warInfo?.recentWar;
+    const myFaction = data.warInfo?.myFaction;
+
+    if (isWarActive) {
+        const war = data.warInfo;
+        if (heroTitle) heroTitle.innerText = `${war.myFaction?.name || 'Friendly'} vs ${war.enemyFaction?.name || 'Enemy'}`;
+        if (heroSub) heroSub.innerText = `Ranked War Active • Target Score: ${(war.target || 0).toLocaleString()}`;
+        if (warBadge) {
+            warBadge.className = "war-badge";
+            warBadge.innerText = "⚡ WAR ACTIVE";
+        }
+        if (peacetimeScoutBar) peacetimeScoutBar.style.display = "none";
+        if (enemyCardTitle) enemyCardTitle.innerHTML = `🔴 Enemy Targets`;
+
+        if (scoreBlock) {
+            scoreBlock.style.display = "flex";
+            const usScore = war.myFaction?.score || 0;
+            const themScore = war.enemyFaction?.score || 0;
+            const total = usScore + themScore;
+            const pct = total > 0 ? Math.round((usScore / total) * 100) : 50;
+
+            scoreBlock.innerHTML = `
+                <div class="score-side">
+                    <div class="score-num" id="score-us" style="color:var(--green);">${usScore.toLocaleString()}</div>
+                    <div class="score-label">Our Score</div>
+                </div>
+                <div class="score-vs">VS</div>
+                <div class="score-side">
+                    <div class="score-num" id="score-them" style="color:var(--red);">${themScore.toLocaleString()}</div>
+                    <div class="score-label">Enemy Score</div>
+                </div>
+                <div class="war-score-bar-wrap">
+                    <div class="war-score-bar-track">
+                        <div class="war-score-bar-fill ${pct < 45 ? 'danger' : ''}" id="war-bar-fill" style="width:${pct}%"></div>
+                    </div>
+                    <div class="war-score-bar-labels"><span>Us</span><span>Them</span></div>
+                </div>
+            `;
+        }
+    } else {
+        // 🟢 PEACETIME STANDBY & HYBRID RECAP MODE OR ⏳ UPCOMING WAR PREPARATION
+        const upcomingWar = data.warInfo?.upcomingWar;
+        if (upcomingWar) {
+            const uEnemy = upcomingWar.enemyFaction || {};
+            if (heroTitle) heroTitle.innerText = `${myFaction?.name || 'Spider-Verse'} vs ${uEnemy.name || 'Opponent'}`;
+            const secsUntil = Math.max(0, (upcomingWar.start || 0) - now);
+            const hLeft = Math.floor(secsUntil / 3600);
+            const mLeft = Math.floor((secsUntil % 3600) / 60);
+            const countdown = hLeft > 24 ? `${Math.floor(hLeft/24)}d ${hLeft%24}h` : `${hLeft}h ${mLeft}m`;
+            if (heroSub) heroSub.innerText = `⚔️ Ranked War Scheduled • Starts in ${countdown} • Target: ${(upcomingWar.target || 0).toLocaleString()} pts • Pre-War Intel Active`;
+            if (warBadge) {
+                warBadge.className = "war-badge upcoming";
+                warBadge.style.background = "rgba(255,165,2,0.15)";
+                warBadge.style.color = "var(--gold)";
+                warBadge.style.borderColor = "rgba(255,165,2,0.4)";
+                warBadge.innerText = "⏳ WAR SCHEDULED";
+            }
+            if (peacetimeScoutBar) peacetimeScoutBar.style.display = "block";
+            if (scouterCurrentTarget) {
+                scouterCurrentTarget.innerText = `${uEnemy.name || 'Opponent'} [${uEnemy.id || ''}]`;
+            }
+            if (enemyCardTitle) {
+                enemyCardTitle.innerHTML = `🔴 Opponent Roster <span style="font-size:0.75em;color:var(--text-dim);font-weight:600;">(${uEnemy.name || 'Opponent'} [${uEnemy.id || ''}])</span>`;
+            }
+            if (scoreBlock) {
+                scoreBlock.style.display = "flex";
+                scoreBlock.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:14px;background:rgba(255,165,2,0.06);padding:10px 18px;border-radius:10px;border:1px solid rgba(255,165,2,0.3);width:100%;justify-content:space-between;flex-wrap:wrap;">
+                        <div style="display:flex;align-items:center;gap:12px;">
+                            <span style="font-size:1.6em;">⏳</span>
+                            <div>
+                                <div style="font-size:0.88em;font-weight:800;color:var(--gold);">UPCOMING WAR: vs ${uEnemy.name || 'Opponent'} [${uEnemy.id || ''}]</div>
+                                <div style="font-size:0.74em;color:var(--text-dim);font-weight:600;margin-top:2px;">Starts in ${countdown} • Target: ${(upcomingWar.target || 0).toLocaleString()} pts • ${enemies.length} Opponent Targets Loaded for Pre-War Scouting</div>
+                            </div>
+                        </div>
+                        <div style="font-size:0.78em;color:var(--teal);font-weight:700;">Pre-War Scouting Active</div>
+                    </div>
+                `;
+            }
+        } else {
+            if (heroTitle) heroTitle.innerText = myFaction?.name ? `${myFaction.name} [${myFaction.id || ''}]` : 'Spider-Verse';
+            if (heroSub) heroSub.innerText = "Peacetime Standby • Faction Operations & Last War Performance Showcase";
+            if (warBadge) {
+                warBadge.className = "war-badge peace";
+                warBadge.style.background = "";
+                warBadge.style.color = "";
+                warBadge.style.borderColor = "";
+                warBadge.innerText = "🟢 STANDBY";
+            }
+            if (peacetimeScoutBar) peacetimeScoutBar.style.display = "block";
+            if (scouterCurrentTarget) {
+                const scoutTargetName = data.warInfo?.scoutedEnemy?.name || (recentWar ? recentWar.enemyName : 'None');
+                const scoutTargetId = data.warInfo?.scoutedEnemy?.id || (recentWar ? recentWar.enemyId : '');
+                scouterCurrentTarget.innerText = `${scoutTargetName} [${scoutTargetId}]`;
+            }
+            if (enemyCardTitle) {
+                const sName = data.warInfo?.scoutedEnemy?.name || (recentWar ? recentWar.enemyName : 'Opponent');
+                enemyCardTitle.innerHTML = `🔴 Opponent Scouter <span style="font-size:0.75em;color:var(--text-dim);font-weight:600;">(${sName})</span>`;
+            }
+
+            if (scoreBlock) {
+                if (recentWar) {
+                    scoreBlock.style.display = "flex";
+                    const outcomeColor = recentWar.isWon ? "var(--green)" : "var(--red)";
+                    const outcomeTag = recentWar.isWon ? "🏆 VICTORY" : "DEFEAT";
+                    scoreBlock.innerHTML = `
+                        <div style="display:flex;align-items:center;gap:14px;background:rgba(255,255,255,0.03);padding:10px 18px;border-radius:10px;border:1px solid var(--border);width:100%;justify-content:space-between;flex-wrap:wrap;">
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <span style="font-size:1.6em;">${recentWar.isWon ? '🏆' : '⚔️'}</span>
+                                <div>
+                                    <div style="font-size:0.88em;font-weight:800;color:var(--text-main);">LAST WAR: vs ${recentWar.enemyName} (${recentWar.ourScore.toLocaleString()} - ${recentWar.theirScore.toLocaleString()})</div>
+                                    <div style="font-size:0.74em;color:${outcomeColor};font-weight:700;margin-top:2px;">${outcomeTag} • +${(recentWar.margin || 0).toLocaleString()} pts Margin • ${recentWar.audited ? `${recentWar.totalHitsMade} hits made` : 'Completed War'}</div>
+                                </div>
+                            </div>
+                            <a href="/dashboard.html" style="background:rgba(0,206,201,0.12);color:var(--teal);border:1px solid var(--teal);padding:5px 12px;border-radius:6px;font-size:0.75em;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">📊 Full War Sentinel Audit &rarr;</a>
+                        </div>
+                    `;
+                } else {
+                    scoreBlock.style.display = "none";
+                }
+            }
+        }
+    }
+
+    // KPI counts
+    const friendlyOnline = data.friendly.filter(p => p.onlineStatus === "Online").length;
+    const friendlyFlying = data.friendly.filter(p => checkIsFlying(p)).length;
+    const friendlyHosp = data.friendly.filter(p => p.state === "Hospital" || p.state === "Jail").length;
+    const enemyOnline = enemies.filter(p => p.onlineStatus === "Online").length;
+    const enemyHosp = enemies.filter(p => p.state === "Hospital").length;
+    const enemyFlying = enemies.filter(p => checkIsFlying(p)).length;
+    const claimed = enemies.filter(p => p.claimedBy).length;
+    const chainCount = myFaction?.chain || 0;
+    const chainMax = myFaction?.chainMax || 100;
+
+    const kpiIcon1 = document.getElementById("kpi-icon-1");
+    const kpiLbl1 = document.getElementById("kpi-lbl-1");
+    const kpiFriendlyOnline = document.getElementById("kpi-friendly-online");
+    const kpiFriendlyTotal = document.getElementById("kpi-friendly-total");
+    const kpiIcon2 = document.getElementById("kpi-icon-2");
+    const kpiLbl2 = document.getElementById("kpi-lbl-2");
+    const kpiEnemyOnline = document.getElementById("kpi-enemy-online");
+    const kpiEnemyTotal = document.getElementById("kpi-enemy-total");
+    const kpiIcon3 = document.getElementById("kpi-icon-3");
+    const kpiLbl3 = document.getElementById("kpi-lbl-3");
+    const kpiEnemyHosp = document.getElementById("kpi-enemy-hosp");
+    const kpiSub3 = document.getElementById("kpi-sub-3");
+    const kpiIcon4 = document.getElementById("kpi-icon-4");
+    const kpiLbl4 = document.getElementById("kpi-lbl-4");
+    const kpiEnemyFlying = document.getElementById("kpi-enemy-flying");
+    const kpiSub4 = document.getElementById("kpi-sub-4");
+    const kpiIcon5 = document.getElementById("kpi-icon-5");
+    const kpiLbl5 = document.getElementById("kpi-lbl-5");
+    const kpiClaimed = document.getElementById("kpi-claimed");
+    const kpiSub5 = document.getElementById("kpi-sub-5");
+
+    if (isWarActive) {
+        if (kpiIcon1) kpiIcon1.innerText = "🟢";
+        if (kpiLbl1) kpiLbl1.innerText = "Friendly Online";
+        if (kpiFriendlyOnline) kpiFriendlyOnline.innerText = friendlyOnline;
+        if (kpiFriendlyTotal) kpiFriendlyTotal.innerText = `of ${data.friendly.length} members`;
+
+        if (kpiIcon2) kpiIcon2.innerText = "🎯";
+        if (kpiLbl2) kpiLbl2.innerText = "Enemy Online";
+        if (kpiEnemyOnline) { kpiEnemyOnline.style.color = "var(--red)"; kpiEnemyOnline.innerText = enemyOnline; }
+        if (kpiEnemyTotal) kpiEnemyTotal.innerText = `of ${enemies.length} targets`;
+
+        if (kpiIcon3) kpiIcon3.innerText = "🏥";
+        if (kpiLbl3) kpiLbl3.innerText = "Enemy Hospitalized";
+        if (kpiEnemyHosp) kpiEnemyHosp.innerText = enemyHosp;
+        if (kpiSub3) kpiSub3.innerText = "In hospital now";
+
+        if (kpiIcon4) kpiIcon4.innerText = "✈️";
+        if (kpiLbl4) kpiLbl4.innerText = "Enemy Traveling";
+        if (kpiEnemyFlying) { kpiEnemyFlying.style.color = "var(--blue)"; kpiEnemyFlying.innerText = enemyFlying; }
+        if (kpiSub4) kpiSub4.innerText = "Landing soon";
+
+        if (kpiIcon5) kpiIcon5.innerText = "🎯";
+        if (kpiLbl5) kpiLbl5.innerText = "Claimed Targets";
+        if (kpiClaimed) { kpiClaimed.style.color = "var(--purple)"; kpiClaimed.innerText = claimed; }
+        if (kpiSub5) kpiSub5.innerText = "Active claims";
+    } else {
+        if (kpiIcon1) kpiIcon1.innerText = "🟢";
+        if (kpiLbl1) kpiLbl1.innerText = "Friendly Online";
+        if (kpiFriendlyOnline) kpiFriendlyOnline.innerText = friendlyOnline;
+        if (kpiFriendlyTotal) kpiFriendlyTotal.innerText = `of ${data.friendly.length} members active`;
+
+        if (kpiIcon2) kpiIcon2.innerText = "✈️";
+        if (kpiLbl2) kpiLbl2.innerText = "Members Traveling";
+        if (kpiEnemyOnline) { kpiEnemyOnline.style.color = "var(--blue)"; kpiEnemyOnline.innerText = friendlyFlying; }
+        if (kpiEnemyTotal) kpiEnemyTotal.innerText = "Running plushies / flowers";
+
+        if (kpiIcon3) kpiIcon3.innerText = "🏥";
+        if (kpiLbl3) kpiLbl3.innerText = "In Hospital / Jail";
+        if (kpiEnemyHosp) kpiEnemyHosp.innerText = friendlyHosp;
+        if (kpiSub3) kpiSub3.innerText = friendlyHosp > 0 ? "Needs medical / revive" : "All members healthy";
+
+        if (kpiIcon4) kpiIcon4.innerText = "🔗";
+        if (kpiLbl4) kpiLbl4.innerText = "Faction Chain";
+        if (kpiEnemyFlying) { kpiEnemyFlying.style.color = "var(--gold)"; kpiEnemyFlying.innerText = chainCount > 0 ? `${chainCount}` : "Ready"; }
+        if (kpiSub4) kpiSub4.innerText = chainCount > 0 ? `Chain in progress (${chainCount}/${chainMax})` : "Standing by for chain";
+
+        if (kpiIcon5) kpiIcon5.innerText = recentWar?.isWon ? "🏆" : "⚔️";
+        if (kpiLbl5) kpiLbl5.innerText = recentWar ? "Last War Score" : "Ranked War";
+        if (kpiClaimed) { kpiClaimed.style.color = recentWar?.isWon ? "var(--green)" : "var(--teal)"; kpiClaimed.innerText = recentWar ? `${recentWar.ourScore} - ${recentWar.theirScore}` : "Ready"; }
+        if (kpiSub5) kpiSub5.innerText = recentWar ? `vs ${recentWar.enemyName}` : "Awaiting matchup";
+    }
+
+    const friendlyCountEl = document.getElementById("friendly-count");
+    if (friendlyCountEl) friendlyCountEl.innerText = data.friendly.length;
+    const enemyCountEl = document.getElementById("enemy-count");
+    if (enemyCountEl) enemyCountEl.innerText = enemies.length;
+
+    // Process enemy / scouted targets
+    if (enemies.length > 0) {
+        processNotifications(enemies);
+        renderWatchlist(enemies);
+        renderHeatmap(enemies, data.premiumActive);
+        currentEnemyData = sortPlayersList(enemies, true);
+        renderEnemyList(currentEnemyData, data.premiumActive);
+    } else {
+        const enemyListEl = document.getElementById("enemy-list");
+        if (enemyListEl) {
+            enemyListEl.innerHTML = `<div class="empty-state">No targets loaded. Enter an upcoming opponent Faction ID in the Scouter above to inspect their roster and 24h activity heatmap before the war starts.</div>`;
+        }
+    }
+    renderFriendlyList(sortPlayersList(data.friendly, false), data.premiumActive);
+    renderChart(data.friendly);
+    renderMiniHud(data);
+    loadWarboardBounties();
+
+    // Update Chart Sync Bar
+    const syncBanner = document.getElementById("chart-sync-banner");
+    const syncText = document.getElementById("chart-sync-text");
+    const syncBar = document.getElementById("chart-sync-bar");
+    const syncPct = document.getElementById("chart-sync-pct");
+    const syncDot = document.getElementById("chart-sync-dot");
+
+    if (data.syncStatus && syncBanner) {
+        if (data.syncStatus.isSyncing) {
+            isActivelySyncingHits = true;
+            hasShownSyncCompleteNotice = false;
+            syncBanner.style.display = "flex";
+            if (syncText) syncText.innerText = `🔄 Syncing Attack History (Page ${data.syncStatus.page || 1} • ${data.syncStatus.totalHitsLoaded || 0} hits loaded)...`;
+            if (syncBar) syncBar.style.width = `${data.syncStatus.percent || 10}%`;
+            if (syncPct) syncPct.innerText = `${data.syncStatus.percent || 10}%`;
+            if (syncDot) { syncDot.style.background = "var(--blue)"; syncDot.style.boxShadow = "0 0 8px var(--blue)"; }
+        } else if (isActivelySyncingHits && !hasShownSyncCompleteNotice) {
+            isActivelySyncingHits = false;
+            hasShownSyncCompleteNotice = true;
+            syncBanner.style.display = "flex";
+            if (syncText) syncText.innerText = `✅ War Attacks & Graph Fully Loaded (${data.syncStatus.totalHitsLoaded || 0} total attacks analyzed)`;
+            if (syncBar) syncBar.style.width = "100%";
+            if (syncPct) syncPct.innerText = "100%";
+            if (syncDot) { syncDot.style.background = "var(--green)"; syncDot.style.boxShadow = "0 0 8px var(--green)"; }
+            setTimeout(() => { 
+                if (syncBanner && !isActivelySyncingHits) syncBanner.style.display = "none"; 
+            }, 4000);
+        } else if (!isActivelySyncingHits) {
+            syncBanner.style.display = "none";
+        }
+    }
+}
 
 async function fetchWarboard() {
     if (isFetchingWarboard || document.hidden) return;
@@ -1585,291 +1885,19 @@ async function fetchWarboard() {
         if (lastWarboardEtag) reqHeaders['If-None-Match'] = lastWarboardEtag;
         const res = await fetch(`/api/warboard`, { headers: reqHeaders });
         if (res.status === 304) {
-            document.getElementById("last-updated").innerText = `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}`;
+            const updatedEl = document.getElementById("last-updated");
+            if (updatedEl) updatedEl.innerText = `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}`;
             return;
         }
         const etagHeader = res.headers.get('ETag');
         if (etagHeader) lastWarboardEtag = etagHeader;
         const data = await res.json();
-        
-        if (data.error) {
-            console.warn("Warboard API transient notice:", data.error);
-            if (currentFriendlyData.length === 0) {
-                document.getElementById("friendly-list").innerHTML = `<div style="color:var(--red);padding:20px;font-weight:700;text-align:center;">${data.error}</div>`;
-            }
-            return;
-        }
-
-        if (!data.friendly || !Array.isArray(data.friendly) || (data.friendly.length === 0 && currentFriendlyData.length > 0)) {
-            console.warn("Transient empty data received from API — preserving existing board state");
-            return;
-        }
-
-        currentFriendlyData = data.friendly;
-        currentWarboardData = data;
-        const enemies = data.enemy || [];
-        const now = Math.floor(Date.now() / 1000);
-        document.getElementById("last-updated").innerText = `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}`;
-
-        // Update War Hero Header Strip
-        const heroTitle = document.getElementById("war-hero-title");
-        const heroSub = document.getElementById("war-hero-sub");
-        const scoreBlock = document.getElementById("war-score-block");
-        const warBadge = document.getElementById("war-status-badge");
-        const peacetimeScoutBar = document.getElementById("peacetime-scout-bar");
-        const enemyCardTitle = document.getElementById("enemy-card-title");
-        const scouterCurrentTarget = document.getElementById("scouter-current-target");
-
-        const isWarActive = data.warInfo && data.warInfo.active;
-        const recentWar = data.warInfo?.recentWar;
-        const myFaction = data.warInfo?.myFaction;
-
-        if (isWarActive) {
-            const war = data.warInfo;
-            if (heroTitle) heroTitle.innerText = `${war.myFaction?.name || 'Friendly'} vs ${war.enemyFaction?.name || 'Enemy'}`;
-            if (heroSub) heroSub.innerText = `Ranked War Active • Target Score: ${(war.target || 0).toLocaleString()}`;
-            if (warBadge) {
-                warBadge.className = "war-badge";
-                warBadge.innerText = "⚡ WAR ACTIVE";
-            }
-            if (peacetimeScoutBar) peacetimeScoutBar.style.display = "none";
-            if (enemyCardTitle) enemyCardTitle.innerHTML = `🔴 Enemy Targets`;
-
-            if (scoreBlock) {
-                scoreBlock.style.display = "flex";
-                const usScore = war.myFaction?.score || 0;
-                const themScore = war.enemyFaction?.score || 0;
-                const total = usScore + themScore;
-                const pct = total > 0 ? Math.round((usScore / total) * 100) : 50;
-
-                scoreBlock.innerHTML = `
-                    <div class="score-side">
-                        <div class="score-num" id="score-us" style="color:var(--green);">${usScore.toLocaleString()}</div>
-                        <div class="score-label">Our Score</div>
-                    </div>
-                    <div class="score-vs">VS</div>
-                    <div class="score-side">
-                        <div class="score-num" id="score-them" style="color:var(--red);">${themScore.toLocaleString()}</div>
-                        <div class="score-label">Enemy Score</div>
-                    </div>
-                    <div class="war-score-bar-wrap">
-                        <div class="war-score-bar-track">
-                            <div class="war-score-bar-fill ${pct < 45 ? 'danger' : ''}" id="war-bar-fill" style="width:${pct}%"></div>
-                        </div>
-                        <div class="war-score-bar-labels"><span>Us</span><span>Them</span></div>
-                    </div>
-                `;
-            }
-        } else {
-            // 🟢 PEACETIME STANDBY & HYBRID RECAP MODE OR ⏳ UPCOMING WAR PREPARATION
-            const upcomingWar = data.warInfo?.upcomingWar;
-            if (upcomingWar) {
-                const uEnemy = upcomingWar.enemyFaction || {};
-                if (heroTitle) heroTitle.innerText = `${myFaction?.name || 'Spider-Verse'} vs ${uEnemy.name || 'Opponent'}`;
-                const secsUntil = Math.max(0, (upcomingWar.start || 0) - now);
-                const hLeft = Math.floor(secsUntil / 3600);
-                const mLeft = Math.floor((secsUntil % 3600) / 60);
-                const countdown = hLeft > 24 ? `${Math.floor(hLeft/24)}d ${hLeft%24}h` : `${hLeft}h ${mLeft}m`;
-                if (heroSub) heroSub.innerText = `⚔️ Ranked War Scheduled • Starts in ${countdown} • Target: ${(upcomingWar.target || 0).toLocaleString()} pts • Pre-War Intel Active`;
-                if (warBadge) {
-                    warBadge.className = "war-badge upcoming";
-                    warBadge.style.background = "rgba(255,165,2,0.15)";
-                    warBadge.style.color = "var(--gold)";
-                    warBadge.style.borderColor = "rgba(255,165,2,0.4)";
-                    warBadge.innerText = "⏳ WAR SCHEDULED";
-                }
-                if (peacetimeScoutBar) peacetimeScoutBar.style.display = "block";
-                if (scouterCurrentTarget) {
-                    scouterCurrentTarget.innerText = `${uEnemy.name || 'Opponent'} [${uEnemy.id || ''}]`;
-                }
-                if (enemyCardTitle) {
-                    enemyCardTitle.innerHTML = `🔴 Opponent Roster <span style="font-size:0.75em;color:var(--text-dim);font-weight:600;">(${uEnemy.name || 'Opponent'} [${uEnemy.id || ''}])</span>`;
-                }
-                if (scoreBlock) {
-                    scoreBlock.style.display = "flex";
-                    scoreBlock.innerHTML = `
-                        <div style="display:flex;align-items:center;gap:14px;background:rgba(255,165,2,0.06);padding:10px 18px;border-radius:10px;border:1px solid rgba(255,165,2,0.3);width:100%;justify-content:space-between;flex-wrap:wrap;">
-                            <div style="display:flex;align-items:center;gap:12px;">
-                                <span style="font-size:1.6em;">⏳</span>
-                                <div>
-                                    <div style="font-size:0.88em;font-weight:800;color:var(--gold);">UPCOMING WAR: vs ${uEnemy.name || 'Opponent'} [${uEnemy.id || ''}]</div>
-                                    <div style="font-size:0.74em;color:var(--text-dim);font-weight:600;margin-top:2px;">Starts in ${countdown} • Target: ${(upcomingWar.target || 0).toLocaleString()} pts • ${enemies.length} Opponent Targets Loaded for Pre-War Scouting</div>
-                                </div>
-                            </div>
-                            <div style="font-size:0.78em;color:var(--teal);font-weight:700;">Pre-War Scouting Active</div>
-                        </div>
-                    `;
-                }
-            } else {
-                if (heroTitle) heroTitle.innerText = myFaction?.name ? `${myFaction.name} [${myFaction.id || ''}]` : 'Spider-Verse';
-                if (heroSub) heroSub.innerText = "Peacetime Standby • Faction Operations & Last War Performance Showcase";
-                if (warBadge) {
-                    warBadge.className = "war-badge peace";
-                    warBadge.style.background = "";
-                    warBadge.style.color = "";
-                    warBadge.style.borderColor = "";
-                    warBadge.innerText = "🟢 STANDBY";
-                }
-                if (peacetimeScoutBar) peacetimeScoutBar.style.display = "block";
-                if (scouterCurrentTarget) {
-                    const scoutTargetName = data.warInfo?.scoutedEnemy?.name || (recentWar ? recentWar.enemyName : 'None');
-                    const scoutTargetId = data.warInfo?.scoutedEnemy?.id || (recentWar ? recentWar.enemyId : '');
-                    scouterCurrentTarget.innerText = `${scoutTargetName} [${scoutTargetId}]`;
-                }
-                if (enemyCardTitle) {
-                    const sName = data.warInfo?.scoutedEnemy?.name || (recentWar ? recentWar.enemyName : 'Opponent');
-                    enemyCardTitle.innerHTML = `🔴 Opponent Scouter <span style="font-size:0.75em;color:var(--text-dim);font-weight:600;">(${sName})</span>`;
-                }
-
-                if (scoreBlock) {
-                    if (recentWar) {
-                        scoreBlock.style.display = "flex";
-                        const outcomeColor = recentWar.isWon ? "var(--green)" : "var(--red)";
-                        const outcomeTag = recentWar.isWon ? "🏆 VICTORY" : "DEFEAT";
-                        scoreBlock.innerHTML = `
-                            <div style="display:flex;align-items:center;gap:14px;background:rgba(255,255,255,0.03);padding:10px 18px;border-radius:10px;border:1px solid var(--border);width:100%;justify-content:space-between;flex-wrap:wrap;">
-                                <div style="display:flex;align-items:center;gap:12px;">
-                                    <span style="font-size:1.6em;">${recentWar.isWon ? '🏆' : '⚔️'}</span>
-                                    <div>
-                                        <div style="font-size:0.88em;font-weight:800;color:var(--text-main);">LAST WAR: vs ${recentWar.enemyName} (${recentWar.ourScore.toLocaleString()} - ${recentWar.theirScore.toLocaleString()})</div>
-                                        <div style="font-size:0.74em;color:${outcomeColor};font-weight:700;margin-top:2px;">${outcomeTag} • +${(recentWar.margin || 0).toLocaleString()} pts Margin • ${recentWar.audited ? `${recentWar.totalHitsMade} hits made` : 'Completed War'}</div>
-                                    </div>
-                                </div>
-                                <a href="/dashboard.html" style="background:rgba(0,206,201,0.12);color:var(--teal);border:1px solid var(--teal);padding:5px 12px;border-radius:6px;font-size:0.75em;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">📊 Full War Sentinel Audit &rarr;</a>
-                            </div>
-                        `;
-                    } else {
-                        scoreBlock.style.display = "none";
-                    }
-                }
-            }
-        }
-
-        // KPI counts
-        const friendlyOnline = data.friendly.filter(p => p.onlineStatus === "Online").length;
-        const friendlyFlying = data.friendly.filter(p => checkIsFlying(p)).length;
-        const friendlyHosp = data.friendly.filter(p => p.state === "Hospital" || p.state === "Jail").length;
-        const enemyOnline = enemies.filter(p => p.onlineStatus === "Online").length;
-        const enemyHosp = enemies.filter(p => p.state === "Hospital").length;
-        const enemyFlying = enemies.filter(p => checkIsFlying(p)).length;
-        const claimed = enemies.filter(p => p.claimedBy).length;
-        const chainCount = myFaction?.chain || 0;
-        const chainMax = myFaction?.chainMax || 100;
-
-        if (isWarActive) {
-            document.getElementById("kpi-icon-1").innerText = "🟢";
-            document.getElementById("kpi-lbl-1").innerText = "Friendly Online";
-            document.getElementById("kpi-friendly-online").innerText = friendlyOnline;
-            document.getElementById("kpi-friendly-total").innerText = `of ${data.friendly.length} members`;
-
-            document.getElementById("kpi-icon-2").innerText = "🎯";
-            document.getElementById("kpi-lbl-2").innerText = "Enemy Online";
-            document.getElementById("kpi-enemy-online").style.color = "var(--red)";
-            document.getElementById("kpi-enemy-online").innerText = enemyOnline;
-            document.getElementById("kpi-enemy-total").innerText = `of ${enemies.length} targets`;
-
-            document.getElementById("kpi-icon-3").innerText = "🏥";
-            document.getElementById("kpi-lbl-3").innerText = "Enemy Hospitalized";
-            document.getElementById("kpi-enemy-hosp").innerText = enemyHosp;
-            document.getElementById("kpi-sub-3").innerText = "In hospital now";
-
-            document.getElementById("kpi-icon-4").innerText = "✈️";
-            document.getElementById("kpi-lbl-4").innerText = "Enemy Traveling";
-            document.getElementById("kpi-enemy-flying").style.color = "var(--blue)";
-            document.getElementById("kpi-enemy-flying").innerText = enemyFlying;
-            document.getElementById("kpi-sub-4").innerText = "Landing soon";
-
-            document.getElementById("kpi-icon-5").innerText = "🎯";
-            document.getElementById("kpi-lbl-5").innerText = "Claimed Targets";
-            document.getElementById("kpi-claimed").style.color = "var(--purple)";
-            document.getElementById("kpi-claimed").innerText = claimed;
-            document.getElementById("kpi-sub-5").innerText = "Active claims";
-        } else {
-            // PEACETIME OPERATIONAL KPIS (No dead zeros!)
-            document.getElementById("kpi-icon-1").innerText = "🟢";
-            document.getElementById("kpi-lbl-1").innerText = "Friendly Online";
-            document.getElementById("kpi-friendly-online").innerText = friendlyOnline;
-            document.getElementById("kpi-friendly-total").innerText = `of ${data.friendly.length} members active`;
-
-            document.getElementById("kpi-icon-2").innerText = "✈️";
-            document.getElementById("kpi-lbl-2").innerText = "Members Traveling";
-            document.getElementById("kpi-enemy-online").style.color = "var(--blue)";
-            document.getElementById("kpi-enemy-online").innerText = friendlyFlying;
-            document.getElementById("kpi-enemy-total").innerText = "Running plushies / flowers";
-
-            document.getElementById("kpi-icon-3").innerText = "🏥";
-            document.getElementById("kpi-lbl-3").innerText = "In Hospital / Jail";
-            document.getElementById("kpi-enemy-hosp").innerText = friendlyHosp;
-            document.getElementById("kpi-sub-3").innerText = friendlyHosp > 0 ? "Needs medical / revive" : "All members healthy";
-
-            document.getElementById("kpi-icon-4").innerText = "🔗";
-            document.getElementById("kpi-lbl-4").innerText = "Faction Chain";
-            document.getElementById("kpi-enemy-flying").style.color = "var(--gold)";
-            document.getElementById("kpi-enemy-flying").innerText = chainCount > 0 ? `${chainCount}` : "Ready";
-            document.getElementById("kpi-sub-4").innerText = chainCount > 0 ? `Chain in progress (${chainCount}/${chainMax})` : "Standing by for chain";
-
-            document.getElementById("kpi-icon-5").innerText = recentWar?.isWon ? "🏆" : "⚔️";
-            document.getElementById("kpi-lbl-5").innerText = recentWar ? "Last War Score" : "Ranked War";
-            document.getElementById("kpi-claimed").style.color = recentWar?.isWon ? "var(--green)" : "var(--teal)";
-            document.getElementById("kpi-claimed").innerText = recentWar ? `${recentWar.ourScore} - ${recentWar.theirScore}` : "Ready";
-            document.getElementById("kpi-sub-5").innerText = recentWar ? `vs ${recentWar.enemyName}` : "Awaiting matchup";
-        }
-
-        document.getElementById("friendly-count").innerText = data.friendly.length;
-        document.getElementById("enemy-count").innerText = enemies.length;
-
-        // Process enemy / scouted targets
-        if (enemies.length > 0) {
-            processNotifications(enemies);
-            renderWatchlist(enemies);
-            renderHeatmap(enemies, data.premiumActive);
-            currentEnemyData = sortPlayersList(enemies, true);
-            renderEnemyList(currentEnemyData, data.premiumActive);
-        } else {
-            const enemyListEl = document.getElementById("enemy-list");
-            if (enemyListEl) {
-                enemyListEl.innerHTML = `<div class="empty-state">No targets loaded. Enter an upcoming opponent Faction ID in the Scouter above to inspect their roster and 24h activity heatmap before the war starts.</div>`;
-            }
-        }
-        renderFriendlyList(sortPlayersList(data.friendly, false), data.premiumActive);
-        renderChart(data.friendly);
-        renderMiniHud(data);
-        loadWarboardBounties();
-
-        // Update Chart Sync Bar
-        const syncBanner = document.getElementById("chart-sync-banner");
-        const syncText = document.getElementById("chart-sync-text");
-        const syncBar = document.getElementById("chart-sync-bar");
-        const syncPct = document.getElementById("chart-sync-pct");
-        const syncDot = document.getElementById("chart-sync-dot");
-
-        if (data.syncStatus && syncBanner) {
-            if (data.syncStatus.isSyncing) {
-                isActivelySyncingHits = true;
-                hasShownSyncCompleteNotice = false;
-                syncBanner.style.display = "flex";
-                if (syncText) syncText.innerText = `🔄 Syncing Attack History (Page ${data.syncStatus.page || 1} • ${data.syncStatus.totalHitsLoaded || 0} hits loaded)...`;
-                if (syncBar) syncBar.style.width = `${data.syncStatus.percent || 10}%`;
-                if (syncPct) syncPct.innerText = `${data.syncStatus.percent || 10}%`;
-                if (syncDot) { syncDot.style.background = "var(--blue)"; syncDot.style.boxShadow = "0 0 8px var(--blue)"; }
-            } else if (isActivelySyncingHits && !hasShownSyncCompleteNotice) {
-                // Only flash completion banner once right after an active sync completes!
-                isActivelySyncingHits = false;
-                hasShownSyncCompleteNotice = true;
-                syncBanner.style.display = "flex";
-                if (syncText) syncText.innerText = `✅ War Attacks & Graph Fully Loaded (${data.syncStatus.totalHitsLoaded || 0} total attacks analyzed)`;
-                if (syncBar) syncBar.style.width = "100%";
-                if (syncPct) syncPct.innerText = "100%";
-                if (syncDot) { syncDot.style.background = "var(--green)"; syncDot.style.boxShadow = "0 0 8px var(--green)"; }
-                setTimeout(() => { 
-                    if (syncBanner && !isActivelySyncingHits) syncBanner.style.display = "none"; 
-                }, 4000);
-            } else if (!isActivelySyncingHits) {
-                // Otherwise remain completely hidden so it never flashes every 5 seconds
-                syncBanner.style.display = "none";
-            }
-        }
-    } catch(e) { console.error("Warboard fetch failed:", e); } finally { isFetchingWarboard = false; }
+        renderWarboardPayload(data);
+    } catch(e) { 
+        console.error("Warboard fetch failed:", e); 
+    } finally { 
+        isFetchingWarboard = false; 
+    }
 }
 
 // ─── Peacetime Pre-War Scouter Actions ───────────────────────────────────────

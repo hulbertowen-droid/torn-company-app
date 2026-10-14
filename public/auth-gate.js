@@ -11,14 +11,8 @@
     'use strict';
 
     const SPIDERVERSE_PAGES = [
-        '/',
-        '/index.html',
-        '/chain.html',
-        '/oc.html',
         '/payout.html',
-        '/discord.html',
-        '/members.html',
-        '/ai-sandbox.html'
+        '/discord.html'
     ];
 
     // ─────────────────────────────────────────────────────────────
@@ -318,7 +312,7 @@
 
     function isSpiderVerseRestrictedPage() {
         const p = getCurrentPath();
-        return SPIDERVERSE_PAGES.includes(p) || p.endsWith('index.html') || p.endsWith('chain.html') || p.endsWith('oc.html') || p.endsWith('payout.html') || p.endsWith('discord.html') || p.endsWith('members.html') || p.endsWith('ai-sandbox.html');
+        return SPIDERVERSE_PAGES.includes(p) || p.endsWith('payout.html') || p.endsWith('discord.html');
     }
 
     // Auth State
@@ -439,14 +433,16 @@
     function handleUnauthenticated() {
         const isRestricted = isSpiderVerseRestrictedPage();
         if (isRestricted) {
-            // Prompt modal on restricted modules
-            showConnectModal(false);
+            // Prompt modal on restricted modules with close button available
+            showConnectModal(true);
         } else {
-            // For public tools, inject a clean "Connect Torn Key" button in the sidebar or header
+            // For public & live warboard tools, inject a clean "Connect Torn Key" button in sidebar/header
             injectConnectButton();
-            // Trigger public page load anyway so users can see public elements
+            // Automatically trigger live warboard polling and page initialization
+            if (typeof window.startPolling === 'function') window.startPolling();
             if (typeof window.initPage === 'function') window.initPage();
             if (typeof window.loadAll === 'function') window.loadAll();
+            if (typeof window.loadRoster === 'function') window.loadRoster();
         }
     }
 
