@@ -14305,8 +14305,8 @@ function checkExpiredBankRequests() {
                     } catch(e) {}
                 })();
             }
-        } else if (req.status === 'verifying' && (now - (req.fulfilledAt || req.timestamp) > 3.5 * 60 * 1000)) {
-            // Safety timeout: if left in verifying for >3.5m (e.g. server restart during loop), revert to pending
+        } else if (req.status === 'verifying' && (now - (req.fulfilledAt || req.timestamp) > 60 * 1000)) {
+            // Revert to unclaimed (pending) after 60 seconds unfulfilled
             req.status = 'pending';
             req.fulfilledBy = null;
             req.fulfillerName = null;
@@ -14335,8 +14335,8 @@ function checkExpiredBankRequests() {
     if (changed) saveBankRequests();
 }
 
-// Run expiry check every 2 minutes
-setInterval(checkExpiredBankRequests, 2 * 60 * 1000);
+// Run expiry check every 15 seconds (catches 60s unfulfilled requests promptly)
+setInterval(checkExpiredBankRequests, 15 * 1000);
 
 function formatTimeAgo(timestamp) {
     if (!timestamp) return 'just now';
@@ -14512,32 +14512,21 @@ function buildBankRequestButtons(req) {
         ];
         return UI.buttonLayout(primaryActions, secondaryLinks);
     } else if (req.status === 'verifying') {
-        const primaryActions = [
+        // When fulfilling, ONLY have the Open Torn Vault button directly to pre-filled vault
+        return [
             {
-                type: 2,
-                style: 1, // Primary (Blue)
-                custom_id: `bank_check_${req.id}`,
-                label: 'Check Logs',
-                emoji: { name: '📋' }
-            },
-            {
-                type: 2,
-                style: 2, // Secondary (Grey)
-                custom_id: `bank_unclaim_${req.id}`,
-                label: 'Unclaim',
-                emoji: { name: '⏳' }
+                type: 1,
+                components: [
+                    {
+                        type: 2,
+                        style: 5, // Link button directly to Torn Vault
+                        label: `Open Torn Vault ($${amtFmt})`,
+                        url: vaultUrl,
+                        emoji: { name: '🏠' }
+                    }
+                ]
             }
         ];
-        const secondaryLinks = [
-            {
-                type: 2,
-                style: 5, // External link on Row 2
-                label: `Open Torn Vault ($${amtFmt})`,
-                url: vaultUrl,
-                emoji: { name: '🏠' }
-            }
-        ];
-        return UI.buttonLayout(primaryActions, secondaryLinks);
     } else {
         // fulfilled, cancelled, expired — NO buttons at all (clean card)
         return [];
@@ -14995,8 +14984,8 @@ async function checkFactionLogForPayment(req, apiKey) {
 
 // ── Background Polling for Log Verification ────────────────────────────────
 async function verifyBankPayment(req, apiKey, botClient) {
-    const maxWait = 5 * 60 * 1000;  // 5-minute window to find the payment in logs
-    const pollInterval = 3500;      // high-speed 3.5s poller
+    const maxWait = 60 * 1000;       // 60-second window to find the payment in logs
+    const pollInterval = 2500;      // high-speed 2.5s poller
     const startedAt = Date.now();
 
     const updateMsg = async () => {
@@ -15039,7 +15028,7 @@ async function verifyBankPayment(req, apiKey, botClient) {
         } catch(e) {}
     }
 
-    // 5 minutes elapsed and still not verified — revert to pending
+    // 60 seconds elapsed and still not verified — revert to unclaimed (pending)
     if (req.status === 'verifying') {
         const bankerId = req.fulfilledBy;
         req.status = 'pending';
@@ -15054,7 +15043,7 @@ async function verifyBankPayment(req, apiKey, botClient) {
                 const bankerUser = await botClient.users.fetch(bankerId).catch(() => null);
                 if (bankerUser) {
                     await bankerUser.send(
-                        `⚠️ **Faction Vault Alert:** Request **#${req.id}** (\$${Number(req.amount).toLocaleString()} for **${req.tornName || 'member'}**) was **not found in Torn faction logs after 5 minutes** and has been reverted to pending.\n\nIf you already gave the cash in Torn, the payment may have been sent to the wrong person or the logs were not matching. Please check Torn and re-fulfill if needed.`
+                        `⚠️ **Faction Vault Alert:** Request **#${req.id}** ($${Number(req.amount).toLocaleString()} for **${req.tornName || 'member'}**) was **not found in Torn faction logs within 60 seconds** and has returned to unclaimed for any banker to take.\n\nIf you still wish to fulfill it, click **💸 Fulfill** on the Discord request card.`
                     ).catch(() => {});
                 }
             } catch(e) {}
@@ -16011,7 +16000,7 @@ async function executeFulfillRequest(reqId, interaction) {
             } catch(e) {}
         }
 
-        // Start background poller (5 minutes)
+        // Start background poller (60 seconds)
         const client = interaction?.client || slashCommandBot;
         if (client) {
             verifyBankPayment(req, apiKey, client).catch(() => {});
@@ -16024,8 +16013,8 @@ async function executeFulfillRequest(reqId, interaction) {
                      `1. Click here to open the Torn Vault with pre-filled recipient and amount:\n` +
                      `👉 **[💸 Open Pre-filled Vault in Torn ($${amtFmt})](${prefilledUrl})**\n\n` +
                      `2. Complete the cash transfer in Torn.\n\n` +
-                     `• The bot is watching faction logs and will **automatically mark this fulfilled** once Torn registers the transfer (up to 5 minutes).\n` +
-                     `• If you need to cancel this fulfillment, click **"⏳ Unclaim"** on the message to release it for another banker.`
+                     `• The bot is watching faction logs and will **automatically mark this fulfilled** once Torn registers the transfer.\n` +
+                     `• If unfulfilled within **60 seconds**, this request will automatically return to unclaimed for another banker.`
         };
     } finally {
         if (!isLockedByCaller) {
@@ -16116,6 +16105,13 @@ async function executeCancelRequest(reqId, interaction = null) {
             (interaction?.member?.permissions?.has?.('Administrator'));
         if (!isRequester && !isBankerOrAdmin) {
             return { success: false, message: `⚠️ Only <@${req.userId}> (the requester) or a banker/admin can cancel this request.` };
+        }
+
+        if (req.status === 'verifying' && req.fulfilledBy && req.fulfilledBy !== interaction?.user?.id) {
+            return {
+                success: false,
+                message: `⚠️ Request **#${reqId}** is currently being fulfilled by <@${req.fulfilledBy}>! Other members cannot cancel or alter it while fulfillment is in progress.`
+            };
         }
 
         if (req.status !== 'pending' && req.status !== 'verifying') {
@@ -19888,6 +19884,20 @@ function setupSlashBotEvents(bot, token) {
             if (customId.startsWith('btn_bs_update')) {
                 await handleBattleStatsUpdate(interaction, { forceUpdate: true, isButton: false, isPublic: true });
                 return;
+            }
+
+            // ── Universal Banker Isolation Guard ──
+            // If any bank button is clicked on a request that is currently claimed (verifying),
+            // strictly prevent ANY user other than the banker that claimed it from pressing it!
+            if (customId.startsWith('bank_')) {
+                const matchedId = customId.replace(/^bank_(pay|check|unclaim|revert|cancel|claimed)_/, '').trim();
+                const targetReq = bankRequests[matchedId];
+                if (targetReq && targetReq.status === 'verifying' && targetReq.fulfilledBy && targetReq.fulfilledBy !== interaction.user.id) {
+                    return interaction.reply({
+                        content: `⚠️ Request **#${matchedId}** is currently being fulfilled by <@${targetReq.fulfilledBy}>! Other members cannot press buttons on this request while in progress. (If unfulfilled, it will return to unclaimed in 60 seconds.)`,
+                        ephemeral: true
+                    }).catch(() => {});
+                }
             }
 
             // ── Bank: Verify & Fulfill ──
