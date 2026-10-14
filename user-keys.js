@@ -19,17 +19,25 @@ const path = require('path');
 const TORN_BASE = 'https://api.torn.com';
 const KEYS_FILE = path.join(__dirname, 'data', 'user_api_keys.json');
 
-// Derive a 32-byte encryption key for AES-256-GCM
-let hasLoggedSecretWarning = false;
+// Candidates for AES-256-GCM encryption/decryption keys
+function getCandidateSecrets() {
+    return [
+        process.env.APP_SECRET,
+        process.env.ENCRYPTION_KEY,
+        process.env.MONGODB_URI,
+        process.env.MONGO_URI,
+        process.env.GLOBAL_BOT_TOKEN,
+        'friday-spider-verse-super-secret-key-2026'
+    ].filter(Boolean);
+}
+
 function getMasterEncryptionKey() {
-    let rawSecret = process.env.APP_SECRET || process.env.ENCRYPTION_KEY;
-    if (!rawSecret) {
-        if (!hasLoggedSecretWarning) {
-            console.warn("[SECURITY WARNING] APP_SECRET is not set in environment variables! Using fallback key.");
-            hasLoggedSecretWarning = true;
-        }
-        rawSecret = 'friday-spider-verse-super-secret-key-2026';
-    }
+    const rawSecret = process.env.APP_SECRET ||
+                      process.env.ENCRYPTION_KEY ||
+                      process.env.MONGODB_URI ||
+                      process.env.MONGO_URI ||
+                      process.env.GLOBAL_BOT_TOKEN ||
+                      'friday-spider-verse-super-secret-key-2026';
     return crypto.scryptSync(rawSecret, 'salt-spider-verse-friday', 32);
 }
 
@@ -39,6 +47,12 @@ const userKeysStore = new Map();
 // In-memory cache for live user stats: apiKey => { data, timestamp }
 const userStatsCache = new Map();
 const STATS_CACHE_TTL_MS = 10000; // 10 seconds cache
+
+// Optional reference to verifiedDiscordToTorn mapping
+let verifiedDiscordMap = null;
+function setVerifiedDiscordMap(map) {
+    verifiedDiscordMap = map;
+}
 
 // Administrator metadata (set dynamically only if explicitly configured)
 let adminMeta = {
@@ -73,20 +87,26 @@ function encryptKey(rawKey) {
 
 /**
  * Decrypt an encrypted API key record using AES-256-GCM.
+ * Seamlessly supports keys encrypted under earlier production configurations (e.g. MONGODB_URI).
  */
 function decryptKey(record) {
-    try {
-        if (!record || !record.ciphertext || !record.iv || !record.tag) return null;
-        const key = getMasterEncryptionKey();
-        const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(record.iv, 'hex'));
-        decipher.setAuthTag(Buffer.from(record.tag, 'hex'));
-        let decrypted = decipher.update(record.ciphertext, 'hex', 'utf8');
-        decrypted += decipher.final('utf8');
-        return decrypted;
-    } catch (err) {
-        console.error('[UserKeys] Decryption error:', err.message);
-        return null;
+    if (!record || !record.ciphertext || !record.iv || !record.tag) return null;
+    const secrets = getCandidateSecrets();
+
+    for (const secret of secrets) {
+        try {
+            const key = crypto.scryptSync(secret, 'salt-spider-verse-friday', 32);
+            const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(record.iv, 'hex'));
+            decipher.setAuthTag(Buffer.from(record.tag, 'hex'));
+            let decrypted = decipher.update(record.ciphertext, 'hex', 'utf8');
+            decrypted += decipher.final('utf8');
+            if (decrypted && decrypted.length === 16) {
+                return decrypted;
+            }
+        } catch (err) {}
     }
+    console.error('[UserKeys] Decryption error: Could not decrypt key with any candidate secret.');
+    return null;
 }
 
 /**
@@ -102,6 +122,7 @@ function saveKeysToDisk() {
             dataObj[discordId] = {
                 tornId: record.tornId,
                 playerName: record.playerName,
+                discordUserId: record.discordUserId || (!discordId.startsWith('torn:') ? discordId : null),
                 ciphertext: record.ciphertext,
                 iv: record.iv,
                 tag: record.tag,
@@ -406,8 +427,11 @@ function resolveUserApiKey(discordUserId, authorName = '', authorUsername = '', 
         }
     }
 
-    // 2. Check by verifiedPlayerId or if dId is a numeric Torn ID or 'torn:ID'
+    // 2. Check by verifiedPlayerId or verifiedDiscordMap or if dId is a numeric Torn ID or 'torn:ID'
     let tId = verifiedPlayerId;
+    if (!tId && verifiedDiscordMap && dId && verifiedDiscordMap[dId]) {
+        tId = verifiedDiscordMap[dId].tornId;
+    }
     if (!tId && dId) {
         if (dId.startsWith('torn:')) {
             tId = dId.replace('torn:', '');
@@ -415,9 +439,28 @@ function resolveUserApiKey(discordUserId, authorName = '', authorUsername = '', 
             tId = dId;
         }
     }
+    // Also check if authorName contains a Torn ID like "[3490493]"
+    if (!tId && authorName) {
+        const idMatch = String(authorName).match(/\[(\d{5,10})\]/);
+        if (idMatch && userKeysStore.has(`torn:${idMatch[1]}`)) {
+            tId = idMatch[1];
+        }
+    }
+
     if (tId) {
         const byTorn = resolveUserApiKeyByTornId(tId);
-        if (byTorn) return byTorn;
+        if (byTorn) {
+            // Permanently bind this Discord ID to this key record so they never have to enter it again!
+            if (dId && !userKeysStore.has(dId)) {
+                const rec = userKeysStore.get(`torn:${tId}`);
+                if (rec) {
+                    rec.discordUserId = dId;
+                    userKeysStore.set(dId, rec);
+                    saveKeysToDisk();
+                }
+            }
+            return byTorn;
+        }
     }
 
     // 3. Fallback search across all stored records for matching discordUserId
@@ -425,12 +468,41 @@ function resolveUserApiKey(discordUserId, authorName = '', authorUsername = '', 
         for (const [k, rec] of userKeysStore.entries()) {
             if (rec && (rec.discordUserId === dId || k === dId)) {
                 const dec = decryptKey(rec);
-                if (dec) return { key: dec, playerName: rec.playerName, playerId: rec.tornId, isOwner: false };
+                if (dec) {
+                    if (!userKeysStore.has(dId)) {
+                        userKeysStore.set(dId, rec);
+                        saveKeysToDisk();
+                    }
+                    return { key: dec, playerName: rec.playerName, playerId: rec.tornId, isOwner: false };
+                }
             }
         }
     }
 
-    // 4. Check if user is the explicit bot administrator with an admin key
+    // 4. Fallback search by playerName matching authorName or authorUsername
+    const cleanAuthor = String(authorName || '').replace(/\[.*?\]|\(.*?\)/g, '').trim().toLowerCase();
+    const cleanUsername = String(authorUsername || '').trim().toLowerCase();
+    if (cleanAuthor || cleanUsername) {
+        for (const [k, rec] of userKeysStore.entries()) {
+            if (rec && rec.playerName) {
+                const rName = rec.playerName.trim().toLowerCase();
+                if ((cleanAuthor && rName === cleanAuthor) || (cleanUsername && rName === cleanUsername)) {
+                    const dec = decryptKey(rec);
+                    if (dec) {
+                        // Permanently bind this Discord ID so they never have to enter it again!
+                        if (dId && !userKeysStore.has(dId)) {
+                            rec.discordUserId = dId;
+                            userKeysStore.set(dId, rec);
+                            saveKeysToDisk();
+                        }
+                        return { key: dec, playerName: rec.playerName, playerId: rec.tornId, isOwner: false };
+                    }
+                }
+            }
+        }
+    }
+
+    // 5. Check if user is the explicit bot administrator with an admin key
     if (primaryOwnerKey && isOwnerUser(dId, authorName, authorUsername, verifiedPlayerId || tId)) {
         return {
             key: primaryOwnerKey,
@@ -1037,5 +1109,6 @@ module.exports = {
     exportEncryptedForMongo,
     importEncryptedFromMongo,
     setMongoSaveCallback,
+    setVerifiedDiscordMap,
     userKeysStore
 };
