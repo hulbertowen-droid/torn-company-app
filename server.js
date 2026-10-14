@@ -14483,21 +14483,19 @@ function getPreFilledVaultUrl(tornId, amount) {
 // Never mix a primary action button and a link button in the same row.
 function buildBankRequestButtons(req) {
     const amtFmt = Number(req.amount).toLocaleString();
-    // Fulfill link goes through our server so we can claim the request, then redirect to Torn vault
-    const fulfillViaServer = `https://torn-company-app-production.up.railway.app/api/bank/pay/${req.id}`;
+    const vaultUrl = getPreFilledVaultUrl(req.tornId, req.amount);
 
     if (req.status === 'pending') {
-        // Row 1: [💸 Fulfill ($amt) — URL link to server redirect] [❌ Cancel — interactive]
+        // Row 1: [💸 Fulfill ($amt) - interactive to claim & mark in-progress] [❌ Cancel]
         return [
             {
                 type: 1,
                 components: [
                     {
                         type: 2,
-                        style: 5, // URL link — opens browser, server claims & redirects to Torn vault
-                        label: `💸 Fulfill ($${amtFmt})`,
-                        url: fulfillViaServer,
-                        emoji: { name: '💸' }
+                        style: 3, // Green (Success) - interactive button to claim and fulfill
+                        custom_id: `bank_pay_${req.id}`,
+                        label: `💸 Fulfill ($${amtFmt})`
                     },
                     {
                         type: 2,
@@ -14510,11 +14508,18 @@ function buildBankRequestButtons(req) {
             }
         ];
     } else if (req.status === 'verifying') {
-        // Verifying: ONLY an Unclaim button (restricted to the claiming banker via Isolation Guard)
+        // Verifying: Direct link button straight to Torn Vault + Unclaim button (restricted to claiming banker)
         return [
             {
                 type: 1,
                 components: [
+                    {
+                        type: 2,
+                        style: 5, // Direct Link Button to official Torn pre-filled vault
+                        label: `🏠 Open Torn Vault ($${amtFmt})`,
+                        url: vaultUrl,
+                        emoji: { name: '💸' }
+                    },
                     {
                         type: 2,
                         style: 2, // Grey (Secondary)
