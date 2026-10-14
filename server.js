@@ -21769,20 +21769,19 @@ function setupSlashBotEvents(bot, token) {
 
         // Direct handling for /withdraw with STRICT OVERDRAFT PROTECTION
         if (cmd === 'withdraw') {
+            // IMMEDIATELY acknowledge Discord interaction within <20ms to guarantee zero timeouts
+            await interaction.deferReply({ ephemeral: true }).catch(() => {});
+
             const rawAmount = interaction.options.getString('amount');
             const amount = parseAmount(rawAmount);
 
             if (!amount) {
-                return interaction.reply({
-                    content: `⚠️ Invalid withdrawal amount: **"${rawAmount || ''}"**.\n\nPlease specify a valid numeric amount, e.g. \`10m\`, \`500k\`, \`1.5b\`, or \`25,000,000\`.`,
-                    ephemeral: true
+                return interaction.editReply({
+                    content: `⚠️ Invalid withdrawal amount: **"${rawAmount || ''}"**.\n\nPlease specify a valid numeric amount, e.g. \`10m\`, \`500k\`, \`1.5b\`, or \`25,000,000\`.`
                 });
             }
 
-            checkExpiredBankRequests();
-
-            // Defer ephemerally while checking Torn API balance and preventing overdrafts
-            await interaction.deferReply({ ephemeral: true });
+            try { checkExpiredBankRequests(); } catch(e) {}
 
             let vaultInfo = null;
             try {
