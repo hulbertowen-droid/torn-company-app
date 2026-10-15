@@ -1755,29 +1755,31 @@ async function pollAttacks() {
             if (chainHitLog.length > 50) chainHitLog.pop();
             renderHitLog();
 
-            // Match attacker against lineup
+            // Match attacker against lineup by ID or name
+            const atkId = atk.attacker_id ? String(atk.attacker_id) : null;
             const atkName = (atk.attacker_name || '').toLowerCase().trim();
-            const idx = lineupMembers.findIndex(m => m.name.toLowerCase().trim() === atkName);
+            const idx = lineupMembers.findIndex(m =>
+                (m.id && atkId && String(m.id) === atkId) ||
+                (m.name && m.name.toLowerCase().trim() === atkName)
+            );
 
             if (idx !== -1) {
                 stateChanged = true;
 
-                if (autoMode) {
-                    // CONVEYOR ROTATION: Move the hitter to the bottom of the queue!
-                    const [hitter] = lineupMembers.splice(idx, 1);
-                    hitter.hit = true;
-                    lineupMembers.push(hitter);
+                // CONVEYOR ROTATION: Move the hitter to the bottom of the queue!
+                const [hitter] = lineupMembers.splice(idx, 1);
+                hitter.hit = true;
+                lineupMembers.push(hitter);
 
-                    if (idx === 0) {
-                        lineupSetStatus(`${atk.attacker_name} landed hit #${atk.chain}! Moved to bottom.`);
-                    } else {
-                        lineupSetStatus(`${atk.attacker_name} landed hit #${atk.chain} (early)! Moved to bottom.`);
-                    }
+                if (idx === 0) {
+                    lineupSetStatus(`✓ ${atk.attacker_name} landed hit #${atk.chain}! Moved to bottom.`);
+                } else {
+                    lineupSetStatus(`✓ ${atk.attacker_name} landed hit #${atk.chain} (out of order)! Moved to bottom.`);
+                }
+
+                if (autoMode) {
                     clearAutoSkipTimer();
                     startAutoSkipTimer();
-                } else {
-                    // Manual mode: just mark hit
-                    lineupMembers[idx].hit = true;
                 }
             }
         }
@@ -2311,21 +2313,60 @@ function lineupAutoFill() {
         pollMemberStatus();
         return;
     }
-    const eligible = factionMemberList.filter(m => isMemberEligible(String(m.id)));
-    if (!eligible.length) {
-        lineupSetStatus('No eligible members found (Online + Okay required).');
-        return;
-    }
+
+    // 1. Purge unavailable members from existing lineup (hospitalized, traveling, abroad, jail, offline)
+    const initialCount = lineupMembers.length;
+    lineupMembers = lineupMembers.filter(lm => {
+        const mem = factionMemberList.find(fm => (lm.id && fm.id === lm.id) || fm.name.toLowerCase() === lm.name.toLowerCase());
+        if (!mem) return false;
+        const st = mem.status?.state || mem.state || 'Okay';
+        const on = mem.last_action?.status || mem.online || 'Offline';
+        return st === 'Okay' && (on === 'Online' || on === 'Idle');
+    });
+    const purged = initialCount - lineupMembers.length;
+
+    // 2. Reset hit & skipped state on retained members for fresh chain
+    lineupMembers.forEach(lm => { lm.hit = false; lm.skipped = false; });
+
+    // 3. Find and append new eligible members (Online or Idle, and Okay)
+    const eligible = factionMemberList.filter(m => {
+        const st = m.status?.state || m.state || 'Okay';
+        const on = m.last_action?.status || m.online || 'Offline';
+        return st === 'Okay' && (on === 'Online' || on === 'Idle');
+    });
+
+    eligible.sort((a, b) => {
+        const aOn = (a.last_action?.status || a.online) === 'Online';
+        const bOn = (b.last_action?.status || b.online) === 'Online';
+        if (aOn && !bOn) return -1;
+        if (!aOn && bOn) return 1;
+        const aTs = a.last_action?.timestamp || a.lastActionTs || 0;
+        const bTs = b.last_action?.timestamp || b.lastActionTs || 0;
+        return bTs - aTs;
+    });
+
     let added = 0;
     for (const m of eligible) {
-        if (!lineupMembers.some(lm => lm.name.toLowerCase() === m.name.toLowerCase())) {
+        if (!lineupMembers.some(lm => (lm.id && lm.id === m.id) || lm.name.toLowerCase() === m.name.toLowerCase())) {
             lineupMembers.push({ name: m.name, id: m.id, hit: false, skipped: false });
             added++;
         }
     }
+
     lineupSave();
     lineupRender();
-    lineupSetStatus(added > 0 ? `Added ${added} eligible member${added > 1 ? 's' : ''}.` : 'All eligible members are already in the lineup.');
+
+    let msg = '';
+    if (purged > 0 && added > 0) {
+        msg = `Auto-fill: Purged ${purged} unavailable, retained ${lineupMembers.length - added}, added ${added} ready.`;
+    } else if (purged > 0) {
+        msg = `Auto-fill: Purged ${purged} unavailable members. Retained ${lineupMembers.length} ready.`;
+    } else if (added > 0) {
+        msg = `Auto-fill: Added ${added} eligible member${added > 1 ? 's' : ''}.`;
+    } else {
+        msg = `Auto-fill: Lineup verified (${lineupMembers.length} ready members).`;
+    }
+    lineupSetStatus(msg);
 }
 
 // ── Import from chain attacks ──────────────────────────────────────

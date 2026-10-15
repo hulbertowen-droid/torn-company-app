@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FactionOS Chain Manager (Standalone)
-// @namespace    https://torn-company-app-production.up.railway.app/
-// @version      2.3.0
+// @namespace    https://factionos-production.up.railway.app/
+// @version      2.4.0
 // @description  Professional standalone chain lineup manager on Torn. Direct API hits, mobile touch optimization, compact mobile layout, intelligent readiness detection, auto-advance, 1-click chat auto-send. Runs on faction pages only.
 // @author       FactionOS
 // @match        https://www.torn.com/factions.php*
@@ -11,10 +11,11 @@
 // @grant        GM_getValue
 // @grant        unsafeWindow
 // @connect      api.torn.com
+// @connect      factionos-production.up.railway.app
 // @connect      torn-company-app-production.up.railway.app
 // @run-at       document-end
-// @updateURL    https://torn-company-app-production.up.railway.app/torn-chain-lineup.user.js
-// @downloadURL  https://torn-company-app-production.up.railway.app/torn-chain-lineup.user.js
+// @updateURL    https://factionos-production.up.railway.app/torn-chain-lineup.user.js
+// @downloadURL  https://factionos-production.up.railway.app/torn-chain-lineup.user.js
 // ==/UserScript==
 
 (function () {
@@ -30,6 +31,7 @@
     // ══════════════════════════════════════════════════════════════
     //  CONSTANTS & STATE
     // ══════════════════════════════════════════════════════════════
+    const SERVER_BASE     = 'https://factionos-production.up.railway.app';
     const LS_KEY_POS      = 'sv_chain_mgr_pos';
     const LS_KEY_APIKEY   = 'sv_chain_apikey';
     const LS_KEY_MEMBERS  = 'sv_chain_members_cache';
@@ -110,7 +112,7 @@
             const body = JSON.stringify({ lineup, targetHitTime, cycle: cycleNum, formattedFull: full, formattedCompact: compact });
             GM_xmlhttpRequest({
                 method: 'POST',
-                url: 'https://torn-company-app-production.up.railway.app/api/chain/lineup',
+                url: `${SERVER_BASE}/api/chain/lineup`,
                 headers: { 'Content-Type': 'application/json' },
                 data: body,
                 timeout: 3000,
@@ -182,30 +184,149 @@
         return false;
     }
 
-    // Unified 1.0s Polling: polls attacks + chain for Limited keys, or chain-only for Public keys
-    function pollChainAndAttacks() {
-        if (!apiKey) return;
+    // Process a batch of qualifying chain attacks (used by both direct API & server proxy)
+    function processAttacks(attacks) {
+        if (!attacks || !attacks.length) return;
+        const chainAtks = attacks
+            .filter(a => a.chain && a.chain > 0)
+            .sort((a, b) => (a.timestamp_ended || 0) - (b.timestamp_ended || 0)); // Ascending: chronological order
 
-        const path = hasAttacksAccess
-            ? '/faction/?selections=attacks,chain'
-            : '/faction/?selections=chain';
+        if (isFirstPoll) {
+            for (const atk of chainAtks) {
+                const id = atk.code || `${atk.attacker_id}_${atk.timestamp_ended}`;
+                processedAtkIds.add(id);
+            }
+            isFirstPoll = false;
+            renderChainBar();
+            return;
+        }
 
-        tornGet(path, (err, d) => {
-            if (err) {
-                // If Torn rejected attacks due to insufficient permission (e.g. Public Key or lacks Faction AA)
-                if (hasAttacksAccess && (err.code === 16 || err.code === 7 || (err.error && /access|permission/i.test(err.error)))) {
-                    hasAttacksAccess = false;
-                    flashStatus('Public Key active: Live timer & lineup working (Limited key needed for auto hit-detection).', false);
-                    tornGet('/faction/?selections=chain', (err2, d2) => {
-                        if (!err2 && d2) handleChainResponse(d2);
-                    });
-                }
-                return;
+        let orderChanged = false;
+
+        for (const atk of chainAtks) {
+            const id = atk.code || `${atk.attacker_id}_${atk.timestamp_ended}`;
+            if (processedAtkIds.has(id)) continue;
+            processedAtkIds.add(id);
+
+            if (processedAtkIds.size > 500) {
+                const arr = [...processedAtkIds];
+                processedAtkIds = new Set(arr.slice(arr.length - 250));
             }
 
-            if (!d) return;
-            handleChainResponse(d);
+            const attackerId = atk.attacker_id ? String(atk.attacker_id) : null;
+            const attackerName = (atk.attacker_name || '').trim().toLowerCase();
+
+            // Check if ANY member in the lineup landed this hit!
+            const hitterIdx = lineup.findIndex(m =>
+                (m.id && attackerId && String(m.id) === attackerId) ||
+                (m.name && m.name.trim().toLowerCase() === attackerName)
+            );
+
+            if (hitterIdx !== -1) {
+                // CONVEYOR ROTATION: Move the hitter to the bottom of the queue!
+                const [hitter] = lineup.splice(hitterIdx, 1);
+                hitter.hit = true;
+                lineup.push(hitter);
+                orderChanged = true;
+
+                if (hitterIdx === 0) {
+                    cycleNum++;
+                    const nextUp = lineup[0] ? lineup[0].name : 'Lineup Empty';
+                    flashStatus(`✓ ${atk.attacker_name} landed hit #${atk.chain}! Next UP: ${nextUp}`, false);
+                    clearAutoSkip();
+                    if (autoMode) startAutoSkip();
+                } else {
+                    const currentUp = lineup[0] ? lineup[0].name : 'Lineup Empty';
+                    flashStatus(`✓ ${atk.attacker_name} landed hit #${atk.chain} (out of order)! Moved to bottom. Next UP: ${currentUp}`, false);
+                }
+            } else {
+                if (lineup.length > 0) {
+                    flashStatus(`Hit #${atk.chain} by ${atk.attacker_name} (${lineup[0].name} is UP)`, false);
+                }
+            }
+        }
+
+        if (orderChanged) {
+            setUpdated(true);
+            save();
+            renderLineup();
+        } else {
+            renderChainBar();
+        }
+    }
+
+    // Backend proxy polling for attacks (guarantees hit detection for keys without Faction AA)
+    function pollBackendAttacks() {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: `${SERVER_BASE}/api/chain/attacks`,
+            headers: { 'x-api-key': apiKey || '' },
+            timeout: 5000,
+            onload(res) {
+                try {
+                    const d = JSON.parse(res.responseText);
+                    if (d && d.attacks) {
+                        processAttacks(d.attacks);
+                    }
+                } catch(e) {}
+            },
+            onerror() {}
         });
+    }
+
+    // Backend fallback for chain data when no API key is provided
+    function pollBackendChainAndAttacks() {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: `${SERVER_BASE}/api/chain/data`,
+            timeout: 4000,
+            onload(res) {
+                try {
+                    const d = JSON.parse(res.responseText);
+                    if (d && d.chain) {
+                        chainCount   = d.chain.current || 0;
+                        chainTimeout = d.chain.timeout || 0;
+                        chainActive  = chainCount > 0;
+                    }
+                } catch(e) {}
+                renderChainBar();
+            },
+            onerror() {}
+        });
+        pollBackendAttacks();
+    }
+
+    // Unified Polling: polls attacks + chain for Limited keys, or chain + backend proxy for Public keys
+    function pollChainAndAttacks() {
+        if (!apiKey) {
+            pollBackendChainAndAttacks();
+            return;
+        }
+
+        if (hasAttacksAccess) {
+            tornGet('/faction/?selections=attacks,chain', (err, d) => {
+                if (err) {
+                    // If Torn rejected attacks due to insufficient permission (e.g. Public Key or lacks Faction AA)
+                    if (err.code === 16 || err.code === 7 || (err.error && /access|permission/i.test(err.error))) {
+                        hasAttacksAccess = false;
+                        flashStatus('Direct Faction AA restricted — switched to FactionOS real-time attack proxy.', false);
+                        tornGet('/faction/?selections=chain', (err2, d2) => {
+                            if (!err2 && d2) handleChainResponse(d2);
+                        });
+                        pollBackendAttacks();
+                    }
+                    return;
+                }
+                if (!d) return;
+                handleChainResponse(d);
+            });
+        } else {
+            // Direct chain timer from Torn (1.0s fast-path) + attack stream from backend proxy
+            tornGet('/faction/?selections=chain', (err, d) => {
+                if (!err && d) handleChainResponse(d);
+            });
+            pollBackendAttacks();
+        }
     }
 
     function handleChainResponse(d) {
@@ -215,86 +336,45 @@
         chainTimeout = chain.timeout || 0;
         chainActive  = chainCount > 0;
 
-        // 2. Process Attacks (Only available on Limited keys with Faction AA)
+        // 2. Process Attacks (Directly from Torn if available, otherwise handled by pollBackendAttacks)
         if (d.attacks) {
-            const rawAtks = Object.values(d.attacks);
-            const chainAtks = rawAtks
-                .filter(a => a.chain && a.chain > 0)
-                .sort((a, b) => (b.timestamp_ended || 0) - (a.timestamp_ended || 0));
-
-            if (isFirstPoll) {
-                for (const atk of chainAtks) {
-                    const id = atk.code || `${atk.attacker_id}_${atk.timestamp_ended}`;
-                    processedAtkIds.add(id);
-                }
-                isFirstPoll = false;
-                renderChainBar();
-                return;
-            }
-
-            let orderChanged = false;
-
-            for (const atk of chainAtks) {
-                const id = atk.code || `${atk.attacker_id}_${atk.timestamp_ended}`;
-                if (processedAtkIds.has(id)) continue;
-                processedAtkIds.add(id);
-
-                if (processedAtkIds.size > 500) {
-                    const arr = [...processedAtkIds];
-                    processedAtkIds = new Set(arr.slice(arr.length - 250));
-                }
-
-                // STRICT VERIFICATION: ONLY currently UP player advances lineup
-                if (isCurrentUp(atk)) {
-                    const [hitter] = lineup.splice(0, 1);
-                    hitter.hit = true;
-                    lineup.push(hitter);
-                    orderChanged = true;
-                    cycleNum++;
-
-                    flashStatus(`✓ ${atk.attacker_name} landed hit #${atk.chain}! Next UP: ${lineup[0].name}`, false);
-                    clearAutoSkip();
-                    if (autoMode) startAutoSkip();
-                } else {
-                    const attackerId = atk.attacker_id ? String(atk.attacker_id) : null;
-                    const attackerName = (atk.attacker_name || '').trim().toLowerCase();
-
-                    const otherIdx = lineup.findIndex((m, idx) => idx > 0 && (
-                        (m.id && attackerId && String(m.id) === attackerId) ||
-                        (m.name && m.name.trim().toLowerCase() === attackerName)
-                    ));
-
-                    if (otherIdx !== -1) {
-                        lineup[otherIdx].hit = true;
-                    }
-
-                    if (lineup.length > 0) {
-                        flashStatus(`Hit #${atk.chain} by ${atk.attacker_name} (${lineup[0].name} is still UP)`, false);
-                    }
-                }
-            }
-
-            if (orderChanged) {
-                setUpdated(true);
-                save();
-                renderLineup();
-            } else {
-                renderChainBar();
-            }
+            processAttacks(Object.values(d.attacks));
         } else {
             renderChainBar();
         }
     }
 
     function fetchFactionMembers() {
-        tornGet('/faction/?selections=basic', (err, d) => {
-            if (err || !d) return;
-            handleMembersResponse(d);
+        if (apiKey) {
+            tornGet('/faction/?selections=basic', (err, d) => {
+                if (err || !d || !d.members) {
+                    fetchBackendMembers();
+                    return;
+                }
+                handleMembersResponse(d);
+            });
+        } else {
+            fetchBackendMembers();
+        }
+    }
+
+    function fetchBackendMembers() {
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: `${SERVER_BASE}/api/chain/members`,
+            headers: { 'x-api-key': apiKey || '' },
+            timeout: 8000,
+            onload(res) {
+                try {
+                    const d = JSON.parse(res.responseText);
+                    if (d && d.members) handleMembersResponse(d);
+                } catch(e) {}
+            },
+            onerror() {}
         });
     }
 
     function startBackgroundPolling() {
-        if (!apiKey) return;
         if (pollInterval) clearInterval(pollInterval);
         if (pollMembersInterval) clearInterval(pollMembersInterval);
 
@@ -520,12 +600,13 @@
     function skipMember(idx) {
         if (idx < 0 || idx >= lineup.length) return;
         const [s] = lineup.splice(idx, 1);
+        s.skipped = true;
         lineup.push(s);
         save();
         renderLineup();
         clearAutoSkip();
         if (autoMode) startAutoSkip();
-        flashStatus(`Skipped ${s.name}.`, false);
+        flashStatus(`Skipped ${s.name} (moved to bottom). Next UP: ${lineup[0] ? lineup[0].name : 'none'}`, false);
     }
 
     function makeCurrent(idx) {
@@ -578,7 +659,9 @@
 
     // ══════════════════════════════════════════════════════════════
     //  INTELLIGENT AUTO-FILL
-    //  Prioritizes: Online+Okay (most recent) > Idle+Okay (most recent)
+    //  1. Purges unavailable members (Hospital, Traveling/Abroad, Jail, Offline)
+    //  2. Resets hit/skipped status on retained ready members
+    //  3. Appends new eligible members (Online/Idle + Okay)
     // ══════════════════════════════════════════════════════════════
     function autoFill() {
         if (!factionMembers.length) {
@@ -586,19 +669,37 @@
             return;
         }
 
-        // Filter only members who are actually capable of participating
+        // 1. Purge unavailable members already in the lineup from past chains
+        const initialCount = lineup.length;
+        lineup = lineup.filter(lm => {
+            const mem = factionMembers.find(fm => (lm.id && fm.id === lm.id) || fm.name.toLowerCase() === lm.name.toLowerCase());
+            if (!mem) {
+                const st = lm.id ? memberStatuses[String(lm.id)] : null;
+                if (!st) return false; // Not in faction
+                const state = st.state || 'Okay';
+                const online = st.online || 'Offline';
+                return state === 'Okay' && (online === 'Online' || online === 'Idle');
+            }
+            const state = mem.state || 'Okay';
+            const online = mem.online || 'Offline';
+            return state === 'Okay' && (online === 'Online' || online === 'Idle');
+        });
+        const purged = initialCount - lineup.length;
+
+        // 2. Clean slate for the new chain: reset hit and skipped on retained members
+        for (const lm of lineup) {
+            lm.hit = false;
+            lm.skipped = false;
+        }
+
+        // 3. Filter capable faction members (Online or Idle, and Okay)
         const capable = factionMembers.filter(m => {
             const state = m.state || 'Okay';
             const online = m.online || 'Offline';
             return state === 'Okay' && (online === 'Online' || online === 'Idle');
         });
 
-        if (!capable.length) {
-            flashStatus('No ready (Online/Idle + Okay) members found.', true);
-            return;
-        }
-
-        // Sort: Online first, then Idle; break ties by most recently active
+        // 4. Sort: Online first, then Idle; break ties by most recently active
         capable.sort((a, b) => {
             if (a.online === 'Online' && b.online !== 'Online') return -1;
             if (a.online !== 'Online' && b.online === 'Online') return 1;
@@ -622,14 +723,23 @@
             }
         }
 
+        cycleNum = 1;
         save();
         renderLineup();
+        clearAutoSkip();
+        if (autoMode) startAutoSkip();
 
-        if (added > 0) {
-            flashStatus(`Auto-filled ${added} ready members (${onlineCount} Online, ${idleCount} Idle).`, false);
+        let msg = '';
+        if (purged > 0 && added > 0) {
+            msg = `Auto-fill: Purged ${purged} unavailable (hosp/travel/offline), retained ${lineup.length - added}, added ${added} ready.`;
+        } else if (purged > 0) {
+            msg = `Auto-fill: Purged ${purged} unavailable members. Retained ${lineup.length} ready members.`;
+        } else if (added > 0) {
+            msg = `Auto-fill: Added ${added} ready members (${onlineCount} Online, ${idleCount} Idle).`;
         } else {
-            flashStatus('All capable faction members are already in the lineup.', false);
+            msg = `Auto-fill: Verified ${lineup.length} ready members (all clean).`;
         }
+        flashStatus(msg, false);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -638,15 +748,26 @@
     const AUTO_SKIP_SECS = 45;
     function startAutoSkip() {
         clearAutoSkip();
-        autoSkipLeft = AUTO_SKIP_SECS;
+        if (!lineup.length) return;
+        const up = lineup[0];
+        const readiness = getMemberReadiness(up.id);
+        // If the player currently UP is confirmed unavailable (Hospital/Traveling/Jail/Offline), skip quickly (10s)
+        autoSkipLeft = readiness.isReady ? AUTO_SKIP_SECS : 10;
+        updateAutoSkipDisplay();
+
         autoSkipTimer = setInterval(() => {
             autoSkipLeft--;
             updateAutoSkipDisplay();
             if (autoSkipLeft <= 0) {
                 clearAutoSkip();
                 if (lineup.length > 0) {
-                    skipMember(0);
-                    flashStatus(`Auto-skipped ${lineup[lineup.length-1].name} (timeout).`, false);
+                    const [s] = lineup.splice(0, 1);
+                    s.skipped = true;
+                    lineup.push(s);
+                    save();
+                    renderLineup();
+                    flashStatus(`Auto-skipped ${s.name} (unavailable/timeout). Next UP: ${lineup[0] ? lineup[0].name : 'none'}`, false);
+                    if (autoMode) startAutoSkip();
                 }
             }
         }, 1000);
@@ -2084,17 +2205,14 @@
     wireEvents(hud);
     setUpdated(false);
     startLocalTimer();
-
-    if (apiKey) {
-        startBackgroundPolling();
-    }
+    startBackgroundPolling();
 
     // Seed from Railway server if local queue is empty
     if (!lineup.length) {
         try {
             GM_xmlhttpRequest({
                 method: 'GET',
-                url: 'https://torn-company-app-production.up.railway.app/api/chain/lineup',
+                url: `${SERVER_BASE}/api/chain/lineup`,
                 timeout: 4000,
                 onload(res) {
                     try {

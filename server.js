@@ -22949,21 +22949,33 @@ const chainMembersCache = new Map();
 
 // GET /api/chain/data — lightweight: returns ONLY chain status
 app.get('/api/chain/data', async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
+    if (req.method === 'OPTIONS') return res.sendStatus(200);
+
+    const serverKey = (discordConfig && discordConfig.apiKey) || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
     const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
-    if (!userKey || userKey === 'null' || !userKey.trim()) {
-        return res.status(401).json({ error: 'No API key provided.' });
+    const cleanKey = (userKey && userKey !== 'null' && userKey.trim()) ? userKey.trim() : serverKey;
+    if (!cleanKey) {
+        return res.status(401).json({ error: 'No API key provided and no server key configured.' });
     }
-    const cleanKey = userKey.trim();
     const cacheKey = cleanKey.slice(-8);
     const cached = chainDataCache.get(cacheKey);
     if (cached && (Date.now() - cached.ts) < 1200) {
         return res.json(cached.data);
     }
     try {
-        const r = await fetch(`https://api.torn.com/faction/?selections=chain&key=${cleanKey}`, {
+        let r = await fetch(`https://api.torn.com/faction/?selections=chain&key=${cleanKey}`, {
             signal: AbortSignal.timeout(5000)
         });
-        const data = await r.json();
+        let data = await r.json();
+        if (data && data.error && (data.error.code === 2 || data.error.code === 7 || data.error.code === 16) && serverKey && serverKey !== cleanKey) {
+            r = await fetch(`https://api.torn.com/faction/?selections=chain&key=${serverKey}`, {
+                signal: AbortSignal.timeout(5000)
+            });
+            data = await r.json();
+        }
         if (data && data.error) {
             return res.status(400).json({ error: data.error.error || 'Torn API error', code: data.error.code });
         }
@@ -22978,21 +22990,33 @@ app.get('/api/chain/data', async (req, res) => {
 
 // GET /api/chain/members — returns faction member roster with online/hospital/traveling statuses
 app.get('/api/chain/members', async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
+    if (req.method === 'OPTIONS') return res.sendStatus(200);
+
+    const serverKey = (discordConfig && discordConfig.apiKey) || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
     const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
-    if (!userKey || userKey === 'null' || !userKey.trim()) {
-        return res.status(401).json({ error: 'No API key provided.' });
+    const cleanKey = (userKey && userKey !== 'null' && userKey.trim()) ? userKey.trim() : serverKey;
+    if (!cleanKey) {
+        return res.status(401).json({ error: 'No API key provided and no server key configured.' });
     }
-    const cleanKey = userKey.trim();
     const cacheKey = cleanKey.slice(-8);
     const cached = chainMembersCache.get(cacheKey);
     if (cached && (Date.now() - cached.ts) < 30000) {
         return res.json(cached.data);
     }
     try {
-        const r = await fetch(`https://api.torn.com/faction/?selections=basic&key=${cleanKey}`, {
+        let r = await fetch(`https://api.torn.com/faction/?selections=basic&key=${cleanKey}`, {
             signal: AbortSignal.timeout(8000)
         });
-        const data = await r.json();
+        let data = await r.json();
+        if (data && data.error && (data.error.code === 2 || data.error.code === 7 || data.error.code === 16) && serverKey && serverKey !== cleanKey) {
+            r = await fetch(`https://api.torn.com/faction/?selections=basic&key=${serverKey}`, {
+                signal: AbortSignal.timeout(8000)
+            });
+            data = await r.json();
+        }
         if (data && data.error) {
             return res.status(400).json({ error: data.error.error || 'Torn API error', code: data.error.code });
         }
@@ -23011,21 +23035,47 @@ app.get('/api/chain/members', async (req, res) => {
 
 // GET /api/chain/attacks — returns qualifying chain attacks (chain > 0)
 app.get('/api/chain/attacks', async (req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
+    if (req.method === 'OPTIONS') return res.sendStatus(200);
+
+    const serverKey = (discordConfig && discordConfig.apiKey) || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
     const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
-    if (!userKey || userKey === 'null' || !userKey.trim()) {
-        return res.status(401).json({ error: 'No API key provided.' });
+    const cleanKey = (userKey && userKey !== 'null' && userKey.trim()) ? userKey.trim() : serverKey;
+    if (!cleanKey) {
+        return res.status(401).json({ error: 'No API key provided and no server key configured.' });
     }
-    const cleanKey = userKey.trim();
     const cacheKey = cleanKey.slice(-8);
     const cached = chainAtksCache.get(cacheKey);
     if (cached && (Date.now() - cached.ts) < 1000) {
         return res.json(cached.data);
     }
     try {
-        const r = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${cleanKey}`, {
+        let r = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${cleanKey}`, {
             signal: AbortSignal.timeout(6000)
         });
-        const data = await r.json();
+        let data = await r.json();
+
+        // If user's key lacks Faction AA (code 7 or 16), automatically fall back to server key!
+        if (data && data.error && (data.error.code === 7 || data.error.code === 16 || data.error.code === 2) && serverKey && serverKey !== cleanKey) {
+            const serverCacheKey = serverKey.slice(-8);
+            const serverCached = chainAtksCache.get(serverCacheKey);
+            if (serverCached && (Date.now() - serverCached.ts) < 1000) {
+                return res.json(serverCached.data);
+            }
+            r = await fetch(`https://api.torn.com/faction/?selections=attacks&key=${serverKey}`, {
+                signal: AbortSignal.timeout(6000)
+            });
+            data = await r.json();
+            if (data && !data.error) {
+                const attacks = data.attacks ? Object.values(data.attacks).filter(a => a.chain && a.chain > 0) : [];
+                const payload = { attacks };
+                chainAtksCache.set(serverCacheKey, { data: payload, ts: Date.now() });
+                return res.json(payload);
+            }
+        }
+
         if (data && data.error) {
             return res.status(400).json({ error: data.error.error || 'Torn API error', code: data.error.code });
         }
