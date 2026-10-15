@@ -577,6 +577,34 @@ let isProcessingStats = false;
 let isProcessingFlights = false;
 let isProcessingActivity = false;
 
+// ── Memory Management: Periodic cache eviction (prevents unbounded heap growth on 384MB) ──
+setInterval(() => {
+    const now = Date.now();
+    const MAX_CACHE_AGE = 30 * 60_000; // 30 min for volatile caches
+    const MAX_DISCORD_CACHE_AGE = 6 * 3600_000; // 6 hours for discord ID lookups
+    let evicted = 0;
+    for (const [k, v] of Object.entries(statsCache)) {
+        if (v.time && (now - v.time) > MAX_CACHE_AGE) { delete statsCache[k]; evicted++; }
+    }
+    for (const [k, v] of Object.entries(flightCache)) {
+        if (v.time && (now - v.time) > MAX_CACHE_AGE) { delete flightCache[k]; evicted++; }
+    }
+    for (const [k, v] of Object.entries(activityCache)) {
+        if (v.time && (now - v.time) > MAX_CACHE_AGE) { delete activityCache[k]; evicted++; }
+    }
+    // Cap discordIdCache at 2000 entries
+    const discordKeys = Object.keys(discordIdCache);
+    if (discordKeys.length > 2000) {
+        discordKeys.slice(0, discordKeys.length - 1000).forEach(k => { delete discordIdCache[k]; evicted++; });
+    }
+    // Cap playerNameCache at 5000 entries
+    const nameKeys = Object.keys(playerNameCache);
+    if (nameKeys.length > 5000) {
+        nameKeys.slice(0, nameKeys.length - 3000).forEach(k => { delete playerNameCache[k]; evicted++; });
+    }
+    if (evicted > 0) console.log(`[MemGC] Evicted ${evicted} stale cache entries`);
+}, 10 * 60_000);
+
 let activeKeyIndex = 0;
 
 const factionWarState = {};
@@ -1381,7 +1409,7 @@ setInterval(() => { globalApiUsage = {}; }, 60000);
 // Startup grace period — prevents all background pollers from firing simultaneously on boot,
 // which would cause an API burst that slows down Discord responses during startup.
 const SERVER_START_TIME = Date.now();
-const STARTUP_GRACE_MS = 30000; // 30 seconds grace before watchers begin
+const STARTUP_GRACE_MS = 60000; // 60 seconds grace before watchers begin
 
 function getNextApiKey() {
     let activeKeys = [];
@@ -3116,7 +3144,7 @@ setInterval(async () => {
             }
         }
     } catch (err) {}
-}, 10000);
+}, 20000);
 
 let companyHistory = [];
 try { if (fs.existsSync('company_history.json')) companyHistory = JSON.parse(fs.readFileSync('company_history.json')); } catch(e) {}
@@ -3193,7 +3221,7 @@ async function verifySubscription(userKey) {
     }
     
     try {
-        const res = await fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`);
+        const res = await fetch(`https://api.torn.com/user/?selections=profile&key=${userKey}`, { signal: AbortSignal.timeout(6000) });
         const data = await res.json();
         
         if (data.error) {
@@ -3283,7 +3311,7 @@ async function cachedTornFetch(url, cacheKey, ttlMs = 2500) {
         return globalTornCache[cacheKey].data;
     }
     try {
-        const res = await fetch(url);
+        const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
         const data = await res.json();
         if (!data.error && data.members && Object.keys(data.members).length > 0) {
             globalTornCache[cacheKey] = { timestamp: now, data };
@@ -6204,6 +6232,22 @@ function sendWarboardResponse(req, res, payload) {
 
 app.get('/api/warboard', async (req, res) => {
     if (global.isTurboMining) return res.json({ error: "Turbo Mining Mode is active. Live Warboard is paused." });
+
+    // ── Fast path: Serve background-built cache instantly (eliminates multi-API-call latency) ──
+    // The background refresher (refreshWarboardBackground) builds the full payload every 45s.
+    // Only fall through to the live API path if no cache exists or it's very stale.
+    const requestedFacIdFast = req.headers['x-faction-id'] || req.query.myFactionId;
+    const myFacIdFast = requestedFacIdFast || String(req.userSession?.factionId || discordConfig.factionId || dynamicFactionId || '52355');
+    const hasFfKey = (req.headers['x-ff-key'] || req.query.ffKey) && (req.headers['x-ff-key'] || req.query.ffKey) !== 'null' && (req.headers['x-ff-key'] || req.query.ffKey) !== '';
+    const cachedPayload = lastGoodWarboardByFaction[myFacIdFast] || lastGoodWarboardPayload;
+    if (cachedPayload && cachedPayload.friendly && cachedPayload.friendly.length > 0 && !hasFfKey) {
+        // Cache is fresh enough — serve immediately
+        const cacheAge = cachedPayload._builtAt ? (Date.now() - cachedPayload._builtAt) : 0;
+        if (cacheAge < 120_000) { // < 2 minutes old
+            return sendWarboardResponse(req, res, cachedPayload);
+        }
+    }
+
     try {
         let userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
         if (!userKey || userKey === "null" || userKey.trim() === "") {
@@ -6403,7 +6447,7 @@ app.get('/api/warboard', async (req, res) => {
         });
 
         if (myData.members && discordConfig.alertOverdose !== false) {
-            checkFactionOverdoses(myData.members, myFactionId, myData.name);
+            checkFactionOverdoses(myData.members, myFacId, myData.name);
         }
 
         const parseMembers = (data, isEnemy = false) => {
@@ -18378,7 +18422,7 @@ setInterval(() => {
     } catch(e) {
         console.error("[Giveaway Loop Error]", e.message);
     }
-}, 5000);
+}, 30000);
 
 // ─── Battle Stats Tracker & Progression Engine (TornStats Parity) ─────────────
 function formatTimeSince(ms) {
@@ -23269,6 +23313,7 @@ async function refreshWarboardBackground() {
                 } : null
             }
         };
+        payload._builtAt = Date.now();
 
         lastGoodWarboardPayload = payload;
         lastGoodWarboardByFaction[facId] = payload;
@@ -23282,8 +23327,8 @@ async function refreshWarboardBackground() {
     }
 }
 
-setInterval(refreshWarboardBackground, 20000);
-setTimeout(refreshWarboardBackground, 3000);
+setInterval(refreshWarboardBackground, 45000);
+setTimeout(refreshWarboardBackground, 5000);
 
 // ── Catch-All JSON Responders for /api/* (Guarantees valid JSON, never HTML) ──
 app.use('/api', (req, res) => {
@@ -23297,7 +23342,7 @@ app.use('/api', (err, req, res, next) => {
 
 const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server listening on port ${PORT}`);
-    // startFrontierPipeline(); // PAUSED: Conserve Torn API budget
+    warboardBroadcaster.attachHttpServer(server);
     startKeepAlive();
     
     // Boot up the integrated recruitment platform (UI and APIs available, background scanning workers paused)
@@ -23308,26 +23353,24 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 // ── Robust 24/7 Keep-Alive Sentinel (Keeps Render awake & eliminates cold starts) ──
 function startKeepAlive() {
     const targets = new Set();
+    targets.add('https://factionos-production.up.railway.app');
+    if (process.env.RAILWAY_PUBLIC_DOMAIN) targets.add(`https://${process.env.RAILWAY_PUBLIC_DOMAIN}`);
     if (process.env.RENDER_EXTERNAL_URL) targets.add(process.env.RENDER_EXTERNAL_URL.replace(/\/$/, ''));
-    targets.add('https://torn-company-app.onrender.com');
-    targets.add('https://torn-company-app-production.up.railway.app');
     if (process.env.APP_URL) targets.add(process.env.APP_URL.replace(/\/$/, ''));
 
-    console.log(`[KeepAlive] 24/7 Keep-Alive Sentinel active for: ${Array.from(targets).join(', ')} (every 5 min)`);
+    console.log(`[KeepAlive] 24/7 Keep-Alive Sentinel active for: ${Array.from(targets).join(', ')} (every 4 min)`);
 
     const doPing = async () => {
         for (const baseUrl of targets) {
             try {
                 const res = await fetch(`${baseUrl}/healthz`, {
-                    signal: AbortSignal.timeout(15_000),
+                    signal: AbortSignal.timeout(10_000),
                     headers: { 
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+                        'User-Agent': 'Spider-Verse-KeepAlive/1.0',
                         'Accept': 'application/json'
                     }
                 });
-                if (res.ok) {
-                    // Success: Inbound HTTP traffic registered by Render routing proxy
-                } else {
+                if (!res.ok) {
                     console.warn(`[KeepAlive] Ping to ${baseUrl}/healthz returned ${res.status}`);
                 }
             } catch(e) {
@@ -23336,15 +23379,15 @@ function startKeepAlive() {
         }
     };
 
-    // First ping 5 minutes after startup, then repeating every 5 minutes (300,000 ms)
-    setTimeout(doPing, 5 * 60_000);
-    setInterval(doPing, 5 * 60_000);
+    // First ping 3 minutes after startup, then repeating every 4 minutes
+    setTimeout(doPing, 3 * 60_000);
+    setInterval(doPing, 4 * 60_000);
 
-    // Heartbeat Telemetry: Log process health & memory every 60s
+    // Heartbeat Telemetry: Log process health & memory every 5 min (reduce log noise)
     setInterval(() => {
         const mem = process.memoryUsage();
         console.log(`[Heartbeat] Uptime: ${Math.floor(process.uptime())}s | RSS: ${Math.round(mem.rss / 1024 / 1024)}MB | Heap: ${Math.round(mem.heapUsed / 1024 / 1024)}MB / ${Math.round(mem.heapTotal / 1024 / 1024)}MB`);
-    }, 60_000);
+    }, 5 * 60_000);
 }
 
 async function startFrontierPipeline() {

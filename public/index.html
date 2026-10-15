@@ -1402,9 +1402,18 @@ function startRefreshProgressBar(refreshMs) {
 
 // ─── Real-Time Push & Local Countdown Engine ──────────────────────────────────
 let liveWarboardWs = null;
+let liveWarboardEs = null;
 let isRealTimePushActive = false;
+let wsFailCount = 0;
 
 function connectRealTimeStream() {
+    if (liveWarboardWs && (liveWarboardWs.readyState === WebSocket.OPEN || liveWarboardWs.readyState === WebSocket.CONNECTING)) {
+        return;
+    }
+    if (wsFailCount >= 2) {
+        connectSseStream();
+        return;
+    }
     try {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws/warboard`;
@@ -1413,7 +1422,7 @@ function connectRealTimeStream() {
         liveWarboardWs.onopen = () => {
             console.log('[Warboard Real-Time] Connected to WebSocket stream');
             isRealTimePushActive = true;
-            // Relax background HTTP polling when live push is connected
+            wsFailCount = 0;
             if (fetchTimer) clearInterval(fetchTimer);
             fetchTimer = setInterval(() => { fetchWarboard(); }, 60000);
         };
@@ -1429,25 +1438,31 @@ function connectRealTimeStream() {
 
         liveWarboardWs.onclose = () => {
             isRealTimePushActive = false;
-            console.warn('[Warboard Real-Time] Disconnected, activating HTTP polling');
-            startPolling();
-            setTimeout(connectRealTimeStream, 8000);
+            wsFailCount++;
+            if (wsFailCount >= 2) {
+                console.warn('[Warboard Real-Time] WebSocket unavailable, switching to SSE stream');
+                connectSseStream();
+            } else {
+                setTimeout(connectRealTimeStream, 5000);
+            }
         };
 
         liveWarboardWs.onerror = () => {
-            if (liveWarboardWs) liveWarboardWs.close();
+            if (liveWarboardWs) {
+                try { liveWarboardWs.close(); } catch(e) {}
+            }
         };
     } catch(err) {
-        // Fall back to Server-Sent Events (SSE)
         connectSseStream();
     }
 }
 
 function connectSseStream() {
+    if (liveWarboardEs && liveWarboardEs.readyState !== EventSource.CLOSED) return;
     if (typeof EventSource !== 'undefined') {
         try {
-            const es = new EventSource('/api/warboard/stream');
-            es.onmessage = (event) => {
+            liveWarboardEs = new EventSource('/api/warboard/stream');
+            liveWarboardEs.onmessage = (event) => {
                 try {
                     const msg = JSON.parse(event.data);
                     if (msg.type === 'warboard_update' && msg.data) {
@@ -1455,20 +1470,18 @@ function connectSseStream() {
                     }
                 } catch(e) {}
             };
-            es.onopen = () => {
+            liveWarboardEs.onopen = () => {
                 isRealTimePushActive = true;
+                console.log('[Warboard Real-Time] Connected to SSE stream');
                 if (fetchTimer) clearInterval(fetchTimer);
                 fetchTimer = setInterval(() => { fetchWarboard(); }, 60000);
             };
-            es.onerror = () => {
+            liveWarboardEs.onerror = () => {
                 isRealTimePushActive = false;
-                startPolling();
             };
         } catch(e) {
-            startPolling();
+            isRealTimePushActive = false;
         }
-    } else {
-        startPolling();
     }
 }
 
@@ -1498,8 +1511,10 @@ function stopPolling() {
 function startPolling() {
     if (document.hidden) return;
     if (fetchTimer) clearInterval(fetchTimer);
-    let refreshMs = Math.max(3000, Math.floor(60000 / cpm));
-    connectRealTimeStream();
+    let refreshMs = Math.max(5000, Math.floor(60000 / cpm));
+    if (!isRealTimePushActive) {
+        connectRealTimeStream();
+    }
     fetchWarboard();
     startRefreshProgressBar(refreshMs);
     fetchTimer = setInterval(() => {
@@ -1507,8 +1522,10 @@ function startPolling() {
             stopPolling();
             return;
         }
-        fetchWarboard();
-        startRefreshProgressBar(refreshMs);
+        if (!isRealTimePushActive) {
+            fetchWarboard();
+            startRefreshProgressBar(refreshMs);
+        }
     }, refreshMs);
 }
 
@@ -1883,7 +1900,7 @@ async function fetchWarboard() {
         const myFacOverride = localStorage.getItem("warboard_myFactionId") || "";
         if (myFacOverride) reqHeaders['x-faction-id'] = myFacOverride;
         if (lastWarboardEtag) reqHeaders['If-None-Match'] = lastWarboardEtag;
-        const res = await fetch(`/api/warboard`, { headers: reqHeaders });
+        const res = await fetch(`/api/warboard`, { headers: reqHeaders, signal: AbortSignal.timeout(8000) });
         if (res.status === 304) {
             const updatedEl = document.getElementById("last-updated");
             if (updatedEl) updatedEl.innerText = `Updated ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'})}`;
