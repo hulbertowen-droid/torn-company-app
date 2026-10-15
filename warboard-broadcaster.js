@@ -29,7 +29,8 @@ class WarboardBroadcaster {
 
         this.wss = new WebSocketServer({
             server: httpServer,
-            path: '/ws/warboard'
+            path: '/ws/warboard',
+            perMessageDeflate: false
         });
 
         this.wss.on('connection', (ws, req) => {
