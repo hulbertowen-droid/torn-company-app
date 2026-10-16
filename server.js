@@ -1146,21 +1146,7 @@ function buildDiscordComponents(embed, isWebhook = false) {
         }
     }
 
-    // 3. If embed has targetId and is a Bot (not webhook), add a Claim Target button if not already present
-    if (!isWebhook && embed.targetId) {
-        const tId = String(embed.targetId).trim().replace(/[^0-9]/g, '');
-        if (tId) {
-            const hasClaim = rawButtons.some(b => b.custom_id && b.custom_id.startsWith('claim_'));
-            if (!hasClaim) {
-                rawButtons.push({
-                    type: 2, // Button
-                    style: 3, // Success / Green
-                    custom_id: `claim_${tId}`,
-                    label: "🎯 Claim Target"
-                });
-            }
-        }
-    }
+    // 3. User requested removal of automatic Claim Target UI button
 
     if (rawButtons.length === 0) return undefined;
 
@@ -2629,6 +2615,22 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
 
         if (fCountry && enemyCountryFlights[fCountry] && enemyCountryFlights[fCountry].length > 0) {
             for (const threatEnemy of enemyCountryFlights[fCountry]) {
+                const eStats = resolvePlayerBattleStats(threatEnemy.id, threatEnemy.level);
+                const fStats = resolvePlayerBattleStats(fId, fMem.level || 1);
+                const eTotal = eStats?.total || (threatEnemy.level ? estimateStatsFromLevel(threatEnemy.level) : 0);
+                const fTotal = fStats?.total || (fMem.level ? estimateStatsFromLevel(fMem.level) : 0);
+
+                // THREAT FILTER:
+                // An enemy is only a genuine threat if they are capable of defeating/farming our member.
+                // If our friendly member has higher or equal battle stats (e.g. Rapidz 25.29M vs GutterZ 679k),
+                // our friendly member has nothing to worry about — do NOT send an overseas threat warning!
+                if (fTotal > 0 && eTotal <= fTotal) {
+                    continue;
+                }
+                if (fTotal === 0 && (fMem.level || 0) >= (threatEnemy.level || 0)) {
+                    continue;
+                }
+
                 const alertKey = `overseas_${fId}_${threatEnemy.id}_${fCountry}`;
                 const lastAlert = overseasAlertTracker[alertKey] || 0;
 
@@ -2649,13 +2651,12 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
                     const eRemainingMin = Math.round(eRemainingSec / 60);
                     const eFlightDurationStr = formatFlightDuration(eRemainingMin);
 
-                    const eStats = resolvePlayerBattleStats(threatEnemy.id, threatEnemy.level);
-                    const fStats = resolvePlayerBattleStats(fId, fMem.level || 1);
-
                     const combinedPing = [targetPing, warRolePing].filter(Boolean).join(' ');
                     const pingMessage = combinedPing
                         ? `${combinedPing} ⚠️ **OVERSEAS THREAT WARNING**: An enemy is flying to your location in **${fCountry}**!`
                         : `⚠️ **OVERSEAS THREAT WARNING**: **${fMem.name}** [${fId}] is being targeted in **${fCountry}**!`;
+
+                    const memberFieldDisplay = targetPing || `**${fMem.name}** [${fId}]`;
 
                     const embed = {
                         title: "✈️ Overseas Threat Warning — Member Targeted",
@@ -2663,12 +2664,11 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
                         color: UI.COLORS.WARNING,
                         footer: { text: "F.R.I.D.A.Y. • FF Scouter Flight Tracker" },
                         timestamp: new Date().toISOString(),
-                        targetId: threatEnemy.id,
                         fields: [
-                            { name: "🎯 Targeted Member", value: `${targetPing ? targetPing + " " : ""}**${fMem.name}** [${fId}]`, inline: true },
+                            { name: "🎯 Targeted Member", value: memberFieldDisplay, inline: true },
                             { name: "📍 Destination", value: `**${fCountry}**`, inline: true },
-                            { name: "⚔️ Enemy Est. Stats", value: `~${formatStatNumber(eStats.total)}`, inline: true },
-                            { name: "🛡️ Your Est. Stats", value: `~${formatStatNumber(fStats.total)}`, inline: true },
+                            { name: "⚔️ Enemy Est. Stats", value: `~${formatStatNumber(eTotal)}`, inline: true },
+                            { name: "🛡️ Your Est. Stats", value: `~${formatStatNumber(fTotal)}`, inline: true },
                             { 
                                 name: "⏱️ Est. Flight Time (At Alert Time)", 
                                 value: `**~${eFlightDurationStr}** (~${eRemainingMin}m remaining)\nExpected Touchdown: <t:${eLandingTime}:R> (<t:${eLandingTime}:T>)\nAlert Sent: <t:${nowSec}:T>`, 
@@ -2683,7 +2683,7 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
                     };
 
                     sendChannelMessage(botToken, targetChannel, embed, pingMessage);
-                    console.log(`[Overseas Alert] Dispatched threat warning for ${fMem.name} in ${fCountry} vs ${threatEnemy.name}`);
+                    console.log(`[Overseas Alert] Dispatched threat warning for ${fMem.name} in ${fCountry} vs ${threatEnemy.name} (Enemy: ${eTotal} vs Friendly: ${fTotal})`);
                 }
             }
         }
@@ -2761,7 +2761,7 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
                         }
                         if (targetFighterId) {
                             targetFighterDiscordId = await getDiscordId(targetFighterId);
-                            targetFighterType = "Target Claimed By";
+                            targetFighterType = "Assigned Tactical Interceptor";
                         }
                     }
 
@@ -2813,7 +2813,6 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
                         color: UI.COLORS.BRAND,
                         footer: { text: "F.R.I.D.A.Y. • FF Scouter Flight Tracker" },
                         timestamp: new Date().toISOString(),
-                        targetId: eId,
                         fields: [
                             { name: "⚔️ Enemy Battle Stats", value: `**~${formatStatNumber(enemyTotal)}**`, inline: true },
                             { name: "🛡️ Our Faction Average", value: `~${formatStatNumber(factionAvgStats)}`, inline: true },
@@ -2832,8 +2831,8 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
 
                     if (targetFighterName) {
                         embed.fields.push({
-                            name: `🎯 ${targetFighterType}`,
-                            value: `${fighterPing ? fighterPing + " " : ""}**${targetFighterName}**${targetFighterId ? ` [${targetFighterId}]` : ''} — matched to intercept`,
+                            name: "🎯 Assigned Tactical Interceptor",
+                            value: fighterPing ? `${fighterPing} — matched to intercept` : `**${targetFighterName}**${targetFighterId ? ` [${targetFighterId}]` : ''} — matched to intercept`,
                             inline: false
                         });
                     }
@@ -2866,7 +2865,6 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
                             color: UI.COLORS.ERROR,
                             footer: { text: "F.R.I.D.A.Y. • FF Scouter Flight Tracker" },
                             timestamp: new Date().toISOString(),
-                            targetId: tracker.enemyId,
                             fields: [
                                 { name: "⚔️ Enemy Battle Stats", value: `**~${formatStatNumber(tracker.enemyStats)}**`, inline: true },
                                 { name: "🛡️ Faction Average", value: `~${formatStatNumber(tracker.factionAvg)}`, inline: true },
@@ -2880,8 +2878,8 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
 
                         if (tracker.targetFighterName) {
                             embed.fields.push({
-                                name: "🎯 Assigned Interceptor",
-                                value: `${fighterPing ? fighterPing + " " : ""}**${tracker.targetFighterName}**${tracker.targetFighterId ? ` [${tracker.targetFighterId}]` : ''}`,
+                                name: "🎯 Assigned Tactical Interceptor",
+                                value: fighterPing ? `${fighterPing} — coordinate hit` : `**${tracker.targetFighterName}**${tracker.targetFighterId ? ` [${tracker.targetFighterId}]` : ''}`,
                                 inline: false
                             });
                         }
@@ -4560,9 +4558,8 @@ app.post('/api/test-discord-alert', async (req, res) => {
             color: UI.COLORS.WARNING,
             footer: { text: "F.R.I.D.A.Y. • FF Scouter Flight Tracker" },
             timestamp: new Date().toISOString(),
-            targetId: "999999",
             fields: [
-                { name: "🎯 Targeted Member", value: `${(discordId && /^\d{15,22}$/.test(String(discordId).trim())) ? `<@${String(discordId).trim()}> ` : ""}**[Your Name]** [123456]`, inline: true },
+                { name: "🎯 Targeted Member", value: (discordId && /^\d{15,22}$/.test(String(discordId).trim())) ? `<@${String(discordId).trim()}>` : "**[Your Name]** [123456]", inline: true },
                 { name: "📍 Destination", value: "**Mexico**", inline: true },
                 { name: "⚔️ Enemy Est. Stats", value: "~150.00M", inline: true },
                 { name: "🛡️ Your Est. Stats", value: "~45.00M", inline: true },
@@ -4593,7 +4590,6 @@ app.post('/api/test-discord-alert', async (req, res) => {
             color: UI.COLORS.BRAND,
             footer: { text: "F.R.I.D.A.Y. • FF Scouter Flight Tracker" },
             timestamp: new Date().toISOString(),
-            targetId: "999999",
             fields: [
                 { name: "⚔️ Enemy Battle Stats", value: "**~285.50M**", inline: true },
                 { name: "🛡️ Our Faction Average", value: "**~82.40M**", inline: true },
@@ -4605,7 +4601,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
                 },
                 {
                     name: "🎯 Assigned Tactical Interceptor",
-                    value: `${fighterPing ? fighterPing + " " : ""}**[Your Name]** [123456] — matched to intercept`,
+                    value: fighterPing ? `${fighterPing} — matched to intercept` : "**[Your Name]** [123456] — matched to intercept",
                     inline: false
                 }
             ],
@@ -4629,14 +4625,13 @@ app.post('/api/test-discord-alert', async (req, res) => {
             color: UI.COLORS.ERROR,
             footer: { text: "F.R.I.D.A.Y. • FF Scouter Flight Tracker" },
             timestamp: new Date().toISOString(),
-            targetId: "999999",
             fields: [
                 { name: "⚔️ Enemy Battle Stats", value: "**~285.50M**", inline: true },
                 { name: "🛡️ Faction Average", value: "**~82.40M**", inline: true },
                 { name: "⏱️ Touchdown ETA", value: `<t:${testLanding}:R> (<t:${testLanding}:T>)`, inline: true },
                 {
-                    name: "🎯 Assigned Interceptor",
-                    value: `${fighterPing ? fighterPing + " " : ""}**[Your Name]** [123456]`,
+                    name: "🎯 Assigned Tactical Interceptor",
+                    value: fighterPing ? `${fighterPing} — coordinate hit` : "**[Your Name]** [123456]",
                     inline: false
                 }
             ],
