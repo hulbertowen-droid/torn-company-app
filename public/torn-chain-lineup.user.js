@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         FactionOS Chain Manager (Standalone)
 // @namespace    https://factionos-production.up.railway.app/
-// @version      2.4.0
+// @version      2.4.1
 // @description  Professional standalone chain lineup manager on Torn. Direct API hits, mobile touch optimization, compact mobile layout, intelligent readiness detection, auto-advance, 1-click chat auto-send. Runs on faction pages only.
 // @author       FactionOS
 // @match        https://www.torn.com/factions.php*
@@ -388,15 +388,22 @@
     // ══════════════════════════════════════════════════════════════
     //  PLAYER READINESS HELPER (GROUNDED IN TORN DATA)
     // ══════════════════════════════════════════════════════════════
-    function getMemberReadiness(id) {
-        const st = memberStatuses[String(id)];
+    function getMemberReadiness(id, name) {
+        let st = id ? memberStatuses[String(id)] : null;
+        if (!st && name && factionMembers.length) {
+            const fm = factionMembers.find(m => m.name.toLowerCase() === name.toLowerCase());
+            if (fm) {
+                st = { online: fm.online, state: fm.state, until: fm.until || 0, lastActionTs: fm.lastActionTs || 0 };
+            }
+        }
         if (!st) {
+            // Default to Ready so we NEVER falsely auto-skip members whose status is still loading!
             return {
-                online: 'Offline', state: 'Okay', isReady: false,
-                statusText: 'OFFLINE • UNAVAILABLE',
-                shortText: 'OFFLINE',
-                dotColor: '#718096',
-                cls: 'st-offline'
+                online: 'Online', state: 'Okay', isReady: true,
+                statusText: 'ONLINE • READY',
+                shortText: 'ONLINE • READY',
+                dotColor: '#2ecc71',
+                cls: 'st-ready'
             };
         }
 
@@ -743,45 +750,94 @@
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  AUTO-SKIP TIMER
+    //  CHAIN TIMER WATCHDOG & EMERGENCY AUTO-SKIP
+    //  NEVER skips players while waiting for hit window!
+    //  ONLY skips if:
+    //  1. Chain timer drops to panic emergency (<= 35s) and player hasn't hit
+    //  2. Player is confirmed in Hospital/Traveling AND chain has entered hit window
     // ══════════════════════════════════════════════════════════════
-    const AUTO_SKIP_SECS = 45;
-    function startAutoSkip() {
-        clearAutoSkip();
-        if (!lineup.length) return;
-        const up = lineup[0];
-        const readiness = getMemberReadiness(up.id);
-        // If the player currently UP is confirmed unavailable (Hospital/Traveling/Jail/Offline), skip quickly (10s)
-        autoSkipLeft = readiness.isReady ? AUTO_SKIP_SECS : 10;
-        updateAutoSkipDisplay();
+    let lastAutoSkipTs = 0;
 
-        autoSkipTimer = setInterval(() => {
-            autoSkipLeft--;
+    function checkAutoSkipWatchdog() {
+        if (!autoMode || !chainActive || !lineup.length) {
             updateAutoSkipDisplay();
-            if (autoSkipLeft <= 0) {
-                clearAutoSkip();
-                if (lineup.length > 0) {
-                    const [s] = lineup.splice(0, 1);
-                    s.skipped = true;
-                    lineup.push(s);
-                    save();
-                    renderLineup();
-                    flashStatus(`Auto-skipped ${s.name} (unavailable/timeout). Next UP: ${lineup[0] ? lineup[0].name : 'none'}`, false);
-                    if (autoMode) startAutoSkip();
-                }
+            return;
+        }
+
+        // Prevent rapid back-to-back skips (at least 6 seconds between skips)
+        if (Date.now() - lastAutoSkipTs < 6000) return;
+
+        const up = lineup[0];
+        const readiness = getMemberReadiness(up.id, up.name);
+        const targetSecs = parseTimeToSecs(targetHitTime) || 180; // default 3:00
+
+        // CASE 1: Player is Online / Idle and Okay (READY)
+        // They are SUPPOSED to wait for the target hit time!
+        // NEVER skip them while chainTimeout > 35s!
+        if (readiness.isReady) {
+            // Panic Emergency Threshold: timer drops to <= 35 seconds!
+            if (chainTimeout > 0 && chainTimeout <= 35) {
+                lastAutoSkipTs = Date.now();
+                const [s] = lineup.splice(0, 1);
+                s.skipped = true;
+                lineup.push(s);
+                save();
+                renderLineup();
+                flashStatus(`⚠️ Panic skip: ${s.name} missed hit window (chain at ${fmtSecs(chainTimeout)})! Next UP: ${lineup[0] ? lineup[0].name : 'none'}`, true);
             }
-        }, 1000);
+            updateAutoSkipDisplay();
+            return;
+        }
+
+        // CASE 2: Player is confirmed Unavailable (Hospital, Traveling, Abroad, Jail, Offline)
+        // Only skip if the chain timer has reached or passed the hit window (chainTimeout <= targetSecs) or is critical (<= 60s)
+        if (!readiness.isReady) {
+            if (chainTimeout > 0 && (chainTimeout <= targetSecs || chainTimeout <= 60)) {
+                lastAutoSkipTs = Date.now();
+                const [s] = lineup.splice(0, 1);
+                s.skipped = true;
+                lineup.push(s);
+                save();
+                renderLineup();
+                flashStatus(`Auto-skipped ${s.name} (${readiness.shortText}) — hit window reached. Next UP: ${lineup[0] ? lineup[0].name : 'none'}`, false);
+            }
+            updateAutoSkipDisplay();
+        }
+    }
+
+    function startAutoSkip() {
+        checkAutoSkipWatchdog();
     }
 
     function clearAutoSkip() {
-        if (autoSkipTimer) { clearInterval(autoSkipTimer); autoSkipTimer = null; }
-        autoSkipLeft = 0;
         updateAutoSkipDisplay();
     }
 
     function updateAutoSkipDisplay() {
         const el = document.getElementById('sv-autoskip-cd');
-        if (el) el.textContent = autoSkipLeft > 0 ? `auto-skip in ${autoSkipLeft}s` : '';
+        if (!el) return;
+        if (!autoMode || !chainActive || !lineup.length) {
+            el.textContent = '';
+            return;
+        }
+
+        const up = lineup[0];
+        const readiness = getMemberReadiness(up.id, up.name);
+        if (readiness.isReady) {
+            // If in panic zone (<= 60s and > 35s), warn about panic skip countdown
+            if (chainTimeout > 35 && chainTimeout <= 60) {
+                el.textContent = `panic skip in ${chainTimeout - 35}s`;
+                el.style.color = '#e3b341';
+            } else if (chainTimeout > 0 && chainTimeout <= 35) {
+                el.textContent = `CRITICAL SKIP`;
+                el.style.color = '#f85149';
+            } else {
+                el.textContent = '';
+            }
+        } else {
+            el.textContent = readiness.shortText;
+            el.style.color = '#f85149';
+        }
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -845,6 +901,7 @@
         timerInterval = setInterval(() => {
             if (chainActive && chainTimeout > 0) chainTimeout--;
             renderChainBar();
+            if (autoMode) checkAutoSkipWatchdog();
         }, 1000);
     }
 
@@ -1013,7 +1070,7 @@
         let offlineCount = 0;
 
         for (const m of lineup) {
-            const r = getMemberReadiness(m.id);
+            const r = getMemberReadiness(m.id, m.name);
             if (r.isReady) readyCount++;
             if (r.online === 'Online') onlineCount++;
             else if (r.online === 'Idle') idleCount++;
@@ -1055,13 +1112,13 @@
 
         // ── 1. CURRENTLY UP CARD (Position 0) ──
         const up = lineup[0];
-        const rUp = getMemberReadiness(up.id);
+        const rUp = getMemberReadiness(up.id, up.name);
 
         html += `
         <div class="sv-tier-card sv-up-card" draggable="true" data-idx="0">
             <div class="sv-tier-header">
                 <div class="sv-tier-tag up-tag">CURRENTLY UP</div>
-                ${autoMode ? `<div class="sv-autoskip-txt" id="sv-autoskip-cd">${autoSkipLeft > 0 ? `auto-skip in ${autoSkipLeft}s` : ''}</div>` : ''}
+                ${autoMode ? `<div class="sv-autoskip-txt" id="sv-autoskip-cd"></div>` : ''}
             </div>
             <div class="sv-tier-body">
                 <div class="sv-player-row">
@@ -1095,7 +1152,7 @@
         // ── 2. NEXT PLAYER CARD (Position 1) ──
         if (lineup.length >= 2) {
             const nx = lineup[1];
-            const rNx = getMemberReadiness(nx.id);
+            const rNx = getMemberReadiness(nx.id, nx.name);
 
             html += `
             <div class="sv-tier-card sv-next-card" draggable="true" data-idx="1">
@@ -1136,7 +1193,7 @@
             html += `<div class="sv-queue-header">Queue (${lineup.length - 2})</div>`;
             for (let i = 2; i < lineup.length; i++) {
                 const m = lineup[i];
-                const rM = getMemberReadiness(m.id);
+                const rM = getMemberReadiness(m.id, m.name);
 
                 html += `
                 <div class="sv-queue-row" draggable="true" data-idx="${i}">
@@ -1199,7 +1256,7 @@
 
         box.innerHTML = `<div class="sv-suggest-hdr">Faction Members (${matches.length})</div>` +
             matches.map((m, idx) => {
-                const r = getMemberReadiness(m.id);
+                const r = getMemberReadiness(m.id, m.name);
                 let nameHtml = esc(m.name);
                 if (val) {
                     nameHtml = nameHtml.replace(new RegExp(`(${escRe(val)})`, 'gi'), '<mark class="sv-mark">$1</mark>');

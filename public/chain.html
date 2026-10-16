@@ -1629,8 +1629,8 @@ function _memberState(m) {
 }
 function isMemberEligible(memberId) {
     const st = memberStatuses[memberId];
-    if (!st) return false;
-    return st.online === 'Online' && st.state === 'Okay';
+    if (!st) return true; // Default to true if loading to avoid false skips
+    return (st.online === 'Online' || st.online === 'Idle') && st.state === 'Okay';
 }
 
 function _statusPillClass(online, state) {
