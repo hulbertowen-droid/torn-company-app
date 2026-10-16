@@ -1440,6 +1440,16 @@ async function getDiscordId(tornId) {
     if (discordIdCache[keyStr]) {
         return discordIdCache[keyStr] === "none" ? null : discordIdCache[keyStr];
     }
+    // Check local verified Discord user mapping first
+    if (typeof verifiedDiscordToTorn === 'object' && verifiedDiscordToTorn) {
+        for (const [dId, val] of Object.entries(verifiedDiscordToTorn)) {
+            const vTornId = String(val?.tornId || val || '');
+            if (vTornId === keyStr && /^\d{15,22}$/.test(dId)) {
+                discordIdCache[keyStr] = dId;
+                return dId;
+            }
+        }
+    }
     let key = getNextApiKey();
     if (!key) return null;
     try {
@@ -1449,7 +1459,7 @@ async function getDiscordId(tornId) {
         // data.discord.userID is the Torn player ID, which must NOT be used for Discord pings!
         const rawDiscordId = data.discord?.discordID || data.discord?.discordId || data.discord?.discord_id || "";
         const cleanDiscordId = rawDiscordId ? String(rawDiscordId).trim() : "";
-        if (/^\d{17,20}$/.test(cleanDiscordId)) {
+        if (/^\d{15,22}$/.test(cleanDiscordId)) {
             discordIdCache[keyStr] = cleanDiscordId;
             return cleanDiscordId;
         }
@@ -2627,22 +2637,43 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
                     overseasAlertTracker[alertKey] = nowMs;
 
                     const dId = await getDiscordId(fId);
-                    const pingStr = (dId && /^\d{17,20}$/.test(dId)) ? `<@${dId}>` : "";
+                    const targetPing = (dId && /^\d{15,22}$/.test(String(dId).trim())) ? `<@${String(dId).trim()}>` : "";
+                    const warRolePing = (discordConfig.retalRoleId && /^\d{15,22}$/.test(String(discordConfig.retalRoleId).trim()))
+                        ? `<@&${String(discordConfig.retalRoleId).trim()}>`
+                        : "";
+
+                    // Query enemy flight details to destination country
+                    const enemyFlightInfo = await getOrFetchFlightDetails(threatEnemy.id, fCountry);
+                    const eLandingTime = enemyFlightInfo.landingTime || (nowSec + 1500);
+                    const eRemainingSec = Math.max(0, eLandingTime - nowSec);
+                    const eRemainingMin = Math.round(eRemainingSec / 60);
+                    const eFlightDurationStr = formatFlightDuration(eRemainingMin);
 
                     const eStats = resolvePlayerBattleStats(threatEnemy.id, threatEnemy.level);
                     const fStats = resolvePlayerBattleStats(fId, fMem.level || 1);
 
+                    const combinedPing = [targetPing, warRolePing].filter(Boolean).join(' ');
+                    const pingMessage = combinedPing
+                        ? `${combinedPing} ⚠️ **OVERSEAS THREAT WARNING**: An enemy is flying to your location in **${fCountry}**!`
+                        : `⚠️ **OVERSEAS THREAT WARNING**: **${fMem.name}** [${fId}] is being targeted in **${fCountry}**!`;
+
                     const embed = {
-                        title: "✈️ Overseas Threat Warning",
-                        description: `**${fMem.name}** — enemy **${threatEnemy.name}** [${threatEnemy.id}] is flying to **${fCountry}** where you are currently located!\n\n⚠️ **Action Required**: Return to Torn City or depart to another destination before they land to avoid being farmed abroad.`,
+                        title: "✈️ Overseas Threat Warning — Member Targeted",
+                        description: `**${fMem.name}** — enemy **${threatEnemy.name}** [${threatEnemy.id}] is flying directly to **${fCountry}** where you are currently located!\n\n⚠️ **Action Required**: Return to Torn City or depart to another destination before they land to avoid being farmed abroad.`,
                         color: UI.COLORS.WARNING,
-                        footer: UI.FOOTER,
+                        footer: { text: "F.R.I.D.A.Y. • FF Scouter Flight Tracker" },
                         timestamp: new Date().toISOString(),
                         targetId: threatEnemy.id,
                         fields: [
+                            { name: "🎯 Targeted Member", value: `${targetPing ? targetPing + " " : ""}**${fMem.name}** [${fId}]`, inline: true },
                             { name: "📍 Destination", value: `**${fCountry}**`, inline: true },
                             { name: "⚔️ Enemy Est. Stats", value: `~${formatStatNumber(eStats.total)}`, inline: true },
-                            { name: "🛡️ Your Est. Stats", value: `~${formatStatNumber(fStats.total)}`, inline: true }
+                            { name: "🛡️ Your Est. Stats", value: `~${formatStatNumber(fStats.total)}`, inline: true },
+                            { 
+                                name: "⏱️ Est. Flight Time (At Alert Time)", 
+                                value: `**~${eFlightDurationStr}** (~${eRemainingMin}m remaining)\nExpected Touchdown: <t:${eLandingTime}:R> (<t:${eLandingTime}:T>)\nAlert Sent: <t:${nowSec}:T>`, 
+                                inline: false 
+                            }
                         ],
                         links: [
                             { label: "✈️ Travel Agency", url: "https://www.torn.com/travelagency.php" },
@@ -2651,7 +2682,7 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
                         ]
                     };
 
-                    sendChannelMessage(botToken, targetChannel, embed, pingStr);
+                    sendChannelMessage(botToken, targetChannel, embed, pingMessage);
                     console.log(`[Overseas Alert] Dispatched threat warning for ${fMem.name} in ${fCountry} vs ${threatEnemy.name}`);
                 }
             }
@@ -2707,8 +2738,42 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
                     const landingTime = flightInfo.landingTime || (nowSec + 1800);
                     const remainingSec = Math.max(0, landingTime - nowSec);
                     const remainingMin = Math.round(remainingSec / 60);
+                    const flightDurationStr = formatFlightDuration(remainingMin);
 
                     const isAlreadyNearLanding = remainingSec <= 1860; // <= 31 mins left
+
+                    // Resolve who is targeted or assigned to counter this enemy:
+                    let targetFighterName = null;
+                    let targetFighterId = null;
+                    let targetFighterDiscordId = null;
+                    let targetFighterType = "Assigned Fighter";
+
+                    const claimed = (typeof claims !== 'undefined' && claims[eId]) || 
+                                    (typeof fState !== 'undefined' && fState?.claims?.[eId]) ||
+                                    (typeof factionWarState !== 'undefined' && Object.values(factionWarState).find(fs => fs.claims?.[eId])?.claims?.[eId]);
+                    if (claimed && claimed.playerName) {
+                        targetFighterName = claimed.playerName;
+                        for (const [fId, fm] of Object.entries(friendlyMembers)) {
+                            if (fm.name && fm.name.toLowerCase() === claimed.playerName.toLowerCase()) {
+                                targetFighterId = fId;
+                                break;
+                            }
+                        }
+                        if (targetFighterId) {
+                            targetFighterDiscordId = await getDiscordId(targetFighterId);
+                            targetFighterType = "Target Claimed By";
+                        }
+                    }
+
+                    if (!targetFighterId) {
+                        const { name: bestMatchName, id: bestMatchId } = findBestTacticalFighter(friendlyMembers, eMem, eId);
+                        if (bestMatchId) {
+                            targetFighterName = bestMatchName;
+                            targetFighterId = bestMatchId;
+                            targetFighterDiscordId = await getDiscordId(bestMatchId);
+                            targetFighterType = "Assigned Tactical Interceptor";
+                        }
+                    }
 
                     tracker = {
                         enemyId: eId,
@@ -2718,6 +2783,9 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
                         landingTime,
                         enemyStats: enemyTotal,
                         factionAvg: factionAvgStats,
+                        targetFighterName,
+                        targetFighterId,
+                        targetFighterDiscordId,
                         alertedInitial: true,
                         alerted30m: isAlreadyNearLanding,
                         startedAt: nowMs
@@ -2727,12 +2795,17 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
 
                     // Initial announcement
                     const descText = isAlreadyNearLanding
-                        ? `**${tracker.enemyName}** [${eId}] is **flying back to Torn** from **${originCountry}**!\n\n⚠️ **IMMINENT TOUCHDOWN**: Their airtime is already within **~${remainingMin} minutes** of landing in Torn City!\nPrepare attacks and stack energy now.`
+                        ? `**${tracker.enemyName}** [${eId}] is **flying back to Torn** from **${originCountry}**!\n\n⚠️ **IMMINENT TOUCHDOWN**: Their airtime is already within **~${remainingMin} minutes** (${flightDurationStr}) of landing in Torn City!\nPrepare attacks and stack energy now.`
                         : `**${tracker.enemyName}** [${eId}] is **flying back to Torn** from **${originCountry}**!\n\n⚠️ **High-Stat Threat**: Battle stats exceed our faction average. F.R.I.D.A.Y will dispatch a follow-up warning when they reach **~30 minutes** away from landing.`;
 
+                    const fighterPing = (targetFighterDiscordId && /^\d{15,22}$/.test(String(targetFighterDiscordId).trim()))
+                        ? `<@${String(targetFighterDiscordId).trim()}>`
+                        : "";
                     const warRolePing = (discordConfig.retalRoleId && /^\d{15,22}$/.test(String(discordConfig.retalRoleId).trim()))
                         ? `<@&${String(discordConfig.retalRoleId).trim()}>`
                         : "";
+
+                    const combinedPing = [fighterPing, warRolePing].filter(Boolean).join(' ');
 
                     const embed = {
                         title: "✈️ High-Threat Inbound — Enemy Flying Home",
@@ -2745,7 +2818,11 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
                             { name: "⚔️ Enemy Battle Stats", value: `**~${formatStatNumber(enemyTotal)}**`, inline: true },
                             { name: "🛡️ Our Faction Average", value: `~${formatStatNumber(factionAvgStats)}`, inline: true },
                             { name: "📍 Flying From", value: `**${originCountry}**`, inline: true },
-                            { name: "⏱️ Touchdown ETA", value: `<t:${landingTime}:R> (<t:${landingTime}:T>)`, inline: false }
+                            { 
+                                name: "⏱️ Est. Flight Time (At Alert Time)", 
+                                value: `**~${flightDurationStr}** (~${remainingMin}m remaining)\nExpected Touchdown: <t:${landingTime}:R> (<t:${landingTime}:T>)\nAlert Sent: <t:${nowSec}:T>`, 
+                                inline: false 
+                            }
                         ],
                         links: [
                             { label: "⚔️ Attack Target", url: `https://www.torn.com/page.php?sid=attack&user2ID=${eId}` },
@@ -2753,7 +2830,15 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
                         ]
                     };
 
-                    sendChannelMessage(botToken, targetChannel, embed, warRolePing);
+                    if (targetFighterName) {
+                        embed.fields.push({
+                            name: `🎯 ${targetFighterType}`,
+                            value: `${fighterPing ? fighterPing + " " : ""}**${targetFighterName}**${targetFighterId ? ` [${targetFighterId}]` : ''} — matched to intercept`,
+                            inline: false
+                        });
+                    }
+
+                    sendChannelMessage(botToken, targetChannel, embed, combinedPing);
                     console.log(`[High-Threat Inbound] Announced return flight for enemy ${tracker.enemyName} [${eId}] from ${originCountry} (Stats: ${enemyTotal} vs Avg: ${factionAvgStats})`);
                 }
             } else {
@@ -2766,9 +2851,14 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
                         tracker.alerted30m = true;
                         saveInboundThreats();
 
+                        const fighterPing = (tracker.targetFighterDiscordId && /^\d{15,22}$/.test(String(tracker.targetFighterDiscordId).trim()))
+                            ? `<@${String(tracker.targetFighterDiscordId).trim()}>`
+                            : "";
                         const warRolePing = (discordConfig.retalRoleId && /^\d{15,22}$/.test(String(discordConfig.retalRoleId).trim()))
                             ? `<@&${String(discordConfig.retalRoleId).trim()}>`
                             : "";
+
+                        const combinedPing = [fighterPing, warRolePing].filter(Boolean).join(' ');
 
                         const embed = {
                             title: "⚠️ High-Threat Inbound — ~30m to Landing",
@@ -2788,7 +2878,15 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
                             ]
                         };
 
-                        sendChannelMessage(botToken, targetChannel, embed, warRolePing);
+                        if (tracker.targetFighterName) {
+                            embed.fields.push({
+                                name: "🎯 Assigned Interceptor",
+                                value: `${fighterPing ? fighterPing + " " : ""}**${tracker.targetFighterName}**${tracker.targetFighterId ? ` [${tracker.targetFighterId}]` : ''}`,
+                                inline: false
+                            });
+                        }
+
+                        sendChannelMessage(botToken, targetChannel, embed, combinedPing);
                         console.log(`[High-Threat Inbound] Dispatched 30m landing warning for ${tracker.enemyName} [${tracker.enemyId}]`);
                     }
                 }
@@ -4441,22 +4539,38 @@ app.post('/api/test-discord-alert', async (req, res) => {
         return res.json({ success: false, error: "Please provide your Faction Bot Token and Channel ID, or a Discord Webhook URL." });
     }
     
-    let pingStr = (discordId && /^\d{17,20}$/.test(String(discordId).trim())) ? `<@${String(discordId).trim()}>` : "";
+    let pingStr = (discordId && /^\d{15,22}$/.test(String(discordId).trim())) ? `<@${String(discordId).trim()}>` : "";
     let embed = {};
     
     const t = String(type || '').toLowerCase().trim();
     if (t === 'travel') {
+        const testLanding = Math.floor(Date.now() / 1000) + (18 * 60);
+        const nowSec = Math.floor(Date.now() / 1000);
+        const warRolePing = (discordConfig.retalRoleId && /^\d{15,22}$/.test(String(discordConfig.retalRoleId).trim()))
+            ? `<@&${String(discordConfig.retalRoleId).trim()}>`
+            : "";
+        const combinedPing = [pingStr, warRolePing].filter(Boolean).join(' ');
+        pingStr = combinedPing
+            ? `${combinedPing} ⚠️ **OVERSEAS THREAT WARNING**: An enemy is flying to your location in **Mexico**!`
+            : `⚠️ **OVERSEAS THREAT WARNING**: **[Your Name]** [123456] is being targeted in **Mexico**!`;
+
         embed = {
-            title: "✈️ Overseas Threat Warning",
-            description: `**[Your Name]** — enemy **[Test] EnemyFighter** [999999] is flying to **Mexico** where you are currently located!\n\n⚠️ **Action Required**: Return to Torn City or depart to another destination before they land to avoid being farmed abroad.`,
+            title: "✈️ Overseas Threat Warning — Member Targeted",
+            description: `**[Your Name]** — enemy **[Test] EnemyFighter** [999999] is flying directly to **Mexico** where you are currently located!\n\n⚠️ **Action Required**: Return to Torn City or depart to another destination before they land to avoid being farmed abroad.`,
             color: UI.COLORS.WARNING,
-            footer: UI.FOOTER,
+            footer: { text: "F.R.I.D.A.Y. • FF Scouter Flight Tracker" },
             timestamp: new Date().toISOString(),
             targetId: "999999",
             fields: [
+                { name: "🎯 Targeted Member", value: `${(discordId && /^\d{15,22}$/.test(String(discordId).trim())) ? `<@${String(discordId).trim()}> ` : ""}**[Your Name]** [123456]`, inline: true },
                 { name: "📍 Destination", value: "**Mexico**", inline: true },
                 { name: "⚔️ Enemy Est. Stats", value: "~150.00M", inline: true },
-                { name: "🛡️ Your Est. Stats", value: "~45.00M", inline: true }
+                { name: "🛡️ Your Est. Stats", value: "~45.00M", inline: true },
+                { 
+                    name: "⏱️ Est. Flight Time (At Alert Time)", 
+                    value: `**~18m remaining**\nExpected Touchdown: <t:${testLanding}:R> (<t:${testLanding}:T>)\nAlert Sent: <t:${nowSec}:T>`, 
+                    inline: false 
+                }
             ],
             links: [
                 { label: "✈️ Travel Agency", url: `https://www.torn.com/travelagency.php` },
@@ -4466,6 +4580,13 @@ app.post('/api/test-discord-alert', async (req, res) => {
         };
     } else if (t === 'inboundthreat' || t === 'inbound') {
         const testLanding = Math.floor(Date.now() / 1000) + (135 * 60);
+        const nowSec = Math.floor(Date.now() / 1000);
+        const warRolePing = (discordConfig.retalRoleId && /^\d{15,22}$/.test(String(discordConfig.retalRoleId).trim()))
+            ? `<@&${String(discordConfig.retalRoleId).trim()}>`
+            : "";
+        const fighterPing = (discordId && /^\d{15,22}$/.test(String(discordId).trim())) ? `<@${String(discordId).trim()}>` : "";
+        pingStr = [fighterPing, warRolePing].filter(Boolean).join(' ');
+
         embed = {
             title: "✈️ High-Threat Inbound — Enemy Flying Home",
             description: `**[Test] HeavyweightEnemy** [999999] is **flying back to Torn** from **Switzerland**!\n\n⚠️ **High-Stat Threat**: Battle stats exceed our faction average. F.R.I.D.A.Y will dispatch a follow-up warning when they reach **~30 minutes** away from landing.`,
@@ -4477,7 +4598,16 @@ app.post('/api/test-discord-alert', async (req, res) => {
                 { name: "⚔️ Enemy Battle Stats", value: "**~285.50M**", inline: true },
                 { name: "🛡️ Our Faction Average", value: "**~82.40M**", inline: true },
                 { name: "📍 Flying From", value: "**Switzerland**", inline: true },
-                { name: "⏱️ Touchdown ETA", value: `<t:${testLanding}:R> (<t:${testLanding}:T>)`, inline: false }
+                { 
+                    name: "⏱️ Est. Flight Time (At Alert Time)", 
+                    value: `**~2h 15m** (~135m remaining)\nExpected Touchdown: <t:${testLanding}:R> (<t:${testLanding}:T>)\nAlert Sent: <t:${nowSec}:T>`, 
+                    inline: false 
+                },
+                {
+                    name: "🎯 Assigned Tactical Interceptor",
+                    value: `${fighterPing ? fighterPing + " " : ""}**[Your Name]** [123456] — matched to intercept`,
+                    inline: false
+                }
             ],
             links: [
                 { label: "⚔️ Attack Target", url: `https://www.torn.com/page.php?sid=attack&user2ID=999999` },
@@ -4486,6 +4616,13 @@ app.post('/api/test-discord-alert', async (req, res) => {
         };
     } else if (t === 'threat30m' || t === 'inbound30m') {
         const testLanding = Math.floor(Date.now() / 1000) + (29 * 60);
+        const nowSec = Math.floor(Date.now() / 1000);
+        const warRolePing = (discordConfig.retalRoleId && /^\d{15,22}$/.test(String(discordConfig.retalRoleId).trim()))
+            ? `<@&${String(discordConfig.retalRoleId).trim()}>`
+            : "";
+        const fighterPing = (discordId && /^\d{15,22}$/.test(String(discordId).trim())) ? `<@${String(discordId).trim()}>` : "";
+        pingStr = [fighterPing, warRolePing].filter(Boolean).join(' ');
+
         embed = {
             title: "⚠️ High-Threat Inbound — ~30m to Landing",
             description: `**[Test] HeavyweightEnemy** [999999] is now **~30 minutes away** (29m remaining) from landing back in Torn City from **Switzerland**!\n\n🎯 Coordinate chain hits, stack energy, or get ready to hospitalize on touchdown.`,
@@ -4496,7 +4633,12 @@ app.post('/api/test-discord-alert', async (req, res) => {
             fields: [
                 { name: "⚔️ Enemy Battle Stats", value: "**~285.50M**", inline: true },
                 { name: "🛡️ Faction Average", value: "**~82.40M**", inline: true },
-                { name: "⏱️ Touchdown ETA", value: `<t:${testLanding}:R> (<t:${testLanding}:T>)`, inline: true }
+                { name: "⏱️ Touchdown ETA", value: `<t:${testLanding}:R> (<t:${testLanding}:T>)`, inline: true },
+                {
+                    name: "🎯 Assigned Interceptor",
+                    value: `${fighterPing ? fighterPing + " " : ""}**[Your Name]** [123456]`,
+                    inline: false
+                }
             ],
             links: [
                 { label: "⚔️ Attack Target", url: `https://www.torn.com/page.php?sid=attack&user2ID=999999` },
