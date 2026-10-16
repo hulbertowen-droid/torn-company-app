@@ -526,8 +526,10 @@ app.use(express.static('public', {
     setHeaders: (res, filePath) => {
         const p = filePath.toLowerCase();
         if (p.endsWith('.user.js')) {
-            // Tampermonkey userscripts: cache 30 mins in browser, stale-while-revalidate for 24h
-            res.setHeader('Cache-Control', 'public, max-age=1800, stale-while-revalidate=86400');
+            // Tampermonkey userscripts: immediate fresh delivery (never stale)
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
         } else if (p.endsWith('.html')) {
             // HTML files: fast tab switching with 15s browser cache + 300s background revalidation
             res.setHeader('Cache-Control', 'public, max-age=15, stale-while-revalidate=300');
