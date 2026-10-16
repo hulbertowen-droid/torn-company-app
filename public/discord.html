@@ -1739,17 +1739,18 @@
                             </div>
                         </div>
 
-                        <div class="trigger-row" id="ti-travelWarnings" data-tags="war travel abroad threat warning overseas">
+                        <div class="trigger-row" id="ti-travelWarnings" data-tags="war travel abroad threat warning overseas return inbound flight">
                             <div class="trigger-row-left">
                                 <span class="trigger-icon">⚠️</span>
                                 <div class="trigger-info">
-                                    <div class="trigger-name">Overseas Threat Warning <span class="tag premium">PREMIUM</span></div>
-                                    <div class="trigger-desc">Pings a faction member abroad when an enemy is flying to their exact destination. Warns them to return home.</div>
+                                    <div class="trigger-name">Overseas Threat & High-Stat Return Warning <span class="tag premium">PREMIUM</span></div>
+                                    <div class="trigger-desc">Pings faction members abroad when an enemy flies to their destination, and alerts Discord when high-stat enemies (&gt; faction average) fly back to Torn with FF Scouter ~30m landing tracker.</div>
                                     <span class="trigger-route-tag">📍 Main Alert Channel</span>
                                 </div>
                             </div>
                             <div class="trigger-controls">
-                                <button class="btn-test" id="btn-test-travel" onclick="testAlert('travel')">▷ Test</button>
+                                <button class="btn-test" id="btn-test-travel" onclick="testAlert('travel')" title="Test Overseas Destination Alert">▷ Test Abroad</button>
+                                <button class="btn-test" id="btn-test-inbound" onclick="testAlert('inboundthreat')" title="Test High-Threat Return Alert">▷ Test Inbound</button>
                                 <label class="switch"><input type="checkbox" id="travelWarnings" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
                         </div>

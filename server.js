@@ -2285,69 +2285,7 @@ setInterval(async () => {
             } catch(e) {}
         }
 
-        if (liveData.members && Object.keys(enemyMembersCache).length > 0) {
-            const COUNTRIES = ["Mexico", "Cayman Islands", "Canada", "Hawaii", "United Kingdom", "Argentina", "Switzerland", "Japan", "China", "UAE", "South Africa"];
-            
-            // Track which enemy IDs are currently traveling (key: `${enemyId}_${country}`)
-            let currentTravelingEnemies = new Set();
-            let enemyThreats = {}; 
-            for (let [eId, eMem] of Object.entries(enemyMembersCache)) {
-                let det = (eMem.status && eMem.status.details) ? eMem.status.details : "";
-                if (det.includes("Traveling to ")) {
-                    let country = COUNTRIES.find(c => det.includes(c));
-                    if (country) {
-                        let travelKey = `${eId}_${country}`;
-                        currentTravelingEnemies.add(travelKey);
-                        if (!enemyThreats[country]) enemyThreats[country] = [];
-                        // Only add threat if this enemy just started traveling (not seen last cycle)
-                        if (!travelAlerts[`enemy_${travelKey}`]) {
-                            enemyThreats[country].push(eMem.name);
-                        }
-                    }
-                }
-            }
-
-            // Update known traveling enemies for next cycle (prune arrived enemies)
-            for (let key of Object.keys(travelAlerts)) {
-                if (key.startsWith('enemy_') && !currentTravelingEnemies.has(key.replace('enemy_', ''))) {
-                    delete travelAlerts[key];
-                }
-            }
-            for (let travelKey of currentTravelingEnemies) {
-                travelAlerts[`enemy_${travelKey}`] = Date.now();
-            }
-
-            for (let [uId, fMem] of Object.entries(liveData.members)) {
-                let det = (fMem.status && fMem.status.details) ? fMem.status.details : "";
-                let fCountry = COUNTRIES.find(c => det.includes(c));
-                if (fCountry && enemyThreats[fCountry] && enemyThreats[fCountry].length > 0) {
-                    let alertKey = `friendly_${uId}_${fCountry}`;
-                    let lastAlert = travelAlerts[alertKey] || 0;
-                    if (Date.now() - lastAlert > 30 * 60 * 1000) { // 30 min per friendly per country
-                        travelAlerts[alertKey] = Date.now();
-                        let dId = await getDiscordId(uId);
-                        let pingStr = (dId && /^\d{17,20}$/.test(dId)) ? `<@${dId}>` : "";
-                        if (discordConfig.travelWarnings !== false && discordConfig.globalChannelId) {
-                            let embed = {
-                                title: "✈️ Overseas Alert",
-                                description: `**${fMem.name}** — an enemy (**${enemyThreats[fCountry][0]}**) is flying to **${fCountry}** where you are located.\n\nReturn to Torn or fly to a different destination.`,
-                                color: UI.COLORS.WARNING,
-                                footer: UI.FOOTER,
-                                timestamp: new Date().toISOString(),
-                                links: [
-                                    { label: "✈️ Travel Agency", url: `https://www.torn.com/travelagency.php` },
-                                    { label: "🌐 Travel Desk", url: `https://torn-company-app-production.up.railway.app/travel.html` }
-                                ]
-                            };
-                            if (discordConfig.globalBotToken) {
-                                sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, embed, pingStr);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
+        // Note: Overseas threat & high-threat return monitoring is handled synchronously in Background Task 3
     } catch (err) {}
 }, 25000); // 25s loop during war, adaptive 60s lightweight check during peace 
 
@@ -2484,6 +2422,392 @@ function findBestTacticalFighter(membersObj, enemyTarget, enemyId) {
     });
 
     return { name: candidates[0].name, id: candidates[0].id, enemyEst };
+}
+
+// ─── Overseas Threats & Inbound Flight Watcher ──────────────────────────────
+const INBOUND_THREATS_FILE = path.join(__dirname, 'data', 'inbound_threats.json');
+
+function loadInboundThreats() {
+    try {
+        if (!fs.existsSync(path.dirname(INBOUND_THREATS_FILE))) {
+            fs.mkdirSync(path.dirname(INBOUND_THREATS_FILE), { recursive: true });
+        }
+        if (fs.existsSync(INBOUND_THREATS_FILE)) {
+            return JSON.parse(fs.readFileSync(INBOUND_THREATS_FILE, 'utf8'));
+        }
+    } catch (e) {}
+    return {};
+}
+
+function saveInboundThreats() {
+    try {
+        if (!fs.existsSync(path.dirname(INBOUND_THREATS_FILE))) {
+            fs.mkdirSync(path.dirname(INBOUND_THREATS_FILE), { recursive: true });
+        }
+        fs.writeFileSync(INBOUND_THREATS_FILE, JSON.stringify(inboundThreatTracker, null, 2), 'utf8');
+    } catch (e) {}
+    saveToMongo();
+}
+
+let inboundThreatTracker = loadInboundThreats();
+let overseasAlertTracker = {};
+
+// Helper: Calculate average battle stats of our faction members
+function getFactionAverageBattleStats(friendlyMembers) {
+    const members = friendlyMembers || friendlyMembersCache || {};
+    const entries = Object.entries(members);
+    if (entries.length === 0) return 50000000;
+    let sum = 0;
+    let count = 0;
+    for (const [id, m] of entries) {
+        if (!m) continue;
+        const bs = (typeof resolvePlayerBattleStats === 'function')
+            ? resolvePlayerBattleStats(id, m.level || 1)
+            : null;
+        const total = bs?.total || (m.level ? estimateStatsFromLevel(m.level) : 0);
+        if (total > 0) {
+            sum += total;
+            count++;
+        }
+    }
+    return count > 0 ? Math.round(sum / count) : 50000000;
+}
+
+// Helper: Query flight ETA from FF Scouter with fallback to Torn standard travel durations
+async function getOrFetchFlightDetails(targetId, originCountry = null) {
+    const sId = String(targetId).trim();
+    const now = Date.now();
+    const nowSec = Math.floor(now / 1000);
+
+    // Standard Torn flight durations in seconds (one-way returning to Torn)
+    const flightDurationsSec = {
+        "Mexico": 26 * 60,
+        "Cayman Islands": 35 * 60,
+        "Canada": 41 * 60,
+        "Hawaii": 134 * 60,
+        "United Kingdom": 159 * 60,
+        "Argentina": 167 * 60,
+        "Switzerland": 176 * 60,
+        "Japan": 225 * 60,
+        "China": 242 * 60,
+        "UAE": 273 * 60,
+        "South Africa": 298 * 60
+    };
+
+    // 1. Check if recent cached result in flightCache is fresh
+    if (flightCache[sId] && (now - flightCache[sId].time) < 30000 && flightCache[sId].landingTime) {
+        return flightCache[sId];
+    }
+
+    // 2. Query FF Scouter API if key is available
+    const ffKey = (typeof getGlobalFFKey === 'function' ? getGlobalFFKey() : null) || discordConfig.ffKey;
+    if (ffKey) {
+        try {
+            const res = await fetch(`https://ffscouter.com/api/v1/player-flights?key=${encodeURIComponent(ffKey)}&target=${encodeURIComponent(sId)}`, {
+                signal: AbortSignal.timeout(5000),
+                headers: { 'Accept': 'application/json' }
+            });
+            const data = await res.json().catch(() => null);
+            if (data && data.current) {
+                const cur = data.current;
+                const earliest = Number(cur.earliest_arrival_time || cur.arrival_early || cur.arrival_min || 0);
+                const latest = Number(cur.latest_arrival_time || cur.arrival_late || cur.arrival_max || 0);
+                let midpoint = 0;
+                if (earliest > 0 && latest > 0) midpoint = Math.round((earliest + latest) / 2);
+                else if (latest > 0) midpoint = latest;
+                else if (earliest > 0) midpoint = earliest;
+
+                const landingTime = midpoint || latest || earliest;
+                if (landingTime > 0) {
+                    const flightInfo = {
+                        midpoint,
+                        landingTime,
+                        earliest,
+                        latest,
+                        destination: cur.destination || "Torn",
+                        origin: cur.origin || originCountry || "",
+                        isEstimate: false,
+                        source: 'FF Scouter',
+                        time: Date.now()
+                    };
+                    flightCache[sId] = flightInfo;
+                    return flightInfo;
+                }
+            }
+        } catch (e) {
+            console.warn(`[FF Flight Tracker] Error querying flights for ${sId}:`, e.message);
+        }
+    }
+
+    // 3. Fallback: estimate from origin country duration
+    const estDuration = flightDurationsSec[originCountry] || (45 * 60);
+    const estimatedLanding = nowSec + estDuration;
+    const fallbackInfo = {
+        midpoint: estimatedLanding,
+        landingTime: estimatedLanding,
+        earliest: estimatedLanding - 300,
+        latest: estimatedLanding + 300,
+        destination: "Torn",
+        origin: originCountry || "Abroad",
+        isEstimate: true,
+        source: 'Estimated Flight Tracker',
+        time: Date.now()
+    };
+    flightCache[sId] = fallbackInfo;
+    return fallbackInfo;
+}
+
+// Core Sentinel: Overseas threats + high-threat return flights + 30m landing tracker
+async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, enemyFacId, enemyFacName = '') {
+    if (!friendlyMembers || !enemyMembers) return;
+    if (discordConfig.travelWarnings === false) return;
+
+    const targetChannel = discordConfig.globalChannelId;
+    const botToken = discordConfig.globalBotToken;
+    const tokenOrWebhook = botToken || targetChannel;
+    if (!tokenOrWebhook || !targetChannel) return;
+
+    const COUNTRIES = ["Mexico", "Cayman Islands", "Canada", "Hawaii", "United Kingdom", "Argentina", "Switzerland", "Japan", "China", "UAE", "South Africa"];
+    const nowSec = Math.floor(Date.now() / 1000);
+    const nowMs = Date.now();
+
+    // ─────────────────────────────────────────────────────────────
+    // PART 1: OVERSEAS THREAT WARNING (Enemy flying to Friendly's destination)
+    // ─────────────────────────────────────────────────────────────
+    const enemyCountryFlights = {};
+    for (const [eId, eMem] of Object.entries(enemyMembers)) {
+        if (!eMem || !eMem.status) continue;
+        const eState = (eMem.status.state || "").trim();
+        const eDesc = (eMem.status.description || "").trim();
+        const eDetails = (eMem.status.details || "").trim();
+        const eCombined = `${eDesc} ${eDetails}`;
+
+        if (eState === "Traveling" || eCombined.toLowerCase().includes("traveling")) {
+            // Must NOT be flying back to Torn
+            if (eCombined.toLowerCase().includes("to torn") || eCombined.toLowerCase().includes("returning to torn")) continue;
+
+            for (const country of COUNTRIES) {
+                if (new RegExp(`\\b${country}\\b`, 'i').test(eCombined)) {
+                    if (!enemyCountryFlights[country]) enemyCountryFlights[country] = [];
+                    enemyCountryFlights[country].push({
+                        id: eId,
+                        name: eMem.name || `Enemy #${eId}`,
+                        level: eMem.level || 1,
+                        status: eMem.status
+                    });
+                    break;
+                }
+            }
+        }
+    }
+
+    // Check friendly members currently abroad or heading to the same country
+    for (const [fId, fMem] of Object.entries(friendlyMembers)) {
+        if (!fMem || !fMem.status) continue;
+        const fState = (fMem.status.state || "").trim();
+        const fDesc = (fMem.status.description || "").trim();
+        const fDetails = (fMem.status.details || "").trim();
+        const fCombined = `${fDesc} ${fDetails}`;
+
+        let fCountry = null;
+        for (const country of COUNTRIES) {
+            if (new RegExp(`\\b${country}\\b`, 'i').test(fCombined) || (fState === "Abroad" && fCombined.toLowerCase().includes(country.toLowerCase()))) {
+                fCountry = country;
+                break;
+            }
+        }
+
+        if (fCountry && enemyCountryFlights[fCountry] && enemyCountryFlights[fCountry].length > 0) {
+            for (const threatEnemy of enemyCountryFlights[fCountry]) {
+                const alertKey = `overseas_${fId}_${threatEnemy.id}_${fCountry}`;
+                const lastAlert = overseasAlertTracker[alertKey] || 0;
+
+                // 30-minute cooldown per friendly-enemy-country pair
+                if (nowMs - lastAlert > 30 * 60 * 1000) {
+                    overseasAlertTracker[alertKey] = nowMs;
+
+                    const dId = await getDiscordId(fId);
+                    const pingStr = (dId && /^\d{17,20}$/.test(dId)) ? `<@${dId}>` : "";
+
+                    const eStats = resolvePlayerBattleStats(threatEnemy.id, threatEnemy.level);
+                    const fStats = resolvePlayerBattleStats(fId, fMem.level || 1);
+
+                    const embed = {
+                        title: "✈️ Overseas Threat Warning",
+                        description: `**${fMem.name}** — enemy **${threatEnemy.name}** [${threatEnemy.id}] is flying to **${fCountry}** where you are currently located!\n\n⚠️ **Action Required**: Return to Torn City or depart to another destination before they land to avoid being farmed abroad.`,
+                        color: UI.COLORS.WARNING,
+                        footer: UI.FOOTER,
+                        timestamp: new Date().toISOString(),
+                        targetId: threatEnemy.id,
+                        fields: [
+                            { name: "📍 Destination", value: `**${fCountry}**`, inline: true },
+                            { name: "⚔️ Enemy Est. Stats", value: `~${formatStatNumber(eStats.total)}`, inline: true },
+                            { name: "🛡️ Your Est. Stats", value: `~${formatStatNumber(fStats.total)}`, inline: true }
+                        ],
+                        links: [
+                            { label: "✈️ Travel Agency", url: "https://www.torn.com/travelagency.php" },
+                            { label: "⚔️ Enemy Profile", url: `https://www.torn.com/profiles.php?XID=${threatEnemy.id}` },
+                            { label: "🌐 Travel Desk", url: "https://torn-company-app-production.up.railway.app/travel.html" }
+                        ]
+                    };
+
+                    sendChannelMessage(botToken, targetChannel, embed, pingStr);
+                    console.log(`[Overseas Alert] Dispatched threat warning for ${fMem.name} in ${fCountry} vs ${threatEnemy.name}`);
+                }
+            }
+        }
+    }
+
+    // Clean up stale overseas cooldowns
+    for (const [k, v] of Object.entries(overseasAlertTracker)) {
+        if (nowMs - v > 2 * 3600 * 1000) delete overseasAlertTracker[k];
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // PART 2: HIGH-THREAT INBOUND RETURN WARNING & 30-MIN SENTINEL
+    // ─────────────────────────────────────────────────────────────
+    const factionAvgStats = getFactionAverageBattleStats(friendlyMembers);
+
+    for (const [eId, eMem] of Object.entries(enemyMembers)) {
+        if (!eMem || !eMem.status) continue;
+        const eState = (eMem.status.state || "").trim();
+        const eDesc = (eMem.status.description || "").trim();
+        const eDetails = (eMem.status.details || "").trim();
+        const eCombined = `${eDesc} ${eDetails}`.toLowerCase();
+
+        const oldRec = backgroundEnemyTrackingState[eId];
+
+        // Detect if enemy is flying back to Torn
+        const wasAbroad = oldRec && oldRec.state === "Abroad";
+        const isNowTraveling = eState === "Traveling" || eCombined.includes("traveling") || eCombined.includes("returning");
+        const mentionsReturningToTorn = eCombined.includes("returning to torn") || eCombined.includes("traveling to torn") || eCombined.includes("flying to torn") || eCombined.includes("heading to torn") || (eState === "Traveling" && eCombined.includes("returning"));
+
+        const isFlyingBack = isNowTraveling && (wasAbroad || mentionsReturningToTorn);
+
+        if (isFlyingBack) {
+            let tracker = inboundThreatTracker[eId];
+
+            if (!tracker) {
+                // Resolve origin country
+                let originCountry = "Abroad";
+                for (const c of COUNTRIES) {
+                    if (new RegExp(`\\b${c}\\b`, 'i').test(`${oldRec?.description || ''} ${oldRec?.details || ''} ${eCombined}`)) {
+                        originCountry = c;
+                        break;
+                    }
+                }
+
+                // Check battle stats vs faction average
+                const enemyBs = resolvePlayerBattleStats(eId, eMem.level || 1);
+                const enemyTotal = enemyBs.total || 0;
+
+                if (enemyTotal > factionAvgStats) {
+                    // Fetch landing time from FF Scouter flight tracker
+                    const flightInfo = await getOrFetchFlightDetails(eId, originCountry);
+                    const landingTime = flightInfo.landingTime || (nowSec + 1800);
+                    const remainingSec = Math.max(0, landingTime - nowSec);
+                    const remainingMin = Math.round(remainingSec / 60);
+
+                    const isAlreadyNearLanding = remainingSec <= 1860; // <= 31 mins left
+
+                    tracker = {
+                        enemyId: eId,
+                        enemyName: eMem.name || `Enemy #${eId}`,
+                        enemyLevel: eMem.level || 1,
+                        originCountry,
+                        landingTime,
+                        enemyStats: enemyTotal,
+                        factionAvg: factionAvgStats,
+                        alertedInitial: true,
+                        alerted30m: isAlreadyNearLanding,
+                        startedAt: nowMs
+                    };
+                    inboundThreatTracker[eId] = tracker;
+                    saveInboundThreats();
+
+                    // Initial announcement
+                    const descText = isAlreadyNearLanding
+                        ? `**${tracker.enemyName}** [${eId}] is **flying back to Torn** from **${originCountry}**!\n\n⚠️ **IMMINENT TOUCHDOWN**: Their airtime is already within **~${remainingMin} minutes** of landing in Torn City!\nPrepare attacks and stack energy now.`
+                        : `**${tracker.enemyName}** [${eId}] is **flying back to Torn** from **${originCountry}**!\n\n⚠️ **High-Stat Threat**: Battle stats exceed our faction average. F.R.I.D.A.Y will dispatch a follow-up warning when they reach **~30 minutes** away from landing.`;
+
+                    const warRolePing = (discordConfig.retalRoleId && /^\d{15,22}$/.test(String(discordConfig.retalRoleId).trim()))
+                        ? `<@&${String(discordConfig.retalRoleId).trim()}>`
+                        : "";
+
+                    const embed = {
+                        title: "✈️ High-Threat Inbound — Enemy Flying Home",
+                        description: descText,
+                        color: UI.COLORS.BRAND,
+                        footer: { text: "F.R.I.D.A.Y. • FF Scouter Flight Tracker" },
+                        timestamp: new Date().toISOString(),
+                        targetId: eId,
+                        fields: [
+                            { name: "⚔️ Enemy Battle Stats", value: `**~${formatStatNumber(enemyTotal)}**`, inline: true },
+                            { name: "🛡️ Our Faction Average", value: `~${formatStatNumber(factionAvgStats)}`, inline: true },
+                            { name: "📍 Flying From", value: `**${originCountry}**`, inline: true },
+                            { name: "⏱️ Touchdown ETA", value: `<t:${landingTime}:R> (<t:${landingTime}:T>)`, inline: false }
+                        ],
+                        links: [
+                            { label: "⚔️ Attack Target", url: `https://www.torn.com/page.php?sid=attack&user2ID=${eId}` },
+                            { label: "👤 Torn Profile", url: `https://www.torn.com/profiles.php?XID=${eId}` }
+                        ]
+                    };
+
+                    sendChannelMessage(botToken, targetChannel, embed, warRolePing);
+                    console.log(`[High-Threat Inbound] Announced return flight for enemy ${tracker.enemyName} [${eId}] from ${originCountry} (Stats: ${enemyTotal} vs Avg: ${factionAvgStats})`);
+                }
+            } else {
+                // If enemy is already tracked: check if they have reached ~30 minutes away
+                if (!tracker.alerted30m) {
+                    const remainingSec = tracker.landingTime - nowSec;
+                    const remainingMin = Math.round(remainingSec / 60);
+
+                    if (remainingSec <= 1860 && remainingSec >= 120) {
+                        tracker.alerted30m = true;
+                        saveInboundThreats();
+
+                        const warRolePing = (discordConfig.retalRoleId && /^\d{15,22}$/.test(String(discordConfig.retalRoleId).trim()))
+                            ? `<@&${String(discordConfig.retalRoleId).trim()}>`
+                            : "";
+
+                        const embed = {
+                            title: "⚠️ High-Threat Inbound — ~30m to Landing",
+                            description: `**${tracker.enemyName}** [${tracker.enemyId}] is now **~30 minutes away** (${remainingMin}m remaining) from landing back in Torn City from **${tracker.originCountry}**!\n\n🎯 Coordinate chain hits, stack energy, or get ready to hospitalize on touchdown.`,
+                            color: UI.COLORS.ERROR,
+                            footer: { text: "F.R.I.D.A.Y. • FF Scouter Flight Tracker" },
+                            timestamp: new Date().toISOString(),
+                            targetId: tracker.enemyId,
+                            fields: [
+                                { name: "⚔️ Enemy Battle Stats", value: `**~${formatStatNumber(tracker.enemyStats)}**`, inline: true },
+                                { name: "🛡️ Faction Average", value: `~${formatStatNumber(tracker.factionAvg)}`, inline: true },
+                                { name: "⏱️ Touchdown ETA", value: `<t:${tracker.landingTime}:R> (<t:${tracker.landingTime}:T>)`, inline: true }
+                            ],
+                            links: [
+                                { label: "⚔️ Attack Target", url: `https://www.torn.com/page.php?sid=attack&user2ID=${tracker.enemyId}` },
+                                { label: "👤 Torn Profile", url: `https://www.torn.com/profiles.php?XID=${tracker.enemyId}` }
+                            ]
+                        };
+
+                        sendChannelMessage(botToken, targetChannel, embed, warRolePing);
+                        console.log(`[High-Threat Inbound] Dispatched 30m landing warning for ${tracker.enemyName} [${tracker.enemyId}]`);
+                    }
+                }
+            }
+        } else if (inboundThreatTracker[eId] && eState !== "Traveling") {
+            // Player is no longer traveling (they landed or cancelled)
+            console.log(`[High-Threat Inbound] Removed enemy ${eId} from tracking (state: ${eState})`);
+            delete inboundThreatTracker[eId];
+            saveInboundThreats();
+        }
+    }
+
+    // Safety cleanup: purge tracker entries older than 8 hours
+    for (const [id, t] of Object.entries(inboundThreatTracker)) {
+        if (nowMs - (t.startedAt || 0) > 8 * 3600 * 1000) {
+            delete inboundThreatTracker[id];
+            saveInboundThreats();
+        }
+    }
 }
 
 // ─── Player Inactivity Tracker & Discord Alerts ──────────────────────────────
@@ -3053,14 +3377,27 @@ setInterval(async () => {
             const enemyData = await enemyRes.json();
             
             if (enemyData.members) {
+                enemyMembersCache = enemyData.members;
+                enemyFactionNameCache = enemyData.name || enemyFactionNameCache;
+                currentEnemyFacId = activeEnemyId;
+
+                // Process Overseas Threats and High-Threat Inbound Return Flights
+                try {
+                    await checkOverseasAndInboundThreats(facData.members, enemyData.members, activeEnemyId, enemyData.name || '');
+                } catch (e) {
+                    console.warn('[Threat Sentinel] Error in flight watcher:', e.message);
+                }
+
+                const botTokenOrChan = discordConfig.globalBotToken || discordConfig.globalChannelId;
+
                 Object.entries(enemyData.members).forEach(async ([id, m]) => {
                     let oldRecord = backgroundEnemyTrackingState[id];
-                    let newRecord = { state: m.status?.state, online: m.last_action?.status, description: m.status?.description, until: m.status?.until };
+                    let newRecord = { state: m.status?.state, online: m.last_action?.status, description: m.status?.description, until: m.status?.until, details: m.status?.details };
                     
                     if (oldRecord) {
                         // ── 1. TARGET ONLINE TRACKER ──
                         if (oldRecord.online !== "Online" && newRecord.online === "Online" && discordConfig.targetOnline === true) {
-                            if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { 
+                            if (botTokenOrChan) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { 
                                 title: "🟢 Target Online", 
                                 description: `**${m.name}** [${id}] is now online in Torn and is attackable.`, 
                                 color: UI.COLORS.SUCCESS,
@@ -3078,7 +3415,11 @@ setInterval(async () => {
                         const wasTravel = oldRecord.state === "Traveling" || (oldRecord.description && oldRecord.description.toLowerCase().includes("traveling"));
                         const notTravelNow = newRecord.state !== "Traveling";
                         if (wasTravel && notTravelNow && discordConfig.targetLanded !== false) {
-                            if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { 
+                            if (inboundThreatTracker && inboundThreatTracker[id]) {
+                                delete inboundThreatTracker[id];
+                                saveInboundThreats();
+                            }
+                            if (botTokenOrChan) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { 
                                 title: "✈️ Target Returned from Abroad", 
                                 description: `**${m.name}** [${id}] has landed back in Torn and is now attackable.`, 
                                 color: UI.COLORS.INFO,
@@ -3107,7 +3448,7 @@ setInterval(async () => {
                                 }
 
                                 let statStr = enemyEst > 0 ? `~${enemyEst.toLocaleString()}` : "Unknown";
-                                if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { 
+                                if (botTokenOrChan) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { 
                                     title: "💊 Early Hospital Escape", 
                                     description: `**${m.name}** [${id}] left hospital early using meds or a revive and is now online.`,
                                     color: UI.COLORS.WARNING,
@@ -3125,7 +3466,7 @@ setInterval(async () => {
                                 }, pingStr);
                                 
                             } else if (discordConfig.targetOutHosp === true && !leftEarly) {
-                                if (discordConfig.globalBotToken) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { 
+                                if (botTokenOrChan) sendChannelMessage(discordConfig.globalBotToken, discordConfig.globalChannelId, { 
                                     title: "🏥 Target Out of Hospital", 
                                     description: `**${m.name}** [${id}] served their full hospital time and is now Okay.`, 
                                     color: UI.COLORS.INFO,
@@ -4106,14 +4447,60 @@ app.post('/api/test-discord-alert', async (req, res) => {
     const t = String(type || '').toLowerCase().trim();
     if (t === 'travel') {
         embed = {
-            title: "✈️ Overseas Alert",
-            description: `**[Your Name]** — an enemy (**[Test] EnemyName**) is flying to **Mexico** where you are located.\n\nReturn to Torn or fly to a different destination.`,
+            title: "✈️ Overseas Threat Warning",
+            description: `**[Your Name]** — enemy **[Test] EnemyFighter** [999999] is flying to **Mexico** where you are currently located!\n\n⚠️ **Action Required**: Return to Torn City or depart to another destination before they land to avoid being farmed abroad.`,
             color: UI.COLORS.WARNING,
             footer: UI.FOOTER,
             timestamp: new Date().toISOString(),
+            targetId: "999999",
+            fields: [
+                { name: "📍 Destination", value: "**Mexico**", inline: true },
+                { name: "⚔️ Enemy Est. Stats", value: "~150.00M", inline: true },
+                { name: "🛡️ Your Est. Stats", value: "~45.00M", inline: true }
+            ],
             links: [
                 { label: "✈️ Travel Agency", url: `https://www.torn.com/travelagency.php` },
+                { label: "⚔️ Enemy Profile", url: `https://www.torn.com/profiles.php?XID=999999` },
                 { label: "🌐 Travel Desk", url: `https://torn-company-app-production.up.railway.app/travel.html` }
+            ]
+        };
+    } else if (t === 'inboundthreat' || t === 'inbound') {
+        const testLanding = Math.floor(Date.now() / 1000) + (135 * 60);
+        embed = {
+            title: "✈️ High-Threat Inbound — Enemy Flying Home",
+            description: `**[Test] HeavyweightEnemy** [999999] is **flying back to Torn** from **Switzerland**!\n\n⚠️ **High-Stat Threat**: Battle stats exceed our faction average. F.R.I.D.A.Y will dispatch a follow-up warning when they reach **~30 minutes** away from landing.`,
+            color: UI.COLORS.BRAND,
+            footer: { text: "F.R.I.D.A.Y. • FF Scouter Flight Tracker" },
+            timestamp: new Date().toISOString(),
+            targetId: "999999",
+            fields: [
+                { name: "⚔️ Enemy Battle Stats", value: "**~285.50M**", inline: true },
+                { name: "🛡️ Our Faction Average", value: "**~82.40M**", inline: true },
+                { name: "📍 Flying From", value: "**Switzerland**", inline: true },
+                { name: "⏱️ Touchdown ETA", value: `<t:${testLanding}:R> (<t:${testLanding}:T>)`, inline: false }
+            ],
+            links: [
+                { label: "⚔️ Attack Target", url: `https://www.torn.com/page.php?sid=attack&user2ID=999999` },
+                { label: "👤 Torn Profile", url: `https://www.torn.com/profiles.php?XID=999999` }
+            ]
+        };
+    } else if (t === 'threat30m' || t === 'inbound30m') {
+        const testLanding = Math.floor(Date.now() / 1000) + (29 * 60);
+        embed = {
+            title: "⚠️ High-Threat Inbound — ~30m to Landing",
+            description: `**[Test] HeavyweightEnemy** [999999] is now **~30 minutes away** (29m remaining) from landing back in Torn City from **Switzerland**!\n\n🎯 Coordinate chain hits, stack energy, or get ready to hospitalize on touchdown.`,
+            color: UI.COLORS.ERROR,
+            footer: { text: "F.R.I.D.A.Y. • FF Scouter Flight Tracker" },
+            timestamp: new Date().toISOString(),
+            targetId: "999999",
+            fields: [
+                { name: "⚔️ Enemy Battle Stats", value: "**~285.50M**", inline: true },
+                { name: "🛡️ Faction Average", value: "**~82.40M**", inline: true },
+                { name: "⏱️ Touchdown ETA", value: `<t:${testLanding}:R> (<t:${testLanding}:T>)`, inline: true }
+            ],
+            links: [
+                { label: "⚔️ Attack Target", url: `https://www.torn.com/page.php?sid=attack&user2ID=999999` },
+                { label: "👤 Torn Profile", url: `https://www.torn.com/profiles.php?XID=999999` }
             ]
         };
     } else if (t === 'chain') {
