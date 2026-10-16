@@ -2567,51 +2567,119 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
     const nowSec = Math.floor(Date.now() / 1000);
     const nowMs = Date.now();
 
-    // ─────────────────────────────────────────────────────────────
-    // PART 1: OVERSEAS THREAT WARNING (Enemy flying to Friendly's destination)
-    // ─────────────────────────────────────────────────────────────
-    const enemyCountryFlights = {};
-    for (const [eId, eMem] of Object.entries(enemyMembers)) {
-        if (!eMem || !eMem.status) continue;
-        const eState = (eMem.status.state || "").trim();
-        const eDesc = (eMem.status.description || "").trim();
-        const eDetails = (eMem.status.details || "").trim();
-        const eCombined = `${eDesc} ${eDetails}`;
+    // Helper: Determine if an enemy is flying TO a specific foreign country
+    // Returns the foreign country name if traveling TO it; returns null if returning to Torn or flying away
+    function getEnemyForeignFlightDestination(eStatus) {
+        if (!eStatus) return null;
+        const eState = (eStatus.state || "").trim();
+        const eDesc = (eStatus.description || "").trim();
+        const eDetails = (eStatus.details || "").trim();
+        const eCombined = `${eDesc} ${eDetails}`.toLowerCase();
 
-        if (eState === "Traveling" || eCombined.toLowerCase().includes("traveling")) {
-            // Must NOT be flying back to Torn
-            if (eCombined.toLowerCase().includes("to torn") || eCombined.toLowerCase().includes("returning to torn")) continue;
+        if (eState !== "Traveling" && !eCombined.includes("traveling") && !eCombined.includes("in transit") && !eCombined.includes("flying to") && !eCombined.includes("heading to")) {
+            return null;
+        }
 
+        // Must NOT be flying back to Torn or returning from abroad
+        const isReturningToTorn = eCombined.includes("to torn") || 
+                                  eCombined.includes("returning to torn") || 
+                                  eCombined.includes("heading to torn") || 
+                                  eCombined.includes("traveling to torn") || 
+                                  eCombined.includes("flying to torn") || 
+                                  eCombined.includes("in transit to torn") || 
+                                  eCombined.includes("back to torn") ||
+                                  eCombined.includes("returning from") ||
+                                  (eState === "Traveling" && eCombined.includes("returning"));
+        if (isReturningToTorn) return null;
+
+        for (const country of COUNTRIES) {
+            const toPattern = new RegExp(`(?:to|heading to|traveling to|flying to|in transit to)\\s+${country}\\b`, 'i');
+            const fromPattern = new RegExp(`\\bfrom\\s+${country}\\b`, 'i');
+            if (toPattern.test(eCombined) && !fromPattern.test(eCombined)) {
+                return country;
+            }
+        }
+        for (const country of COUNTRIES) {
+            const fromPattern = new RegExp(`\\bfrom\\s+${country}\\b`, 'i');
+            if (new RegExp(`\\b${country}\\b`, 'i').test(eCombined) && !fromPattern.test(eCombined)) {
+                return country;
+            }
+        }
+        return null;
+    }
+
+    // Helper: Determine if a friendly member is physically in or actively flying TO a foreign country
+    // Returns the country ONLY if they are physically abroad or actively flying TO that country.
+    // Returns NULL if they are in Torn, returning to Torn, or flying away from that country!
+    function getFriendlyActiveForeignCountry(fStatus) {
+        if (!fStatus) return null;
+        const fState = (fStatus.state || "").trim();
+        const fDesc = (fStatus.description || "").trim();
+        const fDetails = (fStatus.details || "").trim();
+        const fCombined = `${fDesc} ${fDetails}`.toLowerCase();
+
+        // 1. If friendly is returning to Torn / flying away from abroad, they are NOT in that country!
+        const isReturningHome = fCombined.includes("to torn") || 
+                                fCombined.includes("returning to torn") || 
+                                fCombined.includes("heading to torn") || 
+                                fCombined.includes("traveling to torn") || 
+                                fCombined.includes("flying to torn") || 
+                                fCombined.includes("in transit to torn") || 
+                                fCombined.includes("back to torn") ||
+                                fCombined.includes("returning from") ||
+                                (fState === "Traveling" && fCombined.includes("returning"));
+        if (isReturningHome) {
+            return null; // Flying away from the country back to safety in Torn!
+        }
+
+        // 2. If physically Abroad in a foreign country
+        if (fState === "Abroad") {
             for (const country of COUNTRIES) {
-                if (new RegExp(`\\b${country}\\b`, 'i').test(eCombined)) {
-                    if (!enemyCountryFlights[country]) enemyCountryFlights[country] = [];
-                    enemyCountryFlights[country].push({
-                        id: eId,
-                        name: eMem.name || `Enemy #${eId}`,
-                        level: eMem.level || 1,
-                        status: eMem.status
-                    });
-                    break;
+                if (new RegExp(`\\b${country}\\b`, 'i').test(fCombined)) {
+                    return country;
                 }
             }
         }
-    }
 
-    // Check friendly members currently abroad or heading to the same country
-    for (const [fId, fMem] of Object.entries(friendlyMembers)) {
-        if (!fMem || !fMem.status) continue;
-        const fState = (fMem.status.state || "").trim();
-        const fDesc = (fMem.status.description || "").trim();
-        const fDetails = (fMem.status.details || "").trim();
-        const fCombined = `${fDesc} ${fDetails}`;
-
-        let fCountry = null;
-        for (const country of COUNTRIES) {
-            if (new RegExp(`\\b${country}\\b`, 'i').test(fCombined) || (fState === "Abroad" && fCombined.toLowerCase().includes(country.toLowerCase()))) {
-                fCountry = country;
-                break;
+        // 3. If Traveling TO a foreign country (and NOT returning from a country)
+        if (fState === "Traveling" || fCombined.includes("traveling") || fCombined.includes("in transit") || fCombined.includes("heading to") || fCombined.includes("flying to")) {
+            for (const country of COUNTRIES) {
+                const toPattern = new RegExp(`(?:to|heading to|traveling to|flying to|in transit to)\\s+${country}\\b`, 'i');
+                const fromPattern = new RegExp(`\\bfrom\\s+${country}\\b`, 'i');
+                if (toPattern.test(fCombined) && !fromPattern.test(fCombined)) {
+                    return country;
+                }
+            }
+            for (const country of COUNTRIES) {
+                const fromPattern = new RegExp(`\\bfrom\\s+${country}\\b`, 'i');
+                if (new RegExp(`\\b${country}\\b`, 'i').test(fCombined) && !fromPattern.test(fCombined)) {
+                    return country;
+                }
             }
         }
+
+        return null;
+    }
+
+    const enemyCountryFlights = {};
+    for (const [eId, eMem] of Object.entries(enemyMembers)) {
+        if (!eMem || !eMem.status) continue;
+        const targetCountry = getEnemyForeignFlightDestination(eMem.status);
+        if (targetCountry) {
+            if (!enemyCountryFlights[targetCountry]) enemyCountryFlights[targetCountry] = [];
+            enemyCountryFlights[targetCountry].push({
+                id: eId,
+                name: eMem.name || `Enemy #${eId}`,
+                level: eMem.level || 1,
+                status: eMem.status
+            });
+        }
+    }
+
+    // Check friendly members currently abroad or actively heading TO that country
+    for (const [fId, fMem] of Object.entries(friendlyMembers)) {
+        if (!fMem || !fMem.status) continue;
+        const fCountry = getFriendlyActiveForeignCountry(fMem.status);
 
         if (fCountry && enemyCountryFlights[fCountry] && enemyCountryFlights[fCountry].length > 0) {
             for (const threatEnemy of enemyCountryFlights[fCountry]) {
@@ -2651,16 +2719,19 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
                     const eRemainingMin = Math.round(eRemainingSec / 60);
                     const eFlightDurationStr = formatFlightDuration(eRemainingMin);
 
+                    const isAbroadNow = (fMem.status?.state === "Abroad");
+                    const targetLocationDesc = isAbroadNow ? "where you are currently located" : "where you are traveling to";
+
                     const combinedPing = [targetPing, warRolePing].filter(Boolean).join(' ');
                     const pingMessage = combinedPing
-                        ? `${combinedPing} ⚠️ **OVERSEAS THREAT WARNING**: An enemy is flying to your location in **${fCountry}**!`
+                        ? `${combinedPing} ⚠️ **OVERSEAS THREAT WARNING**: An enemy is flying to **${fCountry}** (${targetLocationDesc})!`
                         : `⚠️ **OVERSEAS THREAT WARNING**: **${fMem.name}** [${fId}] is being targeted in **${fCountry}**!`;
 
                     const memberFieldDisplay = targetPing || `**${fMem.name}** [${fId}]`;
 
                     const embed = {
                         title: "✈️ Overseas Threat Warning — Member Targeted",
-                        description: `**${fMem.name}** — enemy **${threatEnemy.name}** [${threatEnemy.id}] is flying directly to **${fCountry}** where you are currently located!\n\n⚠️ **Action Required**: Return to Torn City or depart to another destination before they land to avoid being farmed abroad.`,
+                        description: `**${fMem.name}** — enemy **${threatEnemy.name}** [${threatEnemy.id}] is flying directly to **${fCountry}** ${targetLocationDesc}!\n\n⚠️ **Action Required**: Return to Torn City or depart to another destination before they land to avoid being farmed abroad.`,
                         color: UI.COLORS.WARNING,
                         footer: { text: "F.R.I.D.A.Y. • FF Scouter Flight Tracker" },
                         timestamp: new Date().toISOString(),
