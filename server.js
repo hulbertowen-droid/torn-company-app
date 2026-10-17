@@ -6614,13 +6614,13 @@ app.get('/api/past-war', async (req, res) => {
             }
         }
 
+        const warStart = reportData.rankedwarreport?.war?.start || 0;
+        const warEnd = reportData.rankedwarreport?.war?.end || Math.floor(Date.now() / 1000);
+
         let advancedStats = {};
         if (warScrapeCache_v2[reportId]) {
             advancedStats = warScrapeCache_v2[reportId];
         } else {
-            let warStart = reportData.rankedwarreport.war.start;
-            let warEnd = reportData.rankedwarreport.war.end || Math.floor(Date.now() / 1000);
-            
             let toTimestamp = warEnd;
             let keepScraping = true;
             let pageCount = 0;
