@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>War Payouts | FactionOS</title>
-    <meta name="description" content="Calculate and distribute Torn City ranked war payouts with automated multiplier weighting, surrender terms, score caps, and vault payment deep links.">
+    <meta name="description" content="Calculate and distribute Torn City ranked war payouts with automated multiplier weighting, surrender terms, score caps, teammate bounty reimbursement, and vault payment deep links.">
     
     <!-- Fonts & Core Design System -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -68,7 +68,7 @@
 
     .two-col {
         display: grid;
-        grid-template-columns: 390px 1fr;
+        grid-template-columns: 420px 1fr;
         gap: 20px;
         align-items: start;
     }
@@ -290,18 +290,23 @@
         padding: 14px 18px;
         border-bottom: 1px solid var(--border-subtle);
         background: rgba(255, 255, 255, 0.01);
+        flex-wrap: wrap;
+        gap: 10px;
     }
     .table-head-bar h3 {
-        font-size: 0.75em;
+        font-size: 0.78em;
         font-weight: 800;
         text-transform: uppercase;
         letter-spacing: 1.5px;
-        color: var(--text-muted);
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
 
     .btn-pay {
-        background: rgba(16, 185, 129, 0.1);
-        border: 1px solid rgba(16, 185, 129, 0.3);
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid rgba(16, 185, 129, 0.35);
         color: var(--accent-emerald);
         padding: 5px 12px;
         border-radius: var(--radius-sm);
@@ -310,6 +315,7 @@
         cursor: pointer;
         transition: all var(--transition-fast);
         font-family: inherit;
+        white-space: nowrap;
     }
     .btn-pay:hover {
         background: var(--accent-emerald);
@@ -330,6 +336,149 @@
     .rank-2 .td-name::before { content: '🥈 '; }
     .rank-3 .td-name::before { content: '🥉 '; }
 
+    /* ─── Switch Toggle Styling ─── */
+    .switch-toggle {
+        position: relative;
+        display: inline-block;
+        width: 46px;
+        height: 24px;
+        flex-shrink: 0;
+    }
+    .switch-toggle input { opacity: 0; width: 0; height: 0; }
+    .switch-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background-color: rgba(255, 255, 255, 0.08);
+        border: 1px solid var(--border-subtle);
+        transition: .3s;
+        border-radius: 24px;
+    }
+    .switch-slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 3px;
+        bottom: 3px;
+        background-color: var(--text-muted);
+        transition: .3s;
+        border-radius: 50%;
+    }
+    .switch-toggle input:checked + .switch-slider {
+        background-color: rgba(16, 185, 129, 0.22);
+        border-color: var(--accent-emerald);
+    }
+    .switch-toggle input:checked + .switch-slider:before {
+        transform: translateX(22px);
+        background-color: var(--accent-emerald);
+        box-shadow: 0 0 10px var(--accent-emerald);
+    }
+
+    /* ─── Bounty Reimbursement Card & Scanner ─── */
+    .bounty-reimburse-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        margin-bottom: 20px;
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        transition: all 0.3s ease;
+    }
+    .bounty-reimburse-card.active-glow {
+        border-color: rgba(16, 185, 129, 0.5);
+        box-shadow: 0 0 24px rgba(16, 185, 129, 0.12);
+    }
+
+    .bounty-scanner-box {
+        padding: 42px 24px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        background: radial-gradient(circle at center, rgba(16, 185, 129, 0.07) 0%, transparent 75%);
+    }
+    .scanner-radar {
+        position: relative;
+        width: 84px;
+        height: 84px;
+        border-radius: 50%;
+        border: 2px solid rgba(16, 185, 129, 0.4);
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 0 24px rgba(16, 185, 129, 0.2);
+    }
+    .radar-beam {
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        border-radius: 50%;
+        background: conic-gradient(from 0deg, rgba(16, 185, 129, 0.45), transparent 60%);
+        animation: radarSweep 2s linear infinite;
+    }
+    .radar-center {
+        font-size: 2em;
+        z-index: 2;
+        filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.7));
+    }
+    @keyframes radarSweep {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    .scanner-title {
+        font-family: var(--font-mono);
+        font-size: 0.9em;
+        font-weight: 900;
+        letter-spacing: 2px;
+        color: var(--accent-emerald);
+        text-transform: uppercase;
+        margin-bottom: 6px;
+    }
+    .scanner-subtitle {
+        font-size: 0.85em;
+        color: var(--text-secondary);
+        margin-bottom: 16px;
+        max-width: 480px;
+        line-height: 1.5;
+    }
+    .scanner-bar-wrap {
+        width: 280px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 2px;
+        overflow: hidden;
+        margin-bottom: 10px;
+    }
+    .scanner-bar-fill {
+        height: 100%;
+        width: 35%;
+        background: var(--accent-emerald);
+        box-shadow: 0 0 10px var(--accent-emerald);
+        border-radius: 2px;
+        animation: scanBarSlide 1.4s ease-in-out infinite alternate;
+    }
+    @keyframes scanBarSlide {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(280%); }
+    }
+
+    .teammate-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        color: var(--accent-emerald);
+        padding: 2px 7px;
+        border-radius: 12px;
+        font-size: 0.78em;
+        font-weight: 700;
+        margin: 2px 3px 2px 0;
+        white-space: nowrap;
+    }
+
     @media (max-width: 1100px) {
         .two-col { grid-template-columns: 1fr; }
         .summary-strip { grid-template-columns: repeat(2, 1fr); }
@@ -338,7 +487,7 @@
 </head>
 <body>
     <!-- SIDEBAR -->
-        <nav class="sidebar" id="app-sidebar">
+    <nav class="sidebar" id="app-sidebar">
         <div class="sidebar-header">
             <div class="sidebar-logo">
                 <span class="brand-icon">🕷️</span>
@@ -385,7 +534,7 @@
 
     <!-- MAIN CONTENT WRAPPER -->
     <div class="main-wrapper">
-                <header class="app-topbar">
+        <header class="app-topbar">
             <div class="topbar-left">
                 <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;">☰</button>
                 <div class="topbar-crumb">
@@ -409,11 +558,11 @@
             <!-- FETCH / LOAD REPORT BAR -->
             <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 14px 18px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.2);">
                 <div style="font-weight: 800; color: var(--accent-amber); font-size: 0.82em; text-transform: uppercase; letter-spacing: 1px;">Load Report:</div>
-                <select class="select-input" id="war-selector" style="flex: 1; min-width: 200px; padding: 9px 12px; font-size: 0.9em; background: var(--bg-elevated);" onchange="if(this.value) fetchReport(this.value)">
+                <select class="select-input" id="war-selector" style="flex: 1; min-width: 220px; padding: 9px 12px; font-size: 0.9em; background: var(--bg-elevated);" onchange="if(this.value) fetchReport(this.value)">
                     <option value="">Select a past war...</option>
                 </select>
                 <div style="font-weight: 800; color: var(--text-muted); font-size: 0.8em;">OR</div>
-                <input class="text-input" type="text" id="report-id" style="flex: 1; min-width: 200px; padding: 9px 12px; font-size: 0.9em; background: var(--bg-elevated);" placeholder="Paste report ID (e.g. 123456)">
+                <input class="text-input" type="text" id="report-id" style="flex: 1; min-width: 180px; padding: 9px 12px; font-size: 0.9em; background: var(--bg-elevated);" placeholder="Paste report ID (e.g. 123456)">
                 <button class="btn btn-action" style="padding: 9px 22px; font-size: 0.88em;" onclick="fetchReport()">⚡ Fetch Data</button>
             </div>
 
@@ -441,11 +590,11 @@
                 </div>
             </div>
 
-            <!-- CONTROLS + TABLE -->
+            <!-- CONTROLS + LEDGER / REIMBURSEMENTS -->
             <div class="two-col">
-                <!-- LEFT: All controls -->
+                <!-- LEFT COLUMN: All Payout Controls & Rules -->
                 <div>
-                    <!-- FINANCES -->
+                    <!-- FINANCES & DEDUCTIONS -->
                     <div class="payout-card">
                         <div class="payout-card-title">Finances & Deductions</div>
 
@@ -462,8 +611,8 @@
                             <div class="money-input"><span>$</span><input type="number" id="c-spy" value="0" oninput="recalc()"></div>
                         </div>
                         <div class="field">
-                            <label>Bounties</label>
-                            <div class="money-input"><span>$</span><input type="number" id="c-bounty" value="0" oninput="recalc()"></div>
+                            <label style="color:var(--accent-emerald);">Teammate Bounties (Vault)</label>
+                            <div class="money-input" style="border-color:rgba(16, 185, 129, 0.4);"><span>$</span><input type="number" id="c-bounty" value="0" oninput="recalc()"></div>
                         </div>
                         <div class="field">
                             <label>Terms / Agreements</label>
@@ -479,7 +628,7 @@
                         </div>
                     </div>
 
-                    <!-- CALC MODE -->
+                    <!-- CALCULATION MODE -->
                     <div class="payout-card">
                         <div class="payout-card-title">Calculation Mode</div>
                         <div style="display:flex; gap:8px; margin-bottom:12px;">
@@ -506,7 +655,7 @@
 
                     <!-- SURRENDER / TERMED -->
                     <div class="payout-card">
-                        <div class="payout-card-title">Surrender & Terming</div>
+                        <div class="payout-card-title">Surrender & Score Cap</div>
                         <div style="margin-bottom:10px;">
                             <div style="font-size:0.78em; color:var(--text-muted); margin-bottom:6px;">Surrender Time (TCT/UTC) — hits after this are "termed"</div>
                             <input type="datetime-local" id="surrender-time" onchange="recalc()">
@@ -583,45 +732,164 @@
                     </div>
                 </div>
 
-                <!-- RIGHT: Table -->
-                <div class="table-card">
-                    <div class="table-head-bar">
-                        <h3 id="war-title">Member Compensation Ledger</h3>
-                        <button class="btn btn-action btn-copy" style="padding: 6px 14px; font-size: 0.82em;" onclick="copyPayouts()">📋 Copy Payouts</button>
+                <!-- RIGHT COLUMN: Teammate Bounty Reimbursements + Ledger Table -->
+                <div>
+                    <!-- TEAMMATE BOUNTY REIMBURSEMENTS DECK -->
+                    <div class="bounty-reimburse-card" id="bounty-reimburse-card">
+                        <!-- Top Header with Toggle Switch -->
+                        <div style="padding: 16px 20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; border-bottom:1px solid var(--border-subtle); background:rgba(16, 185, 129, 0.03);">
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <div style="font-size:1.6em; line-height:1;">🛡️</div>
+                                <div>
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <h3 style="font-size:0.88em; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:var(--text-primary); margin:0;">
+                                            Teammate War Bounty Reimbursement
+                                        </h3>
+                                        <span style="font-size:0.68em; background:rgba(16,185,129,0.15); color:var(--accent-emerald); border:1px solid rgba(16,185,129,0.3); padding:2px 8px; border-radius:12px; font-weight:700;">
+                                            Multi-Key Discord Vault
+                                        </span>
+                                    </div>
+                                    <div style="font-size:0.78em; color:var(--text-muted); margin-top:2px;">
+                                        Uses linked member API keys to track personal cash spent bountying fellow faction members strictly during this war.
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:12px;">
+                                <span style="font-size:0.75em; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted);" id="bounty-toggle-label">INACTIVE</span>
+                                <label class="switch-toggle" title="Toggle Teammate War Bounty Reimbursements">
+                                    <input type="checkbox" id="chk-toggle-bounties" onchange="toggleBountyReimbursement(this.checked)">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Panel Container (Shown when toggled on) -->
+                        <div id="bounty-reimburse-panel" style="display:none;">
+                            <!-- State A: Animated Radar Scanning Screen -->
+                            <div id="bounty-loading-screen" class="bounty-scanner-box">
+                                <div class="scanner-radar">
+                                    <div class="radar-beam"></div>
+                                    <div class="radar-center">🛡️</div>
+                                </div>
+                                <div class="scanner-title">QUERYING DISCORD BOT API VAULT</div>
+                                <div class="scanner-subtitle" id="bounty-scan-status">
+                                    Scanning connected faction member event logs & active bounties strictly over this war's timeframe...
+                                </div>
+                                <div class="scanner-bar-wrap">
+                                    <div class="scanner-bar-fill"></div>
+                                </div>
+                                <div style="font-size:0.72em; color:var(--text-muted); font-family:var(--font-mono);">
+                                    Filtering only bounties placed on fellow faction teammates • Cross-referencing roster
+                                </div>
+                            </div>
+
+                            <!-- State B: Results & Itemized Breakdown View -->
+                            <div id="bounty-results-view" style="display:none;">
+                                <!-- Reimbursement Quick KPIs -->
+                                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:10px; padding: 14px 18px; border-bottom:1px solid var(--border-subtle); background:rgba(0,0,0,0.15);">
+                                    <div style="text-align:center;">
+                                        <div style="font-size:0.7em; color:var(--text-muted); text-transform:uppercase; font-weight:800;">Total Reimbursement</div>
+                                        <div style="font-size:1.3em; font-weight:900; color:var(--accent-emerald); font-family:var(--font-mono); margin-top:2px;" id="bounty-stat-total">$0</div>
+                                    </div>
+                                    <div style="text-align:center;">
+                                        <div style="font-size:0.7em; color:var(--text-muted); text-transform:uppercase; font-weight:800;">Contributing Placers</div>
+                                        <div style="font-size:1.3em; font-weight:900; color:var(--accent-cobalt); font-family:var(--font-mono); margin-top:2px;" id="bounty-stat-placers">0</div>
+                                    </div>
+                                    <div style="text-align:center;">
+                                        <div style="font-size:0.7em; color:var(--text-muted); text-transform:uppercase; font-weight:800;">Friendly Bounties</div>
+                                        <div style="font-size:1.3em; font-weight:900; color:var(--accent-amber); font-family:var(--font-mono); margin-top:2px;" id="bounty-stat-bounties">0</div>
+                                    </div>
+                                    <div style="text-align:center;">
+                                        <div style="font-size:0.7em; color:var(--text-muted); text-transform:uppercase; font-weight:800;">API Key Coverage</div>
+                                        <div style="font-size:1.3em; font-weight:900; color:var(--text-primary); font-family:var(--font-mono); margin-top:2px;" id="bounty-stat-scanned">0 Keys</div>
+                                    </div>
+                                </div>
+
+                                <!-- Action Toolbar -->
+                                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; padding:10px 18px; border-bottom:1px solid var(--border-subtle); background:rgba(255,255,255,0.015);">
+                                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.84em; font-weight:700; color:var(--text-secondary);">
+                                        <input type="checkbox" id="chk-apply-to-ledger" checked onchange="toggleApplyReimbursementToLedger(this.checked)" style="accent-color:var(--accent-emerald); width:15px; height:15px;">
+                                        Auto-Add to Member Payouts in Ledger
+                                    </label>
+                                    <div style="display:flex; gap:8px; align-items:center;">
+                                        <button class="btn btn-secondary btn-sm" onclick="applyBountyToDeductions()" title="Set Bounties deduction field to total spent">💰 Set as Deduction</button>
+                                        <button class="btn btn-secondary btn-sm" onclick="scanBountyReimbursements(true)" title="Re-scan connected member keys">↻ Re-Scan</button>
+                                    </div>
+                                </div>
+
+                                <!-- Itemized Placers Table -->
+                                <div class="table-wrap" style="max-height:280px; overflow-y:auto;">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>Member (Placer)</th>
+                                                <th style="text-align:center;">Bounties Placed</th>
+                                                <th>Teammates Protected</th>
+                                                <th style="text-align:right;">Cash Spent</th>
+                                                <th style="text-align:right;">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="bounty-table-body">
+                                            <tr><td colspan="5" style="text-align:center; padding:18px; color:var(--text-muted);">No data yet.</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="table-wrap">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Member</th>
-                                    <th style="text-align:right;">War</th>
-                                    <th style="text-align:right;">Assists</th>
-                                    <th style="text-align:right;">Outside</th>
-                                    <th style="text-align:right;">Termed</th>
-                                    <th style="text-align:right;">Filtered</th>
-                                    <th style="text-align:right;">Adj. Hits</th>
-                                    <th style="text-align:right;">Payout</th>
-                                    <th style="text-align:right;">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tb-body">
-                                <tr>
-                                    <td colspan="9" style="text-align:center; padding: 48px; color: var(--text-muted);">
-                                        <div style="font-size: 2.2em; margin-bottom: 8px;">⚔️</div>
-                                        <p style="font-weight: 600;">Load a war report above to calculate payouts</p>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+
+                    <!-- MEMBER COMPENSATION LEDGER TABLE -->
+                    <div class="table-card">
+                        <div class="table-head-bar">
+                            <h3 id="war-title">Member Compensation Ledger</h3>
+                            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                                <input type="text" id="ledger-search" placeholder="🔍 Search member..." oninput="recalc()" style="background:var(--bg-elevated); border:1px solid var(--border-subtle); color:var(--text-primary); padding:6px 10px; border-radius:var(--radius-sm); font-size:0.82em; width:150px; outline:none;">
+                                <button class="btn btn-action btn-copy" style="padding: 6px 14px; font-size: 0.82em;" onclick="copyPayouts()">📋 Copy Payouts</button>
+                            </div>
+                        </div>
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Member</th>
+                                        <th style="text-align:right;">War</th>
+                                        <th style="text-align:right;">Assists</th>
+                                        <th style="text-align:right;">Outside</th>
+                                        <th style="text-align:right;">Termed</th>
+                                        <th style="text-align:right;">Filtered</th>
+                                        <th style="text-align:right;">Adj. Hits</th>
+                                        <th style="text-align:right;">Payout</th>
+                                        <th style="text-align:right;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tb-body">
+                                    <tr>
+                                        <td colspan="9" style="text-align:center; padding: 48px; color: var(--text-muted);">
+                                            <div style="font-size: 2.2em; margin-bottom: 8px;">⚔️</div>
+                                            <p style="font-weight: 600;">Load a war report above to calculate payouts</p>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
         </main>
     </div>
+
     <script>
         const myKey = localStorage.getItem('warboard_apikey') || '';
         let rawMembers = [];
         let totalCacheVal = 0;
+        window.currentWarMetadata = null;
+
+        // Bounty Reimbursement State
+        let isBountyReimburseOn = false;
+        let bountyReimbursementData = null;
+        let applyReimbursementToLedger = true;
+        const reimbursementMap = new Map(); // placerId -> totalSpent
+        const placerDetailsMap = new Map(); // placerId -> placerObj
 
         // Theme
         const savedTheme = localStorage.getItem('warboard_theme');
@@ -671,13 +939,22 @@
                 const res = await fetch(`/api/past-war?reportId=${id}`, { headers: { 'x-api-key': myKey } });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
-                rawMembers = data.members;
+                rawMembers = data.members || [];
+                window.currentWarMetadata = data.war || null;
                 totalCacheVal = data.rewards?.totalCacheValue || 0;
                 const cacheEl = document.getElementById('inp-cache');
                 if (cacheEl) cacheEl.value = totalCacheVal;
                 const titleEl = document.getElementById('war-title');
-                if (titleEl) titleEl.innerText = '💰 War Payout — Report #' + id;
+                if (titleEl) {
+                    const enemyStr = data.war?.enemyName ? ` vs ${data.war.enemyName}` : '';
+                    titleEl.innerText = `💰 War Payout — Report #${id}${enemyStr}`;
+                }
                 recalc();
+
+                // If bounty reimbursement is currently active, auto-refresh it for this newly loaded war!
+                if (isBountyReimburseOn) {
+                    scanBountyReimbursements();
+                }
             } catch(e) {
                 alert('Error: ' + e.message);
                 setLoading(false);
@@ -686,7 +963,7 @@
 
         function setLoading(on) {
             document.getElementById('tb-body').innerHTML = on
-                ? '<tr><td colspan="9"><div class="empty"><div class="icon">⏳</div><p>Fetching attack logs from Torn API...<br><small style="color:#555;">This can take 10–30 seconds for large wars</small></p></div></td></tr>'
+                ? '<tr><td colspan="9"><div class="empty" style="text-align:center; padding:36px;"><div class="icon" style="font-size:2em; margin-bottom:8px;">⏳</div><p style="font-weight:600;">Fetching attack logs from Torn API...<br><small style="color:var(--text-muted);">This can take 10–30 seconds for large wars</small></p></div></td></tr>'
                 : '';
         }
 
@@ -698,6 +975,134 @@
             return '$' + n.toFixed(0);
         }
 
+        // ─── Teammate Bounty Reimbursements Handler ───────────────────────
+        async function toggleBountyReimbursement(enable) {
+            isBountyReimburseOn = enable;
+            const panel = document.getElementById('bounty-reimburse-panel');
+            const card = document.getElementById('bounty-reimburse-card');
+            const label = document.getElementById('bounty-toggle-label');
+
+            if (!enable) {
+                if (card) card.classList.remove('active-glow');
+                if (panel) panel.style.display = 'none';
+                if (label) { label.innerText = 'INACTIVE'; label.style.color = 'var(--text-muted)'; }
+                reimbursementMap.clear();
+                placerDetailsMap.clear();
+                recalc();
+                return;
+            }
+
+            if (card) card.classList.add('active-glow');
+            if (panel) panel.style.display = 'block';
+            if (label) { label.innerText = 'ACTIVE'; label.style.color = 'var(--accent-emerald)'; }
+
+            await scanBountyReimbursements();
+        }
+
+        async function scanBountyReimbursements(force = false) {
+            const loadingScreen = document.getElementById('bounty-loading-screen');
+            const resultsView = document.getElementById('bounty-results-view');
+            if (loadingScreen) loadingScreen.style.display = 'flex';
+            if (resultsView) resultsView.style.display = 'none';
+
+            let url = '/api/war-bounty-reimbursements?';
+            if (window.currentReportId) {
+                url += `reportId=${encodeURIComponent(window.currentReportId)}&`;
+            } else if (window.currentWarMetadata?.start) {
+                url += `warStart=${window.currentWarMetadata.start}&warEnd=${window.currentWarMetadata.end}&`;
+            }
+            if (force) url += 'force=true&';
+
+            try {
+                const res = await fetch(url, { headers: { 'x-api-key': myKey } });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.error || 'Failed to scan war bounties');
+
+                bountyReimbursementData = data;
+                reimbursementMap.clear();
+                placerDetailsMap.clear();
+
+                for (const p of data.reimbursements || []) {
+                    reimbursementMap.set(Number(p.placerId), p.totalSpent || 0);
+                    placerDetailsMap.set(Number(p.placerId), p);
+                }
+
+                renderBountyReimbursements(data);
+
+                // Auto-fill c-bounty deduction input if currently 0
+                const btyInput = document.getElementById('c-bounty');
+                if (btyInput && (parseFloat(btyInput.value) === 0 || !btyInput.value)) {
+                    btyInput.value = data.stats.totalReimbursementAmount || 0;
+                }
+
+                if (loadingScreen) loadingScreen.style.display = 'none';
+                if (resultsView) resultsView.style.display = 'block';
+
+                recalc();
+            } catch (err) {
+                if (loadingScreen) {
+                    loadingScreen.innerHTML = `<div style="color:var(--accent-crimson); font-weight:700; margin-bottom:8px;">⚠️ ${err.message}</div>
+                    <button class="btn btn-secondary btn-sm" onclick="scanBountyReimbursements(true)">↻ Retry Scan</button>`;
+                }
+            }
+        }
+
+        function renderBountyReimbursements(data) {
+            const stats = data.stats || {};
+            const totalSpentEl = document.getElementById('bounty-stat-total');
+            if (totalSpentEl) totalSpentEl.innerText = fmt(stats.totalReimbursementAmount || 0);
+            const placersCountEl = document.getElementById('bounty-stat-placers');
+            if (placersCountEl) placersCountEl.innerText = stats.membersWithReimbursements || 0;
+            const bountiesCountEl = document.getElementById('bounty-stat-bounties');
+            if (bountiesCountEl) bountiesCountEl.innerText = stats.totalBountiesCount || 0;
+            const scannedCountEl = document.getElementById('bounty-stat-scanned');
+            if (scannedCountEl) scannedCountEl.innerText = `${stats.totalMembersScanned || 0} Linked Keys`;
+
+            const tbody = document.getElementById('bounty-table-body');
+            if (!tbody) return;
+
+            if (!data.reimbursements || data.reimbursements.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:24px; color:var(--text-muted);">
+                    No friendly teammate bounties recorded during this war window.
+                </td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = data.reimbursements.map(p => {
+                const targetBadges = (p.targets || []).map(t =>
+                    `<span class="teammate-chip" title="$${t.spent.toLocaleString()} across ${t.count} bounties">🛡️ ${t.targetName} (${fmtShort(t.spent)})</span>`
+                ).join(' ');
+
+                return `<tr>
+                    <td style="font-weight:700; color:var(--text-primary);">
+                        <a href="https://www.torn.com/profiles.php?XID=${p.placerId}" target="_blank" style="color:inherit; text-decoration:none;">${p.placerName}</a>
+                        <span style="color:var(--text-muted); font-size:0.8em; margin-left:4px;">[${p.placerId}]</span>
+                    </td>
+                    <td style="text-align:center; font-family:var(--font-mono); font-weight:700; color:var(--accent-cobalt);">${p.bountiesCount}</td>
+                    <td style="font-size:0.85em;">${targetBadges || '<span style="color:var(--text-muted);">Teammates</span>'}</td>
+                    <td style="text-align:right; font-family:var(--font-mono); font-weight:900; color:var(--accent-emerald); font-size:1.02em;">${fmt(p.totalSpent)}</td>
+                    <td style="text-align:right;">
+                        <button class="btn-pay" onclick="openPay(this, ${p.placerId}, ${p.totalSpent})" title="Reimburse directly to balance in Torn Vault">💸 Pay Vault</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function toggleApplyReimbursementToLedger(checked) {
+            applyReimbursementToLedger = checked;
+            recalc();
+        }
+
+        function applyBountyToDeductions() {
+            if (!bountyReimbursementData) return;
+            const btyInput = document.getElementById('c-bounty');
+            if (btyInput) {
+                btyInput.value = bountyReimbursementData.stats?.totalReimbursementAmount || 0;
+                recalc();
+            }
+        }
+
+        // ─── Recalculate Payouts & Render Ledger ───────────────────────────
         function recalc() {
             if (!rawMembers || rawMembers.length === 0) return;
 
@@ -765,8 +1170,10 @@
 
             let totalAdjHits = 0;
             const rows = [];
+            const seenIds = new Set();
 
             rawMembers.forEach(m => {
+                seenIds.add(Number(m.id));
                 const mHits = allHits.filter(h => h.uid === m.id);
                 let warH = 0, astH = 0, outH = 0, trmH = 0, fltH = 0, adjH = 0, threshCount = 0;
 
@@ -818,10 +1225,25 @@
                 }
 
                 totalAdjHits += adjH;
-                rows.push({ id: m.id, name: m.name, warH, astH, outH, trmH, fltH, adjH, qualifies, threshCount });
+                rows.push({ id: Number(m.id), name: m.name, warH, astH, outH, trmH, fltH, adjH, qualifies, threshCount });
             });
 
-            // PPH
+            // If a member has friendly bounty spend but wasn't in rawMembers, add them so they receive reimbursement
+            if (isBountyReimburseOn && applyReimbursementToLedger) {
+                for (const [pId, pData] of placerDetailsMap.entries()) {
+                    if (!seenIds.has(pId)) {
+                        rows.push({
+                            id: pId,
+                            name: pData.placerName,
+                            warH: 0, astH: 0, outH: 0, trmH: 0, fltH: 0, adjH: 0,
+                            qualifies: true,
+                            threshCount: 0
+                        });
+                    }
+                }
+            }
+
+            // PPH math
             let actPph = 0;
             if (isCut) {
                 if (eqPay) {
@@ -848,31 +1270,57 @@
             const outCalcPph = document.getElementById('out-calc-pph');
             if (outCalcPph) outCalcPph.innerText = fmtShort(actPph);
 
+            // Filter by search query if present
+            const searchVal = (document.getElementById('ledger-search')?.value || '').toLowerCase().trim();
+            const filteredRows = searchVal
+                ? rows.filter(r => r.name.toLowerCase().includes(searchVal) || String(r.id).includes(searchVal))
+                : rows;
+
             // Render table
-            rows.sort((a, b) => b.adjH - a.adjH);
+            filteredRows.sort((a, b) => {
+                const reimburseA = (isBountyReimburseOn && applyReimbursementToLedger && reimbursementMap.has(a.id)) ? reimbursementMap.get(a.id) : 0;
+                const reimburseB = (isBountyReimburseOn && applyReimbursementToLedger && reimbursementMap.has(b.id)) ? reimbursementMap.get(b.id) : 0;
+                const payA = a.qualifies ? (eqPay ? (isCut ? actPph : hardPph) : a.adjH * actPph) : 0;
+                const payB = b.qualifies ? (eqPay ? (isCut ? actPph : hardPph) : b.adjH * actPph) : 0;
+                return (payB + reimburseB) - (payA + reimburseA);
+            });
+
             let html = '';
-            rows.forEach((m, i) => {
-                const pay = m.qualifies ? (eqPay ? (isCut ? actPph : hardPph) : m.adjH * actPph) : 0;
+            filteredRows.forEach((m, i) => {
+                const basePay = m.qualifies ? (eqPay ? (isCut ? actPph : hardPph) : m.adjH * actPph) : 0;
+                const reimbursement = (isBountyReimburseOn && applyReimbursementToLedger && reimbursementMap.has(m.id))
+                    ? reimbursementMap.get(m.id)
+                    : 0;
+                const totalPay = basePay + reimbursement;
+
                 const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
                 const isPaid = window.currentReportId ? localStorage.getItem('paid_' + window.currentReportId + '_' + m.id) === '1' : false;
+
+                let payoutHtml = `<div class="td-pay${totalPay === 0 ? ' badge-zero' : ''}">${fmt(totalPay)}</div>`;
+                if (reimbursement > 0) {
+                    payoutHtml += `<div style="font-size:0.73em; color:var(--accent-amber); font-weight:700;" title="Includes friendly bounty reimbursement">+ ${fmt(reimbursement)} Bounty</div>`;
+                }
+
                 html += `<tr id="row-${m.id}" class="${rankClass}" style="${isPaid ? 'opacity: 0.4;' : ''}">
-                    <td class="td-name">${m.name}</td>
+                    <td class="td-name">
+                        <a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:inherit; text-decoration:none;">${m.name}</a>
+                    </td>
                     <td class="td-hits${m.warH === 0 ? ' badge-zero' : ''}">${m.warH}</td>
                     <td class="td-ast${m.astH === 0 ? ' badge-zero' : ''}">${m.astH}</td>
                     <td class="td-out${m.outH === 0 ? ' badge-zero' : ''}">${m.outH}</td>
                     <td class="td-trm${m.trmH === 0 ? ' badge-zero' : ''}">${m.trmH}</td>
                     <td class="td-flt">${m.fltH}</td>
                     <td class="td-adj">${m.adjH.toFixed(2)}</td>
-                    <td class="td-pay${pay === 0 ? ' badge-zero' : ''}">${fmt(pay)}</td>
+                    <td style="text-align:right;">${payoutHtml}</td>
                     <td style="text-align:right;">
-                        <label style="cursor:pointer; display:inline-flex; align-items:center; gap:5px; margin-right:10px; color:var(--text-dim); font-size:0.85em;">
-                            <input type="checkbox" id="cb-paid-${m.id}" onchange="markPaid(${m.id}, this.checked)" ${isPaid ? 'checked' : ''} style="accent-color:var(--green);"> Paid
+                        <label style="cursor:pointer; display:inline-flex; align-items:center; gap:5px; margin-right:10px; color:var(--text-muted); font-size:0.82em;">
+                            <input type="checkbox" id="cb-paid-${m.id}" onchange="markPaid(${m.id}, this.checked)" ${isPaid ? 'checked' : ''} style="accent-color:var(--accent-emerald);"> Paid
                         </label>
-                        <button class="btn-pay" onclick="openPay(this, ${m.id}, ${Math.floor(pay)})">💸 Pay</button>
+                        <button class="btn-pay" onclick="openPay(this, ${m.id}, ${Math.floor(totalPay)})" title="Deposit directly to user's faction balance in Torn">💸 Pay</button>
                     </td>
                 </tr>`;
             });
-            document.getElementById('tb-body').innerHTML = html || '<tr><td colspan="9"><div class="empty"><p>No members found.</p></div></td></tr>';
+            document.getElementById('tb-body').innerHTML = html || '<tr><td colspan="9"><div class="empty" style="text-align:center; padding:30px;"><p style="color:var(--text-muted);">No members found.</p></div></td></tr>';
         }
 
         function markPaid(uid, checked) {
@@ -884,11 +1332,12 @@
             if (tr) tr.style.opacity = checked ? '0.4' : '1';
         }
 
+        // ─── Pay Link Deep Link (Fixed: Pre-selects "Add to balance") ──────────
         function openPay(btn, uid, amt) {
             navigator.clipboard.writeText(amt).catch(()=>{});
             if (btn) {
                 const oldText = btn.innerText;
-                btn.innerText = 'Copied Amount!';
+                btn.innerText = 'Copied!';
                 setTimeout(() => { if (btn) btn.innerText = oldText; }, 2000);
             }
             
@@ -898,7 +1347,8 @@
                 markPaid(uid, true);
             }
             
-            window.open(`https://www.torn.com/factions.php?step=your#/tab=controls&select=donate&addMoneyTo=${uid}&giveMoneyTo=${uid}&payUser=${uid}&money=${amt}&amount=${amt}`, '_blank');
+            // Torn Faction Controls URL — option=add-to-balance ensures "Add to balance" is natively selected
+            window.open(`https://www.torn.com/factions.php?step=your&option=add-to-balance&addMoneyTo=${uid}&money=${amt}#/tab=controls&option=add-to-balance&addMoneyTo=${uid}&money=${amt}`, '_blank');
         }
 
         function copyPayouts() {

@@ -6679,7 +6679,19 @@ app.get('/api/past-war', async (req, res) => {
             });
         }
 
-        res.json({ success: true, members: formattedMembers, rewards: { totalCacheValue, caches: cachesWon, points: myFactionWarData?.rewards?.points||0, respect: myFactionWarData?.rewards?.respect||0 } });
+        const enemyFactionName = (enemyFacId && reportData.rankedwarreport?.factions?.[enemyFacId]?.name) || "Enemy Faction";
+        res.json({
+            success: true,
+            war: {
+                start: warStart,
+                end: warEnd,
+                factionId: correctFacId,
+                enemyFactionId: enemyFacId,
+                enemyName: enemyFactionName
+            },
+            members: formattedMembers,
+            rewards: { totalCacheValue, caches: cachesWon, points: myFactionWarData?.rewards?.points||0, respect: myFactionWarData?.rewards?.respect||0 }
+        });
     } catch (err) { res.status(403).json({ error: err.message }); }
 });
 
@@ -6739,6 +6751,329 @@ app.post('/api/update-stats', (req, res) => {
     const state = getFactionWarState(facId);
     state.manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() };
     res.json({ success: true });
+});
+
+// ── War Bounty Reimbursements Engine (Multi-Key Friendly War Bounty Tracker) ───
+const warBountyReimbursementsCache = new Map(); // key -> { timestamp, data }
+const WAR_BOUNTY_REIMBURSE_TTL_MS = 30 * 1000;
+
+app.get('/api/war-bounty-reimbursements', async (req, res) => {
+    const apiKey = req.headers['x-api-key'] || req.query.apiKey || discordConfig.apiKey;
+    const reportId = req.query.reportId ? String(req.query.reportId).trim() : '';
+    let warStart = req.query.warStart ? Number(req.query.warStart) : 0;
+    let warEnd = req.query.warEnd ? Number(req.query.warEnd) : 0;
+    const force = req.query.force === 'true';
+
+    const cacheKey = `reimburse_${reportId || 'active'}_${warStart}_${warEnd}`;
+    const cached = warBountyReimbursementsCache.get(cacheKey);
+    const now = Date.now();
+    if (!force && cached && (now - cached.timestamp < WAR_BOUNTY_REIMBURSE_TTL_MS)) {
+        return res.json(cached.data);
+    }
+
+    try {
+        let correctFacId = null;
+        let enemyName = "Enemy Faction";
+        const friendlyMemberIds = new Set();
+        const memberNames = {};
+
+        // 1. Resolve War Time Window and Friendly Roster
+        if (reportId) {
+            try {
+                const reportRes = await fetch(`https://api.torn.com/torn/${reportId}?selections=rankedwarreport&key=${apiKey}`, {
+                    signal: AbortSignal.timeout(8000)
+                });
+                const reportData = await reportRes.json();
+                if (reportData.rankedwarreport?.war) {
+                    if (!warStart) warStart = Number(reportData.rankedwarreport.war.start || 0);
+                    if (!warEnd) warEnd = Number(reportData.rankedwarreport.war.end || Math.floor(Date.now() / 1000));
+                }
+
+                if (reportData.rankedwarreport?.factions) {
+                    const factions = reportData.rankedwarreport.factions;
+                    let myUserId = null;
+                    if (apiKey) {
+                        try {
+                            const uRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${apiKey}`, { signal: AbortSignal.timeout(5000) });
+                            const uData = await uRes.json();
+                            if (uData.player_id) myUserId = String(uData.player_id);
+                        } catch (e) {}
+                    }
+                    for (const [fId, fData] of Object.entries(factions)) {
+                        if (myUserId && fData.members && fData.members[myUserId]) {
+                            correctFacId = fId;
+                        }
+                    }
+                    if (!correctFacId) {
+                        const fKeys = Object.keys(factions);
+                        correctFacId = fKeys[0] || null;
+                    }
+
+                    if (correctFacId && factions[correctFacId]) {
+                        const enemyEntry = Object.entries(factions).find(([fId]) => fId !== correctFacId);
+                        if (enemyEntry && enemyEntry[1]?.name) enemyName = enemyEntry[1].name;
+                        const mems = factions[correctFacId].members || {};
+                        for (const [id, m] of Object.entries(mems)) {
+                            friendlyMemberIds.add(Number(id));
+                            memberNames[id] = m.name;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn('[WarBountyReimbursements] Failed to load war report:', err.message);
+            }
+        }
+
+        // If no war report or warStart still 0, fallback to faction ranked wars
+        if (!warStart || friendlyMemberIds.size === 0) {
+            try {
+                const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`, {
+                    signal: AbortSignal.timeout(8000)
+                });
+                const facData = await facRes.json();
+                if (facData.members) {
+                    for (const [id, m] of Object.entries(facData.members)) {
+                        friendlyMemberIds.add(Number(id));
+                        memberNames[id] = m.name;
+                    }
+                }
+                if (facData.ID || facData.faction_id) {
+                    correctFacId = String(facData.ID || facData.faction_id);
+                }
+                if (!warStart && facData.rankedwars) {
+                    let targetWar = Object.values(facData.rankedwars).find(w => w.war && (w.war.winner === 0 || !w.war.end || w.war.end === 0));
+                    if (!targetWar) {
+                        const sorted = Object.values(facData.rankedwars).filter(w => w.war?.start).sort((a, b) => (b.war.start || 0) - (a.war.start || 0));
+                        targetWar = sorted[0];
+                    }
+                    if (targetWar?.war) {
+                        warStart = Number(targetWar.war.start || 0);
+                        warEnd = Number(targetWar.war.end || Math.floor(Date.now() / 1000));
+                        if (targetWar.factions) {
+                            const enemyEntry = Object.entries(targetWar.factions).find(([fId]) => fId !== correctFacId);
+                            if (enemyEntry && enemyEntry[1]?.name) enemyName = enemyEntry[1].name;
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn('[WarBountyReimbursements] Failed to load faction data:', err.message);
+            }
+        }
+
+        if (!warStart) warStart = Math.floor(Date.now() / 1000) - (7 * 86400);
+        if (!warEnd) warEnd = Math.floor(Date.now() / 1000);
+
+        // 2. Retrieve connected members from Discord bot vault
+        const connectedMembers = (typeof userKeys !== 'undefined' && userKeys.getAllConnectedMembers)
+            ? userKeys.getAllConnectedMembers()
+            : [];
+
+        // Filter connected members: members belonging to this faction
+        const factionConnected = connectedMembers.filter(cm => friendlyMemberIds.has(Number(cm.tornId)));
+        const scanMembers = factionConnected.length > 0 ? factionConnected : connectedMembers;
+
+        // 3. Scan each member concurrently in batches
+        const reimbursementsByPlacer = {};
+        const BATCH_SIZE = 5;
+
+        for (let i = 0; i < scanMembers.length; i += BATCH_SIZE) {
+            const batch = scanMembers.slice(i, i + BATCH_SIZE);
+            await Promise.all(batch.map(async (cm) => {
+                const placerId = Number(cm.tornId);
+                const placerName = cm.playerName || memberNames[placerId] || `Member #${placerId}`;
+
+                try {
+                    // Fetch member events during war window
+                    let evList = [];
+                    try {
+                        const v2Url = `https://api.torn.com/v2/user/events?key=${cm.key}&to=${warEnd}`;
+                        const evRes = await fetch(v2Url, { signal: AbortSignal.timeout(6000) });
+                        const evData = await evRes.json();
+                        if (evData && Array.isArray(evData.events)) {
+                            evList = evData.events;
+                        }
+                    } catch (e) {}
+
+                    if (evList.length === 0) {
+                        try {
+                            const v1Url = `https://api.torn.com/user/?selections=events&key=${cm.key}`;
+                            const v1Res = await fetch(v1Url, { signal: AbortSignal.timeout(6000) });
+                            const v1Data = await v1Res.json();
+                            if (v1Data && v1Data.events) {
+                                evList = Object.entries(v1Data.events).map(([eId, ev]) => ({ id: eId, ...ev }));
+                            }
+                        } catch (e) {}
+                    }
+
+                    // Also fetch live active bounties if available
+                    let activeBounties = [];
+                    try {
+                        const bRes = await fetch(`https://api.torn.com/v2/user/bounties?key=${cm.key}`, { signal: AbortSignal.timeout(4000) });
+                        const bData = await bRes.json();
+                        if (bData && Array.isArray(bData.bounties)) {
+                            activeBounties = bData.bounties;
+                        }
+                    } catch (e) {}
+
+                    // Track seen bounty instances to prevent double-counting placement vs claim
+                    const seenBounties = new Map();
+
+                    // A. Parse event logs for bounties placed on fellow faction members
+                    for (const ev of evList) {
+                        const text = ev.event || ev.message || ev.text || '';
+                        const ts = Number(ev.timestamp) || 0;
+                        if (!text || ts < warStart || ts > warEnd) continue;
+                        if (!/bount/i.test(text)) continue;
+
+                        const amountMatch = text.match(/\$([0-9,]+)/i);
+                        const amount = amountMatch ? parseInt(amountMatch[1].replace(/,/g, ''), 10) : 0;
+                        if (amount <= 0) continue;
+
+                        const playerLinks = [...text.matchAll(/profiles\.php\?XID=(\d+)[^>]*>([^<]+)<\/a>/g)];
+
+                        const isClaim = /earned your.*bounty reward/i.test(text) || /collected.*bounty you placed/i.test(text) || /claimed.*bounty you placed/i.test(text);
+                        const isPlaced = /you placed a?\s*bounty/i.test(text) || /you placed a?\s*\$[0-9,]+\s+bounty/i.test(text) || (text.toLowerCase().includes('you placed') && text.toLowerCase().includes('bounty'));
+
+                        if (!isClaim && !isPlaced) continue;
+
+                        let targetId = null;
+                        let targetName = 'Unknown Teammate';
+
+                        if (isClaim) {
+                            if (playerLinks.length >= 2) {
+                                targetId = Number(playerLinks[1][1]);
+                                targetName = playerLinks[1][2];
+                            } else if (playerLinks.length === 1) {
+                                targetId = Number(playerLinks[0][1]);
+                                targetName = playerLinks[0][2];
+                            }
+                        } else if (isPlaced) {
+                            if (playerLinks.length > 0) {
+                                targetId = Number(playerLinks[playerLinks.length - 1][1]);
+                                targetName = playerLinks[playerLinks.length - 1][2];
+                            }
+                        }
+
+                        if (!targetId) continue;
+
+                        // CRITICAL: Must be a fellow faction member!
+                        if (!friendlyMemberIds.has(targetId)) continue;
+                        if (memberNames[targetId]) targetName = memberNames[targetId];
+
+                        // Deduplicate: key by targetId + amount + approximate time (within 36 hours)
+                        const dedupWindow = Math.floor(ts / (36 * 3600));
+                        const dedupKey = `${targetId}_${amount}_${dedupWindow}`;
+
+                        if (!seenBounties.has(dedupKey)) {
+                            seenBounties.set(dedupKey, {
+                                targetId,
+                                targetName,
+                                amount,
+                                timestamp: ts,
+                                status: isClaim ? 'Claimed' : 'Placed',
+                                rawText: text
+                            });
+                        } else if (isClaim) {
+                            const existing = seenBounties.get(dedupKey);
+                            existing.status = 'Claimed';
+                        }
+                    }
+
+                    // B. Parse active bounties for any still-live friendly bounties posted during war
+                    for (const b of activeBounties) {
+                        const postedTs = Number(b.posted || b.timestamp || 0);
+                        if (postedTs && (postedTs < warStart || postedTs > warEnd)) continue;
+
+                        const targetId = Number(b.target || b.target_id || 0);
+                        if (!targetId || !friendlyMemberIds.has(targetId)) continue;
+
+                        const amount = Number(b.reward || b.bounty || b.cost || 0);
+                        if (amount <= 0) continue;
+
+                        const targetName = b.target_name || b.name || memberNames[targetId] || `Teammate #${targetId}`;
+                        const dedupWindow = Math.floor((postedTs || warStart) / (36 * 3600));
+                        const dedupKey = `${targetId}_${amount}_${dedupWindow}`;
+
+                        if (!seenBounties.has(dedupKey)) {
+                            seenBounties.set(dedupKey, {
+                                targetId,
+                                targetName,
+                                amount,
+                                timestamp: postedTs || warStart,
+                                status: 'Active (Live)',
+                                rawText: `Live active bounty on ${targetName}`
+                            });
+                        }
+                    }
+
+                    // If member has friendly bounties to reimburse, store them
+                    if (seenBounties.size > 0) {
+                        const bountyList = Array.from(seenBounties.values());
+                        const totalSpent = bountyList.reduce((sum, b) => sum + b.amount, 0);
+
+                        // Group targets
+                        const targetMap = {};
+                        for (const b of bountyList) {
+                            if (!targetMap[b.targetId]) {
+                                targetMap[b.targetId] = {
+                                    targetId: b.targetId,
+                                    targetName: b.targetName,
+                                    count: 0,
+                                    spent: 0
+                                };
+                            }
+                            targetMap[b.targetId].count++;
+                            targetMap[b.targetId].spent += b.amount;
+                        }
+
+                        reimbursementsByPlacer[placerId] = {
+                            placerId,
+                            placerName,
+                            totalSpent,
+                            bountiesCount: bountyList.length,
+                            targets: Object.values(targetMap).sort((a, b) => b.spent - a.spent),
+                            events: bountyList.sort((a, b) => b.timestamp - a.timestamp)
+                        };
+                    }
+                } catch (err) {
+                    console.warn(`[WarBountyReimbursements] Error scanning member ${cm.tornId}:`, err.message);
+                }
+            }));
+
+            if (i + BATCH_SIZE < scanMembers.length) {
+                await new Promise(r => setTimeout(r, 100));
+            }
+        }
+
+        const placersList = Object.values(reimbursementsByPlacer).sort((a, b) => b.totalSpent - a.totalSpent);
+        const totalSpentOverall = placersList.reduce((sum, p) => sum + p.totalSpent, 0);
+        const totalBountiesOverall = placersList.reduce((sum, p) => sum + p.bountiesCount, 0);
+
+        const responseData = {
+            success: true,
+            war: {
+                reportId: reportId || null,
+                start: warStart,
+                end: warEnd,
+                factionId: correctFacId,
+                enemyName
+            },
+            stats: {
+                totalMembersScanned: scanMembers.length,
+                membersWithReimbursements: placersList.length,
+                totalReimbursementAmount: totalSpentOverall,
+                totalBountiesCount: totalBountiesOverall
+            },
+            reimbursements: placersList
+        };
+
+        warBountyReimbursementsCache.set(cacheKey, { timestamp: now, data: responseData });
+        res.json(responseData);
+
+    } catch (err) {
+        console.error('[WarBountyReimbursements] Endpoint error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 app.get('/api/inspect', async (req, res) => {
