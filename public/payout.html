@@ -586,8 +586,8 @@
                 <!-- RIGHT: Table -->
                 <div class="table-card">
                     <div class="table-head-bar">
-                        <h3>Member Compensation Ledger</h3>
-                        <button class="btn btn-action" style="padding: 6px 14px; font-size: 0.82em;" onclick="copyPayouts()">📋 Copy Payouts</button>
+                        <h3 id="war-title">Member Compensation Ledger</h3>
+                        <button class="btn btn-action btn-copy" style="padding: 6px 14px; font-size: 0.82em;" onclick="copyPayouts()">📋 Copy Payouts</button>
                     </div>
                     <div class="table-wrap">
                         <table>
@@ -673,8 +673,10 @@
                 if (data.error) throw new Error(data.error);
                 rawMembers = data.members;
                 totalCacheVal = data.rewards?.totalCacheValue || 0;
-                document.getElementById('inp-cache').value = totalCacheVal;
-                document.getElementById('war-title').innerText = '💰 War Payout — Report #' + id;
+                const cacheEl = document.getElementById('inp-cache');
+                if (cacheEl) cacheEl.value = totalCacheVal;
+                const titleEl = document.getElementById('war-title');
+                if (titleEl) titleEl.innerText = '💰 War Payout — Report #' + id;
                 recalc();
             } catch(e) {
                 alert('Error: ' + e.message);
@@ -833,12 +835,18 @@
             }
 
             // Update KPIs
-            document.getElementById('kpi-cache').innerText  = fmtShort(currentCacheVal);
-            document.getElementById('kpi-deductions').innerText = fmtShort(totalDeductions);
-            document.getElementById('kpi-pool').innerText   = fmtShort(memberPool);
-            document.getElementById('kpi-hits').innerText   = totalAdjHits.toFixed(1);
-            document.getElementById('kpi-pph').innerText    = fmtShort(actPph);
-            document.getElementById('out-calc-pph').innerText = fmtShort(actPph);
+            const kpiCache = document.getElementById('kpi-cache');
+            if (kpiCache) kpiCache.innerText = fmtShort(currentCacheVal);
+            const kpiDeductions = document.getElementById('kpi-deductions');
+            if (kpiDeductions) kpiDeductions.innerText = fmtShort(totalDeductions);
+            const kpiPool = document.getElementById('kpi-pool');
+            if (kpiPool) kpiPool.innerText = fmtShort(memberPool);
+            const kpiHits = document.getElementById('kpi-hits');
+            if (kpiHits) kpiHits.innerText = totalAdjHits.toFixed(1);
+            const kpiPph = document.getElementById('kpi-pph');
+            if (kpiPph) kpiPph.innerText = fmtShort(actPph);
+            const outCalcPph = document.getElementById('out-calc-pph');
+            if (outCalcPph) outCalcPph.innerText = fmtShort(actPph);
 
             // Render table
             rows.sort((a, b) => b.adjH - a.adjH);
@@ -878,9 +886,11 @@
 
         function openPay(btn, uid, amt) {
             navigator.clipboard.writeText(amt).catch(()=>{});
-            const oldText = btn.innerText;
-            btn.innerText = 'Copied Amount!';
-            setTimeout(() => btn.innerText = oldText, 2000);
+            if (btn) {
+                const oldText = btn.innerText;
+                btn.innerText = 'Copied Amount!';
+                setTimeout(() => { if (btn) btn.innerText = oldText; }, 2000);
+            }
             
             const cb = document.getElementById('cb-paid-' + uid);
             if (cb && !cb.checked) {
@@ -901,9 +911,12 @@
                 }
             });
             navigator.clipboard.writeText(text).then(() => {
-                const btn = document.querySelector('.btn-copy');
-                btn.innerText = '✅ Copied!';
-                setTimeout(() => btn.innerText = '📋 Copy Payouts', 2000);
+                const btn = document.querySelector('.btn-copy') || document.querySelector('button[onclick="copyPayouts()"]');
+                if (btn) {
+                    const oldText = btn.innerText;
+                    btn.innerText = '✅ Copied!';
+                    setTimeout(() => { if (btn) btn.innerText = oldText; }, 2000);
+                }
             });
         }
     </script>
