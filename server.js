@@ -19680,16 +19680,26 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
             ]
         );
 
-        return await interaction.editReply({
+        const replyPayload = {
             embeds: [sanitizeEmbed(embed)],
             components: buttonRows
-        });
+        };
+        if (interaction.deferred || interaction.replied) {
+            return await interaction.editReply(replyPayload);
+        } else {
+            return await interaction.reply(replyPayload);
+        }
 
     } catch(err) {
         console.error('[BattleStats] Error in handleBattleStatsUpdate:', err);
-        return await interaction.editReply({
+        const errPayload = {
             embeds: [sanitizeEmbed(UI.error('Command Error', `An unexpected error occurred while processing battle stats: ${err.message}`))]
-        }).catch(() => {});
+        };
+        if (interaction.deferred || interaction.replied) {
+            return await interaction.editReply(errPayload).catch(() => {});
+        } else {
+            return await interaction.reply(errPayload).catch(() => {});
+        }
     }
 }
 
@@ -21629,7 +21639,9 @@ function setupSlashBotEvents(bot, token) {
                 'snipe', 'elim', 'remindkeys'
             ]);
             const isEphemeral = ephemeralCmds.has(cmd);
-            await interaction.deferReply({ ephemeral: isEphemeral }).catch(() => {});
+            await interaction.deferReply({ ephemeral: isEphemeral }).catch(err => {
+                console.error(`[Slash Bot] Failed to deferReply for /${cmd}:`, err.message);
+            });
         }
 
         const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
