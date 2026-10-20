@@ -3842,7 +3842,7 @@ async function cachedTornFetch(url, cacheKey, ttlMs = 2500) {
     }
 }
 
-function autoDetectEnemyFaction(data, allowPeacetimeFallback = false) {
+function autoDetectEnemyFaction(data) {
     if (!data || !data.ID) return null;
     const myId = data.ID.toString();
     if (data.rankedwars && Object.keys(data.rankedwars).length > 0) {
@@ -3857,14 +3857,6 @@ function autoDetectEnemyFaction(data, allowPeacetimeFallback = false) {
             const factions = Object.keys(upcomingWar.factions || {});
             const enemy = factions.find(id => id !== myId);
             if (enemy) return enemy;
-        }
-        if (allowPeacetimeFallback) {
-            const sortedWars = Object.values(data.rankedwars).sort((a, b) => (b.war?.start || 0) - (a.war?.start || 0));
-            if (sortedWars.length > 0) {
-                const factions = Object.keys(sortedWars[0].factions || {});
-                const enemy = factions.find(id => id !== myId);
-                if (enemy) return enemy;
-            }
         }
     }
     return null;
@@ -7269,7 +7261,7 @@ app.get('/api/warboard', async (req, res) => {
 
 
         let enemyId = (req.headers['x-enemy-id'] || req.query.enemyFaction) || null;
-        if (!enemyId) enemyId = autoDetectEnemyFaction(myData, true);
+        if (!enemyId) enemyId = autoDetectEnemyFaction(myData);
         let enemyDataResult = { members: {} };
         if (enemyId) { 
             enemyDataResult = await cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey() || userKey || TORN_API_KEY}`, `enemy_faction_${enemyId}`, 2500); 
@@ -11847,7 +11839,11 @@ async function buildCountryStatusEmbed(country, apiKey, targetEnemyOverride = nu
 
         const friendlyName = facData.name || discordConfig.factionName || "Our Faction";
 
-        // 2. Robust Enemy Faction Resolution
+        // 2. Robust Enemy Faction Resolution (Active/Upcoming War or Explicit Override ONLY)
+        const activeWar = getActiveRankedWar(facData);
+        const upcomingWar = !activeWar ? getUpcomingRankedWar(facData) : null;
+        const targetWar = activeWar || upcomingWar;
+
         let enemyId = null;
         if (targetEnemyOverride) {
             const cleanOverride = String(targetEnemyOverride).trim();
@@ -11867,25 +11863,17 @@ async function buildCountryStatusEmbed(country, apiKey, targetEnemyOverride = nu
                     if (enemyId) break;
                 }
             }
-        }
-
-        if (!enemyId && currentEnemyFacId) {
-            enemyId = String(currentEnemyFacId);
-        }
-
-        const activeWar = getActiveRankedWar(facData);
-        if (!enemyId && activeWar && activeWar.factions) {
-            const oppId = Object.keys(activeWar.factions).find(id => id.toString() !== factionId.toString());
+        } else if (targetWar && targetWar.factions) {
+            const oppId = Object.keys(targetWar.factions).find(id => id.toString() !== factionId.toString());
             if (oppId) enemyId = String(oppId);
         }
 
-        if (!enemyId && discordConfig.enemyFacId) {
-            enemyId = String(discordConfig.enemyFacId);
-        }
-
-        if (!enemyId) {
-            const detected = autoDetectEnemyFaction(facData, true);
-            if (detected) enemyId = String(detected);
+        // Peacetime hygiene: strictly clear all stale enemy variables & caches when no war exists
+        if (!targetWar && !targetEnemyOverride) {
+            enemyId = null;
+            currentEnemyFacId = null;
+            enemyMembersCache = {};
+            enemyFactionNameCache = null;
         }
 
         let enemyName = "Enemy Faction";
@@ -11907,14 +11895,16 @@ async function buildCountryStatusEmbed(country, apiKey, targetEnemyOverride = nu
                 if (parsedEnemy && !parsedEnemy.error && parsedEnemy.members) {
                     enemyData = parsedEnemy;
                     enemyName = parsedEnemy.name || `Enemy [${enemyId}]`;
-                    enemyMembersCache = parsedEnemy.members;
-                    enemyFactionNameCache = enemyName;
-                    currentEnemyFacId = enemyId;
+                    if (targetWar) {
+                        enemyMembersCache = parsedEnemy.members;
+                        enemyFactionNameCache = enemyName;
+                        currentEnemyFacId = enemyId;
+                    }
                 }
             } catch(e) {
                 console.warn(`[Travel] Enemy fetch error for ${enemyId}:`, e.message);
             }
-            if (!enemyData && enemyMembersCache && Object.keys(enemyMembersCache).length > 0) {
+            if (!enemyData && targetWar && enemyMembersCache && Object.keys(enemyMembersCache).length > 0) {
                 enemyData = { members: enemyMembersCache, name: enemyFactionNameCache || enemyName };
                 if (enemyFactionNameCache) enemyName = enemyFactionNameCache;
             }
@@ -12006,46 +11996,47 @@ async function buildCountryStatusEmbed(country, apiKey, targetEnemyOverride = nu
             });
         }
 
-        // ── 2. ENEMY SECTION (with 1-click Attack Links) ──
-        if (enemyTravel.inCountry.length > 0) {
-            fields.push({
-                name: `🎯 ${enemyName} — In ${country} (${enemyTravel.inCountry.length})`,
-                value: enemyTravel.inCountry.slice(0, 15).map(m =>
-                    `${UI.player(m.name, m.id)}${m.onlineStr} • [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})`
-                ).join("\n"),
-                inline: false
-            });
-        }
-        if (enemyTravel.flyingTo.length > 0) {
-            fields.push({
-                name: `✈️ ${enemyName} — Flying TO ${country} (${enemyTravel.flyingTo.length})`,
-                value: enemyTravel.flyingTo.slice(0, 15).map(m =>
-                    `${UI.player(m.name, m.id)} — ${m.landingStr || "ETA unknown"} • [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})`
-                ).join("\n"),
-                inline: false
-            });
-        }
-        if (enemyTravel.flyingBack.length > 0) {
-            fields.push({
-                name: `🔄 ${enemyName} — Flying BACK from ${country} (${enemyTravel.flyingBack.length})`,
-                value: enemyTravel.flyingBack.slice(0, 15).map(m =>
-                    `${UI.player(m.name, m.id)} — ${m.landingStr || "ETA unknown"} • [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})`
-                ).join("\n"),
-                inline: false
-            });
-        }
+        // ── 2. ENEMY SECTION (with 1-click Attack Links — War/Override Only) ──
+        if (enemyData) {
+            if (enemyTravel.inCountry.length > 0) {
+                fields.push({
+                    name: `🎯 ${enemyName} — In ${country} (${enemyTravel.inCountry.length})`,
+                    value: enemyTravel.inCountry.slice(0, 15).map(m =>
+                        `${UI.player(m.name, m.id)}${m.onlineStr} • [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})`
+                    ).join("\n"),
+                    inline: false
+                });
+            }
+            if (enemyTravel.flyingTo.length > 0) {
+                fields.push({
+                    name: `✈️ ${enemyName} — Flying TO ${country} (${enemyTravel.flyingTo.length})`,
+                    value: enemyTravel.flyingTo.slice(0, 15).map(m =>
+                        `${UI.player(m.name, m.id)} — ${m.landingStr || "ETA unknown"} • [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})`
+                    ).join("\n"),
+                    inline: false
+                });
+            }
+            if (enemyTravel.flyingBack.length > 0) {
+                fields.push({
+                    name: `🔄 ${enemyName} — Flying BACK from ${country} (${enemyTravel.flyingBack.length})`,
+                    value: enemyTravel.flyingBack.slice(0, 15).map(m =>
+                        `${UI.player(m.name, m.id)} — ${m.landingStr || "ETA unknown"} • [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${m.id})`
+                    ).join("\n"),
+                    inline: false
+                });
+            }
 
-        // Confirm enemy scanning status clearly
-        if (enemyData && enemyTravel.total === 0) {
+            if (enemyTravel.total === 0) {
+                fields.push({
+                    name: `🎯 ${enemyName} — Overseas Intel`,
+                    value: `*No enemy targets are currently in or traveling to/from ${country}.*`,
+                    inline: false
+                });
+            }
+        } else if (friendlyTravel.total === 0) {
             fields.push({
-                name: `🎯 ${enemyName} — Overseas Intel`,
-                value: `*No enemy targets are currently in or traveling to/from ${country}.*`,
-                inline: false
-            });
-        } else if (!enemyId) {
-            fields.push({
-                name: `🎯 Enemy Travel Intel`,
-                value: `*No enemy faction detected. (Auto-tracks during Ranked War, or set Enemy Faction ID in Settings).*`,
+                name: `🛡️ ${friendlyName} — Overseas Status`,
+                value: `*No members are currently in or traveling to/from ${country}.*`,
                 inline: false
             });
         }
@@ -12063,9 +12054,9 @@ async function buildCountryStatusEmbed(country, apiKey, targetEnemyOverride = nu
             }
         } else {
             if (friendlyTravel.total > 0) {
-                desc = `**${friendlyTravel.total}** friendly member${friendlyTravel.total !== 1 ? 's' : ''} detected for **${country}** • *No enemy faction detected.*`;
+                desc = `🕊️ **Peacetime Intel** • **${friendlyTravel.total}** friendly member${friendlyTravel.total !== 1 ? 's' : ''} detected for **${country}**.`;
             } else {
-                desc = `No friendly members are currently in or traveling to/from **${country}**.`;
+                desc = `🕊️ **Peacetime Intel** • No friendly members are currently in or traveling to/from **${country}**.`;
             }
         }
 
@@ -12074,7 +12065,7 @@ async function buildCountryStatusEmbed(country, apiKey, targetEnemyOverride = nu
         return {
             title: `${emoji} ${country} — Live Travel Intel`,
             description: desc,
-            color: enemyTravel.total > 0 ? UI.COLORS.BRAND : UI.COLORS.INFO,
+            color: (enemyData && enemyTravel.total > 0) ? UI.COLORS.BRAND : UI.COLORS.INFO,
             fields,
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
@@ -15056,7 +15047,6 @@ async function buildWarFlightsEmbed(apiKey, ffKey) {
     try {
         const facData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`, `targets_basic_${apiKey.slice(-6)}`, 3000);
         if (facData.error) throw new Error(facData.error.error || "Torn API error");
-            return `\`${t.label.padEnd(12)}\` **${matching.length}** member${matching.length !== 1 ? 's' : ''}${names}`;
         const activeWar = getActiveRankedWar(facData);
         if (!activeWar || !activeWar.war) {
             return {
@@ -24189,7 +24179,7 @@ async function refreshWarboardBackground() {
         let myData = await cachedTornFetch(`https://api.torn.com/faction/${facId}?selections=basic,rankedwars&key=${apiKey}`, `my_faction_bg_${facId}`, 4000);
         if (!myData || myData.error || !myData.members) return;
 
-        let enemyId = autoDetectEnemyFaction(myData, true);
+        let enemyId = autoDetectEnemyFaction(myData);
         let enemyDataResult = { members: {} };
         if (enemyId) {
             enemyDataResult = await cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${getNextApiKey() || apiKey || TORN_API_KEY}`, `enemy_faction_bg_${enemyId}`, 4000);
