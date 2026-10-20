@@ -11445,7 +11445,7 @@ async function getPlayerFlightFromFFScouter(targetId, ffKey) {
             return null;
         });
 
-        console.log(`[FF Scouter] Target ${targetId} -> HTTP ${res.status}:`, JSON.stringify(raw));
+
 
         if (raw) {
             if (raw.error) {
@@ -24347,10 +24347,8 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 // ── Robust 24/7 Keep-Alive Sentinel (Keeps Render awake & eliminates cold starts) ──
 function startKeepAlive() {
     const targets = new Set();
-    targets.add('https://factionos-production.up.railway.app');
-    if (process.env.RAILWAY_PUBLIC_DOMAIN) targets.add(`https://${process.env.RAILWAY_PUBLIC_DOMAIN}`);
-    if (process.env.RENDER_EXTERNAL_URL) targets.add(process.env.RENDER_EXTERNAL_URL.replace(/\/$/, ''));
     if (process.env.APP_URL) targets.add(process.env.APP_URL.replace(/\/$/, ''));
+    if (targets.size === 0) return; // Dedicated Oracle VPS does not sleep; no keep-alive ping needed
 
     console.log(`[KeepAlive] 24/7 Keep-Alive Sentinel active for: ${Array.from(targets).join(', ')} (every 4 min)`);
 

@@ -60,6 +60,7 @@ let _profileCache   = new Map(); // target_id => { data, ts }
 let _lastRollupDay  = -1;
 let _lastRetrainDay = -1;
 let _lastSweepTs    = 0;
+let _backoffUntil   = 0;
 let _running        = false;
 
 // ── Utility ─────────────────────────────────────────────────────────────────
@@ -280,6 +281,7 @@ async function checkPendingRecentAlerts() {
 
 // ── 1. Attack Ingestion Job ──────────────────────────────────────────────────
 async function ingestAttacks() {
+    if (Date.now() < _backoffUntil) return;
     if (typeof _getApiKey !== 'function') return;
     const apiKey = _getApiKey();
     if (!apiKey) return;
@@ -293,7 +295,9 @@ async function ingestAttacks() {
         const data = await res.json();
 
         if (data.error) {
-            if (data.error.code !== 5 && data.error.code !== 7) { // code 5 = rate limit, code 7 = access denied (foreign key)
+            if (data.error.code === 7 || data.error.code === 16 || data.error.error?.includes('Access level')) {
+                _backoffUntil = Date.now() + 15 * 60 * 1000; // Key lacks faction permissions — back off 15 minutes
+            } else if (data.error.code !== 5) {
                 console.warn('[RetalEngine] Ingestion API error:', data.error.error);
             }
             return;
@@ -1034,6 +1038,7 @@ function _defaultScore(targetId, targetFactionId) {
 
 // ── Scheduler Loop ───────────────────────────────────────────────────────────
 async function schedulerLoop() {
+    if (Date.now() < _backoffUntil) return;
     const now = new Date();
     const utcHour = now.getUTCHours();
     const utcMin  = now.getUTCMinutes();
