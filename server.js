@@ -1024,7 +1024,7 @@ function saveToMongo() {
             if (typeof battleStatsHistory !== 'undefined' && battleStatsHistory && Object.keys(battleStatsHistory).length > 0) {
                 setPayload.battleStatsHistory = battleStatsHistory;
             }
-            AppConfig.updateOne(
+            mongoose.connection.db.collection('app_configs').updateOne(
                 { _id: 'master' },
                 { $set: setPayload },
                 { upsert: true }
