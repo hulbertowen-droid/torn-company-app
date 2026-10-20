@@ -3835,7 +3835,7 @@ async function cachedTornFetch(url, cacheKey, ttlMs = 2500) {
         }
         return data;
     } catch (e) {
-        if (globalTornCache[cacheKey]?.data?.members) {
+        if (globalTornCache[cacheKey]?.data) {
             return globalTornCache[cacheKey].data;
         }
         return { members: {} };
@@ -8817,8 +8817,8 @@ app.get('/api/war-bounties', async (req, res) => {
 
     try {
         // 1. Fetch current ranked war details
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
-        const facData = await facRes.json();
+        const facData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`, `war_bounties_${apiKey.slice(-6)}`, 4000);
+        if (facData.error) throw new Error(facData.error.error || "Torn API error");
         
         let warStart = 0;
         let warEnd = 0;
@@ -9789,20 +9789,13 @@ function trackStockVelocities(data) {
     }
 }
 
-async function getLiveYataStocks() {
-    const now = Date.now();
-    if (cachedYataStocks && (now - lastYataFetchTime < YATA_CACHE_TTL)) {
-        return cachedYataStocks;
-    }
-
-    if (yataFetchPromise) {
-        return await yataFetchPromise;
-    }
+function triggerYataBackgroundFetch() {
+    if (yataFetchPromise) return yataFetchPromise;
 
     yataFetchPromise = (async () => {
         try {
             const resp = await fetch('https://yata.yt/api/v1/travel/export/', {
-                signal: AbortSignal.timeout(12000), // 12 seconds
+                signal: AbortSignal.timeout(8000), // 8 seconds
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                     'Accept': 'application/json, text/plain, */*',
@@ -9834,12 +9827,30 @@ async function getLiveYataStocks() {
         return null;
     })();
 
-    return await yataFetchPromise;
+    return yataFetchPromise;
 }
 
-// Auto-warm YATA overseas cache on boot and refresh every 60 seconds
+async function getLiveYataStocks() {
+    const now = Date.now();
+    // 1. Stale-While-Revalidate: Return memory cache IMMEDIATELY (0ms latency!)
+    if (cachedYataStocks && cachedYataStocks.stocks) {
+        // If older than 45 seconds and no fetch is currently running, refresh in the background
+        if (now - lastYataFetchTime >= 45 * 1000 && !yataFetchPromise) {
+            triggerYataBackgroundFetch().catch(() => {});
+        }
+        return cachedYataStocks;
+    }
+
+    // 2. Cold start fallback (only before initial warm-up completes)
+    if (yataFetchPromise) {
+        return await yataFetchPromise;
+    }
+    return await triggerYataBackgroundFetch();
+}
+
+// Auto-warm YATA overseas cache on boot and refresh every 30 seconds
 setTimeout(() => {
-    getLiveYataStocks().then(data => {
+    triggerYataBackgroundFetch().then(data => {
         if (data && data.stocks) {
             console.log(`[YATA Stock] Cache warmed successfully (${Object.keys(data.stocks).length} countries loaded)`);
         }
@@ -9847,8 +9858,8 @@ setTimeout(() => {
 }, 1000);
 
 setInterval(() => {
-    getLiveYataStocks().catch(() => {});
-}, 60 * 1000);
+    triggerYataBackgroundFetch().catch(() => {});
+}, 30 * 1000);
 
 
 app.get('/api/items', async (req, res) => {
@@ -11210,7 +11221,7 @@ app.post('/api/user/link-key', async (req, res) => {
 
 
 // --- MULTI-TENANT DISCORD BOTS & SLASH COMMANDS ---
-const { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, InteractionType, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { Client, GatewayIntentBits, Events, REST, Routes, SlashCommandBuilder, InteractionType, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 let activeDiscordBots = {}; 
 let botLoginPromises = {};
 
@@ -12313,8 +12324,7 @@ function resolvePlayerStatsProgression(pId, discordUid) {
 async function buildWarStatusEmbed(apiKey) {
     if (!apiKey) return { title: "⚔️ Ranked War", description: "⚠️ No Torn API Key configured on server.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
     try {
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
-        const facData = await facRes.json();
+        const facData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${apiKey}`, `war_status_${apiKey.slice(-6)}`, 3000);
         if (facData.error) throw new Error(facData.error.error || "Torn API error");
 
         const activeWar = getActiveRankedWar(facData);
@@ -12459,8 +12469,7 @@ async function buildTargetsEmbed(apiKey) {
             color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
     }
     try {
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
-        const facData = await facRes.json();
+        const facData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`, `targets_basic_${apiKey.slice(-6)}`, 3000);
         if (facData.error) throw new Error(facData.error.error || "Torn API error");
 
         const activeWar = getActiveRankedWar(facData);
@@ -12485,8 +12494,7 @@ async function buildTargetsEmbed(apiKey) {
             };
         }
 
-        const res = await fetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
-        const data = await res.json();
+        const data = await cachedTornFetch(`https://api.torn.com/faction/${enemyId}?selections=basic&key=${apiKey}`, `targets_enemy_${enemyId}`, 3000);
         if (data.error) throw new Error(data.error.error || "Torn API error");
 
         const members = Object.entries(data.members || {}).map(([id, m]) => ({ id, ...m }));
@@ -12637,8 +12645,7 @@ async function buildSpyEmbed(targetQuery, apiKey) {
 async function buildChainStatusEmbed(apiKey) {
     if (!apiKey) return { title: "🔗 Chain", description: "⚠️ No Torn API key configured.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
     try {
-        const res = await fetch(`https://api.torn.com/faction/?selections=chain,basic&key=${apiKey}`, { signal: AbortSignal.timeout(7000) });
-        const data = await res.json();
+        const data = await cachedTornFetch(`https://api.torn.com/faction/?selections=chain,basic&key=${apiKey}`, `chain_status_${apiKey.slice(-6)}`, 2000);
         if (data.error) throw new Error(data.error.error || "Torn API error");
 
         const chain = data.chain || {};
@@ -12736,8 +12743,7 @@ async function buildProfileEmbed(playerQuery, apiKey) {
     if (!playerQuery || !apiKey) return { title: "👤 Player Profile", description: "Please provide a Torn Player ID or name.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
     const id = playerQuery.toString().trim().replace(/[^0-9]/g, "");
     try {
-        const res = await fetch(`https://api.torn.com/user/${id}?selections=profile,crimes,discord&key=${apiKey}`, { signal: AbortSignal.timeout(7000) });
-        const data = await res.json();
+        const data = await cachedTornFetch(`https://api.torn.com/user/${id}?selections=profile,crimes,discord&key=${apiKey}`, `profile_${id}`, 5000);
         if (data.error) throw new Error(data.error.error || "Player not found");
 
         const status = data.status?.description || data.status?.state || "Unknown";
@@ -12768,8 +12774,7 @@ async function buildProfileEmbed(playerQuery, apiKey) {
 async function buildHospitalEmbed(apiKey) {
     if (!apiKey) return { title: "🏥 Hospital", description: "⚠️ No Torn API key configured.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
     try {
-        const res = await fetch(`https://api.torn.com/faction/?selections=basic&key=${apiKey}`, { signal: AbortSignal.timeout(7000) });
-        const data = await res.json();
+        const data = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic&key=${apiKey}`, `hospital_basic_${apiKey.slice(-6)}`, 3000);
         if (data.error) throw new Error(data.error.error || "Torn API error");
 
         const now = Math.floor(Date.now() / 1000);
@@ -12809,8 +12814,7 @@ async function buildHospitalEmbed(apiKey) {
 async function buildOnlineRosterEmbed(apiKey) {
     if (!apiKey) return { title: "👥 Faction Roster", description: "⚠️ No Torn API key configured.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() }; // keep title
     try {
-        const res = await fetch(`https://api.torn.com/faction/?selections=basic&key=${apiKey}`, { signal: AbortSignal.timeout(7000) });
-        const data = await res.json();
+        const data = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic&key=${apiKey}`, `hospital_basic_${apiKey.slice(-6)}`, 3000);
         if (data.error) throw new Error(data.error.error || "Torn API error");
 
         const members = Object.entries(data.members || {}).map(([id, m]) => ({ id, ...m }));
@@ -13162,8 +13166,7 @@ async function buildRetaliationsEmbed(apiKey) {
 async function buildOCStatusEmbed(apiKey) {
     if (!apiKey) return { title: "💼 Organized Crimes", description: "⚠️ No Torn API key configured.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
     try {
-        const res = await fetch(`https://api.torn.com/faction/?selections=crimes&key=${apiKey}`, { signal: AbortSignal.timeout(7000) });
-        const data = await res.json();
+        const data = await cachedTornFetch(`https://api.torn.com/faction/?selections=crimes&key=${apiKey}`, `oc_status_${apiKey.slice(-6)}`, 5000);
         if (data.error) throw new Error(data.error.error || "Torn API error");
 
         const crimes = Object.entries(data.crimes || {}).map(([id, c]) => ({ id, ...c }));
@@ -13912,8 +13915,7 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
         const choice = String(factionChoice || '').toLowerCase().trim();
         let isEnemy = (choice !== 'friendly' && choice !== 'our' && choice !== 'ours' && !choice.includes('friendly') && !choice.includes('our'));
 
-        const ourRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
-        const ourData = await ourRes.json();
+        const ourData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`, `fac_stats_${apiKey.slice(-6)}`, 4000);
         if (ourData.error) throw new Error(ourData.error.error || "Torn API error");
 
         let facId = null;
@@ -13942,8 +13944,7 @@ async function buildFactionStatsRosterEmbed(factionChoice = 'enemy', apiKey) {
 
         let facData = ourData;
         if (isEnemy) {
-            const enemyRes = await fetch(`https://api.torn.com/faction/${facId}?selections=basic&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
-            facData = await enemyRes.json();
+            facData = await cachedTornFetch(`https://api.torn.com/faction/${facId}?selections=basic&key=${apiKey}`, `fac_enemy_${facId}`, 4000);
             if (facData.error) throw new Error(facData.error.error || "Torn API error fetching enemy faction");
         }
 
@@ -14739,8 +14740,8 @@ async function buildEnemyIntelEmbed(targetFacId, apiKey, ffKey, rosterPage = 0, 
 async function buildWarBountiesEmbed(apiKey) {
     if (!apiKey) return { title: "🎯 War Bounties", description: "⚠️ No Torn API key configured.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
     try {
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
-        const facData = await facRes.json();
+        const facData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`, `war_bounties_${apiKey.slice(-6)}`, 4000);
+        if (facData.error) throw new Error(facData.error.error || "Torn API error");
         
         let activeWar = getActiveRankedWar(facData);
         if (!activeWar || !activeWar.war) {
@@ -14875,8 +14876,7 @@ async function buildInactiveMembersEmbed(apiKey) {
         const url = watchFactionId
             ? `https://api.torn.com/faction/${watchFactionId}?selections=basic&key=${apiKey}`
             : `https://api.torn.com/faction/?selections=basic&key=${apiKey}`;
-        const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-        const data = await res.json();
+        const data = await cachedTornFetch(url, `inactive_${watchFactionId || 'own'}`, 15000);
         if (data.error) throw new Error(data.error.error || "Torn API error");
         if (data.ID) {
             if (!discordConfig.factionId) dynamicFactionId = String(data.ID);
@@ -15054,8 +15054,7 @@ async function buildDonatorStatusEmbed(playerQuery, apiKey) {
 async function buildWarFlightsEmbed(apiKey, ffKey) {
     if (!apiKey) return { title: "✈️ War Flights", description: "⚠️ No Torn API key configured.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
     try {
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
-        const facData = await facRes.json();
+        const facData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${apiKey}`, `targets_basic_${apiKey.slice(-6)}`, 3000);
         if (facData.error) throw new Error(facData.error.error || "Torn API error");
             return `\`${t.label.padEnd(12)}\` **${matching.length}** member${matching.length !== 1 ? 's' : ''}${names}`;
         const activeWar = getActiveRankedWar(facData);
@@ -15119,8 +15118,7 @@ async function buildPayoutEmbed(memberQuery, apiKey) {
     if (!apiKey) return { title: "💰 War Payouts", description: "⚠️ No Torn API key configured.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
     try {
         const cpm = Number(discordConfig.cpm) || 150000;
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
-        const data = await facRes.json();
+        const data = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${apiKey}`, `war_status_${apiKey.slice(-6)}`, 3000);
         if (data.error) throw new Error(data.error.error || "Torn API error");
 
         const q = (memberQuery || '').toLowerCase().trim();
@@ -15219,8 +15217,7 @@ async function buildPayoutEmbed(memberQuery, apiKey) {
 async function buildTopHittersEmbed(apiKey) {
     if (!apiKey) return { title: "🏆 War Leaderboard", description: "⚠️ No Torn API key configured.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
     try {
-        const facRes = await fetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
-        const data = await facRes.json();
+        const data = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${apiKey}`, `war_status_${apiKey.slice(-6)}`, 3000);
         if (data.error) throw new Error(data.error.error || "Torn API error");
 
         const activeWar = getActiveRankedWar(data);
@@ -18234,7 +18231,7 @@ async function executeVerifyMember(memberOrUser, guild, targetPlayerInput = null
             success: false,
             ...UI.verificationCard({
                 memberId: discordUserId,
-                factionName: myFacName || discordConfig.factionName || 'Spider-Verse',
+                factionName: discordConfig.factionName || 'Spider-Verse',
                 verifiedRoleId: discordConfig.verifiedRoleId,
                 isAwaitingAction: true
             }),
@@ -21600,19 +21597,6 @@ function setupSlashBotEvents(bot, token) {
         let subcommand = null;
         try { subcommand = interaction.options.getSubcommand()?.toLowerCase(); } catch(e) {}
 
-        const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : [])
-            .map(c => String(c).toLowerCase().trim());
-        const isCmdDisabled = disabledCmds.includes(cmd) || 
-            (cmd === 'revive' && disabledCmds.includes('revives')) ||
-            (subcommand && (disabledCmds.includes(subcommand) || (subcommand === 'revive' && disabledCmds.includes('revives'))));
-        if (isCmdDisabled) {
-            const label = subcommand ? `/${cmd} ${subcommand}` : `/${cmd}`;
-            return interaction.reply({
-                content: `⚠️ The \`${label}\` command has been disabled by faction leadership on the dashboard.`,
-                ephemeral: true
-            }).catch(() => {});
-        }
-
         // Define safeReply helper so command handlers work seamlessly whether deferred or not
         const safeReply = async (payload) => {
             try {
@@ -21629,6 +21613,19 @@ function setupSlashBotEvents(bot, token) {
             }
         };
 
+        const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : [])
+            .map(c => String(c).toLowerCase().trim());
+        const isCmdDisabled = disabledCmds.includes(cmd) || 
+            (cmd === 'revive' && disabledCmds.includes('revives')) ||
+            (subcommand && (disabledCmds.includes(subcommand) || (subcommand === 'revive' && disabledCmds.includes('revives'))));
+        if (isCmdDisabled) {
+            const label = subcommand ? `/${cmd} ${subcommand}` : `/${cmd}`;
+            return safeReply({
+                content: `⚠️ The \`${label}\` command has been disabled by faction leadership on the dashboard.`,
+                flags: MessageFlags.Ephemeral
+            }).catch(() => {});
+        }
+
         // Immediate Deferral: Discord requires acknowledgment within 3,000ms.
         // Acknowledge immediately at the entry point of slash commands (except modal triggers like /giveaway with no args).
         const wantsModal = (cmd === 'giveaway') && (!interaction.options?.getString?.('prize') || !interaction.options?.getString?.('duration'));
@@ -21639,7 +21636,7 @@ function setupSlashBotEvents(bot, token) {
                 'snipe', 'elim', 'remindkeys'
             ]);
             const isEphemeral = ephemeralCmds.has(cmd);
-            await interaction.deferReply({ ephemeral: isEphemeral }).catch(err => {
+            await interaction.deferReply({ flags: isEphemeral ? MessageFlags.Ephemeral : undefined }).catch(err => {
                 console.error(`[Slash Bot] Failed to deferReply for /${cmd}:`, err.message);
             });
         }
@@ -23433,7 +23430,7 @@ function setupSlashBotEvents(bot, token) {
             }
 
             if (!embed) {
-                return await interaction.editReply({ content: "⚠️ Command not recognized." });
+                return await safeReply({ content: "⚠️ Command not recognized." });
             }
 
             // Support single embed, array of embeds, or { embeds, components }
@@ -23451,13 +23448,13 @@ function setupSlashBotEvents(bot, token) {
 
             const safeEmbeds = embedsToSend.map(e => sanitizeEmbed(e)).filter(Boolean);
             if (safeEmbeds.length === 0) {
-                return await interaction.editReply({ content: "⚠️ No content generated." });
+                return await safeReply({ content: "⚠️ No content generated." });
             }
 
             const totalChars = safeEmbeds.reduce((sum, e) => sum + calculateEmbedChars(e), 0);
 
             if (totalChars <= 5400 && safeEmbeds.length <= 10) {
-                await interaction.editReply({
+                await safeReply({
                     embeds: safeEmbeds,
                     components: componentsToSend
                 });
@@ -23467,7 +23464,7 @@ function setupSlashBotEvents(bot, token) {
                     const isFirst = (i === 0);
                     const isLast = (i === chunks.length - 1);
                     if (isFirst) {
-                        await interaction.editReply({
+                        await safeReply({
                             embeds: chunks[i],
                             components: isLast ? componentsToSend : []
                         });
@@ -23475,14 +23472,14 @@ function setupSlashBotEvents(bot, token) {
                         await interaction.followUp({
                             embeds: chunks[i],
                             components: isLast ? componentsToSend : []
-                        });
+                        }).catch(() => {});
                     }
                 }
             }
         } catch (e) {
             console.error("[Slash Bot] Command execution error:", e);
             try {
-                await interaction.editReply({
+                await safeReply({
                     embeds: [sanitizeEmbed(UI.error(
                         '❌ Command Error',
                         `An error occurred while executing this command: ${e.message || 'Unknown error'}`
@@ -23509,7 +23506,7 @@ function setupSlashBotEvents(bot, token) {
                                 '❌ Application Error',
                                 `An unexpected error occurred: ${topErr.message || 'Unknown error'}`
                             ))],
-                            ephemeral: true
+                            flags: MessageFlags.Ephemeral
                         }).catch(() => {});
                     }
                 }
