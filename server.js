@@ -19600,9 +19600,7 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
             };
 
             const buttonRows = UI.buttonLayout(
-                [
-                    UI.primaryBtn(`btn_bs_update_${playerId}`, 'Update', '🔄')
-                ],
+                [],
                 [
                     UI.linkBtn(`https://www.torn.com/profiles.php?XID=${playerId}`, 'Profile', '👤'),
                     UI.linkBtn('https://www.torn.com/gym.php', 'Gym', '🏋️')
@@ -19745,9 +19743,7 @@ async function handleBattleStatsUpdate(interaction, options = {}) {
         };
 
         const buttonRows = UI.buttonLayout(
-            [
-                UI.primaryBtn(`btn_bs_update_${playerId}`, 'Update', '🔄')
-            ],
+            [],
             [
                 UI.linkBtn(`https://www.torn.com/profiles.php?XID=${playerId}`, 'Profile', '👤'),
                 UI.linkBtn('https://www.torn.com/gym.php', 'Gym', '🏋️')
