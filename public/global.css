@@ -327,6 +327,26 @@ body {
     display: none;
 }
 
+.nav-badge-dev {
+    margin-left: auto;
+    font-size: 0.60rem;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm, 4px);
+    background: rgba(239, 68, 68, 0.14);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.32);
+    line-height: 1.2;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.sidebar.collapsed .nav-badge-dev {
+    display: none;
+}
+
 /* Sidebar Footer (User & Settings) */
 .sidebar-footer {
     padding: 10px 10px 14px;

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Recruit Platform | FactionOS</title>
+<title>Recruit Platform (Early Dev) | FactionOS</title>
 <meta name="description" content="Elite Torn City faction recruitment intelligence. Live global scanner, ranked war poacher, AI-powered candidate grading, and precision outreach tools.">
 <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;0,14..32,900;1,14..32,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -249,11 +249,62 @@ code, .mono { font-family: 'JetBrains Mono', monospace; }
 }
 .icon-btn:hover { background: var(--surface-3); border-color: var(--border-strong); color: var(--text-primary); }
 
+/* ═══════════════════════════════ EARLY DEV BANNER ═══════════════════════════════ */
+.dev-banner {
+    position: fixed;
+    top: 56px;
+    left: 0;
+    right: 0;
+    height: 40px;
+    background: linear-gradient(90deg, rgba(239, 68, 68, 0.16), rgba(245, 158, 11, 0.14));
+    border-bottom: 1px solid rgba(239, 68, 68, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    font-size: 0.82rem;
+    color: #fecaca;
+    z-index: 199;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+.dev-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.dev-banner-icon { font-size: 1.1rem; flex-shrink: 0; }
+.dev-banner-title { font-weight: 800; color: #f87171; letter-spacing: 0.5px; text-transform: uppercase; font-size: 0.75rem; flex-shrink: 0; }
+.dev-banner-text { color: #f1f5f9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dev-banner-text strong { color: #ef4444; font-weight: 700; }
+.dev-banner-badge {
+    background: rgba(239, 68, 68, 0.22);
+    border: 1px solid rgba(239, 68, 68, 0.45);
+    color: #fca5a5;
+    font-size: 0.68rem;
+    font-weight: 800;
+    padding: 3px 10px;
+    border-radius: 99px;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+.brand-tag.dev-tag {
+    background: rgba(239, 68, 68, 0.15) !important;
+    border: 1px solid rgba(239, 68, 68, 0.4) !important;
+    color: #f87171 !important;
+    font-weight: 800 !important;
+}
+
 /* ═══════════════════════════════ LAYOUT ═══════════════════════════════ */
 .workspace {
     display: flex;
-    height: calc(100vh - 56px);
-    margin-top: 56px;
+    height: calc(100vh - 96px);
+    margin-top: 96px;
 }
 
 /* ═══════════════════════════════ PANEL (left sidebar) ═══════════════════════════════ */
@@ -976,6 +1027,8 @@ table.rec-table tbody tr:hover td {
     .mode-tab span.tab-label { display: none; }
     .panel { width: 220px; min-width: 220px; }
     .kpi-bar { display: none; }
+    .dev-banner { padding: 0 12px; }
+    .dev-banner-badge { display: none; }
 }
 </style>
 </head>
@@ -986,7 +1039,7 @@ table.rec-table tbody tr:hover td {
     <a href="/recruit/" class="topbar-brand">
         <div class="brand-icon">🎯</div>
         <span class="brand-name">Recruit Platform</span>
-        <span class="brand-tag">PRO</span>
+        <span class="brand-tag dev-tag">EARLY DEV · NOT USABLE</span>
     </a>
 
     <nav class="mode-tabs">
@@ -1019,6 +1072,16 @@ table.rec-table tbody tr:hover td {
     </div>
 </header>
 
+<!-- ═══════════════════════════════ EARLY DEV NOTICE BANNER ═══════════════════════════════ -->
+<div class="dev-banner">
+    <div class="dev-banner-content">
+        <span class="dev-banner-icon">⚠️</span>
+        <span class="dev-banner-title">Under Early Development:</span>
+        <span class="dev-banner-text">The Recruit Engine is currently in early development and is <strong>not usable</strong> at this time. Live background scanning and automated recruitment are paused.</span>
+    </div>
+    <span class="dev-banner-badge">EARLY DEV · NOT USABLE</span>
+</div>
+
 <!-- ═══════════════════════════════ WORKSPACE ═══════════════════════════════ -->
 <div class="workspace">
 
@@ -1030,10 +1093,10 @@ table.rec-table tbody tr:hover td {
             <div class="scanner-widget">
                 <div class="sw-header">
                     <span class="sw-title">
-                        <div class="pulse-dot" style="background:var(--cyan);box-shadow:0 0 5px rgba(6,182,212,0.6);"></div>
+                        <div class="pulse-dot" style="background:var(--rose);box-shadow:0 0 5px rgba(244,63,94,0.6);"></div>
                         Cloud Auto-Scanner
                     </span>
-                    <span class="sw-status">24/7 ON</span>
+                    <span class="sw-status" style="color: #f87171; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); padding: 1px 6px; border-radius: 4px; font-weight: 700;">PAUSED (DEV)</span>
                 </div>
                 <div class="sw-progress">
                     <div class="sw-bar" id="sw-bar" style="width:0.5%"></div>
@@ -1193,10 +1256,9 @@ table.rec-table tbody tr:hover td {
 
             <div class="tbl-wrap" id="tbl-wrap">
                 <div class="placeholder-state" id="search-empty">
-                    <div class="placeholder-icon">🎯</div>
-                    <div class="placeholder-title">Ready to Recruit</div>
-                    <div class="placeholder-sub">Set your filters and click <strong>Search Candidates</strong> to browse the player pool. The 24/7 cloud scanner continuously monitors all 55,000 factions.</div>
-                    <button class="btn-cta" style="width:auto;padding:9px 20px;margin-top:6px;" onclick="doSearch()">Search Now →</button>
+                    <div class="placeholder-icon">⚠️</div>
+                    <div class="placeholder-title" style="color: #f87171;">Recruit Engine In Early Development</div>
+                    <div class="placeholder-sub" style="max-width: 520px; line-height: 1.6;">The Recruit Engine is currently under active early development and is <strong>not usable</strong> at this time. Live candidate scanning workers and recruitment automation pipelines are temporarily paused.</div>
                 </div>
 
                 <table class="rec-table" id="candidates-table" style="display:none;">
