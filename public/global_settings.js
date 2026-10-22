@@ -220,6 +220,24 @@ function injectGlobalSettings() {
     });
 }
 
+
+function showGlobalToast(message) {
+    let toast = document.getElementById('global-toast-notification');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'global-toast-notification';
+        toast.style.cssText = 'position:fixed;bottom:28px;right:28px;padding:12px 20px;background:linear-gradient(135deg,#10b981,#059669);color:#ffffff;font-family:sans-serif;font-size:0.9em;font-weight:700;border-radius:8px;box-shadow:0 10px 25px rgba(0,0,0,0.5),0 0 15px rgba(16,185,129,0.3);z-index:1000000;display:flex;align-items:center;gap:10px;transition:all 0.3s cubic-bezier(0.16,1,0.3,1);transform:translateY(20px);opacity:0;pointer-events:none;';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.style.transform = 'translateY(0)';
+    toast.style.opacity = '1';
+    setTimeout(() => {
+        toast.style.transform = 'translateY(20px)';
+        toast.style.opacity = '0';
+    }, 2500);
+}
+
 window.openGlobalSettings = async function() {
     injectGlobalSettings();
     const modal = document.getElementById('global-settings-modal');
@@ -267,25 +285,40 @@ window.openGlobalSettings = async function() {
 
     const statusText = document.getElementById('gs-status-text');
     const token = localStorage.getItem('sv_session_token');
+    const savedKey = localStorage.getItem('warboard_apikey') || apiKey;
     if (token) {
         try {
             const res = await fetch('/api/auth/me');
             const data = await res.json();
             if (data.authenticated && data.user) {
-                statusText.innerHTML = `<strong style="color:var(--accent-emerald, #10b981);">${data.user.playerName} [${data.user.playerId}]</strong> (${data.user.factionName || 'Factionless'})`;
+                statusText.innerHTML = `<strong style="color:var(--accent-emerald, #10b981);">Verified Key: ${data.user.playerName} [${data.user.playerId}]</strong> (${data.user.factionName || 'Factionless'})`;
             } else {
                 statusText.innerHTML = '<span style="color:var(--accent-amber, #f59e0b);">Unauthenticated</span>';
             }
         } catch(e) {
-            statusText.textContent = 'Active Session';
+            statusText.innerHTML = '<span style="color:var(--accent-emerald, #10b981);">Active Session</span>';
+        }
+    } else if (savedKey) {
+        statusText.innerHTML = '<span style="color:var(--accent-amber, #f59e0b);">Verifying Key...</span>';
+        try {
+            const res = await fetch('/api/auth/connect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ apiKey: savedKey })
+            });
+            const data = await res.json();
+            if (data.success && data.user) {
+                if (data.sessionToken) localStorage.setItem('sv_session_token', data.sessionToken);
+                sessionStorage.setItem('sv_user', JSON.stringify(data.user));
+                statusText.innerHTML = `<strong style="color:var(--accent-emerald, #10b981);">Verified Key: ${data.user.playerName} [${data.user.playerId}]</strong> (${data.user.factionName || 'Factionless'})`;
+            } else {
+                statusText.innerHTML = `<span style="color:var(--accent-emerald, #10b981);">Key Saved (${savedKey.slice(0,4)}...)</span>`;
+            }
+        } catch(e) {
+            statusText.innerHTML = `<span style="color:var(--accent-emerald, #10b981);">Key Saved (${savedKey.slice(0,4)}...)</span>`;
         }
     } else {
-        const savedKey = localStorage.getItem('warboard_apikey');
-        if (savedKey) {
-            statusText.innerHTML = '<span style="color:var(--accent-emerald, #10b981);">Key Saved</span>';
-        } else {
-            statusText.innerHTML = '<span style="color:var(--text-tertiary, #64748b);">Not connected (Enter Key below)</span>';
-        }
+        statusText.innerHTML = '<span style="color:var(--text-tertiary, #64748b);">Not connected (Enter Key below)</span>';
     }
 };
 
@@ -354,8 +387,9 @@ window.saveGlobalSettings = async function() {
         console.warn('Backend sync warning:', e.message);
     }
 
+    showGlobalToast('✅ Settings Saved & Synchronized!');
     closeGlobalSettings();
-    window.location.reload();
+    setTimeout(() => { window.location.reload(); }, 600);
 };
 
 // Automatically activate Instant Navigation Prefetcher on all pages

@@ -24,6 +24,11 @@
     }
     setInterval(tickTCT, 1000);
     tickTCT();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', tickTCT);
+    } else {
+        tickTCT();
+    }
 
     // 2. User Session & Identity Loader
     async function syncUserIdentity() {

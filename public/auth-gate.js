@@ -267,8 +267,14 @@
             justify-content: space-between;
             gap: 8px;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            flex-shrink: 1;
+            flex-shrink: 0;
             min-width: 0;
+        }
+        .topbar-right .sv-badge-container {
+            height: 32px;
+            box-sizing: border-box;
+            background: rgba(15, 23, 42, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.12);
         }
         @media (max-width: 768px) {
             .sv-badge-container {
@@ -489,7 +495,7 @@
     function injectUserBadge(user) {
         if (document.getElementById('sv-user-badge')) return;
 
-        const container = document.querySelector('.sidebar-header') || document.querySelector('.header') || document.querySelector('header') || document.querySelector('.sidebar');
+        const container = document.querySelector('.topbar-right') || document.querySelector('.header-controls') || document.querySelector('.sidebar-header') || document.querySelector('.header') || document.querySelector('header') || document.querySelector('.sidebar');
         if (!container) return;
 
         const badge = document.createElement('div');
@@ -507,7 +513,11 @@
             <a href="#" id="sv-logout-link" title="Logout" style="color: #ff6b81; text-decoration: none; font-size: 0.72rem; padding: 3px 8px; border: 1px solid rgba(255,107,129,0.35); border-radius: 4px; transition: all 0.2s; white-space: nowrap; flex-shrink: 0;">Logout</a>
         `;
 
-        container.appendChild(badge);
+        if (container.classList.contains('topbar-right') || container.classList.contains('header-controls')) {
+            container.insertBefore(badge, container.firstChild);
+        } else {
+            container.appendChild(badge);
+        }
 
         const logoutLink = document.getElementById('sv-logout-link');
         if (logoutLink) {
@@ -523,7 +533,7 @@
     function injectConnectButton() {
         if (document.getElementById('sv-connect-badge')) return;
 
-        const container = document.querySelector('.sidebar-header') || document.querySelector('.header') || document.querySelector('header') || document.querySelector('.sidebar');
+        const container = document.querySelector('.topbar-right') || document.querySelector('.header-controls') || document.querySelector('.sidebar-header') || document.querySelector('.header') || document.querySelector('header') || document.querySelector('.sidebar');
         if (!container) return;
 
         const btn = document.createElement('div');
@@ -537,7 +547,11 @@
             <span style="color:#a4b0be; font-size:0.75rem; flex-shrink:0;">&rarr;</span>
         `;
         btn.addEventListener('click', () => showConnectModal(true));
-        container.appendChild(btn);
+        if (container.classList.contains('topbar-right') || container.classList.contains('header-controls')) {
+            container.insertBefore(btn, container.firstChild);
+        } else {
+            container.appendChild(btn);
+        }
     }
 
     function showConnectModal(allowClose = true) {

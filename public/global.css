@@ -194,6 +194,7 @@ body {
     color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
+    flex-shrink: 0;
 }
 
 .sidebar-logo .brand-icon {
@@ -201,6 +202,7 @@ body {
     color: var(--accent-crimson);
     filter: drop-shadow(0 0 8px var(--accent-crimson-glow));
     transition: transform var(--transition-fast);
+    flex-shrink: 0;
 }
 
 .sidebar-logo .brand-text {
@@ -208,6 +210,8 @@ body {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     font-weight: 900;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .sidebar.collapsed .brand-text {

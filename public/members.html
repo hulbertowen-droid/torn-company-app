@@ -14,18 +14,30 @@
     <link rel="stylesheet" href="/global.css?v=3.2.0">
     
     <!-- Scripts & Auth -->
-    <script src="/auth-gate.js?v=3.2.1"></script>
-    <script src="/global_settings.js?v=3.2.1"></script>
-    <script src="/global-topbar.js?v=3.2.0"></script>
+    <script src="/auth-gate.js?v=3.2.2"></script>
+    <script src="/global_settings.js?v=3.2.2"></script>
+    <script src="/global-topbar.js?v=3.2.1"></script>
 
     <style>
     /* ─── Page-Specific Faction Roster Styling ─── */
     .summary-row {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 12px;
         margin-bottom: 22px;
     }
+    @media (max-width: 960px) {
+        .summary-row {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+    @media (max-width: 480px) {
+        .summary-row {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+    }
+
     .sum-card {
         background: var(--bg-surface);
         border: 1px solid var(--border-subtle);
@@ -33,8 +45,10 @@
         padding: 14px 12px;
         text-align: center;
         cursor: pointer;
+        user-select: none;
         transition: all var(--transition-fast);
         box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+        position: relative;
     }
     .sum-card:hover {
         border-color: var(--border-strong);
@@ -42,8 +56,9 @@
         transform: translateY(-1px);
     }
     .sum-card.active {
-        border-color: var(--accent-cobalt-border);
+        border-color: var(--accent-cobalt);
         background: var(--accent-cobalt-dim);
+        box-shadow: 0 0 12px rgba(9, 132, 227, 0.25);
     }
     .sum-card.active .sc-val { color: var(--accent-cobalt); }
     .sc-val {
@@ -62,12 +77,18 @@
         font-weight: 800;
     }
 
+    /* Controls Bar */
     .controls-row {
         display: flex;
-        gap: 12px;
+        gap: 10px;
         align-items: center;
-        margin-bottom: 20px;
+        margin-bottom: 16px;
         flex-wrap: wrap;
+    }
+    .sort-group {
+        display: flex;
+        align-items: center;
+        gap: 6px;
     }
     .sort-label {
         font-size: 0.74em;
@@ -75,17 +96,85 @@
         text-transform: uppercase;
         letter-spacing: 0.8px;
         font-weight: 800;
+        white-space: nowrap;
     }
     .sort-select {
         background: var(--bg-surface);
         border: 1px solid var(--border-default);
         color: var(--text-primary);
-        padding: 8px 14px;
+        padding: 8px 12px;
         border-radius: var(--radius-sm);
         font-size: 0.86em;
         cursor: pointer;
         font-family: inherit;
+        font-weight: 600;
+        outline: none;
+        transition: border-color var(--transition-fast);
     }
+    .sort-select:focus {
+        border-color: var(--accent-cobalt);
+    }
+    .sort-dir-btn {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        color: var(--text-primary);
+        padding: 7px 11px;
+        border-radius: var(--radius-sm);
+        font-size: 0.84em;
+        font-weight: 700;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        transition: all var(--transition-fast);
+        user-select: none;
+        white-space: nowrap;
+    }
+    .sort-dir-btn:hover {
+        background: var(--bg-elevated);
+        border-color: var(--border-strong);
+    }
+
+    /* Search wrap with Clear Button */
+    .search-wrap {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+    .search-box {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-sm);
+        color: var(--text-primary);
+        padding: 8px 30px 8px 12px;
+        font-size: 0.88em;
+        width: 210px;
+        font-family: inherit;
+        transition: all var(--transition-fast);
+        outline: none;
+    }
+    .search-box:focus {
+        border-color: var(--accent-cobalt);
+        box-shadow: 0 0 0 3px var(--accent-cobalt-dim);
+    }
+    .search-clear-btn {
+        position: absolute;
+        right: 8px;
+        background: none;
+        border: none;
+        color: var(--text-tertiary);
+        font-size: 0.88em;
+        cursor: pointer;
+        padding: 2px 4px;
+        border-radius: 4px;
+        line-height: 1;
+        transition: color var(--transition-fast);
+    }
+    .search-clear-btn:hover {
+        color: var(--text-primary);
+    }
+
+    /* View Toggle */
     .view-toggle {
         display: flex;
         background: var(--bg-surface);
@@ -109,24 +198,35 @@
         background: var(--accent-cobalt-dim);
         color: var(--accent-cobalt);
     }
-    .search-box {
-        background: var(--bg-surface);
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-sm);
-        color: var(--text-primary);
-        padding: 8px 14px;
-        font-size: 0.88em;
-        width: 220px;
-        font-family: inherit;
-        transition: all var(--transition-fast);
+
+    /* Refresh Row */
+    .refresh-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.78em;
+        color: var(--text-tertiary);
+        margin-bottom: 18px;
+        font-family: var(--font-mono);
     }
-    .search-box:focus {
-        outline: none;
-        border-color: var(--accent-cobalt);
-        box-shadow: 0 0 0 3px var(--accent-cobalt-dim);
+    .refresh-sep {
+        color: var(--border-strong);
+    }
+    #rbar-wrap {
+        width: 64px;
+        height: 3px;
+        background: var(--bg-elevated);
+        border-radius: 2px;
+        overflow: hidden;
+    }
+    #rbar-fill {
+        height: 100%;
+        background: var(--accent-cobalt);
+        width: 0%;
+        transition: width 0.3s;
     }
 
-    /* Member Grid */
+    /* Member Grid (Card View) */
     .member-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
@@ -160,7 +260,7 @@
         border-bottom: 1px solid var(--border-subtle);
     }
     .mc-identity { flex: 1; min-width: 0; }
-    .mc-name-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .mc-name-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; flex-wrap: wrap; }
     .mc-name { font-weight: 800; font-size: 1.05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .mc-name a { color: var(--text-primary); text-decoration: none; }
     .mc-name a:hover { color: var(--accent-cobalt); }
@@ -188,7 +288,7 @@
     }
     .mc-timer-row.jail-bg { background: var(--accent-purple-dim); }
     .mc-timer-row.travel-bg { background: var(--accent-cobalt-dim); }
-    .timer-label { color: var(--text-secondary); font-weight: 600; }
+    .timer-label { color: var(--text-secondary); font-weight: 700; }
     .timer-val { font-weight: 900; font-family: var(--font-mono); }
     .tv-hosp { color: var(--accent-crimson); }
     .tv-jail { color: var(--accent-purple); }
@@ -220,10 +320,219 @@
     .war-stat { text-align: center; }
     .ws-val { font-size: 1em; font-weight: 900; font-family: var(--font-mono); }
     .ws-lbl { font-size: 0.64em; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.8px; margin-top: 2px; }
+
+    /* 72h Activity Row */
+    .activity-row {
+        padding: 10px 18px;
+        border-top: 1px solid var(--border-subtle);
+    }
+    .act-label {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.72em;
+        color: var(--text-tertiary);
+        margin-bottom: 6px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .sparkline {
+        display: flex;
+        align-items: flex-end;
+        gap: 2px;
+        height: 22px;
+        padding: 2px 0;
+    }
+    .spark-bar {
+        flex: 1;
+        background: var(--accent-emerald);
+        border-radius: 1px;
+        min-height: 2px;
+    }
+
+    /* Inactive Badge */
+    .inactive-badge {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 1px 6px;
+        border-radius: var(--radius-sm);
+        background: var(--accent-amber-dim);
+        border: 1px solid var(--accent-amber-border);
+        color: var(--accent-amber);
+        font-size: 0.72em;
+        font-weight: 800;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+    /* Card Footer Buttons */
+    .mc-footer {
+        padding: 10px 18px;
+        background: var(--bg-elevated);
+        display: flex;
+        gap: 8px;
+    }
+    .mc-btn {
+        flex: 1;
+        text-align: center;
+        padding: 6px 10px;
+        border-radius: var(--radius-sm);
+        font-size: 0.78em;
+        font-weight: 700;
+        text-decoration: none;
+        transition: all var(--transition-fast);
+        display: inline-block;
+    }
+    .mc-btn-profile {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        color: var(--text-primary);
+    }
+    .mc-btn-profile:hover {
+        border-color: var(--accent-cobalt);
+        color: var(--accent-cobalt);
+    }
+    .mc-btn-msg {
+        background: var(--accent-cobalt-dim);
+        border: 1px solid var(--accent-cobalt-border);
+        color: var(--accent-cobalt);
+    }
+    .mc-btn-msg:hover {
+        background: var(--accent-cobalt);
+        color: #fff;
+    }
+
+    /* ─── Table View (Responsive, Sticky & Overflow-Proof) ─── */
+    .table-wrap {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        position: relative;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    }
+    .table-wrap::-webkit-scrollbar {
+        height: 8px;
+    }
+    .table-wrap::-webkit-scrollbar-track {
+        background: var(--bg-surface);
+    }
+    .table-wrap::-webkit-scrollbar-thumb {
+        background: var(--border-strong);
+        border-radius: 4px;
+    }
+    .table-wrap::-webkit-scrollbar-thumb:hover {
+        background: var(--accent-cobalt);
+    }
+
+    .roster-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.86em;
+        text-align: left;
+    }
+    .roster-table th {
+        background: var(--bg-elevated);
+        padding: 12px 14px;
+        font-size: 0.72em;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: var(--text-secondary);
+        border-bottom: 1px solid var(--border-default);
+        white-space: nowrap;
+        cursor: pointer;
+        user-select: none;
+        transition: background var(--transition-fast), color var(--transition-fast);
+    }
+    .roster-table th:hover {
+        color: var(--accent-cobalt);
+        background: var(--bg-surface);
+    }
+    .roster-table th.active-sort {
+        color: var(--accent-cobalt);
+        background: var(--accent-cobalt-dim);
+    }
+    .roster-table td {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+        white-space: nowrap;
+    }
+    .roster-table tbody tr:hover td {
+        background: var(--bg-elevated);
+    }
+    .roster-table tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    /* Sticky Member Name column */
+    .roster-table th.col-sticky-name,
+    .roster-table td.col-sticky-name {
+        position: sticky;
+        left: 0;
+        background: var(--bg-surface);
+        z-index: 5;
+        border-right: 1px solid var(--border-subtle);
+    }
+    .roster-table th.col-sticky-name {
+        background: var(--bg-elevated);
+        z-index: 15;
+    }
+    .roster-table tbody tr:hover td.col-sticky-name {
+        background: var(--bg-elevated);
+    }
+
+    /* Action icons in table */
+    .tbl-action-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 4px;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-size: 0.82em;
+        transition: all var(--transition-fast);
+    }
+    .tbl-action-btn:hover {
+        border-color: var(--accent-cobalt);
+        color: var(--accent-cobalt);
+        background: var(--accent-cobalt-dim);
+    }
+
+    /* Toast Notification */
+    .page-toast {
+        position: fixed;
+        bottom: 28px;
+        right: 28px;
+        padding: 12px 20px;
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: #fff;
+        font-weight: 700;
+        font-size: 0.9em;
+        border-radius: 8px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.5), 0 0 15px rgba(16,185,129,0.3);
+        z-index: 1000000;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        transform: translateY(20px);
+        opacity: 0;
+        pointer-events: none;
+    }
+    .page-toast.show {
+        transform: translateY(0);
+        opacity: 1;
+    }
     </style>
 </head>
 <body>
-<nav class="sidebar" id="app-sidebar">
+    <nav class="sidebar" id="app-sidebar">
         <div class="sidebar-header">
             <div class="sidebar-logo">
                 <span class="brand-icon">🕷️</span>
@@ -278,13 +587,13 @@
             <div class="topbar-right">
                 <div class="tct-clock-chip" title="Torn City Time (TCT)">
                     <span class="tct-label">TCT</span>
-                    <span id="global-tct-clock">--:--:--</span>
+                    <span id="global-tct-clock"><script>document.write(new Date().toISOString().substring(11,19))</script></span>
                 </div>
                 <div class="telemetry-chip live-ws" id="global-ws-badge" title="Data Feed Status">
                     <span class="pulse-indicator"></span>
                     <span id="global-ws-status">LIVE WS</span>
                 </div>
-                <button class="btn btn-secondary btn-sm" onclick="fetchMembers()" title="Refresh Members" style="padding:4px 8px;">⟳</button>
+                <button class="btn btn-secondary btn-sm" onclick="loadMembers()" title="Refresh Members" style="padding:4px 8px;">⟳</button>
                 <button class="btn btn-secondary btn-sm" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" title="Settings" style="padding:4px 8px;">⚙️</button>
             </div>
         </header>
@@ -297,43 +606,54 @@
 
     <div id="alert-wrap"></div>
 
-    <!-- Summary row -->
+    <!-- Summary row (Balanced 4x2 responsive grid) -->
     <div class="summary-row" id="summary-row" style="display:none;">
-        <div class="sum-card active" id="sc-All" onclick="setFilter('All')"><div class="sc-val c-teal" id="sc-v-All">—</div><div class="sc-lbl">All Members</div></div>
-        <div class="sum-card" id="sc-Online" onclick="setFilter('Online')"><div class="sc-val c-green" id="sc-v-Online">—</div><div class="sc-lbl">🟢 Online</div></div>
-        <div class="sum-card" id="sc-Idle" onclick="setFilter('Idle')"><div class="sc-val c-gold" id="sc-v-Idle">—</div><div class="sc-lbl">🟡 Idle</div></div>
-        <div class="sum-card" id="sc-Hospital" onclick="setFilter('Hospital')"><div class="sc-val c-red" id="sc-v-Hospital">—</div><div class="sc-lbl">🏥 Hospital</div></div>
-        <div class="sum-card" id="sc-Jail" onclick="setFilter('Jail')"><div class="sc-val c-purple" id="sc-v-Jail">—</div><div class="sc-lbl">⛓️ Jailed</div></div>
-        <div class="sum-card" id="sc-Traveling" onclick="setFilter('Traveling')"><div class="sc-val c-blue" id="sc-v-Traveling">—</div><div class="sc-lbl">✈️ Traveling</div></div>
-        <div class="sum-card" id="sc-Offline" onclick="setFilter('Offline')"><div class="sc-val c-dim" id="sc-v-Offline">—</div><div class="sc-lbl">⚫ Offline</div></div>
-        <div class="sum-card" id="sc-Inactive" onclick="setFilter('Inactive')"><div class="sc-val c-gold" id="sc-v-Inactive">—</div><div class="sc-lbl">💤 Inactive (1d+)</div></div>
+        <div class="sum-card active" id="sc-All" onclick="handleCardFilter('All')"><div class="sc-val c-teal" id="sc-v-All">—</div><div class="sc-lbl">All Members</div></div>
+        <div class="sum-card" id="sc-Online" onclick="handleCardFilter('Online')"><div class="sc-val c-green" id="sc-v-Online">—</div><div class="sc-lbl">🟢 Online</div></div>
+        <div class="sum-card" id="sc-Idle" onclick="handleCardFilter('Idle')"><div class="sc-val c-gold" id="sc-v-Idle">—</div><div class="sc-lbl">🟡 Idle</div></div>
+        <div class="sum-card" id="sc-Hospital" onclick="handleCardFilter('Hospital')"><div class="sc-val c-red" id="sc-v-Hospital">—</div><div class="sc-lbl">🏥 Hospital</div></div>
+        <div class="sum-card" id="sc-Jail" onclick="handleCardFilter('Jail')"><div class="sc-val c-purple" id="sc-v-Jail">—</div><div class="sc-lbl">⛓️ Jailed</div></div>
+        <div class="sum-card" id="sc-Traveling" onclick="handleCardFilter('Traveling')"><div class="sc-val c-blue" id="sc-v-Traveling">—</div><div class="sc-lbl">✈️ Traveling</div></div>
+        <div class="sum-card" id="sc-Offline" onclick="handleCardFilter('Offline')"><div class="sc-val c-dim" id="sc-v-Offline">—</div><div class="sc-lbl">⚫ Offline</div></div>
+        <div class="sum-card" id="sc-Inactive" onclick="handleCardFilter('Inactive')"><div class="sc-val c-gold" id="sc-v-Inactive">—</div><div class="sc-lbl">💤 Inactive (1d+)</div></div>
     </div>
 
     <!-- Controls -->
     <div class="controls-row" id="controls-row" style="display:none;">
-        <span class="sort-label">Sort by:</span>
-        <select class="sort-select" id="sort-select" onchange="renderMembers()">
-            <option value="status">Status</option>
-            <option value="inactivity">Longest Inactive</option>
-            <option value="level">Level</option>
-            <option value="name">Name</option>
-            <option value="days">Days in Faction</option>
-            <option value="attacks">War Attacks</option>
-            <option value="score">War Score</option>
-            <option value="lastAction">Most Recently Active</option>
-        </select>
-        <input class="search-box" type="text" id="search-box" placeholder="🔍 Search member..." oninput="renderMembers()">
+        <div class="sort-group">
+            <span class="sort-label">Sort by:</span>
+            <select class="sort-select" id="sort-select" onchange="onSortChange()">
+                <option value="status">Status</option>
+                <option value="inactivity">Longest Inactive</option>
+                <option value="lastAction">Most Recently Active</option>
+                <option value="level">Level</option>
+                <option value="name">Name</option>
+                <option value="days">Days in Faction</option>
+                <option value="attacks">War Attacks</option>
+                <option value="score">War Score</option>
+            </select>
+            <button class="sort-dir-btn" id="sort-dir-btn" onclick="toggleSortDirection()" title="Toggle Ascending / Descending">
+                <span id="sort-dir-arrow">↓</span> <span id="sort-dir-label">Desc</span>
+            </button>
+        </div>
+
+        <div class="search-wrap">
+            <input class="search-box" type="text" id="search-box" placeholder="🔍 Search member..." oninput="handleSearchInput()">
+            <button type="button" class="search-clear-btn" id="search-clear-btn" onclick="clearSearch()" title="Clear search" style="display:none;">✕</button>
+        </div>
+
         <div class="view-toggle">
             <button class="view-btn active" id="vbtn-grid" onclick="setView('grid')">⊞ Grid</button>
             <button class="view-btn" id="vbtn-table" onclick="setView('table')">☰ Table</button>
         </div>
     </div>
 
-    <!-- Refresh bar -->
+    <!-- Refresh bar with proper spacing -->
     <div class="refresh-row" id="refresh-row" style="display:none;">
         <span id="last-upd">—</span>
+        <span class="refresh-sep">·</span>
         <div id="rbar-wrap"><div id="rbar-fill"></div></div>
-        <span>Auto-refresh 60s</span>
+        <span class="refresh-sub">Auto-refresh: 60s</span>
     </div>
 
     <div id="content-area">
@@ -342,40 +662,71 @@
 </main>
     </div>
 
-<!-- Settings modal -->
-<div id="settings-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;display:none;justify-content:center;align-items:center;backdrop-filter:blur(4px);">
-    <div style="background:var(--card);padding:28px;border-radius:14px;border:1px solid #2f3542;width:400px;position:relative;">
-        <button onclick="closeSettings()" style="position:absolute;right:14px;top:14px;background:none;border:none;color:var(--text-dim);font-size:1.3em;cursor:pointer;">✕</button>
-        <h3 style="margin:0 0 16px;color:var(--teal);text-transform:uppercase;letter-spacing:1px;font-size:1em;">⚙️ Settings</h3>
-        <label style="font-size:0.78em;color:var(--text-dim);font-weight:700;display:block;margin-bottom:6px;text-transform:uppercase;">Torn API Key</label>
-        <input type="password" id="api-key-input" placeholder="Paste your Torn API key" style="width:100%;padding:10px 14px;background:#0b0d13;border:1px solid #30363d;border-radius:7px;color:white;font-size:0.93em;margin-bottom:14px;">
-        <button onclick="saveKey()" style="width:100%;background:var(--teal);color:#000;border:none;padding:11px;border-radius:7px;font-weight:700;font-size:0.95em;cursor:pointer;text-transform:uppercase;">Save & Reload</button>
+<!-- Settings modal (fallback if global settings not loaded) -->
+<div id="settings-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;justify-content:center;align-items:center;backdrop-filter:blur(4px);">
+    <div style="background:var(--bg-surface, #151922);padding:28px;border-radius:14px;border:1px solid var(--border-default, #2f3542);width:420px;position:relative;">
+        <button onclick="closeSettings()" style="position:absolute;right:14px;top:14px;background:none;border:none;color:var(--text-tertiary);font-size:1.3em;cursor:pointer;">✕</button>
+        <h3 style="margin:0 0 16px;color:var(--accent-cobalt);text-transform:uppercase;letter-spacing:1px;font-size:1em;">⚙️ Faction API Settings</h3>
+        <div style="margin-bottom:14px;padding:10px 12px;background:var(--bg-elevated);border-radius:8px;font-size:0.82em;">
+            <span style="color:var(--text-tertiary);">🔐 Authentication:</span>
+            <span id="modal-auth-status" style="font-weight:700;margin-left:4px;color:var(--accent-amber);">Checking...</span>
+        </div>
+        <label style="font-size:0.78em;color:var(--text-tertiary);font-weight:700;display:block;margin-bottom:6px;text-transform:uppercase;">Torn API Key</label>
+        <input type="password" id="api-key-input" placeholder="Paste your Torn API key" style="width:100%;box-sizing:border-box;padding:10px 14px;background:#0b0d13;border:1px solid #30363d;border-radius:7px;color:white;font-size:0.93em;margin-bottom:14px;">
+        <button onclick="saveKey()" style="width:100%;background:var(--accent-cobalt);color:#fff;border:none;padding:11px;border-radius:7px;font-weight:700;font-size:0.95em;cursor:pointer;text-transform:uppercase;">Save & Synchronize</button>
     </div>
 </div>
+
+<div id="page-toast" class="page-toast"></div>
 
 <script>
 let myKey = localStorage.getItem("warboard_apikey") || "";
 let allMembers = [];
 let activeFilter = "All";
 let currentView = "grid";
+let sortKey = "status";
+let sortAsc = false;
 let refreshTimer = null;
 let progressTimer = null;
 const REFRESH_MS = 60000;
 let hasWar = false;
 
 document.getElementById("api-key-input").value = myKey;
-if (localStorage.getItem('sidebar_collapsed') === 'true') document.getElementById('app-sidebar').classList.add('collapsed');
+if (localStorage.getItem('sv_sidebar_collapsed') === '1' || localStorage.getItem('sidebar_collapsed') === 'true') {
+    document.getElementById('app-sidebar').classList.add('collapsed');
+}
 
-function toggleSidebar() {
-    const s = document.getElementById('app-sidebar');
-    s.classList.toggle('collapsed');
-    localStorage.setItem('sidebar_collapsed', s.classList.contains('collapsed'));
+function showToast(msg) {
+    const t = document.getElementById('page-toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => { t.classList.remove('show'); }, 2500);
 }
+
 function openSettings() { 
-    document.getElementById('settings-modal').style.display = 'flex'; 
-    document.getElementById('api-key-input').value = localStorage.getItem('warboard_apikey') || myKey || '';
+    if (typeof openGlobalSettings === 'function') {
+        openGlobalSettings();
+        return;
+    }
+    const modal = document.getElementById('settings-modal');
+    modal.style.display = 'flex'; 
+    const key = localStorage.getItem('warboard_apikey') || myKey || '';
+    document.getElementById('api-key-input').value = key;
+    const authStatus = document.getElementById('modal-auth-status');
+    if (key) {
+        authStatus.textContent = 'Key Stored (' + key.slice(0, 4) + '...)';
+        authStatus.style.color = 'var(--accent-emerald)';
+    } else {
+        authStatus.textContent = 'No Key Configured';
+        authStatus.style.color = 'var(--text-tertiary)';
+    }
 }
-function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
+
+function closeSettings() { 
+    document.getElementById('settings-modal').style.display = 'none'; 
+}
+
 function saveKey() {
     myKey = document.getElementById('api-key-input').value.trim();
     if (myKey) {
@@ -390,9 +741,10 @@ function saveKey() {
                 sessionStorage.setItem('sv_user', JSON.stringify(d.user));
             }
         }).catch(() => {});
+        showToast('✅ Key Saved & Synchronized!');
     }
     closeSettings();
-    loadMembers();
+    setTimeout(() => { loadMembers(); }, 400);
 }
 
 function setAlert(msg, type) {
@@ -437,13 +789,22 @@ function formatLastAction(ts) {
     return `${Math.floor(diff/86400)}d ago`;
 }
 
-// --- LOAD ---
+// --- LOAD MEMBERS ---
 let isLoadingMembers = false;
 let lastMembersEtag = '';
 
 async function loadMembers() {
     if (!myKey || isLoadingMembers || document.hidden) {
         if (!myKey) {
+            document.getElementById('faction-line').textContent = 'No API Key Configured — Set up key in Settings';
+            if (window.updateBroadcasterBadge) {
+                window.updateBroadcasterBadge('DISCONNECTED', false);
+            } else {
+                const wsBadge = document.getElementById('global-ws-badge');
+                const wsStatus = document.getElementById('global-ws-status');
+                if (wsBadge) wsBadge.className = 'telemetry-chip polling';
+                if (wsStatus) wsStatus.textContent = 'NO KEY';
+            }
             setAlert('⚙️ No API key — click Settings and add your Torn API key (needs Faction access).', 'info');
             document.getElementById('content-area').innerHTML =
                 '<div class="empty"><div class="ico">🔑</div><p>Enter your API key in Settings to view faction members.</p></div>';
@@ -466,19 +827,24 @@ async function loadMembers() {
         const data = await res.json();
         if (data.error) { setAlert('❌ ' + data.error, 'error'); return; }
 
-        
         allMembers = data.friendly || [];
         allMembers.forEach(m => {
             const numId = parseInt(m.id) || 0;
-            m.attacks_made = (numId % 100) + Math.floor(Math.abs(Math.sin(numId) * 50));
-            m.respect_earned = (numId % 500) * 10 + Math.floor(Math.abs(Math.cos(numId) * 1000));
-            m.chain_contributions = (numId % 50) + Math.floor(Math.abs(Math.cos(numId+1) * 20));
+            if (typeof m.attacks_made === 'undefined') {
+                m.attacks_made = Number(m.attacks || 0);
+            }
+            if (typeof m.respect_earned === 'undefined') {
+                m.respect_earned = Number(m.score || 0);
+            }
+            if (typeof m.chain_contributions === 'undefined') {
+                m.chain_contributions = Number(m.chainHits || 0);
+            }
         });
 
         hasWar = allMembers.some(m => m.attacks > 0 || m.score > 0);
 
         // Build counts
-        const counts = {All: allMembers.length, Online:0, Idle:0, Hospital:0, Jail:0, Traveling:0, Offline:0, Inactive:0};
+        const counts = { All: allMembers.length, Online: 0, Idle: 0, Hospital: 0, Jail: 0, Traveling: 0, Offline: 0, Inactive: 0 };
         const nowSec = Math.floor(Date.now() / 1000);
         allMembers.forEach(m => {
             const s = getState(m);
@@ -493,14 +859,23 @@ async function loadMembers() {
                 counts.Inactive++;
             }
         });
+
         Object.keys(counts).forEach(k => {
             const el = document.getElementById('sc-v-' + k);
             if (el) el.textContent = counts[k];
         });
 
-        // Faction name
+        // Dynamic Subtitle Line: Includes all non-zero categories
         const fline = document.getElementById('faction-line');
-        fline.textContent = `${allMembers.length} members · ${counts.Online} online · ${counts.Hospital} in hospital · ${counts.Inactive} inactive (1d+)`;
+        const summaryParts = [`${allMembers.length} members`];
+        summaryParts.push(`${counts.Online} online`);
+        if (counts.Idle > 0) summaryParts.push(`${counts.Idle} idle`);
+        if (counts.Hospital > 0) summaryParts.push(`${counts.Hospital} in hospital`);
+        if (counts.Jail > 0) summaryParts.push(`${counts.Jail} jailed`);
+        if (counts.Traveling > 0) summaryParts.push(`${counts.Traveling} traveling`);
+        if (counts.Offline > 0 && counts.Online === 0 && counts.Idle === 0) summaryParts.push(`${counts.Offline} offline`);
+        if (counts.Inactive > 0) summaryParts.push(`${counts.Inactive} inactive (1d+)`);
+        fline.textContent = summaryParts.join(' · ');
 
         document.getElementById('summary-row').style.display = 'grid';
         document.getElementById('controls-row').style.display = 'flex';
@@ -518,7 +893,15 @@ async function loadMembers() {
     }
 }
 
-// --- FILTER / SORT / RENDER ---
+// --- FILTERING & SORTING UX ---
+function handleCardFilter(filterName) {
+    if (activeFilter === filterName && filterName !== 'All') {
+        setFilter('All');
+    } else {
+        setFilter(filterName);
+    }
+}
+
 function setFilter(f) {
     activeFilter = f;
     document.querySelectorAll('.sum-card').forEach(c => c.classList.remove('active'));
@@ -533,9 +916,62 @@ function setView(v) {
     renderMembers();
 }
 
+function onSortChange() {
+    sortKey = document.getElementById('sort-select').value;
+    renderMembers();
+}
+
+function toggleSortDirection() {
+    sortAsc = !sortAsc;
+    updateSortDirButton();
+    renderMembers();
+}
+
+function updateSortDirButton() {
+    const arrow = document.getElementById('sort-dir-arrow');
+    const label = document.getElementById('sort-dir-label');
+    if (sortAsc) {
+        if (arrow) arrow.textContent = '↑';
+        if (label) label.textContent = 'Asc';
+    } else {
+        if (arrow) arrow.textContent = '↓';
+        if (label) label.textContent = 'Desc';
+    }
+}
+
+function handleTableSort(colKey) {
+    if (sortKey === colKey) {
+        sortAsc = !sortAsc;
+    } else {
+        sortKey = colKey;
+        // Sensible defaults: numbers/activity desc, names asc
+        sortAsc = (colKey === 'name');
+        const sel = document.getElementById('sort-select');
+        if (sel) sel.value = colKey;
+    }
+    updateSortDirButton();
+    renderMembers();
+}
+
+function handleSearchInput() {
+    const box = document.getElementById('search-box');
+    const clearBtn = document.getElementById('search-clear-btn');
+    if (clearBtn) {
+        clearBtn.style.display = box.value.trim().length > 0 ? 'block' : 'none';
+    }
+    renderMembers();
+}
+
+function clearSearch() {
+    const box = document.getElementById('search-box');
+    const clearBtn = document.getElementById('search-clear-btn');
+    if (box) box.value = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+    renderMembers();
+}
+
 function renderMembers() {
-    const search = (document.getElementById('search-box')?.value || '').toLowerCase();
-    const sortKey = document.getElementById('sort-select')?.value || 'status';
+    const search = (document.getElementById('search-box')?.value || '').toLowerCase().trim();
 
     let filtered = allMembers.filter(m => {
         const s = getState(m);
@@ -551,25 +987,54 @@ function renderMembers() {
                 if ((now - (m.lastActionTimestamp || 0)) < 86400) return false;
             }
         }
-        if (search && !(m.name || '').toLowerCase().includes(search)) return false;
+        if (search) {
+            const name = (m.name || '').toLowerCase();
+            const id = String(m.id || '');
+            const pos = (m.position || '').toLowerCase();
+            const desc = (m.statusDescription || '').toLowerCase();
+            if (!name.includes(search) && !id.includes(search) && !pos.includes(search) && !desc.includes(search)) {
+                return false;
+            }
+        }
         return true;
     });
 
-    filtered.sort((a,b) => {
-        if (sortKey === 'status') return stateOrder(getState(a)) - stateOrder(getState(b));
-        if (sortKey === 'inactivity') return (a.lastActionTimestamp||0) - (b.lastActionTimestamp||0);
-        if (sortKey === 'level') return (b.level||0) - (a.level||0);
-        if (sortKey === 'name') return (a.name||'').localeCompare(b.name||'');
-        if (sortKey === 'days') return (b.daysInFaction||0) - (a.daysInFaction||0);
-        if (sortKey === 'attacks') return (b.attacks||0) - (a.attacks||0);
-        if (sortKey === 'score') return (b.score||0) - (a.score||0);
-        if (sortKey === 'lastAction') return (b.lastActionTimestamp||0) - (a.lastActionTimestamp||0);
+    const dir = sortAsc ? 1 : -1;
+    filtered.sort((a, b) => {
+        if (sortKey === 'status') {
+            const diff = stateOrder(getState(a)) - stateOrder(getState(b));
+            return (sortAsc ? diff : -diff);
+        }
+        if (sortKey === 'inactivity') {
+            return dir * ((b.lastActionTimestamp || 0) - (a.lastActionTimestamp || 0));
+        }
+        if (sortKey === 'lastAction') {
+            return dir * ((a.lastActionTimestamp || 0) - (b.lastActionTimestamp || 0));
+        }
+        if (sortKey === 'level') {
+            return dir * ((a.level || 0) - (b.level || 0));
+        }
+        if (sortKey === 'name') {
+            return dir * (a.name || '').localeCompare(b.name || '');
+        }
+        if (sortKey === 'days') {
+            return dir * ((a.daysInFaction || 0) - (b.daysInFaction || 0));
+        }
+        if (sortKey === 'attacks') {
+            return dir * ((a.attacks_made || a.attacks || 0) - (b.attacks_made || b.attacks || 0));
+        }
+        if (sortKey === 'score') {
+            return dir * ((a.respect_earned || a.score || 0) - (b.respect_earned || b.score || 0));
+        }
+        if (sortKey === 'chain') {
+            return dir * ((a.chain_contributions || 0) - (b.chain_contributions || 0));
+        }
         return 0;
     });
 
     const area = document.getElementById('content-area');
     if (filtered.length === 0) {
-        area.innerHTML = '<div class="empty"><div class="ico">🔍</div><p>No members match this filter.</p></div>';
+        area.innerHTML = '<div class="empty"><div class="ico">🔍</div><p>No members match this filter or search query.</p></div>';
         return;
     }
 
@@ -582,17 +1047,18 @@ function renderMembers() {
     startTimers();
 }
 
-// ─── CARD ───────────────────────────────────────────────────────────────────
+// ─── CARD VIEW RENDERER ───────────────────────────────────────────────────────
 function renderCard(m) {
     const state   = getState(m);
     const dotCls  = `dot-${state}`;
     const slCls   = `sl-${state}`;
     const stLabel = { online:'🟢 Online', idle:'🟡 Idle', offline:'⚫ Offline', hospital:'🏥 Hospital', jail:'⛓️ Jailed', traveling:'✈️ Traveling' }[state] || '⚫ Offline';
 
-    // --- Timer block ---
+    // --- Timer / Location Block ---
     let timerHtml = '';
+    const now = Math.floor(Date.now() / 1000);
+
     if ((state === 'hospital' || state === 'jail') && m.until) {
-        const now   = Math.floor(Date.now()/1000);
         const secs  = m.until - now;
         const bgCls = state === 'jail' ? 'jail-bg' : '';
         const tvCls = state === 'jail' ? 'tv-jail' : 'tv-hosp';
@@ -602,11 +1068,25 @@ function renderCard(m) {
             <span class="timer-val ${tvCls}" data-until="${m.until}">${secs > 0 ? formatTimer(secs) : 'Releasing...'}</span>
         </div>`;
     } else if (state === 'traveling') {
-        const landingLeft = m.landingTime ? (m.landingTime - Math.floor(Date.now()/1000)) : null;
-        const tText = landingLeft && landingLeft > 0
-            ? `<span class="timer-val tv-travel" data-until="${m.landingTime}">${formatTimer(landingLeft)}</span>`
-            : `<span class="timer-val tv-travel">${m.statusDescription || 'Traveling'}</span>`;
-        timerHtml = `<div class="mc-timer-row travel-bg"><span class="timer-label">✈️ ETA</span>${tText}</div>`;
+        const hasFlightTime = m.landingTime && (m.landingTime - now) > 0;
+        const untilValid = m.until && (m.until - now) > 0;
+        const flightTimeLeft = hasFlightTime ? (m.landingTime - now) : (untilValid ? (m.until - now) : null);
+        const untilTs = hasFlightTime ? m.landingTime : m.until;
+
+        if (flightTimeLeft && flightTimeLeft > 0) {
+            // Actively in flight: Show ✈️ ETA with remaining flight countdown
+            timerHtml = `<div class="mc-timer-row travel-bg">
+                <span class="timer-label">✈️ ETA</span>
+                <span class="timer-val tv-travel" data-until="${untilTs}">${formatTimer(flightTimeLeft)}</span>
+            </div>`;
+        } else {
+            // Stationary abroad: Show 🌍 Abroad with country destination
+            const locName = m.statusDescription || 'Abroad';
+            timerHtml = `<div class="mc-timer-row travel-bg">
+                <span class="timer-label">🌍 Abroad</span>
+                <span class="timer-val tv-travel" style="font-family:var(--font-sans);font-size:0.86em;">${locName}</span>
+            </div>`;
+        }
     }
 
     // --- Est stats ---
@@ -614,10 +1094,11 @@ function renderCard(m) {
         ? m.estStats.toLocaleString()
         : (m.estStats || '—');
 
-    // --- Last action ---
+    // --- Last action & Inactive badge with proper spacing ---
     const lastStr = formatLastAction(m.lastActionTimestamp) || m.lastActionRelative || '—';
+    const isInactive1d = (m.lastActionTimestamp && (now - m.lastActionTimestamp) >= 86400);
 
-    // --- Days bar (max anchored at 5 years = 1825 days) ---
+    // --- Days bar ---
     const daysPct = Math.min((m.daysInFaction || 0) / 1825 * 100, 100).toFixed(1);
 
     // --- War stats section ---
@@ -631,24 +1112,25 @@ function renderCard(m) {
         </div>`;
     }
 
-    // --- Activity sparkline ---
+    // --- 72h Activity with clean flexbox spacing & colon ---
     let sparkHtml = '';
     if (m.timeline && m.timeline.length > 0) {
         const maxAct = Math.max(...m.timeline, 1);
-        const recent = m.timeline.slice(-24); // last 24 buckets
+        const recent = m.timeline.slice(-24);
         const bars = recent.map(v => {
             const pct = (v / maxAct * 100).toFixed(0);
             const opacity = v > 0 ? 0.4 + (v / maxAct * 0.6) : 0.1;
             return `<div class="spark-bar" style="height:${Math.max(pct,5)}%;opacity:${opacity};"></div>`;
         }).join('');
+        const activeHours = m.timeline.filter(v => v > 0).length;
         sparkHtml = `<div class="activity-row">
-            <div class="act-label"><span>72h Activity</span><span style="color:var(--green)">${m.timeline.filter(v=>v>0).length} active hrs</span></div>
+            <div class="act-label">
+                <span>72h Activity:</span>
+                <span style="color:var(--accent-emerald);font-weight:800;">${activeHours} active hrs</span>
+            </div>
             <div class="sparkline">${bars}</div>
         </div>`;
     }
-
-    const nowSec = Math.floor(Date.now()/1000);
-    const isInactive1d = (m.lastActionTimestamp && (nowSec - m.lastActionTimestamp) >= 86400);
 
     return `<div class="mc st-${state}">
         <div class="mc-top">
@@ -656,7 +1138,7 @@ function renderCard(m) {
                 <div class="mc-name-row">
                     <div class="mc-name"><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank">${m.name || '?'}</a></div>
                     ${m.level ? `<span class="lvl-badge">Lv ${m.level}</span>` : ''}
-                    ${isInactive1d ? `<span style="font-size:0.62em;background:rgba(255,165,2,0.15);color:var(--gold);padding:1px 6px;border-radius:4px;border:1px solid rgba(255,165,2,0.3);font-weight:700;white-space:nowrap;">💤 1d+ Inactive</span>` : ''}
+                    ${isInactive1d ? `<span class="inactive-badge">💤 1d+</span>` : ''}
                 </div>
                 <div class="mc-pos">${m.position || 'Member'}</div>
             </div>
@@ -669,17 +1151,17 @@ function renderCard(m) {
         <div class="mc-body">
             <div class="info-item">
                 <div class="info-lbl">Est. Battle Stats</div>
-                <div class="info-val" style="color:var(--blue)">${statStr}</div>
+                <div class="info-val" style="color:var(--accent-cobalt)">${statStr}</div>
             </div>
             <div class="info-item">
                 <div class="info-lbl">Last Action</div>
                 <div class="info-val">${lastStr}</div>
             </div>
             <div class="info-item" style="grid-column:1/-1;">
-                <div style="display:flex; justify-content:space-between; margin-bottom: 5px;"><span style="color:var(--text-dim)">Attacks (All):</span> <span style="color:var(--blue)">${m.attacks_made}</span></div>
-                <div style="display:flex; justify-content:space-between; margin-bottom: 5px;"><span style="color:var(--text-dim)">Respect:</span> <span style="color:var(--green)">+${m.respect_earned.toLocaleString()}</span></div>
-                <div style="display:flex; justify-content:space-between; margin-bottom: 10px;"><span style="color:var(--text-dim)">Chain Hits:</span> <span style="color:var(--gold)">${m.chain_contributions}</span></div>
-                <div class="info-lbl" style="margin-bottom:6px;">Days in Faction — <span style="color:var(--teal)">${m.daysInFaction || 0} days</span></div>
+                <div style="display:flex; justify-content:space-between; margin-bottom: 5px;"><span style="color:var(--text-tertiary)">Attacks (All):</span> <span style="color:var(--accent-cobalt);font-weight:700;">${m.attacks_made ?? m.attacks ?? 0}</span></div>
+                <div style="display:flex; justify-content:space-between; margin-bottom: 5px;"><span style="color:var(--text-tertiary)">Respect Earned:</span> <span style="color:var(--accent-emerald);font-weight:700;">+${(m.respect_earned ?? m.score ?? 0).toLocaleString()}</span></div>
+                <div style="display:flex; justify-content:space-between; margin-bottom: 10px;"><span style="color:var(--text-tertiary)">Chain Hits:</span> <span style="color:var(--accent-amber);font-weight:700;">${m.chain_contributions ?? 0}</span></div>
+                <div class="info-lbl" style="margin-bottom:6px;">Days in Faction — <span style="color:var(--accent-cyan)">${m.daysInFaction || 0} days</span></div>
                 <div class="days-bar-bg"><div class="days-bar-fill" style="width:${daysPct}%"></div></div>
             </div>
         </div>
@@ -692,61 +1174,106 @@ function renderCard(m) {
     </div>`;
 }
 
-// ─── TABLE ───────────────────────────────────────────────────────────────────
+// ─── TABLE VIEW RENDERER (Sticky, Sortable & Overflow-Proof) ───────────────────
 function renderTable(members) {
+    const now = Math.floor(Date.now() / 1000);
+    const getSortArrow = (col) => {
+        if (sortKey !== col) return '';
+        return sortAsc ? ' ↑' : ' ↓';
+    };
+
     const rows = members.map(m => {
         const state = getState(m);
         const sbCls = `sb-${{hospital:'hospital',jail:'jail',traveling:'travel',online:'online',idle:'idle',offline:'offline'}[state]||'offline'}`;
         const stLabel = { online:'🟢 Online', idle:'🟡 Idle', offline:'⚫ Offline', hospital:'🏥 Hospital', jail:'⛓️ Jailed', traveling:'✈️ Traveling' }[state] || '⚫';
 
-        let timer = '—';
+        let timerHtml = '—';
         if ((state === 'hospital' || state === 'jail') && m.until) {
-            const left = m.until - Math.floor(Date.now()/1000);
-            if (left > 0) timer = `<span class="timer-td" style="color:${state==='jail'?'var(--purple)':'var(--red)'}" data-until="${m.until}">${formatTimer(left)}</span>`;
+            const left = m.until - now;
+            if (left > 0) {
+                const colorVar = state === 'jail' ? 'var(--accent-purple)' : 'var(--accent-crimson)';
+                timerHtml = `<span class="timer-td" style="color:${colorVar};font-weight:700;" data-until="${m.until}">${formatTimer(left)}</span>`;
+            } else {
+                timerHtml = '<span style="color:var(--accent-emerald);font-weight:700;">Releasing...</span>';
+            }
         } else if (state === 'traveling') {
-            timer = m.statusDescription || '✈️';
+            const hasFlight = m.landingTime && (m.landingTime - now) > 0;
+            const untilValid = m.until && (m.until - now) > 0;
+            const flightTime = hasFlight ? (m.landingTime - now) : (untilValid ? (m.until - now) : null);
+            const targetTs = hasFlight ? m.landingTime : m.until;
+
+            if (flightTime && flightTime > 0) {
+                timerHtml = `<span class="timer-td" style="color:var(--accent-cobalt);font-weight:700;" data-until="${targetTs}">✈️ ${formatTimer(flightTime)}</span>`;
+            } else {
+                timerHtml = `<span style="color:var(--text-secondary);font-size:0.9em;" title="${m.statusDescription || 'Abroad'}">🌍 ${m.statusDescription || 'Abroad'}</span>`;
+            }
         }
 
         const statStr = typeof m.estStats === 'number' ? m.estStats.toLocaleString() : (m.estStats || '—');
         const last = formatLastAction(m.lastActionTimestamp) || m.lastActionRelative || '—';
-        const eff = m.attacks > 0 ? (m.score/m.attacks).toFixed(1) : '—';
-        const isInactive1d = (m.lastActionTimestamp && (Math.floor(Date.now()/1000) - m.lastActionTimestamp) >= 86400);
+        const isInactive1d = (m.lastActionTimestamp && (now - m.lastActionTimestamp) >= 86400);
 
         return `<tr>
-            <td><a class="tlink" href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank">${m.name}</a></td>
-            <td style="color:var(--gold);font-weight:700">${m.level || '?'}</td>
+            <td class="col-sticky-name">
+                <a class="tlink" href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="font-weight:700;color:var(--text-primary);text-decoration:none;">${m.name}</a>
+            </td>
+            <td style="color:var(--accent-amber);font-weight:700;font-family:var(--font-mono);">${m.level || '?'}</td>
             <td><span class="sb ${sbCls}">${stLabel}</span></td>
-            <td>${timer}</td>
-            <td style="color:var(--text-dim);font-size:0.85em">${m.position || '—'}</td>
-            <td style="color:var(--blue);font-weight:700">${statStr}</td>
-            <td style="color:var(--blue);font-weight:700">${m.attacks_made}</td>
-            <td style="color:var(--green);font-weight:700">+${m.respect_earned.toLocaleString()}</td>
-            <td style="color:var(--gold);font-weight:700">${m.chain_contributions}</td>
-            <td style="color:${isInactive1d ? 'var(--gold)' : 'var(--text-dim)'};font-weight:${isInactive1d ? '700' : 'normal'}">${last}${isInactive1d ? ' <span style="font-size:0.75em;background:rgba(255,165,2,0.15);color:var(--gold);padding:1px 5px;border-radius:4px;border:1px solid rgba(255,165,2,0.3);font-weight:700;">💤 1d+</span>' : ''}</td>
-            <td style="color:var(--text-dim)">${m.daysInFaction||0}d</td>
+            <td>${timerHtml}</td>
+            <td style="color:var(--text-secondary);font-size:0.88em;">${m.position || 'Member'}</td>
+            <td style="color:var(--accent-cobalt);font-weight:700;font-family:var(--font-mono);">${statStr}</td>
+            <td style="color:var(--accent-cobalt);font-weight:700;font-family:var(--font-mono);">${m.attacks_made ?? m.attacks ?? 0}</td>
+            <td style="color:var(--accent-emerald);font-weight:700;font-family:var(--font-mono);">+${(m.respect_earned ?? m.score ?? 0).toLocaleString()}</td>
+            <td style="color:var(--accent-amber);font-weight:700;font-family:var(--font-mono);">${m.chain_contributions ?? 0}</td>
+            <td style="color:${isInactive1d ? 'var(--accent-amber)' : 'var(--text-secondary)'};font-weight:${isInactive1d ? '700' : 'normal'};">
+                ${last}${isInactive1d ? '<span class="inactive-badge">💤 1d+</span>' : ''}
+            </td>
+            <td style="color:var(--text-tertiary);font-family:var(--font-mono);">${m.daysInFaction || 0}d</td>
+            <td>
+                <div style="display:flex;gap:4px;">
+                    <a class="tbl-action-btn" href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" title="View Profile">👤</a>
+                    <a class="tbl-action-btn" href="https://www.torn.com/messages.php?action=send&XID=${m.id}" target="_blank" title="Send Message">✉️</a>
+                </div>
+            </td>
         </tr>`;
     }).join('');
 
-    return `<div class="table-wrap"><table>
-        <thead><tr>
-            <th>Name</th><th>Lv</th><th>Status</th><th>Timer</th>
-            <th>Position</th><th>Est. Stats</th>
-            <th>Attacks (All)</th><th>Respect</th><th>Chain</th>
-            <th>Last Action</th><th>Days</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-    </table></div>`;
+    return `<div class="table-wrap">
+        <table class="roster-table">
+            <thead>
+                <tr>
+                    <th class="col-sticky-name ${sortKey === 'name' ? 'active-sort' : ''}" onclick="handleTableSort('name')">Name${getSortArrow('name')}</th>
+                    <th class="${sortKey === 'level' ? 'active-sort' : ''}" onclick="handleTableSort('level')">Lv${getSortArrow('level')}</th>
+                    <th class="${sortKey === 'status' ? 'active-sort' : ''}" onclick="handleTableSort('status')">Status${getSortArrow('status')}</th>
+                    <th>Location / ETA</th>
+                    <th>Position</th>
+                    <th>Est. Stats</th>
+                    <th class="${sortKey === 'attacks' ? 'active-sort' : ''}" onclick="handleTableSort('attacks')">Attacks (All)${getSortArrow('attacks')}</th>
+                    <th class="${sortKey === 'score' ? 'active-sort' : ''}" onclick="handleTableSort('score')">Respect${getSortArrow('score')}</th>
+                    <th class="${sortKey === 'chain' ? 'active-sort' : ''}" onclick="handleTableSort('chain')">Chain${getSortArrow('chain')}</th>
+                    <th class="${sortKey === 'lastAction' || sortKey === 'inactivity' ? 'active-sort' : ''}" onclick="handleTableSort('lastAction')">Last Action${getSortArrow('lastAction')}</th>
+                    <th class="${sortKey === 'days' ? 'active-sort' : ''}" onclick="handleTableSort('days')">Days${getSortArrow('days')}</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    </div>`;
 }
 
-// ─── TIMERS ───────────────────────────────────────────────────────────────────
+// ─── TIMERS & PROGRESS LOOP ───────────────────────────────────────────────────
 function startTimers() {
     if (window._timerInterval) clearInterval(window._timerInterval);
     window._timerInterval = setInterval(() => {
-        const now = Math.floor(Date.now()/1000);
+        const now = Math.floor(Date.now() / 1000);
         document.querySelectorAll('[data-until]').forEach(el => {
             const left = parseInt(el.dataset.until) - now;
-            if (left <= 0) { el.textContent = '✅ Free!'; el.style.color = 'var(--green)'; }
-            else el.textContent = formatTimer(left);
+            if (left <= 0) {
+                el.textContent = '✅ Free!';
+                el.style.color = 'var(--accent-emerald)';
+            } else {
+                el.textContent = (el.classList.contains('tv-travel') ? '' : '') + formatTimer(left);
+            }
         });
     }, 1000);
 }
@@ -765,7 +1292,7 @@ function startProgress() {
     if (fill) fill.style.width = '0%';
     progressTimer = setInterval(() => {
         if (document.hidden) { stopProgress(); return; }
-        if (fill) fill.style.width = Math.min((Date.now()-start)/REFRESH_MS*100, 100).toFixed(1)+'%';
+        if (fill) fill.style.width = Math.min((Date.now() - start) / REFRESH_MS * 100, 100).toFixed(1) + '%';
     }, 1000);
     refreshTimer = setInterval(() => {
         if (document.hidden) { stopProgress(); return; }
@@ -797,29 +1324,8 @@ try {
     }
 } catch(e) {}
 
+// Initial load
 loadMembers();
-</script>
-
-<script>
-    function toggleTheme() { 
-        document.body.classList.toggle('light-mode'); 
-        localStorage.setItem('theme', document.body.classList.contains('light-mode') ? 'light' : 'dark'); 
-    }
-    if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-mode');
-    
-    // Override toggleSidebar for mobile
-    const originalToggle = typeof toggleSidebar === 'function' ? toggleSidebar : null;
-    window.toggleSidebar = function() {
-        if (window.innerWidth <= 768) {
-            const nav = document.querySelector('.nav-items');
-            if (nav) nav.classList.toggle('mobile-open');
-        } else if (originalToggle) {
-            originalToggle();
-        } else {
-            const s = document.querySelector('.sidebar');
-            if(s) s.classList.toggle('collapsed');
-        }
-    }
 </script>
 </body>
 </html>
