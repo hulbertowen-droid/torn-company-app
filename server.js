@@ -7174,7 +7174,7 @@ app.get('/api/warboard', async (req, res) => {
     const requestedFacIdFast = req.headers['x-faction-id'] || req.query.myFactionId;
     const sessionFacId = (req.userSession?.factionId && String(req.userSession.factionId) !== '0') ? String(req.userSession.factionId) : null;
     const userKeyProvided = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
-    const isServerKey = !userKeyProvided || userKeyProvided === discordConfig.apiKey || userKeyProvided === TORN_API_KEY;
+    let isServerKey = !userKeyProvided || userKeyProvided === discordConfig.apiKey || userKeyProvided === TORN_API_KEY;
     const hostFacId = String(discordConfig.factionId || dynamicFactionId || '52355');
 
     // Only assume the host faction cache if using the server's own key pool and no other faction is requested
