@@ -2225,7 +2225,7 @@ setInterval(async () => {
                                     footer: UI.FOOTER,
                                     links: [
                                         { label: "🔗 View Chain", url: `https://www.torn.com/factions.php?step=your#/tab=chains` },
-                                        { label: "📡 Live Warboard", url: `https://torn-company-app-production.up.railway.app/` }
+                                        { label: "📡 Live Warboard", url: `https://faction-os.duckdns.org/` }
                                     ]
                                 };
                                 if (discordConfig.globalBotToken) {
@@ -2749,7 +2749,7 @@ async function checkOverseasAndInboundThreats(friendlyMembers, enemyMembers, ene
                         links: [
                             { label: "✈️ Travel Agency", url: "https://www.torn.com/travelagency.php" },
                             { label: "⚔️ Enemy Profile", url: `https://www.torn.com/profiles.php?XID=${threatEnemy.id}` },
-                            { label: "🌐 Travel Desk", url: "https://torn-company-app-production.up.railway.app/travel.html" }
+                            { label: "🌐 Travel Desk", url: "https://faction-os.duckdns.org/travel.html" }
                         ]
                     };
 
@@ -4274,7 +4274,7 @@ async function safeDiscordFetch(url, token, options = {}) {
             method: options.method || 'GET',
             headers: {
                 Authorization: `Bot ${token}`,
-                'User-Agent': 'DiscordBot (https://torn-company-app-production.up.railway.app, 2.0)',
+                'User-Agent': 'DiscordBot (https://faction-os.duckdns.org, 2.0)',
                 ...(options.body ? { 'Content-Type': 'application/json' } : {}),
                 ...(options.headers || {})
             },
@@ -4370,7 +4370,7 @@ app.get('/api/discord/diagnostics', async (req, res) => {
             const authRes = await fetch('https://discord.com/api/v10/users/@me', {
                 headers: {
                     Authorization: `Bot ${token}`,
-                    'User-Agent': 'DiscordBot (https://torn-company-app-production.up.railway.app, 2.0)'
+                    'User-Agent': 'DiscordBot (https://faction-os.duckdns.org, 2.0)'
                 }
             });
             results.usersMe = {
@@ -4635,7 +4635,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             links: [
                 { label: "✈️ Travel Agency", url: `https://www.torn.com/travelagency.php` },
                 { label: "⚔️ Enemy Profile", url: `https://www.torn.com/profiles.php?XID=999999` },
-                { label: "🌐 Travel Desk", url: `https://torn-company-app-production.up.railway.app/travel.html` }
+                { label: "🌐 Travel Desk", url: `https://faction-os.duckdns.org/travel.html` }
             ]
         };
     } else if (t === 'inboundthreat' || t === 'inbound') {
@@ -4712,7 +4712,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             timestamp: new Date().toISOString(),
             links: [
                 { label: "🔗 View Chain", url: `https://www.torn.com/factions.php?step=your#/tab=chains` },
-                { label: "📡 Live Warboard", url: `https://torn-company-app-production.up.railway.app/` }
+                { label: "📡 Live Warboard", url: `https://faction-os.duckdns.org/` }
             ]
         };
     } else if (t === 'chainunder90') {
@@ -4724,7 +4724,7 @@ app.post('/api/test-discord-alert', async (req, res) => {
             timestamp: new Date().toISOString(),
             links: [
                 { label: "🔗 View Chain", url: "https://www.torn.com/factions.php?step=your#/tab=chains" },
-                { label: "🎯 Attack Targets", url: "https://torn-company-app-production.up.railway.app/" }
+                { label: "🎯 Attack Targets", url: "https://faction-os.duckdns.org/" }
             ]
         };
     } else if (t === 'chainmilestone') {
@@ -8300,7 +8300,7 @@ async function callOpenRouterFallback(systemPrompt, userPrompt, history = [], op
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${orKey}`,
-                    'HTTP-Referer': 'https://torn-company-app-production.up.railway.app',
+                    'HTTP-Referer': 'https://faction-os.duckdns.org',
                     'X-Title': 'FRIDAY Torn Security Sentinel',
                     'Content-Type': 'application/json'
                 },
@@ -8365,7 +8365,7 @@ app.post('/api/ai/save-openrouter-key', async (req, res) => {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${cleanKey}`,
-                'HTTP-Referer': 'https://torn-company-app-production.up.railway.app',
+                'HTTP-Referer': 'https://faction-os.duckdns.org',
                 'X-Title': 'FRIDAY Torn Security Sentinel',
                 'Content-Type': 'application/json'
             },
@@ -12490,7 +12490,7 @@ async function buildWarStatusEmbed(apiKey) {
             color: isLeading ? UI.COLORS.SUCCESS : UI.COLORS.ERROR,
             fields: [
                 { name: `🏆 Top Hitters`, value: topHitters, inline: false },
-                { name: "🔗 Links", value: `[📡 Live Warboard](https://torn-company-app-production.up.railway.app) • [⚔️ Attack Screen](https://www.torn.com/factions.php?step=your#/tab=war)`, inline: false }
+                { name: "🔗 Links", value: `[📡 Live Warboard](https://faction-os.duckdns.org) • [⚔️ Attack Screen](https://www.torn.com/factions.php?step=your#/tab=war)`, inline: false }
             ],
             footer: UI.FOOTER
         };
@@ -12642,7 +12642,7 @@ async function buildSpyEmbed(targetQuery, apiKey) {
         return {
             title: `🔍 ${playerName} — No Stats on Record`,
             description: `No spy data found in FF Scouter or the database for **${playerName}**.\n\n` +
-                         `• Add a manual spy via the [Live Warboard](https://torn-company-app-production.up.railway.app) → Inspect this player.\n` +
+                         `• Add a manual spy via the [Live Warboard](https://faction-os.duckdns.org) → Inspect this player.\n` +
                          `• [⚔️ Attack](https://www.torn.com/page.php?sid=attack&user2ID=${targetId}) • [👤 Profile](https://www.torn.com/profiles.php?XID=${targetId})`,
             color: UI.COLORS.NEUTRAL,
             footer: UI.FOOTER
@@ -12729,7 +12729,7 @@ async function buildChainStatusEmbed(apiKey) {
                          `${bar} (${Math.round(pct * 100)}%)\n`,
             color: isPanic ? UI.COLORS.ERROR : UI.COLORS.SUCCESS,
             fields: [
-                { name: "🔗 Links", value: `[⚔️ Targets](https://www.torn.com/factions.php?step=your#/tab=war) • [📡 Live Warboard](https://torn-company-app-production.up.railway.app)`, inline: false }
+                { name: "🔗 Links", value: `[⚔️ Targets](https://www.torn.com/factions.php?step=your#/tab=war) • [📡 Live Warboard](https://faction-os.duckdns.org)`, inline: false }
             ],
             footer: UI.FOOTER
         };
@@ -13234,7 +13234,7 @@ async function buildOCStatusEmbed(apiKey) {
                          `**In Planning (${inPlanning.length})**\n${planList}\n`,
             color: ready.length > 0 ? UI.COLORS.SUCCESS : UI.COLORS.INFO,
             fields: [
-                { name: "🔗 OC Manager", value: `[Open OC Manager](https://torn-company-app-production.up.railway.app/oc.html)`, inline: false }
+                { name: "🔗 OC Manager", value: `[Open OC Manager](https://faction-os.duckdns.org/oc.html)`, inline: false }
             ],
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
@@ -13811,7 +13811,7 @@ async function buildStocksEmbed(countryInput, apiKey) {
             new ButtonBuilder()
                 .setStyle(ButtonStyle.Link)
                 .setLabel('Travel Calculator')
-                .setURL('https://torn-company-app-production.up.railway.app/travel.html')
+                .setURL('https://faction-os.duckdns.org/travel.html')
                 .setEmoji('🧮'),
             new ButtonBuilder()
                 .setStyle(ButtonStyle.Link)
@@ -13840,7 +13840,7 @@ async function buildStocksEmbed(countryInput, apiKey) {
     } catch(e) {
         return {
             title: `${target.flag} **${target.name} — Arrival Forecast**`,
-            description: `⚠️ YATA stock feed is currently busy: ${e.message}\n\nYou can view real-time stocks directly on [YATA Travel Abroad](https://yata.yt/bazaar/abroad/) or use the [Travel Calculator](https://torn-company-app-production.up.railway.app/travel.html).`,
+            description: `⚠️ YATA stock feed is currently busy: ${e.message}\n\nYou can view real-time stocks directly on [YATA Travel Abroad](https://yata.yt/bazaar/abroad/) or use the [Travel Calculator](https://faction-os.duckdns.org/travel.html).`,
             color: UI.COLORS.WARNING,
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
@@ -15241,7 +15241,7 @@ async function buildPayoutEmbed(memberQuery, apiKey) {
                          `**Top Earners**:\n${lines}\n\nUse \`/payout member:<name or ID>\` to look up a specific member.`,
             color: UI.COLORS.ECONOMY,
             fields: [
-                { name: "🔗 Payout Dashboard", value: `[Open Web Payout Manager](https://torn-company-app-production.up.railway.app/payout.html)`, inline: false }
+                { name: "🔗 Payout Dashboard", value: `[Open Web Payout Manager](https://faction-os.duckdns.org/payout.html)`, inline: false }
             ],
             footer: UI.FOOTER,
             timestamp: new Date().toISOString()
@@ -22128,7 +22128,7 @@ function setupSlashBotEvents(bot, token) {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${inputKey}`,
-                        'HTTP-Referer': 'https://torn-company-app-production.up.railway.app',
+                        'HTTP-Referer': 'https://faction-os.duckdns.org',
                         'X-Title': 'FRIDAY Torn Security Sentinel',
                         'Content-Type': 'application/json'
                     },

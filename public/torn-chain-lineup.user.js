@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         FactionOS Chain Manager (Standalone)
-// @namespace    https://factionos-production.up.railway.app/
+// @namespace    https://faction-os.duckdns.org/
 // @version      2.4.1
 // @description  Professional standalone chain lineup manager on Torn. Direct API hits, mobile touch optimization, compact mobile layout, intelligent readiness detection, auto-advance, 1-click chat auto-send. Runs on faction pages only.
 // @author       FactionOS
@@ -11,11 +11,11 @@
 // @grant        GM_getValue
 // @grant        unsafeWindow
 // @connect      api.torn.com
-// @connect      factionos-production.up.railway.app
-// @connect      torn-company-app-production.up.railway.app
+// @connect      faction-os.duckdns.org
+// @connect      faction-os.duckdns.org
 // @run-at       document-end
-// @updateURL    https://factionos-production.up.railway.app/torn-chain-lineup.user.js
-// @downloadURL  https://factionos-production.up.railway.app/torn-chain-lineup.user.js
+// @updateURL    https://faction-os.duckdns.org/torn-chain-lineup.user.js
+// @downloadURL  https://faction-os.duckdns.org/torn-chain-lineup.user.js
 // ==/UserScript==
 
 (function () {
@@ -31,7 +31,7 @@
     // ══════════════════════════════════════════════════════════════
     //  CONSTANTS & STATE
     // ══════════════════════════════════════════════════════════════
-    const SERVER_BASE     = 'https://factionos-production.up.railway.app';
+    const SERVER_BASE     = 'https://faction-os.duckdns.org';
     const LS_KEY_POS      = 'sv_chain_mgr_pos';
     const LS_KEY_APIKEY   = 'sv_chain_apikey';
     const LS_KEY_MEMBERS  = 'sv_chain_members_cache';

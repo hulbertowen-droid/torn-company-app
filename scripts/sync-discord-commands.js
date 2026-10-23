@@ -19,7 +19,7 @@ async function main() {
         meRes = await fetch('https://discord.com/api/v10/users/@me', {
             headers: {
                 Authorization: 'Bot ' + token,
-                'User-Agent': 'DiscordBot (https://spider-verse.net, 2.0)'
+                'User-Agent': 'DiscordBot (https://faction-os.duckdns.org, 2.0)'
             }
         });
     } catch (e) {
@@ -61,7 +61,7 @@ async function main() {
         headers: {
             Authorization: 'Bot ' + token,
             'Content-Type': 'application/json',
-            'User-Agent': 'DiscordBot (https://spider-verse.net, 2.0)'
+            'User-Agent': 'DiscordBot (https://faction-os.duckdns.org, 2.0)'
         },
         body: JSON.stringify(commands)
     });

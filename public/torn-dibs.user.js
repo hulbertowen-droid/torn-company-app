@@ -27,7 +27,7 @@
         return '';
     }
 
-    let backendUrl = migrate('dibs_backendUrl') || 'https://spider-verse.net';
+    let backendUrl = migrate('dibs_backendUrl') || 'https://faction-os.duckdns.org';
     let playerName = migrate('dibs_playerName');
     let playerId = GM_getValue('dibs_playerId', '');
 

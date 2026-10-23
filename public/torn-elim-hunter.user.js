@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Torn Elimination Target Hunter
-// @namespace    https://spider-verse.net/
+// @namespace    https://faction-os.duckdns.org/
 // @version      2.6.1
 // @description  Autonomous 1-click snipe button for Torn Elimination. Finds beatable enemies that are NOT in hospital and NOT flying from ANY page.
 // @author       Spider-Verse
@@ -9,13 +9,13 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
-// @connect      spider-verse.net
+// @connect      faction-os.duckdns.org
 // @connect      ffscouter.com
 // @connect      api.torn.com
 // @connect      *
 // @run-at       document-idle
-// @updateURL    https://spider-verse.net/torn-elim-hunter.meta.js
-// @downloadURL  https://spider-verse.net/torn-elim-hunter.user.js
+// @updateURL    https://faction-os.duckdns.org/torn-elim-hunter.meta.js
+// @downloadURL  https://faction-os.duckdns.org/torn-elim-hunter.user.js
 // ==/UserScript==
 
 (function () {
@@ -37,7 +37,7 @@
     }
 
     // ── Constants ──────────────────────────────────────────────────
-    const BACKEND       = 'https://spider-verse.net';
+    const BACKEND       = 'https://faction-os.duckdns.org';
     const KEY_API       = 'elimv2_api_key';
     const KEY_TIER      = 'elimv2_ff_tier';       // easy | manageable | difficult | all
     const KEY_AUTOLAUNCH= 'elimv2_auto_launch';   // true | false
@@ -531,7 +531,7 @@
                 renderStatusCard({
                     title: 'Server Connection Error',
                     icon: '📡',
-                    message: 'Could not connect to spider-verse.net backend.',
+                    message: 'Could not connect to faction-os.duckdns.org backend.',
                     detail: 'Please check your internet connection or try again in a few seconds.',
                     borderColor: '#e74c3c',
                     titleColor: '#e74c3c',

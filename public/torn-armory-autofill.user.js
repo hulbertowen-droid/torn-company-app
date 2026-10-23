@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Spider-Verse Faction Armory Auto-Filler
-// @namespace    https://spider-verse.net/
+// @namespace    https://faction-os.duckdns.org/
 // @version      1.0.0
 // @description  Automatically selects the item, opens the loan/give drawer, and prefills the faction member name and quantity when clicking links from Discord alerts.
 // @author       Spider-Verse
