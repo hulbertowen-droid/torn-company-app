@@ -12454,13 +12454,14 @@ async function buildWarStatusEmbed(apiKey) {
         }
 
         // 2. If liveWarHits has data, map with facData.members
-        if (friendlyMembers.length === 0 && Object.keys(liveWarHits).length > 0) {
-            friendlyMembers = Object.entries(liveWarHits).map(([id, hits]) => ({
+        const fState = ourFid ? getFactionWarState(ourFid) : null;
+        if (friendlyMembers.length === 0 && fState && Object.keys(fState.liveWarHits).length > 0) {
+            friendlyMembers = Object.entries(fState.liveWarHits).map(([id, hits]) => ({
                 id,
                 name: facData.members?.[id]?.name || `Player #${id}`,
                 attacks: Number(hits || 0),
                 score: 0,
-                assists: Number(liveAssists[id] || 0)
+                assists: Number(fState.liveAssists[id] || 0)
             })).filter(m => m.attacks > 0 || m.assists > 0);
         }
 
@@ -12911,7 +12912,7 @@ async function buildOnlineRosterEmbed(apiKey) {
     }
 }
 
-async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
+async function buildRevivesEmbed(apiKey, filterSetting = 'all', callerFacId = null) {
     const candidateKeys = [
         apiKey,
         getNextApiKey(),
@@ -12933,7 +12934,24 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
     }
 
     try {
-        let targetFacId = discordConfig.factionId || dynamicFactionId || '52355';
+        let targetFacId = callerFacId;
+        let facName = null;
+        if (!targetFacId && apiKey) {
+            try {
+                const uRes = await fetch(`https://api.torn.com/user/?selections=profile&key=${encodeURIComponent(apiKey)}`, { signal: AbortSignal.timeout(4000) });
+                const uData = await uRes.json();
+                if (uData && uData.faction?.faction_id) {
+                    targetFacId = String(uData.faction.faction_id);
+                    facName = uData.faction.faction_name;
+                }
+            } catch(e) {}
+        }
+        if (!targetFacId) {
+            targetFacId = discordConfig.factionId || dynamicFactionId || '52355';
+        }
+        if (!facName) {
+            facName = (String(targetFacId) === String(discordConfig.factionId) ? discordConfig.factionName : null) || `Faction [${targetFacId}]`;
+        }
         let members = null;
         let lastApiError = null;
 
@@ -12987,7 +13005,6 @@ async function buildRevivesEmbed(apiKey, filterSetting = 'all') {
         }
 
         const total = members.length;
-        const facName = discordConfig.factionName || 'Spider-Verse';
 
         // Robust filter normalization to match all slash command choices and manual inputs
         const normFilter = String(filterSetting || 'all').toLowerCase().trim();
@@ -15186,6 +15203,7 @@ async function buildPayoutEmbed(memberQuery, apiKey) {
         const ourInfo = activeWar ? (activeWar.factions?.[ourFid] || Object.values(activeWar.factions || {})[0]) : null;
         let memberHitsMap = [];
 
+        const fState = ourFid ? getFactionWarState(ourFid) : null;
         if (ourInfo && ourInfo.members && Object.keys(ourInfo.members).length > 0) {
             memberHitsMap = Object.entries(ourInfo.members).map(([id, m]) => ({
                 id,
@@ -15193,8 +15211,8 @@ async function buildPayoutEmbed(memberQuery, apiKey) {
                 hits: Number(m.attacks || 0),
                 score: Number(m.score || 0)
             })).filter(m => m.hits > 0 || m.score > 0);
-        } else if (Object.keys(liveWarHits).length > 0) {
-            memberHitsMap = Object.entries(liveWarHits).map(([id, hits]) => ({
+        } else if (fState && Object.keys(fState.liveWarHits).length > 0) {
+            memberHitsMap = Object.entries(fState.liveWarHits).map(([id, hits]) => ({
                 id,
                 name: data.members?.[id]?.name || `Player #${id}`,
                 hits: Number(hits || 0),
@@ -15301,11 +15319,12 @@ async function buildTopHittersEmbed(apiKey) {
             })).filter(m => m.attacks > 0 || m.score > 0);
         }
 
-        // 2. Otherwise use liveWarHits (the full aggregated war attack history)
-        if (memberList.length === 0 && Object.keys(liveWarHits).length > 0) {
-            memberList = Object.entries(liveWarHits).map(([id, hits]) => {
+        // 2. Otherwise use fState.liveWarHits (the full aggregated war attack history)
+        const fState = ourFid ? getFactionWarState(ourFid) : null;
+        if (memberList.length === 0 && fState && Object.keys(fState.liveWarHits).length > 0) {
+            memberList = Object.entries(fState.liveWarHits).map(([id, hits]) => {
                 const name = data.members?.[id]?.name || `Player #${id}`;
-                const assists = Number(liveAssists[id] || 0);
+                const assists = Number(fState.liveAssists[id] || 0);
                 return {
                     id,
                     name,
@@ -17881,8 +17900,13 @@ async function executeVerifyWithKey(interactionOrMember, rawKey, explicitGuild =
     const playerPosition = linkRes.faction?.position || "";
     const bars = linkRes.bars;
 
+    const guildWord = (guild?.name || '').toLowerCase().replace(/the |server|initiative|faction|community/gi, '').trim();
     const facId = discordConfig.factionId || dynamicFactionId || "";
-    const isOurFaction = Boolean(facId && String(playerFactionId) === String(facId));
+    const isOurFaction = Boolean(
+        (facId && String(playerFactionId) === String(facId)) ||
+        (guildWord.length >= 3 && playerFactionName.toLowerCase().includes(guildWord)) ||
+        (guild?.name && playerFactionName.toLowerCase() === guild.name.toLowerCase())
+    );
 
     // Detect Leadership & Banker Roles
     let isLeader = false;
@@ -17935,37 +17959,68 @@ async function executeVerifyWithKey(interactionOrMember, rawKey, explicitGuild =
     const roleWarnings = [];
 
     const findGuildRole = (configuredId, matchers) => {
+        if (!guild || !guild.roles?.cache) return configuredId || null;
         if (configuredId && guild.roles.cache.has(configuredId)) return configuredId;
         for (const m of matchers) {
-            const found = guild.roles.cache.find(r => m(r.name.toLowerCase()));
+            const found = guild.roles.cache.find(r => r && r.name && m(r.name.toLowerCase()));
             if (found) return found.id;
         }
         return configuredId || null;
     };
 
-    // 1. Check if user is already verified via Torn Discord
-    const isAlreadyVerified = Boolean(
-        (verifiedDiscordToTorn[discordUserId] && !verifiedDiscordToTorn[discordUserId].pendingDiscordVerify) ||
-        (verifiedRoleId && guildMember?.roles?.cache?.has(verifiedRoleId))
-    );
+    // 1. Assign Verified Role
+    const verifiedRoleId = findGuildRole(discordConfig.verifiedRoleId, [
+        n => n === 'verified',
+        n => n === 'verified member',
+        n => n === 'verified members',
+        n => n.includes('verified'),
+        n => n === 'member',
+        n => n === 'members'
+    ]);
+    if (verifiedRoleId && guildMember) {
+        const res = await applyGuildMemberRole(guild, guildMember, botMember, verifiedRoleId, 'add', 'Tornium API Key Verified');
+        if (res.success && (res.action === 'added' || res.action === 'already_had')) {
+            rolesAdded.push(`<@&${verifiedRoleId}>`);
+        } else if (res.hierarchyError) {
+            roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${verifiedRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
+        }
+    }
 
-    // 2. Faction Member Roles (Only sync if already verified member)
-    if (isOurFaction && guildMember && isAlreadyVerified) {
+    // Remove Unverified Quarantine Role
+    const unverifiedRoleId = findGuildRole(discordConfig.unverifiedRoleId, [
+        n => n === 'unverified',
+        n => n.includes('unverified'),
+        n => n === 'quarantine'
+    ]);
+    if (unverifiedRoleId && guildMember) {
+        await applyGuildMemberRole(guild, guildMember, botMember, unverifiedRoleId, 'remove', 'Verified with API Key');
+    }
+
+    const isAlreadyVerified = true;
+
+    // 2. Faction Member Roles (Sync if member belongs to server's faction)
+    if (isOurFaction && guildMember) {
         const configuredFacName = (discordConfig.factionName || '').toLowerCase().trim();
         const factionRoleId = findGuildRole(discordConfig.factionRoleId, [
             ...(configuredFacName ? [
                 n => n === configuredFacName,
                 n => n.includes(configuredFacName)
             ] : []),
+            ...(guildWord.length >= 3 ? [
+                n => n === `${guildWord} member`,
+                n => n.includes(guildWord) && n.includes('member'),
+                n => n === guildWord
+            ] : []),
             n => n === 'faction member',
             n => n === 'faction',
+            n => n.includes('member') && !n.includes('verified') && !n.includes('guest'),
             n => n.includes('spider-verse'),
             n => n.includes('spider verse'),
             n => n.includes('spiderverse'),
             n => n.includes('spdr')
         ]);
         if (factionRoleId) {
-            const res = await applyGuildMemberRole(guild, guildMember, botMember, factionRoleId, 'add', `Faction Member (${facId || 'Faction'})`);
+            const res = await applyGuildMemberRole(guild, guildMember, botMember, factionRoleId, 'add', `Faction Member (${playerFactionName || 'Faction'})`);
             if (res.success && (res.action === 'added' || res.action === 'already_had')) {
                 rolesAdded.push(`<@&${factionRoleId}>`);
             } else if (res.hierarchyError) {
@@ -17976,41 +18031,51 @@ async function executeVerifyWithKey(interactionOrMember, rawKey, explicitGuild =
         }
 
         // 3. Faction Leader Role
-        if (isLeader && discordConfig.leaderRoleId) {
-            const res = await applyGuildMemberRole(guild, guildMember, botMember, discordConfig.leaderRoleId, 'add', 'Faction Leader / Co-Leader');
+        const leaderRoleId = findGuildRole(discordConfig.leaderRoleId, [
+            ...(guildWord.length >= 3 ? [
+                n => n === `${guildWord} leadership`,
+                n => n.includes(guildWord) && (n.includes('leader') || n.includes('leadership'))
+            ] : []),
+            n => n === 'leadership',
+            n => n === 'faction leader',
+            n => n === 'leader',
+            n => n.includes('leadership') || n.includes('leader')
+        ]);
+        if (isLeader && leaderRoleId) {
+            const res = await applyGuildMemberRole(guild, guildMember, botMember, leaderRoleId, 'add', 'Faction Leader / Co-Leader');
             if (res.success && (res.action === 'added' || res.action === 'already_had')) {
-                rolesAdded.push(`<@&${discordConfig.leaderRoleId}> (👑 Leadership)`);
+                rolesAdded.push(`<@&${leaderRoleId}> (👑 Leadership)`);
             } else if (res.hierarchyError) {
-                roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${discordConfig.leaderRoleId}>.`);
+                roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${leaderRoleId}>.`);
             }
         }
 
         // 4. Faction Banker Role
-        if (isBanker && discordConfig.bankerRoleId) {
-            const res = await applyGuildMemberRole(guild, guildMember, botMember, discordConfig.bankerRoleId, 'add', 'Faction Banker / Vault Controller');
+        const bankerRoleId = findGuildRole(discordConfig.bankerRoleId, [
+            n => n === 'banker',
+            n => n.includes('banker'),
+            n => n.includes('treasurer'),
+            n => n.includes('vault')
+        ]);
+        if (isBanker && bankerRoleId) {
+            const res = await applyGuildMemberRole(guild, guildMember, botMember, bankerRoleId, 'add', 'Faction Banker / Vault Controller');
             if (res.success && (res.action === 'added' || res.action === 'already_had')) {
-                rolesAdded.push(`<@&${discordConfig.bankerRoleId}> (🏦 Banker)`);
+                rolesAdded.push(`<@&${bankerRoleId}> (🏦 Banker)`);
             } else if (res.hierarchyError) {
-                roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${discordConfig.bankerRoleId}>.`);
+                roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${bankerRoleId}>.`);
             }
         }
     }
 
     // Cache to verifiedDiscordToTorn & Persist
     if (playerId) {
-        if (!verifiedDiscordToTorn[discordUserId]) {
-            verifiedDiscordToTorn[discordUserId] = {
-                tornId: String(playerId),
-                tornName: playerName,
-                hasApiKey: true,
-                pendingDiscordVerify: !isAlreadyVerified,
-                timestamp: Date.now()
-            };
-        } else {
-            verifiedDiscordToTorn[discordUserId].hasApiKey = true;
-            verifiedDiscordToTorn[discordUserId].tornId = String(playerId);
-            verifiedDiscordToTorn[discordUserId].tornName = playerName;
-        }
+        verifiedDiscordToTorn[discordUserId] = {
+            tornId: String(playerId),
+            tornName: playerName,
+            hasApiKey: true,
+            pendingDiscordVerify: false,
+            timestamp: Date.now()
+        };
         if (typeof saveVerifiedDiscordUsers === 'function') {
             saveVerifiedDiscordUsers();
         }
@@ -18029,9 +18094,10 @@ async function executeVerifyWithKey(interactionOrMember, rawKey, explicitGuild =
         } catch(e) {}
     }
 
+    const factionBadge = isOurFaction ? (playerFactionName.toLowerCase().includes('spider') ? '🕷️' : '⭐') : '';
     const fields = [
         { name: "👤 Torn Profile", value: UI.player(playerName, playerId), inline: true },
-        { name: "🏢 Faction", value: `${playerFactionName} [${playerFactionId}] ${isOurFaction ? '🕷️' : ''} ${playerPosition ? `· *${playerPosition}*` : ''}`, inline: true },
+        { name: "🏢 Faction", value: `${playerFactionName} [${playerFactionId}] ${factionBadge} ${playerPosition ? `· *${playerPosition}*` : ''}`, inline: true },
         { name: "🏷️ Server Nickname", value: `\`${targetNickname}\`${nickUpdated ? ' *(Updated)*' : (nickNote ? ` *(⚠️ ${nickNote})*` : '')}`, inline: false }
     ];
 
@@ -18049,14 +18115,6 @@ async function executeVerifyWithKey(interactionOrMember, rawKey, explicitGuild =
 
     if (roleWarnings.length > 0) {
         fields.push({ name: "⚠️ Action Required: Role Hierarchy", value: roleWarnings.join('\n\n'), inline: false });
-    }
-
-    if (!isAlreadyVerified) {
-        fields.push({
-            name: "🛡️ Server Verification Required",
-            value: "Your API key is securely saved! To complete server verification and unlock channels, click **🛡️ Verify Me** or verify at **[torn.com/discord](https://www.torn.com/discord)**.",
-            inline: false
-        });
     }
 
     fields.push({
@@ -18362,9 +18420,10 @@ async function executeVerifyMember(memberOrUser, guild, targetPlayerInput = null
     let isBanker = false;
     let memberPositionTitle = "";
 
-    if (isOurFaction && apiKey) {
+    const lookupFacId = (isOurFaction && playerFactionId) ? playerFactionId : (facId || playerFactionId);
+    if (isOurFaction && apiKey && lookupFacId) {
         try {
-            const facRes = await fetch(`https://api.torn.com/faction/${facId}?selections=basic,positions&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
+            const facRes = await fetch(`https://api.torn.com/faction/${lookupFacId}?selections=basic,positions&key=${apiKey}`, { signal: AbortSignal.timeout(8000) });
             const facData = await facRes.json();
             if (facData) {
                 const mData = facData.members?.[String(playerId)] || facData.members?.[playerId];
@@ -18512,9 +18571,10 @@ async function executeVerifyMember(memberOrUser, guild, targetPlayerInput = null
         await applyGuildMemberRole(guild, guildMember, botMember, unverifiedRoleId, 'remove', 'Verified on Torn');
     }
 
+    const factionBadge = isOurFaction ? (playerFactionName.toLowerCase().includes('spider') ? '🕷️' : '⭐') : '';
     const fields = [
         { name: "👤 Torn Profile", value: UI.player(playerName, playerId), inline: true },
-        { name: "🏢 Faction", value: `${playerFactionName} [${playerFactionId}] ${isOurFaction ? '🕷️' : ''} ${memberPositionTitle ? `· *${memberPositionTitle}*` : ''}`, inline: true },
+        { name: "🏢 Faction", value: `${playerFactionName} [${playerFactionId}] ${factionBadge} ${memberPositionTitle ? `· *${memberPositionTitle}*` : ''}`, inline: true },
         { name: "🏷️ Server Nickname", value: `\`${targetNickname}\`${nickUpdated ? ' *(Updated)*' : (nickNote ? ` *(⚠️ ${nickNote})*` : '')}`, inline: false }
     ];
 
@@ -18652,14 +18712,21 @@ async function executeVerifyAll(guild, apiKey) {
         n => n === 'members'
     ]);
 
+    const guildWord = (guild.name || '').toLowerCase().replace(/the |server|initiative|faction|community/gi, '').trim();
     const configuredFacName = (discordConfig.factionName || '').toLowerCase().trim();
     const factionRoleId = findGuildRole(discordConfig.factionRoleId, [
         ...(configuredFacName ? [
             n => n === configuredFacName,
             n => n.includes(configuredFacName)
         ] : []),
+        ...(guildWord.length >= 3 ? [
+            n => n === `${guildWord} member`,
+            n => n.includes(guildWord) && n.includes('member'),
+            n => n === guildWord
+        ] : []),
         n => n === 'faction member',
         n => n === 'faction',
+        n => n.includes('member') && !n.includes('verified') && !n.includes('guest'),
         n => n.includes('spider-verse'),
         n => n.includes('spider verse'),
         n => n.includes('spiderverse'),
@@ -18922,14 +18989,21 @@ async function handleGuildMemberAdd(member) {
             n => n === 'members'
         ]);
 
+        const guildWord = (guild.name || '').toLowerCase().replace(/the |server|initiative|faction|community/gi, '').trim();
         const configuredFacName = (discordConfig.factionName || '').toLowerCase().trim();
         const factionRoleId = findGuildRole(discordConfig.factionRoleId, [
             ...(configuredFacName ? [
                 n => n === configuredFacName,
                 n => n.includes(configuredFacName)
             ] : []),
+            ...(guildWord.length >= 3 ? [
+                n => n === `${guildWord} member`,
+                n => n.includes(guildWord) && n.includes('member'),
+                n => n === guildWord
+            ] : []),
             n => n === 'faction member',
             n => n === 'faction',
+            n => n.includes('member') && !n.includes('verified') && !n.includes('guest'),
             n => n.includes('spider-verse'),
             n => n.includes('spider verse'),
             n => n.includes('spiderverse'),
@@ -23541,7 +23615,7 @@ function setupSlashBotEvents(bot, token) {
                 embed = await buildRetaliationsEmbed(apiKey);
             } else if (cmd === 'revives' || cmd === 'revive') {
                 const setting = interaction.options.getString('setting') || 'all';
-                embed = await buildRevivesEmbed(apiKey, setting);
+                embed = await buildRevivesEmbed(apiKey, setting, invokerKeyRecord?.factionId || null);
             } else if (cmd === 'chain') {
                 embed = await buildChainStatusEmbed(apiKey);
             } else if (cmd === 'chainwatch') {
