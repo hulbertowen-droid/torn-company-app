@@ -2569,6 +2569,10 @@ async function fetchWarboardQueue() {
     isFetchingQueue = true;
     try {
         const headers = { 'x-api-key': MY_KEY };
+        const storedFac = localStorage.getItem("warboard_myFactionId") || (window.currentUser && window.currentUser.factionId);
+        if (storedFac && String(storedFac) !== '0') {
+            headers['x-faction-id'] = String(storedFac);
+        }
         if (lastQueueEtag) headers['If-None-Match'] = lastQueueEtag;
         const res = await fetch('/api/warboard', { headers });
         if (res.status === 304) return;

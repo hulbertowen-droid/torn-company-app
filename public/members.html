@@ -819,6 +819,10 @@ async function loadMembers() {
     isLoadingMembers = true;
     try {
         const headers = { 'x-api-key': myKey };
+        const storedFac = localStorage.getItem("warboard_myFactionId") || (window.currentUser && window.currentUser.factionId);
+        if (storedFac && String(storedFac) !== '0') {
+            headers['x-faction-id'] = String(storedFac);
+        }
         if (lastMembersEtag) headers['If-None-Match'] = lastMembersEtag;
         const res = await fetch(`/api/warboard`, { headers });
         if (res.status === 304) {

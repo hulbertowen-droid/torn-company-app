@@ -2820,8 +2820,12 @@ async function fetchWarboard() {
         if (myKey) reqHeaders['x-api-key'] = myKey;
         if (enemyFacId) reqHeaders['x-enemy-id'] = enemyFacId;
         if (ffKey) reqHeaders['x-ff-key'] = ffKey;
-        const myFacOverride = localStorage.getItem("warboard_myFactionId") || "";
-        if (myFacOverride) reqHeaders['x-faction-id'] = myFacOverride;
+        const activeFacId = getMyCurrentFactionId();
+        if (activeFacId && activeFacId !== '52355') {
+            reqHeaders['x-faction-id'] = activeFacId;
+        } else if (localStorage.getItem("warboard_myFactionId")) {
+            reqHeaders['x-faction-id'] = localStorage.getItem("warboard_myFactionId");
+        }
         if (lastWarboardEtag) reqHeaders['If-None-Match'] = lastWarboardEtag;
 
         const res = await fetch(`/api/warboard`, { headers: reqHeaders, signal: AbortSignal.timeout(8000) });
@@ -2846,7 +2850,12 @@ function checkIsFlying(p) {
 }
 
 function getMyCurrentFactionId() {
-    return localStorage.getItem("warboard_myFactionId") || (window.currentUser && window.currentUser.factionId) || '52355';
+    const stored = localStorage.getItem("warboard_myFactionId");
+    if (stored && stored !== '0') return stored;
+    if (window.currentUser && window.currentUser.factionId && String(window.currentUser.factionId) !== '0') {
+        return String(window.currentUser.factionId);
+    }
+    return '52355';
 }
 
 function showToast(msg, type = "blue") {

@@ -7172,14 +7172,27 @@ app.get('/api/warboard', async (req, res) => {
     // The background refresher (refreshWarboardBackground) builds the full payload every 45s.
     // Only fall through to the live API path if no cache exists or it's very stale.
     const requestedFacIdFast = req.headers['x-faction-id'] || req.query.myFactionId;
-    const myFacIdFast = requestedFacIdFast || String(req.userSession?.factionId || discordConfig.factionId || dynamicFactionId || '52355');
+    const sessionFacId = (req.userSession?.factionId && String(req.userSession.factionId) !== '0') ? String(req.userSession.factionId) : null;
+    const userKeyProvided = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    const isServerKey = !userKeyProvided || userKeyProvided === discordConfig.apiKey || userKeyProvided === TORN_API_KEY;
+    const hostFacId = String(discordConfig.factionId || dynamicFactionId || '52355');
+
+    // Only assume the host faction cache if using the server's own key pool and no other faction is requested
+    let myFacIdFast = requestedFacIdFast || sessionFacId;
+    if (!myFacIdFast && isServerKey) {
+        myFacIdFast = hostFacId;
+    }
+
     const hasFfKey = (req.headers['x-ff-key'] || req.query.ffKey) && (req.headers['x-ff-key'] || req.query.ffKey) !== 'null' && (req.headers['x-ff-key'] || req.query.ffKey) !== '';
-    const cachedPayload = lastGoodWarboardByFaction[myFacIdFast] || lastGoodWarboardPayload;
-    if (cachedPayload && cachedPayload.friendly && cachedPayload.friendly.length > 0 && !hasFfKey) {
-        // Cache is fresh enough — serve immediately
-        const cacheAge = cachedPayload._builtAt ? (Date.now() - cachedPayload._builtAt) : 0;
-        if (cacheAge < 120_000) { // < 2 minutes old
-            return sendWarboardResponse(req, res, cachedPayload);
+    if (myFacIdFast) {
+        // Multi-faction isolation: NEVER leak host payload to an external faction!
+        const cachedPayload = lastGoodWarboardByFaction[myFacIdFast] || (String(myFacIdFast) === hostFacId ? lastGoodWarboardPayload : null);
+        if (cachedPayload && cachedPayload.friendly && cachedPayload.friendly.length > 0 && !hasFfKey) {
+            // Cache is fresh enough — serve immediately
+            const cacheAge = cachedPayload._builtAt ? (Date.now() - cachedPayload._builtAt) : 0;
+            if (cacheAge < 120_000) { // < 2 minutes old
+                return sendWarboardResponse(req, res, cachedPayload);
+            }
         }
     }
 
@@ -7220,9 +7233,10 @@ app.get('/api/warboard', async (req, res) => {
             }
         }
 
-        // Step 2.5: Resilient server-key fallback for authenticated faction members
-        const resolvedFacId = myData?.ID ? myData.ID.toString() : (targetMyFacId || req.userSession?.factionId || discordConfig.factionId || dynamicFactionId || '52355');
-        if ((!myData || myData.error || !myData.members || Object.keys(myData.members).length === 0) && resolvedFacId) {
+        // Step 2.5: Resilient server-key fallback for authenticated host faction members ONLY
+        const isHostMember = Boolean(req.userSession?.isSpiderVerse || (myData?.ID && String(myData.ID) === hostFacId));
+        const resolvedFacId = myData?.ID ? myData.ID.toString() : (targetMyFacId || (isHostMember ? hostFacId : null));
+        if ((!myData || myData.error || !myData.members || Object.keys(myData.members).length === 0) && resolvedFacId && isHostMember) {
             const poolKey = getNextApiKey() || TORN_API_KEY;
             if (poolKey) {
                 const pooledData = await cachedTornFetch(`https://api.torn.com/faction/${resolvedFacId}?selections=basic,rankedwars&key=${poolKey}`, `my_faction_pooled_${resolvedFacId}`, 2500);
@@ -7234,7 +7248,7 @@ app.get('/api/warboard', async (req, res) => {
         }
 
         // Step 3: If personal /faction/ returned error 6 (caller is factionless),
-        // cleanly inform them rather than leaking Spider-Verse
+        // cleanly inform them rather than leaking host faction
         if (!myData || (myData.error && myData.error.code === 6)) {
             return res.json({
                 success: false,
@@ -7246,7 +7260,7 @@ app.get('/api/warboard', async (req, res) => {
             });
         }
 
-        const myFacId = myData?.ID ? myData.ID.toString() : (targetMyFacId || req.userSession?.factionId || discordConfig.factionId || dynamicFactionId || null);
+        const myFacId = myData?.ID ? myData.ID.toString() : (targetMyFacId || sessionFacId || (isServerKey ? hostFacId : null));
         if (!myFacId) {
             return res.json({
                 success: false,
@@ -7260,10 +7274,10 @@ app.get('/api/warboard', async (req, res) => {
 
         // Resilience: If myData hit rate limit or transient error, serve last known good payload for THIS faction ONLY
         if (!myData || myData.error || !myData.members || Object.keys(myData.members).length === 0) {
-            if (lastGoodWarboardByFaction[myFacId]) {
-                return res.json(lastGoodWarboardByFaction[myFacId]);
-            } else if (lastGoodWarboardPayload && String(myFacId) === String(discordConfig.factionId || dynamicFactionId || "0") && (req.userSession?.isSpiderVerse || !req.userSession)) {
-                return res.json(lastGoodWarboardPayload);
+            if (myFacId && lastGoodWarboardByFaction[myFacId]) {
+                return sendWarboardResponse(req, res, lastGoodWarboardByFaction[myFacId]);
+            } else if (lastGoodWarboardPayload && String(myFacId) === hostFacId && (req.userSession?.isSpiderVerse || !req.userSession)) {
+                return sendWarboardResponse(req, res, lastGoodWarboardPayload);
             } else {
                 return res.status(500).json({ error: "Unable to retrieve faction data. Please verify your API key has faction access." });
             }
@@ -7558,7 +7572,8 @@ app.get('/api/warboard', async (req, res) => {
 
         if (friendlyMembers.length > 0) {
             lastGoodWarboardByFaction[myFacId] = payload;
-            if (String(myFacId) === String(discordConfig.factionId || dynamicFactionId || "0")) {
+            const hostFacId = String(discordConfig.factionId || dynamicFactionId || "52355");
+            if (String(myFacId) === hostFacId) {
                 lastGoodWarboardPayload = payload;
                 try {
                     fs.writeFileSync(WARBOARD_BACKUP_FILE, JSON.stringify(payload));
@@ -7571,7 +7586,8 @@ app.get('/api/warboard', async (req, res) => {
         if (targetMyFacId && lastGoodWarboardByFaction[targetMyFacId]) {
             return sendWarboardResponse(req, res, lastGoodWarboardByFaction[targetMyFacId]);
         }
-        if (lastGoodWarboardPayload) {
+        const hostFacId = String(discordConfig.factionId || dynamicFactionId || "52355");
+        if (lastGoodWarboardPayload && (!targetMyFacId || String(targetMyFacId) === hostFacId)) {
             return sendWarboardResponse(req, res, lastGoodWarboardPayload);
         }
         res.status(403).json({ error: err.message });
@@ -18334,7 +18350,12 @@ async function executeVerifyMember(memberOrUser, guild, targetPlayerInput = null
     const playerId = tornUser.player_id;
     const playerFactionId = tornUser.faction?.faction_id || 0;
     const playerFactionName = tornUser.faction?.faction_name || "None";
-    const isOurFaction = Boolean(facId && String(playerFactionId) === String(facId));
+    const guildWord = (guild.name || '').toLowerCase().replace(/the |server|initiative|faction|community/gi, '').trim();
+    const isOurFaction = Boolean(
+        (facId && String(playerFactionId) === String(facId)) ||
+        (guildWord.length >= 3 && playerFactionName.toLowerCase().includes(guildWord)) ||
+        (guild.name && playerFactionName.toLowerCase() === guild.name.toLowerCase())
+    );
 
     // Detect Faction Position (Leader, Co-Leader, Banker, etc.)
     let isLeader = false;
@@ -18396,6 +18417,7 @@ async function executeVerifyMember(memberOrUser, guild, targetPlayerInput = null
     const verifiedRoleId = findGuildRole(discordConfig.verifiedRoleId, [
         n => n === 'verified',
         n => n === 'verified member',
+        n => n === 'verified members',
         n => n.includes('verified'),
         n => n === 'member',
         n => n === 'members'
@@ -18420,8 +18442,14 @@ async function executeVerifyMember(memberOrUser, guild, targetPlayerInput = null
                 n => n === configuredFacName,
                 n => n.includes(configuredFacName)
             ] : []),
+            ...(guildWord.length >= 3 ? [
+                n => n === `${guildWord} member`,
+                n => n.includes(guildWord) && n.includes('member'),
+                n => n === guildWord
+            ] : []),
             n => n === 'faction member',
             n => n === 'faction',
+            n => n.includes('member') && !n.includes('verified') && !n.includes('guest'),
             n => n.includes('spider-verse'),
             n => n.includes('spider verse'),
             n => n.includes('spiderverse'),
@@ -18439,22 +18467,37 @@ async function executeVerifyMember(memberOrUser, guild, targetPlayerInput = null
         }
 
         // 3. Faction Leader Role
-        if (isLeader && discordConfig.leaderRoleId) {
-            const res = await applyGuildMemberRole(guild, guildMember, botMember, discordConfig.leaderRoleId, 'add', 'Faction Leader / Co-Leader');
+        const leaderRoleId = findGuildRole(discordConfig.leaderRoleId, [
+            ...(guildWord.length >= 3 ? [
+                n => n === `${guildWord} leadership`,
+                n => n.includes(guildWord) && (n.includes('leader') || n.includes('leadership'))
+            ] : []),
+            n => n === 'leadership',
+            n => n === 'faction leader',
+            n => n === 'leader',
+            n => n.includes('leadership') || n.includes('leader')
+        ]);
+        if (isLeader && leaderRoleId) {
+            const res = await applyGuildMemberRole(guild, guildMember, botMember, leaderRoleId, 'add', 'Faction Leader / Co-Leader');
             if (res.success && (res.action === 'added' || res.action === 'already_had')) {
-                rolesAdded.push(`<@&${discordConfig.leaderRoleId}> (👑 Leadership)`);
+                rolesAdded.push(`<@&${leaderRoleId}> (👑 Leadership)`);
             } else if (res.hierarchyError) {
-                roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${discordConfig.leaderRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
+                roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${leaderRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
             }
         }
 
         // 4. Faction Banker Role
-        if (isBanker && discordConfig.bankerRoleId) {
-            const res = await applyGuildMemberRole(guild, guildMember, botMember, discordConfig.bankerRoleId, 'add', 'Faction Banker');
+        const bankerRoleId = findGuildRole(discordConfig.bankerRoleId, [
+            n => n === 'banker',
+            n => n.includes('banker'),
+            n => n.includes('treasurer')
+        ]);
+        if (isBanker && bankerRoleId) {
+            const res = await applyGuildMemberRole(guild, guildMember, botMember, bankerRoleId, 'add', 'Faction Banker');
             if (res.success && (res.action === 'added' || res.action === 'already_had')) {
-                rolesAdded.push(`<@&${discordConfig.bankerRoleId}> (🏦 Banker)`);
+                rolesAdded.push(`<@&${bankerRoleId}> (🏦 Banker)`);
             } else if (res.hierarchyError) {
-                roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${discordConfig.bankerRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
+                roleWarnings.push(`⚠️ **Hierarchy Alert:** Bot role is lower than <@&${bankerRoleId}>. Drag **F.R.I.D.A.Y** above it in Server Settings ➔ Roles.`);
             }
         }
     }
@@ -20066,24 +20109,28 @@ function setupSlashBotEvents(bot, token) {
         }
 
         try {
-            const targetGuild = discordConfig.guildId;
-            if (targetGuild) {
-                console.log(`[Slash Bot] Registering guild slash commands for server ${targetGuild}...`);
-                await registerSlashCommands(token, targetGuild);
-            } else {
-                const guilds = Array.from(c.guilds.cache.keys());
-                if (guilds.length === 1) {
-                    console.log(`[Slash Bot] Single server detected (${guilds[0]}). Registering guild commands for instant availability...`);
-                    await registerSlashCommands(token, guilds[0]);
-                } else {
-                    console.log(`[Slash Bot] Registering global slash commands across ${guilds.length} server(s)...`);
-                    await registerSlashCommands(token, null);
-                }
+            const allGuildIds = Array.from(c.guilds.cache.keys());
+            console.log(`[Slash Bot] Connected to ${allGuildIds.length} server(s): ${c.guilds.cache.map(g => g.name).join(', ')}`);
+            for (const gId of allGuildIds) {
+                console.log(`[Slash Bot] Registering guild slash commands for server ${gId} (${c.guilds.cache.get(gId)?.name})...`);
+                await registerSlashCommands(token, gId).catch(err => {
+                    console.warn(`[Slash Bot] Registration error for guild ${gId}:`, err.message);
+                });
             }
-            console.log(`[Slash Bot] Slash commands auto-registered successfully with no duplicates!`);
+            // Register globally as well for DM & multi-guild failover support
+            await registerSlashCommands(token, null).catch(() => {});
+            console.log(`[Slash Bot] Slash commands auto-registered successfully across all servers!`);
         } catch(e) {
             console.warn("[Slash Bot] Startup registration error:", e.message);
         }
+
+        // Auto-register commands whenever added to any new Discord server
+        c.on('guildCreate', async (newGuild) => {
+            console.log(`[Slash Bot] Joined new server: ${newGuild.name} [${newGuild.id}]. Auto-registering slash commands...`);
+            await registerSlashCommands(token, newGuild.id).catch(e => {
+                console.warn(`[Slash Bot] guildCreate registration failed for ${newGuild.id}:`, e.message);
+            });
+        });
 
         // ── Start Retaliation Risk Engine (background jobs) ──
         try {
@@ -21751,7 +21798,14 @@ function setupSlashBotEvents(bot, token) {
             });
         }
 
-        const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+        // Multi-faction key resolution: resolve caller's linked key so members of any faction query their own faction
+        const invokerKeyRecord = (typeof userKeys !== 'undefined' && userKeys.resolveUserApiKey)
+            ? userKeys.resolveUserApiKey(interaction.user.id, interaction.member?.displayName, interaction.user.username)
+            : null;
+        const callerKey = invokerKeyRecord?.key || null;
+        const isExternalGuild = Boolean(interaction.guildId && String(interaction.guildId) !== String(discordConfig.guildId));
+
+        const apiKey = callerKey || discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
 
         // ── Active Command Tutorial & Guide (/tutorial) ──
         if (cmd === 'tutorial') {
@@ -23424,6 +23478,17 @@ function setupSlashBotEvents(bot, token) {
                         timestamp: new Date().toISOString()
                     };
                 }
+            }
+            // Multi-faction guard: If running in an external faction's Discord server and caller has no linked key
+            else if (isExternalGuild && !callerKey && (new Set(['war', 'warboard', 'targets', 'snipers', 'chain', 'chainwatch', 'roster', 'online', 'oc', 'myoc', 'payout', 'mvp', 'top'])).has(cmd)) {
+                return await safeReply({
+                    embeds: [sanitizeEmbed(UI.info(
+                        `⚔️ Faction Operations — ${interaction.guild?.name || 'Your Server'}`,
+                        `To view live war scores, targets, chain timers, or roster status for your faction in this server, please link your Torn API key first using \`/linkkey\`.\n\n` +
+                        `🔒 Your key is encrypted in your personal secure vault and only used to display your faction's intelligence.`
+                    ))],
+                    flags: MessageFlags.Ephemeral
+                });
             }
             // ── War & Intel Commands & Legacy Backward Compatibility ──
             else if (cmd === 'war' || cmd === 'warboard') {

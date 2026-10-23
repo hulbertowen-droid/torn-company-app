@@ -11,7 +11,6 @@
     'use strict';
 
     const SPIDERVERSE_PAGES = [
-        '/payout.html',
         '/discord.html'
     ];
 
@@ -422,6 +421,11 @@
     }
 
     function handleAuthenticated(user) {
+        if (user && user.factionId && String(user.factionId) !== '0') {
+            try {
+                localStorage.setItem('warboard_myFactionId', String(user.factionId));
+            } catch(e) {}
+        }
         injectUserBadge(user);
 
         const isRestricted = isSpiderVerseRestrictedPage();
