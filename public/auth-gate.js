@@ -493,10 +493,36 @@
     }
 
     function injectUserBadge(user) {
+        // Update bottom sidebar user card if present
+        const nameEl = document.getElementById('nav-user-name');
+        const subEl = document.getElementById('nav-user-sub');
+        if (nameEl) nameEl.textContent = `${user.playerName} [${user.playerId}]`;
+        if (subEl) subEl.textContent = user.factionName ? `${user.factionName} [${user.factionId}]` : 'Factionless';
+
+        // Add a clean logout link in sidebar footer
+        const footer = document.getElementById('sidebar-user-footer');
+        if (footer && !document.getElementById('sidebar-logout-link')) {
+            const logoutDiv = document.createElement('div');
+            logoutDiv.id = 'sidebar-logout-link';
+            logoutDiv.style.cssText = 'text-align: right; padding-top: 4px;';
+            logoutDiv.innerHTML = `<a href="#" style="color: #ff6b81; font-size: 0.72rem; text-decoration: none; padding: 2px 8px; border-radius: 4px; border: 1px solid rgba(255,107,129,0.3); background: rgba(255,107,129,0.08); transition: all 0.2s;">Logout</a>`;
+            logoutDiv.querySelector('a').addEventListener('click', (e) => {
+                e.preventDefault();
+                if (confirm('Log out of FactionOS?')) logout();
+            });
+            footer.appendChild(logoutDiv);
+        }
+
         if (document.getElementById('sv-user-badge')) return;
 
-        const container = document.querySelector('.topbar-right') || document.querySelector('.header-controls') || document.querySelector('.sidebar-header') || document.querySelector('.header') || document.querySelector('header') || document.querySelector('.sidebar');
-        if (!container) return;
+        // Strictly target topbar-right or header-controls. NEVER inject into .sidebar-header!
+        const container = document.querySelector('.topbar-right') || document.querySelector('.header-controls');
+        if (!container) {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', () => injectUserBadge(user), { once: true });
+            }
+            return;
+        }
 
         const badge = document.createElement('div');
         badge.id = 'sv-user-badge';
@@ -513,11 +539,7 @@
             <a href="#" id="sv-logout-link" title="Logout" style="color: #ff6b81; text-decoration: none; font-size: 0.72rem; padding: 3px 8px; border: 1px solid rgba(255,107,129,0.35); border-radius: 4px; transition: all 0.2s; white-space: nowrap; flex-shrink: 0;">Logout</a>
         `;
 
-        if (container.classList.contains('topbar-right') || container.classList.contains('header-controls')) {
-            container.insertBefore(badge, container.firstChild);
-        } else {
-            container.appendChild(badge);
-        }
+        container.insertBefore(badge, container.firstChild);
 
         const logoutLink = document.getElementById('sv-logout-link');
         if (logoutLink) {
@@ -533,8 +555,13 @@
     function injectConnectButton() {
         if (document.getElementById('sv-connect-badge')) return;
 
-        const container = document.querySelector('.topbar-right') || document.querySelector('.header-controls') || document.querySelector('.sidebar-header') || document.querySelector('.header') || document.querySelector('header') || document.querySelector('.sidebar');
-        if (!container) return;
+        const container = document.querySelector('.topbar-right') || document.querySelector('.header-controls');
+        if (!container) {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', injectConnectButton, { once: true });
+            }
+            return;
+        }
 
         const btn = document.createElement('div');
         btn.id = 'sv-connect-badge';
@@ -547,11 +574,7 @@
             <span style="color:#a4b0be; font-size:0.75rem; flex-shrink:0;">&rarr;</span>
         `;
         btn.addEventListener('click', () => showConnectModal(true));
-        if (container.classList.contains('topbar-right') || container.classList.contains('header-controls')) {
-            container.insertBefore(btn, container.firstChild);
-        } else {
-            container.appendChild(btn);
-        }
+        container.insertBefore(btn, container.firstChild);
     }
 
     function showConnectModal(allowClose = true) {

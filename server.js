@@ -6737,12 +6737,23 @@ app.post('/api/unbackup', (req, res) => {
     res.json({ success: true });
 });
 app.post('/api/update-stats', (req, res) => {
-    const { enemyId, stats, factionId } = req.body;
+    const { enemyId, stats, factionId, strength, defense, speed, dexterity, timestamp } = req.body;
     const facId = String(factionId || req.headers['x-faction-id'] || req.userSession?.factionId || discordConfig.factionId || dynamicFactionId || '');
     if (!facId) return res.status(400).json({ error: "Faction ID required" });
     const state = getFactionWarState(facId);
-    state.manualStats[enemyId] = { stats: parseInt(stats), time: Date.now() };
-    res.json({ success: true });
+    let totalStats = parseInt(stats) || 0;
+    if (!totalStats && (strength || defense || speed || dexterity)) {
+        totalStats = (parseInt(strength) || 0) + (parseInt(defense) || 0) + (parseInt(speed) || 0) + (parseInt(dexterity) || 0);
+    }
+    state.manualStats[enemyId] = { 
+        stats: totalStats, 
+        time: timestamp ? (typeof timestamp === 'number' ? timestamp : new Date(timestamp).getTime()) : Date.now(),
+        strength: parseInt(strength) || 0,
+        defense: parseInt(defense) || 0,
+        speed: parseInt(speed) || 0,
+        dexterity: parseInt(dexterity) || 0
+    };
+    res.json({ success: true, stats: totalStats });
 });
 
 // ── War Bounty Reimbursements Engine (Multi-Key Friendly War Bounty Tracker) ───
@@ -7410,6 +7421,10 @@ app.get('/api/warboard', async (req, res) => {
 
                 let timeline = activityCache[id]?.timeline || null; let timelineTime = activityCache[id]?.time || null;
 
+                const claimObj = isEnemy ? fState.claims[id] : null;
+                const isClaimValid = claimObj && (Date.now() - (claimObj.time || 0) < 90000);
+                if (claimObj && !isClaimValid) delete fState.claims[id];
+
                 return { 
                     id, 
                     name: m.name, 
@@ -7424,7 +7439,8 @@ app.get('/api/warboard', async (req, res) => {
                     lastActionTimestamp: m.last_action?.timestamp || 0, 
                     landingTime: finalLandingTime, 
                     needsFfScouterForFlights, 
-                    claimedBy: isEnemy ? fState.claims[id]?.playerName || null : null, 
+                    claimedBy: isClaimValid ? claimObj.playerName : null, 
+                    claimTime: isClaimValid ? claimObj.time : null,
                     needsBackup: isEnemy ? fState.backups[id]?.playerName || null : null, 
                     estStats: est, 
                     intelScore: isEnemy ? computeWarIntel({ id, state: m.status?.state, until: finalUntil, onlineStatus: m.last_action?.status || "Offline", estStats: typeof est === 'number' ? est : null }, statsCache) : null, 
@@ -7463,6 +7479,9 @@ app.get('/api/warboard', async (req, res) => {
             detectedEnemyId: enemyId,
             premiumActive: isPremium,
             syncStatus: fState.syncStatus,
+            recentAttacks: Object.values(myData?.attacks || {})
+                .sort((a,b) => (b.timestamp_ended || 0) - (a.timestamp_ended || 0))
+                .slice(0, 50),
             warInfo: activeWar ? {
                 active: true,
                 start: activeWar.war?.start || 0,
@@ -7472,13 +7491,19 @@ app.get('/api/warboard', async (req, res) => {
                     id: myData?.ID || myFacId,
                     name: myData?.name || (myData?.ID ? "Faction #" + myData.ID : (discordConfig.factionName || "Our Faction")),
                     score: (activeWar.factions && myData.ID && activeWar.factions[myData.ID.toString()]) ? (activeWar.factions[myData.ID.toString()].score || 0) : 0,
-                    chain: (activeWar.factions && myData.ID && activeWar.factions[myData.ID.toString()]) ? (activeWar.factions[myData.ID.toString()].chain || 0) : 0
+                    chain: (activeWar.factions && myData.ID && activeWar.factions[myData.ID.toString()]) ? (activeWar.factions[myData.ID.toString()].chain || 0) : (myData?.chain?.current || 0),
+                    chainTimeout: myData?.chain?.timeout || 0,
+                    chainModifier: myData?.chain?.modifier || 1,
+                    chainMax: myData?.chain?.maximum || 100
                 },
                 enemyFaction: {
                     id: enemyId,
                     name: enemyDataResult?.name || "Enemy Faction",
                     score: (activeWar.factions && enemyId && activeWar.factions[enemyId.toString()]) ? (activeWar.factions[enemyId.toString()].score || 0) : 0,
-                    chain: (activeWar.factions && enemyId && activeWar.factions[enemyId.toString()]) ? (activeWar.factions[enemyId.toString()].chain || 0) : 0
+                    chain: (activeWar.factions && enemyId && activeWar.factions[enemyId.toString()]) ? (activeWar.factions[enemyId.toString()].chain || 0) : (enemyDataResult?.chain?.current || 0),
+                    chainTimeout: enemyDataResult?.chain?.timeout || 0,
+                    chainModifier: enemyDataResult?.chain?.modifier || 1,
+                    chainMax: enemyDataResult?.chain?.maximum || 100
                 }
             } : {
                 active: false,
@@ -7500,6 +7525,14 @@ app.get('/api/warboard', async (req, res) => {
                     chainTimeout: myData?.chain?.timeout || 0,
                     chainModifier: myData?.chain?.modifier || 1
                 },
+                enemyFaction: enemyId ? {
+                    id: enemyId,
+                    name: enemyDataResult?.name || "Enemy Faction",
+                    chain: enemyDataResult?.chain?.current || 0,
+                    chainMax: enemyDataResult?.chain?.maximum || 100,
+                    chainTimeout: enemyDataResult?.chain?.timeout || 0,
+                    chainModifier: enemyDataResult?.chain?.modifier || 1
+                } : null,
                 recentWar: recentWarInfo,
                 scoutedEnemy: enemyId ? {
                     id: enemyId,
@@ -24275,6 +24308,10 @@ async function refreshWarboardBackground() {
 
                 let timeline = activityCache[id]?.timeline || null;
 
+                const claimObj = isEnemy ? fState.claims[id] : null;
+                const isClaimValid = claimObj && (Date.now() - (claimObj.time || 0) < 90000);
+                if (claimObj && !isClaimValid) delete fState.claims[id];
+
                 return { 
                     id, 
                     name: m.name, 
@@ -24289,7 +24326,8 @@ async function refreshWarboardBackground() {
                     lastActionTimestamp: m.last_action?.timestamp || 0, 
                     landingTime: finalLandingTime, 
                     needsFfScouterForFlights, 
-                    claimedBy: isEnemy ? fState.claims[id]?.playerName || null : null, 
+                    claimedBy: isClaimValid ? claimObj.playerName : null, 
+                    claimTime: isClaimValid ? claimObj.time : null,
                     needsBackup: isEnemy ? fState.backups[id]?.playerName || null : null, 
                     estStats: est, 
                     intelScore: isEnemy ? computeWarIntel({ id, state: m.status?.state, until: finalUntil, onlineStatus: m.last_action?.status || "Offline", estStats: typeof est === 'number' ? est : null }, statsCache) : null, 
