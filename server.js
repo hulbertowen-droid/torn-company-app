@@ -7222,8 +7222,10 @@ app.get('/api/warboard', async (req, res) => {
             }
         }
 
-        // Step 2: If no explicit faction requested or fetch failed, query user's personal /faction/ endpoint.
-        if (!myData || myData.error) {
+        // Step 2: If no explicit faction requested or fetch failed:
+        // Only fall back to personal /faction/ if user supplied their own key, OR if the request is for the host faction!
+        const canFallbackToPersonal = Boolean(userKeyProvided) || (!requestedFacId || String(requestedFacId) === hostFacId);
+        if ((!myData || myData.error) && canFallbackToPersonal) {
             myData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars,attacks&key=${userKey}`, `my_faction_personal_${userKey}`, 2500);
             if (myData && myData.error && (myData.error.code === 6 || myData.error.code === 7 || myData.error.code === 16)) {
                 myData = await cachedTornFetch(`https://api.torn.com/faction/?selections=basic,rankedwars&key=${userKey}`, `my_faction_personal_basic_${userKey}`, 2500);
@@ -7260,7 +7262,8 @@ app.get('/api/warboard', async (req, res) => {
             });
         }
 
-        const myFacId = myData?.ID ? myData.ID.toString() : (targetMyFacId || sessionFacId || (isServerKey ? hostFacId : null));
+        const isExternalCaller = Boolean((requestedFacId && String(requestedFacId) !== hostFacId) || (sessionFacId && String(sessionFacId) !== hostFacId) || (userKeyProvided && !isServerKey));
+        const myFacId = myData?.ID ? myData.ID.toString() : (targetMyFacId || sessionFacId || (!isExternalCaller ? hostFacId : null));
         if (!myFacId) {
             return res.json({
                 success: false,
@@ -7276,10 +7279,10 @@ app.get('/api/warboard', async (req, res) => {
         if (!myData || myData.error || !myData.members || Object.keys(myData.members).length === 0) {
             if (myFacId && lastGoodWarboardByFaction[myFacId]) {
                 return sendWarboardResponse(req, res, lastGoodWarboardByFaction[myFacId]);
-            } else if (lastGoodWarboardPayload && String(myFacId) === hostFacId && (req.userSession?.isSpiderVerse || !req.userSession)) {
+            } else if (lastGoodWarboardPayload && String(myFacId) === hostFacId && !isExternalCaller) {
                 return sendWarboardResponse(req, res, lastGoodWarboardPayload);
             } else {
-                return res.status(500).json({ error: "Unable to retrieve faction data. Please verify your API key has faction access." });
+                return res.status(404).json({ error: `Unable to retrieve faction data for faction [${myFacId}].` });
             }
         }
 
@@ -7587,7 +7590,8 @@ app.get('/api/warboard', async (req, res) => {
             return sendWarboardResponse(req, res, lastGoodWarboardByFaction[targetMyFacId]);
         }
         const hostFacId = String(discordConfig.factionId || dynamicFactionId || "52355");
-        if (lastGoodWarboardPayload && (!targetMyFacId || String(targetMyFacId) === hostFacId)) {
+        const isExternalCaller = Boolean((requestedFacId && String(requestedFacId) !== hostFacId) || (sessionFacId && String(sessionFacId) !== hostFacId) || (userKeyProvided && !isServerKey));
+        if (lastGoodWarboardPayload && !isExternalCaller && (!targetMyFacId || String(targetMyFacId) === hostFacId)) {
             return sendWarboardResponse(req, res, lastGoodWarboardPayload);
         }
         res.status(403).json({ error: err.message });
