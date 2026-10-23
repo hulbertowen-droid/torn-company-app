@@ -144,8 +144,20 @@
         height: 10px;
         background: rgba(255, 255, 255, 0.08);
         border-radius: 99px;
+        position: relative;
         overflow: hidden;
         display: flex;
+    }
+    .tug-bar-center-tick {
+        position: absolute;
+        left: 50%;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #ffffff;
+        transform: translateX(-50%);
+        z-index: 2;
+        box-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
     }
     .tug-bar-fill-us {
         height: 100%;
@@ -508,6 +520,30 @@
         100% { background-position: -200% 0; }
     }
 
+    /* Mini HUD Overlay & Dashboard Collapse */
+    #mini-hud-container {
+        display: none;
+        background: var(--bg-surface, #11151c);
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+        border-radius: var(--radius-md, 10px);
+        padding: 16px;
+        margin-bottom: 16px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        gap: 16px;
+    }
+    body.hud-mode #mini-hud-container {
+        display: flex;
+        flex-wrap: wrap;
+    }
+    body.hud-mode #war-command-header,
+    body.hud-mode .kpi-row,
+    body.hud-mode #priority-command-strip,
+    body.hud-mode .war-tables-grid,
+    body.hud-mode #attack-feed-section,
+    body.hud-mode #analytics-drawer {
+        display: none !important;
+    }
+
     /* Responsive */
     @media (max-width: 1024px) {
         .tactical-grid { grid-template-columns: 1fr; }
@@ -602,22 +638,22 @@
                             <span id="hud-matchup-title">Spider-Verse vs Enemy</span>
                         </div>
                         <div style="display:flex;gap:6px;align-items:center;">
-                            <button class="hud-btn-exit" onclick="fetchWarboard()" title="Refresh HUD">⟳</button>
-                            <button class="hud-btn-exit" onclick="toggleHudMode()" style="color:var(--war-amber);border-color:rgba(245,158,11,0.4);" title="Exit HUD to Full Board (HotKey: H)">✕ Full View</button>
+                            <button class="hud-btn-exit" onclick="fetchWarboard()" title="Refresh Warboard Intel">🔄 Refresh</button>
+                            <button class="hud-btn-exit" onclick="toggleHudMode()" style="color:var(--war-amber);border-color:rgba(245,158,11,0.4);" title="Exit HUD to Full Board (HotKey: H)">✕ Exit HUD</button>
                         </div>
                     </div>
                     
-                    <div class="hud-score-grid">
-                        <div class="hud-score-box">
-                            <div class="hud-score-num" id="hud-score-us" style="color:var(--war-green);">0</div>
-                            <div class="hud-score-sub" id="hud-name-us">Friendly</div>
+                    <div class="hud-score-grid" style="display:flex;align-items:center;justify-content:space-around;gap:12px;margin:12px 0;">
+                        <div class="hud-score-box" style="text-align:center;">
+                            <div class="hud-score-num" id="hud-score-us" style="color:var(--war-green);font-size:1.6rem;font-weight:900;line-height:1.1;">0</div>
+                            <div class="hud-score-sub" id="hud-name-us" style="font-size:0.75rem;color:var(--text-secondary);margin-top:2px;">Friendly</div>
                         </div>
-                        <div style="font-weight:900;color:var(--text-tertiary);font-size:0.85em;">
-                            <div id="hud-lead-tag" style="background:rgba(16,185,129,0.15);color:var(--war-green);padding:3px 8px;border-radius:12px;font-size:0.75em;font-weight:800;border:1px solid rgba(16,185,129,0.3);">+0 Lead</div>
+                        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                            <div id="hud-lead-tag" style="background:rgba(16,185,129,0.15);color:var(--war-green);padding:4px 10px;border-radius:12px;font-size:0.75em;font-weight:800;border:1px solid rgba(16,185,129,0.3);white-space:nowrap;">+0 Lead</div>
                         </div>
-                        <div class="hud-score-box">
-                            <div class="hud-score-num" id="hud-score-them" style="color:var(--war-red);">0</div>
-                            <div class="hud-score-sub" id="hud-name-them">Enemy</div>
+                        <div class="hud-score-box" style="text-align:center;">
+                            <div class="hud-score-num" id="hud-score-them" style="color:var(--war-red);font-size:1.6rem;font-weight:900;line-height:1.1;">0</div>
+                            <div class="hud-score-sub" id="hud-name-them" style="font-size:0.75rem;color:var(--text-secondary);margin-top:2px;">Enemy</div>
                         </div>
                     </div>
 
@@ -698,12 +734,13 @@
                         <div class="tug-lead-pill tied" id="cmd-lead-tag">⚔️ STANDBY</div>
                         <div class="tug-bar-track">
                             <div class="tug-bar-fill-us" id="cmd-bar-us" style="width: 50%;"></div>
+                            <div class="tug-bar-center-tick" title="0 Lead Center Tick"></div>
                             <div class="tug-bar-fill-them" id="cmd-bar-them" style="width: 50%;"></div>
                         </div>
                         <div class="tug-meta-row">
-                            <span>Our Progress: <strong id="cmd-pct-us" style="color:var(--war-green);">50%</strong></span>
-                            <span>Target: <strong id="cmd-target-val" style="color:var(--text-primary);">15,000 pts</strong></span>
-                            <span>Enemy: <strong id="cmd-pct-them" style="color:var(--war-red);">50%</strong></span>
+                            <span>Enemy Lead: <strong id="cmd-pct-them" style="color:var(--war-red);">0%</strong></span>
+                            <span id="cmd-lead-center" style="font-weight:700;">Lead: <strong id="cmd-lead-display" style="color:var(--war-green);">+0</strong> / <span id="cmd-target-val">15,000 pts</span> (<span id="cmd-target-lead-pct">0%</span> of Target)</span>
+                            <span>Our Lead: <strong id="cmd-pct-us" style="color:var(--war-green);">0%</strong></span>
                         </div>
                     </div>
 
@@ -715,9 +752,9 @@
                         <div class="faction-meta">
                             <div class="fac-name">
                                 <span class="badge" id="fac-rank-them" style="background:rgba(239,68,68,0.15);color:var(--war-red);font-size:0.68rem;padding:2px 6px;">RANKED</span>
-                                <a id="fac-name-them" href="#" target="_blank">Opponent Faction</a>
+                                <a id="fac-name-them" href="#" target="_blank">Run It Industries</a>
                             </div>
-                            <div class="fac-sub" id="fac-id-them">ID: — • — Targets</div>
+                            <div class="fac-sub" id="fac-id-them">ID: 55051 • Loading Targets...</div>
                         </div>
                         <div class="faction-flag enemy" id="fac-flag-them">⚔️</div>
                     </div>
@@ -739,7 +776,7 @@
                     </div>
                     <div class="telemetry-item">
                         <span class="telemetry-label">🏁 Est. Time to Victory (ETV):</span>
-                        <span class="telemetry-val" id="tel-etv" style="color:var(--war-green);">Calculating...</span>
+                        <span class="telemetry-val" id="tel-etv" style="color:var(--text-tertiary);">— (Standby)</span>
                     </div>
                     <div class="telemetry-item">
                         <span class="telemetry-label">🛡️ War Status:</span>
@@ -1204,7 +1241,7 @@
 let myKey = localStorage.getItem("warboard_apikey") || "";
 let ffKey = localStorage.getItem("warboard_ffkey") || "";
 let tsKey = localStorage.getItem("warboard_tskey") || "";
-let enemyFacId = localStorage.getItem("warboard_enemyId") || null;
+let enemyFacId = localStorage.getItem("warboard_enemyId") || localStorage.getItem("factionos_enemy_faction_id") || "55051";
 let myName = localStorage.getItem("warboard_myname") || "Agent";
 let activeEnemyFilter = 'all';
 let activeFriendlyFilter = 'all';
@@ -1659,7 +1696,18 @@ function renderWarboardPayload(data) {
     const isWarActive = isRealWarActive || isWarSimulationActive;
     const war = data.warInfo || {};
     const myFac = war.myFaction || {};
-    const enemyFac = war.enemyFaction || {};
+    const savedEnemyId = localStorage.getItem("warboard_enemyId") || localStorage.getItem("factionos_enemy_faction_id") || "55051";
+    const enemyFac = war.enemyFaction
+        || war.scoutedEnemy
+        || (war.upcomingWar && war.upcomingWar.enemyFaction)
+        || (war.recentWar && war.recentWar.enemyFaction)
+        || (currentEnemyData.length > 0 && currentEnemyData[0].factionName ? { id: currentEnemyData[0].factionId || savedEnemyId, name: currentEnemyData[0].factionName } : { id: savedEnemyId, name: 'Run It Industries' });
+
+    if (enemyFac && enemyFac.id) {
+        localStorage.setItem("warboard_enemyId", enemyFac.id);
+        localStorage.setItem("factionos_enemy_faction_id", enemyFac.id);
+        enemyFacId = enemyFac.id;
+    }
 
     // 1. Update Tug-of-War Command Header
     const facNameUs = document.getElementById('fac-name-us');
@@ -1674,6 +1722,8 @@ function renderWarboardPayload(data) {
     const cmdPctUs = document.getElementById('cmd-pct-us');
     const cmdPctThem = document.getElementById('cmd-pct-them');
     const cmdTargetVal = document.getElementById('cmd-target-val');
+    const cmdLeadDisplay = document.getElementById('cmd-lead-display');
+    const cmdTargetLeadPct = document.getElementById('cmd-target-lead-pct');
 
     let ourScore = isWarSimulationActive ? 8420 : Number(myFac.score || 0);
     let theirScore = isWarSimulationActive ? 5240 : Number(enemyFac.score || 0);
@@ -1681,8 +1731,8 @@ function renderWarboardPayload(data) {
 
     if (facNameUs) facNameUs.textContent = myFac.name || 'Spider-Verse';
     if (facIdUs) facIdUs.textContent = `ID: ${myFac.id || '52355'} • ${currentFriendlyData.length} Members`;
-    if (facNameThem) facNameThem.textContent = enemyFac.name || (isWarSimulationActive ? 'Hydra Syndicate' : 'Opponent Faction');
-    if (facIdThem) facIdThem.textContent = `ID: ${enemyFac.id || '48219'} • ${currentEnemyData.length} Targets`;
+    if (facNameThem) facNameThem.textContent = enemyFac.name || (isWarSimulationActive ? 'Hydra Syndicate' : 'Run It Industries');
+    if (facIdThem) facIdThem.textContent = `ID: ${enemyFac.id || enemyFacId || '55051'} • ${currentEnemyData.length} Targets`;
     if (cmdScoreUs) cmdScoreUs.textContent = ourScore.toLocaleString();
     if (cmdScoreThem) cmdScoreThem.textContent = theirScore.toLocaleString();
 
@@ -1696,18 +1746,36 @@ function renderWarboardPayload(data) {
             cmdLeadTag.innerHTML = `⚠️ ${lead.toLocaleString()} DEFICIT`;
         } else {
             cmdLeadTag.className = 'tug-lead-pill tied';
-            cmdLeadTag.innerHTML = '⚔️ TIED 0-0';
+            cmdLeadTag.innerHTML = isWarActive ? '⚔️ TIED 0-0' : '🛡️ PEACETIME STANDBY';
         }
     }
 
-    const totalPts = ourScore + theirScore;
-    const usPct = totalPts > 0 ? Math.round((ourScore / totalPts) * 100) : 50;
-    const themPct = 100 - usPct;
-    if (cmdBarUs) cmdBarUs.style.width = `${usPct}%`;
-    if (cmdBarThem) cmdBarThem.style.width = `${themPct}%`;
-    if (cmdPctUs) cmdPctUs.textContent = `${usPct}%`;
-    if (cmdPctThem) cmdPctThem.textContent = `${themPct}%`;
-    if (cmdTargetVal) cmdTargetVal.textContent = `${targetGoal.toLocaleString()} pts`;
+    if (!isWarActive || lead === 0) {
+        if (cmdBarUs) cmdBarUs.style.width = '50%';
+        if (cmdBarThem) cmdBarThem.style.width = '50%';
+        if (cmdPctUs) cmdPctUs.textContent = '0%';
+        if (cmdPctThem) cmdPctThem.textContent = '0%';
+        if (cmdLeadDisplay) cmdLeadDisplay.textContent = '+0';
+        if (cmdTargetLeadPct) cmdTargetLeadPct.textContent = '0%';
+        if (cmdTargetVal) cmdTargetVal.textContent = `${targetGoal.toLocaleString()} pts`;
+    } else {
+        const leadPct = targetGoal > 0 ? Math.min(100, Math.round((Math.abs(lead) / targetGoal) * 100)) : 0;
+        if (lead > 0) {
+            if (cmdPctUs) cmdPctUs.textContent = `${leadPct}%`;
+            if (cmdPctThem) cmdPctThem.textContent = '0%';
+            if (cmdLeadDisplay) cmdLeadDisplay.textContent = `+${lead.toLocaleString()}`;
+            if (cmdBarUs) cmdBarUs.style.width = `${50 + Math.min(50, Math.round((lead / targetGoal) * 50))}%`;
+            if (cmdBarThem) cmdBarThem.style.width = `${50 - Math.min(50, Math.round((lead / targetGoal) * 50))}%`;
+        } else {
+            if (cmdPctThem) cmdPctThem.textContent = `${leadPct}%`;
+            if (cmdPctUs) cmdPctUs.textContent = '0%';
+            if (cmdLeadDisplay) cmdLeadDisplay.textContent = `${lead.toLocaleString()}`;
+            if (cmdBarUs) cmdBarUs.style.width = `${50 - Math.min(50, Math.round((Math.abs(lead) / targetGoal) * 50))}%`;
+            if (cmdBarThem) cmdBarThem.style.width = `${50 + Math.min(50, Math.round((Math.abs(lead) / targetGoal) * 50))}%`;
+        }
+        if (cmdTargetLeadPct) cmdTargetLeadPct.textContent = `${leadPct}%`;
+        if (cmdTargetVal) cmdTargetVal.textContent = `${targetGoal.toLocaleString()} pts`;
+    }
 
     // 2. War Clock & 1%/hr Decay Tracker
     const warStartTs = isWarSimulationActive ? (now - 28 * 3600) : (war.start || (now - 3600));
@@ -1735,15 +1803,23 @@ function renderWarboardPayload(data) {
 
     const telEtv = document.getElementById('tel-etv');
     if (telEtv) {
-        if (lead >= decayInfo.currentTarget) telEtv.textContent = 'Victory Imminent!';
-        else if (lead <= -decayInfo.currentTarget) telEtv.textContent = 'Defeat Warning';
-        else {
+        if (!isWarActive || lead === 0) {
+            telEtv.textContent = '— (Standby)';
+            telEtv.style.color = 'var(--text-tertiary)';
+        } else if (lead >= decayInfo.currentTarget) {
+            telEtv.textContent = 'Victory Imminent!';
+            telEtv.style.color = 'var(--war-green)';
+        } else if (lead <= -decayInfo.currentTarget) {
+            telEtv.textContent = 'Defeat Warning';
+            telEtv.style.color = 'var(--war-red)';
+        } else {
             const netPerHour = 650 + (decayInfo.decayActive ? decayInfo.decayRate : 0);
-            const remainingLead = decayInfo.currentTarget - lead;
+            const remainingLead = decayInfo.currentTarget - Math.max(0, lead);
             const hoursLeft = remainingLead / Math.max(1, netPerHour);
             const h = Math.floor(hoursLeft);
             const m = Math.round((hoursLeft - h) * 60);
             telEtv.textContent = `~${h}h ${m}m`;
+            telEtv.style.color = 'var(--war-green)';
         }
     }
 
@@ -1846,7 +1922,7 @@ function renderTacticalQueues(enemies, friendly, attacks) {
         .sort((a,b) => a.until - b.until);
 
     if (badgePop) badgePop.textContent = popping.length;
-    document.getElementById('kpi-hosp-pop-sub').textContent = `${popping.length} popping &lt; 3m`;
+    document.getElementById('kpi-hosp-pop-sub').textContent = `${popping.length} popping < 3m`;
 
     if (popList) {
         if (popping.length === 0) {
@@ -2292,9 +2368,18 @@ function renderFriendlyTable() {
             statusText = '<span style="color:var(--war-green);font-weight:700;">🟢 OKAY</span>';
         }
 
-        const defensePill = isSafe
-            ? '<span class="safe-shield-pill">🛡️ Safe</span>'
-            : '<span class="exposed-warning-pill">⚠️ Exposed</span>';
+        const isRealWar = !!(currentWarboardData && currentWarboardData.warInfo && currentWarboardData.warInfo.active);
+        const enemyChain = (currentWarboardData && currentWarboardData.warInfo && currentWarboardData.warInfo.enemyFaction && currentWarboardData.warInfo.enemyFaction.chain) || 0;
+        const inCombat = isRealWar || isWarSimulationActive || (enemyChain >= 10);
+
+        let defensePill = '';
+        if (isSafe) {
+            defensePill = '<span class="safe-shield-pill">🛡️ Safe</span>';
+        } else if (inCombat) {
+            defensePill = '<span class="exposed-warning-pill" title="Member is OKAY in Torn and vulnerable to enemy war hits — med out or hospitalize to prevent bleed">⚠️ Exposed</span>';
+        } else {
+            defensePill = '<span class="safe-shield-pill" style="background:rgba(16,185,129,0.12);color:var(--war-green);border:1px solid rgba(16,185,129,0.25);" title="Peacetime Standby — Ready for combat">🟢 Ready</span>';
+        }
 
         return `
             <div class="table-dense-row" style="grid-template-columns: minmax(170px, 1.8fr) minmax(85px, 0.9fr) minmax(110px, 1.1fr) auto;">
@@ -2651,10 +2736,11 @@ function renderMiniHud(data) {
     if (!data) return;
     const war = data.warInfo || {};
     const myFac = war.myFaction || {};
-    const enemyFac = war.enemyFaction || {};
+    const savedEnemyId = localStorage.getItem("warboard_enemyId") || localStorage.getItem("factionos_enemy_faction_id") || "55051";
+    const enemyFac = war.enemyFaction || war.scoutedEnemy || war.upcomingWar?.enemyFaction || war.recentWar?.enemyFaction || { id: savedEnemyId, name: 'Run It Industries' };
 
     const matchupEl = document.getElementById("hud-matchup-title");
-    if (matchupEl) matchupEl.innerText = `${myFac.name || 'Spider-Verse'} vs ${enemyFac.name || 'Opponent'}`;
+    if (matchupEl) matchupEl.innerText = `${myFac.name || 'Spider-Verse'} vs ${enemyFac.name || 'Run It Industries'}`;
 
     const usScore = Number(myFac.score || 0);
     const themScore = Number(enemyFac.score || 0);
@@ -2669,7 +2755,7 @@ function renderMiniHud(data) {
     if (usScoreEl) usScoreEl.innerText = usScore.toLocaleString();
     if (themScoreEl) themScoreEl.innerText = themScore.toLocaleString();
     if (nameUsEl) nameUsEl.innerText = myFac.name || "Spider-Verse";
-    if (nameThemEl) nameThemEl.innerText = enemyFac.name || "Opponent";
+    if (nameThemEl) nameThemEl.innerText = enemyFac.name || "Run It Industries";
 
     if (leadTag) {
         const lead = usScore - themScore;
@@ -2694,9 +2780,12 @@ function renderMiniHud(data) {
     if (targetPctEl) targetPctEl.innerText = `${pct}%`;
     if (targetBarEl) targetBarEl.style.width = `${pct}%`;
 
-    // Chain in HUD
+    // Chain in HUD (Dynamic Milestone)
     const hudChainCount = document.getElementById("hud-chain-count");
-    if (hudChainCount) hudChainCount.innerText = `${myFac.chain || 0} / 250`;
+    const friendlyChainCount = myFac.chain || 0;
+    const hudMilestones = [10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
+    const hudNextGoal = hudMilestones.find(m => m > friendlyChainCount) || (friendlyChainCount + 50);
+    if (hudChainCount) hudChainCount.innerText = `${friendlyChainCount} / ${hudNextGoal}`;
 
     // Attackable targets in HUD
     const list = document.getElementById('hud-targets-list');
@@ -2844,10 +2933,8 @@ async function saveWarToArchive() {
 
 // ─── Document Ready Initialization ──────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
-    // Restore HUD mode preference
-    if (localStorage.getItem('warboard_hud_mode') === 'true') {
-        document.body.classList.add('hud-mode');
-    }
+    // Ensure Mini HUD starts hidden on normal page load
+    document.body.classList.remove('hud-mode');
 
     // Hotkey: H toggles HUD mode
     document.addEventListener('keydown', (e) => {

@@ -7396,7 +7396,6 @@ app.get('/api/warboard', async (req, res) => {
                 
                 let warMemberData = isEnemy ? enemyWarMembers[id] : (activeWar ? myWarMembers[id] : recentWarMembers[id]);
                 let baseWarAttacks = warMemberData ? (warMemberData.attacks || 0) : 0;
-                let score = warMemberData ? (warMemberData.score || 0) : 0;
                 let baseAssists = warMemberData ? (warMemberData.assists || 0) : 0;
                 
                 // Peacetime combat audit enrichment for friendly roster
@@ -7404,7 +7403,18 @@ app.get('/api/warboard', async (req, res) => {
                     ? warAuditArchive[recentWarInfo.id].members.find(am => am.id.toString() === id.toString())
                     : null;
 
-                let warAttacks = activeWar ? Math.max(baseWarAttacks, fState.liveWarHits[id] || 0) : (auditMember ? auditMember.hitsMade : baseWarAttacks);
+                let warAttacks = activeWar ? Math.max(baseWarAttacks, fState.liveWarHits[id] || 0) : (auditMember ? (auditMember.hitsMade ?? baseWarAttacks) : baseWarAttacks);
+                let score = (warMemberData && typeof warMemberData.score === 'number' && warMemberData.score > 0)
+                    ? warMemberData.score
+                    : (auditMember && typeof auditMember.respectEarned === 'number' && auditMember.respectEarned > 0
+                        ? Math.round(auditMember.respectEarned)
+                        : (warAttacks > 0 ? Math.round(warAttacks * 4.5) : 0));
+                let respect_earned = (auditMember && typeof auditMember.respectEarned === 'number' && auditMember.respectEarned > 0)
+                    ? Math.round(auditMember.respectEarned)
+                    : score;
+                let chain_contributions = (auditMember && typeof auditMember.hitsMade === 'number')
+                    ? auditMember.hitsMade
+                    : warAttacks;
                 let assists = Math.max(baseAssists, fState.liveAssists[id] || 0);
                 let outsideAttacks = fState.liveOutsideHits[id] || 0;
 
@@ -7456,7 +7466,11 @@ app.get('/api/warboard', async (req, res) => {
                     hitsTaken,
                     warHitsTaken,
                     outsideHitsTaken,
-                    score, 
+                    score,
+                    respect_earned,
+                    chainHits: chain_contributions,
+                    chain_contributions,
+                    attacks_made: warAttacks, 
                     timeline 
                 };
             });
@@ -7525,14 +7539,14 @@ app.get('/api/warboard', async (req, res) => {
                     chainTimeout: myData?.chain?.timeout || 0,
                     chainModifier: myData?.chain?.modifier || 1
                 },
-                enemyFaction: enemyId ? {
-                    id: enemyId,
-                    name: enemyDataResult?.name || "Enemy Faction",
+                enemyFaction: {
+                    id: enemyId || (recentWarInfo?.enemyId || "55051"),
+                    name: enemyDataResult?.name || (recentWarInfo?.enemyName || "Run It Industries"),
                     chain: enemyDataResult?.chain?.current || 0,
                     chainMax: enemyDataResult?.chain?.maximum || 100,
                     chainTimeout: enemyDataResult?.chain?.timeout || 0,
                     chainModifier: enemyDataResult?.chain?.modifier || 1
-                } : null,
+                },
                 recentWar: recentWarInfo,
                 scoutedEnemy: enemyId ? {
                     id: enemyId,
@@ -24284,14 +24298,24 @@ async function refreshWarboardBackground() {
 
                 let warMemberData = isEnemy ? enemyWarMembers[id] : (activeWar ? myWarMembers[id] : recentWarMembers[id]);
                 let baseWarAttacks = warMemberData ? (warMemberData.attacks || 0) : 0;
-                let score = warMemberData ? (warMemberData.score || 0) : 0;
                 let baseAssists = warMemberData ? (warMemberData.assists || 0) : 0;
 
                 let auditMember = (!isEnemy && !activeWar && recentWarInfo?.id && warAuditArchive[recentWarInfo.id]?.members)
                     ? warAuditArchive[recentWarInfo.id].members.find(am => am.id.toString() === id.toString())
                     : null;
 
-                let warAttacks = activeWar ? Math.max(baseWarAttacks, fState.liveWarHits[id] || 0) : (auditMember ? auditMember.hitsMade : baseWarAttacks);
+                let warAttacks = activeWar ? Math.max(baseWarAttacks, fState.liveWarHits[id] || 0) : (auditMember ? (auditMember.hitsMade ?? baseWarAttacks) : baseWarAttacks);
+                let score = (warMemberData && typeof warMemberData.score === 'number' && warMemberData.score > 0)
+                    ? warMemberData.score
+                    : (auditMember && typeof auditMember.respectEarned === 'number' && auditMember.respectEarned > 0
+                        ? Math.round(auditMember.respectEarned)
+                        : (warAttacks > 0 ? Math.round(warAttacks * 4.5) : 0));
+                let respect_earned = (auditMember && typeof auditMember.respectEarned === 'number' && auditMember.respectEarned > 0)
+                    ? Math.round(auditMember.respectEarned)
+                    : score;
+                let chain_contributions = (auditMember && typeof auditMember.hitsMade === 'number')
+                    ? auditMember.hitsMade
+                    : warAttacks;
                 let assists = Math.max(baseAssists, fState.liveAssists[id] || 0);
                 let outsideAttacks = fState.liveOutsideHits[id] || 0;
 
@@ -24343,7 +24367,11 @@ async function refreshWarboardBackground() {
                     hitsTaken,
                     warHitsTaken,
                     outsideHitsTaken,
-                    score, 
+                    score,
+                    respect_earned,
+                    chainHits: chain_contributions,
+                    chain_contributions,
+                    attacks_made: warAttacks, 
                     timeline 
                 };
             });
@@ -24396,6 +24424,14 @@ async function refreshWarboardBackground() {
                     chainMax: myData?.chain?.maximum || 100,
                     chainTimeout: myData?.chain?.timeout || 0,
                     chainModifier: myData?.chain?.modifier || 1
+                },
+                enemyFaction: {
+                    id: enemyId || (recentWarInfo?.enemyId || "55051"),
+                    name: enemyDataResult?.name || (recentWarInfo?.enemyName || "Run It Industries"),
+                    chain: enemyDataResult?.chain?.current || 0,
+                    chainMax: enemyDataResult?.chain?.maximum || 100,
+                    chainTimeout: enemyDataResult?.chain?.timeout || 0,
+                    chainModifier: enemyDataResult?.chain?.modifier || 1
                 },
                 recentWar: recentWarInfo,
                 scoutedEnemy: enemyId ? {

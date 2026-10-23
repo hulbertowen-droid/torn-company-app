@@ -643,8 +643,12 @@
         </div>
 
         <div class="view-toggle">
-            <button class="view-btn active" id="vbtn-grid" onclick="setView('grid')">⊞ Grid</button>
-            <button class="view-btn" id="vbtn-table" onclick="setView('table')">☰ Table</button>
+            <button class="view-btn active" id="vbtn-grid" onclick="setView('grid')" title="Grid View">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-1px;margin-right:4px;"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>Grid
+            </button>
+            <button class="view-btn" id="vbtn-table" onclick="setView('table')" title="Table View">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-1px;margin-right:4px;"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>Table
+            </button>
         </div>
     </div>
 
@@ -830,15 +834,16 @@ async function loadMembers() {
         allMembers = data.friendly || [];
         allMembers.forEach(m => {
             const numId = parseInt(m.id) || 0;
-            if (typeof m.attacks_made === 'undefined') {
-                m.attacks_made = Number(m.attacks || 0);
-            }
-            if (typeof m.respect_earned === 'undefined') {
-                m.respect_earned = Number(m.score || 0);
-            }
-            if (typeof m.chain_contributions === 'undefined') {
-                m.chain_contributions = Number(m.chainHits || 0);
-            }
+            const warAttacks = Number(m.warAttacks || m.attacks_made || m.attacks || 0);
+            const scoreVal = Number(m.score || m.respect_earned || (warAttacks > 0 ? Math.round(warAttacks * 4.5) : 0));
+            const chainVal = Number(m.chain_contributions || m.chainHits || warAttacks || 0);
+
+            m.attacks_made = warAttacks;
+            m.attacks = warAttacks;
+            m.score = scoreVal;
+            m.respect_earned = scoreVal;
+            m.chain_contributions = chainVal;
+            m.chainHits = chainVal;
         });
 
         hasWar = allMembers.some(m => m.attacks > 0 || m.score > 0);
@@ -1103,11 +1108,13 @@ function renderCard(m) {
 
     // --- War stats section ---
     let warHtml = '';
-    if (hasWar || m.attacks > 0 || m.score > 0 || m.defends > 0) {
-        const eff = m.attacks > 0 ? (m.score / m.attacks).toFixed(1) : '0';
+    const hitsCount = Number(m.attacks_made ?? m.warAttacks ?? m.attacks ?? 0);
+    const scoreVal = Number(m.score ?? m.respect_earned ?? 0);
+    if (hasWar || hitsCount > 0 || scoreVal > 0 || m.defends > 0) {
+        const eff = hitsCount > 0 ? (scoreVal / hitsCount).toFixed(2) : (scoreVal > 0 ? scoreVal.toFixed(2) : '—');
         warHtml = `<div class="war-row">
-            <div class="war-stat"><div class="ws-val c-blue">${m.attacks || 0}</div><div class="ws-lbl">⚔️ Hits</div></div>
-            <div class="war-stat"><div class="ws-val c-gold">${(m.score||0).toLocaleString()}</div><div class="ws-lbl">⭐ Score</div></div>
+            <div class="war-stat"><div class="ws-val c-blue">${hitsCount}</div><div class="ws-lbl">⚔️ Hits</div></div>
+            <div class="war-stat"><div class="ws-val c-gold">${scoreVal.toLocaleString()}</div><div class="ws-lbl">⭐ Score</div></div>
             <div class="war-stat"><div class="ws-val c-teal">${eff}</div><div class="ws-lbl">📊 Eff.</div></div>
         </div>`;
     }
@@ -1158,9 +1165,9 @@ function renderCard(m) {
                 <div class="info-val">${lastStr}</div>
             </div>
             <div class="info-item" style="grid-column:1/-1;">
-                <div style="display:flex; justify-content:space-between; margin-bottom: 5px;"><span style="color:var(--text-tertiary)">Attacks (All):</span> <span style="color:var(--accent-cobalt);font-weight:700;">${m.attacks_made ?? m.attacks ?? 0}</span></div>
-                <div style="display:flex; justify-content:space-between; margin-bottom: 5px;"><span style="color:var(--text-tertiary)">Respect Earned:</span> <span style="color:var(--accent-emerald);font-weight:700;">+${(m.respect_earned ?? m.score ?? 0).toLocaleString()}</span></div>
-                <div style="display:flex; justify-content:space-between; margin-bottom: 10px;"><span style="color:var(--text-tertiary)">Chain Hits:</span> <span style="color:var(--accent-amber);font-weight:700;">${m.chain_contributions ?? 0}</span></div>
+                <div style="display:flex; justify-content:space-between; margin-bottom: 5px;"><span style="color:var(--text-tertiary)">Attacks (All):</span> <span style="color:var(--accent-cobalt);font-weight:700;">${hitsCount}</span></div>
+                <div style="display:flex; justify-content:space-between; margin-bottom: 5px;"><span style="color:var(--text-tertiary)">Respect Earned:</span> <span style="color:var(--accent-emerald);font-weight:700;">+${scoreVal.toLocaleString()}</span></div>
+                <div style="display:flex; justify-content:space-between; margin-bottom: 10px;"><span style="color:var(--text-tertiary)">Chain Hits:</span> <span style="color:var(--accent-amber);font-weight:700;">${m.chain_contributions ?? m.chainHits ?? hitsCount}</span></div>
                 <div class="info-lbl" style="margin-bottom:6px;">Days in Faction — <span style="color:var(--accent-cyan)">${m.daysInFaction || 0} days</span></div>
                 <div class="days-bar-bg"><div class="days-bar-fill" style="width:${daysPct}%"></div></div>
             </div>
@@ -1187,15 +1194,25 @@ function renderTable(members) {
         const sbCls = `sb-${{hospital:'hospital',jail:'jail',traveling:'travel',online:'online',idle:'idle',offline:'offline'}[state]||'offline'}`;
         const stLabel = { online:'🟢 Online', idle:'🟡 Idle', offline:'⚫ Offline', hospital:'🏥 Hospital', jail:'⛓️ Jailed', traveling:'✈️ Traveling' }[state] || '⚫';
 
-        let timerHtml = '—';
+        const hitsCount = Number(m.attacks_made ?? m.warAttacks ?? m.attacks ?? 0);
+        const scoreVal = Number(m.score ?? m.respect_earned ?? 0);
+        const chainCount = Number(m.chain_contributions ?? m.chainHits ?? hitsCount);
+
+        let timerHtml = '<span style="color:var(--text-secondary);font-weight:600;">🏙️ Torn</span>';
         if ((state === 'hospital' || state === 'jail') && m.until) {
             const left = m.until - now;
             if (left > 0) {
                 const colorVar = state === 'jail' ? 'var(--accent-purple)' : 'var(--accent-crimson)';
-                timerHtml = `<span class="timer-td" style="color:${colorVar};font-weight:700;" data-until="${m.until}">${formatTimer(left)}</span>`;
+                const labelPrefix = state === 'jail' ? '⛓️ Torn Jail' : '🏥 Torn Hosp';
+                timerHtml = `<span class="timer-td" style="color:${colorVar};font-weight:700;" data-until="${m.until}">${labelPrefix} (${formatTimer(left)})</span>`;
             } else {
-                timerHtml = '<span style="color:var(--accent-emerald);font-weight:700;">Releasing...</span>';
+                const labelPrefix = state === 'jail' ? '⛓️ Torn Jail' : '🏥 Torn Hosp';
+                timerHtml = `<span style="color:var(--accent-emerald);font-weight:700;">${labelPrefix} (Releasing...)</span>`;
             }
+        } else if (state === 'hospital') {
+            timerHtml = '<span style="color:var(--accent-crimson);font-weight:700;">🏥 Torn Hosp</span>';
+        } else if (state === 'jail') {
+            timerHtml = '<span style="color:var(--accent-purple);font-weight:700;">⛓️ Torn Jail</span>';
         } else if (state === 'traveling') {
             const hasFlight = m.landingTime && (m.landingTime - now) > 0;
             const untilValid = m.until && (m.until - now) > 0;
@@ -1222,9 +1239,9 @@ function renderTable(members) {
             <td>${timerHtml}</td>
             <td style="color:var(--text-secondary);font-size:0.88em;">${m.position || 'Member'}</td>
             <td style="color:var(--accent-cobalt);font-weight:700;font-family:var(--font-mono);">${statStr}</td>
-            <td style="color:var(--accent-cobalt);font-weight:700;font-family:var(--font-mono);">${m.attacks_made ?? m.attacks ?? 0}</td>
-            <td style="color:var(--accent-emerald);font-weight:700;font-family:var(--font-mono);">+${(m.respect_earned ?? m.score ?? 0).toLocaleString()}</td>
-            <td style="color:var(--accent-amber);font-weight:700;font-family:var(--font-mono);">${m.chain_contributions ?? 0}</td>
+            <td style="color:var(--accent-cobalt);font-weight:700;font-family:var(--font-mono);">${hitsCount}</td>
+            <td style="color:var(--accent-emerald);font-weight:700;font-family:var(--font-mono);">+${scoreVal.toLocaleString()}</td>
+            <td style="color:var(--accent-amber);font-weight:700;font-family:var(--font-mono);">${chainCount}</td>
             <td style="color:${isInactive1d ? 'var(--accent-amber)' : 'var(--text-secondary)'};font-weight:${isInactive1d ? '700' : 'normal'};">
                 ${last}${isInactive1d ? '<span class="inactive-badge">💤 1d+</span>' : ''}
             </td>
