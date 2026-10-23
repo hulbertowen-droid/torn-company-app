@@ -7196,22 +7196,25 @@ app.get('/api/warboard', async (req, res) => {
         }
     }
 
+    let targetMyFacId = requestedFacIdFast || sessionFacId || null;
+    let requestedFacId = requestedFacIdFast || null;
+
     try {
-        let userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+        let userKey = userKeyProvided;
         if (!userKey || userKey === "null" || userKey.trim() === "") {
             userKey = TORN_API_KEY || discordConfig.apiKey || getNextApiKey();
         }
         if (!userKey || userKey === "null" || userKey.trim() === "") {
             return res.status(503).json({ error: "No faction API key available on server. Please configure an API key." });
         }
+        isServerKey = !userKeyProvided || userKeyProvided === discordConfig.apiKey || userKeyProvided === TORN_API_KEY;
         const ffKey = (req.headers['x-ff-key'] || req.query.ffKey) && (req.headers['x-ff-key'] || req.query.ffKey) !== "null" && (req.headers['x-ff-key'] || req.query.ffKey) !== "" ? (req.headers['x-ff-key'] || req.query.ffKey) : null;
         await verifySubscription(userKey);
 
         const isPremium = (ffKey && ffKey !== "null" && ffKey.trim().length > 10);
-        const requestedFacId = req.headers['x-faction-id'] || req.query.myFactionId;
+        requestedFacId = req.headers['x-faction-id'] || req.query.myFactionId;
         const userInfo = await getUserFactionInfo(userKey);
         let myData = null;
-        let targetMyFacId = null;
 
         // Step 1: If user explicitly requested a faction ID (via header or query), fetch that
         if (requestedFacId) {
