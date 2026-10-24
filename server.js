@@ -15689,30 +15689,54 @@ let cachedFactionVault = { facId: null, data: null, timestamp: 0 };
 
 async function getFactionVaultAndMember(apiKey, interaction = null, targetQuery = null, forceFresh = false) {
     let facId = discordConfig.factionId || dynamicFactionId || "";
-    const url = facId
-        ? `https://api.torn.com/faction/${facId}?selections=basic,donations&key=${apiKey}`
-        : `https://api.torn.com/faction/?selections=basic,donations&key=${apiKey}`;
+
+    // Candidate keys: prefer authorized faction key or pool keys (since donations requires Faction access), then fallback to caller key
+    const candidateKeys = [
+        discordConfig.apiKey,
+        TORN_API_KEY,
+        getNextApiKey(),
+        ...(apiPoolConfig && Array.isArray(apiPoolConfig.keys) ? apiPoolConfig.keys : []),
+        apiKey
+    ].filter(k => k && typeof k === 'string' && k.trim().length >= 16);
+    const uniqueKeys = [...new Set(candidateKeys)];
 
     let data = null;
+    let lastError = null;
+
     if (!forceFresh && cachedFactionVault.data && facId && String(cachedFactionVault.facId) === String(facId) && (Date.now() - cachedFactionVault.timestamp < 10000)) {
         data = cachedFactionVault.data;
     } else {
-        const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-        data = await res.json();
-        if (data && !data.error) {
-            if (data.ID) {
-                facId = String(data.ID);
-                if (!discordConfig.factionId) dynamicFactionId = String(data.ID);
-                if (!discordConfig.factionName && data.name) {
-                    discordConfig.factionName = data.name;
-                    UI.setFactionName(data.name);
+        for (const candidateKey of uniqueKeys) {
+            const url = facId
+                ? `https://api.torn.com/faction/${facId}?selections=basic,donations&key=${candidateKey}`
+                : `https://api.torn.com/faction/?selections=basic,donations&key=${candidateKey}`;
+            try {
+                const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+                const json = await res.json();
+                if (json && !json.error && json.donations) {
+                    data = json;
+                    if (data.ID) {
+                        facId = String(data.ID);
+                        if (!discordConfig.factionId) dynamicFactionId = String(data.ID);
+                        if (!discordConfig.factionName && data.name) {
+                            discordConfig.factionName = data.name;
+                            UI.setFactionName(data.name);
+                        }
+                    }
+                    cachedFactionVault = { facId: String(facId || data.ID || ""), data, timestamp: Date.now() };
+                    break;
+                } else if (json?.error) {
+                    lastError = json.error.error || json.error;
                 }
+            } catch(e) {
+                lastError = e.message;
             }
-            cachedFactionVault = { facId: String(facId || data.ID || ""), data, timestamp: Date.now() };
         }
     }
 
-    if (data && data.error) throw new Error(data.error.error || "Torn API error");
+    if (!data || data.error || !data.donations) {
+        throw new Error(lastError || data?.error?.error || "Torn API error: Unable to read faction vault donations.");
+    }
 
     const donations = data?.donations || {};
     const members = data?.members || {};
@@ -17397,27 +17421,51 @@ app.get('/api/bank/pay/:id', async (req, res) => {
 });
 
 async function buildVaultBalanceEmbed(apiKey, targetQuery = null, requestingUser = null) {
-    if (!apiKey) {
+    const candidateKeys = [
+        discordConfig.apiKey,
+        TORN_API_KEY,
+        getNextApiKey(),
+        ...(apiPoolConfig && Array.isArray(apiPoolConfig.keys) ? apiPoolConfig.keys : []),
+        apiKey
+    ].filter(k => k && typeof k === 'string' && k.trim().length >= 16);
+    const uniqueKeys = [...new Set(candidateKeys)];
+
+    if (uniqueKeys.length === 0) {
         return { title: "🏦 Faction Vault Balance", description: "⚠️ Torn API Key is not configured.", color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
     }
     try {
         let facId = discordConfig.factionId || dynamicFactionId || "";
-        const url = facId
-            ? `https://api.torn.com/faction/${facId}?selections=basic,donations&key=${apiKey}`
-            : `https://api.torn.com/faction/?selections=basic,donations&key=${apiKey}`;
-        const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-        const data = await res.json();
+        let data = null;
+        let lastError = null;
 
-        if (data && !data.error && data.ID) {
-            if (!discordConfig.factionId) dynamicFactionId = String(data.ID);
-            if (!discordConfig.factionName && data.name) {
-                discordConfig.factionName = data.name;
-                UI.setFactionName(data.name);
+        for (const candidateKey of uniqueKeys) {
+            const url = facId
+                ? `https://api.torn.com/faction/${facId}?selections=basic,donations&key=${candidateKey}`
+                : `https://api.torn.com/faction/?selections=basic,donations&key=${candidateKey}`;
+            try {
+                const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+                const json = await res.json();
+                if (json && !json.error && json.donations) {
+                    data = json;
+                    if (data.ID) {
+                        facId = String(data.ID);
+                        if (!discordConfig.factionId) dynamicFactionId = String(data.ID);
+                        if (!discordConfig.factionName && data.name) {
+                            discordConfig.factionName = data.name;
+                            UI.setFactionName(data.name);
+                        }
+                    }
+                    break;
+                } else if (json?.error) {
+                    lastError = json.error.error || json.error;
+                }
+            } catch(e) {
+                lastError = e.message;
             }
         }
 
-        if (data.error) {
-            return { title: "🏦 Faction Vault Balance", description: `⚠️ Torn API Error: ${data.error.error}`, color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
+        if (!data || data.error || !data.donations) {
+            return { title: "🏦 Faction Vault Balance", description: `⚠️ Torn API Error: ${lastError || data?.error?.error || "Unable to read faction vault donations."}`, color: UI.COLORS.ERROR, footer: UI.FOOTER, timestamp: new Date().toISOString() };
         }
 
         const donations = data.donations || {};
@@ -18617,12 +18665,12 @@ async function executeVerifyMember(memberOrUser, guild, targetPlayerInput = null
         roleWarnings,
         isNewVerification: !alreadyHadVerifiedRole,
         alreadyVerified: alreadyHadVerifiedRole,
-        title: `🕷️ Verified: ${playerName} [${playerId}]`,
+        title: `${playerFactionName && playerFactionName.toLowerCase().includes('spider') ? '🕷️' : '🛡️'} Verified: ${playerName} [${playerId}]`,
         description: verifiedViaAdminOverride
-            ? `✅ <@${discordUserId}> [${playerId}] has been manually verified as **[${playerName}](https://www.torn.com/profiles.php?XID=${playerId})**! Roles and nickname synced.`
+            ? `✅ <@${discordUserId}> has been manually verified as **[${playerName}](https://www.torn.com/profiles.php?XID=${playerId})**! Roles and nickname synced.`
             : (alreadyHadVerifiedRole
-                ? `✅ <@${discordUserId}> [${playerId}], your verification is already up to date! Roles and nickname refreshed.`
-                : `✅ <@${discordUserId}> [${playerId}] has been successfully verified! Full server access granted.`),
+                ? `✅ <@${discordUserId}>, your verification is already up to date! Roles and nickname refreshed.`
+                : `✅ <@${discordUserId}> has been successfully verified! Full server access granted.`),
         color: UI.COLORS.GREEN,
         fields,
         footer: UI.FOOTER,
@@ -23197,7 +23245,8 @@ function setupSlashBotEvents(bot, token) {
 
             let vaultInfo = null;
             try {
-                vaultInfo = await getFactionVaultAndMember(apiKey, interaction, null, true);
+                const factionKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey() || apiKey;
+                vaultInfo = await getFactionVaultAndMember(factionKey, interaction, null, true);
             } catch(err) {
                 console.error("[Bank Vault Check Error]:", err.message);
             }
@@ -23505,7 +23554,8 @@ function setupSlashBotEvents(bot, token) {
             // ── Banking & Discord Audit ──
             if (cmd === 'balance') {
                 const member = interaction.options.getString('member');
-                embed = await buildVaultBalanceEmbed(apiKey, member, interaction.user);
+                const factionKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey() || apiKey;
+                embed = await buildVaultBalanceEmbed(factionKey, member, interaction.user);
             } else if (cmd === 'notindiscord' || (cmd === 'faction' && subcommand === 'notindiscord')) {
                 embed = await buildMissingDiscordEmbed(interaction.guild, apiKey);
             }
