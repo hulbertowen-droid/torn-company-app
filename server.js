@@ -15477,8 +15477,8 @@ function checkExpiredBankRequests() {
                     } catch(e) {}
                 })();
             }
-        } else if (req.status === 'verifying' && (now - (req.fulfilledAt || req.timestamp) > 60 * 1000)) {
-            // Revert to unclaimed (pending) after 60 seconds unfulfilled
+        } else if (req.status === 'verifying' && (now - (req.fulfilledAt || req.timestamp) > 5 * 60 * 1000)) {
+            // Revert to unclaimed (pending) after 5 minutes unfulfilled
             req.status = 'pending';
             req.fulfilledBy = null;
             req.fulfillerName = null;
@@ -15680,7 +15680,7 @@ function buildBankRequestButtons(req) {
             }
         ];
     } else if (req.status === 'verifying') {
-        // Verifying: Direct link button straight to Torn Vault + Unclaim button (restricted to claiming banker)
+        // Verifying: Direct link button straight to Torn Vault + Check Logs + Unclaim button (restricted to claiming banker)
         return [
             {
                 type: 1,
@@ -15691,6 +15691,13 @@ function buildBankRequestButtons(req) {
                         label: `🏠 Open Torn Vault ($${amtFmt})`,
                         url: vaultUrl,
                         emoji: { name: '💸' }
+                    },
+                    {
+                        type: 2,
+                        style: 1, // Primary (Blurple) - instant check
+                        custom_id: `bank_check_${req.id}`,
+                        label: 'Check Logs',
+                        emoji: { name: '🔍' }
                     },
                     {
                         type: 2,
@@ -16183,7 +16190,7 @@ async function checkFactionLogForPayment(req, apiKey) {
 
 // ── Background Polling for Log Verification ────────────────────────────────
 async function verifyBankPayment(req, apiKey, botClient) {
-    const maxWait = 60 * 1000;       // 60-second window to find the payment in logs
+    const maxWait = 5 * 60 * 1000;    // 5-minute window to find the payment in logs
     const pollInterval = 2500;      // high-speed 2.5s poller
     const startedAt = Date.now();
 
@@ -16227,7 +16234,7 @@ async function verifyBankPayment(req, apiKey, botClient) {
         } catch(e) {}
     }
 
-    // 60 seconds elapsed and still not verified — revert to unclaimed (pending)
+    // 5 minutes elapsed and still not verified — revert to unclaimed (pending)
     if (req.status === 'verifying') {
         const bankerId = req.fulfilledBy;
         req.status = 'pending';
@@ -16242,7 +16249,7 @@ async function verifyBankPayment(req, apiKey, botClient) {
                 const bankerUser = await botClient.users.fetch(bankerId).catch(() => null);
                 if (bankerUser) {
                     await bankerUser.send(
-                        `⚠️ **Faction Vault Alert:** Request **#${req.id}** ($${Number(req.amount).toLocaleString()} for **${req.tornName || 'member'}**) was **not found in Torn faction logs within 60 seconds** and has returned to unclaimed for any banker to take.\n\nIf you still wish to fulfill it, click **💸 Fulfill** on the Discord request card.`
+                        `⚠️ **Faction Vault Alert:** Request **#${req.id}** ($${Number(req.amount).toLocaleString()} for **${req.tornName || 'member'}**) was **not found in Torn faction logs within 5 minutes** and has returned to unclaimed for any banker to take.\n\nIf you still wish to fulfill it, click **💸 Fulfill** on the Discord request card.`
                     ).catch(() => {});
                 }
             } catch(e) {}
@@ -17199,7 +17206,7 @@ async function executeFulfillRequest(reqId, interaction) {
             } catch(e) {}
         }
 
-        // Start background poller (60 seconds)
+        // Start background poller (5 minutes)
         const client = interaction?.client || slashCommandBot;
         if (client) {
             verifyBankPayment(req, apiKey, client).catch(() => {});
@@ -17213,7 +17220,7 @@ async function executeFulfillRequest(reqId, interaction) {
                      `👉 **[💸 Open Pre-filled Vault in Torn ($${amtFmt})](${prefilledUrl})**\n\n` +
                      `2. Complete the cash transfer in Torn.\n\n` +
                      `• The bot is watching faction logs and will **automatically mark this fulfilled** once Torn registers the transfer.\n` +
-                     `• If unfulfilled within **60 seconds**, this request will automatically return to unclaimed for another banker.`
+                     `• If unfulfilled within **5 minutes**, this request will automatically return to unclaimed for another banker.`
         };
     } finally {
         if (!isLockedByCaller) {
@@ -20077,6 +20084,7 @@ const TUTORIAL_CATALOG = [
             { name: 'donator', text: '`/donator` — Checks if a player has active Donator or Subscriber status.' },
             { name: 'balance', text: '`/balance` — Checks your faction vault balance and donations.' },
             { name: 'withdraw', text: '`/withdraw` — Asks a banker for a cash payout from the faction vault.' },
+            { name: 'with', text: '`/with` — Shortcut alias for `/withdraw`.' },
             { name: 'payout', text: '`/payout` — Checks how much war pay you\'re owed.' },
             { name: 'notifications', text: '`/notifications` — Lets you pick which alerts the bot DMs you about.' },
             { name: 'dmalerts', text: '`/dmalerts` — Shortcut to change your personal DM alert settings.' }
@@ -20114,6 +20122,7 @@ async function registerSlashCommands(token, guildId = null, options = {}) {
         const name = cmd.name.toLowerCase();
         if (disabledCmds.includes(name)) return false;
         if (name === 'revive' && disabledCmds.includes('revives')) return false;
+        if (name === 'with' && disabledCmds.includes('withdraw')) return false;
         return true;
     });
 
@@ -21020,7 +21029,7 @@ function setupSlashBotEvents(bot, token) {
                 }
             }
 
-            if (cmd === 'withdraw' && focusedOption.name === 'amount') {
+            if ((cmd === 'withdraw' || cmd === 'with') && focusedOption.name === 'amount') {
                 const typed = (focusedOption.value || '').replace(/[$,\s]/g, '');
                 const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
 
@@ -21925,6 +21934,7 @@ function setupSlashBotEvents(bot, token) {
         const disabledCmds = (Array.isArray(discordConfig.disabledCommands) ? discordConfig.disabledCommands : [])
             .map(c => String(c).toLowerCase().trim());
         const isCmdDisabled = disabledCmds.includes(cmd) || 
+            (cmd === 'with' && disabledCmds.includes('withdraw')) ||
             (cmd === 'revive' && disabledCmds.includes('revives')) ||
             (subcommand && (disabledCmds.includes(subcommand) || (subcommand === 'revive' && disabledCmds.includes('revives'))));
         if (isCmdDisabled) {
@@ -21940,7 +21950,7 @@ function setupSlashBotEvents(bot, token) {
         const wantsModal = (cmd === 'giveaway') && (!interaction.options?.getString?.('prize') || !interaction.options?.getString?.('duration'));
         if (!wantsModal && !interaction.deferred && !interaction.replied) {
             const ephemeralCmds = new Set([
-                'withdraw', 'promotion', 'notifications', 'dmalerts',
+                'withdraw', 'with', 'promotion', 'notifications', 'dmalerts',
                 'linkkey', 'unlinkkey', 'openrouter', 'bug', 'tutorial',
                 'snipe', 'elim', 'remindkeys'
             ]);
@@ -23250,8 +23260,8 @@ function setupSlashBotEvents(bot, token) {
             });
         }
 
-        // Direct handling for /withdraw with STRICT OVERDRAFT PROTECTION
-        if (cmd === 'withdraw') {
+        // Direct handling for /withdraw and /with with STRICT OVERDRAFT PROTECTION
+        if (cmd === 'withdraw' || cmd === 'with') {
             // IMMEDIATELY acknowledge Discord interaction within <20ms to guarantee zero timeouts
             if (!interaction.deferred && !interaction.replied) await interaction.deferReply({ ephemeral: true }).catch(() => {});
 

@@ -42,6 +42,9 @@ function buildSlashCommands() {
         new SlashCommandBuilder().setName('withdraw').setDescription('Request money from the faction vault (with overdraft protection)')
             .addStringOption(opt => opt.setName('amount').setDescription('Amount to request (e.g. 10m, 500k, 25000000)').setRequired(true).setAutocomplete(true)).toJSON(),
 
+        new SlashCommandBuilder().setName('with').setDescription('Quick shortcut: Request money from the faction vault (alias of /withdraw)')
+            .addStringOption(opt => opt.setName('amount').setDescription('Amount to request (e.g. 10m, 500k, 25000000)').setRequired(true).setAutocomplete(true)).toJSON(),
+
         new SlashCommandBuilder().setName('balance').setDescription('Check faction vault balance and donations')
             .addStringOption(opt => opt.setName('member').setDescription('Member name or ID (leave blank for yourself or leaderboard)')).toJSON(),
 
