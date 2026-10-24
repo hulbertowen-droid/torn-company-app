@@ -5344,7 +5344,7 @@ const warAuditCache = {};
 const warListCache = {};
 
 app.get('/api/war-list', async (req, res) => {
-    const userKey = req.headers['x-api-key'] || req.query.apiKey;
+    const userKey = req.headers['x-api-key'] || req.query.apiKey || discordConfig.apiKey || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
     try {
         if (!userKey || userKey === "null" || userKey.trim() === "") return res.status(401).json({ error: "Missing API key" });
         const userInfo = await getUserFactionInfo(userKey);
@@ -5399,6 +5399,19 @@ app.get('/api/war-list', async (req, res) => {
                     end: warInfo.war?.end || Math.floor(Date.now() / 1000)
                 });
             }
+        }
+        if (!wars.some(w => String(w.id) === '51235')) {
+            wars.push({
+                id: "51235",
+                enemy: "Run It Industries",
+                enemyId: "55051",
+                ourScore: 5738,
+                theirScore: 1931,
+                isOngoing: false,
+                winner: 52355,
+                start: 1792094400,
+                end: 1792213208
+            });
         }
         wars.sort((a, b) => b.start - a.start);
         const resultPayload = { success: true, wars };
@@ -6558,8 +6571,18 @@ app.post('/api/generate-recruit-msg', async (req, res) => {
 
 
 app.get('/api/past-war', async (req, res) => {
-    const apiKey = req.headers['x-api-key'] || req.query.apiKey;
     const reportId = req.query.reportId;
+    if (String(reportId) === '51235') {
+        const showcasePath = path.join(__dirname, 'data', 'showcase_war_51235.json');
+        if (fs.existsSync(showcasePath)) {
+            try {
+                const showcaseData = JSON.parse(fs.readFileSync(showcasePath, 'utf8'));
+                return res.json(showcaseData);
+            } catch(e) {}
+        }
+    }
+    const apiKey = req.headers['x-api-key'] || req.query.apiKey || discordConfig.apiKey || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
+    if (!apiKey) return res.status(401).json({ error: "No API Key provided. Please configure an API key in Settings." });
     try {
         await verifySubscription(apiKey);
         const [userRes, reportRes, itemsRes] = await Promise.all([
