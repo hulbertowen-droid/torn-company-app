@@ -3846,8 +3846,7 @@ function applyConfigToDOM(cfg) {
     }
 
     // Initialize slash command toggles
-    const localDisabled = JSON.parse(localStorage.getItem('warboard_disabled_commands') || '[]');
-    const disabledCmds = (Array.isArray(cfg.disabledCommands) ? cfg.disabledCommands : localDisabled)
+    const disabledCmds = (Array.isArray(cfg.disabledCommands) ? cfg.disabledCommands : [])
         .map(c => String(c).toLowerCase().trim());
     document.querySelectorAll('.cmd-toggle').forEach(chk => {
         const cmdName = (chk.dataset.cmd || '').toLowerCase().trim();
