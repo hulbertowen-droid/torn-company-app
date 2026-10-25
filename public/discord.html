@@ -10,14 +10,15 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/global.css?v=3.2.0">
     <style>
+        
         :root {
             --bg-base: #06080e;
-            --bg-surface: #0b0f19;
+            --bg-subtle: #0b0f19;
             --bg-card: #101624;
             --bg-card-hover: #141c2e;
             --bg-card-elevated: #162035;
-            --border-subtle: rgba(255, 255, 255, 0.08);
-            --border-strong: rgba(255, 255, 255, 0.16);
+            --border-subtle: rgba(255, 255, 255, 0.07);
+            --border-strong: rgba(255, 255, 255, 0.14);
             --border-focus: #5865f2;
             --discord: #5865f2;
             --discord-hover: #4752c4;
@@ -45,24 +46,6 @@
             --shadow-glow: 0 0 25px rgba(88, 101, 242, 0.15);
         }
 
-        body.light-mode {
-            --bg-base: #f1f5f9;
-            --bg-surface: #ffffff;
-            --bg-card: #ffffff;
-            --bg-card-hover: #f8fafc;
-            --bg-card-elevated: #ffffff;
-            --border-subtle: rgba(0, 0, 0, 0.08);
-            --border-strong: rgba(0, 0, 0, 0.16);
-            --border-focus: #5865f2;
-            --text-main: #0f172a;
-            --text-muted: #475569;
-            --text-dim: #647087;
-            --shadow-subtle: 0 4px 20px rgba(0, 0, 0, 0.06);
-            --shadow-glow: 0 0 25px rgba(88, 101, 242, 0.08);
-            background-color: var(--bg-base);
-            color: var(--text-main);
-        }
-
         body {
             background-color: var(--bg-base);
             color: var(--text-main);
@@ -76,61 +59,1632 @@
             padding-bottom: 90px;
         }
 
-        /* Topbar Breadcrumb */
-        .app-topbar {
-            height: 56px;
+        /* Hero / Operations Header */
+        .ops-header {
+            margin-bottom: 24px;
+        }
+        .ops-badge-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+        .ops-pill {
+            font-size: 0.72em;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            background: rgba(255, 71, 87, 0.15);
+            color: var(--spider-red);
+            border: 1px solid rgba(255, 71, 87, 0.3);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .ops-pill.discord {
+            background: rgba(88, 101, 242, 0.15);
+            color: var(--discord);
+            border-color: rgba(88, 101, 242, 0.3);
+        }
+        .ops-title {
+            font-size: 1.85em;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin: 0 0 6px 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .ops-title span {
+            background: linear-gradient(135deg, #fff 30%, #58a6ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .ops-subtitle {
+            font-size: 0.9em;
+            color: var(--text-muted);
+            margin: 0;
+            max-width: 860px;
+            line-height: 1.5;
+        }
+
+        /* Server / Connection Meta Bar */
+        .server-meta-bar {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0 24px;
-            border-bottom: 1px solid var(--border-subtle);
-            background: rgba(6, 8, 14, 0.85);
-            backdrop-filter: blur(12px);
-            position: sticky;
-            top: 0;
-            z-index: 100;
+            flex-wrap: wrap;
+            gap: 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 12px 18px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow-subtle);
         }
-        body.light-mode .app-topbar {
-            background: rgba(255, 255, 255, 0.85);
+        .server-meta-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
         }
-        .topbar-left { display: flex; align-items: center; gap: 12px; }
-        .topbar-crumb { font-size: 0.82em; letter-spacing: 0.5px; color: var(--text-muted); }
-        .topbar-right { display: flex; align-items: center; gap: 12px; }
-        .tct-clock-chip {
-            display: inline-flex; align-items: center; gap: 6px;
-            background: rgba(0,0,0,0.3); border: 1px solid var(--border-subtle);
-            border-radius: 6px; padding: 4px 10px;
-            font-family: var(--font-mono); font-size: 0.82em; color: var(--text-main);
+        .server-icon-badge {
+            width: 42px;
+            height: 42px;
+            border-radius: var(--radius-md);
+            background: var(--bg-subtle);
+            border: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4em;
         }
-        .tct-label { font-weight: 700; color: var(--gold); }
-        .telemetry-chip {
-            display: inline-flex; align-items: center; gap: 6px;
-            font-size: 0.76em; font-weight: 700; padding: 4px 10px;
-            border-radius: 6px; background: rgba(46, 213, 115, 0.12);
-            border: 1px solid rgba(46, 213, 115, 0.25); color: var(--green);
+        .server-meta-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
         }
-        .pulse-indicator {
-            width: 7px; height: 7px; border-radius: 50%;
-            background: var(--green); box-shadow: 0 0 8px var(--green);
-            animation: pulse-ring 2s infinite;
+        .server-name-label {
+            font-size: 0.95em;
+            font-weight: 700;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
-        @keyframes pulse-ring {
-            0% { transform: scale(0.9); opacity: 0.8; }
-            50% { transform: scale(1.3); opacity: 1; }
-            100% { transform: scale(0.9); opacity: 0.8; }
+        .server-detail-label {
+            font-size: 0.78em;
+            color: var(--text-muted);
+        }
+        .server-meta-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
         }
 
-        .main-content {
-            padding: 16px 24px 30px;
-            max-width: 1600px;
-            margin: 0 auto;
+        /* Connection Badge */
+        .conn-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            transition: all 0.25s ease;
+        }
+        .conn-badge .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        .conn-badge.connected {
+            background: rgba(46, 213, 115, 0.12);
+            color: var(--green);
+            border: 1px solid rgba(46, 213, 115, 0.35);
+        }
+        .conn-badge.connected .dot {
+            background: var(--green);
+            box-shadow: 0 0 10px var(--green);
+            animation: pulse-green 2s infinite;
+        }
+        .conn-badge.disconnected {
+            background: rgba(255, 71, 87, 0.12);
+            color: var(--spider-red);
+            border: 1px solid rgba(255, 71, 87, 0.35);
+        }
+        .conn-badge.disconnected .dot {
+            background: var(--spider-red);
+        }
+        @keyframes pulse-green {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.15); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+
+        /* Hero Killswitch Banner */
+        .status-banner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+            padding: 16px 20px;
+            border-radius: var(--radius-lg);
+            margin-bottom: 24px;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .status-banner.live {
+            background: linear-gradient(135deg, rgba(46, 213, 115, 0.08) 0%, rgba(16, 22, 36, 0.9) 100%);
+            border: 1px solid rgba(46, 213, 115, 0.28);
+            box-shadow: 0 4px 25px rgba(46, 213, 115, 0.08);
+        }
+        .status-banner.muted {
+            background: linear-gradient(135deg, rgba(255, 71, 87, 0.08) 0%, rgba(16, 22, 36, 0.9) 100%);
+            border: 1px solid rgba(255, 71, 87, 0.3);
+            box-shadow: 0 4px 25px rgba(255, 71, 87, 0.08);
+        }
+        .status-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+        .status-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .status-banner.live .status-dot {
+            background: var(--green);
+            box-shadow: 0 0 14px var(--green);
+            animation: pulse-green 2s infinite;
+        }
+        .status-banner.muted .status-dot {
+            background: var(--spider-red);
+            box-shadow: 0 0 14px var(--spider-red);
+        }
+        .status-title {
+            font-size: 1.05em;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 2px;
+        }
+        .status-desc {
+            font-size: 0.84em;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+        .status-desc code {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--spider-blue);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 0.9em;
+        }
+
+        /* Telemetry & KPI Cards */
+        .telemetry-grid {
+            display: grid;
+            grid-template-columns: 1.6fr 1fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        @media(max-width: 1100px) {
+            .telemetry-grid { grid-template-columns: 1fr 1fr; }
+        }
+        @media(max-width: 650px) {
+            .telemetry-grid { grid-template-columns: 1fr; }
+        }
+
+        .telemetry-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 16px 18px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            box-shadow: var(--shadow-subtle);
+            transition: transform 0.2s, border-color 0.2s;
+        }
+        .telemetry-card:hover {
+            border-color: var(--border-strong);
+            transform: translateY(-2px);
+        }
+        .telemetry-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .telemetry-label {
+            font-size: 0.76em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+        }
+        .telemetry-icon {
+            font-size: 1.2em;
+            opacity: 0.8;
+        }
+        .telemetry-value-row {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .telemetry-num {
+            font-size: 1.9em;
+            font-weight: 800;
+            color: var(--text-main);
+            font-family: var(--font-mono);
+            line-height: 1;
+        }
+        .telemetry-sub {
+            font-size: 0.78em;
+            color: var(--text-muted);
+        }
+
+        /* Dynamic Progress Bar */
+        .setup-progress-bar-wrap {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        .setup-progress-bar-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #5865f2, #2ed573);
+            border-radius: 10px;
+            transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .setup-checklist-pills {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        .setup-pill {
+            font-size: 0.7em;
+            padding: 2px 7px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-dim);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .setup-pill.done {
+            background: rgba(46, 213, 115, 0.1);
+            color: var(--green);
+            border-color: rgba(46, 213, 115, 0.25);
+        }
+
+        /* Quick Actions Bar */
+        .quick-actions-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 24px;
+            padding: 12px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+        }
+        .quick-actions-label {
+            font-size: 0.78em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            margin-right: 6px;
+        }
+        .btn-action {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-main);
+            padding: 7px 14px;
+            border-radius: var(--radius-md);
+            font-size: 0.82em;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s ease;
+        }
+        .btn-action:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--border-strong);
+            color: #fff;
+            transform: translateY(-1px);
+        }
+        .btn-action.primary {
+            background: var(--discord);
+            border-color: var(--discord);
+            color: #fff;
+        }
+        .btn-action.primary:hover {
+            background: var(--discord-hover);
+        }
+        .btn-action.teal {
+            background: rgba(0, 206, 201, 0.12);
+            color: var(--teal);
+            border-color: rgba(0, 206, 201, 0.3);
+        }
+        .btn-action.teal:hover {
+            background: rgba(0, 206, 201, 0.2);
+        }
+
+        /* Standard Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-subtle);
+            overflow: hidden;
+            transition: border-color 0.2s;
+        }
+        .card:hover {
+            border-color: rgba(255, 255, 255, 0.12);
+        }
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.015);
+        }
+        .card-title {
+            font-size: 1.05em;
+            font-weight: 700;
+            margin: 0;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .card-subtitle {
+            font-size: 0.8em;
+            color: var(--text-muted);
+        }
+        .card-body {
+            padding: 20px;
+        }
+
+        /* Field Grids & Inputs */
+        .field-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        .field-grid.single {
+            grid-template-columns: 1fr;
+        }
+        .field-grid.three {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+        @media(max-width: 768px) {
+            .field-grid, .field-grid.three { grid-template-columns: 1fr; }
+        }
+
+        .field-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .field-label {
+            font-size: 0.82em;
+            font-weight: 600;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .field-label .opt {
+            font-size: 0.85em;
+            font-weight: 400;
+            color: var(--text-dim);
+        }
+        .field-input {
             width: 100%;
             box-sizing: border-box;
+            background: var(--bg-subtle);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 9px 12px;
+            color: var(--text-main);
+            font-size: 0.88em;
+            font-family: inherit;
+            transition: all 0.2s ease;
+        }
+        .field-input:focus {
+            outline: none;
+            border-color: var(--border-focus);
+            background: #0f1524;
+            box-shadow: 0 0 0 3px rgba(88, 101, 242, 0.18);
+        }
+        .field-hint {
+            font-size: 0.75em;
+            color: var(--text-dim);
+            line-height: 1.35;
         }
 
+        /* Filter Tabs & Search Controls */
+        .alerts-toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .alerts-tabs {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .tab-pill {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .tab-pill:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .tab-pill.active {
+            background: rgba(88, 101, 242, 0.18);
+            color: #7b88ff;
+            border-color: rgba(88, 101, 242, 0.4);
+        }
+        .search-box {
+            position: relative;
+            min-width: 240px;
+            max-width: 320px;
+        }
+        .search-input {
+            width: 100%;
+            box-sizing: border-box;
+            background: var(--bg-subtle);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            padding: 7px 14px 7px 38px !important;
+            padding-left: 38px !important;
+            color: var(--text-main);
+            font-size: 0.82em;
+            outline: none;
+            transition: all 0.2s;
+        }
+        .search-input:focus {
+            border-color: var(--border-focus);
+            box-shadow: 0 0 0 3px rgba(88, 101, 242, 0.15);
+        }
+        .search-icon {
+            position: absolute;
+            left: 12px !important;
+            top: 50% !important;
+            transform: translateY(-50%) !important;
+            font-size: 0.85em;
+            color: var(--text-dim);
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        /* Alert Trigger Cards & Rows */
+        .trigger-category-block {
+            margin-bottom: 24px;
+        }
+        .category-title {
+            font-size: 0.85em;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin: 0 0 12px 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .category-title span.count-badge {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-main);
+            font-size: 0.8em;
+            padding: 1px 7px;
+            border-radius: 10px;
+            font-weight: 700;
+        }
+
+        .trigger-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+            gap: 12px;
+        }
+        @media(max-width: 768px) {
+            .trigger-grid { grid-template-columns: 1fr; }
+        }
+
+        .trigger-row {
+            background: var(--bg-subtle);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 14px 16px;
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 14px;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+        }
+        .trigger-row:hover {
+            border-color: var(--border-strong);
+            background: #0e1320;
+            transform: translateY(-1px);
+        }
+        .trigger-row.on {
+            border-color: rgba(46, 213, 115, 0.25);
+            background: linear-gradient(135deg, rgba(46, 213, 115, 0.03) 0%, rgba(14, 19, 32, 0.95) 100%);
+        }
+        .trigger-row-left {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            flex: 1;
+        }
+        .trigger-icon {
+            font-size: 1.35em;
+            line-height: 1;
+            margin-top: 2px;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.04);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .trigger-info {
+            flex: 1;
+        }
+        .trigger-name {
+            font-size: 0.9em;
+            font-weight: 700;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 4px;
+        }
+        .trigger-desc {
+            font-size: 0.78em;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+        .trigger-route-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.72em;
+            color: var(--teal);
+            background: rgba(0, 206, 201, 0.08);
+            border: 1px solid rgba(0, 206, 201, 0.2);
+            padding: 1px 7px;
+            border-radius: 4px;
+            margin-top: 6px;
+            font-family: var(--font-mono);
+        }
+        .trigger-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        /* Tags */
+        .tag {
+            font-size: 0.68em;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .tag.war {
+            background: rgba(255, 71, 87, 0.15);
+            color: var(--spider-red);
+            border: 1px solid rgba(255, 71, 87, 0.3);
+        }
+        .tag.premium {
+            background: rgba(255, 165, 2, 0.15);
+            color: var(--gold);
+            border: 1px solid rgba(255, 165, 2, 0.3);
+        }
+        .tag.faction {
+            background: rgba(0, 206, 201, 0.12);
+            color: var(--teal);
+            border: 1px solid rgba(0, 206, 201, 0.3);
+        }
+        .tag.security {
+            background: rgba(165, 94, 234, 0.15);
+            color: var(--purple);
+            border: 1px solid rgba(165, 94, 234, 0.3);
+        }
+
+        /* Toggle Switches */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 22px;
+        }
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255, 255, 255, 0.12);
+            transition: .25s;
+            border-radius: 22px;
+            border: 1px solid var(--border-subtle);
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 2px;
+            bottom: 2px;
+            background-color: #fff;
+            transition: .25s cubic-bezier(0.16, 1, 0.3, 1);
+            border-radius: 50%;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+        }
+        input:checked + .slider {
+            background-color: var(--green);
+            border-color: var(--green);
+        }
+        input:checked + .slider:before {
+            transform: translateX(18px);
+        }
+
+        .switch-sm {
+            position: relative;
+            display: inline-block;
+            width: 32px;
+            height: 18px;
+        }
+        .switch-sm input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .switch-sm .slider {
+            border-radius: 18px;
+        }
+        .switch-sm .slider:before {
+            height: 12px;
+            width: 12px;
+            left: 2px;
+            bottom: 2px;
+        }
+        .switch-sm input:checked + .slider:before {
+            transform: translateX(14px);
+        }
+
+        /* Test Buttons */
+        .btn-test {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-main);
+            padding: 4px 10px;
+            border-radius: var(--radius-sm);
+            font-size: 0.74em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-test:hover {
+            background: rgba(88, 101, 242, 0.18);
+            border-color: var(--discord);
+            color: #fff;
+        }
+        .btn-test.sending {
+            background: rgba(255, 165, 2, 0.15);
+            border-color: var(--gold);
+            color: var(--gold);
+            cursor: wait;
+        }
+        .btn-test.success {
+            background: rgba(46, 213, 115, 0.2);
+            border-color: var(--green);
+            color: var(--green);
+        }
+        .btn-test.fail {
+            background: rgba(255, 71, 87, 0.2);
+            border-color: var(--spider-red);
+            color: var(--spider-red);
+        }
+
+        /* Slash Command Grid */
+        .cmd-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 10px;
+        }
+        .cmd-card {
+            background: var(--bg-subtle);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: 10px 12px;
+            transition: all 0.2s;
+        }
+        .cmd-card:hover {
+            border-color: var(--border-strong);
+            background: #0e1320;
+        }
+        .cmd-card.on {
+            border-color: rgba(88, 101, 242, 0.3);
+        }
+        .cmd-card-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .cmd-card-title {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 700;
+            font-size: 0.88em;
+        }
+        .cmd-card-title code {
+            font-family: var(--font-mono);
+            color: var(--spider-blue);
+            font-size: 0.95em;
+        }
+        .cmd-card-desc {
+            font-size: 0.74em;
+            color: var(--text-muted);
+            line-height: 1.35;
+        }
+
+        /* Speak as Bot / Broadcaster & Discord Preview Box */
+        .channel-pills-wrap {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            max-height: 140px;
+            overflow-y: auto;
+            padding: 8px;
+            background: var(--bg-subtle);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+        }
+        .channel-pill {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            padding: 4px 10px;
+            border-radius: var(--radius-sm);
+            font-size: 0.78em;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            user-select: none;
+            transition: all 0.15s;
+        }
+        .channel-pill input {
+            display: none;
+        }
+        .channel-pill:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-main);
+        }
+        .channel-pill.selected {
+            background: rgba(88, 101, 242, 0.22);
+            color: #d1d5ff;
+            border-color: var(--discord);
+        }
+        .channel-pill .chan-cat {
+            font-size: 0.85em;
+            color: var(--text-dim);
+        }
+
+        .template-chip {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.74em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .template-chip:hover {
+            background: rgba(88, 101, 242, 0.2);
+            color: #fff;
+            border-color: var(--discord);
+        }
+        .color-preset-btn {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            transition: transform 0.15s;
+        }
+        .color-preset-btn:hover {
+            transform: scale(1.15);
+            border-color: #fff;
+        }
+
+        /* Authentic Discord Dark Preview Box */
+        .discord-preview-box {
+            background: var(--discord-bg);
+            border: 1px solid #232428;
+            border-radius: var(--radius-md);
+            padding: 14px 16px;
+            display: flex;
+            gap: 14px;
+            font-family: 'Inter', system-ui, sans-serif;
+            color: #dbdee1;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+        .dc-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--discord);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3em;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        .dc-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .dc-msg-body {
+            flex: 1;
+            min-width: 0;
+        }
+        .dc-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 4px;
+        }
+        .dc-name {
+            font-weight: 600;
+            color: #f2f3f5;
+            font-size: 0.95em;
+        }
+        .dc-bot-tag {
+            background: #5865f2;
+            color: #ffffff;
+            font-size: 0.65em;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            line-height: 1.3;
+        }
+        .dc-timestamp {
+            font-size: 0.72em;
+            color: #949ba4;
+            margin-left: 2px;
+        }
+        .dc-content {
+            color: #dbdee1;
+            word-break: break-word;
+            font-size: 0.92em;
+        }
+        .dc-mention {
+            background: rgba(88, 101, 242, 0.3);
+            color: #c9cdfb;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-weight: 600;
+            font-size: 0.9em;
+        }
+        .dc-embed {
+            background: var(--discord-card);
+            border-left: 4px solid var(--discord);
+            border-radius: 4px;
+            padding: 10px 14px;
+            margin-top: 6px;
+            max-width: 520px;
+        }
+        .dc-embed-title {
+            font-weight: 700;
+            font-size: 0.96em;
+            color: #f2f3f5;
+            margin-bottom: 6px;
+        }
+        .dc-embed-desc {
+            font-size: 0.88em;
+            color: #dbdee1;
+            line-height: 1.45;
+            word-break: break-word;
+        }
+        .dc-embed-footer {
+            font-size: 0.72em;
+            color: #949ba4;
+            margin-top: 8px;
+            padding-top: 6px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .dc-inlinecode {
+            background: #2b2d31;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: var(--font-mono);
+            font-size: 0.88em;
+        }
+        .dc-codeblock {
+            background: #2b2d31;
+            padding: 8px 10px;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 0.85em;
+            margin: 6px 0;
+            overflow-x: auto;
+        }
+        .dc-quote {
+            border-left: 3px solid #4e5058;
+            padding-left: 10px;
+            margin: 4px 0;
+            color: #949ba4;
+        }
+
+        /* Country Lookup Pills */
+        .country-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        /* Sticky Save Bar */
+        .sticky-save-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(11, 15, 25, 0.88);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border-top: 1px solid var(--border-subtle);
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 999;
+            box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .sticky-save-bar.dirty {
+            border-top-color: rgba(255, 165, 2, 0.4);
+            background: rgba(14, 18, 30, 0.94);
+        }
+        .sticky-save-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .save-indicator-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--text-dim);
+            transition: all 0.2s;
+        }
+        .sticky-save-bar.dirty .save-indicator-dot {
+            background: var(--gold);
+            box-shadow: 0 0 10px var(--gold);
+            animation: pulse-gold 1.5s infinite;
+        }
+        @keyframes pulse-gold {
+            0% { transform: scale(0.9); opacity: 0.7; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(0.9); opacity: 0.7; }
+        }
+        .save-hint-text {
+            font-size: 0.85em;
+            color: var(--text-muted);
+        }
+        .sticky-save-bar.dirty .save-hint-text {
+            color: var(--text-main);
+            font-weight: 600;
+        }
+        .sticky-save-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .btn-save {
+            background: linear-gradient(135deg, #2ed573 0%, #10ac84 100%);
+            border: none;
+            color: #000;
+            font-weight: 800;
+            font-size: 0.88em;
+            padding: 10px 22px;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 4px 15px rgba(46, 213, 115, 0.2);
+        }
+        .btn-save:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(46, 213, 115, 0.35);
+        }
+        .btn-save:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-discard {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            font-weight: 600;
+            font-size: 0.84em;
+            padding: 9px 16px;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-discard:hover {
+            background: rgba(255, 71, 87, 0.15);
+            border-color: var(--spider-red);
+            color: var(--spider-red);
+        }
+
+        /* Collapsible Setup Guide */
+        .guide-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+        .guide-header {
+            padding: 14px 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            user-select: none;
+            font-weight: 700;
+            font-size: 0.92em;
+            color: var(--text-main);
+            transition: background 0.2s;
+        }
+        .guide-header:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .guide-chevron {
+            font-size: 0.75em;
+            color: var(--text-dim);
+            transition: transform 0.25s;
+        }
+        .guide-header.open .guide-chevron {
+            transform: rotate(180deg);
+        }
+        .guide-body {
+            display: none;
+            padding: 0 20px 18px;
+            border-top: 1px solid var(--border-subtle);
+        }
+        .guide-body.open {
+            display: block;
+        }
+        .guide-inner ol {
+            color: var(--text-main);
+            font-size: 0.86em;
+            line-height: 1.8;
+            padding-left: 20px;
+            margin: 14px 0 10px;
+        }
+        .guide-note {
+            background: rgba(255, 165, 2, 0.08);
+            border: 1px solid rgba(255, 165, 2, 0.25);
+            border-radius: var(--radius-sm);
+            padding: 10px 14px;
+            font-size: 0.82em;
+            color: var(--gold);
+            margin-top: 10px;
+        }
+
+        /* Toast Container */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+        }
+        .toast-msg {
+            background: rgba(16, 22, 36, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-strong);
+            color: #fff;
+            padding: 10px 16px;
+            border-radius: var(--radius-md);
+            font-size: 0.85em;
+            font-weight: 600;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            animation: slide-in 0.25s ease;
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .toast-msg.success { border-color: var(--green); color: var(--green); }
+        .toast-msg.error { border-color: var(--spider-red); color: var(--spider-red); }
+        .toast-msg.warning { border-color: var(--gold); color: var(--gold); }
+        @keyframes slide-in {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    
+        /* Responsive alignment with standard executive sidebar */
+        .sticky-save-bar {
+            left: var(--sidebar-width, 240px) !important;
+            transition: left var(--transition-normal) !important;
+        }
+        body.sidebar-collapsed .sticky-save-bar {
+            left: var(--sidebar-width-collapsed, 64px) !important;
+        }
+        @media (max-width: 960px) {
+            .sticky-save-bar {
+                left: 0 !important;
+                right: 0 !important;
+                width: 100% !important;
+                box-sizing: border-box !important;
+            }
+            .field-input, .search-input {
+                font-size: 16px !important;
+            }
+        }
+        @media (max-width: 600px) {
+            .sticky-save-bar {
+                padding: 10px 14px !important;
+                gap: 8px !important;
+            }
+            .save-hint-text {
+                font-size: 0.76em !important;
+            }
+            .btn-save {
+                padding: 8px 14px !important;
+                font-size: 0.82em !important;
+            }
+            .btn-discard {
+                padding: 8px 12px !important;
+                font-size: 0.8em !important;
+            }
+            .ops-title {
+                font-size: 1.35em !important;
+            }
+            .server-meta-bar {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                padding: 12px !important;
+                gap: 10px !important;
+            }
+            .server-meta-left {
+                gap: 10px !important;
+            }
+            .server-meta-actions {
+                width: 100% !important;
+                justify-content: flex-start !important;
+            }
+            .card-body {
+                padding: 14px 12px !important;
+            }
+            .alerts-toolbar {
+                flex-direction: column !important;
+                align-items: stretch !important;
+            }
+            .search-box {
+                max-width: 100% !important;
+                min-width: 0 !important;
+                width: 100% !important;
+            }
+            .field-grid, .field-grid.three {
+                grid-template-columns: 1fr !important;
+                gap: 10px !important;
+            }
+        }
+    
+        /* Responsive Trigger Row & Routing Bar */
+        .trigger-row {
+            flex-wrap: wrap !important;
+        }
+        .trigger-row-left {
+            flex: 1 1 200px !important;
+        }
+        .trigger-routing-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--border-subtle);
+            border-radius: 6px;
+            padding: 6px 10px;
+            margin-top: 8px;
+            width: 100%;
+            box-sizing: border-box;
+            flex-wrap: wrap;
+        }
+        .trigger-routing-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.74em;
+            color: var(--text-muted);
+            flex: 1 1 110px;
+            min-width: 105px;
+        }
+        .trigger-routing-label {
+            font-weight: 700;
+            white-space: nowrap;
+            color: var(--text-dim);
+            font-size: 0.88em;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+        .trigger-override-select {
+            background: var(--bg-card);
+            color: var(--text-main);
+            border: 1px solid var(--border-subtle);
+            border-radius: 4px;
+            padding: 3px 6px;
+            font-size: 0.88em;
+            width: 100%;
+            outline: none;
+            font-family: inherit;
+            cursor: pointer;
+            transition: border-color 0.15s;
+        }
+        .trigger-override-select:focus {
+            border-color: var(--spider-blue);
+        }
+
+        /* Light Mode Comprehensive Theme Overrides */
+        body.light-mode {
+            --bg-base: #f1f5f9;
+            --bg-subtle: #f8fafc;
+            --bg-card: #ffffff;
+            --bg-card-hover: #f1f5f9;
+            --bg-card-elevated: #ffffff;
+            --border-subtle: rgba(0, 0, 0, 0.08);
+            --border-strong: rgba(0, 0, 0, 0.16);
+            --text-main: #0f172a;
+            --text-muted: #475569;
+            --text-dim: #647087;
+            --shadow-subtle: 0 4px 20px rgba(0, 0, 0, 0.06);
+            --shadow-glow: 0 0 25px rgba(88, 101, 242, 0.08);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+        }
+        body.light-mode .card,
+        body.light-mode .telemetry-card,
+        body.light-mode .cmd-card,
+        body.light-mode .trigger-row,
+        body.light-mode .field-input,
+        body.light-mode .field-select,
+        body.light-mode .search-input,
+        body.light-mode .sticky-save-bar {
+            background-color: var(--bg-card);
+            color: var(--text-main);
+        }
+        body.light-mode .trigger-row:hover,
+        body.light-mode .cmd-card:hover {
+            background: #f8fafc;
+        }
+        body.light-mode .trigger-row.on {
+            background: linear-gradient(135deg, rgba(46, 213, 115, 0.08) 0%, rgba(248, 250, 252, 0.95) 100%);
+        }
+        body.light-mode .trigger-routing-bar {
+            background: #f1f5f9;
+            border-color: rgba(0, 0, 0, 0.08);
+        }
+        body.light-mode .trigger-override-select {
+            background: #ffffff;
+            color: #0f172a;
+            border-color: rgba(0, 0, 0, 0.12);
+        }
+        body.light-mode .tab-pill {
+            background: #f8fafc;
+            border-color: rgba(0, 0, 0, 0.1);
+            color: var(--text-muted);
+        }
+        body.light-mode .tab-pill:hover,
+        body.light-mode .tab-pill.active {
+            background: #ffffff;
+            color: var(--text-main);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+        }
+        body.light-mode .field-input,
+        body.light-mode .field-select {
+            background: #ffffff;
+            border-color: rgba(0, 0, 0, 0.15);
+            color: #0f172a;
+        }
+        body.light-mode .field-input::placeholder,
+        body.light-mode .search-input::placeholder {
+            color: #94a3b8;
+        }
+        body.light-mode .search-input {
+            background: #ffffff;
+            border-color: rgba(0, 0, 0, 0.15);
+            color: #0f172a;
+        }
+        body.light-mode .sticky-save-bar {
+            background: rgba(255, 255, 255, 0.96);
+            border-top-color: rgba(0, 0, 0, 0.12);
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+        }
+        body.light-mode .ops-title,
+        body.light-mode .card-title,
+        body.light-mode .telemetry-num {
+            color: #0f172a;
+        }
+        body.light-mode .modal-dialog {
+            background: #ffffff;
+            color: #0f172a;
+            border-color: rgba(0,0,0,0.15);
+        }
+
+        /* Outbound Logs Table */
+        .outbound-table th, .outbound-table td {
+            padding: 8px 10px;
+            font-size: 0.84em;
+            vertical-align: middle;
+        }
+        .outbound-table tr {
+            border-bottom: 1px solid var(--border-subtle);
+            transition: background 0.15s;
+        }
+        .outbound-table tr:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .status-pill-ok {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 700;
+            background: rgba(46, 213, 115, 0.15);
+            color: var(--green);
+            border: 1px solid rgba(46, 213, 115, 0.3);
+        }
+        .status-pill-err {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 700;
+            background: rgba(255, 71, 87, 0.15);
+            color: var(--spider-red);
+            border: 1px solid rgba(255, 71, 87, 0.3);
+        }
+
+        /* Modal Dialog */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .modal-dialog {
+            background: #101624;
+            border: 1px solid var(--border-strong);
+            border-radius: 12px;
+            width: 100%;
+            max-width: 680px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+            overflow: hidden;
+        }
+        .modal-header {
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-close-btn {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 1.5em;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .modal-close-btn:hover {
+            color: var(--text-main);
+        }
+        .modal-body {
+            padding: 16px 18px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .modal-footer {
+            padding: 12px 18px;
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        /* Broadcast Preview Enhancements */
+        .dc-embed-author {
+            font-size: 0.8em;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .dc-embed-thumb {
+            float: right;
+            width: 60px;
+            height: 60px;
+            border-radius: 4px;
+            margin-left: 12px;
+            margin-bottom: 6px;
+            object-fit: cover;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .dc-embed-fields-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .dc-embed-field-name {
+            font-size: 0.74em;
+            font-weight: 700;
+            color: #b5bac1;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-bottom: 2px;
+        }
+        .dc-embed-field-val {
+            font-size: 0.84em;
+            color: #dbdee1;
+            line-height: 1.4;
+        }
+        .dc-preview-buttons-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .dc-preview-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 6px 12px;
+            background: #4e5058;
+            color: #ffffff;
+            border-radius: 4px;
+            font-size: 0.82em;
+            font-weight: 600;
+            text-decoration: none;
+            transition: background 0.15s;
+        }
+        .dc-preview-button:hover {
+            background: #6d6f78;
+        }
+
+    
+
         /* ========================================================
-           LAYER A — Compact Top Bot Telemetry & Quick-Action Hero Strip
+           TACTICAL DECK LAYOUT & OVERRIDES
            ======================================================== */
+        /* Fixed Search Padding */
+        .search-box {
+            position: relative;
+            min-width: 260px;
+        }
+        .search-icon {
+            position: absolute;
+            left: 12px !important;
+            top: 50% !important;
+            transform: translateY(-50%) !important;
+            pointer-events: none !important;
+            font-size: 0.9em;
+            opacity: 0.6;
+            z-index: 2;
+        }
+        .search-input {
+            width: 100% !important;
+            padding: 8px 30px 8px 38px !important;
+            border-radius: var(--radius-md) !important;
+            border: 1px solid var(--border-subtle) !important;
+            background: rgba(0, 0, 0, 0.2) !important;
+            color: var(--text-main) !important;
+            font-size: 0.85em !important;
+            box-sizing: border-box !important;
+            outline: none !important;
+        }
+        body.light-mode .search-input {
+            background: #ffffff !important;
+            border-color: rgba(0, 0, 0, 0.12) !important;
+            color: #0f172a !important;
+        }
+
+        /* Layer A Hero Telemetry Strip */
         .hero-telemetry-strip {
             display: flex;
             align-items: center;
@@ -148,860 +1702,175 @@
             background: linear-gradient(135deg, rgba(88, 101, 242, 0.05) 0%, #ffffff 100%);
             border-color: rgba(0, 0, 0, 0.1);
         }
-
-        .hero-bot-status {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            min-width: 270px;
-        }
+        .hero-bot-status { display: flex; align-items: center; gap: 12px; min-width: 270px; }
         .hero-avatar-ring {
-            position: relative;
-            width: 44px;
-            height: 44px;
-            border-radius: 50%;
-            background: rgba(88, 101, 242, 0.15);
-            border: 2px solid var(--discord);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.4em;
-            flex-shrink: 0;
-            box-shadow: 0 0 15px rgba(88, 101, 242, 0.3);
+            position: relative; width: 44px; height: 44px; border-radius: 50%;
+            background: rgba(88, 101, 242, 0.15); border: 2px solid var(--discord);
+            display: flex; align-items: center; justify-content: center; font-size: 1.4em;
+            flex-shrink: 0; box-shadow: 0 0 15px rgba(88, 101, 242, 0.3);
         }
         .hero-status-pulse {
-            position: absolute;
-            bottom: 0px;
-            right: 0px;
-            width: 11px;
-            height: 11px;
-            border-radius: 50%;
-            background: var(--green);
-            border: 2px solid var(--bg-card);
+            position: absolute; bottom: 0px; right: 0px; width: 11px; height: 11px;
+            border-radius: 50%; background: var(--green); border: 2px solid var(--bg-card);
             box-shadow: 0 0 8px var(--green);
         }
-        .hero-bot-info {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-        .hero-bot-name-row {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-        .hero-bot-name {
-            font-size: 1.05em;
-            font-weight: 800;
-            color: var(--text-main);
-            letter-spacing: -0.2px;
-        }
+        .hero-bot-info { display: flex; flex-direction: column; gap: 2px; }
+        .hero-bot-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .hero-bot-name { font-size: 1.05em; font-weight: 800; color: var(--text-main); letter-spacing: -0.2px; }
         .hero-conn-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 0.74em;
-            font-weight: 700;
-            padding: 2px 8px;
-            border-radius: 12px;
-            background: rgba(46, 213, 115, 0.12);
-            color: var(--green);
-            border: 1px solid rgba(46, 213, 115, 0.25);
+            display: inline-flex; align-items: center; gap: 5px; font-size: 0.74em; font-weight: 700;
+            padding: 2px 8px; border-radius: 12px; background: rgba(46, 213, 115, 0.12);
+            color: var(--green); border: 1px solid rgba(46, 213, 115, 0.25);
         }
-        .hero-conn-pill.disconnected {
-            background: rgba(255, 71, 87, 0.12);
-            color: var(--spider-red);
-            border-color: rgba(255, 71, 87, 0.25);
-        }
-        .hero-guild-stats {
-            font-size: 0.78em;
-            color: var(--text-muted);
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .btn-icon-refresh {
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 0.9em;
-            padding: 2px;
-            line-height: 1;
-            opacity: 0.7;
-            transition: opacity 0.2s, transform 0.2s;
-        }
-        .btn-icon-refresh:hover {
-            opacity: 1;
-            transform: rotate(90deg);
-        }
+        .hero-conn-pill.disconnected { background: rgba(255, 71, 87, 0.12); color: var(--spider-red); border-color: rgba(255, 71, 87, 0.25); }
+        .hero-guild-stats { font-size: 0.78em; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+        .btn-icon-refresh { background: none; border: none; cursor: pointer; font-size: 0.9em; padding: 2px; line-height: 1; opacity: 0.7; transition: opacity 0.2s, transform 0.2s; }
+        .btn-icon-refresh:hover { opacity: 1; transform: rotate(90deg); }
 
         /* 4 Compact KPI Pills */
-        .hero-kpi-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
+        .hero-kpi-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .hero-kpi-pill {
-            background: rgba(0, 0, 0, 0.25);
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-md);
-            padding: 6px 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.82em;
-            cursor: default;
-            transition: border-color 0.2s;
+            background: rgba(0, 0, 0, 0.25); border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+            padding: 6px 12px; display: flex; align-items: center; gap: 8px; font-size: 0.82em; cursor: default;
         }
-        body.light-mode .hero-kpi-pill {
-            background: rgba(0, 0, 0, 0.03);
-            border-color: rgba(0, 0, 0, 0.08);
-        }
-        .hero-kpi-pill:hover {
-            border-color: var(--border-strong);
-        }
+        body.light-mode .hero-kpi-pill { background: rgba(0, 0, 0, 0.03); border-color: rgba(0, 0, 0, 0.08); }
         .hero-kpi-icon { font-size: 1.1em; }
         .hero-kpi-val { font-weight: 700; color: var(--text-main); }
         .hero-kpi-label { color: var(--text-muted); font-size: 0.88em; }
-
-        .kpi-progress-bar-mini {
-            width: 44px;
-            height: 5px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 3px;
-            overflow: hidden;
-            display: inline-block;
-            vertical-align: middle;
-        }
-        .kpi-progress-fill-mini {
-            height: 100%;
-            background: linear-gradient(90deg, var(--gold), var(--green));
-            border-radius: 3px;
-            transition: width 0.3s ease;
-        }
+        .kpi-progress-bar-mini { width: 44px; height: 5px; background: rgba(255, 255, 255, 0.1); border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; }
+        .kpi-progress-fill-mini { height: 100%; background: linear-gradient(90deg, var(--gold), var(--green)); border-radius: 3px; }
 
         /* Hero Right Controls */
-        .hero-actions-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
+        .hero-actions-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         .btn-hero-action {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            font-size: 0.8em;
-            font-weight: 700;
-            border-radius: var(--radius-sm);
-            border: 1px solid var(--border-subtle);
-            background: rgba(255, 255, 255, 0.04);
-            color: var(--text-main);
-            cursor: pointer;
-            transition: all 0.2s;
-            text-decoration: none;
+            display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 0.8em; font-weight: 700;
+            border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: rgba(255, 255, 255, 0.04);
+            color: var(--text-main); cursor: pointer; transition: all 0.2s; text-decoration: none;
         }
-        .btn-hero-action:hover {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: var(--border-strong);
-        }
-        .btn-hero-action.primary {
-            background: var(--discord);
-            border-color: var(--discord);
-            color: #ffffff;
-        }
-        .btn-hero-action.primary:hover {
-            background: var(--discord-hover);
-        }
-        .btn-hero-action.danger-toggle {
-            background: rgba(255, 71, 87, 0.08);
-            border-color: rgba(255, 71, 87, 0.25);
-            color: var(--spider-red);
-        }
-        .btn-hero-action.danger-toggle.active {
-            background: var(--spider-red);
-            color: #ffffff;
-        }
+        .btn-hero-action:hover { background: rgba(255, 255, 255, 0.08); border-color: var(--border-strong); }
+        .btn-hero-action.primary { background: var(--discord); border-color: var(--discord); color: #ffffff; }
+        .btn-hero-action.primary:hover { background: var(--discord-hover); }
+        .btn-hero-action.danger-toggle { background: rgba(255, 71, 87, 0.08); border-color: rgba(255, 71, 87, 0.25); color: var(--spider-red); }
+        .btn-hero-action.danger-toggle.active { background: var(--spider-red); color: #ffffff; }
 
-        /* ========================================================
-           LAYER B — Primary Workspace Sub-Navigation (Sticky 5 Tabs)
-           ======================================================== */
+        /* Layer B Subnav Strip */
         .deck-subnav-strip {
-            position: sticky;
-            top: 56px;
-            z-index: 95;
-            background: rgba(6, 8, 14, 0.95);
-            backdrop-filter: blur(12px);
-            padding: 6px 0 12px;
-            margin-bottom: 8px;
-            border-bottom: 1px solid var(--border-subtle);
+            position: sticky; top: 56px; z-index: 95; background: rgba(6, 8, 14, 0.95);
+            backdrop-filter: blur(12px); padding: 8px 0 12px; margin-bottom: 12px; border-bottom: 1px solid var(--border-subtle);
         }
-        body.light-mode .deck-subnav-strip {
-            background: rgba(241, 245, 249, 0.95);
-            border-color: rgba(0, 0, 0, 0.08);
-        }
-        .deck-tabs-container {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            overflow-x: auto;
-            scrollbar-width: none;
-        }
-        .deck-tabs-container::-webkit-scrollbar { display: none; }
-
+        body.light-mode .deck-subnav-strip { background: rgba(241, 245, 249, 0.95); border-color: rgba(0, 0, 0, 0.08); }
+        .deck-tabs-container { display: flex; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: none; }
         .deck-tab-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 9px 16px;
-            font-size: 0.86em;
-            font-weight: 700;
-            color: var(--text-muted);
-            background: transparent;
-            border: 1px solid transparent;
-            border-radius: var(--radius-md);
-            cursor: pointer;
-            transition: all 0.2s ease;
-            white-space: nowrap;
+            display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; font-size: 0.86em; font-weight: 700;
+            color: var(--text-muted); background: transparent; border: 1px solid transparent; border-radius: var(--radius-md);
+            cursor: pointer; transition: all 0.2s ease; white-space: nowrap;
         }
-        .deck-tab-btn:hover {
-            color: var(--text-main);
-            background: rgba(255, 255, 255, 0.04);
-        }
-        .deck-tab-btn.active {
-            color: #ffffff;
-            background: var(--bg-card);
-            border-color: var(--border-strong);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-        }
-        body.light-mode .deck-tab-btn.active {
-            background: #ffffff;
-            color: var(--discord);
-            border-color: rgba(0, 0, 0, 0.1);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-        }
-        .deck-tab-badge {
-            font-size: 0.74em;
-            padding: 2px 7px;
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.08);
-            color: var(--text-muted);
-        }
-        .deck-tab-btn.active .deck-tab-badge {
-            background: rgba(88, 101, 242, 0.25);
-            color: var(--spider-blue);
-        }
+        .deck-tab-btn:hover { color: var(--text-main); background: rgba(255, 255, 255, 0.04); }
+        .deck-tab-btn.active { color: #ffffff; background: var(--bg-card); border-color: var(--border-strong); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25); }
+        body.light-mode .deck-tab-btn.active { background: #ffffff; color: var(--discord); border-color: rgba(0, 0, 0, 0.1); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06); }
+        .deck-tab-pane { display: none; }
+        .deck-tab-pane.active { display: block; animation: fadeInPane 0.2s ease-in-out; }
+        @keyframes fadeInPane { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
-        .deck-tab-pane {
-            display: none;
-            animation: fadeInPane 0.2s ease-in-out;
-        }
-        .deck-tab-pane.active {
-            display: block;
-        }
-        @keyframes fadeInPane {
-            from { opacity: 0; transform: translateY(4px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Generic Card Styling */
-        .card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-lg);
-            margin-bottom: 20px;
-            box-shadow: var(--shadow-subtle);
-            overflow: hidden;
-        }
-        body.light-mode .card {
-            background: #ffffff;
-            border-color: rgba(0, 0, 0, 0.08);
-        }
-        .card-header {
-            padding: 14px 20px;
-            border-bottom: 1px solid var(--border-subtle);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background: rgba(255, 255, 255, 0.015);
-        }
-        .card-title {
-            margin: 0;
-            font-size: 1.05em;
-            font-weight: 700;
-            color: var(--text-main);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .card-subtitle {
-            font-size: 0.82em;
-            color: var(--text-muted);
-            margin-top: 3px;
-            display: block;
-        }
-        .card-body {
-            padding: 20px;
-        }
-
-        /* Search input styling with 38px left padding */
-        .search-box {
-            position: relative;
-            min-width: 260px;
-        }
-        .search-icon {
-            position: absolute;
-            left: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            pointer-events: none;
-            font-size: 0.9em;
-            opacity: 0.6;
-        }
-        .search-input {
-            width: 100%;
-            padding: 8px 30px 8px 38px !important;
-            border-radius: var(--radius-md);
-            border: 1px solid var(--border-subtle);
-            background: rgba(0, 0, 0, 0.2);
-            color: var(--text-main);
-            font-size: 0.85em;
-            box-sizing: border-box;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-        body.light-mode .search-input {
-            background: #ffffff;
-            border-color: rgba(0, 0, 0, 0.12);
-        }
-        .search-input:focus {
-            border-color: var(--border-focus);
-        }
-
-        /* Triggers Matrix */
-        .alerts-toolbar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            flex-wrap: wrap;
-            margin-bottom: 16px;
-        }
-        .alerts-tabs {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            flex-wrap: wrap;
-        }
-        .tab-pill {
-            padding: 6px 12px;
-            font-size: 0.82em;
-            font-weight: 600;
-            border-radius: 20px;
-            border: 1px solid var(--border-subtle);
-            background: rgba(255, 255, 255, 0.03);
-            color: var(--text-muted);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .tab-pill:hover {
-            color: var(--text-main);
-            border-color: var(--border-strong);
-        }
-        .tab-pill.active {
-            background: var(--discord);
-            border-color: var(--discord);
-            color: #ffffff;
-        }
-        .btn-test {
-            padding: 6px 12px;
-            font-size: 0.8em;
-            font-weight: 600;
-            border-radius: var(--radius-sm);
-            border: 1px solid var(--border-subtle);
-            background: rgba(255, 255, 255, 0.04);
-            color: var(--text-main);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .btn-test:hover {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: var(--border-strong);
-        }
-
-        /* 2-Column Responsive Bento Grid for Trigger Cards */
-        .trigger-category-block {
-            margin-bottom: 24px;
-        }
-        .category-title {
-            font-size: 0.95em;
-            font-weight: 800;
-            color: var(--text-main);
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding-bottom: 6px;
-            border-bottom: 1px solid var(--border-subtle);
-        }
-        .trigger-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 14px;
-        }
-        @media(max-width: 960px) {
-            .trigger-grid { grid-template-columns: 1fr; }
-        }
-
-        .trigger-row {
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-md);
-            padding: 14px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            transition: border-color 0.2s, background 0.2s;
-        }
-        body.light-mode .trigger-row {
-            background: #ffffff;
-            border-color: rgba(0, 0, 0, 0.08);
-        }
-        .trigger-row.on {
-            border-color: rgba(88, 101, 242, 0.35);
-            background: rgba(88, 101, 242, 0.03);
-        }
-        .trigger-row-top {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-        }
-        .trigger-name-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-        .trigger-title {
-            font-weight: 700;
-            font-size: 0.92em;
-            color: var(--text-main);
-        }
-        .trigger-desc {
-            font-size: 0.8em;
-            color: var(--text-muted);
-            line-height: 1.4;
-        }
-        .trigger-routing-footer {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
-            padding-top: 10px;
-            border-top: 1px solid var(--border-subtle);
-            margin-top: 2px;
-        }
-        .pill-select {
-            padding: 4px 8px;
-            font-size: 0.76em;
-            font-weight: 600;
-            border-radius: var(--radius-sm);
-            border: 1px solid var(--border-subtle);
-            background: rgba(0,0,0,0.25);
-            color: var(--text-main);
-            outline: none;
-        }
-        body.light-mode .pill-select {
-            background: #f8fafc;
-            border-color: rgba(0,0,0,0.12);
-        }
-
-        /* Tab 2: Split-Screen Studio */
+        /* Studio Split Grid (Tab 2) */
         .studio-split-grid {
-            display: grid;
-            grid-template-columns: 1.15fr 0.85fr;
-            gap: 20px;
-            align-items: start;
+            display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 20px; align-items: start;
         }
-        @media(max-width: 1024px) {
-            .studio-split-grid { grid-template-columns: 1fr; }
-        }
+        @media(max-width: 1024px) { .studio-split-grid { grid-template-columns: 1fr; } }
         .studio-mode-switcher {
-            display: flex; gap: 8px; background: rgba(0, 0, 0, 0.25);
-            padding: 4px; border-radius: 8px; border: 1px solid var(--border-subtle); margin-bottom: 16px;
+            display: flex; gap: 8px; background: rgba(0, 0, 0, 0.25); padding: 4px; border-radius: 8px;
+            border: 1px solid var(--border-subtle); margin-bottom: 16px;
         }
         .studio-mode-btn {
-            flex: 1; padding: 8px 14px; border-radius: 6px; border: none;
-            background: transparent; color: var(--text-muted); font-size: 0.84em; font-weight: 700;
-            cursor: pointer; transition: all 0.2s;
+            flex: 1; padding: 8px 14px; border-radius: 6px; border: none; background: transparent;
+            color: var(--text-muted); font-size: 0.84em; font-weight: 700; cursor: pointer; transition: all 0.2s;
         }
-        .studio-mode-btn.active {
-            background: var(--discord); color: #ffffff; box-shadow: 0 2px 8px rgba(88, 101, 242, 0.3);
-        }
+        .studio-mode-btn.active { background: var(--discord); color: #ffffff; box-shadow: 0 2px 8px rgba(88, 101, 242, 0.3); }
 
-        /* Preset Chips */
-        .preset-chips-row {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            flex-wrap: wrap;
-            margin-bottom: 14px;
-        }
+        .preset-chips-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
         .preset-chip {
-            padding: 4px 10px;
-            border-radius: 14px;
-            border: 1px solid var(--border-subtle);
-            background: rgba(255, 255, 255, 0.04);
-            color: var(--text-main);
-            font-size: 0.78em;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
+            padding: 4px 10px; border-radius: 14px; border: 1px solid var(--border-subtle);
+            background: rgba(255, 255, 255, 0.04); color: var(--text-main); font-size: 0.78em; font-weight: 600; cursor: pointer;
         }
-        .preset-chip:hover {
-            border-color: var(--discord);
-            background: rgba(88, 101, 242, 0.1);
-        }
+        .preset-chip:hover { border-color: var(--discord); background: rgba(88, 101, 242, 0.1); }
 
-        /* Channel Pills Wrap */
         .channel-pills-wrap {
             display: flex; gap: 6px; flex-wrap: wrap; max-height: 120px; overflow-y: auto;
             background: rgba(0, 0, 0, 0.2); padding: 8px; border-radius: 8px; border: 1px solid var(--border-subtle);
         }
-        .chan-pill {
-            display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px;
-            border-radius: 14px; font-size: 0.78em; font-weight: 600; cursor: pointer;
-            border: 1px solid var(--border-subtle); background: rgba(255,255,255,0.03); color: var(--text-muted);
-            transition: all 0.15s;
-        }
-        .chan-pill.selected {
-            background: var(--discord); border-color: var(--discord); color: #ffffff;
-        }
 
-        /* Discord Simulator Window */
+        /* Simulator Window (Tab 2) */
         .dc-simulator-window {
-            background: var(--discord-bg);
-            border-radius: var(--radius-lg);
-            border: 1px solid rgba(0, 0, 0, 0.3);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            overflow: hidden;
-            font-family: 'Inter', sans-serif;
-            position: sticky;
-            top: 130px;
+            background: var(--discord-bg); border-radius: var(--radius-lg); border: 1px solid rgba(0, 0, 0, 0.3);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); overflow: hidden; font-family: 'Inter', sans-serif;
+            position: sticky; top: 130px;
         }
         .dc-channel-header {
-            background: var(--discord-card);
-            padding: 10px 16px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.2);
-            font-size: 0.88em;
-            font-weight: 700;
-            color: #f2f3f5;
+            background: var(--discord-card); padding: 10px 16px; display: flex; align-items: center;
+            justify-content: space-between; border-bottom: 1px solid rgba(0, 0, 0, 0.2); font-size: 0.88em; font-weight: 700; color: #f2f3f5;
         }
-        .dc-chat-body {
-            padding: 16px;
-            display: flex;
-            gap: 14px;
-            align-items: flex-start;
-        }
+        .dc-chat-body { padding: 16px; display: flex; gap: 14px; align-items: flex-start; }
         .dc-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: #5865f2;
-            flex-shrink: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.2em;
-            color: #fff;
-            overflow: hidden;
+            width: 40px; height: 40px; border-radius: 50%; background: #5865f2; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center; font-size: 1.2em; color: #fff; overflow: hidden;
         }
-        .dc-msg-content {
-            flex: 1;
-            min-width: 0;
-        }
-        .dc-author-row {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            margin-bottom: 4px;
-        }
-        .dc-author-name {
-            font-weight: 700;
-            font-size: 0.95em;
-            color: #ffffff;
-        }
-        .dc-bot-tag {
-            background: #5865f2;
-            color: #ffffff;
-            font-size: 0.65em;
-            font-weight: 700;
-            padding: 1px 4px;
-            border-radius: 3px;
-            text-transform: uppercase;
-        }
-        .dc-timestamp {
-            font-size: 0.72em;
-            color: #949ba4;
-        }
-        .dc-text {
-            color: #dbdee1;
-            font-size: 0.92em;
-            line-height: 1.45;
-            white-space: pre-wrap;
-            word-break: break-word;
-            margin-bottom: 8px;
-        }
-        .dc-mention {
-            background: rgba(88, 101, 242, 0.3);
-            color: #c9cdfb;
-            padding: 1px 4px;
-            border-radius: 3px;
-            font-weight: 500;
-        }
-        .dc-embed {
-            background: var(--discord-card);
-            border-left: 4px solid #5865f2;
-            border-radius: 4px;
-            padding: 12px 16px;
-            max-width: 520px;
-            margin-top: 6px;
-        }
-        .dc-embed-author {
-            display: flex; align-items: center; gap: 8px; font-size: 0.82em; font-weight: 700; color: #ffffff; margin-bottom: 6px;
-        }
-        .dc-embed-title {
-            font-weight: 700; font-size: 1em; color: #ffffff; margin-bottom: 6px;
-        }
-        .dc-embed-desc {
-            font-size: 0.86em; color: #dbdee1; line-height: 1.4; margin-bottom: 8px; white-space: pre-wrap;
-        }
-        .dc-embed-fields {
-            display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;
-        }
-        .dc-field-name { font-weight: 700; font-size: 0.78em; color: #949ba4; margin-bottom: 2px; }
-        .dc-field-val { font-size: 0.84em; color: #dbdee1; }
-        .dc-embed-footer {
-            font-size: 0.74em; color: #949ba4; margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.06);
-        }
-        .dc-buttons-row {
-            display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;
-        }
-        .dc-btn {
-            background: #4e5058; color: #ffffff; padding: 6px 12px; border-radius: 4px;
-            font-size: 0.84em; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;
-        }
+        .dc-msg-wrap { flex: 1; min-width: 0; }
+        .dc-meta-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+        .dc-user-name { font-weight: 700; font-size: 0.95em; color: #ffffff; }
+        .dc-bot-tag { background: #5865f2; color: #ffffff; font-size: 0.65em; font-weight: 700; padding: 1px 4px; border-radius: 3px; text-transform: uppercase; }
+        .dc-timestamp { font-size: 0.72em; color: #949ba4; }
+        .dc-content-text { color: #dbdee1; font-size: 0.92em; line-height: 1.45; white-space: pre-wrap; word-break: break-word; margin-bottom: 8px; }
+        .dc-mention { background: rgba(88, 101, 242, 0.3); color: #c9cdfb; padding: 1px 4px; border-radius: 3px; font-weight: 500; }
+        .dc-embed-card { background: var(--discord-card); border-left: 4px solid #5865f2; border-radius: 4px; padding: 12px 16px; max-width: 520px; margin-top: 6px; }
+        .dc-embed-author { display: flex; align-items: center; gap: 8px; font-size: 0.82em; font-weight: 700; color: #ffffff; margin-bottom: 6px; }
+        .dc-embed-title { font-weight: 700; font-size: 1em; color: #ffffff; margin-bottom: 6px; }
+        .dc-embed-desc { font-size: 0.86em; color: #dbdee1; line-height: 1.4; margin-bottom: 8px; white-space: pre-wrap; }
+        .dc-embed-thumb { float: right; width: 64px; height: 64px; border-radius: 4px; object-fit: cover; margin-left: 10px; margin-bottom: 6px; }
+        .dc-embed-fields-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+        .dc-embed-footer-text { font-size: 0.74em; color: #949ba4; margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.06); }
+        .dc-buttons-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+        .dc-btn { background: #4e5058; color: #ffffff; padding: 6px 12px; border-radius: 4px; font-size: 0.84em; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
 
-        /* Tab 3: Event Stream Routing Table */
-        .routing-matrix-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        .routing-matrix-table th {
-            text-align: left;
-            padding: 10px 14px;
-            font-size: 0.8em;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: var(--text-muted);
-            border-bottom: 1px solid var(--border-subtle);
-            background: rgba(255, 255, 255, 0.02);
-        }
-        .routing-matrix-table td {
-            padding: 14px;
-            border-bottom: 1px solid var(--border-subtle);
-            vertical-align: middle;
-        }
-        .routing-stream-name {
-            font-weight: 700;
-            font-size: 0.9em;
-            color: var(--text-main);
-        }
-        .routing-stream-desc {
-            font-size: 0.78em;
-            color: var(--text-muted);
-            margin-top: 2px;
-        }
-        .field-select, .field-input {
-            width: 100%;
-            padding: 8px 10px;
-            border-radius: var(--radius-sm);
-            border: 1px solid var(--border-subtle);
-            background: rgba(0, 0, 0, 0.25);
-            color: var(--text-main);
-            font-size: 0.84em;
-            box-sizing: border-box;
-            outline: none;
-        }
-        body.light-mode .field-select, body.light-mode .field-input {
-            background: #ffffff;
-            border-color: rgba(0, 0, 0, 0.12);
-        }
-        .field-label {
-            font-size: 0.82em;
-            font-weight: 700;
-            color: var(--text-muted);
-            margin-bottom: 4px;
-            display: block;
-        }
+        /* Routing Table (Tab 3) */
+        .routing-matrix-table { width: 100%; border-collapse: collapse; }
+        .routing-matrix-table th { text-align: left; padding: 10px 14px; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); border-bottom: 1px solid var(--border-subtle); background: rgba(255, 255, 255, 0.02); }
+        .routing-matrix-table td { padding: 14px; border-bottom: 1px solid var(--border-subtle); vertical-align: middle; }
+        .routing-stream-name { font-weight: 700; font-size: 0.9em; color: var(--text-main); }
+        .routing-stream-desc { font-size: 0.78em; color: var(--text-muted); margin-top: 2px; }
+        .role-hierarchy-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        @media(max-width: 900px) { .role-hierarchy-grid { grid-template-columns: 1fr; } }
+        .role-card { background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 12px; }
+        .role-card-title { font-weight: 700; font-size: 0.86em; color: var(--text-main); margin-bottom: 8px; }
 
-        /* Role Hierarchy Grid */
-        .role-hierarchy-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-        }
-        @media(max-width: 900px) {
-            .role-hierarchy-grid { grid-template-columns: 1fr; }
-        }
-        .role-card {
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-md);
-            padding: 12px;
-        }
-        .role-card-title {
-            font-weight: 700;
-            font-size: 0.86em;
-            color: var(--text-main);
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        /* Tab 4: Slash Commands Matrix */
-        .cmd-category-block {
-            margin-bottom: 18px;
-        }
-        .cmd-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-        }
-        @media(max-width: 1100px) {
-            .cmd-grid { grid-template-columns: repeat(2, 1fr); }
-        }
-        @media(max-width: 700px) {
-            .cmd-grid { grid-template-columns: 1fr; }
-        }
-        .cmd-card {
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-sm);
-            padding: 10px 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-        body.light-mode .cmd-card {
-            background: #ffffff;
-            border-color: rgba(0,0,0,0.08);
-        }
-        .cmd-card-top {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .cmd-name {
-            font-family: var(--font-mono);
-            font-size: 0.85em;
-            font-weight: 700;
-            color: var(--spider-blue);
-        }
-        .cmd-desc {
-            font-size: 0.76em;
-            color: var(--text-muted);
-            line-height: 1.35;
-        }
-
-        /* Layer C: Floating Glassmorphic Unsaved-Changes Dock */
+        /* Layer C Floating Save Dock */
         .floating-save-dock {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%) translateY(100px);
-            opacity: 0;
-            pointer-events: none;
-            background: rgba(16, 22, 36, 0.95);
-            backdrop-filter: blur(16px);
-            border: 1px solid var(--border-strong);
-            border-radius: 30px;
-            padding: 10px 24px;
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px);
+            opacity: 0; pointer-events: none; background: rgba(16, 22, 36, 0.95); backdrop-filter: blur(16px);
+            border: 1px solid var(--border-strong); border-radius: 30px; padding: 10px 24px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(88, 101, 242, 0.2);
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            z-index: 1000;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex; align-items: center; gap: 16px; z-index: 1000; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        body.light-mode .floating-save-dock {
-            background: rgba(255, 255, 255, 0.95);
-            border-color: rgba(0, 0, 0, 0.15);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
-        }
-        .floating-save-dock.dirty {
-            transform: translateX(-50%) translateY(0);
-            opacity: 1;
-            pointer-events: auto;
-        }
-        .save-dock-text {
-            font-size: 0.86em;
-            font-weight: 600;
-            color: var(--text-main);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .btn-dock {
-            padding: 7px 16px;
-            font-size: 0.82em;
-            font-weight: 700;
-            border-radius: 20px;
-            border: none;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .btn-dock.primary {
-            background: linear-gradient(135deg, var(--discord), #4752c4);
-            color: #ffffff;
-            box-shadow: 0 2px 10px rgba(88, 101, 242, 0.4);
-        }
-        .btn-dock.secondary {
-            background: rgba(255, 255, 255, 0.08);
-            color: var(--text-muted);
-        }
+        body.light-mode .floating-save-dock { background: rgba(255, 255, 255, 0.95); border-color: rgba(0, 0, 0, 0.15); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12); }
+        .floating-save-dock.dirty { transform: translateX(-50%) translateY(0); opacity: 1; pointer-events: auto; }
+        .save-dock-text { font-size: 0.86em; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+        .btn-dock { padding: 7px 16px; font-size: 0.82em; font-weight: 700; border-radius: 20px; border: none; cursor: pointer; transition: all 0.2s; }
+        .btn-dock.primary { background: linear-gradient(135deg, var(--discord), #4752c4); color: #ffffff; box-shadow: 0 2px 10px rgba(88, 101, 242, 0.4); }
+        .btn-dock.secondary { background: rgba(255, 255, 255, 0.08); color: var(--text-muted); }
         .btn-dock:hover { transform: scale(1.03); }
 
-        /* Modal Backdrop */
-        .modal-backdrop {
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(0,0,0,0.75); backdrop-filter: blur(8px);
-            display: flex; align-items: center; justify-content: center;
-            z-index: 10000;
+        /* Toast Container */
+        .toast-container {
+            position: fixed; bottom: 24px; right: 24px; z-index: 99999; display: flex; flex-direction: column; gap: 10px; pointer-events: none;
         }
-        .modal-dialog {
-            background: var(--bg-card); border: 1px solid var(--border-strong);
-            border-radius: var(--radius-lg); width: 90%; max-width: 650px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.6); overflow: hidden;
+        .toast-msg {
+            pointer-events: auto; background: var(--bg-card-elevated, #162035); border: 1px solid var(--border-strong);
+            color: var(--text-main); padding: 10px 18px; border-radius: var(--radius-md); box-shadow: 0 8px 25px rgba(0,0,0,0.5);
+            font-size: 0.86em; font-weight: 600; display: flex; align-items: center; gap: 8px; animation: toastSlideIn 0.25s ease-out;
         }
-        .modal-header {
-            padding: 14px 20px; border-bottom: 1px solid var(--border-subtle);
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .modal-close-btn { background: none; border: none; font-size: 1.4em; color: var(--text-muted); cursor: pointer; }
-        .modal-body { padding: 18px 20px; }
-        .modal-footer {
-            padding: 12px 20px; border-top: 1px solid var(--border-subtle);
-            display: flex; justify-content: flex-end; gap: 10px;
-        }
+        .toast-msg.success { border-color: rgba(46, 213, 115, 0.4); background: rgba(46, 213, 115, 0.12); color: #2ed573; }
+        .toast-msg.error { border-color: rgba(255, 71, 87, 0.4); background: rgba(255, 71, 87, 0.12); color: #ff4757; }
+        .toast-msg.warning { border-color: rgba(255, 165, 2, 0.4); background: rgba(255, 165, 2, 0.12); color: #ffa502; }
+        @keyframes toastSlideIn { from { transform: translateX(50px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
     </style>
 </head>
 <body>
@@ -1085,10 +1954,13 @@
                     <div class="hero-bot-info">
                         <div class="hero-bot-name-row">
                             <span class="hero-bot-name">F.R.I.D.A.Y. Sentinel</span>
-                            <span class="hero-conn-pill connected" id="hero-conn-pill">🟢 Connected • Spider-Verse [52355]</span>
+                            <span class="hero-conn-pill connected" id="hero-conn-pill"><span id="connection-indicator">🟢 Connected • Spider-Verse [52355]</span></span>
                         </div>
                         <div class="hero-guild-stats">
-                            <span id="hero-channels-count">20 Channels</span> • <span id="hero-roles-count">10 Roles Discovered</span>
+                            <span id="hero-channels-count"><span id="discovered-channels-count">20</span> Channels</span> • <span id="hero-roles-count"><span id="discovered-roles-label">10 Roles Discovered</span></span>
+                            <span id="detected-server-name" style="display:none;"></span>
+                            <span id="detected-server-detail" style="display:none;"></span>
+                            <span id="server-icon-indicator" style="display:none;"></span>
                             <button type="button" class="btn-icon-refresh" title="Resync Discord Guild Cache" onclick="fetchGuildAndChannels(true)">🔄</button>
                         </div>
                     </div>
@@ -1105,6 +1977,9 @@
                         <div class="kpi-progress-bar-mini">
                             <div class="kpi-progress-fill-mini" id="kpi-readiness-bar-fill" style="width: 65%;"></div>
                         </div>
+                        <span id="setup-progress-percent" style="display:none;">65%</span>
+                        <span id="setup-progress-bar" style="display:none;"></span>
+                        <span id="setup-progress-status" style="display:none;"></span>
                     </div>
 
                     <div class="hero-kpi-pill" onclick="switchDeckTab('sentinel')" style="cursor:pointer;" title="View Alert Sentinel Triggers">
@@ -1134,13 +2009,15 @@
 
                 <!-- Right: Global Controls -->
                 <div class="hero-actions-group">
-                    <button type="button" class="btn-hero-action danger-toggle" id="hero-killswitch-btn" onclick="toggleKillswitch()">
+                    <button type="button" class="btn-hero-action danger-toggle" id="btn-kill" onclick="toggleKillswitch()">
                         <span id="hero-killswitch-icon">⏸️</span>
                         <span id="hero-killswitch-text">Pause Alerts</span>
                     </button>
-                    <button type="button" class="btn-hero-action" onclick="postVerificationCard()">
+                    <div id="status-banner" style="display:none;"><span id="status-title"></span><span id="status-desc"></span></div>
+                    <button type="button" class="btn-hero-action" id="btn-post-verify" onclick="postVerificationCard()">
                         📌 Post Verify Card
                     </button>
+                    <span id="post-verify-status" style="display:none;"></span>
                     <button type="button" class="btn-hero-action primary" onclick="registerSlashCommands()">
                         ✅ Sync Commands
                     </button>
@@ -1184,6 +2061,9 @@
                 <div>
                     <p class="card-title">⚡ Alert Triggers & Tactical Sentinel Matrix</p>
                     <span class="card-subtitle">Real-time listeners firing live webhooks and interactive Discord embeds</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span id="triggers-active-badge-sub" style="font-size:0.82em; font-weight:700; color:var(--green);"><span id="active-alerts-count">13</span> / <span id="total-alerts-count">27</span> Triggers Active</span>
                 </div>
             </div>
             <div class="card-body">
@@ -2411,217 +3291,261 @@
             <!-- ========================================================
                  TAB 2: 📢 Broadcast & Rules Studio (Split-Screen Studio)
                  ======================================================== -->
+            
             <div class="deck-tab-pane" id="tab-pane-broadcast">
-            <div class="studio-split-grid" id="split-studio-container">
-                <!-- Left Column: Composer & Presets -->
-                <div class="card" id="card-bot-broadcaster" style="border-left: 3px solid var(--discord); margin-bottom:0;">
-                    <div class="card-header">
-                        <div>
-                            <p class="card-title"><span>🤖</span> Broadcast Studio & Rules Manager</p>
-                            <span class="card-subtitle">Broadcast messages natively through F.R.I.D.A.Y or publish Welcome & Rules embeds</span>
+                <div class="studio-split-grid" id="split-studio-container">
+                    <!-- Left Column: Composer & Presets -->
+                    <div class="card" id="card-bot-broadcaster" style="border-left: 3px solid var(--discord); margin-bottom:0;">
+                        <div class="card-header">
+                            <div>
+                                <p class="card-title"><span>🤖</span> Broadcast Studio & Rules Manager</p>
+                                <span class="card-subtitle">Broadcast messages natively through F.R.I.D.A.Y or publish Welcome & Rules embeds</span>
+                            </div>
+                            <div id="broadcaster-bot-tag" style="display:flex; align-items:center; gap:8px; background:rgba(88,101,242,0.1); padding:4px 10px; border-radius:20px; border:1px solid rgba(88,101,242,0.25);">
+                                <span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--green);"></span>
+                                <span style="font-size:0.78em; font-weight:700; color:var(--text-main);" id="broadcaster-bot-name">F.R.I.D.A.Y.</span>
+                                <span style="background:#5865f2; color:#fff; font-size:9px; padding:1px 4px; border-radius:3px; font-weight:700;">BOT</span>
+                            </div>
                         </div>
-                    </div>
-                    <div class="card-body">
-                        <!-- Mode Switcher -->
-                        <div class="studio-mode-switcher">
-                            <button type="button" class="studio-mode-btn active" id="btn-mode-broadcast" onclick="switchBroadcastMode('broadcast')">📢 Live Broadcast (F.R.I.D.A.Y.)</button>
-                            <button type="button" class="studio-mode-btn" id="btn-mode-rules" onclick="switchBroadcastMode('rules')">📜 Welcome & Faction Rules Card</button>
-                        </div>
-
-                        <!-- Sub-Section A: Live Broadcast Composer -->
-                        <div id="section-composer-broadcast">
-                            <!-- Preset Chips -->
-                            <div class="preset-chips-row">
-                                <span style="font-size:0.78em; font-weight:700; color:var(--text-dim); display:flex; align-items:center; margin-right:4px;">Quick Presets:</span>
-                                <button type="button" class="preset-chip" onclick="applyTemplate('war')">⚔️ War Call</button>
-                                <button type="button" class="preset-chip" onclick="applyTemplate('chain')">🔗 Chain Push</button>
-                                <button type="button" class="preset-chip" onclick="applyTemplate('hosp')">🏥 Turtle / Hosp Up</button>
-                                <button type="button" class="preset-chip" onclick="applyTemplate('oc')">💼 OC Slots Open</button>
-                                <button type="button" class="preset-chip" onclick="applyTemplate('payout')">💰 War Payouts Ready</button>
-                                <button type="button" class="preset-chip" onclick="applyTemplate('clear')">🧼 Clear</button>
+                        <div class="card-body">
+                            <!-- Mode Switcher -->
+                            <div class="studio-mode-switcher">
+                                <button type="button" class="studio-mode-btn active" id="btn-mode-broadcast" onclick="switchBroadcastMode('broadcast')">📢 Live Broadcast (F.R.I.D.A.Y.)</button>
+                                <button type="button" class="studio-mode-btn" id="btn-mode-rules" onclick="switchBroadcastMode('rules')">📜 Welcome & Faction Rules Card</button>
                             </div>
 
-                            <!-- Channel Selector Section -->
-                            <div style="margin-bottom:14px;">
-                                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:6px;">
-                                    <label class="field-label" style="margin:0;">📡 Destination Channel(s) <span id="selected-channels-badge" style="background:rgba(0,206,201,0.12); color:var(--teal); border:1px solid rgba(0,206,201,0.25); font-size:0.75em; padding:2px 8px; border-radius:12px; font-weight:700;">0 selected</span></label>
-                                    <div style="display:flex; gap:4px; flex-wrap:wrap;">
-                                        <button type="button" class="btn-test" onclick="quickSelectChannel('main')">🚨 Main</button>
-                                        <button type="button" class="btn-test" onclick="quickSelectChannel('retal')">⚔️ Retal</button>
-                                        <button type="button" class="btn-test" onclick="quickSelectChannel('oc')">💼 OC</button>
-                                        <button type="button" class="btn-test" onclick="selectAllBroadcastChannels(true)" style="color:var(--green);">✅ All</button>
-                                        <button type="button" class="btn-test" onclick="selectAllBroadcastChannels(false)" style="color:var(--spider-red);">❌ Clear</button>
+                            <!-- Sub-Section A: Live Broadcast Composer -->
+                            <div id="section-composer-broadcast">
+                                <!-- Preset Chips -->
+                                <div class="preset-chips-row">
+                                    <span style="font-size:0.78em; font-weight:700; color:var(--text-dim); display:flex; align-items:center; margin-right:4px;">Quick Presets:</span>
+                                    <button type="button" class="preset-chip" onclick="applyTemplate('war')">⚔️ War Call</button>
+                                    <button type="button" class="preset-chip" onclick="applyTemplate('chain')">🔗 Chain Push</button>
+                                    <button type="button" class="preset-chip" onclick="applyTemplate('hosp')">🏥 Turtle / Hosp Up</button>
+                                    <button type="button" class="preset-chip" onclick="applyTemplate('oc')">💼 OC Slots Open</button>
+                                    <button type="button" class="preset-chip" onclick="applyTemplate('payout')">💰 War Payouts Ready</button>
+                                    <button type="button" class="preset-chip" onclick="applyTemplate('clear')">🧼 Clear</button>
+                                </div>
+
+                                <!-- Destination Channels -->
+                                <div style="margin-bottom:14px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:6px;">
+                                        <label class="field-label" style="margin:0;">📡 Destination Channel(s) <span id="selected-channels-badge" style="background:rgba(0,206,201,0.12); color:var(--teal); border:1px solid rgba(0,206,201,0.25); font-size:0.75em; padding:2px 8px; border-radius:12px; font-weight:700;">0 selected</span></label>
+                                        <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                                            <button type="button" class="btn-test" onclick="quickSelectChannel('main')">🚨 Main</button>
+                                            <button type="button" class="btn-test" onclick="quickSelectChannel('retal')">⚔️ Retal</button>
+                                            <button type="button" class="btn-test" onclick="quickSelectChannel('oc')">💼 OC</button>
+                                            <button type="button" class="btn-test" onclick="selectAllBroadcastChannels(true)" style="color:var(--green);">✅ All</button>
+                                            <button type="button" class="btn-test" onclick="selectAllBroadcastChannels(false)" style="color:var(--spider-red);">❌ Clear</button>
+                                        </div>
+                                    </div>
+                                    <div id="broadcast-channels-container" class="channel-pills-wrap">
+                                        <div style="color:var(--text-dim); font-size:0.8em; padding:6px;">Connect Bot Token or click "Refresh Server & Channels" to load channels.</div>
+                                    </div>
+                                    <div style="display:flex; gap:8px; align-items:center; margin-top:8px;">
+                                        <span style="font-size:0.78em; color:var(--text-dim); white-space:nowrap;">✏️ Custom Channel ID(s):</span>
+                                        <input type="text" id="custom-broadcast-channels" class="field-input" placeholder="e.g. 123456789012345678, 987654321098765432" style="font-size:0.82em; padding:6px 10px;" oninput="updateBroadcastPreview()">
                                     </div>
                                 </div>
-                                <div id="broadcast-channels-container" class="channel-pills-wrap">
-                                    <div style="color:var(--text-dim); font-size:0.8em; padding:6px;">Loading discovered channels...</div>
-                                </div>
-                                <input type="text" id="custom-broadcast-channels" class="field-input" placeholder="✏️ Custom Channel ID(s) comma-separated (optional)" style="font-size:0.82em; padding:6px 10px;" oninput="updateBroadcastPreview()">
-                            </div>
 
-                            <!-- Audience Mention -->
-                            <div style="margin-bottom:14px;">
-                                <label class="field-label" for="broadcast-mention-select">📢 Audience Ping / Mention</label>
-                                <select id="broadcast-mention-select" class="field-input" onchange="updateBroadcastPreview()">
-                                    <option value="">No Mention (Silent / Normal)</option>
-                                    <option value="everyone">@everyone (Notify all members)</option>
-                                    <option value="here">@here (Notify online members)</option>
-                                    <optgroup label="Server Roles" id="broadcast-role-group"></optgroup>
-                                </select>
-                            </div>
-
-                            <!-- Message Content -->
-                            <div style="margin-bottom:14px;">
-                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                                    <label class="field-label" style="margin:0;">💬 Message Body (Markdown Supported)</label>
-                                    <span id="broadcast-char-count" style="font-size:0.75em; color:var(--text-dim);">0 / 2000</span>
-                                </div>
-                                <textarea id="broadcast-content" rows="4" class="field-input" style="font-family:'Inter',system-ui,sans-serif; resize:vertical; min-height:90px;" placeholder="Type what you want F.R.I.D.A.Y to say... Markdown supported: **bold**, *italics*, &apos;code&apos;, &gt; quotes" oninput="updateBroadcastPreview()"></textarea>
-                            </div>
-
-                            <!-- Embed Elements & Branding -->
-                            <div style="background:rgba(0,0,0,0.2); border:1px solid var(--border-subtle); border-radius:8px; padding:12px; margin-bottom:14px;">
-                                <div style="font-size:0.8em; font-weight:700; color:var(--text-dim); text-transform:uppercase; margin-bottom:8px;">🎨 Embed Styling & Metadata</div>
-                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:8px;">
+                                <!-- Audience Mention & Style Radios -->
+                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
                                     <div>
-                                        <label class="field-label" style="font-size:0.76em;">Embed Title</label>
-                                        <input type="text" id="embed-title-input" class="field-input" placeholder="e.g. ⚔️ Official Faction War Directive" oninput="updateBroadcastPreview()">
+                                        <label class="field-label" for="broadcast-mention-select">📢 Audience Mention</label>
+                                        <select id="broadcast-mention-select" class="field-input" onchange="updateBroadcastPreview()">
+                                            <option value="">No Mention (Silent)</option>
+                                            <option value="everyone">@everyone (All members)</option>
+                                            <option value="here">@here (Online members)</option>
+                                            <optgroup label="Server Roles" id="broadcast-role-group"></optgroup>
+                                        </select>
                                     </div>
                                     <div>
-                                        <label class="field-label" style="font-size:0.76em;">Accent Color</label>
-                                        <div style="display:flex; gap:6px; align-items:center;">
-                                            <input type="color" id="embed-color-input" value="#5865F2" style="width:34px; height:32px; border:none; background:none; cursor:pointer;" onchange="updateBroadcastPreview()">
-                                            <button type="button" class="btn-test" onclick="setEmbedColor('#ff4757')" style="color:#ff4757;">Red</button>
-                                            <button type="button" class="btn-test" onclick="setEmbedColor('#ffa502')" style="color:#ffa502;">Gold</button>
-                                            <button type="button" class="btn-test" onclick="setEmbedColor('#2ed573')" style="color:#2ed573;">Green</button>
-                                            <button type="button" class="btn-test" onclick="setEmbedColor('#5865F2')" style="color:#5865F2;">Blurple</button>
+                                        <label class="field-label">💬 Message Format</label>
+                                        <div style="display:flex; gap:12px; align-items:center; padding-top:6px;">
+                                            <label style="display:flex; align-items:center; gap:6px; font-size:0.82em; cursor:pointer; color:var(--text-main);">
+                                                <input type="radio" name="broadcast_msg_style" value="chat" checked onchange="onBroadcastStyleChange()">
+                                                <span>💬 Plain Chat</span>
+                                            </label>
+                                            <label style="display:flex; align-items:center; gap:6px; font-size:0.82em; cursor:pointer; color:var(--text-main);">
+                                                <input type="radio" name="broadcast_msg_style" value="embed" onchange="onBroadcastStyleChange()">
+                                                <span>🗂️ Embed Card</span>
+                                            </label>
                                         </div>
                                     </div>
                                 </div>
-                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:8px;">
-                                    <div>
-                                        <label class="field-label" style="font-size:0.76em;">Author Header</label>
-                                        <input type="text" id="broadcast-author" class="field-input" placeholder="e.g. Faction High Command" oninput="updateBroadcastPreview()">
-                                    </div>
-                                    <div>
-                                        <label class="field-label" style="font-size:0.76em;">
-                                            <span>Thumbnail Image</span>
-                                            <button type="button" class="btn-test" style="font-size:0.68em; padding:0 4px;" onclick="setPresetThumbnail('https://faction-os.duckdns.org/icons/spiderverse.png')">🕷️ Crest</button>
-                                        </label>
-                                        <input type="text" id="broadcast-thumbnail" class="field-input" placeholder="https://..." oninput="updateBroadcastPreview()">
-                                    </div>
-                                </div>
-                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:8px;">
-                                    <div>
-                                        <input type="text" id="broadcast-field1-name" class="field-input" placeholder="Field 1 Name (e.g. Chain)" style="font-size:0.8em; margin-bottom:4px;" oninput="updateBroadcastPreview()">
-                                        <input type="text" id="broadcast-field1-val" class="field-input" placeholder="Field 1 Value (e.g. 2,450 / 2,500)" style="font-size:0.8em;" oninput="updateBroadcastPreview()">
-                                    </div>
-                                    <div>
-                                        <input type="text" id="broadcast-field2-name" class="field-input" placeholder="Field 2 Name (e.g. Lead)" style="font-size:0.8em; margin-bottom:4px;" oninput="updateBroadcastPreview()">
-                                        <input type="text" id="broadcast-field2-val" class="field-input" placeholder="Field 2 Value (e.g. +3,807 pts)" style="font-size:0.8em;" oninput="updateBroadcastPreview()">
-                                    </div>
-                                </div>
-                                <div>
-                                    <label class="field-label" style="font-size:0.76em;">Footer Text</label>
-                                    <input type="text" id="embed-footer-input" class="field-input" placeholder="F.R.I.D.A.Y • Faction Operations" oninput="updateBroadcastPreview()">
-                                </div>
-                            </div>
 
-                            <!-- Interactive Link Buttons Builder -->
-                            <div style="background:rgba(0,0,0,0.2); border:1px solid var(--border-subtle); border-radius:8px; padding:12px; margin-bottom:14px;">
-                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                                    <span style="font-size:0.8em; font-weight:700; color:var(--text-dim); text-transform:uppercase;">🔗 Clickable Discord Link Buttons</span>
-                                    <div style="display:flex; gap:4px;">
-                                        <button type="button" class="btn-test" onclick="applyButtonPreset(1, '⚔️ Open Live Warboard', 'https://faction-os.duckdns.org/')">Warboard</button>
-                                        <button type="button" class="btn-test" onclick="applyButtonPreset(2, '💰 View War Payouts', 'https://faction-os.duckdns.org/payout.html')">Payouts</button>
-                                        <button type="button" class="btn-test" onclick="applyButtonPreset(3, '✈️ Overseas Stock Intel', 'https://faction-os.duckdns.org/travel.html')">Travel</button>
-                                        <button type="button" class="btn-test" onclick="clearButtonsPreset()" style="color:var(--spider-red);">Clear</button>
+                                <!-- Message Textarea -->
+                                <div style="margin-bottom:14px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                                        <label class="field-label" style="margin:0;">📝 Message Content (Markdown Supported)</label>
+                                        <span id="broadcast-char-count" style="font-size:0.75em; color:var(--text-dim); font-family:var(--font-mono);">0 / 2000</span>
                                     </div>
+                                    <textarea id="broadcast-content" class="field-input" rows="4" placeholder="Enter announcement, battle order, or faction directive..." style="resize:vertical; line-height:1.45; font-size:0.88em;" oninput="updateBroadcastPreview(); trackDirty();"></textarea>
                                 </div>
-                                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:8px;">
-                                    <div>
-                                        <input type="text" id="broadcast-btn1-label" class="field-input" placeholder="Button 1 Label" style="font-size:0.8em; margin-bottom:4px;" oninput="updateBroadcastPreview()">
-                                        <input type="text" id="broadcast-btn1-url" class="field-input" placeholder="Button 1 URL" style="font-size:0.8em;" oninput="updateBroadcastPreview()">
-                                    </div>
-                                    <div>
-                                        <input type="text" id="broadcast-btn2-label" class="field-input" placeholder="Button 2 Label" style="font-size:0.8em; margin-bottom:4px;" oninput="updateBroadcastPreview()">
-                                        <input type="text" id="broadcast-btn2-url" class="field-input" placeholder="Button 2 URL" style="font-size:0.8em;" oninput="updateBroadcastPreview()">
-                                    </div>
-                                    <div>
-                                        <input type="text" id="broadcast-btn3-label" class="field-input" placeholder="Button 3 Label" style="font-size:0.8em; margin-bottom:4px;" oninput="updateBroadcastPreview()">
-                                        <input type="text" id="broadcast-btn3-url" class="field-input" placeholder="Button 3 URL" style="font-size:0.8em;" oninput="updateBroadcastPreview()">
-                                    </div>
-                                </div>
-                            </div>
 
-                            <!-- Dispatch Controls -->
-                            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                                <button type="button" id="btn-send-broadcast" class="btn-hero-action primary" onclick="sendBroadcastMessage()" style="padding:10px 20px; font-size:0.9em;">
-                                    🚀 Dispatch Broadcast Now
-                                </button>
-                                <div style="display:flex; align-items:center; gap:6px;">
-                                    <input type="time" id="broadcast-schedule-time" class="field-input" style="width:115px; padding:7px 8px; font-size:0.82em;">
-                                    <button type="button" id="btn-schedule-broadcast" class="btn-hero-action ghost" onclick="scheduleBroadcast()">
-                                        ⏰ Schedule TCT
+                                <!-- Embed Customization Accordion/Section -->
+                                <div id="embed-options-panel" style="display:none; background:rgba(0,0,0,0.2); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:14px; margin-bottom:14px;">
+                                    <div style="font-weight:700; font-size:0.86em; color:var(--text-main); margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+                                        <span>🎨</span> Embed Card Customization
+                                    </div>
+                                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px;">
+                                        <div>
+                                            <label class="field-label">Embed Title</label>
+                                            <input type="text" id="embed-title-input" class="field-input" placeholder="e.g. ⚔️ WAR DIRECTIVE #42" oninput="updateBroadcastPreview()">
+                                        </div>
+                                        <div>
+                                            <label class="field-label">Border Accent Color</label>
+                                            <div style="display:flex; align-items:center; gap:8px;">
+                                                <input type="color" id="embed-color-input" value="#5865F2" style="width:36px; height:36px; padding:0; border:none; border-radius:6px; cursor:pointer; background:none;" oninput="updateBroadcastPreview()">
+                                                <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                                                    <span style="width:18px; height:18px; border-radius:50%; background:#5865F2; cursor:pointer; display:inline-block;" onclick="setEmbedColor('#5865F2')"></span>
+                                                    <span style="width:18px; height:18px; border-radius:50%; background:#ff4757; cursor:pointer; display:inline-block;" onclick="setEmbedColor('#ff4757')"></span>
+                                                    <span style="width:18px; height:18px; border-radius:50%; background:#ffa502; cursor:pointer; display:inline-block;" onclick="setEmbedColor('#ffa502')"></span>
+                                                    <span style="width:18px; height:18px; border-radius:50%; background:#2ed573; cursor:pointer; display:inline-block;" onclick="setEmbedColor('#2ed573')"></span>
+                                                    <span style="width:18px; height:18px; border-radius:50%; background:#00cec9; cursor:pointer; display:inline-block;" onclick="setEmbedColor('#00cec9')"></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px;">
+                                        <div>
+                                            <label class="field-label">Author Header</label>
+                                            <input type="text" id="broadcast-author" class="field-input" placeholder="e.g. Spider-Verse War Council" oninput="updateBroadcastPreview()">
+                                        </div>
+                                        <div>
+                                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                                <label class="field-label" style="margin:0;">Thumbnail URL</label>
+                                                <a href="javascript:void(0)" onclick="setPresetThumbnail('https://faction-os.duckdns.org/icons/spiderverse.png')" style="font-size:0.74em; color:var(--spider-blue); text-decoration:none;">🕷️ Crest</a>
+                                            </div>
+                                            <input type="url" id="broadcast-thumbnail" class="field-input" placeholder="https://..." oninput="updateBroadcastPreview()">
+                                        </div>
+                                    </div>
+
+                                    <!-- 2-Column Fields -->
+                                    <div style="margin-bottom:10px;">
+                                        <label class="field-label">Custom Fields (2-Column Grid)</label>
+                                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:6px;">
+                                            <input type="text" id="broadcast-field1-name" class="field-input" placeholder="Field 1 Label (e.g. Target Wall)" oninput="updateBroadcastPreview()">
+                                            <input type="text" id="broadcast-field1-val" class="field-input" placeholder="Field 1 Value (e.g. Sector 7 Lead)" oninput="updateBroadcastPreview()">
+                                        </div>
+                                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                                            <input type="text" id="broadcast-field2-name" class="field-input" placeholder="Field 2 Label (e.g. Energy Status)" oninput="updateBroadcastPreview()">
+                                            <input type="text" id="broadcast-field2-val" class="field-input" placeholder="Field 2 Value (e.g. 100% Stack Ready)" oninput="updateBroadcastPreview()">
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label class="field-label">Footer Text</label>
+                                        <input type="text" id="embed-footer-input" class="field-input" placeholder="e.g. F.R.I.D.A.Y. • Faction Operations Automated Intelligence" oninput="updateBroadcastPreview()">
+                                    </div>
+                                </div>
+
+                                <!-- Action Buttons Builder -->
+                                <div style="margin-bottom:16px;">
+                                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                        <label class="field-label" style="margin:0;">🔗 Discord Link Buttons (Up to 3 Interactive Buttons)</label>
+                                        <div style="display:flex; gap:6px;">
+                                            <a href="javascript:void(0)" onclick="applyButtonPreset('warboard')" style="font-size:0.75em; color:var(--spider-blue); text-decoration:none;">⚔️ Warboard</a>
+                                            <a href="javascript:void(0)" onclick="applyButtonPreset('payouts')" style="font-size:0.75em; color:var(--spider-blue); text-decoration:none;">💰 Payouts</a>
+                                            <a href="javascript:void(0)" onclick="clearButtonsPreset()" style="font-size:0.75em; color:var(--spider-red); text-decoration:none;">✕ Clear</a>
+                                        </div>
+                                    </div>
+                                    <div style="display:grid; grid-template-columns:1fr 2fr; gap:6px; margin-bottom:6px;">
+                                        <input type="text" id="broadcast-btn1-label" class="field-input" placeholder="Button 1 Label (e.g. ⚔️ Live Warboard)" oninput="updateBroadcastPreview()">
+                                        <input type="url" id="broadcast-btn1-url" class="field-input" placeholder="https://faction-os.duckdns.org/warboard.html" oninput="updateBroadcastPreview()">
+                                    </div>
+                                    <div style="display:grid; grid-template-columns:1fr 2fr; gap:6px; margin-bottom:6px;">
+                                        <input type="text" id="broadcast-btn2-label" class="field-input" placeholder="Button 2 Label (e.g. 💰 View Payouts)" oninput="updateBroadcastPreview()">
+                                        <input type="url" id="broadcast-btn2-url" class="field-input" placeholder="https://..." oninput="updateBroadcastPreview()">
+                                    </div>
+                                    <div style="display:grid; grid-template-columns:1fr 2fr; gap:6px;">
+                                        <input type="text" id="broadcast-btn3-label" class="field-input" placeholder="Button 3 Label" oninput="updateBroadcastPreview()">
+                                        <input type="url" id="broadcast-btn3-url" class="field-input" placeholder="https://..." oninput="updateBroadcastPreview()">
+                                    </div>
+                                </div>
+
+                                <!-- Actions & Scheduling -->
+                                <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; padding-top:12px; border-top:1px solid var(--border-subtle);">
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <input type="time" id="broadcast-schedule-time" class="field-input" style="width:130px; font-size:0.8em; padding:6px 8px;">
+                                        <button type="button" class="btn-test" id="btn-schedule-broadcast" onclick="scheduleBroadcast()">⏰ Schedule TCT</button>
+                                    </div>
+                                    <button type="button" class="btn-hero-action primary" id="btn-send-broadcast" onclick="sendBroadcastMessage()" style="font-size:0.88em; padding:8px 18px;">
+                                        🚀 Dispatch Broadcast via F.R.I.D.A.Y.
                                     </button>
                                 </div>
-                                <span id="broadcast-status-msg" style="font-size:0.84em; font-weight:700;"></span>
+                                <div id="broadcast-status-msg" style="margin-top:10px; font-size:0.84em; font-weight:600;"></div>
+                                <div id="broadcast-delivery-report" style="margin-top:10px;"></div>
                             </div>
-                            <div id="broadcast-delivery-report" style="display:none; margin-top:12px; padding:10px; border-radius:6px; background:rgba(0,0,0,0.3); border:1px solid var(--border-subtle); font-size:0.82em;"></div>
-                        </div>
 
-                        <!-- Sub-Section B: Welcome & Rules Composer -->
-                        <div id="section-composer-rules" style="display:none;">
-                            <div style="margin-bottom:14px;">
-                                <label class="field-label">Target Welcome Channel</label>
-                                <select class="field-input" id="welcome-channelid-select" onchange="onChannelSelectChange(this, 'welcome-channelid'); trackDirty();">
-                                    <option value="">-- Select Welcome Channel --</option>
-                                </select>
-                                <input type="text" id="welcome-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
-                            </div>
-                            <div style="margin-bottom:14px;">
-                                <label class="field-label">Rules Embed Title</label>
-                                <input type="text" id="welcome-rules-title" class="field-input" placeholder="📜 Welcome to the Faction & Server Rules" oninput="updateBroadcastPreview(); trackDirty();">
-                            </div>
-                            <div style="margin-bottom:14px;">
-                                <label class="field-label">Rules Content (Markdown)</label>
-                                <textarea id="welcome-rules-content" rows="8" class="field-input" style="font-family:'Inter',system-ui,sans-serif; resize:vertical; min-height:160px;" oninput="updateBroadcastPreview(); trackDirty();"></textarea>
-                            </div>
-                            <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
-                                <label style="display:flex; align-items:center; gap:8px; font-size:0.85em; cursor:pointer;">
+                            <!-- Sub-Section B: Welcome & Rules Composer -->
+                            <div id="section-composer-rules" style="display:none;">
+                                <div style="margin-bottom:14px;">
+                                    <label class="field-label" for="welcome-channelid-select">📜 Welcome & Rules Destination Channel</label>
+                                    <select class="field-input channel-picker" id="welcome-channelid-select" onchange="onChannelSelectChange(this, 'welcome-channelid'); trackDirty(); updateBroadcastPreview();">
+                                        <option value="">-- Select Channel (e.g. #welcome-and-rules) --</option>
+                                    </select>
+                                    <input type="text" id="welcome-channelid" class="field-input" style="display:none; margin-top:6px;" placeholder="Custom Channel ID" oninput="trackDirty(); updateBroadcastPreview();">
+                                </div>
+
+                                <div style="margin-bottom:14px;">
+                                    <label class="field-label" for="welcome-rules-title">Card Title</label>
+                                    <input type="text" id="welcome-rules-title" class="field-input" placeholder="🕷️ SPIDER-VERSE OFFICIAL FACTION GUIDELINES" oninput="trackDirty(); updateBroadcastPreview();">
+                                </div>
+
+                                <div style="margin-bottom:14px;">
+                                    <label class="field-label" for="welcome-rules-content">Faction Rules & Welcome Text (Markdown Supported)</label>
+                                    <textarea id="welcome-rules-content" class="field-input" rows="8" placeholder="Enter faction rules, OC guidelines, chain rules, drug protocols..." style="resize:vertical; line-height:1.45; font-size:0.88em;" oninput="trackDirty(); updateBroadcastPreview();"></textarea>
+                                </div>
+
+                                <div style="display:flex; align-items:center; gap:8px; margin-bottom:16px;">
                                     <input type="checkbox" id="postWelcomeRulesOnJoin" onchange="trackDirty()">
-                                    <span>Automatically post this welcome card whenever a new member joins</span>
-                                </label>
+                                    <label for="postWelcomeRulesOnJoin" style="font-size:0.84em; color:var(--text-main); cursor:pointer;">
+                                        Automatically mention and guide new members to this card when they join the Discord server
+                                    </label>
+                                </div>
+
+                                <div style="display:flex; align-items:center; gap:12px;">
+                                    <button type="button" class="btn-action primary" id="btn-post-rules" onclick="postOfficialRulesCard()">
+                                        📜 Post Official Rules Card
+                                    </button>
+                                    <button type="button" class="btn-action primary" id="btn-post-welcome-rules" onclick="postOfficialRulesCard()" style="display:none;">
+                                        📜 Post Official Rules Card
+                                    </button>
+                                    <span id="post-rules-status" style="font-size:0.85em; font-weight:600;"></span>
+                                </div>
                             </div>
-                            <button type="button" class="btn-hero-action teal" onclick="testAlert('welcome_rules')" style="padding:10px 20px; font-size:0.9em;">
-                                📌 Dispatch Welcome Rules Card Now
-                            </button>
                         </div>
                     </div>
-                </div>
 
-                <!-- Right Column: Sticky Live Discord Desktop Simulator -->
-                <div class="sticky-simulator-wrap">
-                    <div class="discord-sim-window">
-                        <div class="dc-sim-header">
-                            <span>#</span> <span id="dc-sim-chan-header">war-info</span>
-                            <span style="font-size:0.76em; font-weight:400; color:#949ba4; margin-left:auto;">Discord Channel Simulator</span>
+                    <!-- Right Column: Sticky Live Discord Dark Mode Channel Simulator -->
+                    <div class="dc-simulator-window" id="discord-simulator">
+                        <div class="dc-channel-header">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span style="font-size:1.1em; opacity:0.7;">#</span>
+                                <span id="dc-sim-chan-header">war-info</span>
+                            </div>
+                            <div style="font-size:0.8em; opacity:0.6; display:flex; gap:10px;">
+                                <span>🔔</span><span>📌</span><span>👥</span>
+                            </div>
                         </div>
-                        <div class="dc-sim-body">
-                            <div class="dc-avatar">🤖</div>
+                        <div class="dc-chat-body">
+                            <div class="dc-avatar" id="dc-preview-avatar">🤖</div>
                             <div class="dc-msg-wrap">
                                 <div class="dc-meta-row">
-                                    <span class="dc-user-name">F.R.I.D.A.Y.</span>
+                                    <span class="dc-user-name" id="dc-preview-name">F.R.I.D.A.Y.</span>
                                     <span class="dc-bot-tag">BOT</span>
-                                    <span class="dc-timestamp" id="dc-sim-timestamp">Today at 10:14 PM</span>
+                                    <span class="dc-timestamp" id="dc-preview-timestamp">Today at 12:00 PM</span>
+                                    <span class="dc-timestamp" id="dc-sim-timestamp" style="display:none;">Today at 12:00 PM</span>
                                 </div>
-                                <div id="dc-preview-mention" style="display:none;"></div>
+                                <div id="dc-preview-mention" style="display:none; margin-bottom:4px;"></div>
                                 <div class="dc-content-text" id="dc-preview-text">Type a message to preview how F.R.I.D.A.Y will speak in Discord...</div>
-                                <div class="dc-embed-card" id="dc-preview-embed">
+                                <div class="dc-embed-card" id="dc-preview-embed" style="display:none;">
                                     <div class="dc-embed-author" id="dc-embed-author" style="display:none;"></div>
-                                    <img class="dc-embed-thumb-img" id="dc-embed-thumb" style="display:none;" alt="Thumbnail">
-                                    <div class="dc-embed-title-text" id="dc-embed-title" style="display:none;"></div>
-                                    <div class="dc-embed-desc-text" id="dc-embed-desc">Type a message above to preview the announcement card...</div>
+                                    <div class="dc-embed-title" id="dc-embed-title" style="display:none;"></div>
+                                    <div class="dc-embed-desc" id="dc-embed-desc"></div>
+                                    <img class="dc-embed-thumb" id="dc-embed-thumb" style="display:none;" alt="Thumbnail">
                                     <div class="dc-embed-fields-grid" id="dc-embed-fields" style="display:none;"></div>
                                     <div class="dc-embed-footer-text" id="dc-embed-footer">F.R.I.D.A.Y • Faction Operations</div>
                                 </div>
@@ -2631,288 +3555,243 @@
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- ========================================================
-             TAB 3: 🗺️ Channel & Role Routing (Visual Routing Matrix Table)
-             ======================================================== -->
 
             <!-- ========================================================
                  TAB 3: 🗺️ Channel & Role Routing (Event Stream Routing Matrix)
                  ======================================================== -->
+            
             <div class="deck-tab-pane" id="tab-pane-routing">
-            <div class="card" id="card-roles-routing">
-                <div class="card-header">
-                    <div>
-                        <p class="card-title">📡 Event Stream Routing Matrix</p>
-                        <span class="card-subtitle">Map specialized operational event streams to dedicated Discord channels, roles, and automated DMs</span>
+                <div class="card" id="card-roles-routing">
+                    <div class="card-header">
+                        <div>
+                            <p class="card-title">📡 Event Stream Routing Matrix</p>
+                            <span class="card-subtitle">Map specialized operational event streams to dedicated Discord channels, roles, and automated DMs</span>
+                        </div>
                     </div>
-                </div>
-                <div class="card-body" style="padding:0; overflow-x:auto;">
-                    <table class="routing-matrix-table">
-                        <thead>
-                            <tr>
-                                <th style="width:30%;">Operational Event Stream</th>
-                                <th style="width:35%;">Destination Channel</th>
-                                <th style="width:35%;">Audience / Ping Role</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- Row 1: Main War Alerts -->
-                            <tr>
-                                <td>
-                                    <div class="routing-stream-name">⚔️ Main War & Attack Alerts</div>
-                                    <div class="routing-stream-desc">Target landings, hospital releases, sniper pings, overseas threats</div>
-                                </td>
-                                <td>
-                                    <select class="field-select channel-picker" id="global-channelid-select" onchange="onChannelSelectChange(this, 'global-channelid'); trackDirty();">
-                                        <option value="">-- Select Channel --</option>
-                                    </select>
-                                    <input type="text" id="global-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
-                                </td>
-                                <td>
-                                    <input type="text" id="discord-userid" class="field-input" placeholder="Your Discord User ID (personal chain alerts)" oninput="trackDirty();">
-                                </td>
-                            </tr>
-
-                            <!-- Row 2: Retaliation Engine -->
-                            <tr>
-                                <td>
-                                    <div class="routing-stream-name">🔄 Retaliation Engine</div>
-                                    <div class="routing-stream-desc">Incoming enemy attack warnings and member retaliation alerts</div>
-                                </td>
-                                <td>
-                                    <select class="field-select channel-picker" id="retal-channelid-select" onchange="onChannelSelectChange(this, 'retal-channelid'); trackDirty();">
-                                        <option value="">-- Same as Main Alert Channel --</option>
-                                    </select>
-                                    <input type="text" id="retal-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
-                                </td>
-                                <td>
-                                    <select class="field-select role-picker" id="retal-roleid-select" onchange="onRoleSelectChange(this, 'retal-roleid'); trackDirty();">
-                                        <option value="">-- Select Role (or leave blank) --</option>
-                                    </select>
-                                    <input type="text" id="retal-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
-                                    <label style="display:flex; align-items:center; gap:6px; font-size:0.75em; margin-top:6px; cursor:pointer;">
-                                        <input type="checkbox" id="retal-ping-defender" onchange="trackDirty()">
-                                        <span>Also ping defender</span>
-                                    </label>
-                                </td>
-                            </tr>
-
-                            <!-- Row 3: Organized Crimes (OC 2.0) -->
-                            <tr>
-                                <td>
-                                    <div class="routing-stream-name">💼 Organized Crimes (OC 2.0)</div>
-                                    <div class="routing-stream-desc">Planned teams, countdown pings, low CPR warnings, delayed crimes</div>
-                                </td>
-                                <td>
-                                    <select class="field-select channel-picker" id="oc-channelid-select" onchange="onChannelSelectChange(this, 'oc-channelid'); trackDirty();">
-                                        <option value="">-- Same as Main Alert Channel --</option>
-                                    </select>
-                                    <input type="text" id="oc-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
-                                </td>
-                                <td>
-                                    <select class="field-select role-picker" id="oc-roleid-select" onchange="onRoleSelectChange(this, 'oc-roleid'); trackDirty();">
-                                        <option value="">-- Select Role (or leave blank) --</option>
-                                    </select>
-                                    <input type="text" id="oc-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
-                                    <div style="margin-top:6px;">
-                                        <select class="field-select role-picker" id="oc-manager-roleid-select" onchange="onRoleSelectChange(this, 'oc-manager-roleid'); trackDirty();" style="font-size:0.8em;">
-                                            <option value="">-- Select OC Manager Role --</option>
+                    <div class="card-body" style="padding:0; overflow-x:auto;">
+                        <table class="routing-matrix-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:30%;">Operational Event Stream</th>
+                                    <th style="width:35%;">Destination Channel</th>
+                                    <th style="width:35%;">Audience / Ping Role</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Row 1: Main War Alerts -->
+                                <tr>
+                                    <td>
+                                        <div class="routing-stream-name">⚔️ Main War & Attack Alerts</div>
+                                        <div class="routing-stream-desc">Target landings, hospital releases, sniper pings, overseas threats</div>
+                                    </td>
+                                    <td>
+                                        <select class="field-select channel-picker" id="global-channelid-select" onchange="onChannelSelectChange(this, 'global-channelid'); trackDirty();">
+                                            <option value="">-- Select Channel --</option>
                                         </select>
-                                        <input type="text" id="oc-manager-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
-                                        <input type="text" id="oc-manager-userids" class="field-input" placeholder="OC Manager User IDs (comma-separated)" style="font-size:0.78em; margin-top:4px;" oninput="trackDirty()">
-                                    </div>
-                                </td>
-                            </tr>
+                                        <input type="text" id="global-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
+                                    </td>
+                                    <td>
+                                        <select class="field-select role-picker" id="global-roleid-select" onchange="onRoleSelectChange(this, 'global-roleid'); trackDirty();" style="display:none;">
+                                            <option value="">-- Default Faction Ping --</option>
+                                        </select>
+                                        <input type="text" id="global-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
+                                        <input type="text" id="discord-userid" class="field-input" placeholder="Your Discord User ID (personal chain alerts)" oninput="trackDirty()">
+                                    </td>
+                                </tr>
 
-                            <!-- Row 4: Member Inactivity -->
-                            <tr>
-                                <td>
-                                    <div class="routing-stream-name">💤 Member Inactivity Tracker</div>
-                                    <div class="routing-stream-desc">Fires when members go offline for > 24 hours during war / peace</div>
-                                </td>
-                                <td>
-                                    <select class="field-select channel-picker" id="inactivity-channelid-select" onchange="onChannelSelectChange(this, 'inactivity-channelid'); trackDirty();">
-                                        <option value="">-- Same as Main Alert Channel --</option>
-                                    </select>
-                                    <input type="text" id="inactivity-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
-                                </td>
-                                <td>
-                                    <select class="field-select role-picker" id="inactivity-roleid-select" onchange="onRoleSelectChange(this, 'inactivity-roleid'); trackDirty();">
-                                        <option value="">-- Select Role (or leave blank) --</option>
-                                    </select>
-                                    <input type="text" id="inactivity-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
-                                </td>
-                            </tr>
+                                <!-- Row 2: Retaliation Engine -->
+                                <tr>
+                                    <td>
+                                        <div class="routing-stream-name">🩸 Retaliation & Defend Engine</div>
+                                        <div class="routing-stream-desc">Fires when members are attacked or retals become available</div>
+                                    </td>
+                                    <td>
+                                        <select class="field-select channel-picker" id="retal-channelid-select" onchange="onChannelSelectChange(this, 'retal-channelid'); trackDirty();">
+                                            <option value="">-- Same as Main Alert Channel --</option>
+                                        </select>
+                                        <input type="text" id="retal-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
+                                    </td>
+                                    <td>
+                                        <select class="field-select role-picker" id="retal-roleid-select" onchange="onRoleSelectChange(this, 'retal-roleid'); trackDirty();">
+                                            <option value="">-- Select Role (or leave blank) --</option>
+                                        </select>
+                                        <input type="text" id="retal-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
+                                        <label style="display:flex; align-items:center; gap:6px; font-size:0.78em; color:var(--text-muted); margin-top:4px; cursor:pointer;">
+                                            <input type="checkbox" id="retal-ping-defender" onchange="trackDirty()">
+                                            <span>Also ping defender</span>
+                                        </label>
+                                    </td>
+                                </tr>
 
-                            <!-- Row 5: Drug Overdose Sentinel -->
-                            <tr>
-                                <td>
-                                    <div class="routing-stream-name">💊 Drug Overdose Sentinel</div>
-                                    <div class="routing-stream-desc">Alerts revivers and medics when a faction member overdoses on Xanax</div>
-                                </td>
-                                <td>
-                                    <select class="field-select channel-picker" id="overdose-channelid-select" onchange="onChannelSelectChange(this, 'overdose-channelid'); trackDirty();">
-                                        <option value="">-- Same as Main Alert Channel --</option>
-                                    </select>
-                                    <input type="text" id="overdose-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
-                                </td>
-                                <td>
-                                    <select class="field-select role-picker" id="overdose-roleid-select" onchange="onRoleSelectChange(this, 'overdose-roleid'); trackDirty();">
-                                        <option value="">-- Select Role (or leave blank) --</option>
-                                    </select>
-                                    <input type="text" id="overdose-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
-                                </td>
-                            </tr>
+                                <!-- Row 3: Organized Crimes (OC 2.0) -->
+                                <tr>
+                                    <td>
+                                        <div class="routing-stream-name">💼 Organized Crimes (OC 2.0)</div>
+                                        <div class="routing-stream-desc">Planned teams, countdown pings, success/fail notices, CPR warnings</div>
+                                    </td>
+                                    <td>
+                                        <select class="field-select channel-picker" id="oc-channelid-select" onchange="onChannelSelectChange(this, 'oc-channelid'); trackDirty();">
+                                            <option value="">-- Same as Main Alert Channel --</option>
+                                        </select>
+                                        <input type="text" id="oc-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
+                                    </td>
+                                    <td>
+                                        <select class="field-select role-picker" id="oc-roleid-select" onchange="onRoleSelectChange(this, 'oc-roleid'); trackDirty();">
+                                            <option value="">-- Select Role (or leave blank) --</option>
+                                        </select>
+                                        <input type="text" id="oc-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
+                                        <div style="margin-top:6px; display:flex; flex-direction:column; gap:4px;">
+                                            <select class="field-select role-picker" id="oc-manager-roleid-select" onchange="onRoleSelectChange(this, 'oc-manager-roleid'); trackDirty();">
+                                                <option value="">-- Select OC Manager Role --</option>
+                                            </select>
+                                            <input type="text" id="oc-manager-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
+                                            <input type="text" id="oc-manager-userids" class="field-input" placeholder="OC Manager Discord User IDs (comma-separated for DMs)" oninput="trackDirty()">
+                                            <button type="button" class="btn-test" id="btn-test-oc-matrix-dm" onclick="testOcManagerDm()" style="font-size:0.75em; align-self:flex-start;">▷ Test OC Manager DM</button>
+                                        </div>
+                                    </td>
+                                </tr>
 
-                            <!-- Row 6: Vault Requests & Banking -->
-                            <tr>
-                                <td>
-                                    <div class="routing-stream-name">🏦 Vault Requests & Banking</div>
-                                    <div class="routing-stream-desc">Deposit notifications, withdrawal requests, ghost trade alerts</div>
-                                </td>
-                                <td>
-                                    <select class="field-select channel-picker" id="banking-channelid-select" onchange="onChannelSelectChange(this, 'banking-channelid'); trackDirty();">
-                                        <option value="">-- Post in Command Channel --</option>
-                                    </select>
-                                    <input type="text" id="banking-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
-                                </td>
-                                <td>
-                                    <select class="field-select role-picker" id="banker-roleid-select" onchange="onRoleSelectChange(this, 'banker-roleid'); trackDirty();">
-                                        <option value="">-- Select Banker Role --</option>
-                                    </select>
-                                    <input type="text" id="banker-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
-                                </td>
-                            </tr>
+                                <!-- Row 4: Member Inactivity -->
+                                <tr>
+                                    <td>
+                                        <div class="routing-stream-name">💤 Member Inactivity Tracker</div>
+                                        <div class="routing-stream-desc">Fires when members go offline for >48h or miss war stacking</div>
+                                    </td>
+                                    <td>
+                                        <select class="field-select channel-picker" id="inactivity-channelid-select" onchange="onChannelSelectChange(this, 'inactivity-channelid'); trackDirty();">
+                                            <option value="">-- Same as Main Alert Channel --</option>
+                                        </select>
+                                        <input type="text" id="inactivity-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
+                                    </td>
+                                    <td>
+                                        <select class="field-select role-picker" id="inactivity-roleid-select" onchange="onRoleSelectChange(this, 'inactivity-roleid'); trackDirty();">
+                                            <option value="">-- Select Role (or leave blank) --</option>
+                                        </select>
+                                        <input type="text" id="inactivity-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
+                                    </td>
+                                </tr>
 
-                            <!-- Row 7: Promotion Requests & Leadership -->
-                            <tr>
-                                <td>
-                                    <div class="routing-stream-name">🎖️ Promotions & Leadership</div>
-                                    <div class="routing-stream-desc">Officer rank applications and leadership milestone notifications</div>
-                                </td>
-                                <td>
-                                    <select class="field-select channel-picker" id="promotion-channelid-select" onchange="onChannelSelectChange(this, 'promotion-channelid'); trackDirty();">
-                                        <option value="">-- Post in Leadership Channel --</option>
-                                    </select>
-                                    <input type="text" id="promotion-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
-                                </td>
-                                <td>
-                                    <select class="field-select role-picker" id="leader-roleid-select" onchange="onRoleSelectChange(this, 'leader-roleid'); trackDirty();">
-                                        <option value="">-- Select Leader Role --</option>
-                                    </select>
-                                    <input type="text" id="leader-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
-                                </td>
-                            </tr>
+                                <!-- Row 5: Drug Overdose Sentinel -->
+                                <tr>
+                                    <td>
+                                        <div class="routing-stream-name">💊 Drug Overdose Sentinel</div>
+                                        <div class="routing-stream-desc">Alerts revivers and medics when a faction member overdoses</div>
+                                    </td>
+                                    <td>
+                                        <select class="field-select channel-picker" id="overdose-channelid-select" onchange="onChannelSelectChange(this, 'overdose-channelid'); trackDirty();">
+                                            <option value="">-- Same as Main Alert Channel --</option>
+                                        </select>
+                                        <input type="text" id="overdose-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
+                                    </td>
+                                    <td>
+                                        <select class="field-select role-picker" id="overdose-roleid-select" onchange="onRoleSelectChange(this, 'overdose-roleid'); trackDirty();">
+                                            <option value="">-- Select Role (e.g. @Revivers) --</option>
+                                        </select>
+                                        <input type="text" id="overdose-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
+                                    </td>
+                                </tr>
 
-                            <!-- Row 8: Verification Gatekeeper -->
-                            <tr>
-                                <td>
-                                    <div class="routing-stream-name">🛡️ Verification Gatekeeper</div>
-                                    <div class="routing-stream-desc">Automated member verification, role syncing, and quarantine gate</div>
-                                </td>
-                                <td>
-                                    <select class="field-select channel-picker" id="verification-channelid-select" onchange="onChannelSelectChange(this, 'verification-channelid'); trackDirty();">
-                                        <option value="">-- Select Channel --</option>
-                                    </select>
-                                    <input type="text" id="verification-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
-                                </td>
-                                <td>
-                                    <label style="display:flex; align-items:center; gap:6px; font-size:0.75em; cursor:pointer;">
-                                        <input type="checkbox" id="notify-api-key-linked" onchange="trackDirty()">
-                                        <span>Notify in channel when new key linked</span>
-                                    </label>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                                <!-- Row 6: Vault & Armory Requests -->
+                                <tr>
+                                    <td>
+                                        <div class="routing-stream-name">💰 Vault & Armory Requests</div>
+                                        <div class="routing-stream-desc">Loan requests, deposit notices, ghost trade alerts</div>
+                                    </td>
+                                    <td>
+                                        <select class="field-select channel-picker" id="banking-channelid-select" onchange="onChannelSelectChange(this, 'banking-channelid'); trackDirty();">
+                                            <option value="">-- Post in Command Channel --</option>
+                                        </select>
+                                        <input type="text" id="banking-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
+                                    </td>
+                                    <td>
+                                        <select class="field-select role-picker" id="banker-roleid-select" onchange="onRoleSelectChange(this, 'banker-roleid'); trackDirty();">
+                                            <option value="">-- Select Role (e.g. @Bankers) --</option>
+                                        </select>
+                                        <input type="text" id="banker-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
+                                    </td>
+                                </tr>
+
+                                <!-- Row 7: Rank & Promotion Requests -->
+                                <tr>
+                                    <td>
+                                        <div class="routing-stream-name">🎖️ Rank & Promotion Requests</div>
+                                        <div class="routing-stream-desc">Dispatches promotion petitions to faction leadership</div>
+                                    </td>
+                                    <td>
+                                        <select class="field-select channel-picker" id="promotion-channelid-select" onchange="onChannelSelectChange(this, 'promotion-channelid'); trackDirty();">
+                                            <option value="">-- Post in Leadership Channel --</option>
+                                        </select>
+                                        <input type="text" id="promotion-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
+                                    </td>
+                                    <td>
+                                        <select class="field-select role-picker" id="leader-roleid-select" onchange="onRoleSelectChange(this, 'leader-roleid'); trackDirty();">
+                                            <option value="">-- Select Role (e.g. @Co-Leaders) --</option>
+                                        </select>
+                                        <input type="text" id="leader-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
+                                    </td>
+                                </tr>
+
+                                <!-- Row 8: Verification Gatekeeper -->
+                                <tr>
+                                    <td>
+                                        <div class="routing-stream-name">🚪 Verification Gatekeeper</div>
+                                        <div class="routing-stream-desc">New member join channel & automated role assignment gate</div>
+                                    </td>
+                                    <td>
+                                        <select class="field-select channel-picker" id="verification-channelid-select" onchange="onChannelSelectChange(this, 'verification-channelid'); trackDirty();">
+                                            <option value="">-- Select Verification Channel --</option>
+                                        </select>
+                                        <input type="text" id="verification-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
+                                    </td>
+                                    <td>
+                                        <label style="display:flex; align-items:center; gap:6px; font-size:0.82em; color:var(--text-main); cursor:pointer;">
+                                            <input type="checkbox" id="notify-api-key-linked" onchange="trackDirty()">
+                                            <span>Notify channel when member links API key</span>
+                                        </label>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Faction Server Role Hierarchy Mapping -->
+                <div class="card" style="margin-top:20px;">
+                    <div class="card-header">
+                        <div>
+                            <p class="card-title">👥 Faction Server Role Hierarchy Mapping</p>
+                            <span class="card-subtitle">Assign Discord roles to operational permissions across F.R.I.D.A.Y. commands and automation</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="role-hierarchy-grid">
+                            <div class="role-card">
+                                <div class="role-card-title">👑 Faction Member Role</div>
+                                <select class="field-select role-picker" id="faction-roleid-select" onchange="onRoleSelectChange(this, 'faction-roleid'); trackDirty();">
+                                    <option value="">-- Select Role --</option>
+                                </select>
+                                <input type="text" id="faction-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
+                            </div>
+                            <div class="role-card">
+                                <div class="role-card-title">🛡️ Verified Role</div>
+                                <select class="field-select role-picker" id="verified-roleid-select" onchange="onRoleSelectChange(this, 'verified-roleid'); trackDirty();">
+                                    <option value="">-- Select Role --</option>
+                                </select>
+                                <input type="text" id="verified-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
+                            </div>
+                            <div class="role-card">
+                                <div class="role-card-title">🔒 Unverified Role</div>
+                                <select class="field-select role-picker" id="unverified-roleid-select" onchange="onRoleSelectChange(this, 'unverified-roleid'); trackDirty();">
+                                    <option value="">-- Select Role --</option>
+                                </select>
+                                <input type="text" id="unverified-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Faction Role Hierarchy Mapping Grid -->
-            <div class="card">
-                <div class="card-header">
-                    <div>
-                        <p class="card-title">🎖️ Faction Role Hierarchy Mapping</p>
-                        <span class="card-subtitle">Connect Torn faction permissions to Discord roles for automated sync and access control</span>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div class="role-hierarchy-grid">
-                        <div class="role-card">
-                            <div class="role-card-title">👑 Faction Leader Role</div>
-                            <select class="field-select role-picker" id="leader-roleid-select-card" onchange="document.getElementById('leader-roleid').value = this.value; trackDirty();">
-                                <option value="">-- Select Role --</option>
-                            </select>
-                        </div>
-                        <div class="role-card">
-                            <div class="role-card-title">🏦 Banker Role</div>
-                            <select class="field-select role-picker" id="banker-roleid-select-card" onchange="document.getElementById('banker-roleid').value = this.value; trackDirty();">
-                                <option value="">-- Select Role --</option>
-                            </select>
-                        </div>
-                        <div class="role-card">
-                            <div class="role-card-title">💼 OC Manager Role</div>
-                            <select class="field-select role-picker" id="oc-manager-roleid-select-card" onchange="document.getElementById('oc-manager-roleid').value = this.value; trackDirty();">
-                                <option value="">-- Select Role --</option>
-                            </select>
-                        </div>
-                        <div class="role-card">
-                            <div class="role-card-title">🕷️ Faction Member Role</div>
-                            <select class="field-select role-picker" id="faction-roleid-select" onchange="onRoleSelectChange(this, 'faction-roleid'); trackDirty();">
-                                <option value="">-- Select Role --</option>
-                            </select>
-                            <input type="text" id="faction-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
-                        </div>
-                        <div class="role-card">
-                            <div class="role-card-title">🛡️ Verified Role</div>
-                            <select class="field-select role-picker" id="verified-roleid-select" onchange="onRoleSelectChange(this, 'verified-roleid'); trackDirty();">
-                                <option value="">-- Select Role --</option>
-                            </select>
-                            <input type="text" id="verified-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
-                        </div>
-                        <div class="role-card">
-                            <div class="role-card-title">🔒 Unverified Role</div>
-                            <select class="field-select role-picker" id="unverified-roleid-select" onchange="onRoleSelectChange(this, 'unverified-roleid'); trackDirty();">
-                                <option value="">-- Select Role --</option>
-                            </select>
-                            <input type="text" id="unverified-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Server Security & Channel Locking Guide -->
-            <div class="card">
-                <div class="card-header">
-                    <div>
-                        <p class="card-title">🔒 Server Security & Channel Locking Guide</p>
-                        <span class="card-subtitle">Recommended permissions matrix for bulletproof faction operations</span>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; font-size:0.84em;">
-                        <div style="background:rgba(255,255,255,0.02); padding:12px; border-radius:8px; border:1px solid var(--border-subtle);">
-                            <div style="font-weight:700; color:var(--text-main); margin-bottom:6px;">🎯 Private Alert Channels</div>
-                            <div style="color:var(--text-muted); line-height:1.4;">Channels like <code>#war-info</code> and <code>#retaliations</code> should be visible only to the verified <strong>@Faction Member</strong> role. Deny <strong>@everyone</strong> View Channel to prevent spy leaks.</div>
-                        </div>
-                        <div style="background:rgba(255,255,255,0.02); padding:12px; border-radius:8px; border:1px solid var(--border-subtle);">
-                            <div style="font-weight:700; color:var(--text-main); margin-bottom:6px;">🤖 Bot Permissions</div>
-                            <div style="color:var(--text-muted); line-height:1.4;">F.R.I.D.A.Y. requires <strong>Send Messages</strong>, <strong>Embed Links</strong>, <strong>Attach Files</strong>, and <strong>Use External Emojis</strong> in all designated alert channels.</div>
-                        </div>
-                        <div style="background:rgba(255,255,255,0.02); padding:12px; border-radius:8px; border:1px solid var(--border-subtle);">
-                            <div style="font-weight:700; color:var(--text-main); margin-bottom:6px;">🛡️ Quarantine Isolation</div>
-                            <div style="color:var(--text-muted); line-height:1.4;">The <strong>@Unverified</strong> role should only have access to <code>#verification</code>. Once members authenticate via Torn API, the bot automatically removes Unverified and grants Verified.</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ========================================================
-             TAB 4: ⚡ Slash Commands & Recon (57 Commands)
-             ======================================================== -->
 
             <!-- ========================================================
                  TAB 4: ⚡ Slash Commands & Recon (57 Commands + Overseas Intel)
@@ -2925,7 +3804,8 @@
                     <span class="card-subtitle">Enable or disable individual slash commands. Disabled commands are hidden from Discord autocomplete.</span>
                 </div>
                 <div style="display:flex; align-items:center; gap:8px;">
-                    <span id="commands-active-badge-sub" style="font-size:0.8em; font-weight:700; color:var(--green);">34 Commands Available</span>
+                    <span id="commands-active-badge-sub" style="font-size:0.8em; font-weight:700; color:var(--green);"><span id="commands-active-num">30</span> / 57 Commands Available</span>
+                <span id="commands-active-badge" style="display:none;"></span>
                 </div>
             </div>
             <div class="card-body">
@@ -3483,6 +4363,15 @@
                         </div>
                     </div>
                     <div class="card-body">
+                        <div id="token-expired-alert" style="display:none; background: rgba(255, 71, 87, 0.12); border: 1px solid rgba(255, 71, 87, 0.4); border-radius: 10px; padding: 14px 18px; margin-bottom: 20px;">
+                            <div style="display:flex; align-items:center; gap:10px; font-weight:700; color:#ff6b81; font-size:1.05em;">
+                                <span>⚠️ Discord Bot Token Expired or Revoked (401 Unauthorized)</span>
+                            </div>
+                            <div style="margin-top:6px; font-size:0.9em; color:#f1f2f6; line-height:1.5;">
+                                Discord reported that this bot token is invalid or has expired. Open the Discord Developer Portal → select your Application → Bot → Reset Token → paste your fresh token below and save.
+                            </div>
+                        </div>
+
                         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px; margin-bottom:16px;">
                             <div>
                                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
@@ -3500,7 +4389,7 @@
                         </div>
 
                         <div style="background:rgba(88,101,242,0.06); border:1px solid rgba(88,101,242,0.18); border-radius:8px; padding:10px 14px; margin-bottom:16px; font-size:0.84em; color:var(--text-muted); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
-                            <span>🗺️ Looking for Channel & Role routing? All stream routing has moved to the <a href="javascript:void(0)" onclick="switchDeckTab('routing')" style="color:var(--spider-blue); font-weight:700; text-decoration:none;">Channel & Role Routing Deck</a>.</span>
+                            <span>🗺️ Looking for Channel & Role routing? All stream routing is centralized in the <a href="javascript:void(0)" onclick="switchDeckTab('routing')" style="color:var(--spider-blue); font-weight:700; text-decoration:none;">Channel & Role Routing Deck</a>.</span>
                             <button type="button" class="btn-test" onclick="switchDeckTab('routing')">Open Routing Matrix →</button>
                         </div>
 
@@ -3508,6 +4397,7 @@
                             <div style="font-size:0.82em; color:var(--text-muted);">
                                 <span>Bot Invite Link: </span>
                                 <a id="invite-link" href="#" target="_blank" style="color:var(--spider-blue); font-weight:700; text-decoration:none;">Click here to invite F.R.I.D.A.Y. to your server</a>
+                                <a id="bot-invite-link" href="#" target="_blank" style="display:none;"></a>
                             </div>
                             <button type="button" onclick="fetchGuildAndChannels(true)" id="btn-refresh-channels" class="btn-hero-action ghost">
                                 🔄 Refresh Server & Channels
@@ -3518,7 +4408,7 @@
 
                 <!-- Discord Developer Portal Setup Guide -->
                 <div class="card">
-                    <div class="card-header" style="cursor:pointer;" onclick="toggleGuide()">
+                    <div class="card-header" id="guide-toggle" style="cursor:pointer;" onclick="toggleGuide()">
                         <div>
                             <p class="card-title">📖 3-Step Discord Developer Portal Setup Guide</p>
                             <span class="card-subtitle">How to generate your Bot Token, enable Privileged Gateway Intents, and invite the bot</span>
@@ -3595,6 +4485,9 @@
             </div>
         </main>
     </div>
+
+    <!-- Toast Notification Container -->
+    <div class="toast-container" id="toast-container"></div>
 
     <div class="modal-backdrop" id="payload-modal" style="display:none;" onclick="closePayloadModal(event)">
         <div class="modal-dialog" onclick="event.stopPropagation()">
@@ -3914,7 +4807,11 @@ async function fetchGuildAndChannels(force = false) {
             if (nameEl) nameEl.textContent = `Connected: ${data.guildName}`;
             if (detailEl) detailEl.textContent = `${data.channels.length} text channels, ${data.roles.length} roles discovered`;
             
-            const chanCountEl = document.getElementById('discovered-channels-count');
+            const heroChan = document.getElementById('hero-channels-count');
+    if (heroChan) heroChan.textContent = `${data.channels.length} Channels`;
+    const heroRole = document.getElementById('hero-roles-count');
+    if (heroRole) heroRole.textContent = `${data.roles.length} Roles Discovered`;
+    const chanCountEl = document.getElementById('discovered-channels-count');
             const rolesLabelEl = document.getElementById('discovered-roles-label');
             if (chanCountEl) chanCountEl.textContent = data.channels.length;
             if (rolesLabelEl) rolesLabelEl.textContent = `${data.roles.length} Roles mapped from Discord API.`;
@@ -4179,7 +5076,7 @@ function setConnectionStatus(connected, guildName) {
     }
     const tokenBadge = document.getElementById('token-server-badge');
     if (tokenBadge) {
-        tokenBadge.style.display = hasSavedServerToken ? 'inline' : 'none';
+        tokenBadge.style.display = (hasSavedServerToken || connected) ? 'inline' : 'none';
     }
     const badge = document.getElementById('connection-indicator');
     if (badge) {
@@ -4191,7 +5088,7 @@ function setConnectionStatus(connected, guildName) {
     if (connected && bar && !bar.classList.contains('dirty')) {
         if (hint) hint.textContent = '🟢 Bot Connected • All changes synced';
     }
-    if (typeof updateDeckKPIs === 'function') updateDeckKPIs();
+    if (typeof calculateSetupProgress === 'function') calculateSetupProgress();
 }
 
 // ── Slash Commands Management ──
@@ -5723,7 +6620,7 @@ async function sendBroadcastMessage() {
 }
 
 
-// ── Tactical Deck Sub-Navigation Tabs ──
+// ── Deck Tab Switching ──
 function switchDeckTab(tabId) {
     const tabs = document.querySelectorAll('.deck-tab-btn');
     const panes = document.querySelectorAll('.deck-tab-pane');
@@ -5775,11 +6672,25 @@ function setCategoryTriggers(enable) {
     if (typeof showToast === 'function') showToast((enable ? 'Enabled' : 'Disabled') + ' ' + (currentCategory || 'all').toUpperCase() + ' triggers.', 'info');
 }
 
-// ── Dynamic KPI Updates ──
-function updateDeckKPIs() {
-    if (typeof calculateSetupProgress === 'function') calculateSetupProgress();
-    if (typeof updateActiveCount === 'function') updateActiveCount();
-    if (typeof updateCommandsBadge === 'function') updateCommandsBadge();
+// ── Toast Safe Wrapper ──
+function showToast(msg, type = 'info') {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        container.className = 'toast-container';
+        document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.className = 'toast-msg ' + type;
+    toast.innerHTML = (type === 'success' ? '✅ ' : (type === 'error' ? '❌ ' : 'ℹ️ ')) + msg;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.transition = 'opacity 0.3s, transform 0.3s';
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(50px)';
+        setTimeout(() => toast.remove(), 300);
+    }, 4000);
 }
 
     </script>
