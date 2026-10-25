@@ -4703,24 +4703,26 @@ function updateCategoryBadges() {
 }
 
 function calculateSetupProgress() {
-    const token = (document.getElementById('global-bottoken')?.value.trim() || '');
-    const mainChan = (document.getElementById('global-channelid')?.value.trim() || '');
-    const verifyChan = (document.getElementById('verification-channelid')?.value.trim() || '');
-    const ocChan = (document.getElementById('oc-channelid')?.value.trim() || mainChan);
-    const verifiedRole = (document.getElementById('verified-roleid')?.value.trim() || '');
-    const factionRole = (document.getElementById('faction-roleid')?.value.trim() || '');
+    const rawToken = (document.getElementById('global-bottoken')?.value || '').trim();
+    const token = (!rawToken || /^[.•*]+$/.test(rawToken)) ? '' : rawToken;
+    const mainChan = (document.getElementById('global-channelid')?.value || '').trim();
+    const verifyChan = (document.getElementById('verification-channelid')?.value || '').trim();
+    const ocChan = (document.getElementById('oc-channelid')?.value || mainChan).trim();
+    const verifiedRole = (document.getElementById('verified-roleid')?.value || '').trim();
+    const factionRole = (document.getElementById('faction-roleid')?.value || '').trim();
 
-    const hasValidToken = hasSavedServerToken || token.length > 20;
+    const hasValidToken = (typeof hasSavedServerToken !== 'undefined' && hasSavedServerToken) || token.length > 20 || !!initialConfigSnapshot?.hasBotToken;
 
     const checks = [
-        { id: 'pill-token', done: hasValidToken, weight: 35 },
-        { id: 'pill-main-chan', done: mainChan.length > 8 || !!initialConfigSnapshot?.globalChannelId, weight: 20 },
-        { id: 'pill-verify-chan', done: verifyChan.length > 8, weight: 15 },
-        { id: 'pill-oc', done: ocChan.length > 8, weight: 15 },
-        { id: 'pill-roles', done: verifiedRole.length > 3 || factionRole.length > 3, weight: 15 }
+        { id: 'pill-token', done: hasValidToken, weight: 35, label: 'Bot Token' },
+        { id: 'pill-main-chan', done: mainChan.length > 8 || !!initialConfigSnapshot?.globalChannelId, weight: 20, label: 'Alert Channel' },
+        { id: 'pill-verify-chan', done: verifyChan.length > 8 || !!initialConfigSnapshot?.verificationChannelId, weight: 15, label: 'Verify Channel' },
+        { id: 'pill-oc', done: ocChan.length > 8 || !!initialConfigSnapshot?.ocChannelId || !!initialConfigSnapshot?.globalChannelId, weight: 15, label: 'OC Channel' },
+        { id: 'pill-roles', done: verifiedRole.length > 3 || factionRole.length > 3 || !!initialConfigSnapshot?.verifiedRoleId || !!initialConfigSnapshot?.factionRoleId, weight: 15, label: 'Roles' }
     ];
 
     let totalScore = 0;
+    const missing = [];
     checks.forEach(c => {
         const pill = document.getElementById(c.id);
         if (c.done) {
@@ -4728,8 +4730,26 @@ function calculateSetupProgress() {
             if (pill) pill.classList.add('done');
         } else {
             if (pill) pill.classList.remove('done');
+            missing.push(c.label);
         }
     });
+
+    const kpiVal = document.getElementById('kpi-readiness-val');
+    const kpiFill = document.getElementById('kpi-readiness-bar-fill');
+    if (kpiVal) kpiVal.textContent = totalScore + '%';
+    if (kpiFill) {
+        kpiFill.style.width = totalScore + '%';
+        if (totalScore >= 80) kpiFill.style.background = 'linear-gradient(90deg, var(--gold), var(--green))';
+        else if (totalScore >= 50) kpiFill.style.background = 'var(--gold)';
+        else kpiFill.style.background = 'var(--spider-red)';
+    }
+
+    const pillContainer = kpiVal?.closest('.hero-kpi-pill');
+    if (pillContainer) {
+        pillContainer.title = totalScore === 100 
+            ? 'Readiness: 100% • All operational components fully configured!' 
+            : `Readiness: ${totalScore}% • Missing: ${missing.join(', ')}`;
+    }
 
     const percentEl = document.getElementById('setup-progress-percent');
     const barEl = document.getElementById('setup-progress-bar');
