@@ -634,6 +634,73 @@ function generateChainAnsi({ current = 0, max = 250, timeoutSec = 300, multiplie
 }
 
 /**
+ * Generates the 10-block ANSI Vault Withdrawal chart:
+ * PAYOUT in Yellow/Green (0;33m / 0;32m)
+ * VAULT remaining in Blue/Cyan (0;34m / 0;36m)
+ * Empty track in Dark Gray (0;30m)
+ * Aligned currency amounts in White (0;37m)
+ */
+function generateWithdrawAnsi(req) {
+    if (!req) req = {};
+    const amount = Number(req.amount || 0);
+    let vaultAfter = 0;
+    if (req.remainingBalance !== undefined && req.remainingBalance !== null && Number(req.remainingBalance) >= 0) {
+        vaultAfter = Number(req.remainingBalance);
+    } else if (req.balanceAfter !== undefined && req.balanceAfter !== null) {
+        vaultAfter = Number(req.balanceAfter);
+    } else if (req.vaultAfter !== undefined && req.vaultAfter !== null) {
+        vaultAfter = Number(req.vaultAfter);
+    } else if (req.balanceBefore !== undefined && req.balanceBefore !== null) {
+        vaultAfter = (req.status === 'cancelled' || req.status === 'expired')
+            ? Number(req.balanceBefore)
+            : Math.max(0, Number(req.balanceBefore) - amount);
+    }
+
+    const totalBefore = Math.max(
+        amount + vaultAfter,
+        Number(req.balanceBefore || 0),
+        amount,
+        1
+    );
+
+    const payoutRatio = Math.min(1, Math.max(0, amount / totalBefore));
+    const vaultRatio = Math.min(1, Math.max(0, vaultAfter / totalBefore));
+
+    const payoutBars = Math.round(payoutRatio * 10);
+    const vaultBars = Math.round(vaultRatio * 10);
+
+    const amtStr = `$${amount.toLocaleString('en-US')}`;
+    const vaultStr = `$${vaultAfter.toLocaleString('en-US')}`;
+    const maxValLen = Math.max(amtStr.length, vaultStr.length);
+
+    let payoutColor = ANSI_YELLOW;
+    let vaultColor = ANSI_BLUE;
+    let payoutDesc = `${((payoutRatio * 100).toFixed(1) + '% of vault').padStart(15, ' ')}`;
+    let vaultDesc = `${((vaultRatio * 100).toFixed(1) + '% remaining').padStart(15, ' ')}`;
+
+    if (req.status === 'fulfilled') {
+        payoutColor = ANSI_GREEN;
+        payoutDesc = 'Paid in Torn'.padStart(15, ' ');
+        vaultDesc = 'Current Vault'.padStart(15, ' ');
+    } else if (req.status === 'cancelled' || req.status === 'expired') {
+        payoutColor = ANSI_RED;
+        payoutDesc = 'Cancelled'.padStart(15, ' ');
+        vaultDesc = 'Preserved'.padStart(15, ' ');
+    }
+
+    const payoutFilled = payoutColor + FILLED_BLOCK.repeat(payoutBars);
+    const payoutEmpty = ANSI_GRAY + EMPTY_BLOCK.repeat(10 - payoutBars) + ANSI_RESET;
+
+    const vaultFilled = vaultColor + FILLED_BLOCK.repeat(vaultBars);
+    const vaultEmpty = ANSI_GRAY + EMPTY_BLOCK.repeat(10 - vaultBars) + ANSI_RESET;
+
+    const line1 = `${payoutColor}PAYOUT ${ANSI_RESET} ${payoutFilled}${payoutEmpty}  ${ANSI_WHITE}${amtStr.padStart(maxValLen, ' ')}${ANSI_RESET}  ${ANSI_GRAY}${payoutDesc}${ANSI_RESET}`;
+    const line2 = `${vaultColor}VAULT  ${ANSI_RESET} ${vaultFilled}${vaultEmpty}  ${ANSI_WHITE}${vaultStr.padStart(maxValLen, ' ')}${ANSI_RESET}  ${ANSI_GRAY}${vaultDesc}${ANSI_RESET}`;
+
+    return '```ansi\n' + line1 + '\n' + line2 + '\n```';
+}
+
+/**
  * Sleek Card Builder strictly matching the reference screenshot:
  * - Left accent line (Green for success/gains, Blue for view/info, Amber for warning, Red for danger)
  * - Author: Player [ID] with avatar and profile URL
@@ -712,5 +779,5 @@ module.exports = {
     sep, blankField,
     primaryBtn, secondaryBtn, successBtn, dangerBtn, linkBtn, actionRow, paginator,
     FILLED_BLOCK, EMPTY_BLOCK, ANSI_RESET, ANSI_GRAY, ANSI_RED, ANSI_GREEN, ANSI_YELLOW, ANSI_BLUE, ANSI_MAGENTA, ANSI_CYAN, ANSI_WHITE,
-    generateBattleStatsAnsi, generateVitalsAnsi, generateWarTugAnsi, generateChainAnsi, sleekCard
+    generateBattleStatsAnsi, generateVitalsAnsi, generateWarTugAnsi, generateChainAnsi, generateWithdrawAnsi, sleekCard
 };

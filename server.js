@@ -16154,114 +16154,76 @@ function formatTimeAgo(timestamp) {
 }
 
 function buildBankRequestEmbed(req) {
-    const formattedAmount = `$${Number(req.amount).toLocaleString()}`;
+    const amount = Number(req.amount || 0);
+    const formattedAmount = `$${amount.toLocaleString('en-US')}`;
     const name = req.tornName || req.userName || 'Member';
-    const requesterDisplay = req.tornId
-        ? `[${name} [${req.tornId}]](https://www.torn.com/profiles.php?XID=${req.tornId})`
-        : (req.userId ? `<@${req.userId}>` : name);
+    const tornId = req.tornId;
 
-    // Bug 1: Accent color = state (Amber #f0b232 for awaiting banker, Green for paid, Red for denied/cancelled)
-    let color = 0xF0B232; // Amber (#f0b232)
-    let statusFieldName = '⏳ Status';
-    let statusValue = `Awaiting banker, requested ${formatTimeAgo(req.timestamp)}`;
-    let description = `New withdrawal from ${name} for ${formattedAmount}`;
+    let color = UI.COLORS.GOLD; // Amber (#f0b232)
+    let title = `🏦 Vault Withdrawal #${req.id}`;
+    let subtitlePill = `\`⏳ Pending Banker\``;
+    let calmNote = 'Vault balance verified · Banker click Fulfill below to claim and send cash in Torn.';
 
-    let vaultAfter = 0;
-    if (req.remainingBalance !== undefined && req.remainingBalance !== null && Number(req.remainingBalance) >= 0) {
-        vaultAfter = req.remainingBalance;
-    } else if (req.balanceAfter !== undefined && req.balanceAfter !== null) {
-        vaultAfter = req.balanceAfter;
-    } else if (req.vaultAfter !== undefined && req.vaultAfter !== null) {
-        vaultAfter = req.vaultAfter;
-    } else if (req.balanceBefore !== undefined && req.balanceBefore !== null) {
-        vaultAfter = (req.status === 'cancelled' || req.status === 'expired')
-            ? req.balanceBefore
-            : Math.max(0, req.balanceBefore - req.amount);
-    }
-    const formattedVaultAfter = `$${Number(vaultAfter).toLocaleString()}`;
-
-    if (req.status === 'verifying') {
-        color = 0xF0B232; // Amber (#f0b232)
-        statusFieldName = '⏳ Status';
-        const payerMention = req.fulfilledBy ? `<@${req.fulfilledBy}>` : (req.fulfillerName ? `@${req.fulfillerName}` : 'Banker');
-        statusValue = `In progress by ${payerMention}, ${formatTimeAgo(req.fulfilledAt || req.timestamp)}`;
-    } else if (req.status === 'fulfilled') {
-        color = 0x2ECC71; // Green
-        description = `Withdrawal from ${name} for ${formattedAmount}`;
-        statusFieldName = '✔ Status';
-        const fulfillerName = req.fulfillerName || (req.fulfilledBy ? `<@${req.fulfilledBy}>` : 'Banker');
-        const timeRef = req.fulfilledAt || req.verifiedAt || req.timestamp || Date.now();
-        statusValue = `Paid by ${fulfillerName}, ${formatTimeAgo(timeRef)}`;
-    } else if (req.status === 'cancelled') {
-        color = 0xE74C3C; // Red
-        description = `Withdrawal from ${name} for ${formattedAmount}`;
-        statusFieldName = '❌ Status';
-        const cancellerName = req.cancellerName || (req.cancelledBy && req.cancelledBy !== 'system' ? `<@${req.cancelledBy}>` : 'Banker');
-        statusValue = `Denied by ${cancellerName}, ${formatTimeAgo(req.cancelledAt || req.timestamp)}`;
-    } else if (req.status === 'expired') {
-        color = 0xE74C3C; // Red
-        description = `Withdrawal from ${name} for ${formattedAmount}`;
-        statusFieldName = '❌ Status';
-        statusValue = `Denied by Banker, timed out after 60 minutes`;
-    }
-
-    // Bug 2: Card title uses bank building icon 🏦 (hourglass ⏳ is ONLY on Status field)
-    const title = `🏦 Vault request #${req.id}`;
-
-    // Field layout and order: Amount / Requested by / Vault after / In-game status / Status
-    const fields = [
-        {
-            name: 'Amount',
-            value: `**${formattedAmount}**`,
-            inline: true
-        },
-        {
-            name: 'Requested by',
-            value: requesterDisplay,
-            inline: true
-        },
-        {
-            name: 'Vault after',
-            value: formattedVaultAfter,
-            inline: true
-        }
-    ];
-
-    // Bug 3: In-game status (no traffic light 🚦 icon, only status dot)
-    if (req.memberStatus && (req.status === 'pending' || req.status === 'verifying')) {
-        let badge = '🟢 In Torn City (okay)';
+    // In-game status badge
+    let inGameBadge = '🟢 In Torn (okay)';
+    if (req.memberStatus) {
         const state = (req.memberStatus.state || '').toLowerCase();
         const desc = (req.memberStatus.description || req.memberStatus.state || 'okay').toLowerCase();
         if (state.includes('travel') || state.includes('abroad')) {
-            badge = `✈️ Traveling (${desc})`;
+            inGameBadge = `✈️ Traveling (${desc})`;
         } else if (state.includes('hospital')) {
-            badge = `🔴 In Hospital (${desc})`;
+            inGameBadge = `🔴 Hospital (${desc})`;
         } else if (state.includes('jail')) {
-            badge = `🔴 In Jail (${desc})`;
+            inGameBadge = `🔴 Jail (${desc})`;
         } else {
-            badge = `🟢 In Torn City (${desc})`;
+            inGameBadge = `🟢 In Torn (${desc})`;
         }
-        fields.push({
-            name: 'In-game status',
-            value: badge,
-            inline: false
-        });
     }
 
-    fields.push({
-        name: statusFieldName,
-        value: statusValue,
-        inline: false
+    if (req.status === 'verifying') {
+        color = UI.COLORS.GOLD;
+        title = `🏦 Vault Withdrawal In Progress #${req.id}`;
+        const payer = req.fulfillerName || (req.fulfilledBy ? `<@${req.fulfilledBy}>` : 'Banker');
+        subtitlePill = `\`🔄 In Progress by ${payer}\`  ·  ${formatTimeAgo(req.fulfilledAt || req.timestamp)}  ·  ${inGameBadge}`;
+        calmNote = `Claimed by ${payer} · Faction controls payment in progress in Torn.`;
+    } else if (req.status === 'fulfilled') {
+        color = UI.COLORS.GREEN;
+        title = `🏦 Vault Withdrawal Fulfilled #${req.id}`;
+        const fulfillerName = req.fulfillerName || (req.fulfilledBy ? `<@${req.fulfilledBy}>` : 'Banker');
+        const timeRef = req.fulfilledAt || req.verifiedAt || req.timestamp || Date.now();
+        subtitlePill = `\`✅ Paid by ${fulfillerName}\`  ·  ${formatTimeAgo(timeRef)}`;
+        calmNote = 'Delivered via Torn Faction Vault · Confirmed in official faction logs.';
+    } else if (req.status === 'cancelled') {
+        color = UI.COLORS.RED;
+        title = `🏦 Vault Withdrawal Cancelled #${req.id}`;
+        const cancellerName = req.cancellerName || (req.cancelledBy && req.cancelledBy !== 'system' ? `<@${req.cancelledBy}>` : 'Banker');
+        subtitlePill = `\`❌ Denied by ${cancellerName}\`  ·  ${formatTimeAgo(req.cancelledAt || req.timestamp)}`;
+        calmNote = 'Request closed · No funds were deducted from faction vault.';
+    } else if (req.status === 'expired') {
+        color = UI.COLORS.RED;
+        title = `🏦 Vault Withdrawal Expired #${req.id}`;
+        subtitlePill = `\`❌ Expired\`  ·  Timed out after 60m`;
+        calmNote = 'Request timed out after 60 minutes with no banker activity.';
+    } else {
+        // Pending
+        subtitlePill = `\`⏳ Pending Banker\`  ·  ${formatTimeAgo(req.timestamp)}  ·  ${inGameBadge}`;
+    }
+
+    const ansiBlock = UI.generateWithdrawAnsi(req);
+
+    const embed = UI.sleekCard({
+        color,
+        authorName: tornId ? `${name} [${tornId}]` : name,
+        authorIcon: req.authorIcon || (tornId ? `https://profileimages.torn.com/${tornId}` : null),
+        authorUrl: tornId ? `https://www.torn.com/profiles.php?XID=${tornId}` : null,
+        title,
+        heroValue: formattedAmount,
+        subtitle: subtitlePill,
+        ansiBlock,
+        note: calmNote
     });
 
-    return {
-        title,
-        description,
-        color,
-        fields,
-        footer: { text: 'F.R.I.D.A.Y • Spider-Verse Security Sentinel' },
-        timestamp: new Date(req.timestamp || Date.now()).toISOString()
-    };
+    return embed;
 }
 
 function getPreFilledVaultUrl(tornId, amount) {
@@ -16277,62 +16239,40 @@ function getPreFilledVaultUrl(tornId, amount) {
 function buildBankRequestButtons(req) {
     const amtFmt = Number(req.amount).toLocaleString();
     const vaultUrl = getPreFilledVaultUrl(req.tornId, req.amount);
+    const tornProfileUrl = req.tornId ? `https://www.torn.com/profiles.php?XID=${req.tornId}` : null;
+    const generalVaultUrl = 'https://www.torn.com/factions.php?step=your#/tab=controls';
 
     if (req.status === 'pending') {
-        // Row 1: [💸 Fulfill ($amt) - interactive to claim & mark in-progress] [❌ Cancel]
-        return [
-            {
-                type: 1,
-                components: [
-                    {
-                        type: 2,
-                        style: 3, // Green (Success) - interactive button to claim and fulfill
-                        custom_id: `bank_pay_${req.id}`,
-                        label: `💸 Fulfill ($${amtFmt})`
-                    },
-                    {
-                        type: 2,
-                        style: 4, // Red (Danger / Action)
-                        custom_id: `bank_cancel_${req.id}`,
-                        label: 'Cancel',
-                        emoji: { name: '❌' }
-                    }
-                ]
-            }
-        ];
+        return UI.buttonLayout(
+            [
+                UI.successBtn(`bank_pay_${req.id}`, `Fulfill ($${amtFmt})`, '💸'),
+                UI.dangerBtn(`bank_cancel_${req.id}`, 'Cancel', '❌')
+            ],
+            [
+                UI.linkBtn(vaultUrl, `Torn Vault ($${amtFmt}) ↗`, '🏠'),
+                ...(tornProfileUrl ? [UI.linkBtn(tornProfileUrl, 'Profile ↗', '👤')] : [])
+            ]
+        );
     } else if (req.status === 'verifying') {
-        // Verifying: Direct link button straight to Torn Vault + Check Logs + Unclaim button (restricted to claiming banker)
-        return [
-            {
-                type: 1,
-                components: [
-                    {
-                        type: 2,
-                        style: 5, // Direct Link Button to official Torn pre-filled vault
-                        label: `🏠 Open Torn Vault ($${amtFmt})`,
-                        url: vaultUrl,
-                        emoji: { name: '💸' }
-                    },
-                    {
-                        type: 2,
-                        style: 1, // Primary (Blurple) - instant check
-                        custom_id: `bank_check_${req.id}`,
-                        label: 'Check Logs',
-                        emoji: { name: '🔍' }
-                    },
-                    {
-                        type: 2,
-                        style: 2, // Grey (Secondary)
-                        custom_id: `bank_unclaim_${req.id}`,
-                        label: '⏳ Unclaim',
-                        emoji: { name: '↩️' }
-                    }
-                ]
-            }
-        ];
+        return UI.buttonLayout(
+            [
+                UI.primaryBtn(`bank_check_${req.id}`, 'Check Logs', '🔍'),
+                UI.secondaryBtn(`bank_unclaim_${req.id}`, 'Unclaim', '↩️')
+            ],
+            [
+                UI.linkBtn(vaultUrl, `Open Torn Vault ($${amtFmt}) ↗`, '💸'),
+                ...(tornProfileUrl ? [UI.linkBtn(tornProfileUrl, 'Profile ↗', '👤')] : [])
+            ]
+        );
     } else {
-        // fulfilled, cancelled, expired — NO buttons at all (clean card)
-        return [];
+        // fulfilled, cancelled, expired — keep secondary reference links
+        return UI.buttonLayout(
+            [],
+            [
+                UI.linkBtn(generalVaultUrl, 'Faction Vault ↗', '🏠'),
+                ...(tornProfileUrl ? [UI.linkBtn(tornProfileUrl, 'Profile ↗', '👤')] : [])
+            ]
+        );
     }
 }
 
@@ -23950,33 +23890,32 @@ function setupSlashBotEvents(bot, token) {
 
             // ── ZERO BALANCE CHECK ──
             if (totalBalance <= 0) {
-                return interaction.editReply({
-                    embeds: [{
-                        title: "❌ Insufficient Vault Balance",
-                        description: `You currently have **$0** deposited in the faction vault for **${vaultInfo.factionName}**.\n\n` +
-                                     `Player: [**${tornName || 'You'}** [${targetId}]](https://www.torn.com/profiles.php?XID=${targetId})\n\n` +
-                                     `You cannot withdraw funds without a positive vault balance.`,
-                        color: UI.COLORS.ERROR,
-                        footer: UI.FOOTER,
-                        timestamp: new Date().toISOString()
-                    }]
+                const zeroEmbed = UI.sleekCard({
+                    color: UI.COLORS.ERROR,
+                    authorName: `${tornName || interaction.user.username} [${targetId}]`,
+                    authorIcon: interaction.user?.displayAvatarURL?.({ extension: 'png', size: 64 }) || (targetId ? `https://profileimages.torn.com/${targetId}` : null),
+                    authorUrl: targetId ? `https://www.torn.com/profiles.php?XID=${targetId}` : null,
+                    title: '🏦 Insufficient Vault Balance',
+                    heroValue: '$0 Balance',
+                    subtitle: `\`❌ Request Denied\`  ·  ${vaultInfo.factionName || 'Faction'} Vault`,
+                    note: 'You cannot withdraw funds without a positive vault balance in the faction treasury.'
                 });
+                return interaction.editReply({ embeds: [sanitizeEmbed(zeroEmbed)] });
             }
 
             // ── OVERDRAFT PREVENTION CHECK ──
             if (amount > totalBalance) {
-                return interaction.editReply({
-                    embeds: [{
-                        title: "❌ Overdraft Prevention — Request Denied",
-                        description: `You cannot withdraw **$${amount.toLocaleString()}** because it exceeds your total faction vault balance of **$${totalBalance.toLocaleString()}**!\n\n` +
-                                     `💵 **Total Vault Balance:** **$${totalBalance.toLocaleString()}**\n` +
-                                     `🚫 **Attempted Request:** **$${amount.toLocaleString()}**\n\n` +
-                                     `*Please reduce your request amount to $${totalBalance.toLocaleString()} or less.*`,
-                        color: UI.COLORS.ERROR,
-                        footer: UI.FOOTER,
-                        timestamp: new Date().toISOString()
-                    }]
+                const overdraftEmbed = UI.sleekCard({
+                    color: UI.COLORS.ERROR,
+                    authorName: `${tornName || interaction.user.username} [${targetId}]`,
+                    authorIcon: interaction.user?.displayAvatarURL?.({ extension: 'png', size: 64 }) || (targetId ? `https://profileimages.torn.com/${targetId}` : null),
+                    authorUrl: targetId ? `https://www.torn.com/profiles.php?XID=${targetId}` : null,
+                    title: '🏦 Overdraft Prevention — Request Denied',
+                    heroValue: `$${amount.toLocaleString()} Requested`,
+                    subtitle: `\`❌ Exceeds Limit\`  ·  Vault Limit: $${totalBalance.toLocaleString()}`,
+                    note: `Please reduce your withdrawal request to $${totalBalance.toLocaleString()} or less.`
                 });
+                return interaction.editReply({ embeds: [sanitizeEmbed(overdraftEmbed)] });
             }
 
             // Build request object
@@ -24019,12 +23958,14 @@ function setupSlashBotEvents(bot, token) {
                 replacedNote = `\n*(Previous pending request ${oldIds} was automatically replaced)*`;
             }
 
+            const userAvatarUrl = interaction.user?.displayAvatarURL?.({ extension: 'png', size: 64 }) || null;
             const req = {
                 id: reqId,
                 userId: interaction.user.id,
                 userName: interaction.user.username,
                 tornId: targetId,
                 tornName: tornName,
+                authorIcon: userAvatarUrl || (targetId ? `https://profileimages.torn.com/${targetId}` : null),
                 amount,
                 timestamp: Date.now(),
                 status: 'pending',
@@ -24130,13 +24071,9 @@ function setupSlashBotEvents(bot, token) {
                     ? `in <#${postedChan.id}>`
                     : `below`;
 
-                const unlinkedTip = (userKeys && typeof userKeys.hasLinkedKey === 'function' && !userKeys.hasLinkedKey(interaction.user.id))
-                    ? `\n\n💡 *Tip: Run \`/verify\` to link your Torn Limited API key for live energy & stat tracking!*`
-                    : '';
-
                 return interaction.editReply({
-                    content: `✅ Your withdrawal request **#${req.id}** for **$${amount.toLocaleString()}** has been posted ${locationNote}!${replacedNote}\n` +
-                             `Remaining available balance: **$${(totalBalance - amount).toLocaleString()}**.*${unlinkedTip}`
+                    content: `✅ Your withdrawal request **#${req.id}** for **$${amount.toLocaleString()}** has been posted ${locationNote}!${replacedNote}`,
+                    embeds: [sanitizeEmbed(reqEmbed)]
                 });
             }
 
@@ -24145,14 +24082,8 @@ function setupSlashBotEvents(bot, token) {
             req.messageId = null;
             saveBankRequests();
 
-            const unlinkedTip = (userKeys && typeof userKeys.hasLinkedKey === 'function' && !userKeys.hasLinkedKey(interaction.user.id))
-                ? `\n\n💡 *Tip: Run \`/verify\` to link your Torn Limited API key for live energy & stat tracking!*`
-                : '';
-
             return interaction.editReply({
-                content: `✅ Your withdrawal request **#${req.id}** for **$${amount.toLocaleString()}** is active!${replacedNote}\n` +
-                         `Remaining available balance: **$${(totalBalance - amount).toLocaleString()}**.\n` +
-                         `*(Note: Bot lacks "Send Messages" permission in this channel to post publicly, but your request has been recorded and will be auto-fulfilled when cash is sent)*${unlinkedTip}`,
+                content: `✅ Your withdrawal request **#${req.id}** for **$${amount.toLocaleString()}** is active!${replacedNote}`,
                 embeds: [sanitizeEmbed(reqEmbed)],
                 components: reqButtons
             });
