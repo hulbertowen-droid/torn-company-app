@@ -5249,7 +5249,7 @@ function setEssentialCommands() {
 
 // ── Application Initialization & Data Loading ──
 function applyConfigToDOM(cfg) {
-    let tokenVal = cfg.globalBotToken || localStorage.getItem('warboard_bottoken') || '';
+    let tokenVal = localStorage.getItem('factionos_discord_bot_token') || localStorage.getItem('warboard_bottoken') || cfg.globalBotToken || '';
     if (!tokenVal && cfg && cfg[0] !== undefined) {
         let reconstructed = '';
         for (let i = 0; cfg[i] !== undefined; i++) reconstructed += cfg[i];
@@ -5407,9 +5407,12 @@ function applyConfigToDOM(cfg) {
             gatewayStatus.style.color = 'var(--green)';
             gatewayStatus.textContent = `🟢 Token Saved${tail}`;
         }
-        if (tokenInput && (!tokenVal || /^[.•*]+$/.test(tokenVal))) {
-            tokenInput.value = '';
-            tokenInput.placeholder = `•••••••••••••••••••••••• (Saved on server${tail})`;
+        if (tokenInput) {
+            if (tokenVal && !/^[.•*]+$/.test(tokenVal)) {
+                tokenInput.value = tokenVal;
+            } else if (!tokenInput.value) {
+                tokenInput.placeholder = `•••••••••••••••••••••••• (Saved on server${tail})`;
+            }
         }
         const expiredAlert = document.getElementById('token-expired-alert');
         if (expiredAlert) expiredAlert.style.display = 'none';
@@ -5480,8 +5483,8 @@ async function saveAndVerifyBotToken() {
             } catch(e) {}
 
             if (tokenInput) {
-                tokenInput.value = '';
-                tokenInput.placeholder = `•••••••••••••••••••••••• (Saved: ...${tail})`;
+                tokenInput.value = cleaned;
+                tokenInput.type = 'password';
             }
 
             hasSavedServerToken = true;
@@ -5508,6 +5511,12 @@ function toggleTokenVisibility() {
     const input = document.getElementById('global-bottoken');
     const btn = document.getElementById('btn-toggle-token-vis');
     if (!input) return;
+    if (!input.value) {
+        const cached = localStorage.getItem('factionos_discord_bot_token') || localStorage.getItem('warboard_bottoken') || '';
+        if (cached && !/^[.•*]+$/.test(cached)) {
+            input.value = cached;
+        }
+    }
     const isPass = input.type === 'password';
     input.type = isPass ? 'text' : 'password';
     if (btn) btn.textContent = isPass ? '🙈 Hide Token' : '👁️ Show Token';
@@ -5812,6 +5821,9 @@ async function saveDiscordConfig() {
             if (statusEl) {
                 statusEl.style.color = 'var(--green)';
                 statusEl.textContent = '✅ Operations center configuration saved.';
+            }
+            if (tokenToSend && document.getElementById('global-bottoken')) {
+                document.getElementById('global-bottoken').value = tokenToSend;
             }
             clearDirty();
             const hasActiveBot = !!(botToken || initialConfigSnapshot?.hasBotToken || (typeof hasSavedServerToken !== 'undefined' && hasSavedServerToken));
