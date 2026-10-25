@@ -4577,7 +4577,7 @@ app.get('/api/discord/diagnostics', async (req, res) => {
 // API endpoint: Save and verify Discord Bot Token
 app.post('/api/discord/save-and-verify-token', async (req, res) => {
     try {
-        const rawToken = String(req.body.token || '').trim().replace(/^Bot\s+/i, '').replace(/^["']|["']$/g, '');
+        const rawToken = String(req.body.token || req.body.botToken || req.body.globalBotToken || '').trim().replace(/^Bot\s+/i, '').replace(/^["']|["']$/g, '');
         const guildId = String(req.body.guildId || discordConfig.guildId || '').trim().replace(/[^0-9]/g, '');
         const isMaskedOrEmpty = !rawToken || /^[.•*]+$/.test(rawToken);
 
@@ -4586,30 +4586,33 @@ app.post('/api/discord/save-and-verify-token', async (req, res) => {
             return res.status(400).json({ success: false, error: "Please enter a valid Discord Bot Token from Discord Developer Portal." });
         }
 
-        // Validate token with Discord API
-        const meRes = await fetch('https://discord.com/api/v10/users/@me', {
-            headers: {
-                Authorization: `Bot ${tokenToTest}`,
-                'User-Agent': 'DiscordBot (https://faction-os.duckdns.org, 2.0)'
-            }
-        });
+        console.log(`[Discord Bot] Verifying token (tail: ...${tokenToTest.slice(-4)}, length: ${tokenToTest.length}, maskedInput: ${isMaskedOrEmpty})`);
 
-        if (!meRes.ok) {
-            return res.status(meRes.status).json({
+        // Validate token with Discord API using safeDiscordFetch
+        let botData;
+        try {
+            botData = await safeDiscordFetch('https://discord.com/api/v10/users/@me', tokenToTest, { timeoutMs: 8000 });
+        } catch (fetchErr) {
+            console.warn('[Discord Bot] Verification fetch failed:', fetchErr.message);
+            const is401 = fetchErr.status === 401 || fetchErr.message.includes('401') || fetchErr.message.includes('Unauthorized');
+            return res.status(is401 ? 401 : 400).json({
                 success: false,
-                status: meRes.status,
-                error: meRes.status === 401 
+                status: is401 ? 401 : 400,
+                error: is401
                     ? "Invalid Bot Token (401 Unauthorized) — Paste a fresh token from Discord Developer Portal."
-                    : `Discord verification failed (HTTP ${meRes.status})`
+                    : `Discord verification failed: ${fetchErr.message}`
             });
         }
 
-        const botData = await meRes.json();
+        if (!botData || !botData.id) {
+            return res.status(401).json({
+                success: false,
+                error: "Invalid Bot Token (401 Unauthorized) — Discord did not return bot identity."
+            });
+        }
 
         // Successfully verified! Save token
-        if (!isMaskedOrEmpty) {
-            discordConfig.globalBotToken = tokenToTest;
-        }
+        discordConfig.globalBotToken = tokenToTest;
         if (guildId) {
             discordConfig.guildId = guildId;
         }
@@ -4625,9 +4628,17 @@ app.post('/api/discord/save-and-verify-token', async (req, res) => {
             bot: {
                 id: botData.id,
                 username: botData.username,
+                discriminator: botData.discriminator || '0000',
+                avatar: botData.avatar ? `https://cdn.discordapp.com/avatars/${botData.id}/${botData.avatar}.png` : null
+            },
+            botUser: {
+                id: botData.id,
+                username: botData.username,
+                discriminator: botData.discriminator || '0000',
                 avatar: botData.avatar ? `https://cdn.discordapp.com/avatars/${botData.id}/${botData.avatar}.png` : null
             },
             tokenTail: tokenToTest.slice(-4),
+            botTokenTail: tokenToTest.slice(-4),
             guildId: discordConfig.guildId || null
         });
     } catch (err) {
@@ -4639,7 +4650,9 @@ app.post('/api/discord/save-and-verify-token', async (req, res) => {
 // API endpoint: Auto-detect Discord Guild, channels, and roles
 app.get('/api/discord/guild-info', async (req, res) => {
     try {
-        const token = (req.query.token || discordConfig.globalBotToken || '').trim();
+        const rawReqToken = String(req.query.token || '').trim();
+        const isTokenMasked = !rawReqToken || /^[.•*]+$/.test(rawReqToken);
+        const token = (isTokenMasked ? discordConfig.globalBotToken : rawReqToken || '').trim();
         if (!token) {
             return res.status(400).json({ success: false, error: "Missing bot token. Please enter or save your Bot Token." });
         }

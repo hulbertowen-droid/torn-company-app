@@ -4831,7 +4831,8 @@ function hideTokenExpiredBanner() {
 
 // ── Discord API Guild & Channel Fetching ──
 async function fetchGuildAndChannels(force = false) {
-    const token = (document.getElementById('global-bottoken')?.value.trim() || '');
+    const rawVal = (document.getElementById('global-bottoken')?.value || '').trim();
+    const token = (!rawVal || /^[.•*]+$/.test(rawVal)) ? '' : rawVal;
     const btn = document.getElementById('btn-refresh-channels');
     if (btn) btn.disabled = true;
     try {
@@ -5455,12 +5456,13 @@ async function saveAndVerifyBotToken() {
         const res = await fetch('/api/discord/save-and-verify-token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ botToken: cleaned, guildId: guildId || undefined })
+            body: JSON.stringify({ token: cleaned, botToken: cleaned, globalBotToken: cleaned, guildId: guildId || undefined })
         });
         const data = await res.json();
         if (data.success) {
-            const tail = data.botTokenTail || (cleaned.length >= 4 ? cleaned.slice(-4) : '••••');
-            const botTag = data.botUser ? `${data.botUser.username}#${data.botUser.discriminator || '0000'}` : 'F.R.I.D.A.Y.';
+            const tail = data.botTokenTail || data.tokenTail || (cleaned.length >= 4 ? cleaned.slice(-4) : '••••');
+            const user = data.botUser || data.bot || {};
+            const botTag = user.username ? `${user.username}${user.discriminator && user.discriminator !== '0' && user.discriminator !== '0000' ? '#' + user.discriminator : ''}` : 'F.R.I.D.A.Y.';
             if (statusEl) {
                 statusEl.style.color = 'var(--green)';
                 statusEl.textContent = `🟢 Verified: ${botTag} (Ends in ...${tail})`;
