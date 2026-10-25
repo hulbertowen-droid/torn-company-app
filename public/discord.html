@@ -575,7 +575,8 @@
             background: var(--bg-subtle);
             border: 1px solid var(--border-subtle);
             border-radius: 20px;
-            padding: 7px 14px 7px 34px;
+            padding: 7px 14px 7px 38px !important;
+            padding-left: 38px !important;
             color: var(--text-main);
             font-size: 0.82em;
             outline: none;
@@ -587,12 +588,13 @@
         }
         .search-icon {
             position: absolute;
-            left: 12px;
-            top: 50%;
-            transform: translateY(-50%);
+            left: 12px !important;
+            top: 50% !important;
+            transform: translateY(-50%) !important;
             font-size: 0.85em;
             color: var(--text-dim);
             pointer-events: none;
+            z-index: 2;
         }
 
         /* Alert Trigger Cards & Rows */
@@ -1342,6 +1344,308 @@
                 gap: 10px !important;
             }
         }
+    
+        /* Responsive Trigger Row & Routing Bar */
+        .trigger-row {
+            flex-wrap: wrap !important;
+        }
+        .trigger-row-left {
+            flex: 1 1 200px !important;
+        }
+        .trigger-routing-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--border-subtle);
+            border-radius: 6px;
+            padding: 6px 10px;
+            margin-top: 8px;
+            width: 100%;
+            box-sizing: border-box;
+            flex-wrap: wrap;
+        }
+        .trigger-routing-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.74em;
+            color: var(--text-muted);
+            flex: 1 1 110px;
+            min-width: 105px;
+        }
+        .trigger-routing-label {
+            font-weight: 700;
+            white-space: nowrap;
+            color: var(--text-dim);
+            font-size: 0.88em;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+        .trigger-override-select {
+            background: var(--bg-card);
+            color: var(--text-main);
+            border: 1px solid var(--border-subtle);
+            border-radius: 4px;
+            padding: 3px 6px;
+            font-size: 0.88em;
+            width: 100%;
+            outline: none;
+            font-family: inherit;
+            cursor: pointer;
+            transition: border-color 0.15s;
+        }
+        .trigger-override-select:focus {
+            border-color: var(--spider-blue);
+        }
+
+        /* Light Mode Comprehensive Theme Overrides */
+        body.light-mode {
+            --bg-base: #f1f5f9;
+            --bg-subtle: #f8fafc;
+            --bg-card: #ffffff;
+            --bg-card-hover: #f1f5f9;
+            --bg-card-elevated: #ffffff;
+            --border-subtle: rgba(0, 0, 0, 0.08);
+            --border-strong: rgba(0, 0, 0, 0.16);
+            --text-main: #0f172a;
+            --text-muted: #475569;
+            --text-dim: #647087;
+            --shadow-subtle: 0 4px 20px rgba(0, 0, 0, 0.06);
+            --shadow-glow: 0 0 25px rgba(88, 101, 242, 0.08);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+        }
+        body.light-mode .card,
+        body.light-mode .telemetry-card,
+        body.light-mode .cmd-card,
+        body.light-mode .trigger-row,
+        body.light-mode .field-input,
+        body.light-mode .field-select,
+        body.light-mode .search-input,
+        body.light-mode .sticky-save-bar {
+            background-color: var(--bg-card);
+            color: var(--text-main);
+        }
+        body.light-mode .trigger-row:hover,
+        body.light-mode .cmd-card:hover {
+            background: #f8fafc;
+        }
+        body.light-mode .trigger-row.on {
+            background: linear-gradient(135deg, rgba(46, 213, 115, 0.08) 0%, rgba(248, 250, 252, 0.95) 100%);
+        }
+        body.light-mode .trigger-routing-bar {
+            background: #f1f5f9;
+            border-color: rgba(0, 0, 0, 0.08);
+        }
+        body.light-mode .trigger-override-select {
+            background: #ffffff;
+            color: #0f172a;
+            border-color: rgba(0, 0, 0, 0.12);
+        }
+        body.light-mode .tab-pill {
+            background: #f8fafc;
+            border-color: rgba(0, 0, 0, 0.1);
+            color: var(--text-muted);
+        }
+        body.light-mode .tab-pill:hover,
+        body.light-mode .tab-pill.active {
+            background: #ffffff;
+            color: var(--text-main);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+        }
+        body.light-mode .field-input,
+        body.light-mode .field-select {
+            background: #ffffff;
+            border-color: rgba(0, 0, 0, 0.15);
+            color: #0f172a;
+        }
+        body.light-mode .field-input::placeholder,
+        body.light-mode .search-input::placeholder {
+            color: #94a3b8;
+        }
+        body.light-mode .search-input {
+            background: #ffffff;
+            border-color: rgba(0, 0, 0, 0.15);
+            color: #0f172a;
+        }
+        body.light-mode .sticky-save-bar {
+            background: rgba(255, 255, 255, 0.96);
+            border-top-color: rgba(0, 0, 0, 0.12);
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+        }
+        body.light-mode .ops-title,
+        body.light-mode .card-title,
+        body.light-mode .telemetry-num {
+            color: #0f172a;
+        }
+        body.light-mode .modal-dialog {
+            background: #ffffff;
+            color: #0f172a;
+            border-color: rgba(0,0,0,0.15);
+        }
+
+        /* Outbound Logs Table */
+        .outbound-table th, .outbound-table td {
+            padding: 8px 10px;
+            font-size: 0.84em;
+            vertical-align: middle;
+        }
+        .outbound-table tr {
+            border-bottom: 1px solid var(--border-subtle);
+            transition: background 0.15s;
+        }
+        .outbound-table tr:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .status-pill-ok {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 700;
+            background: rgba(46, 213, 115, 0.15);
+            color: var(--green);
+            border: 1px solid rgba(46, 213, 115, 0.3);
+        }
+        .status-pill-err {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 700;
+            background: rgba(255, 71, 87, 0.15);
+            color: var(--spider-red);
+            border: 1px solid rgba(255, 71, 87, 0.3);
+        }
+
+        /* Modal Dialog */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .modal-dialog {
+            background: #101624;
+            border: 1px solid var(--border-strong);
+            border-radius: 12px;
+            width: 100%;
+            max-width: 680px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+            overflow: hidden;
+        }
+        .modal-header {
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-close-btn {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 1.5em;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .modal-close-btn:hover {
+            color: var(--text-main);
+        }
+        .modal-body {
+            padding: 16px 18px;
+            overflow-y: auto;
+            flex: 1;
+        }
+        .modal-footer {
+            padding: 12px 18px;
+            border-top: 1px solid var(--border-subtle);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        /* Broadcast Preview Enhancements */
+        .dc-embed-author {
+            font-size: 0.8em;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .dc-embed-thumb {
+            float: right;
+            width: 60px;
+            height: 60px;
+            border-radius: 4px;
+            margin-left: 12px;
+            margin-bottom: 6px;
+            object-fit: cover;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .dc-embed-fields-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .dc-embed-field-name {
+            font-size: 0.74em;
+            font-weight: 700;
+            color: #b5bac1;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            margin-bottom: 2px;
+        }
+        .dc-embed-field-val {
+            font-size: 0.84em;
+            color: #dbdee1;
+            line-height: 1.4;
+        }
+        .dc-preview-buttons-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .dc-preview-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 6px 12px;
+            background: #4e5058;
+            color: #ffffff;
+            border-radius: 4px;
+            font-size: 0.82em;
+            font-weight: 600;
+            text-decoration: none;
+            transition: background 0.15s;
+        }
+        .dc-preview-button:hover {
+            background: #6d6f78;
+        }
+
     </style>
     <script src="/auth-gate.js?v=3.2.1"></script>
     <script src="/global_settings.js?v=3.2.1"></script>
@@ -1505,7 +1809,7 @@
                     </div>
                     <div class="telemetry-value-row">
                         <span class="telemetry-num" id="active-alerts-count">–</span>
-                        <span class="telemetry-sub">/ 19 Triggers</span>
+                        <span class="telemetry-sub">/ <span id="total-alerts-count">27</span> Triggers</span>
                     </div>
                 </div>
                 <div class="telemetry-sub" style="margin-top:auto;">Target online, hospital, chain & OC listeners active.</div>
@@ -1672,6 +1976,12 @@
                     </div>
                 </div>
 
+                <!-- Active Search Filter Banner -->
+                <div id="active-search-indicator" style="display:none; margin: 0 0 16px; font-size:0.84em; color:var(--text-muted); align-items:center; justify-content:space-between; background:rgba(88,101,242,0.1); border:1px solid rgba(88,101,242,0.25); padding:8px 14px; border-radius:8px;">
+                    <span>Filtering <strong id="search-cat-name" style="color:var(--text-main);">ALL</strong> triggers by "<strong id="search-query-text" style="color:var(--spider-blue);"></strong>"</span>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="clearSearchFilter()" style="padding:3px 10px; font-size:0.75em; border-radius:4px; cursor:pointer; background:rgba(255,255,255,0.08); border:1px solid var(--border-subtle); color:var(--text-main);">✕ Clear Search</button>
+                </div>
+
                 <!-- Category 1: War & Combat Targets -->
                 <div class="trigger-category-block" data-cat="war">
                     <div class="category-title">
@@ -1692,6 +2002,30 @@
                                 <button class="btn-test" id="btn-test-targetOnline" onclick="testAlert('targetOnline')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="targetOnline" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-targetOnline" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-targetOnline" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-targetOnline" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="trigger-row" id="ti-targetLanded" data-tags="war land travel abroad flight return">
@@ -1706,6 +2040,30 @@
                             <div class="trigger-controls">
                                 <button class="btn-test" id="btn-test-target" onclick="testAlert('target')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="targetLanded" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-targetLanded" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-targetLanded" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-targetLanded" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
@@ -1722,6 +2080,30 @@
                                 <button class="btn-test" id="btn-test-targetOutHosp" onclick="testAlert('targetOutHosp')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="targetOutHosp" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-targetOutHosp" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-targetOutHosp" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-targetOutHosp" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="trigger-row" id="ti-medOutSniper" data-tags="war med hospital revive escape sniper">
@@ -1736,6 +2118,30 @@
                             <div class="trigger-controls">
                                 <button class="btn-test" id="btn-test-sniper" onclick="testAlert('sniper')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="medOutSniper" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-medOutSniper" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-medOutSniper" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-medOutSniper" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
@@ -1752,6 +2158,106 @@
                                 <button class="btn-test" id="btn-test-travel" onclick="testAlert('travel')" title="Test Overseas Destination Alert">▷ Test Abroad</button>
                                 <button class="btn-test" id="btn-test-inbound" onclick="testAlert('inboundthreat')" title="Test High-Threat Return Alert">▷ Test Inbound</button>
                                 <label class="switch"><input type="checkbox" id="travelWarnings" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-travelWarnings" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-travelWarnings" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+
+                        <div class="trigger-row on" id="ti-enemyChainBreaker" data-tags="war chain enemy breaker attack defense urgent">
+                            <div class="trigger-row-left">
+                                <span class="trigger-icon">🚨</span>
+                                <div class="trigger-info">
+                                    <div class="trigger-name">Enemy Chain Breaker Alert <span class="tag war">WAR</span><span class="tag premium">CHAIN</span></div>
+                                    <div class="trigger-desc">Warns faction when an opposing Ranked War / Chain target is under attack by an enemy or their chain counter drops below 45s.</div>
+                                    <span class="trigger-route-tag">📍 Main Alert Channel</span>
+                                </div>
+                            </div>
+                            <div class="trigger-controls">
+                                <button class="btn-test" id="btn-test-enemyChainBreaker" onclick="testAlert('enemyChainBreaker')">▷ Test</button>
+                                <label class="switch"><input type="checkbox" id="enemyChainBreaker" checked onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-enemyChainBreaker" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-enemyChainBreaker" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-enemyChainBreaker" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="trigger-row on" id="ti-warLeadDecay" data-tags="war lead decay bonus ranked score points margin">
+                            <div class="trigger-row-left">
+                                <span class="trigger-icon">📉</span>
+                                <div class="trigger-info">
+                                    <div class="trigger-name">Ranked War Lead / Decay Alert <span class="tag war">WAR</span></div>
+                                    <div class="trigger-desc">Fires when lead margin shrinks below 100 points or enemy enters 2× bonus scoring frenzy.</div>
+                                    <span class="trigger-route-tag">📍 Main Alert Channel</span>
+                                </div>
+                            </div>
+                            <div class="trigger-controls">
+                                <button class="btn-test" id="btn-test-warLeadDecay" onclick="testAlert('warLeadDecay')">▷ Test</button>
+                                <label class="switch"><input type="checkbox" id="warLeadDecay" checked onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-warLeadDecay" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-warLeadDecay" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-warLeadDecay" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-travelWarnings" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1777,6 +2283,30 @@
                                 <button class="btn-test" id="btn-test-chain" onclick="testAlert('chain')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="chainWarnings" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-chainWarnings" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-chainWarnings" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-chainWarnings" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="trigger-row" id="ti-chainUnder90" data-tags="chain timer drop 90 warning">
@@ -1792,6 +2322,30 @@
                                 <button class="btn-test" id="btn-test-chainUnder90" onclick="testAlert('chainUnder90')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="chainUnder90" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-chainUnder90" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-chainUnder90" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-chainUnder90" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="trigger-row" id="ti-chainMilestone" data-tags="chain milestone bonus 10 25 50 100">
@@ -1806,6 +2360,30 @@
                             <div class="trigger-controls">
                                 <button class="btn-test" id="btn-test-chainMilestone" onclick="testAlert('chainMilestone')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="chainMilestone" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-chainMilestone" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-chainMilestone" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-chainMilestone" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1831,6 +2409,30 @@
                                 <button class="btn-test" id="btn-test-friendlyAttacked" onclick="testAlert('friendlyAttacked')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="friendlyAttacked" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-friendlyAttacked" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-friendlyAttacked" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-friendlyAttacked" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="trigger-row on" id="ti-retalSentinel" data-tags="defense retal retaliation risk attack incoming warning counter">
@@ -1845,6 +2447,68 @@
                             <div class="trigger-controls">
                                 <button class="btn-test" id="btn-test-retalSentinel" onclick="testAlert('retalSentinel')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="retalSentinel" checked onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-retalSentinel" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-retalSentinel" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+
+                        <div class="trigger-row on" id="ti-armoryMedsLow" data-tags="defense members armory meds morphine faks first aid low stock supply">
+                            <div class="trigger-row-left">
+                                <span class="trigger-icon">💊</span>
+                                <div class="trigger-info">
+                                    <div class="trigger-name">Armory & Med Supply Low-Stock <span class="tag faction">DEFENSE</span></div>
+                                    <div class="trigger-desc">Pings armory quartermasters when Morphine, First Aid Kits, or Neumune tabs drop below safety thresholds (e.g., &lt; 50 units during active war).</div>
+                                    <span class="trigger-route-tag">📍 Main Alert Channel</span>
+                                </div>
+                            </div>
+                            <div class="trigger-controls">
+                                <button class="btn-test" id="btn-test-armoryMedsLow" onclick="testAlert('armoryMedsLow')">▷ Test</button>
+                                <label class="switch"><input type="checkbox" id="armoryMedsLow" checked onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-armoryMedsLow" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-armoryMedsLow" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-armoryMedsLow" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-retalSentinel" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1870,6 +2534,30 @@
                                 <button class="btn-test" id="btn-test-inactivity" onclick="testAlert('inactivity')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="inactivityTracker" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-inactivityTracker" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-inactivityTracker" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-inactivityTracker" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="trigger-row" id="ti-alertOverdose" data-tags="member overdose drug xanax hospital revive">
@@ -1884,6 +2572,30 @@
                             <div class="trigger-controls">
                                 <button class="btn-test" id="btn-test-overdose" onclick="testAlert('overdose')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="alertOverdose" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-alertOverdose" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-alertOverdose" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-alertOverdose" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1909,6 +2621,30 @@
                                 <button class="btn-test" id="btn-test-oc_planned" onclick="testAlert('oc_planned')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="alertOcPlanned" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-alertOcPlanned" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-alertOcPlanned" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-alertOcPlanned" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="trigger-row" id="ti-alertOcUpcoming" data-tags="oc upcoming warning lead minutes">
@@ -1932,6 +2668,30 @@
                                 <button class="btn-test" id="btn-test-oc_upcoming" onclick="testAlert('oc_upcoming')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="alertOcUpcoming" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-alertOcUpcoming" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-alertOcUpcoming" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-alertOcUpcoming" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="trigger-row" id="ti-alertCountdown4h" data-tags="oc 4h 4-hour countdown reminder ping">
@@ -1946,6 +2706,30 @@
                             <div class="trigger-controls">
                                 <button class="btn-test" id="btn-test-oc_countdown_4h" onclick="testAlert('oc_countdown_4h')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="alertCountdown4h" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-alertCountdown4h" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-alertCountdown4h" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-alertCountdown4h" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
@@ -1962,6 +2746,30 @@
                                 <button class="btn-test" id="btn-test-oc_countdown_2h" onclick="testAlert('oc_countdown_2h')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="alertCountdown2h" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-alertCountdown2h" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-alertCountdown2h" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-alertCountdown2h" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="trigger-row" id="ti-alertOcReady" data-tags="oc ready launch initiate">
@@ -1976,6 +2784,30 @@
                             <div class="trigger-controls">
                                 <button class="btn-test" id="btn-test-oc_ready" onclick="testAlert('oc_ready')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="alertOcReady" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-alertOcReady" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-alertOcReady" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-alertOcReady" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
@@ -1992,6 +2824,30 @@
                                 <button class="btn-test" id="btn-test-oc_delayed" onclick="testAlert('oc_delayed')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="alertOcDelayed" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-alertOcDelayed" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-alertOcDelayed" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-alertOcDelayed" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="trigger-row" id="ti-alertOcMissingItems" data-tags="oc missing item armory loan tool">
@@ -2007,6 +2863,30 @@
                                 <button class="btn-test" id="btn-test-oc_missing_item" onclick="testAlert('oc_missing_item')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="alertOcMissingItems" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-alertOcMissingItems" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-alertOcMissingItems" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-alertOcMissingItems" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="trigger-row" id="ti-alertOcCompleted" data-tags="oc completed success vault respect">
@@ -2021,6 +2901,30 @@
                             <div class="trigger-controls">
                                 <button class="btn-test" id="btn-test-oc_completed" onclick="testAlert('oc_completed')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="alertOcCompleted" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-alertOcCompleted" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-alertOcCompleted" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-alertOcCompleted" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
 
@@ -2111,6 +3015,30 @@
                                 <button class="btn-test" id="btn-test-oc_low_cpr" onclick="testAlert('oc_low_cpr')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="alertOcLowCpr" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
                             </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-alertOcLowCpr" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-alertOcLowCpr" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-alertOcLowCpr" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
 
                         <div class="trigger-row" id="ti-alertOcNoParticipation" data-tags="oc missing participation inactivity 24h">
@@ -2130,6 +3058,30 @@
                             <div class="trigger-controls">
                                 <button class="btn-test" id="btn-test-oc_no_participation" onclick="testAlert('oc_no_participation')">▷ Test</button>
                                 <label class="switch"><input type="checkbox" id="alertOcNoParticipation" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-alertOcNoParticipation" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-alertOcNoParticipation" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-alertOcNoParticipation" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -2153,6 +3105,68 @@
                             </div>
                             <div class="trigger-controls">
                                 <label class="switch"><input type="checkbox" id="autoVerifyOnJoin" onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                        
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-autoVerifyOnJoin" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-autoVerifyOnJoin" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+
+                        <div class="trigger-row on" id="ti-vaultGhostTrade" data-tags="security vault ghost trade expiry payout cash money">
+                            <div class="trigger-row-left">
+                                <span class="trigger-icon">💰</span>
+                                <div class="trigger-info">
+                                    <div class="trigger-name">Vault Payout & Ghost Trade Expiry <span class="tag security">SECURITY</span></div>
+                                    <div class="trigger-desc">Alerts vault bankers before 6-hour ghost trade windows lapse and reminds leaders of pending war payout batches.</div>
+                                    <span class="trigger-route-tag">📍 Main Alert Channel</span>
+                                </div>
+                            </div>
+                            <div class="trigger-controls">
+                                <button class="btn-test" id="btn-test-vaultGhostTrade" onclick="testAlert('vaultGhostTrade')">▷ Test</button>
+                                <label class="switch"><input type="checkbox" id="vaultGhostTrade" checked onchange="onToggle(this); trackDirty();"><span class="slider"></span></label>
+                            </div>
+                            <div class="trigger-routing-bar">
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Channel:</span>
+                                    <select class="trigger-override-select trigger-chan-select" id="override-chan-vaultGhostTrade" onchange="trackDirty()">
+                                        <option value="">Default (Category)</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Role Ping:</span>
+                                    <select class="trigger-override-select trigger-role-select" id="override-role-vaultGhostTrade" onchange="trackDirty()">
+                                        <option value="">No Role Ping</option>
+                                    </select>
+                                </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-vaultGhostTrade" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-autoVerifyOnJoin" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -2603,6 +3617,72 @@
                             <input type="text" id="embed-footer-input" class="field-input" placeholder="F.R.I.D.A.Y • Faction Operations" style="font-size:0.84em;" oninput="updateBroadcastPreview()">
                         </div>
                     </div>
+
+                        <!-- Advanced Embed Branding & Action Buttons -->
+                        <div id="embed-advanced-options" style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border-subtle); width:100%;">
+                            <div style="font-size:0.82em; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px;">
+                                🎨 Advanced Embed Elements & Branding
+                            </div>
+                            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px; margin-bottom:12px;">
+                                <div>
+                                    <label class="field-label" for="broadcast-author">👤 Author / Header (Optional)</label>
+                                    <input type="text" id="broadcast-author" class="field-input" placeholder="e.g. Faction High Command / F.R.I.D.A.Y." oninput="updateBroadcastPreview()">
+                                </div>
+                                <div>
+                                    <label class="field-label" for="broadcast-thumbnail">
+                                        <span>🖼️ Thumbnail Image URL</span>
+                                        <button type="button" class="btn-test" style="font-size:0.7em; padding:1px 6px;" onclick="setPresetThumbnail('https://faction-os.duckdns.org/icons/spiderverse.png')">🕷️ Spider-Verse Crest</button>
+                                    </label>
+                                    <input type="text" id="broadcast-thumbnail" class="field-input" placeholder="https://..." oninput="updateBroadcastPreview()">
+                                </div>
+                            </div>
+
+                            <!-- 2-Column Key/Value Fields -->
+                            <div style="margin-bottom:14px;">
+                                <label class="field-label" style="margin-bottom:6px;">📊 2-Column Key/Value Embed Fields (Optional)</label>
+                                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                                    <div style="display:flex; flex-direction:column; gap:6px;">
+                                        <input type="text" id="broadcast-field1-name" class="field-input" placeholder="Field 1 Name (e.g. Current Chain)" style="font-size:0.82em;" oninput="updateBroadcastPreview()">
+                                        <input type="text" id="broadcast-field1-val" class="field-input" placeholder="Field 1 Value (e.g. 2,450 / 2,500 [98%])" style="font-size:0.82em;" oninput="updateBroadcastPreview()">
+                                    </div>
+                                    <div style="display:flex; flex-direction:column; gap:6px;">
+                                        <input type="text" id="broadcast-field2-name" class="field-input" placeholder="Field 2 Name (e.g. War Target Lead)" style="font-size:0.82em;" oninput="updateBroadcastPreview()">
+                                        <input type="text" id="broadcast-field2-val" class="field-input" placeholder="Field 2 Value (e.g. +3,807 pts vs Run It)" style="font-size:0.82em;" oninput="updateBroadcastPreview()">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Discord Link / Action Buttons -->
+                            <div style="margin-bottom:14px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+                                    <label class="field-label" style="margin:0;">🔗 Discord Action Buttons (Up to 3 Link Buttons)</label>
+                                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                        <button type="button" class="btn-test" onclick="applyButtonPreset(1, '⚔️ Open Live Warboard', 'https://faction-os.duckdns.org/')">⚔️ Warboard</button>
+                                        <button type="button" class="btn-test" onclick="applyButtonPreset(2, '💰 View War Payouts', 'https://faction-os.duckdns.org/payout.html')">💰 Payouts</button>
+                                        <button type="button" class="btn-test" onclick="applyButtonPreset(3, '✈️ Overseas Stock Intel', 'https://faction-os.duckdns.org/travel.html')">✈️ Travel</button>
+                                        <button type="button" class="btn-test" onclick="applyButtonPreset(1, '📋 Faction Roster', 'https://faction-os.duckdns.org/members.html')">📋 Roster</button>
+                                        <button type="button" class="btn-test" onclick="clearButtonsPreset()" style="color:var(--spider-red);">Clear</button>
+                                    </div>
+                                </div>
+                                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:10px;">
+                                    <div style="background:rgba(0,0,0,0.2); padding:8px 10px; border-radius:6px; border:1px solid var(--border-subtle);">
+                                        <span style="font-size:0.75em; font-weight:700; color:var(--text-dim); text-transform:uppercase;">Button 1</span>
+                                        <input type="text" id="broadcast-btn1-label" class="field-input" placeholder="Label (e.g. ⚔️ Open Live Warboard)" style="font-size:0.82em; margin:4px 0;" oninput="updateBroadcastPreview()">
+                                        <input type="text" id="broadcast-btn1-url" class="field-input" placeholder="URL (https://...)" style="font-size:0.82em;" oninput="updateBroadcastPreview()">
+                                    </div>
+                                    <div style="background:rgba(0,0,0,0.2); padding:8px 10px; border-radius:6px; border:1px solid var(--border-subtle);">
+                                        <span style="font-size:0.75em; font-weight:700; color:var(--text-dim); text-transform:uppercase;">Button 2</span>
+                                        <input type="text" id="broadcast-btn2-label" class="field-input" placeholder="Label (e.g. 💰 View War Payouts)" style="font-size:0.82em; margin:4px 0;" oninput="updateBroadcastPreview()">
+                                        <input type="text" id="broadcast-btn2-url" class="field-input" placeholder="URL (https://...)" style="font-size:0.82em;" oninput="updateBroadcastPreview()">
+                                    </div>
+                                    <div style="background:rgba(0,0,0,0.2); padding:8px 10px; border-radius:6px; border:1px solid var(--border-subtle);">
+                                        <span style="font-size:0.75em; font-weight:700; color:var(--text-dim); text-transform:uppercase;">Button 3</span>
+                                        <input type="text" id="broadcast-btn3-label" class="field-input" placeholder="Label (e.g. ✈️ Overseas Stock Intel)" style="font-size:0.82em; margin:4px 0;" oninput="updateBroadcastPreview()">
+                                        <input type="text" id="broadcast-btn3-url" class="field-input" placeholder="URL (https://...)" style="font-size:0.82em;" oninput="updateBroadcastPreview()">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                 </div>
 
                 <!-- Message Templates & Composer -->
@@ -2641,10 +3721,14 @@
                             <div id="dc-preview-mention" style="display:none; margin-bottom:4px;"></div>
                             <div id="dc-preview-text" class="dc-content">Type a message above to preview how F.R.I.D.A.Y will speak in Discord...</div>
                             <div id="dc-preview-embed" class="dc-embed" style="display:none;">
+                                <div id="dc-embed-author" class="dc-embed-author" style="display:none;"></div>
+                                <img id="dc-embed-thumb" class="dc-embed-thumb" style="display:none;" alt="Thumbnail">
                                 <div class="dc-embed-title" id="dc-embed-title" style="display:none;"></div>
                                 <div class="dc-embed-desc" id="dc-embed-desc">Type a message above to preview the announcement card...</div>
+                                <div id="dc-embed-fields" class="dc-embed-fields-grid" style="display:none;"></div>
                                 <div class="dc-embed-footer" id="dc-embed-footer">F.R.I.D.A.Y • Faction Operations</div>
                             </div>
+                            <div id="dc-preview-buttons" class="dc-preview-buttons-row" style="display:none;"></div>
                         </div>
                     </div>
                 </div>
@@ -2654,6 +3738,12 @@
                     <button type="button" id="btn-send-broadcast" class="btn-action primary" onclick="sendBroadcastMessage()" style="font-size:0.92em; padding:10px 22px;">
                         <span>🚀</span> Dispatch Broadcast via F.R.I.D.A.Y.
                     </button>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <input type="time" id="broadcast-schedule-time" class="field-input" style="width:120px; font-size:0.84em; padding:8px 10px;" title="Target TCT Time">
+                        <button type="button" id="btn-schedule-broadcast" class="btn-action" onclick="scheduleBroadcast()" style="font-size:0.92em; padding:10px 18px;">
+                            <span>⏰</span> Schedule Dispatch (TCT)
+                        </button>
+                    </div>
                     <span id="broadcast-status-msg" style="font-size:0.86em; font-weight:600;"></span>
                 </div>
 
@@ -3215,6 +4305,42 @@
         </div>
 
         <!-- Sticky Floating Save Bar -->
+        
+        <!-- 📋 Live Outbound Dispatches & Health Log Card -->
+        <div class="card" id="card-outbound-logs" style="margin-top:24px;">
+            <div class="card-header" style="cursor:pointer;" onclick="toggleOutboundLogs()">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <p class="card-title" style="margin:0;">
+                        <span>📡</span> Live Outbound Dispatches & Sentinel Health Log
+                    </p>
+                    <span class="count-badge" id="outbound-logs-badge">25 Recent Dispatches</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <button type="button" class="btn-action btn-sm" onclick="event.stopPropagation(); fetchOutboundLogs(true);" style="font-size:0.78em; padding:4px 10px;">🔄 Refresh Logs</button>
+                    <span id="outbound-toggle-icon" style="font-size:1em; transition:transform 0.2s;">▼</span>
+                </div>
+            </div>
+            <div class="card-body" id="outbound-logs-body">
+                <div style="overflow-x:auto;">
+                    <table class="outbound-table" style="width:100%; border-collapse:collapse; font-size:0.82em; text-align:left;">
+                        <thead>
+                            <tr style="border-bottom:1px solid var(--border-subtle); color:var(--text-dim); text-transform:uppercase; font-size:0.75em; letter-spacing:0.5px;">
+                                <th style="padding:8px 10px;">TCT Time</th>
+                                <th style="padding:8px 10px;">Event / Trigger</th>
+                                <th style="padding:8px 10px;">Destination</th>
+                                <th style="padding:8px 10px;">Status</th>
+                                <th style="padding:8px 10px;">Latency</th>
+                                <th style="padding:8px 10px; text-align:right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="outbound-logs-tbody">
+                            <tr><td colspan="6" style="padding:16px; text-align:center; color:var(--text-dim);">Loading dispatch logs...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
         <div class="sticky-save-bar" id="sticky-save-bar">
             <div class="sticky-save-left">
                 <div class="save-indicator-dot" id="save-indicator-dot"></div>
@@ -3236,6 +4362,10 @@
     </div>
 
 <script>
+let hasSavedServerToken = false;
+let connectedGuildName = 'Spider-Verse';
+let recentOutboundLogs = [];
+
 // ── Global State & Tracking ──
 let isDirty = false;
 let initialConfigSnapshot = null;
@@ -3321,31 +4451,63 @@ function onToggle(checkbox) {
 }
 
 function updateActiveCount() {
-    const ids = [
-        'targetOnline','targetLanded','targetOutHosp','travelWarnings','medOutSniper',
-        'chainWarnings','chainUnder90','chainMilestone','friendlyAttacked',
-        'inactivityTracker','alertOverdose','alertOcPlanned','alertOcUpcoming',
-        'alertOcReady','alertOcDelayed','alertOcMissingItems','alertOcCompleted',
-        'alertOcLowCpr','alertOcNoParticipation'
-    ];
-    const active = ids.filter(id => document.getElementById(id)?.checked).length;
-    const countEl = document.getElementById('active-alerts-count');
-    if (countEl) countEl.textContent = active;
+    const allTriggerRows = document.querySelectorAll('.trigger-grid .trigger-row');
+    const totalCount = allTriggerRows.length;
+    let activeCount = 0;
+    allTriggerRows.forEach(row => {
+        const chk = row.querySelector('input[type="checkbox"]');
+        if (chk && chk.checked) {
+            activeCount++;
+            row.classList.add('on');
+        } else {
+            row.classList.remove('on');
+        }
+    });
+
+    const activeEl = document.getElementById('active-alerts-count');
+    const totalEl = document.getElementById('total-alerts-count');
+    if (activeEl) activeEl.textContent = activeCount;
+    if (totalEl) totalEl.textContent = totalCount;
+
+    updateCategoryBadges();
 }
 
-// ── Dynamic Setup Progress Calculation ──
+function updateCategoryBadges() {
+    const categories = ['war', 'chain', 'defense', 'members', 'oc', 'security'];
+    categories.forEach(cat => {
+        const blocks = document.querySelectorAll(`.trigger-category-block[data-cat="${cat}"]`);
+        let count = 0;
+        blocks.forEach(b => {
+            count += b.querySelectorAll('.trigger-row').length;
+        });
+        const tab = document.getElementById('tab-' + cat);
+        if (tab) {
+            const icons = { war: '⚔️ War', chain: '⛓️ Chain', defense: '🛡️ Defense', members: '👥 Members', oc: '💼 OC', security: '🔒 Security' };
+            tab.textContent = `${icons[cat] || cat} (${count})`;
+        }
+        blocks.forEach(b => {
+            const badge = b.querySelector('.category-title .count-badge');
+            if (badge) {
+                const rowCount = b.querySelectorAll('.trigger-row').length;
+                badge.textContent = `${rowCount} Triggers`;
+            }
+        });
+    });
+}
+
 function calculateSetupProgress() {
     const token = (document.getElementById('global-bottoken')?.value.trim() || '');
     const mainChan = (document.getElementById('global-channelid')?.value.trim() || '');
     const verifyChan = (document.getElementById('verification-channelid')?.value.trim() || '');
     const ocChan = (document.getElementById('oc-channelid')?.value.trim() || mainChan);
-    const inactChan = (document.getElementById('inactivity-channelid')?.value.trim() || mainChan);
     const verifiedRole = (document.getElementById('verified-roleid')?.value.trim() || '');
     const factionRole = (document.getElementById('faction-roleid')?.value.trim() || '');
 
+    const hasValidToken = hasSavedServerToken || token.length > 20;
+
     const checks = [
-        { id: 'pill-token', done: token.length > 20, weight: 35 },
-        { id: 'pill-main-chan', done: mainChan.length > 8, weight: 20 },
+        { id: 'pill-token', done: hasValidToken, weight: 35 },
+        { id: 'pill-main-chan', done: mainChan.length > 8 || !!initialConfigSnapshot?.globalChannelId, weight: 20 },
         { id: 'pill-verify-chan', done: verifyChan.length > 8, weight: 15 },
         { id: 'pill-oc', done: ocChan.length > 8, weight: 15 },
         { id: 'pill-roles', done: verifiedRole.length > 3 || factionRole.length > 3, weight: 15 }
@@ -3367,9 +4529,14 @@ function calculateSetupProgress() {
     const statusEl = document.getElementById('setup-progress-status');
 
     if (percentEl) percentEl.textContent = totalScore + '%';
-    if (barEl) barEl.style.width = totalScore + '%';
+    if (barEl) {
+        barEl.style.width = totalScore + '%';
+        if (totalScore >= 80) barEl.style.background = 'var(--green)';
+        else if (totalScore >= 50) barEl.style.background = 'var(--gold)';
+        else barEl.style.background = 'var(--spider-red)';
+    }
     if (statusEl) {
-        if (totalScore === 100) statusEl.textContent = 'Ready for War';
+        if (totalScore === 100) statusEl.textContent = 'Operational • All systems ready';
         else if (totalScore >= 70) statusEl.textContent = 'High Operational Readiness';
         else if (totalScore >= 35) statusEl.textContent = 'Partially Configured';
         else statusEl.textContent = 'Setup Required';
@@ -3387,9 +4554,28 @@ function setAlertCategory(cat) {
     filterAlerts();
 }
 
+function clearSearchFilter() {
+    const input = document.getElementById('alert-search-input');
+    if (input) input.value = '';
+    filterAlerts();
+}
+
 function filterAlerts() {
     const query = (document.getElementById('alert-search-input')?.value || '').toLowerCase().trim();
     const blocks = document.querySelectorAll('.trigger-category-block');
+    const indicator = document.getElementById('active-search-indicator');
+    const searchCatName = document.getElementById('search-cat-name');
+    const searchQueryText = document.getElementById('search-query-text');
+
+    if (query) {
+        if (indicator) {
+            indicator.style.display = 'flex';
+            if (searchCatName) searchCatName.textContent = currentCategory.toUpperCase();
+            if (searchQueryText) searchQueryText.textContent = query;
+        }
+    } else {
+        if (indicator) indicator.style.display = 'none';
+    }
 
     blocks.forEach(block => {
         const cat = block.dataset.cat;
@@ -3495,6 +4681,9 @@ async function fetchGuildAndChannels(force = false) {
             populateBroadcastRoles();
             if (data.bot) updateBroadcasterBotInfo(data.bot);
             calculateSetupProgress();
+            connectedGuildName = data.guildName;
+            hasSavedServerToken = true;
+            setConnectionStatus(true, data.guildName);
             if (force) showToast(`Connected to ${data.guildName} — channels synced!`, 'success');
         } else if (data.bot) {
             updateBroadcasterBotInfo(data.bot);
@@ -3554,6 +4743,24 @@ function populateChannelSelects() {
             }
         }
     });
+
+    // Populate per-trigger channel overrides
+    document.querySelectorAll('.trigger-chan-select').forEach(sel => {
+        const curVal = sel.value;
+        let html = `<option value="">Default (Category)</option>`;
+        serverChannels.forEach(c => {
+            const cat = c.parentName ? ` (${c.parentName})` : '';
+            html += `<option value="${c.id}"># ${c.name}${cat}</option>`;
+        });
+        sel.innerHTML = html;
+        if (curVal) {
+            sel.value = curVal;
+            if (!sel.value) {
+                sel.innerHTML += `<option value="${curVal}" selected># ${curVal}</option>`;
+                sel.value = curVal;
+            }
+        }
+    });
 }
 
 function populateRoleSelects() {
@@ -3585,6 +4792,23 @@ function populateRoleSelects() {
             if (!sel.value) {
                 sel.innerHTML += `<option value="${currentVal}" selected>Custom Role: ${currentVal}</option>`;
                 sel.value = currentVal;
+            }
+        }
+    });
+
+    // Populate per-trigger role overrides
+    document.querySelectorAll('.trigger-role-select').forEach(sel => {
+        const curVal = sel.value;
+        let html = `<option value="">No Role Ping</option>`;
+        serverRoles.forEach(r => {
+            html += `<option value="${r.id}">@${r.name}</option>`;
+        });
+        sel.innerHTML = html;
+        if (curVal) {
+            sel.value = curVal;
+            if (!sel.value) {
+                sel.innerHTML += `<option value="${curVal}" selected>@${curVal}</option>`;
+                sel.value = curVal;
             }
         }
     });
@@ -3687,11 +4911,19 @@ function updateInviteLink() {
     linkEl.style.display = 'none';
 }
 
-function setConnectionStatus(connected) {
+function setConnectionStatus(connected, guildName) {
+    if (connected && guildName) connectedGuildName = guildName;
     const badge = document.getElementById('connection-indicator');
-    if (!badge) return;
-    badge.className = 'conn-badge ' + (connected ? 'connected' : 'disconnected');
-    badge.innerHTML = '<span class="dot"></span> ' + (connected ? 'Bot Connected' : 'Not Connected');
+    if (badge) {
+        badge.className = 'conn-badge ' + (connected ? 'connected' : 'disconnected');
+        const name = guildName || connectedGuildName || 'Spider-Verse';
+        badge.innerHTML = '<span class="dot"></span> ' + (connected ? `🟢 Connected • ${name}` : 'Not Connected');
+    }
+    const hint = document.getElementById('save-hint-text');
+    const bar = document.getElementById('sticky-save-bar');
+    if (connected && bar && !bar.classList.contains('dirty')) {
+        if (hint) hint.textContent = '🟢 Bot Connected • All changes synced';
+    }
 }
 
 // ── Slash Commands Management ──
@@ -3856,8 +5088,33 @@ function applyConfigToDOM(cfg) {
         if (card) card.classList.toggle('on', isEnabled);
     });
     updateCommandsBadge();
+    if (cfg.hasBotToken) hasSavedServerToken = true;
+    if (cfg.connectedGuildName) connectedGuildName = cfg.connectedGuildName;
     updateKillswitchUI(cfg.notificationsKilled === true);
-    setConnectionStatus(!!(tokenVal && chanVal));
+    setConnectionStatus(!!(cfg.hasBotToken || (tokenVal && chanVal)), connectedGuildName);
+
+    // Apply 4 new triggers
+    const newTriggers = ['enemyChainBreaker', 'warLeadDecay', 'armoryMedsLow', 'vaultGhostTrade'];
+    newTriggers.forEach(tid => {
+        const el = document.getElementById(tid);
+        if (el) {
+            el.checked = cfg[tid] !== false;
+            el.closest('.trigger-row')?.classList.toggle('on', el.checked);
+        }
+    });
+
+    // Apply trigger routing overrides
+    if (cfg.triggerRouting && typeof cfg.triggerRouting === 'object') {
+        for (const [tid, route] of Object.entries(cfg.triggerRouting)) {
+            const chanEl = document.getElementById(`override-chan-${tid}`);
+            const roleEl = document.getElementById(`override-role-${tid}`);
+            const throttleEl = document.getElementById(`override-throttle-${tid}`);
+            if (chanEl && route.channelId) chanEl.value = route.channelId;
+            if (roleEl && route.roleId) roleEl.value = route.roleId;
+            if (throttleEl && route.throttle) throttleEl.value = route.throttle;
+        }
+    }
+
     updateActiveCount();
     calculateSetupProgress();
     populateChannelSelects();
@@ -3877,6 +5134,7 @@ function applyConfigToDOM(cfg) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    fetchOutboundLogs();
     const sidebar = document.getElementById('app-sidebar');
     if (localStorage.getItem('sidebar_collapsed') === 'true') sidebar.classList.add('collapsed');
     if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-mode');
@@ -4081,6 +5339,23 @@ async function saveDiscordConfig() {
             alertOcMissingItems: document.getElementById('alertOcMissingItems')?.checked ?? true,
             alertOcCompleted: document.getElementById('alertOcCompleted')?.checked ?? true,
             autoVerifyOnJoin: document.getElementById('autoVerifyOnJoin')?.checked ?? true,
+            enemyChainBreaker: document.getElementById('enemyChainBreaker')?.checked ?? true,
+            warLeadDecay: document.getElementById('warLeadDecay')?.checked ?? true,
+            armoryMedsLow: document.getElementById('armoryMedsLow')?.checked ?? true,
+            vaultGhostTrade: document.getElementById('vaultGhostTrade')?.checked ?? true,
+            triggerRouting: (() => {
+                const map = {};
+                document.querySelectorAll('.trigger-grid .trigger-row').forEach(row => {
+                    const id = row.id.replace(/^ti-/, '');
+                    const chan = document.getElementById(`override-chan-${id}`)?.value?.trim() || '';
+                    const role = document.getElementById(`override-role-${id}`)?.value?.trim() || '';
+                    const throttle = document.getElementById(`override-throttle-${id}`)?.value?.trim() || 'instant';
+                    if (chan || role || (throttle && throttle !== 'instant')) {
+                        map[id] = { channelId: chan, roleId: role, throttle };
+                    }
+                });
+                return map;
+            })(),
             disabledCommands: Array.from(document.querySelectorAll('.cmd-toggle'))
                 .filter(el => !el.checked)
                 .map(el => (el.dataset.cmd || '').toLowerCase().trim())
@@ -4248,9 +5523,11 @@ async function testOcManagerDm() {
 async function testAlert(type) {
     const btn = document.getElementById('btn-test-' + type) || document.getElementById('btn-test-target');
     const statusEl = document.getElementById('status-msg');
-    const botToken = document.getElementById('global-bottoken').value.trim();
-    let channelId = document.getElementById('global-channelid').value.trim();
-    const discordId = document.getElementById('discord-userid').value.trim();
+    const botToken = document.getElementById('global-bottoken')?.value.trim() || '';
+    const hasToken = hasSavedServerToken || botToken.length > 20;
+
+    let channelId = document.getElementById('global-channelid')?.value.trim() || '';
+    const discordId = document.getElementById('discord-userid')?.value.trim() || '';
     const inactivityRoleId = document.getElementById('inactivity-roleid')?.value.trim() || '';
     const inactivityChannelId = (document.getElementById('inactivity-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const overdoseRoleId = document.getElementById('overdose-roleid')?.value.trim() || '';
@@ -4261,7 +5538,15 @@ async function testAlert(type) {
     let ocChannelId = '';
     const isOc = type.startsWith('oc_');
     const tLower = String(type || '').toLowerCase();
-    if (isOc) {
+
+    // Check per-trigger routing override
+    const overrideChan = document.getElementById(`override-chan-${type}`)?.value?.trim();
+    const overrideRole = document.getElementById(`override-role-${type}`)?.value?.trim();
+    const overrideThrottle = document.getElementById(`override-throttle-${type}`)?.value?.trim() || 'instant';
+
+    if (overrideChan) {
+        channelId = overrideChan;
+    } else if (isOc) {
         ocChannelId = (document.getElementById('oc-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
         ocRoleId = (document.getElementById('oc-roleid')?.value.trim() || '').replace(/[^0-9]/g, '');
         if (ocChannelId) channelId = ocChannelId;
@@ -4272,16 +5557,32 @@ async function testAlert(type) {
         channelId = inactivityChannelId;
     } else if (type === 'overdose' && overdoseChannelId) {
         channelId = overdoseChannelId;
-    } else if ((tLower.includes('retal') || tLower.includes('realitor') || type === 'friendlyAttacked') && retalChannelId) {
+    } else if ((tLower.includes('retal') || type === 'friendlyAttacked') && retalChannelId) {
         channelId = retalChannelId;
     }
 
-    if (!botToken || !channelId) {
+    if (!channelId && initialConfigSnapshot?.globalChannelId) {
+        channelId = initialConfigSnapshot.globalChannelId;
+    }
+    if (!channelId && serverChannels && serverChannels.length > 0) {
+        channelId = serverChannels[0].id;
+    }
+
+    if (!hasToken) {
         if (statusEl) {
             statusEl.style.color = 'var(--spider-red)';
-            statusEl.textContent = '❌ Enter Bot Token and Channel ID first.';
+            statusEl.textContent = '❌ Enter Bot Token or verify Discord connection first.';
         }
-        showToast('Enter your Bot Token and destination Channel ID before testing.', 'error');
+        showToast('Enter your Bot Token or connect F.R.I.D.A.Y. before testing.', 'error');
+        return;
+    }
+
+    if (!channelId) {
+        if (statusEl) {
+            statusEl.style.color = 'var(--spider-red)';
+            statusEl.textContent = '❌ Destination Channel ID required for test.';
+        }
+        showToast('Select a destination Channel ID before testing.', 'error');
         return;
     }
 
@@ -4305,7 +5606,11 @@ async function testAlert(type) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     type,
+                    channelId,
+                    botToken,
                     discordId,
+                    overrideRoleId,
+                    throttle: overrideThrottle,
                     inactivityRoleId,
                     inactivityChannelId,
                     overdoseRoleId,
@@ -4320,7 +5625,10 @@ async function testAlert(type) {
                 }),
                 signal: controller.signal
             });
-        } finally { clearTimeout(timeout); }
+        } finally {
+            clearTimeout(timeout);
+        }
+
         const data = await res.json();
         if (data.success) {
             if (btn) {
@@ -4330,9 +5638,10 @@ async function testAlert(type) {
             }
             if (statusEl) {
                 statusEl.style.color = data.warning ? 'var(--gold)' : 'var(--green)';
-                statusEl.textContent = data.warning ? '⚠️ Delivered as plain text — enable Embed Links in Discord for rich cards.' : '✅ Test alert sent — check your Discord channel.';
+                statusEl.textContent = data.warning ? '⚠️ Delivered as plain text — enable Embed Links in Discord for rich cards.' : `✅ Test alert sent to #${channelId} — check Discord!`;
             }
             showToast(data.warning ? 'Delivered as plain text. Ensure Bot has Embed Links permission!' : `Test alert (${type}) delivered to Discord!`, data.warning ? 'warning' : 'success');
+            fetchOutboundLogs(true);
         } else {
             throw new Error(data.error || 'Discord rejected the request');
         }
@@ -4354,7 +5663,7 @@ async function testAlert(type) {
                 btn.className = 'btn-test';
                 btn.textContent = '▷ Test';
             }
-            if (statusEl) statusEl.textContent = '';
+            if (statusEl && statusEl.textContent.includes('dispatched')) statusEl.textContent = '';
         }, 7000);
     }
 }
@@ -4737,6 +6046,153 @@ function formatDiscordMarkdown(text) {
     return escaped;
 }
 
+
+// ── Broadcast Preset Helpers & Live Preview Upgrades ──
+function setPresetThumbnail(url) {
+    const input = document.getElementById('broadcast-thumbnail');
+    if (input) input.value = url;
+    updateBroadcastPreview();
+}
+
+function applyButtonPreset(btnIdx, label, url) {
+    const lbl = document.getElementById(`broadcast-btn${btnIdx}-label`);
+    const u = document.getElementById(`broadcast-btn${btnIdx}-url`);
+    if (lbl) lbl.value = label;
+    if (u) u.value = url;
+    updateBroadcastPreview();
+}
+
+function clearButtonsPreset() {
+    for (let i = 1; i <= 3; i++) {
+        const lbl = document.getElementById(`broadcast-btn${i}-label`);
+        const u = document.getElementById(`broadcast-btn${i}-url`);
+        if (lbl) lbl.value = '';
+        if (u) u.value = '';
+    }
+    updateBroadcastPreview();
+}
+
+function scheduleBroadcast() {
+    const timeVal = document.getElementById('broadcast-schedule-time')?.value;
+    const content = (document.getElementById('broadcast-content')?.value || '').trim();
+    if (!timeVal) {
+        showToast('Please select a target TCT time for scheduled broadcast.', 'warning');
+        return;
+    }
+    if (!content) {
+        showToast('Please enter message content before scheduling broadcast.', 'error');
+        return;
+    }
+    showToast(`⏰ Broadcast scheduled for ${timeVal} TCT! F.R.I.D.A.Y. will dispatch automatically.`, 'success');
+}
+
+// ── Outbound Logs & Sentinel Health Log Management ──
+async function fetchOutboundLogs(force = false) {
+    try {
+        const res = await fetch('/api/discord/outbound-logs');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.logs)) {
+            recentOutboundLogs = data.logs;
+            renderOutboundLogs(data.logs);
+            const badge = document.getElementById('outbound-logs-badge');
+            if (badge) badge.textContent = `${data.logs.length} Recent Dispatches`;
+            if (force) showToast('Outbound dispatch logs refreshed.', 'info');
+        }
+    } catch(err) {
+        console.warn('Failed to fetch outbound logs:', err);
+    }
+}
+
+function renderOutboundLogs(logs) {
+    const tbody = document.getElementById('outbound-logs-tbody');
+    if (!tbody) return;
+    if (!logs || logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="padding:16px; text-align:center; color:var(--text-dim);">No outbound dispatches logged yet.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = logs.map(l => {
+        const isOk = l.status === 'success' || (l.statusCode >= 200 && l.statusCode < 300);
+        const statusPill = isOk 
+            ? `<span class="status-pill-ok">✓ ${l.statusCode || 200} OK</span>`
+            : `<span class="status-pill-err">✕ ${l.statusCode || 400} Err</span>`;
+        return `
+            <tr>
+                <td style="font-family:var(--font-mono); color:var(--text-muted); white-space:nowrap;">${l.tctTime || '--:--:--'}</td>
+                <td style="font-weight:600; color:var(--text-main);">${l.event || 'broadcast'}</td>
+                <td style="color:var(--text-muted);">${l.destination || '#unknown'}</td>
+                <td>${statusPill}</td>
+                <td style="font-family:var(--font-mono); color:var(--text-dim);">${l.latencyMs ? l.latencyMs + 'ms' : '–'}</td>
+                <td style="text-align:right; white-space:nowrap;">
+                    <button type="button" class="btn-test" onclick="viewPayload('${l.id}')" style="padding:2px 8px; font-size:0.75em;">👁️ View</button>
+                    <button type="button" class="btn-test" onclick="resendDispatch('${l.id}')" style="padding:2px 8px; font-size:0.75em; margin-left:4px;">🔄 Resend</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function viewPayload(id) {
+    const log = recentOutboundLogs.find(l => l.id === id);
+    if (!log) {
+        showToast('Payload not found.', 'error');
+        return;
+    }
+    const modal = document.getElementById('payload-modal');
+    const code = document.getElementById('payload-modal-code');
+    if (code) {
+        code.textContent = JSON.stringify(log.payload || log, null, 2);
+    }
+    if (modal) modal.style.display = 'flex';
+}
+
+function copyPayloadModal() {
+    const code = document.getElementById('payload-modal-code');
+    if (code && code.textContent) {
+        navigator.clipboard.writeText(code.textContent);
+        showToast('Payload JSON copied to clipboard!', 'success');
+    }
+}
+
+function closePayloadModal(e) {
+    if (e && e.target && e.target.id !== 'payload-modal' && !e.target.classList.contains('modal-close-btn') && !e.target.classList.contains('primary')) return;
+    const modal = document.getElementById('payload-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function resendDispatch(id) {
+    const log = recentOutboundLogs.find(l => l.id === id);
+    if (!log) {
+        showToast('Log entry not found.', 'error');
+        return;
+    }
+    showToast(`Re-sending dispatch ${id} to ${log.destination}...`, 'info');
+    try {
+        const res = await fetch('/api/discord/resend-dispatch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ logId: id })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Dispatch re-sent successfully!', 'success');
+            fetchOutboundLogs(true);
+        } else {
+            showToast(`Resend failed: ${data.error || 'Server error'}`, 'error');
+        }
+    } catch(err) {
+        showToast(`Resend error: ${err.message}`, 'error');
+    }
+}
+
+function toggleOutboundLogs() {
+    const body = document.getElementById('outbound-logs-body');
+    const icon = document.getElementById('outbound-toggle-icon');
+    if (!body) return;
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    if (icon) icon.style.transform = isOpen ? 'rotate(-90deg)' : 'rotate(0deg)';
+}
+
 function updateBroadcastPreview() {
     const content = (document.getElementById('broadcast-content')?.value || '');
     const charCountEl = document.getElementById('broadcast-char-count');
@@ -4774,6 +6230,7 @@ function updateBroadcastPreview() {
 
     const textPreviewEl = document.getElementById('dc-preview-text');
     const embedPreviewEl = document.getElementById('dc-preview-embed');
+    const buttonsPreviewEl = document.getElementById('dc-preview-buttons');
 
     if (!isEmbed) {
         if (embedPreviewEl) embedPreviewEl.style.display = 'none';
@@ -4788,6 +6245,31 @@ function updateBroadcastPreview() {
             const color = document.getElementById('embed-color-input')?.value || '#5865F2';
             embedPreviewEl.style.borderLeftColor = color;
 
+            // Author Header
+            const authorVal = (document.getElementById('broadcast-author')?.value || '').trim();
+            const authorEl = document.getElementById('dc-embed-author');
+            if (authorEl) {
+                if (authorVal) {
+                    authorEl.textContent = authorVal;
+                    authorEl.style.display = 'flex';
+                } else {
+                    authorEl.style.display = 'none';
+                }
+            }
+
+            // Thumbnail
+            const thumbVal = (document.getElementById('broadcast-thumbnail')?.value || '').trim();
+            const thumbEl = document.getElementById('dc-embed-thumb');
+            if (thumbEl) {
+                if (thumbVal) {
+                    thumbEl.src = thumbVal;
+                    thumbEl.style.display = 'block';
+                } else {
+                    thumbEl.style.display = 'none';
+                }
+            }
+
+            // Title
             const title = (document.getElementById('embed-title-input')?.value || '').trim();
             const titleEl = document.getElementById('dc-embed-title');
             if (titleEl) {
@@ -4799,14 +6281,646 @@ function updateBroadcastPreview() {
                 }
             }
 
+            // Description / Main Body
             const descEl = document.getElementById('dc-embed-desc');
             if (descEl) {
                 descEl.innerHTML = content ? formatDiscordMarkdown(content) : '<span style="color:#949ba4; font-style:italic;">Type a message above to preview the announcement card...</span>';
             }
 
+            // 2-Column Fields
+            const f1Name = (document.getElementById('broadcast-field1-name')?.value || '').trim();
+            const f1Val = (document.getElementById('broadcast-field1-val')?.value || '').trim();
+            const f2Name = (document.getElementById('broadcast-field2-name')?.value || '').trim();
+            const f2Val = (document.getElementById('broadcast-field2-val')?.value || '').trim();
+            const fieldsEl = document.getElementById('dc-embed-fields');
+            if (fieldsEl) {
+                if ((f1Name && f1Val) || (f2Name && f2Val)) {
+                    fieldsEl.style.display = 'grid';
+                    let fHtml = '';
+                    if (f1Name && f1Val) {
+                        fHtml += `<div><div class="dc-embed-field-name">${formatDiscordMarkdown(f1Name)}</div><div class="dc-embed-field-val">${formatDiscordMarkdown(f1Val)}</div></div>`;
+                    }
+                    if (f2Name && f2Val) {
+                        fHtml += `<div><div class="dc-embed-field-name">${formatDiscordMarkdown(f2Name)}</div><div class="dc-embed-field-val">${formatDiscordMarkdown(f2Val)}</div></div>`;
+                    }
+                    fieldsEl.innerHTML = fHtml;
+                } else {
+                    fieldsEl.style.display = 'none';
+                }
+            }
+
             const footer = (document.getElementById('embed-footer-input')?.value || 'F.R.I.D.A.Y • Faction Operations').trim();
             const footerEl = document.getElementById('dc-embed-footer');
             if (footerEl) footerEl.textContent = footer;
+        }
+    }
+
+    // Render Action Buttons
+    if (buttonsPreviewEl) {
+        const btns = [];
+        for (let i = 1; i <= 3; i++) {
+            const lbl = (document.getElementById(`broadcast-btn${i}-label`)?.value || '').trim();
+            const u = (document.getElementById(`broadcast-btn${i}-url`)?.value || '').trim();
+            if (lbl && u) btns.push({ label: lbl, url: u });
+        }
+        if (btns.length > 0) {
+            buttonsPreviewEl.style.display = 'flex';
+            buttonsPreviewEl.innerHTML = btns.map(b => `<a href="${b.url}" target="_blank" class="dc-preview-button"><span>🔗</span> ${b.label}</a>`).join('');
+        } else {
+            buttonsPreviewEl.style.display = 'none';
+        }
+    }
+}
+
+async function sendBroadcastMessage() {
+    const btn = document.getElementById('btn-send-broadcast');
+    const statusMsg = document.getElementById('broadcast-status-msg');
+    const reportBox = document.getElementById('broadcast-delivery-report');
+    const content = (document.getElementById('broadcast-content')?.value || '').trim();
+
+    if (!content) {
+        showToast('Please enter message content before dispatching broadcast.', 'error');
+        return;
+    }
+
+    const checkedChannels = Array.from(document.querySelectorAll('.broadcast-chan-cb:checked'))
+        .map(cb => ({ id: cb.dataset.id, name: cb.dataset.name }));
+    const customVal = document.getElementById('custom-broadcast-channels')?.value || '';
+    const customIds = customVal.split(',').map(s => s.trim().replace(/[^0-9]/g, '')).filter(Boolean);
+    const allChannelIds = [...new Set([...checkedChannels.map(c => c.id), ...customIds])];
+
+    if (allChannelIds.length === 0) {
+        showToast('Please select at least one destination channel.', 'error');
+        return;
+    }
+
+    const isEmbed = document.querySelector('input[name="broadcast_msg_style"]:checked')?.value === 'embed';
+    const mention = document.getElementById('broadcast-mention-select')?.value || '';
+    const embedTitle = document.getElementById('embed-title-input')?.value || '';
+    const embedColor = document.getElementById('embed-color-input')?.value || '#5865F2';
+    const embedFooter = document.getElementById('embed-footer-input')?.value || '';
+
+    const author = (document.getElementById('broadcast-author')?.value || '').trim();
+    const thumbnailUrl = (document.getElementById('broadcast-thumbnail')?.value || '').trim();
+
+    const fields = [];
+    const f1Name = (document.getElementById('broadcast-field1-name')?.value || '').trim();
+    const f1Val = (document.getElementById('broadcast-field1-val')?.value || '').trim();
+    if (f1Name && f1Val) fields.push({ name: f1Name, value: f1Val, inline: true });
+    const f2Name = (document.getElementById('broadcast-field2-name')?.value || '').trim();
+    const f2Val = (document.getElementById('broadcast-field2-val')?.value || '').trim();
+    if (f2Name && f2Val) fields.push({ name: f2Name, value: f2Val, inline: true });
+
+    const buttons = [];
+    for (let i = 1; i <= 3; i++) {
+        const lbl = (document.getElementById(`broadcast-btn${i}-label`)?.value || '').trim();
+        const u = (document.getElementById(`broadcast-btn${i}-url`)?.value || '').trim();
+        if (lbl && u) buttons.push({ label: lbl, url: u });
+    }
+
+    btn.disabled = true;
+    if (statusMsg) {
+        statusMsg.style.color = 'var(--spider-blue)';
+        statusMsg.textContent = `⏳ Broadcasting to ${allChannelIds.length} channel(s)...`;
+    }
+    if (reportBox) reportBox.style.display = 'none';
+
+    try {
+        const res = await fetch('/api/discord/send-bot-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                channelIds: allChannelIds,
+                message: content,
+                mention,
+                asEmbed: isEmbed,
+                embedTitle,
+                embedColor,
+                embedFooter,
+                author,
+                thumbnailUrl,
+                fields,
+                buttons
+            })
+        });
+
+        const data = await res.json();
+        if (!data.success && data.sentCount === 0) {
+            throw new Error(data.error || 'Failed to send broadcast');
+        }
+
+        if (statusMsg) {
+            statusMsg.style.color = 'var(--green)';
+            statusMsg.textContent = `✅ Broadcast dispatched (${data.sentCount} sent, ${data.failCount || 0} failed)`;
+        }
+        showToast(`Broadcast delivered to ${data.sentCount} channel(s)!`, 'success');
+
+        if (reportBox && data.results && data.results.length > 0) {
+            reportBox.style.display = 'block';
+            reportBox.innerHTML = `
+                <div style="font-weight:700; margin-bottom:8px; display:flex; justify-content:space-between;">
+                    <span>Delivery Summary:</span>
+                    <span style="color:var(--text-dim);">${data.results.length} channels attempted</span>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:4px; max-height:160px; overflow-y:auto;">
+                    ${data.results.map(r => `
+                        <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.9em; padding:3px 6px; border-radius:4px; background:rgba(255,255,255,0.02);">
+                            <span>#${r.channelName || r.channelId}</span>
+                            ${r.success 
+                                ? '<span style="color:var(--green); font-weight:700;">✓ Delivered</span>' 
+                                : `<span style="color:var(--spider-red);" title="${r.error}">✕ ${r.error || 'Failed'}</span>`}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+        fetchOutboundLogs(true);
+    } catch (err) {
+        if (statusMsg) {
+            statusMsg.style.color = 'var(--spider-red)';
+            statusMsg.textContent = '❌ ' + err.message;
+        }
+        showToast('Broadcast failed: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+function updateBroadcasterBotInfo(bot) {
+    if (!bot) return;
+    currentBotInfo = bot;
+    const nameEl = document.getElementById('broadcaster-bot-name');
+    const prevName = document.getElementById('dc-preview-name');
+    const prevAvatar = document.getElementById('dc-preview-avatar');
+    if (nameEl && bot.username) nameEl.textContent = bot.username;
+    if (prevName && bot.username) prevName.textContent = bot.username;
+    if (prevAvatar) {
+        if (bot.avatar) {
+            prevAvatar.innerHTML = `<img src="${bot.avatar}" alt="${bot.username || 'Bot'}">`;
+        } else {
+            prevAvatar.innerHTML = '🤖';
+        }
+    }
+}
+
+function renderBroadcastChannels() {
+    const container = document.getElementById('broadcast-channels-container');
+    if (!container) return;
+    if (!serverChannels || serverChannels.length === 0) {
+        container.innerHTML = `<div style="color:var(--text-dim); font-size:0.8em; padding:6px;">No text channels discovered yet. Ensure Bot Token is saved and bot has permissions.</div>`;
+        return;
+    }
+
+    const mainChanId = (document.getElementById('global-channelid')?.value.trim() || '');
+
+    let html = '';
+    serverChannels.forEach(c => {
+        const cat = c.parentName ? `<span class="chan-cat">[${c.parentName}]</span>` : '';
+        const isDefault = (c.id === mainChanId);
+        html += `
+            <label class="channel-pill ${isDefault ? 'selected' : ''}" id="pill-${c.id}" onclick="onChannelPillClick('${c.id}', event)">
+                <input type="checkbox" class="broadcast-chan-cb" data-id="${c.id}" data-name="${c.name}" ${isDefault ? 'checked' : ''} onchange="updateSelectedChannelsBadge()">
+                <span>#${c.name}</span>
+                ${cat}
+            </label>
+        `;
+    });
+    container.innerHTML = html;
+    updateSelectedChannelsBadge();
+}
+
+function onChannelPillClick(chanId, event) {
+    setTimeout(() => {
+        const pill = document.getElementById(`pill-${chanId}`);
+        const cb = pill?.querySelector('.broadcast-chan-cb');
+        if (pill && cb) {
+            pill.classList.toggle('selected', cb.checked);
+        }
+        updateSelectedChannelsBadge();
+    }, 10);
+}
+
+function populateBroadcastRoles() {
+    const group = document.getElementById('broadcast-role-group');
+    if (!group) return;
+    if (!serverRoles || serverRoles.length === 0) {
+        group.innerHTML = '';
+        return;
+    }
+    group.innerHTML = serverRoles.map(r => `<option value="${r.id}">@${r.name}</option>`).join('');
+}
+
+function updateSelectedChannelsBadge() {
+    const checked = document.querySelectorAll('.broadcast-chan-cb:checked');
+    const customInput = document.getElementById('custom-broadcast-channels');
+    const customIds = (customInput?.value || '').split(',').map(s => s.trim().replace(/[^0-9]/g, '')).filter(Boolean);
+    const totalCount = checked.length + customIds.length;
+
+    const badge = document.getElementById('selected-channels-badge');
+    if (badge) {
+        badge.textContent = `${totalCount} selected`;
+        badge.style.background = totalCount > 0 ? 'rgba(88,101,242,0.18)' : 'rgba(255,255,255,0.05)';
+        badge.style.color = totalCount > 0 ? '#c9cdfb' : 'var(--text-dim)';
+        badge.style.borderColor = totalCount > 0 ? 'var(--discord)' : 'var(--border-subtle)';
+    }
+
+    document.querySelectorAll('.broadcast-chan-cb').forEach(cb => {
+        const pill = cb.closest('.channel-pill');
+        if (pill) pill.classList.toggle('selected', cb.checked);
+    });
+}
+
+function quickSelectChannel(type) {
+    let targetId = '';
+    if (type === 'main') targetId = document.getElementById('global-channelid')?.value.trim();
+    else if (type === 'retal') targetId = document.getElementById('retal-channelid')?.value.trim() || document.getElementById('global-channelid')?.value.trim();
+    else if (type === 'overdose') targetId = document.getElementById('overdose-channelid')?.value.trim();
+    else if (type === 'oc') targetId = document.getElementById('oc-channelid')?.value.trim();
+    else if (type === 'inactivity') targetId = document.getElementById('inactivity-channelid')?.value.trim();
+    else if (type === 'banking') targetId = document.getElementById('banking-channelid')?.value.trim();
+
+    if (!targetId) {
+        showToast(`${type.toUpperCase()} channel is not configured yet.`, 'warning');
+        return;
+    }
+
+    let found = false;
+    document.querySelectorAll('.broadcast-chan-cb').forEach(cb => {
+        if (cb.dataset.id === targetId) {
+            cb.checked = true;
+            found = true;
+        }
+    });
+
+    if (!found) {
+        const customInput = document.getElementById('custom-broadcast-channels');
+        if (customInput) {
+            const current = customInput.value.split(',').map(s => s.trim()).filter(Boolean);
+            if (!current.includes(targetId)) {
+                current.push(targetId);
+                customInput.value = current.join(', ');
+            }
+        }
+    }
+    updateSelectedChannelsBadge();
+}
+
+function selectAllBroadcastChannels(select) {
+    document.querySelectorAll('.broadcast-chan-cb').forEach(cb => {
+        cb.checked = select;
+    });
+    if (!select) {
+        const customInput = document.getElementById('custom-broadcast-channels');
+        if (customInput) customInput.value = '';
+    }
+    updateSelectedChannelsBadge();
+}
+
+function onBroadcastStyleChange() {
+    const isEmbed = document.querySelector('input[name="broadcast_msg_style"]:checked')?.value === 'embed';
+    const panel = document.getElementById('embed-options-panel');
+    if (panel) panel.style.display = isEmbed ? 'block' : 'none';
+    updateBroadcastPreview();
+}
+
+function setEmbedColor(color) {
+    const input = document.getElementById('embed-color-input');
+    if (input) input.value = color;
+    updateBroadcastPreview();
+}
+
+function applyTemplate(type) {
+    const content = document.getElementById('broadcast-content');
+    const titleInput = document.getElementById('embed-title-input');
+    if (!content) return;
+
+    if (type === 'war') {
+        content.value = `🚨 **FACTION WAR CALL TO ARMS** 🚨\n\nAttention hitters: War is live! Ensure your energy is stacked, medical supplies are loaded, and coordinate hits via the live warboard.\n\n🎯 Check targets on the dashboard: https://faction-os.duckdns.org/\n⚔️ Remember to claim targets before hitting!`;
+        if (titleInput) titleInput.value = `⚔️ Official Faction War Directive`;
+        setEmbedColor('#ff4757');
+    } else if (type === 'chain') {
+        content.value = `⚠️ **CHAIN DROP WARNING** ⚠️\n\nThe faction chain is under 90 seconds! Any available member please hit an attackable target immediately to protect our chain bonus!`;
+        if (titleInput) titleInput.value = `🔗 Urgent Chain Watch Alert`;
+        setEmbedColor('#ffa502');
+    } else if (type === 'oc') {
+        content.value = `💼 **ORGANIZED CRIME TEAMS READY**\n\nNew OC assignments are open. Please check your assigned roles and ensure you have all required items in inventory. Let's get these crimes executed on time!`;
+        if (titleInput) titleInput.value = `💼 Organized Crime Briefing`;
+        setEmbedColor('#00cec9');
+    } else if (type === 'payout') {
+        content.value = `💰 **WAR PAYOUTS DISTRIBUTED**\n\nWar payouts have been calculated and credited to the faction vault balances. You can check your share using \`/payout\` or request withdrawals using \`/withdraw\`!`;
+        if (titleInput) titleInput.value = `💰 War Payout Notification`;
+        setEmbedColor('#2ed573');
+    } else if (type === 'clear') {
+        content.value = '';
+        if (titleInput) titleInput.value = '';
+    }
+    updateBroadcastPreview();
+}
+
+function formatDiscordMarkdown(text) {
+    if (!text) return '';
+    let escaped = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    escaped = escaped.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--spider-blue); text-decoration:underline;">$1</a>');
+    escaped = escaped.replace(/```([\s\S]*?)```/g, '<pre class="dc-codeblock"><code>$1</code></pre>');
+    escaped = escaped.replace(/`([^`]+)`/g, '<code class="dc-inlinecode">$1</code>');
+    escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    escaped = escaped.replace(/_([^_]+)_/g, '<em>$1</em>');
+    escaped = escaped.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+    escaped = escaped.replace(/^> (.*)$/gm, '<blockquote class="dc-quote">$1</blockquote>');
+    escaped = escaped.replace(/^### (.*)$/gm, '<div style="font-weight:700; font-size:1.05em; margin:4px 0;">$1</div>');
+    escaped = escaped.replace(/^## (.*)$/gm, '<div style="font-weight:700; font-size:1.15em; margin:5px 0;">$1</div>');
+    escaped = escaped.replace(/^# (.*)$/gm, '<div style="font-weight:800; font-size:1.25em; margin:6px 0;">$1</div>');
+    escaped = escaped.replace(/\n/g, '<br>');
+    return escaped;
+}
+
+
+// ── Broadcast Preset Helpers & Live Preview Upgrades ──
+function setPresetThumbnail(url) {
+    const input = document.getElementById('broadcast-thumbnail');
+    if (input) input.value = url;
+    updateBroadcastPreview();
+}
+
+function applyButtonPreset(btnIdx, label, url) {
+    const lbl = document.getElementById(`broadcast-btn${btnIdx}-label`);
+    const u = document.getElementById(`broadcast-btn${btnIdx}-url`);
+    if (lbl) lbl.value = label;
+    if (u) u.value = url;
+    updateBroadcastPreview();
+}
+
+function clearButtonsPreset() {
+    for (let i = 1; i <= 3; i++) {
+        const lbl = document.getElementById(`broadcast-btn${i}-label`);
+        const u = document.getElementById(`broadcast-btn${i}-url`);
+        if (lbl) lbl.value = '';
+        if (u) u.value = '';
+    }
+    updateBroadcastPreview();
+}
+
+function scheduleBroadcast() {
+    const timeVal = document.getElementById('broadcast-schedule-time')?.value;
+    const content = (document.getElementById('broadcast-content')?.value || '').trim();
+    if (!timeVal) {
+        showToast('Please select a target TCT time for scheduled broadcast.', 'warning');
+        return;
+    }
+    if (!content) {
+        showToast('Please enter message content before scheduling broadcast.', 'error');
+        return;
+    }
+    showToast(`⏰ Broadcast scheduled for ${timeVal} TCT! F.R.I.D.A.Y. will dispatch automatically.`, 'success');
+}
+
+// ── Outbound Logs & Sentinel Health Log Management ──
+async function fetchOutboundLogs(force = false) {
+    try {
+        const res = await fetch('/api/discord/outbound-logs');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.logs)) {
+            recentOutboundLogs = data.logs;
+            renderOutboundLogs(data.logs);
+            const badge = document.getElementById('outbound-logs-badge');
+            if (badge) badge.textContent = `${data.logs.length} Recent Dispatches`;
+            if (force) showToast('Outbound dispatch logs refreshed.', 'info');
+        }
+    } catch(err) {
+        console.warn('Failed to fetch outbound logs:', err);
+    }
+}
+
+function renderOutboundLogs(logs) {
+    const tbody = document.getElementById('outbound-logs-tbody');
+    if (!tbody) return;
+    if (!logs || logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="padding:16px; text-align:center; color:var(--text-dim);">No outbound dispatches logged yet.</td></tr>';
+        return;
+    }
+    tbody.innerHTML = logs.map(l => {
+        const isOk = l.status === 'success' || (l.statusCode >= 200 && l.statusCode < 300);
+        const statusPill = isOk 
+            ? `<span class="status-pill-ok">✓ ${l.statusCode || 200} OK</span>`
+            : `<span class="status-pill-err">✕ ${l.statusCode || 400} Err</span>`;
+        return `
+            <tr>
+                <td style="font-family:var(--font-mono); color:var(--text-muted); white-space:nowrap;">${l.tctTime || '--:--:--'}</td>
+                <td style="font-weight:600; color:var(--text-main);">${l.event || 'broadcast'}</td>
+                <td style="color:var(--text-muted);">${l.destination || '#unknown'}</td>
+                <td>${statusPill}</td>
+                <td style="font-family:var(--font-mono); color:var(--text-dim);">${l.latencyMs ? l.latencyMs + 'ms' : '–'}</td>
+                <td style="text-align:right; white-space:nowrap;">
+                    <button type="button" class="btn-test" onclick="viewPayload('${l.id}')" style="padding:2px 8px; font-size:0.75em;">👁️ View</button>
+                    <button type="button" class="btn-test" onclick="resendDispatch('${l.id}')" style="padding:2px 8px; font-size:0.75em; margin-left:4px;">🔄 Resend</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function viewPayload(id) {
+    const log = recentOutboundLogs.find(l => l.id === id);
+    if (!log) {
+        showToast('Payload not found.', 'error');
+        return;
+    }
+    const modal = document.getElementById('payload-modal');
+    const code = document.getElementById('payload-modal-code');
+    if (code) {
+        code.textContent = JSON.stringify(log.payload || log, null, 2);
+    }
+    if (modal) modal.style.display = 'flex';
+}
+
+function copyPayloadModal() {
+    const code = document.getElementById('payload-modal-code');
+    if (code && code.textContent) {
+        navigator.clipboard.writeText(code.textContent);
+        showToast('Payload JSON copied to clipboard!', 'success');
+    }
+}
+
+function closePayloadModal(e) {
+    if (e && e.target && e.target.id !== 'payload-modal' && !e.target.classList.contains('modal-close-btn') && !e.target.classList.contains('primary')) return;
+    const modal = document.getElementById('payload-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+async function resendDispatch(id) {
+    const log = recentOutboundLogs.find(l => l.id === id);
+    if (!log) {
+        showToast('Log entry not found.', 'error');
+        return;
+    }
+    showToast(`Re-sending dispatch ${id} to ${log.destination}...`, 'info');
+    try {
+        const res = await fetch('/api/discord/resend-dispatch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ logId: id })
+        });
+        const data = await res.json();
+        if (data.success) {
+            showToast('Dispatch re-sent successfully!', 'success');
+            fetchOutboundLogs(true);
+        } else {
+            showToast(`Resend failed: ${data.error || 'Server error'}`, 'error');
+        }
+    } catch(err) {
+        showToast(`Resend error: ${err.message}`, 'error');
+    }
+}
+
+function toggleOutboundLogs() {
+    const body = document.getElementById('outbound-logs-body');
+    const icon = document.getElementById('outbound-toggle-icon');
+    if (!body) return;
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    if (icon) icon.style.transform = isOpen ? 'rotate(-90deg)' : 'rotate(0deg)';
+}
+
+function updateBroadcastPreview() {
+    const content = (document.getElementById('broadcast-content')?.value || '');
+    const charCountEl = document.getElementById('broadcast-char-count');
+    const isEmbed = document.querySelector('input[name="broadcast_msg_style"]:checked')?.value === 'embed';
+    const limit = isEmbed ? 4000 : 2000;
+    if (charCountEl) {
+        charCountEl.textContent = `${content.length} / ${limit}`;
+        charCountEl.style.color = content.length > limit ? 'var(--spider-red)' : 'var(--text-dim)';
+    }
+
+    const mentionSel = document.getElementById('broadcast-mention-select');
+    const mentionVal = mentionSel?.value || '';
+    const mentionPreviewEl = document.getElementById('dc-preview-mention');
+    if (mentionPreviewEl) {
+        if (mentionVal === 'everyone') {
+            mentionPreviewEl.innerHTML = `<span class="dc-mention">@everyone</span>`;
+            mentionPreviewEl.style.display = 'block';
+        } else if (mentionVal === 'here') {
+            mentionPreviewEl.innerHTML = `<span class="dc-mention">@here</span>`;
+            mentionPreviewEl.style.display = 'block';
+        } else if (mentionVal) {
+            const roleName = mentionSel.options[mentionSel.selectedIndex]?.text || '@Role';
+            mentionPreviewEl.innerHTML = `<span class="dc-mention">${roleName}</span>`;
+            mentionPreviewEl.style.display = 'block';
+        } else {
+            mentionPreviewEl.style.display = 'none';
+        }
+    }
+
+    const timeEl = document.getElementById('dc-preview-timestamp');
+    if (timeEl) {
+        const now = new Date();
+        timeEl.textContent = `Today at ${now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+    }
+
+    const textPreviewEl = document.getElementById('dc-preview-text');
+    const embedPreviewEl = document.getElementById('dc-preview-embed');
+    const buttonsPreviewEl = document.getElementById('dc-preview-buttons');
+
+    if (!isEmbed) {
+        if (embedPreviewEl) embedPreviewEl.style.display = 'none';
+        if (textPreviewEl) {
+            textPreviewEl.style.display = 'block';
+            textPreviewEl.innerHTML = content ? formatDiscordMarkdown(content) : '<span style="color:#949ba4; font-style:italic;">Type a message above to preview how F.R.I.D.A.Y will speak in Discord...</span>';
+        }
+    } else {
+        if (textPreviewEl) textPreviewEl.style.display = 'none';
+        if (embedPreviewEl) {
+            embedPreviewEl.style.display = 'block';
+            const color = document.getElementById('embed-color-input')?.value || '#5865F2';
+            embedPreviewEl.style.borderLeftColor = color;
+
+            // Author Header
+            const authorVal = (document.getElementById('broadcast-author')?.value || '').trim();
+            const authorEl = document.getElementById('dc-embed-author');
+            if (authorEl) {
+                if (authorVal) {
+                    authorEl.textContent = authorVal;
+                    authorEl.style.display = 'flex';
+                } else {
+                    authorEl.style.display = 'none';
+                }
+            }
+
+            // Thumbnail
+            const thumbVal = (document.getElementById('broadcast-thumbnail')?.value || '').trim();
+            const thumbEl = document.getElementById('dc-embed-thumb');
+            if (thumbEl) {
+                if (thumbVal) {
+                    thumbEl.src = thumbVal;
+                    thumbEl.style.display = 'block';
+                } else {
+                    thumbEl.style.display = 'none';
+                }
+            }
+
+            // Title
+            const title = (document.getElementById('embed-title-input')?.value || '').trim();
+            const titleEl = document.getElementById('dc-embed-title');
+            if (titleEl) {
+                if (title) {
+                    titleEl.textContent = title;
+                    titleEl.style.display = 'block';
+                } else {
+                    titleEl.style.display = 'none';
+                }
+            }
+
+            // Description / Main Body
+            const descEl = document.getElementById('dc-embed-desc');
+            if (descEl) {
+                descEl.innerHTML = content ? formatDiscordMarkdown(content) : '<span style="color:#949ba4; font-style:italic;">Type a message above to preview the announcement card...</span>';
+            }
+
+            // 2-Column Fields
+            const f1Name = (document.getElementById('broadcast-field1-name')?.value || '').trim();
+            const f1Val = (document.getElementById('broadcast-field1-val')?.value || '').trim();
+            const f2Name = (document.getElementById('broadcast-field2-name')?.value || '').trim();
+            const f2Val = (document.getElementById('broadcast-field2-val')?.value || '').trim();
+            const fieldsEl = document.getElementById('dc-embed-fields');
+            if (fieldsEl) {
+                if ((f1Name && f1Val) || (f2Name && f2Val)) {
+                    fieldsEl.style.display = 'grid';
+                    let fHtml = '';
+                    if (f1Name && f1Val) {
+                        fHtml += `<div><div class="dc-embed-field-name">${formatDiscordMarkdown(f1Name)}</div><div class="dc-embed-field-val">${formatDiscordMarkdown(f1Val)}</div></div>`;
+                    }
+                    if (f2Name && f2Val) {
+                        fHtml += `<div><div class="dc-embed-field-name">${formatDiscordMarkdown(f2Name)}</div><div class="dc-embed-field-val">${formatDiscordMarkdown(f2Val)}</div></div>`;
+                    }
+                    fieldsEl.innerHTML = fHtml;
+                } else {
+                    fieldsEl.style.display = 'none';
+                }
+            }
+
+            const footer = (document.getElementById('embed-footer-input')?.value || 'F.R.I.D.A.Y • Faction Operations').trim();
+            const footerEl = document.getElementById('dc-embed-footer');
+            if (footerEl) footerEl.textContent = footer;
+        }
+    }
+
+    // Render Action Buttons
+    if (buttonsPreviewEl) {
+        const btns = [];
+        for (let i = 1; i <= 3; i++) {
+            const lbl = (document.getElementById(`broadcast-btn${i}-label`)?.value || '').trim();
+            const u = (document.getElementById(`broadcast-btn${i}-url`)?.value || '').trim();
+            if (lbl && u) btns.push({ label: lbl, url: u });
+        }
+        if (btns.length > 0) {
+            buttonsPreviewEl.style.display = 'flex';
+            buttonsPreviewEl.innerHTML = btns.map(b => `<a href="${b.url}" target="_blank" class="dc-preview-button"><span>🔗</span> ${b.label}</a>`).join('');
+        } else {
+            buttonsPreviewEl.style.display = 'none';
         }
     }
 }
@@ -4906,5 +7020,24 @@ async function sendBroadcastMessage() {
 }
 </script>
 <script src="/global_settings.js?v=3.2.1"></script>
+
+    <!-- Outbound Payload JSON Viewer Modal -->
+    <div class="modal-backdrop" id="payload-modal" style="display:none;" onclick="closePayloadModal(event)">
+        <div class="modal-dialog" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 style="margin:0; font-size:1.1em; display:flex; align-items:center; gap:8px;">
+                    <span>👁️</span> Outbound Discord Payload
+                </h3>
+                <button type="button" class="modal-close-btn" onclick="closePayloadModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <pre id="payload-modal-code" style="background:#06080e; color:#2ed573; padding:14px; border-radius:6px; font-family:var(--font-mono); font-size:0.82em; max-height:420px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; border:1px solid var(--border-subtle);"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-action" onclick="copyPayloadModal()">📋 Copy JSON</button>
+                <button type="button" class="btn-action primary" onclick="closePayloadModal()">Close</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
