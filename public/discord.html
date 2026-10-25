@@ -50,13 +50,27 @@
             background-color: var(--bg-base);
             color: var(--text-main);
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            max-width: 100vw;
+        }
+
+        .main-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+            width: calc(100vw - var(--sidebar-width));
+        }
+
+        .main-content {
+            flex: 1;
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            padding: 20px 24px 110px;
             box-sizing: border-box;
-            overflow-x: hidden;
-            padding-bottom: 90px;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
         }
 
         /* Hero / Operations Header */
@@ -1755,7 +1769,7 @@
 
         /* Layer B Subnav Strip */
         .deck-subnav-strip {
-            position: sticky; top: 56px; z-index: 95; background: rgba(6, 8, 14, 0.95);
+            position: sticky; top: -20px; z-index: 95; background: rgba(6, 8, 14, 0.95);
             backdrop-filter: blur(12px); padding: 8px 0 12px; margin-bottom: 12px; border-bottom: 1px solid var(--border-subtle);
         }
         body.light-mode .deck-subnav-strip { background: rgba(241, 245, 249, 0.95); border-color: rgba(0, 0, 0, 0.08); }
@@ -1803,7 +1817,7 @@
         .dc-simulator-window {
             background: var(--discord-bg); border-radius: var(--radius-lg); border: 1px solid rgba(0, 0, 0, 0.3);
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); overflow: hidden; font-family: 'Inter', sans-serif;
-            position: sticky; top: 130px;
+            position: sticky; top: 10px;
         }
         .dc-channel-header {
             background: var(--discord-card); padding: 10px 16px; display: flex; align-items: center;
@@ -1919,7 +1933,7 @@
         </div>
     </nav>
 
-    <div class="app-main">
+    <div class="main-wrapper">
         <header class="app-topbar">
             <div class="topbar-left">
                 <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;">☰</button>
