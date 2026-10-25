@@ -309,7 +309,6 @@ function verificationCard(options = {}) {
             `${userIntro}${ICONS.LOCKED} **Server Access Locked**\n` +
             `To protect faction intelligence, armory vaults, and member privacy, all channels remain locked until your Torn City identity is verified.`,
         color: isAwaitingAction ? COLORS.GOLD : COLORS.RED,
-        thumbnail: { url: "https://www.torn.com/favicon.ico" },
         fields: [
             {
                 name: `${ICONS.VERIFICATION} Standard Verification (Required)`,
@@ -450,6 +449,232 @@ function formatTimeAgo(dateOrMs) {
     return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
+// ── 10. SLEEK & CALM UI DESIGN SYSTEM (MATCHING REFERENCE SPEC) ─────────────
+const FILLED_BLOCK = '▇'; // \u2587
+const EMPTY_BLOCK  = '▢'; // \u25A2
+const ANSI_RESET   = '\u001b[0m';
+const ANSI_RED     = '\u001b[31m';
+const ANSI_GREEN   = '\u001b[32m';
+const ANSI_YELLOW  = '\u001b[33m';
+const ANSI_BLUE    = '\u001b[34m';
+const ANSI_CYAN    = '\u001b[36m';
+const ANSI_WHITE   = '\u001b[37m';
+
+/**
+ * Generates the 10-block ANSI bar chart for Battle Stats:
+ * STR in Red (31m)
+ * DEF in Blue (34m)
+ * SPD in Yellow (33m)
+ * DEX in Green (32m)
+ * Bars scaled to maxStat (10 blocks = 100% of peak stat)
+ * Monospace aligned numbers and build percentages
+ */
+function generateBattleStatsAnsi(stats) {
+    if (!stats) stats = {};
+    const str = Number(stats.str ?? stats.strength ?? 0);
+    const def = Number(stats.def ?? stats.defense ?? 0);
+    const spd = Number(stats.spd ?? stats.speed ?? 0);
+    const dex = Number(stats.dex ?? stats.dexterity ?? 0);
+    const total = Number(stats.total ?? (str + def + spd + dex));
+    const maxStat = Math.max(str, def, spd, dex, 1);
+    const safeTotal = Math.max(total, str + def + spd + dex, 1);
+
+    const items = [
+        { label: 'STR', val: str, color: ANSI_RED },
+        { label: 'DEF', val: def, color: ANSI_BLUE },
+        { label: 'SPD', val: spd, color: ANSI_YELLOW },
+        { label: 'DEX', val: dex, color: ANSI_GREEN },
+    ];
+
+    const maxNumLen = Math.max(...items.map(i => i.val.toLocaleString('en-US').length));
+
+    const lines = items.map(item => {
+        const ratio = Math.min(1, Math.max(0, item.val / maxStat));
+        const filledCount = Math.round(ratio * 10);
+        const emptyCount = Math.max(0, 10 - filledCount);
+
+        const filledBars = FILLED_BLOCK.repeat(filledCount);
+        const emptyBars = EMPTY_BLOCK.repeat(emptyCount);
+
+        const pct = ((item.val / safeTotal) * 100).toFixed(1) + '%';
+        const numStr = item.val.toLocaleString('en-US').padStart(maxNumLen, ' ');
+        const pctStr = pct.padStart(5, ' ');
+
+        return `${item.color}${item.label} ${filledBars}${ANSI_RESET}${emptyBars} ${numStr}  ${pctStr}`;
+    });
+
+    return '```ansi\n' + lines.join('\n') + '\n```';
+}
+
+/**
+ * Generates the 10-block ANSI bar chart for Player Vitals (Energy, Nerve, Happy, Life):
+ * NRG in Green (32m)
+ * NRV in Yellow (33m)
+ * HPY in Blue (34m)
+ * LIF in Red (31m)
+ */
+function generateVitalsAnsi(vitals) {
+    if (!vitals) vitals = {};
+    const parseBar = (val, maxFallback) => {
+        if (typeof val === 'number') return { cur: val, max: maxFallback };
+        if (val && typeof val === 'object') {
+            const cur = Number(val.current ?? val.cur ?? 0);
+            const max = Number(val.maximum ?? val.max ?? maxFallback);
+            return { cur, max };
+        }
+        return { cur: 0, max: maxFallback };
+    };
+
+    const energy = parseBar(vitals.energy ?? vitals.nrg, vitals.maxEnergy ?? 150);
+    const nerve  = parseBar(vitals.nerve ?? vitals.nrv,  vitals.maxNerve ?? 50);
+    const happy  = parseBar(vitals.happy ?? vitals.hpy,  vitals.maxHappy ?? 5000);
+    const life   = parseBar(vitals.life ?? vitals.lif,   vitals.maxLife ?? 5000);
+
+    const items = [
+        { label: 'NRG', cur: energy.cur, max: energy.max, color: ANSI_GREEN },
+        { label: 'NRV', cur: nerve.cur,  max: nerve.max,  color: ANSI_YELLOW },
+        { label: 'HPY', cur: happy.cur,  max: happy.max,  color: ANSI_BLUE },
+        { label: 'LIF', cur: life.cur,   max: life.max,   color: ANSI_RED },
+    ];
+
+    const maxValLen = Math.max(...items.map(i => `${i.cur.toLocaleString('en-US')}/${i.max.toLocaleString('en-US')}`.length));
+
+    const lines = items.map(item => {
+        const ratio = Math.min(1, Math.max(0, item.cur / Math.max(item.max || 1, 1)));
+        const filledCount = Math.round(ratio * 10);
+        const emptyCount = Math.max(0, 10 - filledCount);
+
+        const filledBars = FILLED_BLOCK.repeat(filledCount);
+        const emptyBars = EMPTY_BLOCK.repeat(emptyCount);
+
+        const valStr = `${item.cur.toLocaleString('en-US')}/${item.max.toLocaleString('en-US')}`.padStart(maxValLen, ' ');
+        const pct = ((ratio * 100).toFixed(1) + '%').padStart(6, ' ');
+
+        return `${item.color}${item.label} ${filledBars}${ANSI_RESET}${emptyBars} ${valStr}  ${pct}`;
+    });
+
+    return '```ansi\n' + lines.join('\n') + '\n```';
+}
+
+/**
+ * Generates the 10-block ANSI Tug-of-War chart:
+ * Friendly faction in Green (32m)
+ * Enemy faction in Red (31m)
+ */
+function generateWarTugAnsi(war) {
+    if (!war) war = {};
+    const ourScore = Number(war.ourScore ?? war.ourPoints ?? 0);
+    const theirScore = Number(war.theirScore ?? war.enemyScore ?? war.enemyPoints ?? 0);
+    const ourName = war.ourName ?? 'US';
+    const theirName = war.theirName ?? war.enemyName ?? 'THEM';
+
+    const total = Math.max(1, ourScore + theirScore);
+    const ourRatio = ourScore / total;
+    const theirRatio = theirScore / total;
+
+    const ourBars = Math.round(ourRatio * 10);
+    const theirBars = Math.max(0, 10 - ourBars);
+
+    const ourLabel = (ourName || 'US').slice(0, 6).padEnd(6, ' ');
+    const theirLabel = (theirName || 'THEM').slice(0, 6).padEnd(6, ' ');
+
+    const ourNum = ourScore.toLocaleString('en-US');
+    const theirNum = theirScore.toLocaleString('en-US');
+    const maxNumLen = Math.max(ourNum.length, theirNum.length);
+
+    const line1 = `${ANSI_GREEN}${ourLabel} ${FILLED_BLOCK.repeat(ourBars)}${ANSI_RESET}${EMPTY_BLOCK.repeat(10 - ourBars)} ${ourNum.padStart(maxNumLen, ' ')}  ${((ourRatio * 100).toFixed(1) + '%').padStart(6, ' ')}`;
+    const line2 = `${ANSI_RED}${theirLabel} ${FILLED_BLOCK.repeat(theirBars)}${ANSI_RESET}${EMPTY_BLOCK.repeat(10 - theirBars)} ${theirNum.padStart(maxNumLen, ' ')}  ${((theirRatio * 100).toFixed(1) + '%').padStart(6, ' ')}`;
+
+    return '```ansi\n' + line1 + '\n' + line2 + '\n```';
+}
+
+/**
+ * Generates the 10-block ANSI Chain Tracker chart:
+ */
+function generateChainAnsi({ current = 0, max = 250, timeoutSec = 300, multiplier = 1.0 }) {
+    const chainRatio = Math.min(1, Math.max(0, current / Math.max(max, 1)));
+    const chainBars = Math.round(chainRatio * 10);
+
+    const timerRatio = Math.min(1, Math.max(0, timeoutSec / 300));
+    const timerBars = Math.round(timerRatio * 10);
+    const timerColor = timeoutSec < 60 ? ANSI_RED : (timeoutSec < 120 ? ANSI_YELLOW : ANSI_GREEN);
+
+    const m = Math.floor(Math.max(0, timeoutSec) / 60);
+    const s = Math.floor(Math.max(0, timeoutSec) % 60);
+    const timerStr = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+
+    const line1 = `${ANSI_GREEN}HITS   ${FILLED_BLOCK.repeat(chainBars)}${ANSI_RESET}${EMPTY_BLOCK.repeat(10 - chainBars)} ${current.toLocaleString('en-US')}/${max.toLocaleString('en-US')}  ${Number(multiplier).toFixed(2)}x`;
+    const line2 = `${timerColor}TIMER  ${FILLED_BLOCK.repeat(timerBars)}${ANSI_RESET}${EMPTY_BLOCK.repeat(10 - timerBars)} ${timerStr} cooldown`;
+
+    return '```ansi\n' + line1 + '\n' + line2 + '\n```';
+}
+
+/**
+ * Sleek Card Builder strictly matching the reference screenshot:
+ * - Left accent line (Green for success/gains, Blue for view/info, Amber for warning, Red for danger)
+ * - Author: Player [ID] with avatar and profile URL
+ * - Title: Single emoji + clean title
+ * - Large Discord H1 header (# <Value>)
+ * - Subtitle / Badge pill (`+18,050` ⚖️ Archetype)
+ * - ANSI block (dark inner card with 10-block colored bars)
+ * - Note below: calm, muted sentence
+ * - NO top-right thumbnail (guaranteed!)
+ * - Locked footer + timestamp
+ */
+function sleekCard({
+    color = COLORS.GREEN,
+    authorName,
+    authorIcon,
+    authorUrl,
+    title,
+    heroValue,
+    subtitle,
+    ansiBlock,
+    body,
+    note,
+    fields
+}) {
+    const descParts = [];
+    if (heroValue) {
+        descParts.push(`# ${heroValue}`);
+    }
+    if (subtitle) {
+        descParts.push(subtitle);
+    }
+    if (descParts.length > 0) {
+        descParts.push('');
+    }
+    if (ansiBlock) {
+        descParts.push(ansiBlock);
+    }
+    if (body) {
+        descParts.push(body);
+    }
+    if (note) {
+        if (ansiBlock || body) descParts.push('');
+        descParts.push(note);
+    }
+
+    const card = {
+        color: typeof color === 'number' ? color : (COLORS[color] || COLORS.GREEN),
+        title: title ? ensureBrand(title) : undefined,
+        description: descParts.join('\n'),
+        fields: fields || undefined,
+        footer: FOOTER,
+        timestamp: new Date().toISOString()
+    };
+
+    if (authorName) {
+        card.author = {
+            name: authorName,
+            icon_url: authorIcon || undefined,
+            url: authorUrl || undefined
+        };
+    }
+
+    return card;
+}
+
 module.exports = {
     COLORS, ICONS, FOOTER, FOOTER_TEXT, setFactionName,
     embed, gold, blue, green, red, teal,
@@ -462,4 +687,6 @@ module.exports = {
     tsRelative, tsShort, tsTime, msToUnix, dateToUnix, formatTimeAgo, timeAgo: formatTimeAgo,
     sep, blankField,
     primaryBtn, secondaryBtn, successBtn, dangerBtn, linkBtn, actionRow, paginator,
+    FILLED_BLOCK, EMPTY_BLOCK, ANSI_RESET, ANSI_RED, ANSI_GREEN, ANSI_YELLOW, ANSI_BLUE, ANSI_CYAN, ANSI_WHITE,
+    generateBattleStatsAnsi, generateVitalsAnsi, generateWarTugAnsi, generateChainAnsi, sleekCard
 };
