@@ -13394,19 +13394,19 @@ async function buildOnlineRosterEmbed(apiKey) {
 
         const FILLED = UI.FILLED_BLOCK;
         const EMPTY = UI.EMPTY_BLOCK;
-        const RESET = UI.ANSI_RESET;
         const safeTotal = Math.max(1, total);
 
         const onBars = Math.round((online / safeTotal) * 10);
+        const idleBars = Math.round((idle / safeTotal) * 10);
         const hospBars = Math.round((hosp / safeTotal) * 10);
         const flyBars = Math.round((traveling / safeTotal) * 10);
 
         const ansiBreakdown = [
             '```ansi',
-            `\u001b[32mONLINE ${FILLED.repeat(onBars)}${RESET}${EMPTY.repeat(10 - onBars)} ${online.toString().padStart(2, ' ')}  (${Math.round(online/safeTotal*100)}%)`,
-            `\u001b[33mIDLE   ${FILLED.repeat(Math.round(idle/safeTotal*10))}${RESET}${EMPTY.repeat(10 - Math.round(idle/safeTotal*10))} ${idle.toString().padStart(2, ' ')}  (${Math.round(idle/safeTotal*100)}%)`,
-            `\u001b[31mHOSP   ${FILLED.repeat(hospBars)}${RESET}${EMPTY.repeat(10 - hospBars)} ${hosp.toString().padStart(2, ' ')}  (${Math.round(hosp/safeTotal*100)}%)`,
-            `\u001b[34mABROAD ${FILLED.repeat(flyBars)}${RESET}${EMPTY.repeat(10 - flyBars)} ${traveling.toString().padStart(2, ' ')}  (${Math.round(traveling/safeTotal*100)}%)`,
+            `${UI.ANSI_GREEN}ONLINE${UI.ANSI_RESET} ${UI.ANSI_GREEN}${FILLED.repeat(onBars)}${UI.ANSI_GRAY}${EMPTY.repeat(10 - onBars)}${UI.ANSI_RESET}  ${UI.ANSI_WHITE}${online.toString().padStart(2, ' ')}${UI.ANSI_RESET}  ${UI.ANSI_GRAY}(${Math.round(online/safeTotal*100)}%)${UI.ANSI_RESET}`,
+            `${UI.ANSI_YELLOW}IDLE  ${UI.ANSI_RESET} ${UI.ANSI_YELLOW}${FILLED.repeat(idleBars)}${UI.ANSI_GRAY}${EMPTY.repeat(10 - idleBars)}${UI.ANSI_RESET}  ${UI.ANSI_WHITE}${idle.toString().padStart(2, ' ')}${UI.ANSI_RESET}  ${UI.ANSI_GRAY}(${Math.round(idle/safeTotal*100)}%)${UI.ANSI_RESET}`,
+            `${UI.ANSI_RED}HOSP  ${UI.ANSI_RESET} ${UI.ANSI_RED}${FILLED.repeat(hospBars)}${UI.ANSI_GRAY}${EMPTY.repeat(10 - hospBars)}${UI.ANSI_RESET}  ${UI.ANSI_WHITE}${hosp.toString().padStart(2, ' ')}${UI.ANSI_RESET}  ${UI.ANSI_GRAY}(${Math.round(hosp/safeTotal*100)}%)${UI.ANSI_RESET}`,
+            `${UI.ANSI_BLUE}ABROAD${UI.ANSI_RESET} ${UI.ANSI_BLUE}${FILLED.repeat(flyBars)}${UI.ANSI_GRAY}${EMPTY.repeat(10 - flyBars)}${UI.ANSI_RESET}  ${UI.ANSI_WHITE}${traveling.toString().padStart(2, ' ')}${UI.ANSI_RESET}  ${UI.ANSI_GRAY}(${Math.round(traveling/safeTotal*100)}%)${UI.ANSI_RESET}`,
             '```'
         ].join('\n');
 

@@ -450,24 +450,28 @@ function formatTimeAgo(dateOrMs) {
 }
 
 // ── 10. SLEEK & CALM UI DESIGN SYSTEM (MATCHING REFERENCE SPEC) ─────────────
-const FILLED_BLOCK = '▇'; // \u2587
-const EMPTY_BLOCK  = '▢'; // \u25A2
+const FILLED_BLOCK = '■'; // \u25A0 Black Square (matches font metrics of EMPTY_BLOCK)
+const EMPTY_BLOCK  = '□'; // \u25A1 White Square (matches font metrics of FILLED_BLOCK)
+
+// Discord ANSI color constants (0;{color}m format required by Discord syntax highlighter)
 const ANSI_RESET   = '\u001b[0m';
-const ANSI_RED     = '\u001b[31m';
-const ANSI_GREEN   = '\u001b[32m';
-const ANSI_YELLOW  = '\u001b[33m';
-const ANSI_BLUE    = '\u001b[34m';
-const ANSI_CYAN    = '\u001b[36m';
-const ANSI_WHITE   = '\u001b[37m';
+const ANSI_GRAY    = '\u001b[0;30m';
+const ANSI_RED     = '\u001b[0;31m';
+const ANSI_GREEN   = '\u001b[0;32m';
+const ANSI_YELLOW  = '\u001b[0;33m';
+const ANSI_BLUE    = '\u001b[0;34m';
+const ANSI_MAGENTA = '\u001b[0;35m';
+const ANSI_CYAN    = '\u001b[0;36m';
+const ANSI_WHITE   = '\u001b[0;37m';
 
 /**
  * Generates the 10-block ANSI bar chart for Battle Stats:
- * STR in Red (31m)
- * DEF in Blue (34m)
- * SPD in Yellow (33m)
- * DEX in Green (32m)
- * Bars scaled to maxStat (10 blocks = 100% of peak stat)
- * Monospace aligned numbers and build percentages
+ * STR in Red (0;31m)
+ * DEF in Blue (0;34m)
+ * SPD in Yellow (0;33m)
+ * DEX in Green (0;32m)
+ * Empty track in Dark Gray (0;30m)
+ * Monospace aligned numbers (0;37m) and build percentages (0;30m)
  */
 function generateBattleStatsAnsi(stats) {
     if (!stats) stats = {};
@@ -493,14 +497,14 @@ function generateBattleStatsAnsi(stats) {
         const filledCount = Math.round(ratio * 10);
         const emptyCount = Math.max(0, 10 - filledCount);
 
-        const filledBars = FILLED_BLOCK.repeat(filledCount);
-        const emptyBars = EMPTY_BLOCK.repeat(emptyCount);
+        const filledBars = item.color + FILLED_BLOCK.repeat(filledCount);
+        const emptyBars = ANSI_GRAY + EMPTY_BLOCK.repeat(emptyCount) + ANSI_RESET;
 
         const pct = ((item.val / safeTotal) * 100).toFixed(1) + '%';
         const numStr = item.val.toLocaleString('en-US').padStart(maxNumLen, ' ');
         const pctStr = pct.padStart(5, ' ');
 
-        return `${item.color}${item.label} ${filledBars}${ANSI_RESET}${emptyBars} ${numStr}  ${pctStr}`;
+        return `${item.color}${item.label}${ANSI_RESET} ${filledBars}${emptyBars}  ${ANSI_WHITE}${numStr}${ANSI_RESET}  ${ANSI_GRAY}${pctStr}${ANSI_RESET}`;
     });
 
     return '```ansi\n' + lines.join('\n') + '\n```';
@@ -508,10 +512,11 @@ function generateBattleStatsAnsi(stats) {
 
 /**
  * Generates the 10-block ANSI bar chart for Player Vitals (Energy, Nerve, Happy, Life):
- * NRG in Green (32m)
- * NRV in Yellow (33m)
- * HPY in Blue (34m)
- * LIF in Red (31m)
+ * NRG in Green (0;32m)
+ * NRV in Yellow (0;33m)
+ * HPY in Blue (0;34m)
+ * LIF in Red (0;31m)
+ * Empty track in Dark Gray (0;30m)
  */
 function generateVitalsAnsi(vitals) {
     if (!vitals) vitals = {};
@@ -544,13 +549,13 @@ function generateVitalsAnsi(vitals) {
         const filledCount = Math.round(ratio * 10);
         const emptyCount = Math.max(0, 10 - filledCount);
 
-        const filledBars = FILLED_BLOCK.repeat(filledCount);
-        const emptyBars = EMPTY_BLOCK.repeat(emptyCount);
+        const filledBars = item.color + FILLED_BLOCK.repeat(filledCount);
+        const emptyBars = ANSI_GRAY + EMPTY_BLOCK.repeat(emptyCount) + ANSI_RESET;
 
         const valStr = `${item.cur.toLocaleString('en-US')}/${item.max.toLocaleString('en-US')}`.padStart(maxValLen, ' ');
-        const pct = ((ratio * 100).toFixed(1) + '%').padStart(6, ' ');
+        const pct = ((ratio * 100).toFixed(0) + '%').padStart(4, ' ');
 
-        return `${item.color}${item.label} ${filledBars}${ANSI_RESET}${emptyBars} ${valStr}  ${pct}`;
+        return `${item.color}${item.label}${ANSI_RESET} ${filledBars}${emptyBars}  ${ANSI_WHITE}${valStr}${ANSI_RESET}  ${ANSI_GRAY}${pct}${ANSI_RESET}`;
     });
 
     return '```ansi\n' + lines.join('\n') + '\n```';
@@ -558,8 +563,9 @@ function generateVitalsAnsi(vitals) {
 
 /**
  * Generates the 10-block ANSI Tug-of-War chart:
- * Friendly faction in Green (32m)
- * Enemy faction in Red (31m)
+ * Friendly faction in Green (0;32m)
+ * Enemy faction in Red (0;31m)
+ * Empty track in Dark Gray (0;30m)
  */
 function generateWarTugAnsi(war) {
     if (!war) war = {};
@@ -575,21 +581,30 @@ function generateWarTugAnsi(war) {
     const ourBars = Math.round(ourRatio * 10);
     const theirBars = Math.max(0, 10 - ourBars);
 
-    const ourLabel = (ourName || 'US').slice(0, 6).padEnd(6, ' ');
-    const theirLabel = (theirName || 'THEM').slice(0, 6).padEnd(6, ' ');
+    const maxLabelLen = Math.min(10, Math.max((ourName || 'US').length, (theirName || 'THEM').length, 4));
+    const ourLabel = (ourName || 'US').slice(0, maxLabelLen).padEnd(maxLabelLen, ' ');
+    const theirLabel = (theirName || 'THEM').slice(0, maxLabelLen).padEnd(maxLabelLen, ' ');
 
     const ourNum = ourScore.toLocaleString('en-US');
     const theirNum = theirScore.toLocaleString('en-US');
     const maxNumLen = Math.max(ourNum.length, theirNum.length);
 
-    const line1 = `${ANSI_GREEN}${ourLabel} ${FILLED_BLOCK.repeat(ourBars)}${ANSI_RESET}${EMPTY_BLOCK.repeat(10 - ourBars)} ${ourNum.padStart(maxNumLen, ' ')}  ${((ourRatio * 100).toFixed(1) + '%').padStart(6, ' ')}`;
-    const line2 = `${ANSI_RED}${theirLabel} ${FILLED_BLOCK.repeat(theirBars)}${ANSI_RESET}${EMPTY_BLOCK.repeat(10 - theirBars)} ${theirNum.padStart(maxNumLen, ' ')}  ${((theirRatio * 100).toFixed(1) + '%').padStart(6, ' ')}`;
+    const ourBarFilled = ANSI_GREEN + FILLED_BLOCK.repeat(ourBars);
+    const ourBarEmpty = ANSI_GRAY + EMPTY_BLOCK.repeat(10 - ourBars) + ANSI_RESET;
+    const theirBarFilled = ANSI_RED + FILLED_BLOCK.repeat(theirBars);
+    const theirBarEmpty = ANSI_GRAY + EMPTY_BLOCK.repeat(10 - theirBars) + ANSI_RESET;
+
+    const line1 = `${ANSI_GREEN}${ourLabel}${ANSI_RESET} ${ourBarFilled}${ourBarEmpty}  ${ANSI_WHITE}${ourNum.padStart(maxNumLen, ' ')}${ANSI_RESET}  ${ANSI_GRAY}${((ourRatio * 100).toFixed(1) + '%').padStart(6, ' ')}${ANSI_RESET}`;
+    const line2 = `${ANSI_RED}${theirLabel}${ANSI_RESET} ${theirBarFilled}${theirBarEmpty}  ${ANSI_WHITE}${theirNum.padStart(maxNumLen, ' ')}${ANSI_RESET}  ${ANSI_GRAY}${((theirRatio * 100).toFixed(1) + '%').padStart(6, ' ')}${ANSI_RESET}`;
 
     return '```ansi\n' + line1 + '\n' + line2 + '\n```';
 }
 
 /**
  * Generates the 10-block ANSI Chain Tracker chart:
+ * Hits in Green (0;32m)
+ * Timer in Red/Yellow/Green based on remaining seconds
+ * Empty track in Dark Gray (0;30m)
  */
 function generateChainAnsi({ current = 0, max = 250, timeoutSec = 300, multiplier = 1.0 }) {
     const chainRatio = Math.min(1, Math.max(0, current / Math.max(max, 1)));
@@ -602,9 +617,18 @@ function generateChainAnsi({ current = 0, max = 250, timeoutSec = 300, multiplie
     const m = Math.floor(Math.max(0, timeoutSec) / 60);
     const s = Math.floor(Math.max(0, timeoutSec) % 60);
     const timerStr = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    const hitsStr = `${current.toLocaleString('en-US')}/${max.toLocaleString('en-US')}`;
 
-    const line1 = `${ANSI_GREEN}HITS   ${FILLED_BLOCK.repeat(chainBars)}${ANSI_RESET}${EMPTY_BLOCK.repeat(10 - chainBars)} ${current.toLocaleString('en-US')}/${max.toLocaleString('en-US')}  ${Number(multiplier).toFixed(2)}x`;
-    const line2 = `${timerColor}TIMER  ${FILLED_BLOCK.repeat(timerBars)}${ANSI_RESET}${EMPTY_BLOCK.repeat(10 - timerBars)} ${timerStr} cooldown`;
+    const maxValLen = Math.max(hitsStr.length, timerStr.length);
+
+    const chainBarFilled = ANSI_GREEN + FILLED_BLOCK.repeat(chainBars);
+    const chainBarEmpty = ANSI_GRAY + EMPTY_BLOCK.repeat(10 - chainBars) + ANSI_RESET;
+
+    const timerBarFilled = timerColor + FILLED_BLOCK.repeat(timerBars);
+    const timerBarEmpty = ANSI_GRAY + EMPTY_BLOCK.repeat(10 - timerBars) + ANSI_RESET;
+
+    const line1 = `${ANSI_GREEN}HITS ${ANSI_RESET} ${chainBarFilled}${chainBarEmpty}  ${ANSI_WHITE}${hitsStr.padStart(maxValLen, ' ')}${ANSI_RESET}  ${ANSI_CYAN}${Number(multiplier).toFixed(2)}x${ANSI_RESET}`;
+    const line2 = `${timerColor}TIME ${ANSI_RESET} ${timerBarFilled}${timerBarEmpty}  ${ANSI_WHITE}${timerStr.padStart(maxValLen, ' ')}${ANSI_RESET}  ${ANSI_GRAY}cooldown${ANSI_RESET}`;
 
     return '```ansi\n' + line1 + '\n' + line2 + '\n```';
 }
@@ -687,6 +711,6 @@ module.exports = {
     tsRelative, tsShort, tsTime, msToUnix, dateToUnix, formatTimeAgo, timeAgo: formatTimeAgo,
     sep, blankField,
     primaryBtn, secondaryBtn, successBtn, dangerBtn, linkBtn, actionRow, paginator,
-    FILLED_BLOCK, EMPTY_BLOCK, ANSI_RESET, ANSI_RED, ANSI_GREEN, ANSI_YELLOW, ANSI_BLUE, ANSI_CYAN, ANSI_WHITE,
+    FILLED_BLOCK, EMPTY_BLOCK, ANSI_RESET, ANSI_GRAY, ANSI_RED, ANSI_GREEN, ANSI_YELLOW, ANSI_BLUE, ANSI_MAGENTA, ANSI_CYAN, ANSI_WHITE,
     generateBattleStatsAnsi, generateVitalsAnsi, generateWarTugAnsi, generateChainAnsi, sleekCard
 };
