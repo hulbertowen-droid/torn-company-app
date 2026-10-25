@@ -5613,6 +5613,7 @@ async function saveDiscordConfig() {
             tokenToSend = cachedCleaned;
         }
     }
+    let botToken = tokenToSend || '';
 
     let channelId = (document.getElementById('global-channelid')?.value || '').trim();
     const discordId = (document.getElementById('discord-userid')?.value || '').trim();
@@ -5657,6 +5658,7 @@ async function saveDiscordConfig() {
     if (channelId.includes('.') || /[a-zA-Z]/.test(channelId)) {
         if (channelId.length > 25 && !botToken) {
             botToken = channelId;
+            tokenToSend = channelId;
             document.getElementById('global-bottoken').value = botToken;
             updateInviteLink();
         }
@@ -5810,11 +5812,12 @@ async function saveDiscordConfig() {
                 statusEl.textContent = '✅ Operations center configuration saved.';
             }
             clearDirty();
-            setConnectionStatus(!!(botToken && channelId));
+            const hasActiveBot = !!(botToken || initialConfigSnapshot?.hasBotToken || (typeof hasSavedServerToken !== 'undefined' && hasSavedServerToken));
+            setConnectionStatus(!!(hasActiveBot && channelId));
             updateInviteLink();
             calculateSetupProgress();
             showToast('Settings & active slash commands saved successfully!', 'success');
-            if (botToken || initialConfigSnapshot?.hasBotToken) {
+            if (hasActiveBot) {
                 registerSlashCommands().catch(() => {});
             }
         } else {
