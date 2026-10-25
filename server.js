@@ -3923,6 +3923,7 @@ app.get('/api/get-discord-config', (req, res) => {
         delete fullConfig[i];
     }
     fullConfig.hasBotToken = !!(discordConfig.globalBotToken && discordConfig.globalBotToken.length > 20);
+    fullConfig.botTokenTail = (discordConfig.globalBotToken && discordConfig.globalBotToken.length > 20) ? discordConfig.globalBotToken.slice(-4) : '';
     res.json(fullConfig);
 });
 
@@ -4025,10 +4026,13 @@ app.post('/api/save-discord-config', async (req, res) => {
     saveOcConfig();
 
     if (payload.globalBotToken !== undefined) {
-        const rawToken = String(payload.globalBotToken || '').trim();
-        if (rawToken.length > 20) {
-            payload.globalBotToken = rawToken;
-        } else if (rawToken === '') {
+        const rawToken = String(payload.globalBotToken || '').trim().replace(/^Bot\s+/i, '').replace(/^["']|["']$/g, '');
+        const isMaskedOrEmpty = !rawToken || /^[.•*]+$/.test(rawToken);
+        if (!isMaskedOrEmpty && rawToken.length > 20) {
+            discordConfig.globalBotToken = rawToken;
+            console.log(`[Discord Bot] Stored valid bot token (${rawToken.length} chars).`);
+        } else {
+            console.log(`[Discord Bot] Preserving existing bot token; ignored masked or empty value (${rawToken.length} chars).`);
             delete payload.globalBotToken;
         }
     }
@@ -4568,6 +4572,68 @@ app.get('/api/discord/diagnostics', async (req, res) => {
     results.botTag = slashCommandBot?.user?.tag || null;
 
     res.json(results);
+});
+
+// API endpoint: Save and verify Discord Bot Token
+app.post('/api/discord/save-and-verify-token', async (req, res) => {
+    try {
+        const rawToken = String(req.body.token || '').trim().replace(/^Bot\s+/i, '').replace(/^["']|["']$/g, '');
+        const guildId = String(req.body.guildId || discordConfig.guildId || '').trim().replace(/[^0-9]/g, '');
+        const isMaskedOrEmpty = !rawToken || /^[.•*]+$/.test(rawToken);
+
+        let tokenToTest = isMaskedOrEmpty ? discordConfig.globalBotToken : rawToken;
+        if (!tokenToTest || tokenToTest.length < 20) {
+            return res.status(400).json({ success: false, error: "Please enter a valid Discord Bot Token from Discord Developer Portal." });
+        }
+
+        // Validate token with Discord API
+        const meRes = await fetch('https://discord.com/api/v10/users/@me', {
+            headers: {
+                Authorization: `Bot ${tokenToTest}`,
+                'User-Agent': 'DiscordBot (https://faction-os.duckdns.org, 2.0)'
+            }
+        });
+
+        if (!meRes.ok) {
+            return res.status(meRes.status).json({
+                success: false,
+                status: meRes.status,
+                error: meRes.status === 401 
+                    ? "Invalid Bot Token (401 Unauthorized) — Paste a fresh token from Discord Developer Portal."
+                    : `Discord verification failed (HTTP ${meRes.status})`
+            });
+        }
+
+        const botData = await meRes.json();
+
+        // Successfully verified! Save token
+        if (!isMaskedOrEmpty) {
+            discordConfig.globalBotToken = tokenToTest;
+        }
+        if (guildId) {
+            discordConfig.guildId = guildId;
+        }
+        saveDiscordConfig();
+
+        // Launch bot
+        startSlashCommandBot(tokenToTest).catch(err => {
+            console.warn('[Discord Bot] startSlashCommandBot error:', err.message);
+        });
+
+        res.json({
+            success: true,
+            bot: {
+                id: botData.id,
+                username: botData.username,
+                avatar: botData.avatar ? `https://cdn.discordapp.com/avatars/${botData.id}/${botData.avatar}.png` : null
+            },
+            tokenTail: tokenToTest.slice(-4),
+            guildId: discordConfig.guildId || null
+        });
+    } catch (err) {
+        console.error('[Discord Bot] Save and verify error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 // API endpoint: Auto-detect Discord Guild, channels, and roles

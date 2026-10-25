@@ -193,6 +193,17 @@ const globalSettingsHTML = `
         </div>
 
         <div class="global-form-row">
+            <label for="gs-discord-bot-token">Faction Discord Bot Token</label>
+            <input type="password" id="gs-discord-bot-token" aria-label="Discord Bot Token" placeholder="Paste Discord Bot Token from Developer Portal">
+            <div class="helper-text">Powers F.R.I.D.A.Y. Sentinel alerts & slash commands in your server.</div>
+        </div>
+
+        <div class="global-form-row">
+            <label for="gs-discord-channel-id">Faction Alert Channel ID</label>
+            <input type="text" id="gs-discord-channel-id" aria-label="Discord Channel ID" placeholder="Numeric Discord Channel ID (e.g. 1234567890...)">
+        </div>
+
+        <div class="global-form-row">
             <label for="gs-api-cpm">API Calls Per Minute Pacing</label>
             <input type="number" id="gs-api-cpm" aria-label="API Calls Per Minute" min="1" max="60" placeholder="12 calls/min">
         </div>
@@ -283,6 +294,22 @@ window.openGlobalSettings = async function() {
     document.getElementById('gs-discord-webhook').value = discord;
     document.getElementById('gs-api-cpm').value = cpm;
 
+    let botToken = localStorage.getItem('factionos_discord_bot_token') || localStorage.getItem('warboard_bottoken') || '';
+    let botChan = localStorage.getItem('warboard_channelid') || '';
+    const botTokenEl = document.getElementById('gs-discord-bot-token');
+    const botChanEl = document.getElementById('gs-discord-channel-id');
+    if (botTokenEl) botTokenEl.value = botToken;
+    if (botChanEl) botChanEl.value = botChan;
+
+    fetch('/api/get-discord-config').then(r => r.json()).then(cfg => {
+        if (cfg.hasBotToken && botTokenEl && !botTokenEl.value) {
+            botTokenEl.placeholder = '•••••••••••••••••••••••• (Saved on Server' + (cfg.botTokenTail ? ' ...' + cfg.botTokenTail : '') + ')';
+        }
+        if (cfg.globalChannelId && botChanEl && !botChanEl.value) {
+            botChanEl.value = cfg.globalChannelId;
+        }
+    }).catch(() => {});
+
     const statusText = document.getElementById('gs-status-text');
     const token = localStorage.getItem('sv_session_token');
     const savedKey = localStorage.getItem('warboard_apikey') || apiKey;
@@ -336,6 +363,19 @@ window.saveGlobalSettings = async function() {
     const myName = document.getElementById('gs-my-name').value.trim();
     const discord = document.getElementById('gs-discord-webhook').value.trim();
     const cpm = document.getElementById('gs-api-cpm').value.trim() || "12";
+    const rawBotToken = document.getElementById('gs-discord-bot-token')?.value || '';
+    const cleanedBotToken = rawBotToken.trim().replace(/^Bot\s+/i, '').replace(/^["']|["']$/g, '');
+    const isBotTokenMaskedOrEmpty = !cleanedBotToken || /^[.•*]+$/.test(cleanedBotToken);
+    const rawChanId = document.getElementById('gs-discord-channel-id')?.value || '';
+    const cleanedChanId = rawChanId.trim().replace(/[^0-9]/g, '');
+
+    if (!isBotTokenMaskedOrEmpty && cleanedBotToken.length > 20) {
+        localStorage.setItem('factionos_discord_bot_token', cleanedBotToken);
+        localStorage.setItem('warboard_bottoken', cleanedBotToken);
+    }
+    if (cleanedChanId) {
+        localStorage.setItem('warboard_channelid', cleanedChanId);
+    }
 
     if (apiKey) {
         localStorage.setItem('warboard_apikey', apiKey);
@@ -376,13 +416,18 @@ window.saveGlobalSettings = async function() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ apiKey, ffKey, tsKey, enemyFacId, myName, cpm })
         });
-        if (apiKey || ffKey) {
-            await fetch('/api/save-discord-config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ apiKey, ffKey, enemyFacId })
-            });
+        const discordPayload = { apiKey, ffKey, enemyFacId };
+        if (!isBotTokenMaskedOrEmpty && cleanedBotToken.length > 20) {
+            discordPayload.globalBotToken = cleanedBotToken;
         }
+        if (cleanedChanId) {
+            discordPayload.globalChannelId = cleanedChanId;
+        }
+        await fetch('/api/save-discord-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(discordPayload)
+        });
     } catch(e) {
         console.warn('Backend sync warning:', e.message);
     }

@@ -1368,46 +1368,48 @@
             flex: 1 1 200px !important;
         }
         .trigger-routing-bar {
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            display: grid !important;
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+            gap: 8px !important;
             background: rgba(0, 0, 0, 0.25);
             border: 1px solid var(--border-subtle);
             border-radius: 6px;
-            padding: 6px 10px;
-            margin-top: 8px;
+            padding: 8px 10px;
+            margin-top: 12px;
             width: 100%;
             box-sizing: border-box;
-            flex-wrap: wrap;
         }
         .trigger-routing-item {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 0.74em;
-            color: var(--text-muted);
-            flex: 1 1 110px;
-            min-width: 105px;
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 4px !important;
+            min-width: 0 !important;
+            width: 100%;
         }
         .trigger-routing-label {
-            font-weight: 700;
-            white-space: nowrap;
-            color: var(--text-dim);
-            font-size: 0.88em;
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
+            font-weight: 700 !important;
+            white-space: nowrap !important;
+            color: var(--text-dim) !important;
+            font-size: 0.68em !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.6px !important;
         }
         .trigger-override-select {
             background: var(--bg-card);
             color: var(--text-main);
             border: 1px solid var(--border-subtle);
             border-radius: 4px;
-            padding: 3px 6px;
-            font-size: 0.88em;
+            padding: 6px 20px 6px 8px;
+            font-size: 12px;
             width: 100%;
+            min-width: 0;
+            box-sizing: border-box;
             outline: none;
             font-family: inherit;
             cursor: pointer;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            overflow: hidden;
             transition: border-color 0.15s;
         }
         .trigger-override-select:focus {
@@ -1809,15 +1811,15 @@
         .preset-chip:hover { border-color: var(--discord); background: rgba(88, 101, 242, 0.1); }
 
         .channel-pills-wrap {
-            display: flex; gap: 6px; flex-wrap: wrap; max-height: 120px; overflow-y: auto;
-            background: rgba(0, 0, 0, 0.2); padding: 8px; border-radius: 8px; border: 1px solid var(--border-subtle);
+            height: auto; min-height: 44px; max-height: none; overflow: visible; display: flex; flex-wrap: wrap; gap: 6px; padding: 8px;
+            background: rgba(0, 0, 0, 0.2); border-radius: 8px; border: 1px solid var(--border-subtle);
         }
 
         /* Simulator Window (Tab 2) */
         .dc-simulator-window {
             background: var(--discord-bg); border-radius: var(--radius-lg); border: 1px solid rgba(0, 0, 0, 0.3);
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); overflow: hidden; font-family: 'Inter', sans-serif;
-            position: sticky; top: 10px;
+            position: sticky; top: 24px; align-self: flex-start;
         }
         .dc-channel-header {
             background: var(--discord-card); padding: 10px 16px; display: flex; align-items: center;
@@ -2300,6 +2302,18 @@
                                         <option value="">No Role Ping</option>
                                     </select>
                                 </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-travelWarnings" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
 
                         <div class="trigger-row on" id="ti-enemyChainBreaker" data-tags="war chain enemy breaker attack defense urgent">
                             <div class="trigger-row-left">
@@ -2368,17 +2382,6 @@
                                 <div class="trigger-routing-item">
                                     <span class="trigger-routing-label">Throttle:</span>
                                     <select class="trigger-override-select trigger-throttle-select" id="override-throttle-warLeadDecay" onchange="trackDirty()">
-                                        <option value="instant">⚡ Instant</option>
-                                        <option value="batch30s">⏱️ Batch 30s</option>
-                                        <option value="cd1m">⏳ 1m Cooldown</option>
-                                        <option value="cd5m">⏳ 5m Cooldown</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                                <div class="trigger-routing-item">
-                                    <span class="trigger-routing-label">Throttle:</span>
-                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-travelWarnings" onchange="trackDirty()">
                                         <option value="instant">⚡ Instant</option>
                                         <option value="batch30s">⏱️ Batch 30s</option>
                                         <option value="cd1m">⏳ 1m Cooldown</option>
@@ -2589,6 +2592,18 @@
                                         <option value="">No Role Ping</option>
                                     </select>
                                 </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-retalSentinel" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
 
                         <div class="trigger-row on" id="ti-armoryMedsLow" data-tags="defense members armory meds morphine faks first aid low stock supply">
                             <div class="trigger-row-left">
@@ -2619,17 +2634,6 @@
                                 <div class="trigger-routing-item">
                                     <span class="trigger-routing-label">Throttle:</span>
                                     <select class="trigger-override-select trigger-throttle-select" id="override-throttle-armoryMedsLow" onchange="trackDirty()">
-                                        <option value="instant">⚡ Instant</option>
-                                        <option value="batch30s">⏱️ Batch 30s</option>
-                                        <option value="cd1m">⏳ 1m Cooldown</option>
-                                        <option value="cd5m">⏳ 5m Cooldown</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                                <div class="trigger-routing-item">
-                                    <span class="trigger-routing-label">Throttle:</span>
-                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-retalSentinel" onchange="trackDirty()">
                                         <option value="instant">⚡ Instant</option>
                                         <option value="batch30s">⏱️ Batch 30s</option>
                                         <option value="cd1m">⏳ 1m Cooldown</option>
@@ -3247,6 +3251,18 @@
                                         <option value="">No Role Ping</option>
                                     </select>
                                 </div>
+                                <div class="trigger-routing-item">
+                                    <span class="trigger-routing-label">Throttle:</span>
+                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-autoVerifyOnJoin" onchange="trackDirty()">
+                                        <option value="instant">⚡ Instant</option>
+                                        <option value="batch30s">⏱️ Batch 30s</option>
+                                        <option value="cd1m">⏳ 1m Cooldown</option>
+                                        <option value="cd5m">⏳ 5m Cooldown</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
 
                         <div class="trigger-row on" id="ti-vaultGhostTrade" data-tags="security vault ghost trade expiry payout cash money">
                             <div class="trigger-row-left">
@@ -3277,17 +3293,6 @@
                                 <div class="trigger-routing-item">
                                     <span class="trigger-routing-label">Throttle:</span>
                                     <select class="trigger-override-select trigger-throttle-select" id="override-throttle-vaultGhostTrade" onchange="trackDirty()">
-                                        <option value="instant">⚡ Instant</option>
-                                        <option value="batch30s">⏱️ Batch 30s</option>
-                                        <option value="cd1m">⏳ 1m Cooldown</option>
-                                        <option value="cd5m">⏳ 5m Cooldown</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                                <div class="trigger-routing-item">
-                                    <span class="trigger-routing-label">Throttle:</span>
-                                    <select class="trigger-override-select trigger-throttle-select" id="override-throttle-autoVerifyOnJoin" onchange="trackDirty()">
                                         <option value="instant">⚡ Instant</option>
                                         <option value="batch30s">⏱️ Batch 30s</option>
                                         <option value="cd1m">⏳ 1m Cooldown</option>
@@ -3577,19 +3582,24 @@
             
             <div class="deck-tab-pane" id="tab-pane-routing">
                 <div class="card" id="card-roles-routing">
-                    <div class="card-header">
+                    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
                         <div>
                             <p class="card-title">📡 Event Stream Routing Matrix</p>
                             <span class="card-subtitle">Map specialized operational event streams to dedicated Discord channels, roles, and automated DMs</span>
                         </div>
+                        <button type="button" class="btn-hero-action primary" id="btn-save-routing" onclick="saveDiscordConfig()" style="display:inline-flex; align-items:center; gap:6px;">
+                            💾 Save Routing & Roles
+                        </button>
                     </div>
                     <div class="card-body" style="padding:0; overflow-x:auto;">
                         <table class="routing-matrix-table">
                             <thead>
                                 <tr>
-                                    <th style="width:30%;">Operational Event Stream</th>
-                                    <th style="width:35%;">Destination Channel</th>
-                                    <th style="width:35%;">Audience / Ping Role</th>
+                                    <th style="width:26%;">Operational Event Stream</th>
+                                    <th style="width:26%;">Destination Channel</th>
+                                    <th style="width:22%;">Audience / Ping Role</th>
+                                    <th style="width:16%;">DM / Target Override</th>
+                                    <th style="width:10%; text-align:right;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -3606,11 +3616,16 @@
                                         <input type="text" id="global-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
                                     </td>
                                     <td>
-                                        <select class="field-select role-picker" id="global-roleid-select" onchange="onRoleSelectChange(this, 'global-roleid'); trackDirty();" style="display:none;">
+                                        <select class="field-select role-picker" id="global-roleid-select" onchange="onRoleSelectChange(this, 'global-roleid'); trackDirty();">
                                             <option value="">-- Default Faction Ping --</option>
                                         </select>
                                         <input type="text" id="global-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
-                                        <input type="text" id="discord-userid" class="field-input" placeholder="Your Discord User ID (personal chain alerts)" oninput="trackDirty()">
+                                    </td>
+                                    <td>
+                                        <input type="text" id="discord-userid" class="field-input" placeholder="User ID for personal pings" oninput="trackDirty()">
+                                    </td>
+                                    <td style="text-align:right;">
+                                        <button type="button" class="btn-test" onclick="testAlert('targetOnline')">▷ Test</button>
                                     </td>
                                 </tr>
 
@@ -3631,10 +3646,14 @@
                                             <option value="">-- Select Role (or leave blank) --</option>
                                         </select>
                                         <input type="text" id="retal-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
-                                        <label style="display:flex; align-items:center; gap:6px; font-size:0.78em; color:var(--text-muted); margin-top:4px; cursor:pointer;">
-                                            <input type="checkbox" id="retal-ping-defender" onchange="trackDirty()">
-                                            <span>Also ping defender</span>
+                                    </td>
+                                    <td>
+                                        <label style="display:flex; align-items:center; gap:6px; font-size:0.78em; color:var(--text-muted); cursor:pointer;">
+                                            <input type="checkbox" id="retal-ping-defender" onchange="trackDirty()"> Ping Defender
                                         </label>
+                                    </td>
+                                    <td style="text-align:right;">
+                                        <button type="button" class="btn-test" onclick="testAlert('retalSentinel')">▷ Test</button>
                                     </td>
                                 </tr>
 
@@ -3655,14 +3674,13 @@
                                             <option value="">-- Select Role (or leave blank) --</option>
                                         </select>
                                         <input type="text" id="oc-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
-                                        <div style="margin-top:6px; display:flex; flex-direction:column; gap:4px;">
-                                            <select class="field-select role-picker" id="oc-manager-roleid-select" onchange="onRoleSelectChange(this, 'oc-manager-roleid'); trackDirty();">
-                                                <option value="">-- Select OC Manager Role --</option>
-                                            </select>
-                                            <input type="text" id="oc-manager-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
-                                            <input type="text" id="oc-manager-userids" class="field-input" placeholder="OC Manager Discord User IDs (comma-separated for DMs)" oninput="trackDirty()">
-                                            <button type="button" class="btn-test" id="btn-test-oc-matrix-dm" onclick="testOcManagerDm()" style="font-size:0.75em; align-self:flex-start;">▷ Test OC Manager DM</button>
-                                        </div>
+                                        <input type="text" id="oc-manager-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
+                                    </td>
+                                    <td>
+                                        <input type="text" id="oc-manager-userids" class="field-input" placeholder="OC Manager User IDs (for DMs)" oninput="trackDirty()">
+                                    </td>
+                                    <td style="text-align:right;">
+                                        <button type="button" class="btn-test" id="btn-test-oc-matrix-dm" onclick="testOcManagerDm()" style="font-size:0.75em;">▷ Test DM</button>
                                     </td>
                                 </tr>
 
@@ -3684,6 +3702,10 @@
                                         </select>
                                         <input type="text" id="inactivity-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
                                     </td>
+                                    <td><span style="color:var(--text-dim); font-size:0.8em;">—</span></td>
+                                    <td style="text-align:right;">
+                                        <button type="button" class="btn-test" onclick="testAlert('inactivityTracker')">▷ Test</button>
+                                    </td>
                                 </tr>
 
                                 <!-- Row 5: Drug Overdose Sentinel -->
@@ -3704,6 +3726,10 @@
                                         </select>
                                         <input type="text" id="overdose-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
                                     </td>
+                                    <td><span style="color:var(--text-dim); font-size:0.8em;">—</span></td>
+                                    <td style="text-align:right;">
+                                        <button type="button" class="btn-test" onclick="testAlert('alertOverdose')">▷ Test</button>
+                                    </td>
                                 </tr>
 
                                 <!-- Row 6: Vault & Armory Requests -->
@@ -3720,10 +3746,12 @@
                                     </td>
                                     <td>
                                         <select class="field-select role-picker" id="banker-roleid-select" onchange="onRoleSelectChange(this, 'banker-roleid'); trackDirty();">
-                                            <option value="">-- Select Role (e.g. @Bankers) --</option>
+                                            <option value="">-- Select Banker Role --</option>
                                         </select>
                                         <input type="text" id="banker-roleid" class="field-input" style="display:none;" oninput="trackDirty()">
                                     </td>
+                                    <td><span style="color:var(--text-dim); font-size:0.8em;">—</span></td>
+                                    <td style="text-align:right;"><span style="color:var(--text-dim); font-size:0.8em;">—</span></td>
                                 </tr>
 
                                 <!-- Row 7: Rank & Promotion Requests -->
@@ -3749,8 +3777,8 @@
                                 <!-- Row 8: Verification Gatekeeper -->
                                 <tr>
                                     <td>
-                                        <div class="routing-stream-name">🚪 Verification Gatekeeper</div>
-                                        <div class="routing-stream-desc">New member join channel & automated role assignment gate</div>
+                                        <div class="routing-stream-name">🛡️ Verification Gatekeeper</div>
+                                        <div class="routing-stream-desc">Isolates unverified users and auto-unlocks roles on Torn verify</div>
                                     </td>
                                     <td>
                                         <select class="field-select channel-picker" id="verification-channelid-select" onchange="onChannelSelectChange(this, 'verification-channelid'); trackDirty();">
@@ -3759,10 +3787,11 @@
                                         <input type="text" id="verification-channelid" class="field-input" style="display:none;" oninput="trackDirty()">
                                     </td>
                                     <td>
-                                        <label style="display:flex; align-items:center; gap:6px; font-size:0.82em; color:var(--text-main); cursor:pointer;">
-                                            <input type="checkbox" id="notify-api-key-linked" onchange="trackDirty()">
-                                            <span>Notify channel when member links API key</span>
-                                        </label>
+                                        <div style="font-size:0.82em; color:var(--text-muted); line-height:1.5;">Auto-removes <strong style="color:var(--text-main);">Unverified</strong> &amp; grants <strong style="color:var(--text-main);">Verified</strong> role (mapped in Hierarchy below)</div>
+                                    </td>
+                                    <td><span style="color:var(--text-dim); font-size:0.8em;">—</span></td>
+                                    <td style="text-align:right;">
+                                        <button type="button" class="btn-test" onclick="postVerificationCard()">📌 Post Card</button>
                                     </td>
                                 </tr>
                             </tbody>
@@ -3837,7 +3866,7 @@
 
                 <!-- Commands Category 1: Member Verification & Security -->
                 <div class="cmd-category-block">
-                    <div class="category-title"><span>🛡️ Member Verification & Security</span></div>
+                    <div class="category-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;"><span>🛡️ Member Verification & Security</span><div style="display:flex; align-items:center; gap:8px;"><span class="cmd-category-badge" style="font-size:0.75em; font-weight:700; padding:2px 8px; border-radius:12px; border:1px solid rgba(88,101,242,0.3); background:rgba(88,101,242,0.15); color:var(--spider-blue);">6 / 6 Active</span><button type="button" class="btn-test" onclick="toggleCmdCategory(this)" style="font-size:0.72em; padding:2px 8px;">Toggle Category</button></div></div>
                     <div class="cmd-grid">
                         <div class="cmd-card on" id="cmd-card-verify">
                             <div class="cmd-card-top">
@@ -3886,7 +3915,7 @@
 
                 <!-- Commands Category 2: Faction Vault & Banking -->
                 <div class="cmd-category-block" style="margin-top:16px;">
-                    <div class="category-title"><span>🏦 Faction Vault & Banking</span></div>
+                    <div class="category-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;"><span>🏦 Faction Vault & Banking</span><div style="display:flex; align-items:center; gap:8px;"><span class="cmd-category-badge" style="font-size:0.75em; font-weight:700; padding:2px 8px; border-radius:12px; border:1px solid rgba(88,101,242,0.3); background:rgba(88,101,242,0.15); color:var(--spider-blue);">2 / 2 Active</span><button type="button" class="btn-test" onclick="toggleCmdCategory(this)" style="font-size:0.72em; padding:2px 8px;">Toggle Category</button></div></div>
                     <div class="cmd-grid">
                         <div class="cmd-card on" id="cmd-card-withdraw">
                             <div class="cmd-card-top">
@@ -3907,7 +3936,7 @@
 
                 <!-- Commands Category 3: War & Combat Intelligence -->
                 <div class="cmd-category-block" style="margin-top:16px;">
-                    <div class="category-title"><span>⚔️ War & Combat Intelligence</span></div>
+                    <div class="category-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;"><span>⚔️ War & Combat Intelligence</span><div style="display:flex; align-items:center; gap:8px;"><span class="cmd-category-badge" style="font-size:0.75em; font-weight:700; padding:2px 8px; border-radius:12px; border:1px solid rgba(88,101,242,0.3); background:rgba(88,101,242,0.15); color:var(--spider-blue);">11 / 11 Active</span><button type="button" class="btn-test" onclick="toggleCmdCategory(this)" style="font-size:0.72em; padding:2px 8px;">Toggle Category</button></div></div>
                     <div class="cmd-grid">
                         <div class="cmd-card on" id="cmd-card-war">
                             <div class="cmd-card-top">
@@ -3991,7 +4020,7 @@
 
                 <!-- Commands Category 4: Chains & Organized Crimes -->
                 <div class="cmd-category-block" style="margin-top:16px;">
-                    <div class="category-title"><span>🔗 Chains & Organized Crimes</span></div>
+                    <div class="category-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;"><span>🔗 Chains & Organized Crimes</span><div style="display:flex; align-items:center; gap:8px;"><span class="cmd-category-badge" style="font-size:0.75em; font-weight:700; padding:2px 8px; border-radius:12px; border:1px solid rgba(88,101,242,0.3); background:rgba(88,101,242,0.15); color:var(--spider-blue);">4 / 4 Active</span><button type="button" class="btn-test" onclick="toggleCmdCategory(this)" style="font-size:0.72em; padding:2px 8px;">Toggle Category</button></div></div>
                     <div class="cmd-grid">
                         <div class="cmd-card on" id="cmd-card-chain">
                             <div class="cmd-card-top">
@@ -4026,7 +4055,7 @@
 
                 <!-- Commands Category 5: Faction Management Suite -->
                 <div class="cmd-category-block" style="margin-top:16px;">
-                    <div class="category-title"><span>👥 Faction Management Suite</span></div>
+                    <div class="category-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;"><span>👥 Faction Management Suite</span><div style="display:flex; align-items:center; gap:8px;"><span class="cmd-category-badge" style="font-size:0.75em; font-weight:700; padding:2px 8px; border-radius:12px; border:1px solid rgba(88,101,242,0.3); background:rgba(88,101,242,0.15); color:var(--spider-blue);">10 / 10 Active</span><button type="button" class="btn-test" onclick="toggleCmdCategory(this)" style="font-size:0.72em; padding:2px 8px;">Toggle Category</button></div></div>
                     <div class="cmd-grid">
                         <div class="cmd-card on" id="cmd-card-faction">
                             <div class="cmd-card-top">
@@ -4110,7 +4139,7 @@
 
                 <!-- Commands Category 6: Economy & Player Tools -->
                 <div class="cmd-category-block" style="margin-top:16px;">
-                    <div class="category-title"><span>🌍 Economy & Player Tools</span></div>
+                    <div class="category-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;"><span>🌍 Economy & Player Tools</span><div style="display:flex; align-items:center; gap:8px;"><span class="cmd-category-badge" style="font-size:0.75em; font-weight:700; padding:2px 8px; border-radius:12px; border:1px solid rgba(88,101,242,0.3); background:rgba(88,101,242,0.15); color:var(--spider-blue);">17 / 17 Active</span><button type="button" class="btn-test" onclick="toggleCmdCategory(this)" style="font-size:0.72em; padding:2px 8px;">Toggle Category</button></div></div>
                     <div class="cmd-grid">
                         <div class="cmd-card on" id="cmd-card-profile">
                             <div class="cmd-card-top">
@@ -4229,7 +4258,7 @@
 
                 <!-- Commands Category 7: Alert Controls & Utilities -->
                 <div class="cmd-category-block" style="margin-top:16px;">
-                    <div class="category-title"><span>📢 Alert Controls & Utilities</span></div>
+                    <div class="category-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;"><span>📢 Alert Controls & Utilities</span><div style="display:flex; align-items:center; gap:8px;"><span class="cmd-category-badge" style="font-size:0.75em; font-weight:700; padding:2px 8px; border-radius:12px; border:1px solid rgba(88,101,242,0.3); background:rgba(88,101,242,0.15); color:var(--spider-blue);">7 / 7 Active</span><button type="button" class="btn-test" onclick="toggleCmdCategory(this)" style="font-size:0.72em; padding:2px 8px;">Toggle Category</button></div></div>
                     <div class="cmd-grid">
                         <div class="cmd-card on" id="cmd-card-alerts">
                             <div class="cmd-card-top">
@@ -4393,7 +4422,16 @@
                                     <span id="token-server-badge" style="font-size:0.72em; font-weight:700; color:var(--green);">🟢 Saved on Server (Masked)</span>
                                 </div>
                                 <input class="field-input" type="password" id="global-bottoken" name="discord_bot_token_field" placeholder="Paste token from Discord Developer Portal" autocomplete="new-password" oninput="trackDirty(); updateInviteLink(); if (this.value.length > 30) fetchGuildAndChannels();">
-                                <span style="font-size:0.75em; color:var(--text-muted); margin-top:4px; display:block;">Token is encrypted server-side and never exposed in client logs.</span>
+                                <div style="display:flex; align-items:center; gap:8px; margin-top:10px; flex-wrap:wrap;">
+                                    <button type="button" class="btn-hero-action primary" id="btn-save-verify-token" onclick="saveAndVerifyBotToken()" style="background:var(--green, #2ed573); border-color:var(--green, #2ed573); color:#ffffff; font-weight:700; font-size:0.82em; padding:6px 14px;">
+                                        💾 Save & Verify Bot Token
+                                    </button>
+                                    <button type="button" class="btn-hero-action" id="btn-toggle-token-vis" onclick="toggleTokenVisibility()" style="font-size:0.82em; padding:6px 12px;">
+                                        👁️ Show Token
+                                    </button>
+                                    <span id="gateway-token-status" style="font-size:0.82em; font-weight:700;"></span>
+                                </div>
+                                <span style="font-size:0.75em; color:var(--text-muted); margin-top:6px; display:block;">Token is encrypted server-side and never exposed in client logs.</span>
                             </div>
                             <div>
                                 <label class="field-label">Discord Guild / Server ID</label>
@@ -4427,9 +4465,9 @@
                             <p class="card-title">📖 3-Step Discord Developer Portal Setup Guide</p>
                             <span class="card-subtitle">How to generate your Bot Token, enable Privileged Gateway Intents, and invite the bot</span>
                         </div>
-                        <span id="guide-toggle-icon">▼</span>
+                        <span id="guide-toggle-icon" style="transition:transform 0.2s; font-size:0.9em;">▼</span>
                     </div>
-                    <div class="guide-body" id="guide-body" style="display:none;">
+                    <div class="guide-body" id="guide-body">
                         <div class="guide-inner">
                     <ol>
                         <li>Go to the <a href="https://discord.com/developers/applications" target="_blank" style="color:var(--discord); text-decoration:underline;">Discord Developer Portal</a> → click <b>New Application</b>. Name it <b>F.R.I.D.A.Y.</b> or your faction bot name.</li>
@@ -4597,9 +4635,13 @@ function toggleTheme() {
 function toggleGuide() {
     const toggle = document.getElementById('guide-toggle');
     const body = document.getElementById('guide-body');
+    const icon = document.getElementById('guide-toggle-icon');
     if (toggle && body) {
-        toggle.classList.toggle('open');
-        body.classList.toggle('open');
+        const isOpen = body.classList.toggle('open');
+        toggle.classList.toggle('open', isOpen);
+        if (icon) {
+            icon.style.transform = isOpen ? 'rotate(180deg)' : 'rotate(0deg)';
+        }
     }
 }
 
@@ -5041,12 +5083,30 @@ function updateKillswitchUI(killed) {
         banner.className = 'status-banner muted';
         if (title) title.textContent = 'Notifications Paused';
         if (desc) desc.innerHTML = 'All alerts are currently silenced. Click below or use <code>/resume</code> or <code>!resume</code> in Discord to restore.';
-        if (btn) { btn.style.background = '#2ed573'; btn.style.borderColor = '#2ed573'; btn.textContent = '▷ Resume Alerts'; }
+        if (btn) {
+            btn.classList.add('active');
+            btn.style.background = 'var(--green, #2ed573)';
+            btn.style.borderColor = 'var(--green, #2ed573)';
+            btn.style.color = '#ffffff';
+            const iconEl = btn.querySelector('#hero-killswitch-icon') || btn.querySelector('span:first-child');
+            const textEl = btn.querySelector('#hero-killswitch-text') || btn.querySelector('span:last-child');
+            if (iconEl) iconEl.textContent = '▶️';
+            if (textEl) textEl.textContent = 'Resume Alerts';
+        }
     } else {
         banner.className = 'status-banner live';
         if (title) title.textContent = 'Notifications Active';
         if (desc) desc.innerHTML = 'All alerts are broadcasting. Use <code>/pause</code> or <code>!pause</code> in Discord to temporarily silence alerts.';
-        if (btn) { btn.style.background = '#ff4757'; btn.style.borderColor = '#ff4757'; btn.textContent = '⏸ Pause All Alerts'; }
+        if (btn) {
+            btn.classList.remove('active');
+            btn.style.background = '';
+            btn.style.borderColor = '';
+            btn.style.color = '';
+            const iconEl = btn.querySelector('#hero-killswitch-icon') || btn.querySelector('span:first-child');
+            const textEl = btn.querySelector('#hero-killswitch-text') || btn.querySelector('span:last-child');
+            if (iconEl) iconEl.textContent = '⏸️';
+            if (textEl) textEl.textContent = 'Pause Alerts';
+        }
     }
 }
 
@@ -5112,6 +5172,35 @@ function onCommandToggle(el) {
     updateCommandsBadge();
 }
 
+function updateSlashCommandBadges() {
+    document.querySelectorAll('.cmd-category-block').forEach(block => {
+        const toggles = block.querySelectorAll('.cmd-toggle');
+        const checked = block.querySelectorAll('.cmd-toggle:checked');
+        const badge = block.querySelector('.cmd-category-badge');
+        if (badge) {
+            badge.textContent = `${checked.length} / ${toggles.length} Active`;
+            badge.style.color = checked.length > 0 ? 'var(--green)' : 'var(--spider-red)';
+            badge.style.background = checked.length > 0 ? 'rgba(46,213,115,0.12)' : 'rgba(255,71,87,0.12)';
+            badge.style.borderColor = checked.length > 0 ? 'rgba(46,213,115,0.25)' : 'rgba(255,71,87,0.25)';
+        }
+    });
+}
+
+function toggleCmdCategory(btn) {
+    const block = btn.closest('.cmd-category-block');
+    if (!block) return;
+    const toggles = block.querySelectorAll('.cmd-toggle');
+    const checked = block.querySelectorAll('.cmd-toggle:checked');
+    const enable = checked.length < toggles.length;
+    toggles.forEach(t => {
+        t.checked = enable;
+        const card = t.closest('.cmd-card') || t.closest('.trigger-row');
+        if (card) card.classList.toggle('on', enable);
+    });
+    updateCommandsBadge();
+    trackDirty();
+}
+
 function updateCommandsBadge() {
     const all = document.querySelectorAll('.cmd-toggle');
     const active = document.querySelectorAll('.cmd-toggle:checked').length;
@@ -5131,6 +5220,7 @@ function updateCommandsBadge() {
         badge.style.borderColor = active > 0 ? 'rgba(46,213,115,0.3)' : 'rgba(255,71,87,0.3)';
         badge.style.background = active > 0 ? 'rgba(46,213,115,0.15)' : 'rgba(255,71,87,0.15)';
     }
+    updateSlashCommandBadges();
 }
 
 function setAllCommands(enable) {
@@ -5303,11 +5393,25 @@ function applyConfigToDOM(cfg) {
     populateChannelSelects();
     populateRoleSelects();
 
-    if (cfg.hasBotToken && !tokenVal) {
-        const tokenInput = document.getElementById('global-bottoken');
-        if (tokenInput && !tokenInput.value) {
-            tokenInput.placeholder = '•••••••••••••••••••••••• (Token securely saved on server)';
+    const tokenBadge = document.getElementById('token-server-badge');
+    const gatewayStatus = document.getElementById('gateway-token-status');
+    const tokenInput = document.getElementById('global-bottoken');
+    if (cfg.hasBotToken) {
+        const tail = cfg.botTokenTail ? ` (Ends in ...${cfg.botTokenTail})` : '';
+        if (tokenBadge) {
+            tokenBadge.style.color = 'var(--green)';
+            tokenBadge.textContent = `🟢 Saved on Server${tail}`;
         }
+        if (gatewayStatus && !gatewayStatus.textContent) {
+            gatewayStatus.style.color = 'var(--green)';
+            gatewayStatus.textContent = `🟢 Token Saved${tail}`;
+        }
+        if (tokenInput && (!tokenVal || /^[.•*]+$/.test(tokenVal))) {
+            tokenInput.value = '';
+            tokenInput.placeholder = `•••••••••••••••••••••••• (Saved on server${tail})`;
+        }
+        const expiredAlert = document.getElementById('token-expired-alert');
+        if (expiredAlert) expiredAlert.style.display = 'none';
     }
 
     if ((tokenVal && tokenVal.length > 20) || cfg.hasBotToken) {
@@ -5316,7 +5420,118 @@ function applyConfigToDOM(cfg) {
     updateBroadcastPreview();
 }
 
+
+// ── Gateway Bot Token Dedicated Save & Verify ──
+async function saveAndVerifyBotToken() {
+    const tokenInput = document.getElementById('global-bottoken');
+    const statusEl = document.getElementById('gateway-token-status');
+    const badgeEl = document.getElementById('token-server-badge');
+    const btn = document.getElementById('btn-save-verify-token');
+
+    let raw = tokenInput?.value || '';
+    let cleaned = raw.trim().replace(/^Bot\s+/i, '').replace(/^["']|["']$/g, '');
+    if (!cleaned || /^[.•*]+$/.test(cleaned)) {
+        cleaned = localStorage.getItem('factionos_discord_bot_token') || localStorage.getItem('warboard_bottoken') || '';
+        cleaned = cleaned.trim().replace(/^Bot\s+/i, '').replace(/^["']|["']$/g, '');
+    }
+
+    if (!cleaned || /^[.•*]+$/.test(cleaned) || cleaned.length < 20) {
+        if (statusEl) {
+            statusEl.style.color = 'var(--spider-red)';
+            statusEl.textContent = '🔴 Paste a valid Bot Token from Discord Developer Portal';
+        }
+        showToast('Please enter a valid Bot Token before saving.', 'error');
+        return;
+    }
+
+    if (btn) btn.disabled = true;
+    if (statusEl) {
+        statusEl.style.color = 'var(--spider-blue)';
+        statusEl.textContent = '⏳ Verifying token with Discord...';
+    }
+
+    try {
+        const guildId = (document.getElementById('guild-id-input')?.value.trim() || '').replace(/[^0-9]/g, '');
+        const res = await fetch('/api/discord/save-and-verify-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ botToken: cleaned, guildId: guildId || undefined })
+        });
+        const data = await res.json();
+        if (data.success) {
+            const tail = data.botTokenTail || (cleaned.length >= 4 ? cleaned.slice(-4) : '••••');
+            const botTag = data.botUser ? `${data.botUser.username}#${data.botUser.discriminator || '0000'}` : 'F.R.I.D.A.Y.';
+            if (statusEl) {
+                statusEl.style.color = 'var(--green)';
+                statusEl.textContent = `🟢 Verified: ${botTag} (Ends in ...${tail})`;
+            }
+            if (badgeEl) {
+                badgeEl.style.color = 'var(--green)';
+                badgeEl.textContent = `🟢 Token Saved (Ends in ...${tail})`;
+            }
+            const expiredAlert = document.getElementById('token-expired-alert');
+            if (expiredAlert) expiredAlert.style.display = 'none';
+
+            try {
+                localStorage.setItem('factionos_discord_bot_token', cleaned);
+                localStorage.setItem('warboard_bottoken', cleaned);
+            } catch(e) {}
+
+            if (tokenInput) {
+                tokenInput.value = '';
+                tokenInput.placeholder = `•••••••••••••••••••••••• (Saved: ...${tail})`;
+            }
+
+            hasSavedServerToken = true;
+            showToast(`Bot token verified! Connected as ${botTag}.`, 'success');
+
+            if (typeof fetchGuildAndChannels === 'function') fetchGuildAndChannels();
+            if (typeof fetchGuildRoles === 'function') fetchGuildRoles();
+            if (typeof calculateSetupProgress === 'function') calculateSetupProgress();
+        } else {
+            throw new Error(data.error || 'Verification failed');
+        }
+    } catch(err) {
+        if (statusEl) {
+            statusEl.style.color = 'var(--spider-red)';
+            statusEl.textContent = `🔴 Invalid Token — ${err.message}`;
+        }
+        showToast('Token verification error: ' + err.message, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+function toggleTokenVisibility() {
+    const input = document.getElementById('global-bottoken');
+    const btn = document.getElementById('btn-toggle-token-vis');
+    if (!input) return;
+    const isPass = input.type === 'password';
+    input.type = isPass ? 'text' : 'password';
+    if (btn) btn.textContent = isPass ? '🙈 Hide Token' : '👁️ Show Token';
+}
+
+function updateTctClock() {
+    const el = document.getElementById('global-tct-clock');
+    if (!el) return;
+    const now = new Date();
+    const utcHours = String(now.getUTCHours()).padStart(2, '0');
+    const utcMins = String(now.getUTCMinutes()).padStart(2, '0');
+    const utcSecs = String(now.getUTCSeconds()).padStart(2, '0');
+    el.textContent = `${utcHours}:${utcMins}:${utcSecs} TCT`;
+}
+
+
 document.addEventListener('DOMContentLoaded', async () => {
+    updateTctClock();
+    setInterval(updateTctClock, 1000);
+
+    // Tab 3 dirty change tracking for all inputs & selects
+    document.querySelectorAll('#tab-pane-routing select, #tab-pane-routing input').forEach(el => {
+        el.addEventListener('change', trackDirty);
+        el.addEventListener('input', trackDirty);
+    });
+
     try {
         const savedTab = localStorage.getItem('sv_discord_active_tab') || 'sentinel';
         switchDeckTab(savedTab);
@@ -5381,9 +5596,26 @@ async function saveDiscordConfig() {
         showToast('Missing API Key — open Settings to set your Torn API key.', 'error');
         return;
     }
-    let botToken = document.getElementById('global-bottoken').value.trim();
-    let channelId = document.getElementById('global-channelid').value.trim();
-    const discordId = document.getElementById('discord-userid').value.trim();
+    const rawTokenInput = document.getElementById('global-bottoken')?.value || '';
+    const cleanedToken = rawTokenInput.trim().replace(/^Bot\s+/i, '').replace(/^["']|["']$/g, '');
+    const isMaskedOrEmpty = !cleanedToken || /^[.•*]+$/.test(cleanedToken);
+    let tokenToSend = undefined;
+    if (!isMaskedOrEmpty) {
+        tokenToSend = cleanedToken;
+        try {
+            localStorage.setItem('factionos_discord_bot_token', cleanedToken);
+            localStorage.setItem('warboard_bottoken', cleanedToken);
+        } catch(e) {}
+    } else {
+        const cached = localStorage.getItem('factionos_discord_bot_token') || localStorage.getItem('warboard_bottoken') || '';
+        const cachedCleaned = cached.trim().replace(/^Bot\s+/i, '').replace(/^["']|["']$/g, '');
+        if (cachedCleaned && !/^[.•*]+$/.test(cachedCleaned) && cachedCleaned.length > 20) {
+            tokenToSend = cachedCleaned;
+        }
+    }
+
+    let channelId = (document.getElementById('global-channelid')?.value || '').trim();
+    const discordId = (document.getElementById('discord-userid')?.value || '').trim();
     const inactivityChannelId = (document.getElementById('inactivity-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
     const inactivityRoleId = document.getElementById('inactivity-roleid')?.value.trim() || '';
     const overdoseChannelId = (document.getElementById('overdose-channelid')?.value.trim() || '').replace(/[^0-9]/g, '');
@@ -5439,7 +5671,6 @@ async function saveDiscordConfig() {
     }
     channelId = channelId.replace(/[^0-9]/g, '');
 
-    localStorage.setItem('warboard_bottoken', botToken);
     localStorage.setItem('warboard_channelid', channelId);
     localStorage.setItem('warboard_discordid', discordId);
     localStorage.setItem('warboard_inactivity_channelid', inactivityChannelId);
@@ -5469,7 +5700,7 @@ async function saveDiscordConfig() {
 
     try {
         const payload = {
-            globalBotToken: botToken,
+            ...(tokenToSend ? { globalBotToken: tokenToSend } : {}),
             globalChannelId: channelId,
             personalDiscordId: discordId,
             inactivityChannelId,
@@ -6304,7 +6535,17 @@ function renderOutboundLogs(logs) {
             : `<span class="status-pill-err">✕ ${l.statusCode || 400} Err</span>`;
         return `
             <tr>
-                <td style="font-family:var(--font-mono); color:var(--text-muted); white-space:nowrap;">${l.tctTime || '--:--:--'}</td>
+                <td style="font-family:var(--font-mono); color:var(--text-muted); white-space:nowrap;">${(() => {
+                    if (l.tctTime) return l.tctTime;
+                    if (l.timeTCT) return l.timeTCT;
+                    if (l.timestamp) {
+                        try {
+                            const d = new Date(l.timestamp);
+                            if (!isNaN(d.getTime())) return d.toISOString().slice(11, 19) + ' TCT';
+                        } catch(e) {}
+                    }
+                    return l.time || '--:--:--';
+                })()}</td>
                 <td style="font-weight:600; color:var(--text-main);">${l.event || 'broadcast'}</td>
                 <td style="color:var(--text-muted);">${l.destination || '#unknown'}</td>
                 <td>${statusPill}</td>
@@ -6381,6 +6622,56 @@ function toggleOutboundLogs() {
 }
 
 function updateBroadcastPreview() {
+    const isRulesMode = document.getElementById('btn-mode-rules')?.classList.contains('active');
+    const textPreviewEl = document.getElementById('dc-preview-text');
+    const embedPreviewEl = document.getElementById('dc-preview-embed');
+    const buttonsPreviewEl = document.getElementById('dc-preview-buttons');
+    const mentionPreviewEl = document.getElementById('dc-preview-mention');
+    const timeEl = document.getElementById('dc-preview-timestamp');
+
+    if (timeEl) {
+        const now = new Date();
+        timeEl.textContent = `Today at ${now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+    }
+
+    if (isRulesMode) {
+        if (mentionPreviewEl) mentionPreviewEl.style.display = 'none';
+        if (textPreviewEl) textPreviewEl.style.display = 'none';
+        if (buttonsPreviewEl) buttonsPreviewEl.style.display = 'none';
+        if (embedPreviewEl) {
+            embedPreviewEl.style.display = 'block';
+            embedPreviewEl.style.borderLeftColor = 'var(--discord, #5865F2)';
+
+            const authorEl = document.getElementById('dc-embed-author');
+            if (authorEl) {
+                authorEl.textContent = '🕷️ SPIDER-VERSE FACTION RULES';
+                authorEl.style.display = 'flex';
+            }
+            const thumbEl = document.getElementById('dc-embed-thumb');
+            if (thumbEl) thumbEl.style.display = 'none';
+
+            const title = (document.getElementById('welcome-rules-title')?.value || '').trim() || '📜 OFFICIAL FACTION RULES & WELCOME';
+            const titleEl = document.getElementById('dc-embed-title');
+            if (titleEl) {
+                titleEl.textContent = title;
+                titleEl.style.display = 'block';
+            }
+
+            const rulesContent = document.getElementById('welcome-rules-content')?.value || '';
+            const descEl = document.getElementById('dc-embed-desc');
+            if (descEl) {
+                descEl.innerHTML = rulesContent ? formatDiscordMarkdown(rulesContent) : '<span style="color:#949ba4; font-style:italic;">Type faction guidelines and welcome instructions above...</span>';
+            }
+
+            const fieldsEl = document.getElementById('dc-embed-fields');
+            if (fieldsEl) fieldsEl.style.display = 'none';
+
+            const footerEl = document.getElementById('dc-embed-footer');
+            if (footerEl) footerEl.textContent = 'F.R.I.D.A.Y • Welcome & Gatekeeper Sentinel';
+        }
+        return;
+    }
+
     const content = (document.getElementById('broadcast-content')?.value || '');
     const charCountEl = document.getElementById('broadcast-char-count');
     const isEmbed = document.querySelector('input[name="broadcast_msg_style"]:checked')?.value === 'embed';
@@ -6392,7 +6683,6 @@ function updateBroadcastPreview() {
 
     const mentionSel = document.getElementById('broadcast-mention-select');
     const mentionVal = mentionSel?.value || '';
-    const mentionPreviewEl = document.getElementById('dc-preview-mention');
     if (mentionPreviewEl) {
         if (mentionVal === 'everyone') {
             mentionPreviewEl.innerHTML = `<span class="dc-mention">@everyone</span>`;
@@ -6408,16 +6698,6 @@ function updateBroadcastPreview() {
             mentionPreviewEl.style.display = 'none';
         }
     }
-
-    const timeEl = document.getElementById('dc-preview-timestamp');
-    if (timeEl) {
-        const now = new Date();
-        timeEl.textContent = `Today at ${now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
-    }
-
-    const textPreviewEl = document.getElementById('dc-preview-text');
-    const embedPreviewEl = document.getElementById('dc-preview-embed');
-    const buttonsPreviewEl = document.getElementById('dc-preview-buttons');
 
     if (!isEmbed) {
         if (embedPreviewEl) embedPreviewEl.style.display = 'none';
