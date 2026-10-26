@@ -16554,13 +16554,6 @@ function buildBankRequestButtons(req) {
                 components: [
                     {
                         type: 2,
-                        style: 5, // Link button directly to Torn Vault
-                        label: `Open Vault ($${amtFmt})`,
-                        url: vaultUrl,
-                        emoji: { name: '🏦' }
-                    },
-                    {
-                        type: 2,
                         style: 3, // Success button to mark fulfilled
                         custom_id: `bank_pay_${req.id}`,
                         label: `Fulfill ($${amtFmt})`,
@@ -22473,7 +22466,23 @@ function setupSlashBotEvents(bot, token) {
                     }
 
                     if (res && res.message) {
-                        await interaction.followUp({ content: res.message, ephemeral: true }).catch(() => {});
+                        const prefilledUrl = getPreFilledVaultUrl(req.tornId, req.amount);
+                        const amtFmt = Number(req.amount).toLocaleString('en-US');
+                        const followUpComponents = [
+                            {
+                                type: 1,
+                                components: [
+                                    {
+                                        type: 2,
+                                        style: 5,
+                                        label: `Open Vault ($${amtFmt})`,
+                                        url: prefilledUrl,
+                                        emoji: { name: '🏦' }
+                                    }
+                                ]
+                            }
+                        ];
+                        await interaction.followUp({ content: res.message, components: followUpComponents, ephemeral: true }).catch(() => {});
                     }
                 } finally {
                     bankRequestFulfillLocks.delete(reqId);
