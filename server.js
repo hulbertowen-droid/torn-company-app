@@ -14909,7 +14909,13 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
             timestamp: new Date().toISOString(),
             takeoffReminder,
             targetCountry: target.name,
-            modeLabel
+            modeLabel,
+            processed,
+            priorityItems,
+            target,
+            bagCapacity,
+            modeKey,
+            flightDurationMin
         };
 
     } catch(e) {
@@ -22249,6 +22255,197 @@ function setupSlashBotEvents(bot, token) {
                     }).catch(() => {});
                 }
             }
+
+            // ── /stocks Private Takeoff Radar Selection ──
+            if (interaction.customId && interaction.customId.startsWith('travel_select_ping_')) {
+                try {
+                    const parts = interaction.customId.split('_');
+                    // customId format: travel_select_ping_${target.yCode}_${modeKey}_${bagCapacity}
+                    const yCode = parts[3] || 'can';
+                    const mode = parts[4] || 'jet';
+                    const bag = parseInt(parts[5], 10) || 29;
+
+                    const selectedVal = interaction.values?.[0];
+                    const apiKey = (typeof discordConfig !== 'undefined' ? discordConfig.apiKey : null) || (typeof TORN_API_KEY !== 'undefined' ? TORN_API_KEY : null) || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
+                    const target = resolveYataCountry(yCode);
+                    const countryName = target.name || 'Overseas';
+                    const userId = interaction.user.id;
+                    const chanId = interaction.channelId;
+
+                    if (selectedVal === 'cancel') {
+                        let clearedCount = 0;
+                        for (const [key, handle] of activeTakeoffTimers.entries()) {
+                            if (key.startsWith(`${userId}_${yCode}`)) {
+                                clearTimeout(handle);
+                                activeTakeoffTimers.delete(key);
+                                clearedCount++;
+                            }
+                        }
+                        return await interaction.update({
+                            embeds: [{
+                                title: `🔕 Takeoff Reminders Cleared — ${target.flag} ${countryName}`,
+                                description: `Any scheduled departure reminders for **${countryName}** have been cleared.\n\nYou can set a new reminder anytime by clicking **Remind Me**.`,
+                                color: UI.COLORS.WARN,
+                                footer: { text: "F.R.I.D.A.Y. • Private Takeoff Radar" },
+                                timestamp: new Date().toISOString()
+                            }],
+                            components: []
+                        }).catch(() => {});
+                    }
+
+                    if (selectedVal && selectedVal.startsWith('ping_')) {
+                        const itemId = parseInt(selectedVal.split('_')[1], 10);
+                        const res = await buildStocksEmbed(yCode, apiKey, { mode, bag, discordUserId: userId });
+                        const allItems = [...(res.priorityItems || []), ...(res.processed || [])];
+                        const item = allItems.find(i => i.id === itemId);
+
+                        if (!item) {
+                            return await interaction.update({
+                                content: `⚠️ Item details not found. Please click **Remind Me** on the main card again.`,
+                                embeds: [],
+                                components: []
+                            }).catch(() => {});
+                        }
+
+                        const isFlyNow = item.phase === 'A' || item.phase === 'B1';
+                        if (isFlyNow) {
+                            const agencyRow = new ActionRowBuilder().addComponents(
+                                new ButtonBuilder()
+                                    .setStyle(ButtonStyle.Link)
+                                    .setLabel('Book Flight in Travel Agency')
+                                    .setURL('https://www.torn.com/travelagency.php')
+                                    .setEmoji('✈️'),
+                                new ButtonBuilder()
+                                    .setStyle(ButtonStyle.Link)
+                                    .setLabel('View Abroad Stock')
+                                    .setURL('https://yata.yt/bazaar/abroad/')
+                                    .setEmoji('🌐')
+                            );
+                            return await interaction.update({
+                                embeds: [{
+                                    title: `🟢 Fly Now — ${item.icon} ${item.name}!`,
+                                    description: `**No need to wait!** **${item.name}** is in stock right now and will survive your flight.\n\n` +
+                                                 `• 🛬 **Projected at Landing:** **~${item.likelyStock.toLocaleString()} units left** *(Low: ${item.lowStock.toLocaleString()} · High: ${item.highStock.toLocaleString()})*\n` +
+                                                 `• 💰 **Estimated Bag Profit:** **+$${formatCompactProfit(item.fullBagProfit)}/bag**\n` +
+                                                 `• ⏱️ **Takeoff Window:** Open now *(depart immediately)*\n\n` +
+                                                 `👉 **[Click here to open Travel Agency & Fly](https://www.torn.com/travelagency.php)**`,
+                                    color: UI.COLORS.SUCCESS,
+                                    footer: { text: "F.R.I.D.A.Y. • Private Takeoff Radar" },
+                                    timestamp: new Date().toISOString()
+                                }],
+                                components: [agencyRow]
+                            }).catch(() => {});
+                        }
+
+                        // Scheduled wait for restock
+                        const nowSec = Math.floor(Date.now() / 1000);
+                        const waitSec = Math.max(1, item.takeoffUnix - nowSec);
+                        const pingKey = `${userId}_${yCode}_${item.id}`;
+
+                        if (activeTakeoffTimers.has(pingKey)) {
+                            clearTimeout(activeTakeoffTimers.get(pingKey));
+                            activeTakeoffTimers.delete(pingKey);
+                        }
+
+                        const client = interaction.client || slashCommandBot;
+                        const itemName = item.name;
+                        const itemIcon = item.icon || '📦';
+                        const restockTct = item.futureRestockTct || '';
+                        const fullBagStr = `+$${formatCompactProfit(item.fullBagProfit)}/bag`;
+                        const flightMins = res.flightDurationMin || target.airstrip;
+                        const modeLbl = res.modeLabel || `🛩️ Jet ${formatFlightDuration(flightMins)}`;
+                        const pphStr = `$${formatCompactProfit(Math.round(item.fullBagProfit / ((flightMins * 2) / 60)))}/hr`;
+                        const bagCap = res.bagCapacity || bag || 29;
+
+                        const timer = setTimeout(async () => {
+                            activeTakeoffTimers.delete(pingKey);
+                            try {
+                                const user = await client?.users?.fetch(userId).catch(() => null);
+                                const pingEmbed = {
+                                    title: `🛫 Takeoff Alert — ${target.flag} ${countryName}!`,
+                                    description: `**It is now time to take off for ${itemIcon} ${itemName}!**\n\n` +
+                                                 `• 🔄 **Estimated Restock:** **~${restockTct} TCT** (~${(item.shelfCap || item.typicalSize || 1500).toLocaleString()} units)\n` +
+                                                 `• 🛬 **Your Arrival:** Lands ~3 minutes after restock with fresh inventory\n` +
+                                                 `• 🎒 **Bag Profit:** **${fullBagStr}** (\`${pphStr}\`)\n` +
+                                                 `• 🛩️ **Flight Specs:** \`${modeLbl}\` · \`🎒 ${bagCap} items\`\n\n` +
+                                                 `👉 **[Book Flight Now in Torn Travel Agency](https://www.torn.com/travelagency.php)**`,
+                                    color: UI.COLORS.SUCCESS,
+                                    footer: { text: "F.R.I.D.A.Y. • Spider-Verse Tactical OS" },
+                                    timestamp: new Date().toISOString()
+                                };
+
+                                const agencyBtn = new ActionRowBuilder().addComponents(
+                                    new ButtonBuilder()
+                                        .setStyle(ButtonStyle.Link)
+                                        .setLabel('Book Flight Now')
+                                        .setURL('https://www.torn.com/travelagency.php')
+                                        .setEmoji('✈️'),
+                                    new ButtonBuilder()
+                                        .setStyle(ButtonStyle.Link)
+                                        .setLabel('Overseas Stock Radar')
+                                        .setURL('https://yata.yt/bazaar/abroad/')
+                                        .setEmoji('🌐')
+                                );
+
+                                let sent = false;
+                                if (user) {
+                                    sent = await user.send({ embeds: [pingEmbed], components: [agencyBtn] }).catch(() => null);
+                                }
+                                if (!sent && chanId) {
+                                    const ch = client?.channels?.cache?.get(chanId) || await client?.channels?.fetch(chanId).catch(() => null);
+                                    if (ch) {
+                                        await ch.send({
+                                            content: `🛫 <@${userId}> — **Takeoff Alert for ${countryName}!** Time to depart for **${itemName}**!`,
+                                            embeds: [pingEmbed],
+                                            components: [agencyBtn]
+                                        }).catch(() => {});
+                                    }
+                                }
+                            } catch(e) {
+                                console.warn('[Travel Ping] Error dispatching alert:', e.message);
+                            }
+                        }, Math.max(1000, waitSec * 1000));
+
+                        activeTakeoffTimers.set(pingKey, timer);
+
+                        const agencyRow = new ActionRowBuilder().addComponents(
+                            new ButtonBuilder()
+                                .setStyle(ButtonStyle.Link)
+                                .setLabel('Travel Agency')
+                                .setURL('https://www.torn.com/travelagency.php')
+                                .setEmoji('✈️'),
+                            new ButtonBuilder()
+                                .setStyle(ButtonStyle.Link)
+                                .setLabel('Travel Desk')
+                                .setURL('https://faction-os.duckdns.org/travel.html')
+                                .setEmoji('🧮')
+                        );
+
+                        return await interaction.update({
+                            embeds: [{
+                                title: `🔔 Private Takeoff Reminder Set — ${item.icon} ${item.name}`,
+                                description: `F.R.I.D.A.Y. will **privately ping you in direct messages** when it's time to fly for **${item.name}**!\n\n` +
+                                             `• 🛫 **Takeoff Time:** **~${item.takeoffTct} TCT** (<t:${item.takeoffUnix}:R>)\n` +
+                                             `• 🔄 **Projected Restock:** **~${item.futureRestockTct} TCT** (~${(item.shelfCap || item.typicalSize || 1500).toLocaleString()} units)\n` +
+                                             `• 🛬 **Your Arrival:** Lands ~3 minutes after restock with fresh shelves\n` +
+                                             `• 💰 **Estimated Bag Profit:** **${fullBagStr}** (\`${pphStr}\`)\n` +
+                                             `• 🛩️ **Flight Specs:** \`${modeLbl}\` · \`🎒 ${bagCap} items\`\n\n` +
+                                             `*(Keep your DMs open from server members so F.R.I.D.A.Y. can deliver your ping!)*`,
+                                color: UI.COLORS.SUCCESS,
+                                footer: { text: "F.R.I.D.A.Y. • Private Takeoff Radar (Scheduled)" },
+                                timestamp: new Date().toISOString()
+                            }],
+                            components: [agencyRow]
+                        }).catch(() => {});
+                    }
+                } catch(err) {
+                    console.error('[Slash Bot] travel_select_ping error:', err);
+                    return interaction.reply({
+                        content: `⚠️ Failed to process takeoff reminder: ${err.message || 'Unknown error'}`,
+                        ephemeral: true
+                    }).catch(() => {});
+                }
+            }
         }
 
         // ── Autocomplete Interactions ──
@@ -22364,61 +22561,91 @@ function setupSlashBotEvents(bot, token) {
                 const mode = parts[3] || 'jet';
                 const bag = parseInt(parts[4], 10) || 29;
 
-                const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
+                const apiKey = (typeof discordConfig !== 'undefined' ? discordConfig.apiKey : null) || (typeof TORN_API_KEY !== 'undefined' ? TORN_API_KEY : null) || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
 
                 if (action === 'ping') {
                     const res = await buildStocksEmbed(yCode, apiKey, { mode, bag, discordUserId: interaction.user.id });
-                    const pingData = res.takeoffReminder;
                     const countryName = res.targetCountry || 'Overseas';
+                    const target = res.target || resolveYataCountry(yCode);
+                    const bagCap = res.bagCapacity || bag || 29;
+                    const modeLbl = res.modeLabel || '🛩️ Jet';
 
-                    if (!pingData || !pingData.takeoffUnix || pingData.takeoffUnix <= Math.floor(Date.now() / 1000)) {
+                    const priorityItems = res.priorityItems || [];
+                    const processed = res.processed || [];
+
+                    const reminderItems = [];
+                    const seenIds = new Set();
+                    for (const item of [...priorityItems, ...processed.filter(p => !p.isPriority && (p.isDrug || p.fullBagProfit >= 50000))]) {
+                        if (!item || !item.id || seenIds.has(item.id)) continue;
+                        seenIds.add(item.id);
+                        reminderItems.push(item);
+                        if (reminderItems.length >= 24) break; // Leave room for cancel option (max 25 options)
+                    }
+
+                    if (reminderItems.length === 0) {
                         return await interaction.reply({
-                            content: `🛫 **Stock is ready right now!** There is no need to wait — take off for **${countryName}** immediately!`,
+                            content: `⚠️ No restock forecast data currently available for **${countryName}**.`,
                             ephemeral: true
                         }).catch(() => {});
                     }
 
-                    const waitSec = pingData.takeoffUnix - Math.floor(Date.now() / 1000);
-                    const pingKey = `${interaction.user.id}_${yCode}`;
-
-                    if (activeTakeoffTimers.has(pingKey)) {
-                        clearTimeout(activeTakeoffTimers.get(pingKey));
-                        activeTakeoffTimers.delete(pingKey);
-                    }
-
-                    const client = interaction.client || slashCommandBot;
-                    const userId = interaction.user.id;
-                    const chanId = interaction.channelId;
-                    const itemName = pingData.itemName || 'stock';
-                    const restockTct = pingData.restockTct || '';
-
-                    const timer = setTimeout(async () => {
-                        activeTakeoffTimers.delete(pingKey);
-                        try {
-                            const user = await client?.users?.fetch(userId).catch(() => null);
-                            const pingMsg = `🛫 <@${userId}> — **Takeoff Alert for ${countryName}!**\n` +
-                                            `It is now time to depart for **${itemName}** to land right after the **~${restockTct} TCT** restock!\n` +
-                                            `👉 [Torn Travel Agency](https://www.torn.com/travelagency.php)`;
-                            let sent = false;
-                            if (user) {
-                                sent = await user.send(pingMsg).catch(() => null);
-                            }
-                            if (!sent && chanId) {
-                                const ch = client?.channels?.cache?.get(chanId) || await client?.channels?.fetch(chanId).catch(() => null);
-                                if (ch) await ch.send(pingMsg).catch(() => {});
-                            }
-                        } catch(e) {
-                            console.warn('[Travel Ping] Error dispatching takeoff alert:', e.message);
+                    const itemLines = reminderItems.map(item => {
+                        const fullBagStr = `+$${formatCompactProfit(item.fullBagProfit)}/bag`;
+                        if (item.phase === 'A' || item.phase === 'B1') {
+                            return `🟢 **${item.icon || '📦'} ${item.name}** · **Fly now!** (~${(item.likelyStock || 0).toLocaleString()} left at landing · **${fullBagStr}**)`;
+                        } else {
+                            const takeoffDisplay = item.takeoffUnix ? `<t:${item.takeoffUnix}:R>` : `in ~${item.waitMinutes || 15}m`;
+                            return `⏳ **${item.icon || '📦'} ${item.name}** · **Depart ~${item.takeoffTct || 'Soon'} TCT** (${takeoffDisplay}) → Restock ~${item.futureRestockTct || 'Soon'} TCT`;
                         }
-                    }, Math.max(1000, waitSec * 1000));
+                    });
 
-                    activeTakeoffTimers.set(pingKey, timer);
+                    const selectOptions = reminderItems.map(item => {
+                        const isFlyNow = item.phase === 'A' || item.phase === 'B1';
+                        const fullBagStr = `+$${formatCompactProfit(item.fullBagProfit)}/bag`;
+                        let desc = isFlyNow
+                            ? `Fly now · ~${(item.likelyStock || 0).toLocaleString()} left at landing (${fullBagStr})`
+                            : `Depart ~${item.takeoffTct || 'Soon'} TCT · Restock ~${item.futureRestockTct || 'Soon'} TCT (${fullBagStr})`;
+                        if (desc.length > 95) desc = desc.slice(0, 92) + '...';
+
+                        return new StringSelectMenuOptionBuilder()
+                            .setLabel((item.name || 'Item').slice(0, 100))
+                            .setValue(`ping_${item.id}`)
+                            .setDescription(desc)
+                            .setEmoji(item.icon || '📦');
+                    });
+
+                    selectOptions.push(
+                        new StringSelectMenuOptionBuilder()
+                            .setLabel(`Cancel Alert for ${countryName}`)
+                            .setValue('cancel')
+                            .setDescription('Clear any pending takeoff reminder for this country')
+                            .setEmoji('🔕')
+                    );
+
+                    const selectMenu = new StringSelectMenuBuilder()
+                        .setCustomId(`travel_select_ping_${target.yCode}_${res.modeKey || mode}_${bagCap}`)
+                        .setPlaceholder(`Choose an item for private departure ping...`)
+                        .addOptions(selectOptions);
+
+                    const selectRow = new ActionRowBuilder().addComponents(selectMenu);
+
+                    const reminderEmbed = {
+                        title: `🔔 Takeoff Reminders — ${target.flag} ${countryName}`,
+                        description: `### 🛫 Private Flight Departure Alerts\n` +
+                                     `Select an item below. F.R.I.D.A.Y. will send you a **private direct message** right when it's time to take off so you land right as fresh stock hits the shelves!\n\n` +
+                                     `🛩️ **Your Flight Specs:** \`${modeLbl}\`  •  \`🎒 ${bagCap} items\`\n` +
+                                     `────────────────────────────────────\n` +
+                                     itemLines.join('\n') + `\n` +
+                                     `────────────────────────────────────\n` +
+                                     `👉 *Select an item from the menu below to schedule your takeoff ping.*`,
+                        color: UI.COLORS.INFO || 0x3498DB,
+                        footer: { text: "F.R.I.D.A.Y. • Private Takeoff Radar (Only visible to you)" },
+                        timestamp: new Date().toISOString()
+                    };
 
                     return await interaction.reply({
-                        content: `🔔 **Takeoff Reminder Set!**\n` +
-                                 `I will notify you at **~${pingData.takeoffTct} TCT** (<t:${pingData.takeoffUnix}:R>) when it's time to fly for **${itemName}**!\n` +
-                                 `• Projected Restock: ~${restockTct} TCT\n` +
-                                 `• Flight Mode: ${res.modeLabel} (🎒 ${bag} cap)`,
+                        embeds: [reminderEmbed],
+                        components: [selectRow],
                         ephemeral: true
                     }).catch(() => {});
                 }
