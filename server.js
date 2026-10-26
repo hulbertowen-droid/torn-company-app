@@ -16090,6 +16090,7 @@ function checkExpiredBankRequests() {
                             const msg = await chan.messages.fetch(req.messageId).catch(() => null);
                             if (msg) {
                                 await msg.edit({
+                                    content: buildBankRequestMessageContent(req),
                                     embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
                                     components: buildBankRequestButtons(req)
                                 }).catch(() => {});
@@ -16115,6 +16116,7 @@ function checkExpiredBankRequests() {
                             const msg = await chan.messages.fetch(req.messageId).catch(() => null);
                             if (msg) {
                                 await msg.edit({
+                                    content: buildBankRequestMessageContent(req),
                                     embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
                                     components: buildBankRequestButtons(req)
                                 }).catch(() => {});
@@ -16153,77 +16155,193 @@ function formatTimeAgo(timestamp) {
     return `${days} day${days === 1 ? '' : 's'} ago`;
 }
 
+function buildBankRequestMessageContent(req) {
+    const name = req.tornName || req.userName || 'Member';
+    const formattedAmount = `$${Number(req.amount || 0).toLocaleString('en-US')}`;
+    const bankerPing = discordConfig.bankerRoleId ? `<@&${discordConfig.bankerRoleId}>` : 'Bankers';
+    const fulfiller = req.fulfillerName || (req.fulfilledBy ? `<@${req.fulfilledBy}>` : 'Banker');
+
+    if (req.status === 'fulfilled') {
+        return `✅ **Vault Withdrawal #${req.id} Disbursed** — **${formattedAmount}** sent to **${name}** by **${fulfiller}**`;
+    } else if (req.status === 'cancelled') {
+        return `🚫 **Vault Withdrawal #${req.id} Cancelled** — Request from **${name}** (${formattedAmount}) was voided`;
+    } else if (req.status === 'expired') {
+        return `⏱️ **Vault Withdrawal #${req.id} Expired** — Request from **${name}** (${formattedAmount}) timed out`;
+    } else if (req.status === 'verifying') {
+        const payer = req.fulfillerName || (req.fulfilledBy ? `<@${req.fulfilledBy}>` : 'Banker');
+        return `⏳ **Vault Withdrawal #${req.id} In Progress** — Claimed by **${payer}** (${formattedAmount})`;
+    } else {
+        // Pending
+        return `🔔 ${bankerPing} — **Incoming Vault Withdrawal** • **${name}** requested **${formattedAmount}**`;
+    }
+}
+
+function formatMemberLiveStatus(memberStatus) {
+    if (!memberStatus) return '🟢 Okay (In Torn)';
+    const state = (memberStatus.state || '').toLowerCase();
+    const desc = memberStatus.description || memberStatus.state || 'In Torn';
+    if (state.includes('hospital') || state.includes('hosp')) {
+        const timeMatch = desc.match(/\d+h\s*\d+m|\d+m|\d+h/i);
+        const timeStr = timeMatch ? ` (${timeMatch[0]})` : '';
+        return `🔴 Hospital${timeStr}`;
+    }
+    if (state.includes('jail')) {
+        return `🔴 In Jail`;
+    }
+    if (state.includes('travel') || state.includes('abroad')) {
+        return `✈️ Traveling / Abroad`;
+    }
+    return `🟢 Okay (In Torn)`;
+}
+
 function buildBankRequestEmbed(req) {
     const amount = Number(req.amount || 0);
-    const formattedAmount = `$${amount.toLocaleString('en-US')}`;
     const name = req.tornName || req.userName || 'Member';
     const tornId = req.tornId;
 
-    let color = UI.COLORS.GOLD; // Amber (#f0b232)
-    let title = `🏦 Vault Withdrawal #${req.id}`;
-    let subtitlePill = `\`⏳ Pending Banker\``;
-    let calmNote = 'Vault balance verified · Banker click Fulfill below to claim and send cash in Torn.';
+    let color = 0xF59E0B; // #F59E0B (Amber Gold)
+    let title = `🏦 VAULT WITHDRAWAL #${req.id}  •  ⏳ PENDING`;
 
-    // In-game status badge
-    let inGameBadge = '🟢 In Torn (okay)';
-    if (req.memberStatus) {
-        const state = (req.memberStatus.state || '').toLowerCase();
-        const desc = (req.memberStatus.description || req.memberStatus.state || 'okay').toLowerCase();
-        if (state.includes('travel') || state.includes('abroad')) {
-            inGameBadge = `✈️ Traveling (${desc})`;
-        } else if (state.includes('hospital')) {
-            inGameBadge = `🔴 Hospital (${desc})`;
-        } else if (state.includes('jail')) {
-            inGameBadge = `🔴 Jail (${desc})`;
-        } else {
-            inGameBadge = `🟢 In Torn (${desc})`;
-        }
-    }
-
-    if (req.status === 'verifying') {
-        color = UI.COLORS.GOLD;
-        title = `🏦 Vault Withdrawal In Progress #${req.id}`;
-        const payer = req.fulfillerName || (req.fulfilledBy ? `<@${req.fulfilledBy}>` : 'Banker');
-        subtitlePill = `\`🔄 In Progress by ${payer}\`  ·  ${formatTimeAgo(req.fulfilledAt || req.timestamp)}  ·  ${inGameBadge}`;
-        calmNote = `Claimed by ${payer} · Faction controls payment in progress in Torn.`;
-    } else if (req.status === 'fulfilled') {
-        color = UI.COLORS.GREEN;
-        title = `🏦 Vault Withdrawal Fulfilled #${req.id}`;
-        const fulfillerName = req.fulfillerName || (req.fulfilledBy ? `<@${req.fulfilledBy}>` : 'Banker');
-        const timeRef = req.fulfilledAt || req.verifiedAt || req.timestamp || Date.now();
-        subtitlePill = `\`✅ Paid by ${fulfillerName}\`  ·  ${formatTimeAgo(timeRef)}`;
-        calmNote = 'Delivered via Torn Faction Vault · Confirmed in official faction logs.';
+    if (req.status === 'fulfilled') {
+        color = 0x10B981; // #10B981 (Emerald Green)
+        title = `🏦 VAULT WITHDRAWAL #${req.id}  •  ✅ DISBURSED`;
     } else if (req.status === 'cancelled') {
-        color = UI.COLORS.RED;
-        title = `🏦 Vault Withdrawal Cancelled #${req.id}`;
-        const cancellerName = req.cancellerName || (req.cancelledBy && req.cancelledBy !== 'system' ? `<@${req.cancelledBy}>` : 'Banker');
-        subtitlePill = `\`❌ Denied by ${cancellerName}\`  ·  ${formatTimeAgo(req.cancelledAt || req.timestamp)}`;
-        calmNote = 'Request closed · No funds were deducted from faction vault.';
+        color = 0xEF4444; // #EF4444 (Crimson Red)
+        title = `🏦 VAULT WITHDRAWAL #${req.id}  •  🚫 CANCELLED`;
     } else if (req.status === 'expired') {
-        color = UI.COLORS.RED;
-        title = `🏦 Vault Withdrawal Expired #${req.id}`;
-        subtitlePill = `\`❌ Expired\`  ·  Timed out after 60m`;
-        calmNote = 'Request timed out after 60 minutes with no banker activity.';
-    } else {
-        // Pending
-        subtitlePill = `\`⏳ Pending Banker\`  ·  ${formatTimeAgo(req.timestamp)}  ·  ${inGameBadge}`;
+        color = 0xEF4444; // #EF4444 (Crimson Red)
+        title = `🏦 VAULT WITHDRAWAL #${req.id}  •  ⏱️ EXPIRED`;
+    } else if (req.status === 'verifying') {
+        color = 0xF59E0B; // #F59E0B (Amber Gold)
+        title = `🏦 VAULT WITHDRAWAL #${req.id}  •  🔄 IN PROGRESS`;
     }
 
-    const ansiBlock = UI.generateWithdrawAnsi(req);
+    const prior = Number(req.balanceBefore !== undefined && req.balanceBefore !== null
+        ? req.balanceBefore
+        : (req.remainingBalance ? Number(req.remainingBalance) + amount : amount));
+    const safePrior = Math.max(prior, amount, 1);
 
-    const embed = UI.sleekCard({
+    const isCancelled = req.status === 'cancelled' || req.status === 'expired';
+    const isFulfilled = req.status === 'fulfilled';
+    const isVerifying = req.status === 'verifying';
+
+    const remaining = isCancelled ? prior : Math.max(0, prior - amount);
+    const reqPct = Math.min(100, (amount / safePrior) * 100).toFixed(1);
+    const remPct = Math.max(0, 100 - parseFloat(reqPct)).toFixed(1);
+
+    const amtStr = `$${amount.toLocaleString('en-US')}`;
+    const priorStr = `$${prior.toLocaleString('en-US')}`;
+    const remStr = `$${remaining.toLocaleString('en-US')}`;
+
+    const SEP = '──────────────────────────────────────';
+    const ratio = Math.min(1, Math.max(0, amount / safePrior));
+    let filledCount = Math.round(ratio * 20);
+    if (ratio > 0 && filledCount === 0) filledCount = 1;
+    const emptyCount = 20 - filledCount;
+
+    let receiptLines = [];
+    if (isFulfilled) {
+        receiptLines = [
+            `\u001b[1;37m💸 AMOUNT DISBURSED:  \u001b[1;32m${amtStr}\u001b[0m`,
+            SEP,
+            `\u001b[0;36mPRIOR BALANCE   \u001b[0;37m${priorStr}\u001b[0m`,
+            `\u001b[0;32mPAID TO MEMBER  \u001b[1;32m- ${amtStr}\u001b[0m`,
+            `\u001b[0;34mNEW VAULT BAL   \u001b[1;37m${remStr}\u001b[0m`,
+            `\u001b[0;90mSTATUS \u001b[1;32m[${'█'.repeat(20)}] \u001b[1;32mSETTLED\u001b[0m`
+        ];
+    } else if (isCancelled) {
+        receiptLines = [
+            `\u001b[1;37m🚫 REQUEST VOIDED:    \u001b[1;31m${amtStr}\u001b[0m`,
+            SEP,
+            `\u001b[0;36mVAULT BALANCE   \u001b[0;37m${priorStr}\u001b[0m`,
+            `\u001b[0;31mVOIDED AMOUNT   \u001b[1;31m$0 deducted\u001b[0m`,
+            `\u001b[0;34mPRESERVED BAL   \u001b[1;37m${priorStr}\u001b[0m`,
+            `\u001b[0;90mSTATUS \u001b[1;31m[${'░'.repeat(20)}] \u001b[1;31mVOIDED\u001b[0m`
+        ];
+    } else if (isVerifying) {
+        receiptLines = [
+            `\u001b[1;37m⏳ IN PROGRESS:       \u001b[1;33m${amtStr}\u001b[0m`,
+            SEP,
+            `\u001b[0;36mVAULT AVAILABLE \u001b[1;37m${priorStr}\u001b[0m`,
+            `\u001b[0;33mCLAIMED AMOUNT  \u001b[1;33m- ${amtStr}  (${reqPct}%)\u001b[0m`,
+            `\u001b[0;34mVAULT REMAINING \u001b[1;32m${remStr} (${remPct}%)\u001b[0m`,
+            `\u001b[0;90mSTATUS \u001b[1;33m[${'█'.repeat(10)}${'░'.repeat(10)}] \u001b[1;33mCLAIMED\u001b[0m`
+        ];
+    } else {
+        receiptLines = [
+            `\u001b[1;37m💳 WITHDRAWAL AMOUNT: \u001b[1;33m${amtStr}\u001b[0m`,
+            SEP,
+            `\u001b[0;36mVAULT AVAILABLE \u001b[1;37m${priorStr}\u001b[0m`,
+            `\u001b[0;33mREQUESTED       \u001b[1;33m- ${amtStr}  (${reqPct}%)\u001b[0m`,
+            `\u001b[0;34mVAULT REMAINING \u001b[1;32m${remStr} (${remPct}%)\u001b[0m`,
+            `\u001b[0;90mSHARE  \u001b[1;32m[${'█'.repeat(filledCount)}${'░'.repeat(emptyCount)}] \u001b[0;90mVerified\u001b[0m`
+        ];
+    }
+
+    const description = '```ansi\n' + receiptLines.join('\n') + '\n```';
+
+    const requesterValue = tornId
+        ? `[${name} [${tornId}]](https://www.torn.com/profiles.php?XID=${tornId})`
+        : `**${name}**`;
+
+    let field2Name = '🩺 Member Status';
+    let field2Value = formatMemberLiveStatus(req.memberStatus);
+
+    if (isFulfilled) {
+        field2Name = '🏦 Processed By';
+        field2Value = `**${req.fulfillerName || (req.fulfilledBy ? `<@${req.fulfilledBy}>` : 'Banker')}**`;
+    } else if (isCancelled) {
+        field2Name = '🚫 Voided By';
+        field2Value = `**${req.cancellerName || (req.cancelledBy && req.cancelledBy !== 'system' ? `<@${req.cancelledBy}>` : 'System')}**`;
+    }
+
+    let field3Name = '⏱️ Timeline';
+    let field3Value = `Requested <t:${Math.floor((req.timestamp || Date.now()) / 1000)}:R>`;
+
+    if (isFulfilled) {
+        const timeRef = req.fulfilledAt || req.verifiedAt || Date.now();
+        let turnaroundStr = '';
+        if (req.timestamp && timeRef > req.timestamp) {
+            const diffSec = Math.max(1, Math.floor((timeRef - req.timestamp) / 1000));
+            if (diffSec < 60) turnaroundStr = ` (⚡ ${diffSec}s turnaround)`;
+            else turnaroundStr = ` (⚡ ${Math.floor(diffSec / 60)}m ${diffSec % 60}s turnaround)`;
+        }
+        field3Value = `Paid <t:${Math.floor(timeRef / 1000)}:R>${turnaroundStr}`;
+    } else if (isCancelled) {
+        const cancelRef = req.cancelledAt || req.expiredAt || Date.now();
+        field3Value = `Voided <t:${Math.floor(cancelRef / 1000)}:R>`;
+    } else if (isVerifying) {
+        const claimRef = req.fulfilledAt || req.timestamp || Date.now();
+        field3Value = `Claimed <t:${Math.floor(claimRef / 1000)}:R>`;
+    }
+
+    const fields = [
+        { name: '👤 Requester', value: requesterValue, inline: true },
+        { name: field2Name, value: field2Value, inline: true },
+        { name: field3Name, value: field3Value, inline: true }
+    ];
+
+    const authorName = tornId
+        ? `${name} [${tornId}] • Spider-Verse Vault Ledger`
+        : `${name} • Spider-Verse Vault Ledger`;
+    const authorIcon = req.authorIcon || (tornId ? `https://profileimages.torn.com/${tornId}` : null);
+    const authorUrl = tornId ? `https://www.torn.com/profiles.php?XID=${tornId}` : null;
+
+    return {
         color,
-        authorName: tornId ? `${name} [${tornId}]` : name,
-        authorIcon: req.authorIcon || (tornId ? `https://profileimages.torn.com/${tornId}` : null),
-        authorUrl: tornId ? `https://www.torn.com/profiles.php?XID=${tornId}` : null,
+        author: {
+            name: authorName,
+            icon_url: authorIcon || undefined,
+            url: authorUrl || undefined
+        },
         title,
-        heroValue: formattedAmount,
-        subtitle: subtitlePill,
-        ansiBlock,
-        note: calmNote
-    });
-
-    return embed;
+        description,
+        fields,
+        footer: {
+            text: `F.R.I.D.A.Y. • Spider-Verse Financial Sentinel • Vault Ledger #${req.id}`
+        },
+        timestamp: new Date().toISOString()
+    };
 }
 
 function getPreFilledVaultUrl(tornId, amount) {
@@ -16232,47 +16350,133 @@ function getPreFilledVaultUrl(tornId, amount) {
     return `https://www.torn.com/factions.php?step=your&option=give-to-user&giveMoneyTo=${id}&addMoneyTo=${id}&money=${amt}#/tab=controls&option=give-to-user&giveMoneyTo=${id}&addMoneyTo=${id}&money=${amt}`;
 }
 
-// Rule 7: BUTTON HIERARCHY
-// Row 1 = primary actions only (max 2, e.g. Confirm/Cancel).
-// Row 2 = secondary/external links, visually separated.
-// Never mix a primary action button and a link button in the same row.
 function buildBankRequestButtons(req) {
-    const amtFmt = Number(req.amount).toLocaleString();
+    const amtFmt = Number(req.amount).toLocaleString('en-US');
     const vaultUrl = getPreFilledVaultUrl(req.tornId, req.amount);
-    const tornProfileUrl = req.tornId ? `https://www.torn.com/profiles.php?XID=${req.tornId}` : null;
-    const generalVaultUrl = 'https://www.torn.com/factions.php?step=your#/tab=controls';
+    const tornProfileUrl = req.tornId 
+        ? `https://www.torn.com/profiles.php?XID=${req.tornId}` 
+        : 'https://www.torn.com';
 
     if (req.status === 'pending') {
-        return UI.buttonLayout(
-            [
-                UI.successBtn(`bank_pay_${req.id}`, `Fulfill ($${amtFmt})`, '💸'),
-                UI.dangerBtn(`bank_cancel_${req.id}`, 'Cancel', '❌')
-            ],
-            [
-                UI.linkBtn(vaultUrl, `Torn Vault ($${amtFmt}) ↗`, '🏠'),
-                ...(tornProfileUrl ? [UI.linkBtn(tornProfileUrl, 'Profile ↗', '👤')] : [])
-            ]
-        );
+        return [
+            {
+                type: 1,
+                components: [
+                    {
+                        type: 2,
+                        style: 5, // Link button directly to Torn Vault
+                        label: `Open Vault ($${amtFmt})`,
+                        url: vaultUrl,
+                        emoji: { name: '🏦' }
+                    },
+                    {
+                        type: 2,
+                        style: 3, // Success button to mark fulfilled
+                        custom_id: `bank_pay_${req.id}`,
+                        label: `Fulfill ($${amtFmt})`,
+                        emoji: { name: '💸' }
+                    },
+                    {
+                        type: 2,
+                        style: 5, // Link button to Profile
+                        label: 'Profile',
+                        url: tornProfileUrl,
+                        emoji: { name: '👤' }
+                    },
+                    {
+                        type: 2,
+                        style: 2, // Secondary dark button with high-contrast monochrome ✖️ icon
+                        custom_id: `bank_cancel_${req.id}`,
+                        label: 'Cancel',
+                        emoji: { name: '✖️' }
+                    }
+                ]
+            }
+        ];
     } else if (req.status === 'verifying') {
-        return UI.buttonLayout(
-            [
-                UI.primaryBtn(`bank_check_${req.id}`, 'Check Logs', '🔍'),
-                UI.secondaryBtn(`bank_unclaim_${req.id}`, 'Unclaim', '↩️')
-            ],
-            [
-                UI.linkBtn(vaultUrl, `Open Torn Vault ($${amtFmt}) ↗`, '💸'),
-                ...(tornProfileUrl ? [UI.linkBtn(tornProfileUrl, 'Profile ↗', '👤')] : [])
-            ]
-        );
+        return [
+            {
+                type: 1,
+                components: [
+                    {
+                        type: 2,
+                        style: 5,
+                        label: `Open Vault ($${amtFmt})`,
+                        url: vaultUrl,
+                        emoji: { name: '🏦' }
+                    },
+                    {
+                        type: 2,
+                        style: 1,
+                        custom_id: `bank_check_${req.id}`,
+                        label: 'Check Logs',
+                        emoji: { name: '🔍' }
+                    },
+                    {
+                        type: 2,
+                        style: 2,
+                        custom_id: `bank_unclaim_${req.id}`,
+                        label: 'Unclaim',
+                        emoji: { name: '↩️' }
+                    },
+                    {
+                        type: 2,
+                        style: 5,
+                        label: 'Profile',
+                        url: tornProfileUrl,
+                        emoji: { name: '👤' }
+                    }
+                ]
+            }
+        ];
+    } else if (req.status === 'fulfilled') {
+        const fulfillerName = req.fulfillerName || (req.fulfilledBy ? `Banker` : 'Banker');
+        return [
+            {
+                type: 1,
+                components: [
+                    {
+                        type: 2,
+                        style: 2,
+                        custom_id: `bank_done_${req.id}`,
+                        label: `Paid by ${fulfillerName} ($${amtFmt})`,
+                        disabled: true,
+                        emoji: { name: '✅' }
+                    },
+                    {
+                        type: 2,
+                        style: 5,
+                        label: 'Requester Profile',
+                        url: tornProfileUrl,
+                        emoji: { name: '👤' }
+                    }
+                ]
+            }
+        ];
     } else {
-        // fulfilled, cancelled, expired — keep secondary reference links
-        return UI.buttonLayout(
-            [],
-            [
-                UI.linkBtn(generalVaultUrl, 'Faction Vault ↗', '🏠'),
-                ...(tornProfileUrl ? [UI.linkBtn(tornProfileUrl, 'Profile ↗', '👤')] : [])
-            ]
-        );
+        const label = req.status === 'expired' ? 'Expired (60m)' : `Cancelled (${req.cancellerName || 'Voided'})`;
+        return [
+            {
+                type: 1,
+                components: [
+                    {
+                        type: 2,
+                        style: 2,
+                        custom_id: `bank_void_${req.id}`,
+                        label: label.slice(0, 80),
+                        disabled: true,
+                        emoji: { name: '🚫' }
+                    },
+                    {
+                        type: 2,
+                        style: 5,
+                        label: 'Requester Profile',
+                        url: tornProfileUrl,
+                        emoji: { name: '👤' }
+                    }
+                ]
+            }
+        ];
     }
 }
 
@@ -16773,6 +16977,7 @@ async function verifyBankPayment(req, apiKey, botClient) {
             if (!chan) return;
             const msg = await chan.messages.fetch(req.messageId).catch(() => null);
             if (msg) await msg.edit({
+                content: buildBankRequestMessageContent(req),
                 embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
                 components: buildBankRequestButtons(req)
             }).catch(() => {});
@@ -17075,8 +17280,9 @@ async function autoCheckActiveBankRequests() {
                             const msg = await chan.messages.fetch(req.messageId).catch(() => null);
                             if (msg) {
                                 await msg.edit({
+                                    content: buildBankRequestMessageContent(req),
                                     embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
-                                    components: buildBankRequestButtons(req) // Returns [] (no buttons)
+                                    components: buildBankRequestButtons(req)
                                 }).catch(() => {});
                             }
                         }
@@ -17738,6 +17944,7 @@ async function executeFulfillRequest(reqId, interaction) {
                     const targetMsg = targetChan && await targetChan.messages.fetch(req.messageId).catch(() => null);
                     if (targetMsg) {
                         await targetMsg.edit({
+                            content: buildBankRequestMessageContent(req),
                             embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
                             components: buildBankRequestButtons(req)
                         }).catch(() => {});
@@ -17770,6 +17977,7 @@ async function executeFulfillRequest(reqId, interaction) {
                 const targetMsg = targetChan && await targetChan.messages.fetch(req.messageId).catch(() => null);
                 if (targetMsg) {
                     await targetMsg.edit({
+                        content: buildBankRequestMessageContent(req),
                         embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
                         components: buildBankRequestButtons(req)
                     }).catch(() => {});
@@ -17845,6 +18053,7 @@ async function executeUnclaimFulfillment(reqId, interaction) {
                     const targetMsg = await targetChan.messages.fetch(req.messageId).catch(() => null);
                     if (targetMsg) {
                         await targetMsg.edit({
+                            content: buildBankRequestMessageContent(req),
                             embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
                             components: buildBankRequestButtons(req)
                         }).catch(() => {});
@@ -17910,8 +18119,10 @@ async function executeCancelRequest(reqId, interaction = null) {
                 if (client) {
                     const targetChan = client.channels.cache.get(req.channelId)
                         || await client.channels.fetch(req.channelId).catch(() => null);
+                    const targetMsg = targetChan && await targetChan.messages.fetch(req.messageId).catch(() => null);
                     if (targetMsg) {
                         await targetMsg.edit({
+                            content: buildBankRequestMessageContent(req),
                             embeds: [sanitizeEmbed(updatedEmbed)],
                             components: updatedButtons
                         }).catch(() => {});
@@ -17999,6 +18210,7 @@ app.get('/api/bank/pay/:id', async (req, res) => {
                             const targetMsg = await targetChan.messages.fetch(bankReq.messageId).catch(() => null);
                             if (targetMsg) {
                                 await targetMsg.edit({
+                                    content: buildBankRequestMessageContent(bankReq),
                                     embeds: [sanitizeEmbed(buildBankRequestEmbed(bankReq))],
                                     components: buildBankRequestButtons(bankReq)
                                 }).catch(() => {});
@@ -20789,6 +21001,7 @@ function setupSlashBotEvents(bot, token) {
                                     const m = await ch.messages.fetch(req.messageId).catch(() => null);
                                     if (m) {
                                         await m.edit({
+                                            content: buildBankRequestMessageContent(req),
                                             embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
                                             components: buildBankRequestButtons(req)
                                         }).catch(() => {});
@@ -21986,6 +22199,7 @@ function setupSlashBotEvents(bot, token) {
                     // This turns the button to "In progress by @Banker" with Check Logs & Unclaim,
                     // instantly removing the green "Fulfill" button for everyone in Discord!
                     await interaction.editReply({
+                        content: buildBankRequestMessageContent(req),
                         embeds: [sanitizeEmbed(buildBankRequestEmbed(req))],
                         components: buildBankRequestButtons(req)
                     }).catch(() => {});
@@ -21997,6 +22211,7 @@ function setupSlashBotEvents(bot, token) {
                     const updatedReq = bankRequests[reqId];
                     if (updatedReq && updatedReq.status === 'fulfilled') {
                         await interaction.editReply({
+                            content: buildBankRequestMessageContent(updatedReq),
                             embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
                             components: buildBankRequestButtons(updatedReq)
                         }).catch(() => {});
@@ -22045,6 +22260,7 @@ function setupSlashBotEvents(bot, token) {
                     const updatedReq = bankRequests[reqId];
                     if (updatedReq) {
                         await interaction.editReply({
+                            content: buildBankRequestMessageContent(updatedReq),
                             embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
                             components: buildBankRequestButtons(updatedReq)
                         }).catch(() => {});
@@ -22082,6 +22298,7 @@ function setupSlashBotEvents(bot, token) {
                     const updatedReq = bankRequests[reqId];
                     if (updatedReq) {
                         await interaction.editReply({
+                            content: buildBankRequestMessageContent(updatedReq),
                             embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
                             components: buildBankRequestButtons(updatedReq)
                         }).catch(() => {});
@@ -22121,6 +22338,7 @@ function setupSlashBotEvents(bot, token) {
                     const updatedReq = bankRequests[reqId];
                     if (updatedReq) {
                         await interaction.editReply({
+                            content: buildBankRequestMessageContent(updatedReq),
                             embeds: [sanitizeEmbed(buildBankRequestEmbed(updatedReq))],
                             components: buildBankRequestButtons(updatedReq)
                         }).catch(() => {});
@@ -23937,17 +24155,9 @@ function setupSlashBotEvents(bot, token) {
                                 chan.messages.fetch(oldReq.messageId).then(m => {
                                     if (m) {
                                         m.edit({
+                                            content: buildBankRequestMessageContent(oldReq),
                                             embeds: [sanitizeEmbed(buildBankRequestEmbed(oldReq))],
-                                            components: [{
-                                                type: 1,
-                                                components: [{
-                                                    type: 2,
-                                                    style: 2,
-                                                    custom_id: `superseded_${oldReq.id}`,
-                                                    label: `🔄 Replaced by #${reqId} ($${amount.toLocaleString()})`,
-                                                    disabled: true
-                                                }]
-                                            }]
+                                            components: buildBankRequestButtons(oldReq)
                                         }).catch(() => {});
                                     }
                                 }).catch(() => {});
@@ -23978,9 +24188,7 @@ function setupSlashBotEvents(bot, token) {
 
             const reqEmbed = buildBankRequestEmbed(req);
             const reqButtons = buildBankRequestButtons(req);
-            const pingContent = discordConfig.bankerRoleId 
-                ? `🔔 <@&${discordConfig.bankerRoleId}> — New vault withdrawal request from **${req.tornName || req.userName}** for **$${amount.toLocaleString()}**!`
-                : undefined;
+            const pingContent = buildBankRequestMessageContent(req);
 
             // Resolve potential target channels (with cache + fetch fallback)
             const bankingChanId = discordConfig.bankingChannelId;
@@ -24083,7 +24291,7 @@ function setupSlashBotEvents(bot, token) {
             saveBankRequests();
 
             return interaction.editReply({
-                content: `✅ Your withdrawal request **#${req.id}** for **$${amount.toLocaleString()}** is active!${replacedNote}`,
+                content: buildBankRequestMessageContent(req),
                 embeds: [sanitizeEmbed(reqEmbed)],
                 components: reqButtons
             });

@@ -643,61 +643,69 @@ function generateChainAnsi({ current = 0, max = 250, timeoutSec = 300, multiplie
 function generateWithdrawAnsi(req) {
     if (!req) req = {};
     const amount = Number(req.amount || 0);
-    let vaultAfter = 0;
-    if (req.remainingBalance !== undefined && req.remainingBalance !== null && Number(req.remainingBalance) >= 0) {
-        vaultAfter = Number(req.remainingBalance);
-    } else if (req.balanceAfter !== undefined && req.balanceAfter !== null) {
-        vaultAfter = Number(req.balanceAfter);
-    } else if (req.vaultAfter !== undefined && req.vaultAfter !== null) {
-        vaultAfter = Number(req.vaultAfter);
-    } else if (req.balanceBefore !== undefined && req.balanceBefore !== null) {
-        vaultAfter = (req.status === 'cancelled' || req.status === 'expired')
-            ? Number(req.balanceBefore)
-            : Math.max(0, Number(req.balanceBefore) - amount);
-    }
+    const prior = Number(req.balanceBefore !== undefined && req.balanceBefore !== null
+        ? req.balanceBefore
+        : (req.remainingBalance ? Number(req.remainingBalance) + amount : amount));
+    const safePrior = Math.max(prior, amount, 1);
 
-    const totalBefore = Math.max(
-        amount + vaultAfter,
-        Number(req.balanceBefore || 0),
-        amount,
-        1
-    );
+    const isCancelled = req.status === 'cancelled' || req.status === 'expired';
+    const isFulfilled = req.status === 'fulfilled';
+    const isVerifying = req.status === 'verifying';
 
-    const payoutRatio = Math.min(1, Math.max(0, amount / totalBefore));
-    const vaultRatio = Math.min(1, Math.max(0, vaultAfter / totalBefore));
-
-    const payoutBars = Math.round(payoutRatio * 10);
-    const vaultBars = Math.round(vaultRatio * 10);
+    const remaining = isCancelled ? prior : Math.max(0, prior - amount);
+    const reqPct = Math.min(100, (amount / safePrior) * 100).toFixed(1);
+    const remPct = Math.max(0, 100 - parseFloat(reqPct)).toFixed(1);
 
     const amtStr = `$${amount.toLocaleString('en-US')}`;
-    const vaultStr = `$${vaultAfter.toLocaleString('en-US')}`;
-    const maxValLen = Math.max(amtStr.length, vaultStr.length);
+    const priorStr = `$${prior.toLocaleString('en-US')}`;
+    const remStr = `$${remaining.toLocaleString('en-US')}`;
 
-    let payoutColor = ANSI_YELLOW;
-    let vaultColor = ANSI_BLUE;
-    let payoutDesc = `${((payoutRatio * 100).toFixed(1) + '% of vault').padStart(15, ' ')}`;
-    let vaultDesc = `${((vaultRatio * 100).toFixed(1) + '% remaining').padStart(15, ' ')}`;
+    const SEP = '──────────────────────────────────────';
+    const ratio = Math.min(1, Math.max(0, amount / safePrior));
+    let filledCount = Math.round(ratio * 20);
+    if (ratio > 0 && filledCount === 0) filledCount = 1;
+    const emptyCount = 20 - filledCount;
 
-    if (req.status === 'fulfilled') {
-        payoutColor = ANSI_GREEN;
-        payoutDesc = 'Paid in Torn'.padStart(15, ' ');
-        vaultDesc = 'Current Vault'.padStart(15, ' ');
-    } else if (req.status === 'cancelled' || req.status === 'expired') {
-        payoutColor = ANSI_RED;
-        payoutDesc = 'Cancelled'.padStart(15, ' ');
-        vaultDesc = 'Preserved'.padStart(15, ' ');
+    let receiptLines = [];
+    if (isFulfilled) {
+        receiptLines = [
+            `\u001b[1;37m💸 AMOUNT DISBURSED:  \u001b[1;32m${amtStr}\u001b[0m`,
+            SEP,
+            `\u001b[0;36mPRIOR BALANCE   \u001b[0;37m${priorStr}\u001b[0m`,
+            `\u001b[0;32mPAID TO MEMBER  \u001b[1;32m- ${amtStr}\u001b[0m`,
+            `\u001b[0;34mNEW VAULT BAL   \u001b[1;37m${remStr}\u001b[0m`,
+            `\u001b[0;90mSTATUS \u001b[1;32m[${'█'.repeat(20)}] \u001b[1;32mSETTLED\u001b[0m`
+        ];
+    } else if (isCancelled) {
+        receiptLines = [
+            `\u001b[1;37m🚫 REQUEST VOIDED:    \u001b[1;31m${amtStr}\u001b[0m`,
+            SEP,
+            `\u001b[0;36mVAULT BALANCE   \u001b[0;37m${priorStr}\u001b[0m`,
+            `\u001b[0;31mVOIDED AMOUNT   \u001b[1;31m$0 deducted\u001b[0m`,
+            `\u001b[0;34mPRESERVED BAL   \u001b[1;37m${priorStr}\u001b[0m`,
+            `\u001b[0;90mSTATUS \u001b[1;31m[${'░'.repeat(20)}] \u001b[1;31mVOIDED\u001b[0m`
+        ];
+    } else if (isVerifying) {
+        receiptLines = [
+            `\u001b[1;37m⏳ IN PROGRESS:       \u001b[1;33m${amtStr}\u001b[0m`,
+            SEP,
+            `\u001b[0;36mVAULT AVAILABLE \u001b[1;37m${priorStr}\u001b[0m`,
+            `\u001b[0;33mCLAIMED AMOUNT  \u001b[1;33m- ${amtStr}  (${reqPct}%)\u001b[0m`,
+            `\u001b[0;34mVAULT REMAINING \u001b[1;32m${remStr} (${remPct}%)\u001b[0m`,
+            `\u001b[0;90mSTATUS \u001b[1;33m[${'█'.repeat(10)}${'░'.repeat(10)}] \u001b[1;33mCLAIMED\u001b[0m`
+        ];
+    } else {
+        receiptLines = [
+            `\u001b[1;37m💳 WITHDRAWAL AMOUNT: \u001b[1;33m${amtStr}\u001b[0m`,
+            SEP,
+            `\u001b[0;36mVAULT AVAILABLE \u001b[1;37m${priorStr}\u001b[0m`,
+            `\u001b[0;33mREQUESTED       \u001b[1;33m- ${amtStr}  (${reqPct}%)\u001b[0m`,
+            `\u001b[0;34mVAULT REMAINING \u001b[1;32m${remStr} (${remPct}%)\u001b[0m`,
+            `\u001b[0;90mSHARE  \u001b[1;32m[${'█'.repeat(filledCount)}${'░'.repeat(emptyCount)}] \u001b[0;90mVerified\u001b[0m`
+        ];
     }
 
-    const payoutFilled = payoutColor + FILLED_BLOCK.repeat(payoutBars);
-    const payoutEmpty = ANSI_GRAY + EMPTY_BLOCK.repeat(10 - payoutBars) + ANSI_RESET;
-
-    const vaultFilled = vaultColor + FILLED_BLOCK.repeat(vaultBars);
-    const vaultEmpty = ANSI_GRAY + EMPTY_BLOCK.repeat(10 - vaultBars) + ANSI_RESET;
-
-    const line1 = `${payoutColor}PAYOUT ${ANSI_RESET} ${payoutFilled}${payoutEmpty}  ${ANSI_WHITE}${amtStr.padStart(maxValLen, ' ')}${ANSI_RESET}  ${ANSI_GRAY}${payoutDesc}${ANSI_RESET}`;
-    const line2 = `${vaultColor}VAULT  ${ANSI_RESET} ${vaultFilled}${vaultEmpty}  ${ANSI_WHITE}${vaultStr.padStart(maxValLen, ' ')}${ANSI_RESET}  ${ANSI_GRAY}${vaultDesc}${ANSI_RESET}`;
-
-    return '```ansi\n' + line1 + '\n' + line2 + '\n```';
+    return '```ansi\n' + receiptLines.join('\n') + '\n```';
 }
 
 /**
