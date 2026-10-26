@@ -14054,69 +14054,36 @@ const FALLBACK_DESTINATIONS = {
 const activeTakeoffTimers = new Map(); // key: `${userId}_${yCode}` -> Timeout handle
 
 function formatTCT(unixSec) {
-    if (!unixSec) return "00:00";
+    if (!unixSec || isNaN(unixSec)) return "00:00";
     const d = new Date(Number(unixSec) * 1000);
-    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' });
+    const hh = String(d.getUTCHours()).padStart(2, '0');
+    const mm = String(d.getUTCMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
 }
 
 function formatCompactProfit(num) {
     if (!num || isNaN(num)) return "0";
     num = Number(num);
-    if (num >= 1e9) return (num / 1e9).toFixed(2) + "B";
-    if (num >= 1e6) return (num / 1e6).toFixed(2) + "M";
-    if (num >= 1e3) return Math.round(num / 1e3) + "k";
-    return num.toLocaleString();
+    if (num >= 1e9) {
+        const v = (num / 1e9).toFixed(2);
+        return v.endsWith('.00') ? v.slice(0, -3) + "B" : v + "B";
+    }
+    if (num >= 1e6) {
+        const v = (num / 1e6).toFixed(2);
+        return v.endsWith('.00') ? v.slice(0, -3) + "M" : (v.endsWith('0') ? v.slice(0, -1) + "M" : v + "M");
+    }
+    if (num >= 1e3) {
+        const v = (num / 1e3).toFixed(1);
+        return v.endsWith('.0') ? v.slice(0, -2) + "k" : v + "k";
+    }
+    return Math.round(num).toLocaleString();
 }
 
 function formatProfitPerHour(fullBagProfit, flightDurationMin) {
-    if (!fullBagProfit || !flightDurationMin) return '$0';
+    if (!fullBagProfit || !flightDurationMin) return '$0/hr';
     const roundTripHours = (flightDurationMin * 2) / 60;
-    const pph = fullBagProfit / roundTripHours;
-    return `$${formatStatNumber(Math.round(pph))}`;
-}
-
-function generateStockBar(current, maxTarget) {
-    const ratio = Math.min(1, Math.max(0, current / (maxTarget || 1)));
-    const filled = Math.min(10, Math.max(current > 0 ? 1 : 0, Math.round(ratio * 10)));
-    return '█'.repeat(filled) + '░'.repeat(10 - filled);
-}
-
-function buildAnsiTakeoffRadar({ modeLabel, landingTct, items }) {
-    const title = `🧭 TAKEOFF RADAR (${modeLabel.toUpperCase()} → ${landingTct})`;
-    const SEP = '──────────────────────────────────────────'; // 42 chars
-
-    const lines = [
-        `\u001b[1;37m${title}\u001b[0m`,
-        SEP
-    ];
-
-    for (const it of items) {
-        let col1 = '';
-        let col2 = '';
-        let col3 = '';
-
-        const nameClean = (it.shortName || it.name).toUpperCase().slice(0, 9);
-
-        if (it.phase === 'A' || it.phase === 'B1') {
-            col1 = `\u001b[1;32m🟢 ${nameClean.padEnd(9)}\u001b[0m`;
-            col2 = `\u001b[1;37mFLY NOW  \u001b[0m`;
-            const profitStr = it.fullBagProfit > 0 ? ` (+$${formatCompactProfit(it.fullBagProfit)})` : '';
-            const qtyStr = it.likelyStock >= 1000 ? `${(it.likelyStock / 1000).toFixed(1)}k` : `${it.likelyStock}`;
-            col3 = `\u001b[0;32m~${qtyStr} at ETA${profitStr}\u001b[0m`;
-        } else if (it.phase === 'C' || it.phase === 'B2') {
-            col1 = `\u001b[1;33m⏳ ${nameClean.padEnd(9)}\u001b[0m`;
-            col2 = `\u001b[1;33mWAIT ~${String(it.waitMinutes).padEnd(2)}m \u001b[0m`;
-            col3 = `\u001b[0;90mDepart ~${it.takeoffTct} TCT\u001b[0m`;
-        } else {
-            col1 = `\u001b[1;31m⚫ ${nameClean.padEnd(9)}\u001b[0m`;
-            col2 = `\u001b[1;31mGONE AT ETA \u001b[0m`;
-            col3 = `\u001b[0;90mCheck next cycle\u001b[0m`;
-        }
-
-        lines.push(`${col1}${col2}${col3}`);
-    }
-
-    return '```ansi\n' + lines.join('\n') + '\n```';
+    const pph = Math.round(fullBagProfit / roundTripHours);
+    return `$${formatCompactProfit(pph)}/hr`;
 }
 
 async function buildStocksEmbed(countryInput, apiKey, options = {}) {
@@ -14215,9 +14182,8 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
         }
 
         const landingUnix = nowSec + (flightDurationMin * 60);
-        const landingDate = new Date(landingUnix * 1000);
-        const landingTimeStr = landingDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' }) + ' TCT';
-        const departTimeStr = new Date(nowSec * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' }) + ' TCT';
+        const landingTimeStr = `${formatTCT(landingUnix)} TCT`;
+        const departTimeStr = `${formatTCT(nowSec)} TCT`;
 
         // Helper: Category Icons
         function getItemIcon(name = "") {
@@ -14322,6 +14288,7 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
                 else if (n.includes("ecstasy")) marketValue = 65000;
                 else if (n.includes("pcp")) marketValue = 21000;
                 else if (n.includes("cannabis")) marketValue = 7500;
+                else if (n.includes("kitten")) marketValue = 35700;
             }
 
             let profitPerItem = Math.max(0, marketValue - (s.cost || 0));
@@ -14337,117 +14304,89 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
             let minsBeforeLanding = 0;
             let windowClosesInMin = 0;
             let windowClosesTimeStr = '';
-            let windowOpenMins = 0;
             let waitMinutes = 0;
             let takeoffTct = '';
             let takeoffUnix = 0;
+            let futureRestockTct = '';
             let minutesToEmpty = 0;
             let emptyTct = '';
-            let hoursToEmpty = 0;
-            let fasterModeNote = '';
 
             const minutesRemainingCurrent = burnRate > 0 ? (currentStock / burnRate) : 9999;
+            const burnableUntilBag = Math.max(0, currentStock - bagCapacity);
+            const safeMinutesUntilBag = burnRate > 0 ? (burnableUntilBag / burnRate) : 9999;
 
             if (currentStock > 0 && minutesRemainingCurrent >= flightDurationMin) {
-                // PHASE A: In stock and survives the flight
+                // CASE 1: In stock and survives the flight
                 phase = 'A';
                 likelyStock = Math.round(currentStock - (burnRate * flightDurationMin));
                 lowStock = Math.max(0, Math.round(currentStock - (burnRate * 1.30 * flightDurationMin)));
                 highStock = Math.round(currentStock - (burnRate * 0.70 * flightDurationMin));
 
-                hoursToEmpty = Math.max(1, Math.round(minutesRemainingCurrent / 60));
-                const burnableUntilBag = Math.max(0, currentStock - bagCapacity);
-                const safeMinutesTotal = burnRate > 0 ? (burnableUntilBag / burnRate) : 9999;
-                windowClosesInMin = Math.max(0, Math.floor(safeMinutesTotal - flightDurationMin));
+                windowClosesInMin = Math.max(0, Math.floor(safeMinutesUntilBag - flightDurationMin));
                 const windowClosesUnix = nowSec + (windowClosesInMin * 60);
                 windowClosesTimeStr = formatTCT(windowClosesUnix);
 
-            } else if (currentStock > 0 && minutesRemainingCurrent < flightDurationMin) {
-                // PHASE C: In stock, but sells out mid-flight!
-                phase = 'C';
-                likelyStock = 0;
-                lowStock = 0;
-                highStock = 0;
-
-                minutesToEmpty = Math.max(1, Math.round(minutesRemainingCurrent));
-                const emptyUnix = nowSec + (minutesToEmpty * 60);
-                emptyTct = formatTCT(emptyUnix);
-                minsBeforeLanding = flightDurationMin - minutesToEmpty;
-
-                // Predict subsequent restock after selling out
-                const restockDelay = n.includes("xanax") ? 20 : 35;
-                const minTarget = minutesToEmpty + restockDelay;
-                const qOffset = (15 - ((curMin + minTarget) % 15)) % 15;
-                const nextRestockMin = minTarget + qOffset;
-                restockUnix = nowSec + (nextRestockMin * 60);
-                restockTimeStr = formatTCT(restockUnix);
-
-                takeoffUnix = restockUnix + (3 * 60) - (flightDurationMin * 60);
-                waitMinutes = Math.max(1, Math.ceil((takeoffUnix - nowSec) / 60));
-                takeoffTct = formatTCT(takeoffUnix);
-
-                if (bctMins < minutesToEmpty) {
-                    fasterModeNote = ` · ⚡ Catchable ONLY with BCT (${bctMins}m)`;
-                } else if (wltMins < minutesToEmpty) {
-                    fasterModeNote = ` · ⚡ Catchable with WLT (${wltMins}m) or BCT (${bctMins}m)`;
-                }
-
             } else {
-                // PHASE B: Out of stock (currentStock === 0)
-                let zeroAgeMins = 0;
-                if (tracked && tracked.zeroSinceTs) {
-                    zeroAgeMins = Math.round((nowMs - tracked.zeroSinceTs) / 60000);
-                } else if (yataUpdateSec) {
-                    zeroAgeMins = Math.max(0, Math.round((nowSec - yataUpdateSec) / 60));
-                }
+                // Either sells out mid-flight OR is currently 0
+                if (currentStock > 0) {
+                    minutesToEmpty = Math.max(1, Math.round(minutesRemainingCurrent));
+                    const emptyUnix = nowSec + (minutesToEmpty * 60);
+                    emptyTct = formatTCT(emptyUnix);
 
-                let firstRestockMin = minsToNextQuarter;
-                if (zeroAgeMins < 5 && minsToNextQuarter < 4) {
-                    firstRestockMin = minsToNextQuarter + 15;
-                } else if (zeroAgeMins > 40) {
-                    firstRestockMin = Math.max(1, minsToNextQuarter);
-                }
-
-                restockUnix = nowSec + (firstRestockMin * 60);
-                restockTimeStr = formatTCT(restockUnix);
-
-                const safeTakeoffStart = restockUnix + (3 * 60) - (flightDurationMin * 60);
-                const burnDuration = burnRate > 0 ? Math.floor((typicalSize - bagCapacity) / burnRate) * 60 : 1800;
-                const safeTakeoffEnd = restockUnix + burnDuration - (flightDurationMin * 60);
-
-                if (nowSec >= safeTakeoffStart && nowSec <= safeTakeoffEnd) {
-                    // Sub-case B1: In-Flight Restock!
-                    phase = 'B1';
-                    minsBeforeLanding = Math.max(1, Math.round((landingUnix - restockUnix) / 60));
-                    likelyStock = Math.max(0, Math.round(typicalSize - (burnRate * minsBeforeLanding)));
-                    lowStock = Math.max(0, Math.round((typicalSize * 0.75) - (burnRate * 1.30 * minsBeforeLanding)));
-                    highStock = Math.round((typicalSize * 1.25) - (burnRate * 0.70 * minsBeforeLanding));
-                    windowOpenMins = Math.max(1, Math.round((safeTakeoffEnd - nowSec) / 60));
+                    const restockDelay = n.includes("xanax") ? 20 : 35;
+                    const minTarget = minutesToEmpty + restockDelay;
+                    const qOffset = (15 - ((curMin + minTarget) % 15)) % 15;
+                    const nextRestockMin = minTarget + qOffset;
+                    restockUnix = nowSec + (nextRestockMin * 60);
+                    restockTimeStr = formatTCT(restockUnix);
                 } else {
-                    // Sub-case B2: Wait to depart
-                    phase = 'B2';
-                    takeoffUnix = safeTakeoffStart;
+                    // Currently 0
+                    let zeroAgeMins = 0;
+                    if (tracked && tracked.zeroSinceTs) {
+                        zeroAgeMins = Math.round((nowMs - tracked.zeroSinceTs) / 60000);
+                    } else if (yataUpdateSec) {
+                        zeroAgeMins = Math.max(0, Math.round((nowSec - yataUpdateSec) / 60));
+                    }
+                    let firstRestockMin = minsToNextQuarter;
+                    if (zeroAgeMins < 5 && minsToNextQuarter < 4) {
+                        firstRestockMin = minsToNextQuarter + 15;
+                    } else if (zeroAgeMins > 40) {
+                        firstRestockMin = Math.max(1, minsToNextQuarter);
+                    }
+                    restockUnix = nowSec + (firstRestockMin * 60);
+                    restockTimeStr = formatTCT(restockUnix);
+                }
+
+                // Check if restock happens while player is in the air (T_restock <= T_landing - 2m)
+                const isRestockInFlight = (restockUnix <= landingUnix - (2 * 60));
+
+                if (isRestockInFlight) {
+                    minsBeforeLanding = Math.max(1, Math.round((landingUnix - restockUnix) / 60));
+                    const projectedAtLanding = Math.max(0, Math.round(typicalSize - (burnRate * minsBeforeLanding)));
+
+                    if (projectedAtLanding >= bagCapacity) {
+                        // CASE 2: In-Flight Restock! Fresh stock on arrival
+                        phase = 'B1';
+                        likelyStock = projectedAtLanding;
+                        lowStock = Math.max(0, Math.round((typicalSize * 0.75) - (burnRate * 1.30 * minsBeforeLanding)));
+                        highStock = Math.round((typicalSize * 1.25) - (burnRate * 0.70 * minsBeforeLanding));
+                    }
+                }
+
+                if (phase !== 'B1') {
+                    // CASE 3: WAIT TO FLY
+                    // Ensure future restock target gives a departure strictly in the future (takeoffUnix > nowSec)
+                    let futureRestockUnix = restockUnix;
+                    while (futureRestockUnix + (3 * 60) - (flightDurationMin * 60) <= nowSec) {
+                        futureRestockUnix += 15 * 60;
+                    }
+                    takeoffUnix = futureRestockUnix + (3 * 60) - (flightDurationMin * 60);
                     waitMinutes = Math.max(1, Math.ceil((takeoffUnix - nowSec) / 60));
                     takeoffTct = formatTCT(takeoffUnix);
-                    likelyStock = 0;
-                    lowStock = 0;
-                    highStock = 0;
-                }
-            }
+                    futureRestockTct = formatTCT(futureRestockUnix);
 
-            let status = { code: 'plenty', emoji: '🟢', label: 'Plenty' };
-            if (phase === 'A' || phase === 'B1') {
-                if (lowStock >= bagCapacity) {
-                    status = { code: 'plenty', emoji: '🟢', label: 'Plenty' };
-                } else if (likelyStock >= bagCapacity) {
-                    status = { code: 'tight', emoji: '🟡', label: 'Tight' };
-                } else {
-                    status = { code: 'short', emoji: '🔴', label: 'Short' };
+                    phase = currentStock > 0 ? 'C' : 'B2';
                 }
-            } else if (phase === 'C') {
-                status = { code: 'gone', emoji: '⚫', label: 'Gone at ETA' };
-            } else {
-                status = { code: 'wait', emoji: '⏳', label: 'Restock Pending' };
             }
 
             return {
@@ -14458,6 +14397,7 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
                 isDrug: isDrugItem(s.name),
                 burnRate,
                 shelfCap,
+                typicalSize,
                 profitPerItem,
                 fullBagProfit,
                 phase,
@@ -14469,15 +14409,12 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
                 minsBeforeLanding,
                 windowClosesInMin,
                 windowClosesTimeStr,
-                windowOpenMins,
                 waitMinutes,
                 takeoffTct,
                 takeoffUnix,
+                futureRestockTct,
                 minutesToEmpty,
-                emptyTct,
-                hoursToEmpty,
-                fasterModeNote,
-                status
+                emptyTct
             };
         });
 
@@ -14490,73 +14427,63 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
             return b.fullBagProfit - a.fullBagProfit;
         });
 
-        // ── Top Takeoff ANSI Radar Box ──
-        const ansiBox = buildAnsiTakeoffRadar({
-            modeLabel: modeUpper,
-            landingTct: landingTimeStr,
-            items: priorityItems.slice(0, 4)
-        });
-
-        // ── Best Run Summary ──
+        // ── Top Verdict Callout ──
         const bestRun = priorityItems.find(p => p.phase === 'A' || p.phase === 'B1');
         const bestUpcoming = priorityItems.find(p => p.phase === 'C' || p.phase === 'B2');
 
         let summaryLine = '';
         if (bestRun) {
-            const pph = formatProfitPerHour(bestRun.fullBagProfit, flightDurationMin);
-            summaryLine = `💰 **Best Immediate Run:** **${bestRun.name}** (+${formatStatNumber(bestRun.fullBagProfit)}/bag · **${pph}/hr** round-trip) — **Take off now!**`;
+            const pphStr = formatCompactProfit(Math.round(bestRun.fullBagProfit / ((flightDurationMin * 2) / 60)));
+            summaryLine = `🏆 **Best Run Now:** **${bestRun.name}** (**+$${formatCompactProfit(bestRun.fullBagProfit)}/bag** · **$${pphStr}/hr**) — **Fly now!**`;
         } else if (bestUpcoming) {
-            const pph = formatProfitPerHour(bestUpcoming.fullBagProfit, flightDurationMin);
-            summaryLine = `⏳ **Best Upcoming Run:** **${bestUpcoming.name}** (+${formatStatNumber(bestUpcoming.fullBagProfit)}/bag · **${pph}/hr**) — **Wait ~${bestUpcoming.waitMinutes}m & depart at ~${bestUpcoming.takeoffTct} TCT**`;
+            const pphStr = formatCompactProfit(Math.round(bestUpcoming.fullBagProfit / ((flightDurationMin * 2) / 60)));
+            summaryLine = `⏳ **Best Upcoming:** **${bestUpcoming.name}** (**+$${formatCompactProfit(bestUpcoming.fullBagProfit)}/bag** · **$${pphStr}/hr**) — **Wait ~${bestUpcoming.waitMinutes}m & depart at ~${bestUpcoming.takeoffTct} TCT**`;
         } else {
             summaryLine = `⚫ **Priority items depleted.** Check next quarter-hour.`;
         }
 
-        // ── Priority Item Cards (Zero Orphan Wrapping) ──
+        // ── Streamlined Priority Item Cards (1 Header + 2 Clean Quote Lines) ──
         const priorityBlocks = priorityItems.map(item => {
-            let actionPill = '';
-            let line3 = '';
-            let line4 = '';
             const fullBagProfit = item.fullBagProfit;
-            const pph = formatProfitPerHour(fullBagProfit, flightDurationMin);
+            const pph = Math.round(fullBagProfit / ((flightDurationMin * 2) / 60));
+            const pphStr = `$${formatCompactProfit(pph)}/hr`;
+            const profitPerItemStr = `+$${formatCompactProfit(item.profitPerItem)}/ea`;
+            const fullBagProfitStr = `+$${formatCompactProfit(fullBagProfit)}/bag`;
+
+            let header = '';
+            let line1 = '';
+            let line2 = '';
 
             if (item.phase === 'A') {
                 const isTight = item.lowStock < bagCapacity;
-                actionPill = isTight ? '🟡 `FLY NOW · TIGHT`' : '🟢 `FLY NOW · PLENTY`';
-                const timeNote = item.hoursToEmpty > 3 
-                    ? `*(sells out in ~${item.hoursToEmpty}h)*` 
-                    : `*(sells out in ~${Math.round(item.currentStock / (item.burnRate || 1))}m at ${item.windowClosesTimeStr} TCT)*`;
-                line3 = `> 📊 \`Now: ${item.currentStock.toLocaleString()}\` (\`−${item.burnRate}/m\`) → 📉 **Depleting steadily** ${timeNote}`;
-                const bar = generateStockBar(item.likelyStock, item.shelfCap);
-                const windowNote = (item.windowClosesInMin > 0 && item.windowClosesInMin < 180)
-                    ? ` · Window open **~${item.windowClosesInMin}m** (until ${item.windowClosesTimeStr} TCT)`
-                    : '';
-                line4 = `> 🛬 **At ${landingTimeStr}:** \`[${bar}]\` **~${item.likelyStock.toLocaleString()} left** *(range: ${item.lowStock.toLocaleString()}–${item.highStock.toLocaleString()})*${windowNote}`;
+                const pill = isTight ? '🟡 `FLY NOW · TIGHT`' : '🟢 `FLY NOW · PLENTY`';
+                header = `${pill}  ${item.icon} **${item.name}** · **$${item.cost.toLocaleString()}** → **${profitPerItemStr}** (**${fullBagProfitStr}** · \`${pphStr}\`)`;
+                line1 = `> 📊 \`Now: ${item.currentStock.toLocaleString()}\` (\`−${item.burnRate}/m\`)  •  🛬 **At ${landingTimeStr}:** **~${item.likelyStock.toLocaleString()} left** *(${item.lowStock.toLocaleString()}–${item.highStock.toLocaleString()})*`;
+                if (item.burnRate === 0 || item.windowClosesInMin >= 720) {
+                    line2 = `> ⏱️ **Takeoff Window:** Open now *(burn rate steady)*`;
+                } else {
+                    line2 = `> ⏱️ **Takeoff Window:** Open for **~${item.windowClosesInMin}m** *(depart before \`${item.windowClosesTimeStr} TCT\`)*`;
+                }
             } else if (item.phase === 'B1') {
-                actionPill = '🟢 `FLY NOW · PLENTY`';
-                line3 = `> 📊 \`Now: 0\` (\`−${item.burnRate}/m\`) → 🔄 **Restocks In-Flight at ${item.restockTimeStr} TCT** *(${item.minsBeforeLanding}m before you land)*`;
-                const bar = generateStockBar(item.likelyStock, item.shelfCap);
-                line4 = `> 🛬 **At ${landingTimeStr}:** \`[${bar}]\` **~${item.likelyStock.toLocaleString()} left** *(range: ${item.lowStock.toLocaleString()}–${item.highStock.toLocaleString()})* · Window open **~${item.windowOpenMins}m**`;
-            } else if (item.phase === 'B2') {
-                actionPill = `⏳ \`WAIT ~${item.waitMinutes}m · RESTOCK PENDING\``;
-                line3 = `> 📊 \`Now: 0\` (\`−${item.burnRate}/m\`) → 🔄 **Est. Next Restock: ~${item.restockTimeStr} TCT** *(~${(item.shelfCap || 1500).toLocaleString()} units)*`;
-                line4 = `> 🛫 **Takeoff Advice:** ⏳ **Wait ~${item.waitMinutes}m to fly** — Depart at **~${item.takeoffTct} TCT** (<t:${item.takeoffUnix}:R>) to land 3m after restock`;
+                header = `🟢 \`FLY NOW · IN-FLIGHT RESTOCK\`  ${item.icon} **${item.name}** · **$${item.cost.toLocaleString()}** → **${profitPerItemStr}** (**${fullBagProfitStr}** · \`${pphStr}\`)`;
+                if (item.currentStock > 0) {
+                    line1 = `> 📊 \`Now: ${item.currentStock.toLocaleString()}\` (\`−${item.burnRate}/m\`, hits 0 at \`${item.emptyTct} TCT\`)  •  🔄 **Restocks at ~${item.restockTimeStr} TCT** *(${item.minsBeforeLanding}m before landing)*`;
+                } else {
+                    line1 = `> 📊 \`Now: 0\` (\`−${item.burnRate}/m\`)  •  🔄 **Restocks at ~${item.restockTimeStr} TCT** *(${item.minsBeforeLanding}m before landing)*`;
+                }
+                line2 = `> 🛬 **At ${landingTimeStr}:** **~${item.likelyStock.toLocaleString()} left** after restock  •  ⏱️ **Takeoff Window:** Open now`;
             } else if (item.phase === 'C') {
-                actionPill = `⏳ \`WAIT ~${item.waitMinutes}m · GONE AT ETA\``;
-                line3 = `> 📊 \`Now: ${item.currentStock.toLocaleString()}\` (\`−${item.burnRate}/m\`) → 📉 **Hits 0 in ~${item.minutesToEmpty}m at ${item.emptyTct} TCT** *(${item.minsBeforeLanding}m before you land!)*`;
-                line4 = `> 🛫 **Next Window:** Est. restock **~${item.restockTimeStr} TCT** → **Depart at ~${item.takeoffTct} TCT** (<t:${item.takeoffUnix}:R>)${item.fasterModeNote}`;
+                header = `⏳ \`WAIT ~${item.waitMinutes}m · GONE AT ETA\`  ${item.icon} **${item.name}** · **$${item.cost.toLocaleString()}** → **${profitPerItemStr}** (**${fullBagProfitStr}** · \`${pphStr}\`)`;
+                line1 = `> 📊 \`Now: ${item.currentStock.toLocaleString()}\` (\`−${item.burnRate}/m\`) → 📉 **Hits 0 at ${item.emptyTct} TCT** *(sells out before \`${landingTimeStr}\` landing)*`;
+                line2 = `> 🛫 **Takeoff Plan:** Next restock **~${item.futureRestockTct} TCT** → **Depart at ~${item.takeoffTct} TCT** (<t:${item.takeoffUnix}:R>)`;
+            } else {
+                // Phase B2 (currently 0, restock pending after landing)
+                header = `⏳ \`WAIT ~${item.waitMinutes}m · RESTOCK PENDING\`  ${item.icon} **${item.name}** · **$${item.cost.toLocaleString()}** → **${profitPerItemStr}** (**${fullBagProfitStr}** · \`${pphStr}\`)`;
+                line1 = `> 📊 \`Now: 0\` (\`−${item.burnRate}/m\`) → 🔄 **Next restock: ~${item.futureRestockTct} TCT** *(~${(item.shelfCap || item.typicalSize || 1500).toLocaleString()} units)*`;
+                line2 = `> 🛫 **Takeoff Plan:** Depart at **~${item.takeoffTct} TCT** (<t:${item.takeoffUnix}:R>) to land 3m after restock`;
             }
 
-            const profitBadge = (fullBagProfit > 0)
-                ? `> 💰 **+$${formatStatNumber(item.profitPerItem)}/ea** (**+$${formatStatNumber(fullBagProfit)}/bag** · **${pph}/hr**)`
-                : `> 💰 Market value: **$${item.cost.toLocaleString()}** (Breakeven/Low margin)`;
-
-            return [
-                `${actionPill}  ${item.icon} **${item.name}** — **$${item.cost.toLocaleString()}**`,
-                profitBadge,
-                line3,
-                line4
-            ].join('\n');
+            return `${header}\n${line1}\n${line2}`;
         });
 
         // ── Secondary Drugs & Other Goods ──
@@ -14567,7 +14494,7 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
         if (drugItems.length > 0) {
             const drugParts = drugItems.map(d => {
                 const profitStr = d.fullBagProfit > 0 ? ` (+${formatCompactProfit(d.fullBagProfit)}/bag)` : '';
-                return `${d.status.emoji} ${d.name} ~${d.likelyStock.toLocaleString()}${profitStr}`;
+                return `${d.status?.emoji || '💊'} ${d.name} ~${d.likelyStock.toLocaleString()}${profitStr}`;
             });
             drugsLine = `💊 **Other Drugs:** ${drugParts.join(' · ')}`;
         }
@@ -14577,11 +14504,11 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
         let fillerCount = 0;
 
         for (const it of nonDrugOthers) {
-            if (it.fullBagProfit > 0 || (it.status.code !== 'plenty' && it.quantity > 0)) {
-                if (it.status.code !== 'plenty') {
-                    notableOthers.push(`${it.status.emoji} ${it.status.label}: ${it.name} ~${it.likelyStock.toLocaleString()}`);
+            if (it.fullBagProfit > 0 || (it.phase !== 'A' && it.quantity > 0)) {
+                if (it.phase !== 'A') {
+                    notableOthers.push(`⚫ ${it.name} ~${it.likelyStock.toLocaleString()}`);
                 } else {
-                    notableOthers.push(`${it.status.emoji} ${it.name} ~${it.likelyStock.toLocaleString()} (+${formatCompactProfit(it.fullBagProfit)}/bag)`);
+                    notableOthers.push(`🟢 ${it.name} ~${it.likelyStock.toLocaleString()} (+${formatCompactProfit(it.fullBagProfit)}/bag)`);
                 }
             } else {
                 fillerCount++;
@@ -14596,15 +14523,13 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
             otherStockLine = `📦 **Other Stock:** ${allParts.join(' · ')}`;
         }
 
-        const legendStr = '-# 🟢 Plenty (low covers bag) · 🟡 Tight (likely covers bag) · 🔴 Short (<bag) · ⚫ Gone (~0)';
+        const legendStr = '-# 🟢 Plenty · 🟡 Tight · 🔴 Short · 🔄 In-Flight Restock · ⏳ Wait for Next Cycle';
 
         const descParts = [
-            `🛫 **Depart:** \`${departTimeStr}\` (<t:${nowSec}:R>)  •  ✈️ **Arrival:** \`${landingTimeStr}\` (\`${modeLabel}\` · \`🎒 ${bagCapacity} cap\`)`,
-            `📡 **Telemetry:** YATA synced <t:${yataUpdateSec || nowSec}:R>  •  🎯 **Confidence:** \`${confidenceStr}\``,
-            ansiBox,
+            `🛫 **Depart:** \`${departTimeStr}\` (<t:${nowSec}:R>)  •  ✈️ **Arrival:** \`${landingTimeStr}\` (\`${modeLabel}\` · \`🎒 ${bagCapacity}\`)`,
+            `📡 **YATA:** Synced <t:${yataUpdateSec || nowSec}:R> (\`${confidenceStr}\`)`,
             summaryLine,
             ``,
-            `**Priority items · projected at landing**`,
             priorityBlocks.join('\n\n'),
             ``
         ];
@@ -14614,7 +14539,10 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
 
         const description = descParts.join('\n');
 
-        // ── Interactive Discord Components ──
+        // ── Interactive Discord Components (2 Clean, Non-Wrapping Rows) ──
+        const modeShortName = modeKey === 'standard' ? 'Std' : (modeKey === 'wlt' ? 'WLT' : (modeKey === 'bct' ? 'BCT' : 'Jet'));
+        const modeEmoji = modeKey === 'standard' ? '🛫' : (modeKey === 'wlt' ? '✈️' : (modeKey === 'bct' ? '🎫' : '🛩️'));
+
         const actionRow1 = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setStyle(ButtonStyle.Primary)
@@ -14624,8 +14552,8 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
             new ButtonBuilder()
                 .setStyle(ButtonStyle.Secondary)
                 .setCustomId(`travel_mode_${target.yCode}_${nextMode}_${bagCapacity}`)
-                .setLabel(`Mode: ${modeLabel.replace(/^[^\w]+/, '').trim()}`)
-                .setEmoji(modeKey === 'standard' ? '🛫' : (modeKey === 'wlt' ? '✈️' : (modeKey === 'bct' ? '🎫' : '🛩️'))),
+                .setLabel(`${modeShortName} (${formatFlightDuration(flightDurationMin)})`)
+                .setEmoji(modeEmoji),
             new ButtonBuilder()
                 .setStyle(ButtonStyle.Secondary)
                 .setCustomId(`travel_bag_${target.yCode}_${modeKey}_${nextBag}`)
@@ -14634,7 +14562,7 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
             new ButtonBuilder()
                 .setStyle(ButtonStyle.Success)
                 .setCustomId(`travel_ping_${target.yCode}_${modeKey}_${bagCapacity}`)
-                .setLabel('Ping Me at Takeoff')
+                .setLabel('Remind Me')
                 .setEmoji('🔔')
         );
 
@@ -14646,12 +14574,12 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
                 .setEmoji('✈️'),
             new ButtonBuilder()
                 .setStyle(ButtonStyle.Link)
-                .setLabel('FactionOS Travel Desk')
+                .setLabel('Travel Desk')
                 .setURL('https://faction-os.duckdns.org/travel.html')
                 .setEmoji('🧮'),
             new ButtonBuilder()
                 .setStyle(ButtonStyle.Link)
-                .setLabel('Live YATA Abroad')
+                .setLabel('YATA')
                 .setURL('https://yata.yt/bazaar/abroad/')
                 .setEmoji('🌐')
         );
@@ -14667,7 +14595,7 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
                 itemName: waitItem.name,
                 takeoffUnix: waitItem.takeoffUnix,
                 takeoffTct: waitItem.takeoffTct,
-                restockTct: waitItem.restockTimeStr,
+                restockTct: waitItem.futureRestockTct || waitItem.restockTimeStr,
                 waitMinutes: waitItem.waitMinutes
             };
         }
