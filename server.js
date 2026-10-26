@@ -16459,66 +16459,83 @@ function buildBankRequestEmbed(req) {
         title = `🏦 VAULT WITHDRAWAL #${req.id}  •  🔄 IN PROGRESS`;
     }
 
-    const prior = Number(req.balanceBefore !== undefined && req.balanceBefore !== null
-        ? req.balanceBefore
-        : (req.remainingBalance ? Number(req.remainingBalance) + amount : amount));
-    const safePrior = Math.max(prior, amount, 1);
-
     const isCancelled = req.status === 'cancelled' || req.status === 'expired';
     const isFulfilled = req.status === 'fulfilled';
     const isVerifying = req.status === 'verifying';
 
-    const remaining = isCancelled ? prior : Math.max(0, prior - amount);
-    const reqPct = Math.min(100, (amount / safePrior) * 100).toFixed(1);
-    const remPct = Math.max(0, 100 - parseFloat(reqPct)).toFixed(1);
+    const hasPersonalBalance = (req.balanceBefore !== undefined && req.balanceBefore !== null && !isNaN(req.balanceBefore))
+        || (req.remainingBalance !== undefined && req.remainingBalance !== null && !isNaN(req.remainingBalance));
+
+    const memberPriorBalance = hasPersonalBalance
+        ? Number(req.balanceBefore !== undefined && req.balanceBefore !== null
+            ? req.balanceBefore
+            : Number(req.remainingBalance) + amount)
+        : null;
+
+    const memberRemainingBalance = hasPersonalBalance ? Math.max(0, memberPriorBalance - amount) : null;
 
     const amtStr = `$${amount.toLocaleString('en-US')}`;
-    const priorStr = `$${prior.toLocaleString('en-US')}`;
-    const remStr = `$${remaining.toLocaleString('en-US')}`;
+    const priorStr = hasPersonalBalance ? `$${memberPriorBalance.toLocaleString('en-US')}` : '';
+    const remStr = hasPersonalBalance ? `$${memberRemainingBalance.toLocaleString('en-US')}` : '';
 
-    const SEP = '──────────────────────────────────────';
-    const ratio = Math.min(1, Math.max(0, amount / safePrior));
-    let filledCount = Math.round(ratio * 20);
-    if (ratio > 0 && filledCount === 0) filledCount = 1;
-    const emptyCount = 20 - filledCount;
+    const SEP = '────────────────────────────────────';
 
     let receiptLines = [];
     if (isFulfilled) {
-        receiptLines = [
-            `\u001b[1;37m💸 AMOUNT DISBURSED:  \u001b[1;32m${amtStr}\u001b[0m`,
-            SEP,
-            `\u001b[0;36mPRIOR BALANCE   \u001b[0;37m${priorStr}\u001b[0m`,
-            `\u001b[0;32mPAID TO MEMBER  \u001b[1;32m- ${amtStr}\u001b[0m`,
-            `\u001b[0;34mNEW VAULT BAL   \u001b[1;37m${remStr}\u001b[0m`,
-            `\u001b[0;90mSTATUS \u001b[1;32m[${'█'.repeat(20)}] \u001b[1;32mSETTLED\u001b[0m`
-        ];
+        if (hasPersonalBalance) {
+            receiptLines = [
+                `\u001b[1;32m✅ AMOUNT SENT:         ${amtStr}\u001b[0m`,
+                SEP,
+                `\u001b[0;36mPRIOR BALANCE    \u001b[0;37m${priorStr}\u001b[0m`,
+                `\u001b[0;32mSENT TO MEMBER   \u001b[1;32m- ${amtStr}\u001b[0m`,
+                `\u001b[0;37mNEW MEMBER BAL   \u001b[1;37m${remStr}\u001b[0m`
+            ];
+        } else {
+            receiptLines = [
+                `\u001b[1;32m✅ AMOUNT SENT:         ${amtStr}\u001b[0m`
+            ];
+        }
     } else if (isCancelled) {
-        receiptLines = [
-            `\u001b[1;37m🚫 REQUEST VOIDED:    \u001b[1;31m${amtStr}\u001b[0m`,
-            SEP,
-            `\u001b[0;36mVAULT BALANCE   \u001b[0;37m${priorStr}\u001b[0m`,
-            `\u001b[0;31mVOIDED AMOUNT   \u001b[1;31m$0 deducted\u001b[0m`,
-            `\u001b[0;34mPRESERVED BAL   \u001b[1;37m${priorStr}\u001b[0m`,
-            `\u001b[0;90mSTATUS \u001b[1;31m[${'░'.repeat(20)}] \u001b[1;31mVOIDED\u001b[0m`
-        ];
+        if (req.status === 'expired') {
+            receiptLines = [
+                `\u001b[1;31m⏱️ EXPIRED:\u001b[0m \u001b[0;37mRequest for \u001b[1;37m${amtStr}\u001b[0;37m timed out • No funds deducted.\u001b[0m`
+            ];
+        } else {
+            receiptLines = [
+                `\u001b[1;31m🚫 VOIDED:\u001b[0m \u001b[0;37mRequest for \u001b[1;37m${amtStr}\u001b[0;37m was cancelled • No funds deducted.\u001b[0m`
+            ];
+        }
     } else if (isVerifying) {
-        receiptLines = [
-            `\u001b[1;37m⏳ IN PROGRESS:       \u001b[1;33m${amtStr}\u001b[0m`,
-            SEP,
-            `\u001b[0;36mVAULT AVAILABLE \u001b[1;37m${priorStr}\u001b[0m`,
-            `\u001b[0;33mCLAIMED AMOUNT  \u001b[1;33m- ${amtStr}  (${reqPct}%)\u001b[0m`,
-            `\u001b[0;34mVAULT REMAINING \u001b[1;32m${remStr} (${remPct}%)\u001b[0m`,
-            `\u001b[0;90mSTATUS \u001b[1;33m[${'█'.repeat(10)}${'░'.repeat(10)}] \u001b[1;33mCLAIMED\u001b[0m`
-        ];
+        if (hasPersonalBalance) {
+            const cashOutTag = memberRemainingBalance === 0 ? ' \u001b[0;90m(Full Cash-Out)\u001b[0m' : '';
+            receiptLines = [
+                `\u001b[1;33m⏳ IN PROGRESS:         ${amtStr}\u001b[0m`,
+                SEP,
+                `\u001b[0;36mYOUR VAULT BAL   \u001b[1;37m${priorStr}\u001b[0m`,
+                `\u001b[0;33mCLAIMED AMOUNT   \u001b[1;33m- ${amtStr}\u001b[0m`,
+                `\u001b[0;32mBALANCE AFTER    \u001b[1;32m${remStr}\u001b[0m${cashOutTag}`
+            ];
+        } else {
+            receiptLines = [
+                `\u001b[1;33m⏳ IN PROGRESS:         ${amtStr}\u001b[0m`
+            ];
+        }
     } else {
-        receiptLines = [
-            `\u001b[1;37m💳 WITHDRAWAL AMOUNT: \u001b[1;33m${amtStr}\u001b[0m`,
-            SEP,
-            `\u001b[0;36mVAULT AVAILABLE \u001b[1;37m${priorStr}\u001b[0m`,
-            `\u001b[0;33mREQUESTED       \u001b[1;33m- ${amtStr}  (${reqPct}%)\u001b[0m`,
-            `\u001b[0;34mVAULT REMAINING \u001b[1;32m${remStr} (${remPct}%)\u001b[0m`,
-            `\u001b[0;90mSHARE  \u001b[1;32m[${'█'.repeat(filledCount)}${'░'.repeat(emptyCount)}] \u001b[0;90mVerified\u001b[0m`
-        ];
+        // Pending
+        if (hasPersonalBalance) {
+            const cashOutTag = memberRemainingBalance === 0 ? ' \u001b[0;90m(Full Cash-Out)\u001b[0m' : '';
+            receiptLines = [
+                `\u001b[1;33m💸 WITHDRAWAL REQUEST:  ${amtStr}\u001b[0m`,
+                SEP,
+                `\u001b[0;36mYOUR VAULT BAL   \u001b[1;37m${priorStr}\u001b[0m`,
+                `\u001b[0;33mWITHDRAWING      \u001b[1;33m- ${amtStr}\u001b[0m`,
+                `\u001b[0;32mBALANCE AFTER    \u001b[1;32m${remStr}\u001b[0m${cashOutTag}`
+            ];
+        } else {
+            receiptLines = [
+                `\u001b[1;33m💸 WITHDRAWAL REQUEST:  ${amtStr}\u001b[0m`
+            ];
+        }
     }
 
     const description = '```ansi\n' + receiptLines.join('\n') + '\n```';
@@ -16527,46 +16544,48 @@ function buildBankRequestEmbed(req) {
         ? `[${name} [${tornId}]](https://www.torn.com/profiles.php?XID=${tornId})`
         : `**${name}**`;
 
+    const field1Name = isFulfilled ? '👤 Recipient' : '👤 Requester';
+
     let field2Name = '🩺 Member Status';
     let field2Value = formatMemberLiveStatus(req.memberStatus);
 
     if (isFulfilled) {
-        field2Name = '🏦 Processed By';
+        field2Name = '🏦 Sent By';
         field2Value = `**${req.fulfillerName || (req.fulfilledBy ? `<@${req.fulfilledBy}>` : 'Banker')}**`;
     } else if (isCancelled) {
         field2Name = '🚫 Voided By';
-        field2Value = `**${req.cancellerName || (req.cancelledBy && req.cancelledBy !== 'system' ? `<@${req.cancelledBy}>` : 'System')}**`;
+        field2Value = `**${req.cancellerName || (req.cancelledBy && req.cancelledBy !== 'system' ? `<@${req.cancelledBy}>` : (req.status === 'expired' ? 'Auto-Expiry' : 'System'))}**`;
+    } else if (isVerifying) {
+        field2Name = '🏦 Claimed By';
+        field2Value = `**${req.fulfillerName || (req.fulfilledBy ? `<@${req.fulfilledBy}>` : 'Banker')}**`;
     }
 
-    let field3Name = '⏱️ Timeline';
-    let field3Value = `Requested <t:${Math.floor((req.timestamp || Date.now()) / 1000)}:R>`;
+    let field3Name = '⏱️ Requested';
+    let field3Value = `<t:${Math.floor((req.timestamp || Date.now()) / 1000)}:R>`;
 
     if (isFulfilled) {
+        field3Name = '⏱️ Completed';
         const timeRef = req.fulfilledAt || req.verifiedAt || Date.now();
-        let turnaroundStr = '';
-        if (req.timestamp && timeRef > req.timestamp) {
-            const diffSec = Math.max(1, Math.floor((timeRef - req.timestamp) / 1000));
-            if (diffSec < 60) turnaroundStr = ` (⚡ ${diffSec}s turnaround)`;
-            else turnaroundStr = ` (⚡ ${Math.floor(diffSec / 60)}m ${diffSec % 60}s turnaround)`;
-        }
-        field3Value = `Paid <t:${Math.floor(timeRef / 1000)}:R>${turnaroundStr}`;
+        field3Value = `<t:${Math.floor(timeRef / 1000)}:R>`;
     } else if (isCancelled) {
+        field3Name = req.status === 'expired' ? '⏱️ Expired' : '⏱️ Cancelled';
         const cancelRef = req.cancelledAt || req.expiredAt || Date.now();
-        field3Value = `Voided <t:${Math.floor(cancelRef / 1000)}:R>`;
+        field3Value = `<t:${Math.floor(cancelRef / 1000)}:R>`;
     } else if (isVerifying) {
+        field3Name = '⏱️ Claimed';
         const claimRef = req.fulfilledAt || req.timestamp || Date.now();
-        field3Value = `Claimed <t:${Math.floor(claimRef / 1000)}:R>`;
+        field3Value = `<t:${Math.floor(claimRef / 1000)}:R>`;
     }
 
     const fields = [
-        { name: '👤 Requester', value: requesterValue, inline: true },
+        { name: field1Name, value: requesterValue, inline: true },
         { name: field2Name, value: field2Value, inline: true },
         { name: field3Name, value: field3Value, inline: true }
     ];
 
     const authorName = tornId
-        ? `${name} [${tornId}] • Spider-Verse Vault Ledger`
-        : `${name} • Spider-Verse Vault Ledger`;
+        ? `${name} [${tornId}]`
+        : name;
     const authorIcon = req.authorIcon || (tornId ? `https://profileimages.torn.com/${tornId}` : null);
     const authorUrl = tornId ? `https://www.torn.com/profiles.php?XID=${tornId}` : null;
 
@@ -16581,7 +16600,7 @@ function buildBankRequestEmbed(req) {
         description,
         fields,
         footer: {
-            text: `F.R.I.D.A.Y. • Spider-Verse Financial Sentinel • Vault Ledger #${req.id}`
+            text: `F.R.I.D.A.Y. • Spider-Verse Vault #${req.id}`
         },
         timestamp: new Date().toISOString()
     };
