@@ -13932,16 +13932,16 @@ function resolveYataCountry(input) {
     const c = input.toLowerCase().trim().replace(/[-_]/g, " ");
 
     if (c.includes("south") || c.includes("africa") || c === "sa" || c === "sou" || c === "za") return FLIGHT_PROFILES["sou"];
-    if (c.includes("mex") || c === "mexico") return FLIGHT_PROFILES["mex"];
-    if (c.includes("cayman") || c === "cay") return FLIGHT_PROFILES["cay"];
-    if (c.includes("can") || c === "canada") return FLIGHT_PROFILES["can"];
-    if (c.includes("haw") || c === "hawaii") return FLIGHT_PROFILES["haw"];
-    if (c.includes("uk") || c.includes("united kingdom") || c.includes("london") || c.includes("britain") || c === "uni") return FLIGHT_PROFILES["uni"];
-    if (c.includes("arg") || c === "argentina") return FLIGHT_PROFILES["arg"];
-    if (c.includes("swi") || c.includes("switz") || c === "switzerland") return FLIGHT_PROFILES["swi"];
-    if (c.includes("jap") || c === "japan") return FLIGHT_PROFILES["jap"];
-    if (c.includes("chi") || c === "china") return FLIGHT_PROFILES["chi"];
-    if (c.includes("uae") || c.includes("dubai")) return FLIGHT_PROFILES["uae"];
+    if (c.includes("mex") || c === "mexico" || c === "mx") return FLIGHT_PROFILES["mex"];
+    if (c.includes("cayman") || c === "cay" || c === "ky") return FLIGHT_PROFILES["cay"];
+    if (c.includes("can") || c === "canada" || c === "ca") return FLIGHT_PROFILES["can"];
+    if (c.includes("haw") || c === "hawaii" || c === "hi") return FLIGHT_PROFILES["haw"];
+    if (c.includes("uk") || c.includes("united kingdom") || c.includes("london") || c.includes("britain") || c.includes("england") || c === "uni" || c === "gb") return FLIGHT_PROFILES["uni"];
+    if (c.includes("arg") || c === "argentina" || c === "ar") return FLIGHT_PROFILES["arg"];
+    if (c.includes("swi") || c.includes("switz") || c === "switzerland" || c === "swiss" || c === "ch") return FLIGHT_PROFILES["swi"];
+    if (c.includes("jap") || c === "japan" || c === "jp") return FLIGHT_PROFILES["jap"];
+    if (c.includes("chi") || c === "china" || c === "cn") return FLIGHT_PROFILES["chi"];
+    if (c.includes("uae") || c.includes("dubai") || c.includes("emirates") || c === "ae") return FLIGHT_PROFILES["uae"];
 
     return FLIGHT_PROFILES["sou"];
 }
@@ -13989,65 +13989,254 @@ function getItemBurnRate(cCode, item) {
 }
 
 const FALLBACK_DESTINATIONS = {
+    "mex": [
+        { id: 258, name: "Jaguar Plushie", cost: 10000, quantity: 1500 },
+        { id: 260, name: "Dahlia", cost: 300, quantity: 3000 },
+        { id: 8, name: "Axe", cost: 4200, quantity: 100 },
+        { id: 11, name: "Samurai Sword", cost: 75000, quantity: 250 },
+        { id: 20, name: "Desert Eagle", cost: 45000, quantity: 60 },
+        { id: 26, name: "AK-47", cost: 15000, quantity: 120 },
+        { id: 31, name: "M249 SAW", cost: 950000, quantity: 100 },
+        { id: 50, name: "Outer Tactical Vest", cost: 1000000, quantity: 180 },
+        { id: 63, name: "Minigun", cost: 3000000, quantity: 110 },
+        { id: 99, name: "Springfield 1911", cost: 500, quantity: 0 },
+        { id: 107, name: "Trench Coat", cost: 500000, quantity: 100 },
+        { id: 108, name: "9mm Uzi", cost: 1100000, quantity: 50 },
+        { id: 110, name: "Leather Bullwhip", cost: 1500, quantity: 90 },
+        { id: 111, name: "Ninja Claws", cost: 8000, quantity: 100 },
+        { id: 159, name: "Bolt Cutters", cost: 20, quantity: 280 },
+        { id: 175, name: "Taser", cost: 5500, quantity: 0 },
+        { id: 177, name: "Cobra Derringer", cost: 70000, quantity: 30 },
+        { id: 178, name: "Flak Jacket", cost: 7500, quantity: 50 },
+        { id: 229, name: "Claymore Mine", cost: 15000, quantity: 0 },
+        { id: 230, name: "Flare Gun", cost: 300, quantity: 60 },
+        { id: 231, name: "Heckler & Koch SL8", cost: 45000, quantity: 0 },
+        { id: 259, name: "Mayan Statue", cost: 500, quantity: 190 },
+        { id: 399, name: "ArmaLite M-15A4", cost: 20000000, quantity: 40 },
+        { id: 409, name: "Yucca Plant", cost: 20000, quantity: 120 },
+        { id: 426, name: "Bottle of Tequila", cost: 80, quantity: 0 },
+        { id: 432, name: "Crazy Straw", cost: 20, quantity: 800 },
+        { id: 640, name: "Kevlar Gloves", cost: 400000, quantity: 80 },
+        { id: 1125, name: "Card Skimmer", cost: 180, quantity: 5000 },
+        { id: 1429, name: "Zip Ties", cost: 20, quantity: 400 },
+        { id: 1499, name: "Obsidian Point", cost: 135905, quantity: 800 }
+    ],
     "cay": [
         { id: 618, name: "Stingray Plushie", cost: 400, quantity: 1800 },
-        { id: 617, name: "Banana Orchid", cost: 4000, quantity: 900 },
-        { id: 1482, name: "Bearer Bond", cost: 86273, quantity: 4500 },
-        { id: 612, name: "Tavor TAR-21", cost: 495000, quantity: 120 }
-    ],
-    "mex": [
-        { id: 274, name: "Jaguar Plushie", cost: 10000, quantity: 2000 },
-        { id: 275, name: "Dahlia", cost: 300, quantity: 3500 },
-        { id: 278, name: "Short Bow", cost: 3000, quantity: 50 }
+        { id: 617, name: "Banana Orchid", cost: 4000, quantity: 5000 },
+        { id: 612, name: "Tavor TAR-21", cost: 495000, quantity: 250 },
+        { id: 613, name: "Harpoon", cost: 300000, quantity: 100 },
+        { id: 614, name: "Diamond Bladed Knife", cost: 950000, quantity: 80 },
+        { id: 615, name: "Naval Cutlass", cost: 50000000, quantity: 2 },
+        { id: 616, name: "Trout", cost: 20, quantity: 0 },
+        { id: 619, name: "Steel Drum", cost: 1500, quantity: 10 },
+        { id: 620, name: "Nodding Turtle", cost: 700, quantity: 30 },
+        { id: 621, name: "Snorkel", cost: 20000, quantity: 15 },
+        { id: 622, name: "Flippers", cost: 10000, quantity: 25 },
+        { id: 623, name: "Speedo", cost: 6000, quantity: 12 },
+        { id: 624, name: "Bikini", cost: 8000, quantity: 50 },
+        { id: 625, name: "Wetsuit", cost: 30000, quantity: 50 },
+        { id: 626, name: "Diving Gloves", cost: 5000, quantity: 30 },
+        { id: 1482, name: "Bearer Bond", cost: 88065, quantity: 1800 }
     ],
     "can": [
-        { id: 261, name: "Wolverine Plushie", cost: 30, quantity: 964 },
-        { id: 262, name: "Crocus", cost: 600, quantity: 8039 },
-        { id: 206, name: "Xanax", cost: 792750, quantity: 0 },
-        { id: 259, name: "Vicodin", cost: 8000, quantity: 600 },
-        { id: 254, name: "PCP", cost: 15000, quantity: 4000 },
-        { id: 260, name: "Cannabis", cost: 5000, quantity: 1500 },
-        { id: 1001, name: "Safety Boots", cost: 50, quantity: 45 },
-        { id: 1002, name: "Hockey Stick", cost: 60, quantity: 60 }
+        { id: 261, name: "Wolverine Plushie", cost: 20, quantity: 1500 },
+        { id: 263, name: "Crocus", cost: 600, quantity: 5000 },
+        { id: 206, name: "Xanax", cost: 793811, quantity: 1500 },
+        { id: 196, name: "Cannabis", cost: 7104, quantity: 800 },
+        { id: 197, name: "Ecstasy", cost: 33499, quantity: 2000 },
+        { id: 201, name: "PCP", cost: 2476, quantity: 3000 },
+        { id: 205, name: "Vicodin", cost: 1769, quantity: 0 },
+        { id: 252, name: "Ithaca 37", cost: 10000, quantity: 20 },
+        { id: 253, name: "Lorcin 380", cost: 300, quantity: 15 },
+        { id: 262, name: "Hockey Stick", cost: 400, quantity: 140 },
+        { id: 328, name: "PVC Cards", cost: 12500, quantity: 400 },
+        { id: 402, name: "Ice Pick", cost: 20000, quantity: 50 },
+        { id: 410, name: "Fire Hydrant", cost: 20000, quantity: 50 },
+        { id: 413, name: "Mountie Hat", cost: 30000, quantity: 50 },
+        { id: 645, name: "Safety Boots", cost: 77000, quantity: 35 },
+        { id: 1348, name: "Aluminum Plate", cost: 1200, quantity: 2000 },
+        { id: 1361, name: "Dog Treats", cost: 20, quantity: 700 },
+        { id: 1483, name: "Insulin", cost: 2514, quantity: 1800 },
+        { id: 1484, name: "Bear Gall", cost: 30669, quantity: 20 },
+        { id: 1504, name: "Quartz Point", cost: 146379, quantity: 350 }
     ],
     "haw": [
-        { id: 265, name: "Tiki Statue", cost: 500, quantity: 100 },
-        { id: 270, name: "Ceibo Flower", cost: 500, quantity: 2000 }
+        { id: 264, name: "Orchid", cost: 700, quantity: 2500 },
+        { id: 240, name: "Type 98 Anti Tank", cost: 25000000, quantity: 20 },
+        { id: 241, name: "Bushmaster Carbon 15", cost: 15000, quantity: 90 },
+        { id: 242, name: "HEG", cost: 20000, quantity: 25 },
+        { id: 243, name: "Taurus PT92", cost: 600, quantity: 10 },
+        { id: 265, name: "Pele Charm", cost: 2000, quantity: 100 },
+        { id: 419, name: "Small Suitcase", cost: 2000000, quantity: 0 },
+        { id: 420, name: "Medium Suitcase", cost: 4000000, quantity: 40 },
+        { id: 421, name: "Large Suitcase", cost: 10000000, quantity: 5 },
+        { id: 430, name: "Coconut Bra", cost: 750000, quantity: 25 },
+        { id: 1485, name: "Shark Fin", cost: 20286, quantity: 3000 },
+        { id: 1486, name: "Turtle Shell", cost: 70960, quantity: 500 },
+        { id: 1502, name: "Basalt Point", cost: 118854, quantity: 500 }
     ],
     "uni": [
         { id: 268, name: "Red Fox Plushie", cost: 1000, quantity: 1500 },
-        { id: 206, name: "Xanax", cost: 799500, quantity: 450 },
-        { id: 266, name: "Nessie Plushie", cost: 200, quantity: 2000 },
-        { id: 267, name: "Heather", cost: 5000, quantity: 3000 },
-        { id: 259, name: "Vicodin", cost: 8000, quantity: 1200 },
-        { id: 254, name: "PCP", cost: 15000, quantity: 800 },
-        { id: 104, name: "Enfield SA-80", cost: 35000, quantity: 60 }
+        { id: 266, name: "Nessie Plushie", cost: 200, quantity: 1000 },
+        { id: 267, name: "Heather", cost: 5000, quantity: 4000 },
+        { id: 206, name: "Xanax", cost: 899486, quantity: 2000 },
+        { id: 196, name: "Cannabis", cost: 11769, quantity: 1000 },
+        { id: 197, name: "Ecstasy", cost: 39190, quantity: 1000 },
+        { id: 198, name: "Ketamine", cost: 50777, quantity: 1000 },
+        { id: 201, name: "PCP", cost: 6917, quantity: 0 },
+        { id: 203, name: "Shrooms", cost: 938, quantity: 0 },
+        { id: 205, name: "Vicodin", cost: 1862, quantity: 0 },
+        { id: 217, name: "Claymore Sword", cost: 100000, quantity: 30 },
+        { id: 218, name: "Crossbow", cost: 900, quantity: 90 },
+        { id: 219, name: "Enfield SA-80", cost: 250000, quantity: 200 },
+        { id: 220, name: "Grenade", cost: 10000, quantity: 400 },
+        { id: 221, name: "Stick Grenade", cost: 8000, quantity: 80 },
+        { id: 397, name: "Flail", cost: 8000000, quantity: 0 },
+        { id: 408, name: "Sextant", cost: 25000, quantity: 25 },
+        { id: 411, name: "Model Space Ship", cost: 17000, quantity: 5 },
+        { id: 415, name: "Ship in a Bottle", cost: 40000, quantity: 20 },
+        { id: 416, name: "Paper Weight", cost: 1500, quantity: 50 },
+        { id: 418, name: "Tailor's Dummy", cost: 10000, quantity: 25 },
+        { id: 431, name: "Dart Board", cost: 700, quantity: 50 },
+        { id: 438, name: "Cricket Bat", cost: 15000, quantity: 25 },
+        { id: 439, name: "Frying Pan", cost: 400, quantity: 25 },
+        { id: 641, name: "WWII Helmet", cost: 89500, quantity: 5 },
+        { id: 1246, name: "Inkwell", cost: 380, quantity: 60 },
+        { id: 1501, name: "Chert Point", cost: 130728, quantity: 500 }
     ],
     "arg": [
-        { id: 273, name: "Monkey Plushie", cost: 400, quantity: 1800 },
-        { id: 270, name: "Ceibo Flower", cost: 500, quantity: 2500 }
+        { id: 269, name: "Monkey Plushie", cost: 400, quantity: 1500 },
+        { id: 271, name: "Ceibo Flower", cost: 500, quantity: 3500 },
+        { id: 196, name: "Cannabis", cost: 12319, quantity: 1000 },
+        { id: 198, name: "Ketamine", cost: 1102, quantity: 0 },
+        { id: 199, name: "LSD", cost: 20454, quantity: 0 },
+        { id: 203, name: "Shrooms", cost: 5067, quantity: 1000 },
+        { id: 204, name: "Speed", cost: 5594, quantity: 0 },
+        { id: 255, name: "Flamethrower", cost: 3000000, quantity: 20 },
+        { id: 256, name: "Tear Gas", cost: 15000, quantity: 0 },
+        { id: 257, name: "Throwing Knife", cost: 35000, quantity: 5 },
+        { id: 270, name: "Soccer Ball", cost: 60, quantity: 250 },
+        { id: 333, name: "Liquid Body Armor", cost: 7500000, quantity: 100 },
+        { id: 391, name: "Macana", cost: 100000, quantity: 200 },
+        { id: 407, name: "Compass", cost: 2500, quantity: 45 },
+        { id: 1466, name: "Lighter", cost: 20, quantity: 600 },
+        { id: 1487, name: "Patagonian Fossil", cost: 549000, quantity: 2000 },
+        { id: 1488, name: "Meteorite Fragment", cost: 458000, quantity: 1500 },
+        { id: 1503, name: "Chalcedony Point", cost: 100000, quantity: 400 }
     ],
     "swi": [
-        { id: 269, name: "Chamois Plushie", cost: 400, quantity: 3000 },
-        { id: 271, name: "Edelweiss", cost: 3000, quantity: 2000 },
-        { id: 277, name: "Kitten Plushie", cost: 500, quantity: 500 }
+        { id: 273, name: "Chamois Plushie", cost: 400, quantity: 1500 },
+        { id: 272, name: "Edelweiss", cost: 900, quantity: 4000 },
+        { id: 196, name: "Cannabis", cost: 2973, quantity: 0 },
+        { id: 198, name: "Ketamine", cost: 1120, quantity: 0 },
+        { id: 199, name: "LSD", cost: 21667, quantity: 3000 },
+        { id: 201, name: "PCP", cost: 6174, quantity: 0 },
+        { id: 203, name: "Shrooms", cost: 2677, quantity: 2000 },
+        { id: 204, name: "Speed", cost: 5004, quantity: 0 },
+        { id: 222, name: "Flash Grenade", cost: 12000, quantity: 400 },
+        { id: 223, name: "Jackhammer", cost: 5000000, quantity: 50 },
+        { id: 224, name: "Swiss Army Knife", cost: 2500, quantity: 80 },
+        { id: 361, name: "Neumune Tablet", cost: 900000, quantity: 0 },
+        { id: 398, name: "SIG 552", cost: 7500000, quantity: 25 },
+        { id: 435, name: "Dozen White Roses", cost: 950000000, quantity: 1 },
+        { id: 436, name: "Snowboard", cost: 6000, quantity: 800 },
+        { id: 1489, name: "Ephedrine Powder", cost: 13934, quantity: 1500 },
+        { id: 1490, name: "Safrole Oil", cost: 4784, quantity: 400 },
+        { id: 1491, name: "Ergotamine Ampoule", cost: 4899, quantity: 3000 }
     ],
     "jap": [
-        { id: 272, name: "Stingray Plushie", cost: 400, quantity: 1500 },
-        { id: 282, name: "Cherry Blossom", cost: 500, quantity: 2500 }
+        { id: 277, name: "Cherry Blossom", cost: 500, quantity: 4000 },
+        { id: 206, name: "Xanax", cost: 667017, quantity: 0 },
+        { id: 197, name: "Ecstasy", cost: 37816, quantity: 1000 },
+        { id: 198, name: "Ketamine", cost: 1140, quantity: 0 },
+        { id: 200, name: "Opium", cost: 20436, quantity: 0 },
+        { id: 203, name: "Shrooms", cost: 919, quantity: 0 },
+        { id: 204, name: "Speed", cost: 6072, quantity: 1000 },
+        { id: 205, name: "Vicodin", cost: 5034, quantity: 1000 },
+        { id: 233, name: "BT MP9", cost: 55000, quantity: 400 },
+        { id: 234, name: "Chain Whip", cost: 2500, quantity: 25 },
+        { id: 235, name: "Wooden Nunchaku", cost: 5000, quantity: 25 },
+        { id: 236, name: "Kama", cost: 50000, quantity: 10 },
+        { id: 237, name: "Kodachi", cost: 95000, quantity: 350 },
+        { id: 238, name: "Sai", cost: 1000, quantity: 20 },
+        { id: 239, name: "Ninja Star", cost: 500, quantity: 240 },
+        { id: 278, name: "Kabuki Mask", cost: 10000, quantity: 15 },
+        { id: 279, name: "Maneki Neko", cost: 50000, quantity: 150 },
+        { id: 294, name: "Bottle of Sake", cost: 40, quantity: 50 },
+        { id: 334, name: "Flexible Body Armor", cost: 15000000, quantity: 100 },
+        { id: 395, name: "Metal Nunchaku", cost: 400000, quantity: 95 },
+        { id: 427, name: "Sumo Doll", cost: 300, quantity: 40 },
+        { id: 429, name: "Chopsticks", cost: 20, quantity: 15 },
+        { id: 433, name: "Sensu", cost: 500, quantity: 10 },
+        { id: 434, name: "Yakitori Lantern", cost: 4500, quantity: 12 },
+        { id: 437, name: "Glow Stick", cost: 20, quantity: 400 },
+        { id: 1249, name: "Hydrochloric Acid", cost: 24500, quantity: 0 },
+        { id: 1333, name: "Bonded Latex", cost: 220000, quantity: 2000 },
+        { id: 1492, name: "Counterfeit Manga", cost: 23134, quantity: 500 },
+        { id: 1493, name: "Whale Meat", cost: 1923, quantity: 3000 }
     ],
     "chi": [
-        { id: 264, name: "Panda Plushie", cost: 400, quantity: 2000 },
-        { id: 276, name: "Peony", cost: 5000, quantity: 2500 }
+        { id: 274, name: "Panda Plushie", cost: 400, quantity: 1500 },
+        { id: 276, name: "Peony", cost: 5000, quantity: 5000 },
+        { id: 197, name: "Ecstasy", cost: 27191, quantity: 0 },
+        { id: 199, name: "LSD", cost: 19597, quantity: 0 },
+        { id: 200, name: "Opium", cost: 14140, quantity: 1800 },
+        { id: 201, name: "PCP", cost: 6440, quantity: 0 },
+        { id: 204, name: "Speed", cost: 6042, quantity: 1000 },
+        { id: 244, name: "Blowgun", cost: 2500, quantity: 20 },
+        { id: 245, name: "Bo Staff", cost: 500, quantity: 15 },
+        { id: 246, name: "Fireworks", cost: 500, quantity: 20 },
+        { id: 247, name: "Katana", cost: 16000, quantity: 25 },
+        { id: 248, name: "Qsz-92", cost: 90000, quantity: 35 },
+        { id: 249, name: "SKS Carbine", cost: 6500, quantity: 12 },
+        { id: 250, name: "Twin Tiger Hooks", cost: 50000, quantity: 10 },
+        { id: 251, name: "Wushu Double Axes", cost: 75000, quantity: 0 },
+        { id: 275, name: "Jade Buddha", cost: 12000, quantity: 70 },
+        { id: 326, name: "Printing Paper", cost: 75000, quantity: 100 },
+        { id: 335, name: "Stick of Dynamite", cost: 50000, quantity: 100 },
+        { id: 400, name: "Guandao", cost: 200000, quantity: 10 },
+        { id: 1462, name: "Magnesium Shavings", cost: 22000, quantity: 2000 },
+        { id: 1494, name: "Pangolin Scales", cost: 153000, quantity: 1800 },
+        { id: 1498, name: "Tiger Bone Powder", cost: 30114, quantity: 3000 }
     ],
     "uae": [
-        { id: 281, name: "Camel Plushie", cost: 14000, quantity: 1500 },
-        { id: 260, name: "Tribulus Omanense", cost: 6000, quantity: 2000 }
+        { id: 384, name: "Camel Plushie", cost: 14000, quantity: 150 },
+        { id: 385, name: "Tribulus Omanense", cost: 6000, quantity: 6000 },
+        { id: 381, name: "Gold Laptop", cost: 8000000000, quantity: 1 },
+        { id: 382, name: "Gold Plated AK-47", cost: 25000000000, quantity: 1 },
+        { id: 386, name: "Sports Sneakers", cost: 14000000000, quantity: 1 },
+        { id: 387, name: "Handbag", cost: 16000000000, quantity: 1 },
+        { id: 388, name: "Pink Mac-10", cost: 23000000000, quantity: 1 },
+        { id: 412, name: "Sports Shades", cost: 10000, quantity: 50 },
+        { id: 414, name: "Proda Sunglasses", cost: 100000, quantity: 55 },
+        { id: 1264, name: "Potassium Nitrate", cost: 3800, quantity: 500 },
+        { id: 1495, name: "Ambergris Lump", cost: 338424, quantity: 150 },
+        { id: 1496, name: "Natural Pearls", cost: 95693, quantity: 40 }
     ],
     "sou": [
-        { id: 258, name: "Lion Plushie", cost: 400, quantity: 1500 },
-        { id: 263, name: "African Violet", cost: 2000, quantity: 3000 },
-        { id: 206, name: "Xanax", cost: 799500, quantity: 1800 }
+        { id: 281, name: "Lion Plushie", cost: 400, quantity: 1000 },
+        { id: 282, name: "African Violet", cost: 2000, quantity: 6000 },
+        { id: 206, name: "Xanax", cost: 707043, quantity: 1500 },
+        { id: 4, name: "Knuckle Dusters", cost: 800, quantity: 130 },
+        { id: 199, name: "LSD", cost: 21897, quantity: 0 },
+        { id: 200, name: "Opium", cost: 25103, quantity: 900 },
+        { id: 201, name: "PCP", cost: 6370, quantity: 0 },
+        { id: 203, name: "Shrooms", cost: 848, quantity: 0 },
+        { id: 225, name: "Mag 7", cost: 60000, quantity: 40 },
+        { id: 226, name: "Smoke Grenade", cost: 20000, quantity: 700 },
+        { id: 227, name: "Spear", cost: 600, quantity: 15 },
+        { id: 228, name: "Vektor CR-21", cost: 7500, quantity: 40 },
+        { id: 280, name: "Elephant Statue", cost: 500, quantity: 100 },
+        { id: 332, name: "Combat Vest", cost: 3500000, quantity: 40 },
+        { id: 358, name: "Raw Ivory", cost: 1884, quantity: 1800 },
+        { id: 406, name: "Afro Comb", cost: 50000, quantity: 500 },
+        { id: 651, name: "Combat Helmet", cost: 3100000, quantity: 25 },
+        { id: 652, name: "Combat Pants", cost: 2950000, quantity: 0 },
+        { id: 653, name: "Combat Boots", cost: 2400000, quantity: 40 },
+        { id: 654, name: "Combat Gloves", cost: 2100000, quantity: 45 },
+        { id: 1497, name: "Uncut Diamonds", cost: 179275, quantity: 3000 },
+        { id: 1500, name: "Quartzite Point", cost: 122595, quantity: 500 }
     ]
 };
 
@@ -14093,8 +14282,21 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
         const yataCountry = yataData?.stocks?.[target.yCode];
         let countryStocks = yataCountry?.stocks || [];
 
-        if (countryStocks.length === 0 && FALLBACK_DESTINATIONS[target.yCode]) {
-            countryStocks = FALLBACK_DESTINATIONS[target.yCode];
+        const fallbackList = FALLBACK_DESTINATIONS[target.yCode] || [];
+        if (countryStocks.length === 0) {
+            countryStocks = fallbackList.map(s => ({ ...s }));
+        } else if (fallbackList.length > 0) {
+            // Strictly sanitize: Only retain items that truly belong to this country's catalog
+            const validMap = new Map(fallbackList.map(s => [s.id, s]));
+            countryStocks = countryStocks.filter(s => validMap.has(s.id));
+
+            // Ensure completeness: If any known destination item is missing from YATA, add it with quantity: 0
+            const existingIds = new Set(countryStocks.map(s => s.id));
+            for (const fb of fallbackList) {
+                if (!existingIds.has(fb.id)) {
+                    countryStocks.push({ ...fb, quantity: 0 });
+                }
+            }
         }
 
         if (countryStocks.length === 0) {
@@ -14418,12 +14620,20 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
             };
         });
 
-        // ── Priority items sorting ──
+        // ── Priority items sorting (Plushies, Flowers & Xanax) ──
         const priorityItems = processed.filter(p => p.isPriority);
         priorityItems.sort((a, b) => {
+            const aIsXan = (a.name || '').toLowerCase().includes('xanax');
+            const bIsXan = (b.name || '').toLowerCase().includes('xanax');
+
             const orderA = (a.phase === 'A' || a.phase === 'B1') ? 0 : 1;
             const orderB = (b.phase === 'A' || b.phase === 'B1') ? 0 : 1;
             if (orderA !== orderB) return orderA - orderB;
+
+            // When both are in the same phase group, give Xanax top priority if profitable
+            if (aIsXan && !bIsXan && a.fullBagProfit > 0) return -1;
+            if (bIsXan && !aIsXan && b.fullBagProfit > 0) return 1;
+
             return b.fullBagProfit - a.fullBagProfit;
         });
 
@@ -14486,41 +14696,27 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
             return `${header}\n${line1}\n${line2}`;
         });
 
-        // ── Secondary Drugs & Other Goods ──
-        const drugItems = processed.filter(p => !p.isPriority && p.isDrug);
-        drugItems.sort((a, b) => b.fullBagProfit - a.fullBagProfit);
-
-        let drugsLine = '';
-        if (drugItems.length > 0) {
-            const drugParts = drugItems.map(d => {
-                const profitStr = d.fullBagProfit > 0 ? ` (+${formatCompactProfit(d.fullBagProfit)}/bag)` : '';
-                return `${d.status?.emoji || '💊'} ${d.name} ~${d.likelyStock.toLocaleString()}${profitStr}`;
-            });
-            drugsLine = `💊 **Other Drugs:** ${drugParts.join(' · ')}`;
-        }
-
-        const nonDrugOthers = processed.filter(p => !p.isPriority && !p.isDrug);
-        const notableOthers = [];
-        let fillerCount = 0;
-
-        for (const it of nonDrugOthers) {
-            if (it.fullBagProfit > 0 || (it.phase !== 'A' && it.quantity > 0)) {
-                if (it.phase !== 'A') {
-                    notableOthers.push(`⚫ ${it.name} ~${it.likelyStock.toLocaleString()}`);
-                } else {
-                    notableOthers.push(`🟢 ${it.name} ~${it.likelyStock.toLocaleString()} (+${formatCompactProfit(it.fullBagProfit)}/bag)`);
-                }
-            } else {
-                fillerCount++;
-            }
-        }
+        // ── All Other Country Items (Super-Compact Stock Roster) ──
+        const otherItems = processed.filter(p => !p.isPriority);
+        otherItems.sort((a, b) => {
+            const aInStock = (a.currentStock || 0) > 0 ? 1 : 0;
+            const bInStock = (b.currentStock || 0) > 0 ? 1 : 0;
+            if (aInStock !== bInStock) return bInStock - aInStock;
+            if (aInStock && bInStock) return (b.currentStock || 0) - (a.currentStock || 0);
+            return (a.name || '').localeCompare(b.name || '');
+        });
 
         let otherStockLine = '';
-        if (notableOthers.length > 0 || fillerCount > 0) {
-            const fillerNote = fillerCount > 0 ? `*(+${fillerCount} common items in stock)*` : '';
-            const allParts = [...notableOthers];
-            if (fillerNote) allParts.push(fillerNote);
-            otherStockLine = `📦 **Other Stock:** ${allParts.join(' · ')}`;
+        if (otherItems.length > 0) {
+            const formattedOthers = otherItems.map(it => {
+                const qty = it.currentStock || 0;
+                if (qty > 0) {
+                    const qtyStr = qty >= 1000 ? `${(qty / 1000).toFixed(1)}k` : `${qty}`;
+                    return `🟢 ${it.name} (${qtyStr})`;
+                }
+                return `⚫ ${it.name} (0)`;
+            });
+            otherStockLine = `📦 **Other Items in ${target.name}:**\n${formattedOthers.join(' · ')}`;
         }
 
         const legendStr = '-# 🟢 Plenty · 🟡 Tight · 🔴 Short · 🔄 In-Flight Restock · ⏳ Wait for Next Cycle';
@@ -14533,8 +14729,10 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
             priorityBlocks.join('\n\n'),
             ``
         ];
-        if (drugsLine) descParts.push(drugsLine);
-        if (otherStockLine) descParts.push(otherStockLine);
+        if (otherStockLine) {
+            descParts.push(otherStockLine);
+            descParts.push(``);
+        }
         descParts.push(legendStr);
 
         const description = descParts.join('\n');
