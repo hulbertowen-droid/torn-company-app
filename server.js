@@ -14053,6 +14053,12 @@ const FALLBACK_DESTINATIONS = {
 
 const activeTakeoffTimers = new Map(); // key: `${userId}_${yCode}` -> Timeout handle
 
+function formatTCT(unixSec) {
+    if (!unixSec) return "00:00";
+    const d = new Date(Number(unixSec) * 1000);
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'UTC' });
+}
+
 function formatCompactProfit(num) {
     if (!num || isNaN(num)) return "0";
     num = Number(num);
