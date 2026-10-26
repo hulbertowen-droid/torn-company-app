@@ -14275,6 +14275,115 @@ function formatProfitPerHour(fullBagProfit, flightDurationMin) {
     return `$${formatCompactProfit(pph)}/hr`;
 }
 
+// ── Auto-Detect User Flight Mode, Perks & Bag Capacity from Torn API ──
+async function resolveUserTravelProfile(apiKey, discordUserId, options = {}) {
+    let mode = options.mode ? String(options.mode).toLowerCase() : null;
+    let bag = options.bag ? parseInt(options.bag, 10) : null;
+    let inFlight = null;
+    let playerName = null;
+    let effectiveKey = null;
+
+    // 1. Try to find user's personal key from userKeys vault
+    if (discordUserId && typeof userKeys !== 'undefined' && userKeys.resolveUserApiKey) {
+        try {
+            const rec = userKeys.resolveUserApiKey(discordUserId);
+            if (rec && rec.key) {
+                effectiveKey = rec.key;
+                playerName = rec.tornName || null;
+            }
+        } catch(e) {}
+    }
+
+    // 2. Fall back to provided apiKey or bot key
+    if (!effectiveKey) {
+        const dCfg = (typeof discordConfig !== 'undefined') ? discordConfig : {};
+        effectiveKey = apiKey || dCfg.apiKey || (typeof TORN_API_KEY !== 'undefined' ? TORN_API_KEY : null) || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
+    }
+
+    if (effectiveKey && typeof cachedTornFetch === 'function') {
+        try {
+            const cacheKey = `user_travel_prof_${effectiveKey.slice(-6)}`;
+            const data = await cachedTornFetch(
+                `https://api.torn.com/user/?selections=travel,perks,profile&key=${effectiveKey}`,
+                cacheKey,
+                60000
+            );
+
+            if (data && !data.error) {
+                if (!playerName) playerName = data.name || data.player_id;
+
+                const travel = data.travel || {};
+                if (travel.time_left > 0) {
+                    inFlight = {
+                        destination: travel.destination || '',
+                        method: travel.method || '',
+                        timeLeftSec: travel.time_left,
+                        arrivalUnix: travel.timestamp || (Math.floor(Date.now() / 1000) + travel.time_left),
+                        departedUnix: travel.departed || Math.floor(Date.now() / 1000)
+                    };
+                }
+
+                // Auto-detect Flight Mode from API if not manually passed
+                if (!mode) {
+                    const method = (travel.method || '').toLowerCase();
+                    const propPerks = (data.property_perks || []).map(p => String(p).toLowerCase());
+
+                    if (method.includes('business') || method.includes('bct')) {
+                        mode = 'wlt';
+                    } else if (method.includes('airstrip') || method.includes('private') || propPerks.some(p => p.includes('airstrip'))) {
+                        mode = 'jet';
+                    } else if (method.includes('standard')) {
+                        mode = 'standard';
+                    } else if (propPerks.some(p => p.includes('airstrip'))) {
+                        mode = 'jet';
+                    } else {
+                        mode = 'standard';
+                    }
+                }
+
+                // Auto-detect Bag Capacity from API perks if not manually passed
+                if (!bag || isNaN(bag)) {
+                    let cap = 5; // Base Torn capacity
+                    cap += 10;   // Large Suitcase (+10) standard
+
+                    // Scan Faction perks (Excursion branch adds up to +10)
+                    const factionPerks = data.faction_perks || [];
+                    for (const p of factionPerks) {
+                        const m = String(p).match(/\+\s*(\d+)\s*(?:travel\s*item\s*capacity|travel\s*capacity|extra\s*travel\s*item)/i);
+                        if (m) cap += parseInt(m[1], 10);
+                    }
+
+                    // Scan Job perks (Cruise Line +2/+3, Lingerie +2)
+                    const jobPerks = data.job_perks || [];
+                    for (const p of jobPerks) {
+                        const m = String(p).match(/\+\s*(\d+)\s*(?:travel\s*item\s*capacity|travel\s*capacity|extra\s*travel\s*item)/i);
+                        if (m) cap += parseInt(m[1], 10);
+                    }
+
+                    // Scan Book perks (Smuggling for Beginners +10)
+                    const bookPerks = data.book_perks || [];
+                    for (const p of bookPerks) {
+                        const m = String(p).match(/\+\s*(\d+)\s*(?:travel\s*item\s*capacity|travel\s*capacity|extra\s*travel\s*item)/i);
+                        if (m) cap += parseInt(m[1], 10);
+                    }
+
+                    bag = cap;
+                }
+            }
+        } catch(e) {
+            // Non-fatal, gracefully fall back
+        }
+    }
+
+    return {
+        mode: mode || 'jet',
+        bag: (bag && bag >= 5) ? bag : 29,
+        inFlight,
+        playerName,
+        effectiveKey
+    };
+}
+
 async function buildStocksEmbed(countryInput, apiKey, options = {}) {
     const target = resolveYataCountry(countryInput);
     try {
@@ -14309,9 +14418,14 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
             };
         }
 
-        // Flight modes & capacity settings
-        const mode = (options.mode || 'jet').toLowerCase();
-        const bagCapacity = parseInt(options.bag, 10) || 29;
+        // Auto-detect flight modes & capacity settings via Torn API
+        const discordUserId = options.discordUserId || null;
+        const userProfile = await resolveUserTravelProfile(apiKey, discordUserId, options);
+
+        const mode = userProfile.mode;
+        const bagCapacity = userProfile.bag;
+        const inFlight = userProfile.inFlight;
+        const effectiveApiKey = userProfile.effectiveKey || apiKey;
 
         const stdMins = target.standard;
         const jetMins = target.airstrip;
@@ -14345,28 +14459,11 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
             modeKey = 'jet';
         }
 
-        const nextModeMap = {
-            'standard': 'jet',
-            'jet': 'wlt',
-            'wlt': 'bct',
-            'bct': 'standard'
-        };
-        const nextMode = nextModeMap[modeKey] || 'jet';
-
-        const nextBagMap = {
-            15: 19,
-            19: 24,
-            24: 29,
-            29: 34,
-            34: 15
-        };
-        const nextBag = nextBagMap[bagCapacity] || 29;
-
         // Fetch Torn item catalog if available for ground-truth market values / profit calculations
         let itemCatalog = null;
-        if (apiKey) {
+        if (effectiveApiKey) {
             try {
-                const cat = await cachedTornFetch(`https://api.torn.com/torn/?selections=items&key=${apiKey}`, 'torn_items_catalog', 3600000);
+                const cat = await cachedTornFetch(`https://api.torn.com/torn/?selections=items&key=${effectiveApiKey}`, 'torn_items_catalog', 3600000);
                 if (cat && cat.items) itemCatalog = cat.items;
             } catch(e) {}
         }
@@ -14383,9 +14480,21 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
             confidenceStr = `🟡 Moderate (${minsSinceYata}m ago)`;
         }
 
-        const landingUnix = nowSec + (flightDurationMin * 60);
-        const landingTimeStr = `${formatTCT(landingUnix)} TCT`;
-        const departTimeStr = `${formatTCT(nowSec)} TCT`;
+        // Check if user is actively airborne flying to THIS specific destination
+        const isFlyingToTarget = inFlight && inFlight.destination && inFlight.destination.toLowerCase() === target.name.toLowerCase();
+
+        let landingUnix = nowSec + (flightDurationMin * 60);
+        let landingTimeStr = `${formatTCT(landingUnix)} TCT`;
+        let departTimeStr = `${formatTCT(nowSec)} TCT`;
+        let travelHeader = `🛫 **Depart:** \`${departTimeStr}\` (<t:${nowSec}:R>)  •  ✈️ **Arrival:** \`${landingTimeStr}\` (\`${modeLabel}\` · \`🎒 ${bagCapacity}\`)`;
+
+        if (isFlyingToTarget) {
+            landingUnix = inFlight.arrivalUnix;
+            flightDurationMin = Math.max(1, Math.round(inFlight.timeLeftSec / 60));
+            landingTimeStr = `${formatTCT(landingUnix)} TCT`;
+            departTimeStr = `${formatTCT(inFlight.departedUnix)} TCT`;
+            travelHeader = `🛩️ **In Flight to ${target.name}:** Lands \`${landingTimeStr}\` (<t:${landingUnix}:R>)  •  \`🎒 ${bagCapacity} items\``;
+        }
 
         // Helper: Category Icons
         function getItemIcon(name = "") {
@@ -14722,7 +14831,7 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
         const legendStr = '-# 🟢 Plenty · 🟡 Tight · 🔴 Short · 🔄 In-Flight Restock · ⏳ Wait for Next Cycle';
 
         const descParts = [
-            `🛫 **Depart:** \`${departTimeStr}\` (<t:${nowSec}:R>)  •  ✈️ **Arrival:** \`${landingTimeStr}\` (\`${modeLabel}\` · \`🎒 ${bagCapacity}\`)`,
+            travelHeader,
             `📡 **YATA:** Synced <t:${yataUpdateSec || nowSec}:R> (\`${confidenceStr}\`)`,
             summaryLine,
             ``,
@@ -14737,34 +14846,18 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
 
         const description = descParts.join('\n');
 
-        // ── Interactive Discord Components (2 Clean, Non-Wrapping Rows) ──
-        const modeShortName = modeKey === 'standard' ? 'Std' : (modeKey === 'wlt' ? 'WLT' : (modeKey === 'bct' ? 'BCT' : 'Jet'));
-        const modeEmoji = modeKey === 'standard' ? '🛫' : (modeKey === 'wlt' ? '✈️' : (modeKey === 'bct' ? '🎫' : '🛩️'));
-
-        const actionRow1 = new ActionRowBuilder().addComponents(
+        // ── Interactive Discord Components (1 Clean, Ultra-Streamlined Row) ──
+        const actionRow = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setStyle(ButtonStyle.Primary)
                 .setCustomId(`travel_refresh_${target.yCode}_${modeKey}_${bagCapacity}`)
                 .setLabel('Refresh')
                 .setEmoji('🔄'),
             new ButtonBuilder()
-                .setStyle(ButtonStyle.Secondary)
-                .setCustomId(`travel_mode_${target.yCode}_${nextMode}_${bagCapacity}`)
-                .setLabel(`${modeShortName} (${formatFlightDuration(flightDurationMin)})`)
-                .setEmoji(modeEmoji),
-            new ButtonBuilder()
-                .setStyle(ButtonStyle.Secondary)
-                .setCustomId(`travel_bag_${target.yCode}_${modeKey}_${nextBag}`)
-                .setLabel(`Bag: ${bagCapacity}`)
-                .setEmoji('🎒'),
-            new ButtonBuilder()
                 .setStyle(ButtonStyle.Success)
                 .setCustomId(`travel_ping_${target.yCode}_${modeKey}_${bagCapacity}`)
                 .setLabel('Remind Me')
-                .setEmoji('🔔')
-        );
-
-        const actionRow2 = new ActionRowBuilder().addComponents(
+                .setEmoji('🔔'),
             new ButtonBuilder()
                 .setStyle(ButtonStyle.Link)
                 .setLabel('Travel Agency')
@@ -14798,12 +14891,21 @@ async function buildStocksEmbed(countryInput, apiKey, options = {}) {
             };
         }
 
+        const footerText = userProfile.playerName
+            ? `F.R.I.D.A.Y. • Auto-Synced for ${userProfile.playerName} (${modeLabel.split(' ')[0]} ${modeKey.toUpperCase()} · 🎒 ${bagCapacity})`
+            : (UI.FOOTER?.text || "F.R.I.D.A.Y. • Spider-Verse Tactical OS");
+
+        const footerObj = {
+            text: footerText,
+            icon_url: UI.FOOTER?.icon_url
+        };
+
         return {
             title: `${target.flag} ${target.name} — Arrival Forecast`,
             description,
             color,
-            components: [actionRow1, actionRow2],
-            footer: UI.FOOTER,
+            components: [actionRow],
+            footer: footerObj,
             timestamp: new Date().toISOString(),
             takeoffReminder,
             targetCountry: target.name,
@@ -22265,7 +22367,7 @@ function setupSlashBotEvents(bot, token) {
                 const apiKey = discordConfig.apiKey || TORN_API_KEY || getNextApiKey();
 
                 if (action === 'ping') {
-                    const res = await buildStocksEmbed(yCode, apiKey, { mode, bag });
+                    const res = await buildStocksEmbed(yCode, apiKey, { mode, bag, discordUserId: interaction.user.id });
                     const pingData = res.takeoffReminder;
                     const countryName = res.targetCountry || 'Overseas';
 
@@ -22326,7 +22428,7 @@ function setupSlashBotEvents(bot, token) {
                     lastYataFetchTime = 0;
                     cachedYataStocks = null;
                 }
-                const res = await buildStocksEmbed(yCode, apiKey, { mode, bag });
+                const res = await buildStocksEmbed(yCode, apiKey, { mode, bag, discordUserId: interaction.user.id });
                 let safeEmbeds = [];
                 let safeComps = [];
                 if (res && Array.isArray(res.embeds)) {
@@ -24957,7 +25059,7 @@ function setupSlashBotEvents(bot, token) {
                 embed = await buildMyOCEmbed(player, apiKey, interaction.user.username);
             } else if (cmd === 'stocks' || cmd === 'forecast' || cmd === 'takeoff' || cmd === 'arrival') {
                 const country = interaction.options.getString('country');
-                embed = await buildStocksEmbed(country, apiKey);
+                embed = await buildStocksEmbed(country, apiKey, { discordUserId: interaction.user.id });
             } else if (cmd === 'bazaar') {
                 const item = interaction.options.getString('item');
                 embed = await buildBazaarEmbed(item, apiKey);
