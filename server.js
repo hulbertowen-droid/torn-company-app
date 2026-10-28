@@ -18762,6 +18762,113 @@ function renderBankNoticeHtml(title, message, details = '', isSuccess = false) {
 </html>`;
 }
 
+// ── Mobile App Launcher Landing Page (Torn PDA & Official Torn App) ───────
+function renderMobileAppLauncherHtml({ reqId, amount, tornId, tornName, prefilledUrl, isAndroid, isIOS }) {
+    const amtFmt = Number(amount || 0).toLocaleString('en-US');
+    const recipient = tornName || `Player #${tornId}`;
+    const tornPathAndQuery = prefilledUrl.replace(/^https?:\/\//i, '');
+
+    // Android Intent schemes:
+    // 1. Torn PDA (dominant community mobile app)
+    const pdaIntent = `intent://${tornPathAndQuery}#Intent;scheme=https;package=com.manuito.tornpda;fallback_url=${encodeURIComponent(prefilledUrl)};end`;
+    // 2. Official Torn App
+    const officialIntent = `intent://${tornPathAndQuery}#Intent;scheme=https;package=com.ionicframework.tornv2301860;fallback_url=${encodeURIComponent(prefilledUrl)};end`;
+    // 3. Generic Intent (routes to whichever app handles torn.com)
+    const genericIntent = `intent://${tornPathAndQuery}#Intent;scheme=https;fallback_url=${encodeURIComponent(prefilledUrl)};end`;
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Opening Torn App | Request #${reqId}</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background: #0b0f19; color: #f3f4f6; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+        .card { background: #111827; border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 20px; max-width: 440px; width: 100%; padding: 32px 24px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8); text-align: center; }
+        
+        .badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 9999px; font-size: 12px; font-weight: 700; color: #34d399; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 20px; }
+        .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 10px #10b981; animation: pulse 1.8s infinite; }
+        @keyframes pulse { 0% { opacity: 0.4; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.2); } 100% { opacity: 0.4; transform: scale(0.9); } }
+
+        h1 { font-size: 22px; font-weight: 800; margin-bottom: 6px; color: #f9fafb; letter-spacing: -0.02em; }
+        .amount { font-size: 32px; font-weight: 900; color: #10b981; margin-bottom: 4px; text-shadow: 0 0 20px rgba(16, 185, 129, 0.3); }
+        .recipient { font-size: 15px; color: #9ca3af; margin-bottom: 24px; }
+        .recipient strong { color: #e5e7eb; }
+
+        .btn-stack { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+        .btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 15px 20px; border-radius: 12px; font-weight: 700; font-size: 16px; text-decoration: none; transition: transform 0.1s, opacity 0.15s; border: none; cursor: pointer; }
+        .btn:active { transform: scale(0.98); }
+        
+        .btn-pda { background: linear-gradient(135deg, #10b981, #059669); color: #ffffff; box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.4); }
+        .btn-official { background: #1f2937; border: 1px solid rgba(255, 255, 255, 0.12); color: #f3f4f6; }
+        .btn-web { background: transparent; color: #9ca3af; font-size: 14px; font-weight: 500; padding: 10px; }
+        .btn-web:hover { color: #d1d5db; }
+
+        .note-box { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 14px; font-size: 12.5px; color: #9ca3af; line-height: 1.5; text-align: left; }
+        .note-box strong { color: #d1d5db; }
+        .footer-logo { margin-top: 20px; font-size: 11px; color: #4b5563; text-transform: uppercase; letter-spacing: 0.08em; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="badge">
+            <span class="pulse-dot"></span>
+            Claimed • Opening App
+        </div>
+        
+        <h1>Vault Withdrawal #${reqId}</h1>
+        <div class="amount">$${amtFmt}</div>
+        <div class="recipient">Recipient: <strong>${recipient} [${tornId}]</strong></div>
+
+        <div class="btn-stack">
+            ${isAndroid ? `
+                <a id="btn-pda" href="${pdaIntent}" class="btn btn-pda">
+                    📱 Open in Torn PDA
+                </a>
+                <a id="btn-official" href="${officialIntent}" class="btn btn-official">
+                    📱 Open in Official Torn App
+                </a>
+            ` : `
+                <a id="btn-ios-app" href="${prefilledUrl}" target="_top" class="btn btn-pda">
+                    📱 Open in Torn App
+                </a>
+            `}
+            <a href="${prefilledUrl}" class="btn btn-web">
+                🌐 Open in Web Browser Instead
+            </a>
+        </div>
+
+        <div class="note-box">
+            💡 <strong>Opening in Discord?</strong> Tap the button above to launch your app.<br>
+            <em>Pro Tip:</em> In Discord, go to <strong>User Settings → Advanced → Turn ON "Open links in external browser"</strong> to always open links in your apps directly!
+        </div>
+
+        <div class="footer-logo">F.R.I.D.A.Y. Bank Fast-Track • Spider-Verse</div>
+    </div>
+
+    <script>
+        (function() {
+            var isAndroid = ${isAndroid ? 'true' : 'false'};
+            var isIOS = ${isIOS ? 'true' : 'false'};
+            var pdaIntent = ${JSON.stringify(pdaIntent)};
+            var webUrl = ${JSON.stringify(prefilledUrl)};
+
+            // Attempt instant automatic launch
+            try {
+                if (isAndroid) {
+                    window.location.replace(pdaIntent);
+                } else if (isIOS) {
+                    // On iOS, attempt to trigger Universal Link
+                    window.location.replace(webUrl);
+                }
+            } catch(e) {}
+        })();
+    </script>
+</body>
+</html>`;
+}
+
 // ── 1-Click Direct Torn Vault Fulfillment Redirect ──────────────────────────
 // The "Fulfill" button in Discord is a URL link (style 5) pointing to /fulfill/:id (or /api/bank/pay/:id).
 // This route: 
@@ -18932,8 +19039,28 @@ app.get(['/fulfill/:id', '/api/bank/pay/:id'], async (req, res) => {
             verifyBankPayment(bankReq, apiKey, botInstance).catch(() => {});
         }
 
-        // 1-Click Redirect to prefilled Torn City vault URL
+        // Prefilled Torn City vault URL
         const prefilledUrl = getPreFilledVaultUrl(bankReq.tornId, bankReq.amount);
+
+        const ua = String(req.headers['user-agent'] || '');
+        const isAndroid = /Android/i.test(ua);
+        const isIOS = /iPhone|iPad|iPod/i.test(ua);
+        const isMobile = isAndroid || isIOS || /Mobile|Tablet/i.test(ua);
+
+        // Mobile bankers: Break out of Discord's in-app webview and launch Torn PDA / Torn App
+        if (isMobile && req.query.web !== '1') {
+            return res.send(renderMobileAppLauncherHtml({
+                reqId,
+                amount: bankReq.amount,
+                tornId: bankReq.tornId,
+                tornName: bankReq.tornName || bankReq.userName,
+                prefilledUrl,
+                isAndroid,
+                isIOS
+            }));
+        }
+
+        // Desktop bankers: Immediate 1-click redirect in browser
         return res.redirect(302, prefilledUrl);
     } finally {
         bankRequestFulfillLocks.delete(reqId);
