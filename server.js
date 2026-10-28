@@ -16855,15 +16855,14 @@ function getPreFilledVaultUrl(tornId, amount) {
 function buildBankRequestButtons(req) {
     const st = String(req.status || '').toLowerCase();
     const amtFmt = Number(req.amount || 0).toLocaleString('en-US');
-    const fulfillUrl = `https://faction-os.duckdns.org/fulfill/${req.id}`;
 
     if (st === 'pending') {
         return [
             new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
-                    .setStyle(ButtonStyle.Link)
-                    .setLabel(`Fulfill ($${amtFmt})`)
-                    .setURL(fulfillUrl)
+                    .setCustomId(`claim_withdrawal:${req.id}`)
+                    .setLabel(`Claim & Fulfill ($${amtFmt})`)
+                    .setStyle(ButtonStyle.Primary)
                     .setEmoji('💸'),
                 new ButtonBuilder()
                     .setCustomId(`bank_cancel_${req.id}`)
@@ -23222,28 +23221,19 @@ function setupSlashBotEvents(bot, token) {
                     withdrawal.claimedAt = Date.now();
                     saveBankRequests();
 
-                    // Step 3: Disable public button immediately via interaction.update
+                    // Step 3: Update public message immediately via interaction.update (Claimed + Unclaim + Cancel)
                     const updatedPublicEmbed = buildBankRequestEmbed(withdrawal);
-                    const disabledPublicButton = new ActionRowBuilder().addComponents(
-                        new ButtonBuilder()
-                            .setCustomId(`claimed_locked:${withdrawalId}`)
-                            .setLabel(`Claimed by ${interaction.user.username}`.slice(0, 80))
-                            .setStyle(ButtonStyle.Secondary)
-                            .setDisabled(true)
-                            .setEmoji('⏳')
-                    );
-
                     await interaction.update({
                         content: buildBankRequestMessageContent(withdrawal),
                         embeds: [sanitizeEmbed(updatedPublicEmbed)],
-                        components: [disabledPublicButton]
-                    }).catch(err => console.error('[Bank] Error disabling public button on claim:', err));
+                        components: buildBankRequestButtons(withdrawal)
+                    }).catch(err => console.error('[Bank] Error updating public button on claim:', err));
 
-                    // Step 4: Send the Torn City Link Privately via Ephemeral Follow-Up
+                    // Step 4: Send the Torn City Link Privately via Ephemeral Follow-Up (Direct Universal Link to open app with ZERO prompts!)
                     const tornUrl = withdrawal.tornUrl || getPreFilledVaultUrl(withdrawal.tornUserId || withdrawal.tornId, withdrawal.amount);
                     const ephemeralRow = new ActionRowBuilder().addComponents(
                         new ButtonBuilder()
-                            .setLabel('Open Torn City to Fulfill')
+                            .setLabel('Open in Torn PDA / App')
                             .setStyle(ButtonStyle.Link)
                             .setURL(tornUrl)
                             .setEmoji('🏦'),
@@ -23265,8 +23255,8 @@ function setupSlashBotEvents(bot, token) {
 
                     await interaction.followUp({
                         content: `💸 **You claimed Vault Request #${withdrawalId} ($${amtFmt}) for ${recipientName}${recipientId ? ` [${recipientId}]` : ''}!**\n\n` +
-                                 `1. Click **Open Torn City to Fulfill** below to disburse the funds directly in Torn.\n` +
-                                 `2. Once transferred, click **Mark Fulfilled** to complete the request.\n` +
+                                 `1. Tap **Open in Torn PDA / App** below to open directly in your app with **zero popups**.\n` +
+                                 `2. Once transferred, click **Mark Fulfilled** (or F.R.I.D.A.Y. will auto-detect it from logs).\n` +
                                  `3. If you are unable to fulfill it right now, click **Release Claim** to return it to the queue.`,
                         components: [ephemeralRow],
                         flags: MessageFlags.Ephemeral
@@ -23342,16 +23332,7 @@ function setupSlashBotEvents(bot, token) {
                                     await publicMsg.edit({
                                         content: buildBankRequestMessageContent(withdrawal),
                                         embeds: [sanitizeEmbed(buildBankRequestEmbed(withdrawal))],
-                                        components: [
-                                            new ActionRowBuilder().addComponents(
-                                                new ButtonBuilder()
-                                                    .setCustomId(`completed_locked:${withdrawalId}`)
-                                                    .setLabel('Fulfilled')
-                                                    .setStyle(ButtonStyle.Success)
-                                                    .setDisabled(true)
-                                                    .setEmoji('✅')
-                                            )
-                                        ]
+                                        components: buildBankRequestButtons(withdrawal)
                                     }).catch(err => console.error('[Bank] Error updating public message on complete:', err));
                                 }
                             }
@@ -23445,41 +23426,49 @@ function setupSlashBotEvents(bot, token) {
                     withdrawal.fulfilledAt = null;
                     saveBankRequests();
 
-                    // Update the message directly if clicked on public message
                     const updatedContent = buildBankRequestMessageContent(withdrawal);
                     const updatedEmbed = sanitizeEmbed(buildBankRequestEmbed(withdrawal));
                     const updatedButtons = buildBankRequestButtons(withdrawal);
 
-                    await interaction.update({
-                        content: updatedContent,
-                        embeds: [updatedEmbed],
-                        components: updatedButtons
-                    }).catch(async () => {
-                        // If interaction.update failed (e.g. ephemeral), edit the public message
-                        if (withdrawal.channelId && withdrawal.messageId) {
-                            try {
-                                const client = interaction.client || slashCommandBot;
-                                const channel = client.channels.cache.get(withdrawal.channelId)
-                                    || await client.channels.fetch(withdrawal.channelId).catch(() => null);
-                                if (channel) {
-                                    const publicMsg = await channel.messages.fetch(withdrawal.messageId).catch(() => null);
-                                    if (publicMsg) {
-                                        await publicMsg.edit({
-                                            content: updatedContent,
-                                            embeds: [updatedEmbed],
-                                            components: updatedButtons
-                                        }).catch(() => {});
-                                    }
-                                }
-                            } catch(e) {}
-                        }
-                    });
+                    // Check if clicked from ephemeral message vs public message
+                    const isEphemeralClick = (interaction.message?.id !== withdrawal.messageId);
 
-                    // Send ephemeral confirmation
-                    await interaction.followUp({
-                        content: `↩️ **Claim released.** Vault Request #${withdrawalId} has been returned to the queue and is now open for any banker to fulfill.`,
-                        flags: MessageFlags.Ephemeral
-                    }).catch(() => {});
+                    // Edit original public message
+                    if (withdrawal.channelId && withdrawal.messageId) {
+                        try {
+                            const client = interaction.client || slashCommandBot;
+                            const channel = client.channels.cache.get(withdrawal.channelId)
+                                || await client.channels.fetch(withdrawal.channelId).catch(() => null);
+                            if (channel) {
+                                const publicMsg = await channel.messages.fetch(withdrawal.messageId).catch(() => null);
+                                if (publicMsg) {
+                                    await publicMsg.edit({
+                                        content: updatedContent,
+                                        embeds: [updatedEmbed],
+                                        components: updatedButtons
+                                    }).catch(() => {});
+                                }
+                            }
+                        } catch(e) {}
+                    }
+
+                    // Respond to user interaction
+                    if (isEphemeralClick) {
+                        await interaction.update({
+                            content: `↩️ **Claim released.** Vault Request #${withdrawalId} has been returned to the queue and is now open for any banker to claim.`,
+                            components: []
+                        }).catch(() => {});
+                    } else {
+                        await interaction.update({
+                            content: updatedContent,
+                            embeds: [updatedEmbed],
+                            components: updatedButtons
+                        }).catch(() => {});
+                        await interaction.followUp({
+                            content: `↩️ **Claim released.** Vault Request #${withdrawalId} has been returned to the queue and is now open for any banker to fulfill.`,
+                            flags: MessageFlags.Ephemeral
+                        }).catch(() => {});
+                    }
 
                 } finally {
                     processingLocks.delete(withdrawalId);
