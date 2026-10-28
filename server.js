@@ -18841,7 +18841,7 @@ function renderMobileAppLauncherHtml({ reqId, amount, tornId, tornName, prefille
 
         <div class="note-box">
             💡 <strong>Opening in Discord?</strong> Tap the button above to launch your app.<br>
-            <em>Pro Tip:</em> In Discord, go to <strong>User Settings → Advanced → Turn ON "Open links in external browser"</strong> to always open links in your apps directly!
+            <em>Pro Tip:</em> In Discord, go to <strong>Profile icon → Settings (Gear) → Web Browser → Select "External Browser"</strong> to always open links in your apps directly!
         </div>
 
         <div class="footer-logo">F.R.I.D.A.Y. Bank Fast-Track • Spider-Verse</div>
