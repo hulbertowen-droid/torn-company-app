@@ -22923,65 +22923,6 @@ function setupSlashBotEvents(bot, token) {
                 return await interaction.editReply(replyPayload);
             }
 
-            // Warboard Target Claim
-            if (customId.startsWith('claim_')) {
-                const targetId = customId.replace('claim_', '').trim().replace(/[^0-9]/g, '');
-                if (!targetId) {
-                    return interaction.reply({ content: "⚠️ Target ID not found.", ephemeral: true }).catch(() => {});
-                }
-
-                const claimerName = interaction.user.username;
-                const now = Date.now();
-                const facId = String(discordConfig.factionId || dynamicFactionId || 'default');
-                const fState = getFactionWarState(facId);
-                const existingClaim = fState.claims[targetId] || claims[targetId];
-
-                if (existingClaim && existingClaim.playerName && existingClaim.playerName !== claimerName && (now - existingClaim.time < 15 * 60 * 1000)) {
-                    return interaction.reply({
-                        content: `⚠️ Target **[${targetId}]** is already claimed by **${existingClaim.playerName}** (${Math.round((now - existingClaim.time)/1000)}s ago)!`,
-                        ephemeral: true
-                    }).catch(() => {});
-                }
-
-                fState.claims[targetId] = { playerName: claimerName, time: now, discordId: interaction.user.id };
-                claims[targetId] = { playerName: claimerName, time: now, discordId: interaction.user.id };
-
-                const attackLink = `https://www.torn.com/page.php?sid=attack&user2ID=${targetId}`;
-
-                return interaction.reply({
-                    embeds: [{
-                        title: `🎯 Target [${targetId}] Claimed!`,
-                        description: `**<@${interaction.user.id}>** has claimed **Target [${targetId}]** directly from Discord.\n\n` +
-                            `[⚔️ Launch Attack in Torn](${attackLink}) • [👤 Profile](https://www.torn.com/profiles.php?XID=${targetId})`,
-                        color: UI.COLORS.SUCCESS, footer: UI.FOOTER,
-                        timestamp: new Date().toISOString()
-                    }]
-                }).catch(() => {});
-            }
-
-            // Warboard Target Unclaim
-            if (customId.startsWith('unclaim_')) {
-                const targetId = customId.replace('unclaim_', '').trim().replace(/[^0-9]/g, '');
-                const facId = String(discordConfig.factionId || dynamicFactionId || 'default');
-                const fState = getFactionWarState(facId);
-                delete fState.claims[targetId];
-                delete claims[targetId];
-                return interaction.reply({
-                    content: `🔓 Target **[${targetId}]** is now released and unclaimed.`,
-                    ephemeral: true
-                }).catch(() => {});
-            }
-
-            // ── Battle Stats Quick Update Button ──
-            if (customId.startsWith('btn_bs_update')) {
-                await handleBattleStatsUpdate(interaction, {
-                    forceUpdate: true,
-                    isButton: true,
-                    isPublic: true
-                });
-                return;
-            }
-
             // ── Torn City Vault Withdrawal: Two-Step Ephemeral Claim & Lock Flow ──
 
             // 1. Claim & Fulfill (Atomic In-Memory Lock + Status Check + Public Button Disable + Ephemeral Follow-Up)
@@ -23350,6 +23291,65 @@ function setupSlashBotEvents(bot, token) {
                     processingLocks.delete(reqId);
                 }
                 return;
+            }
+
+            // ── Battle Stats Quick Update Button ──
+            if (customId.startsWith('btn_bs_update')) {
+                await handleBattleStatsUpdate(interaction, {
+                    forceUpdate: true,
+                    isButton: true,
+                    isPublic: true
+                });
+                return;
+            }
+
+            // Warboard Target Claim (Protected from collision with withdrawal buttons)
+            if (customId.startsWith('claim_') && !customId.startsWith('claim_withdrawal:') && !customId.startsWith('claimed_locked:')) {
+                const targetId = customId.replace('claim_', '').trim().replace(/[^0-9]/g, '');
+                if (!targetId) {
+                    return interaction.reply({ content: "⚠️ Target ID not found.", ephemeral: true }).catch(() => {});
+                }
+
+                const claimerName = interaction.user.username;
+                const now = Date.now();
+                const facId = String(discordConfig.factionId || dynamicFactionId || 'default');
+                const fState = getFactionWarState(facId);
+                const existingClaim = fState.claims[targetId] || claims[targetId];
+
+                if (existingClaim && existingClaim.playerName && existingClaim.playerName !== claimerName && (now - existingClaim.time < 15 * 60 * 1000)) {
+                    return interaction.reply({
+                        content: `⚠️ Target **[${targetId}]** is already claimed by **${existingClaim.playerName}** (${Math.round((now - existingClaim.time)/1000)}s ago)!`,
+                        ephemeral: true
+                    }).catch(() => {});
+                }
+
+                fState.claims[targetId] = { playerName: claimerName, time: now, discordId: interaction.user.id };
+                claims[targetId] = { playerName: claimerName, time: now, discordId: interaction.user.id };
+
+                const attackLink = `https://www.torn.com/page.php?sid=attack&user2ID=${targetId}`;
+
+                return interaction.reply({
+                    embeds: [{
+                        title: `🎯 Target [${targetId}] Claimed!`,
+                        description: `**<@${interaction.user.id}>** has claimed **Target [${targetId}]** directly from Discord.\n\n` +
+                            `[⚔️ Launch Attack in Torn](${attackLink}) • [👤 Profile](https://www.torn.com/profiles.php?XID=${targetId})`,
+                        color: UI.COLORS.SUCCESS, footer: UI.FOOTER,
+                        timestamp: new Date().toISOString()
+                    }]
+                }).catch(() => {});
+            }
+
+            // Warboard Target Unclaim (Protected from collision with withdrawal buttons)
+            if (customId.startsWith('unclaim_') && !customId.startsWith('unclaim_withdrawal:')) {
+                const targetId = customId.replace('unclaim_', '').trim().replace(/[^0-9]/g, '');
+                const facId = String(discordConfig.factionId || dynamicFactionId || 'default');
+                const fState = getFactionWarState(facId);
+                delete fState.claims[targetId];
+                delete claims[targetId];
+                return interaction.reply({
+                    content: `🔓 Target **[${targetId}]** is now released and unclaimed.`,
+                    ephemeral: true
+                }).catch(() => {});
             }
 
             // ── Giveaway: Enter / Leave ──
