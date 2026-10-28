@@ -11543,6 +11543,272 @@ async function findElimSnipeTargetForUser({ apiKey, userId = '', tier = 'managea
     };
 }
 
+// =========================================================================
+// HALLOWEEN TARGET HUNTER ENGINE (Trick or Treat / FFScouter / Okay-only)
+// =========================================================================
+
+const halloweenState = {
+    targetCache: new Map(),        // cacheKey -> { candidates, at }
+    playerStatusCache: new Map(),  // playerId -> { state, until, checkedAt }
+    servedCooldowns: new Map()     // userKeyId -> Map(targetId -> expTimestamp)
+};
+
+function halloweenCleanCaches() {
+    const now = Date.now();
+    for (const [key, item] of halloweenState.targetCache.entries()) {
+        if (now - item.at > 180000) halloweenState.targetCache.delete(key);
+    }
+    for (const [id, item] of halloweenState.playerStatusCache.entries()) {
+        if (item.until && now > item.until) {
+            halloweenState.playerStatusCache.delete(id);
+        } else if (!item.until && now - item.checkedAt > 60000) {
+            halloweenState.playerStatusCache.delete(id);
+        }
+    }
+    for (const [userKey, cooldowns] of halloweenState.servedCooldowns.entries()) {
+        for (const [targetId, exp] of cooldowns.entries()) {
+            if (now > exp) cooldowns.delete(targetId);
+        }
+        if (cooldowns.size === 0) halloweenState.servedCooldowns.delete(userKey);
+    }
+}
+
+setInterval(halloweenCleanCaches, 60000);
+
+/**
+ * Core Halloween Target Finder
+ */
+async function findHalloweenTarget({
+    apiKey,
+    userId = '',
+    targetFF = null,
+    minFF = 1.0,
+    maxFF = 2.0,
+    minLevel = 1,
+    maxLevel = 100,
+    inactiveOnly = true,
+    factionless = true,
+    excludeIds = new Set()
+}) {
+    if (!apiKey) {
+        return {
+            success: false,
+            code: 'ACCOUNT_NOT_CONNECTED',
+            message: 'Torn Limited API Key is required to fetch Halloween targets.'
+        };
+    }
+
+    halloweenCleanCaches();
+
+    const userKeyId = String(userId || crypto.createHash('sha256').update(apiKey).digest('hex').slice(0, 16));
+    let myServed = halloweenState.servedCooldowns.get(userKeyId);
+    if (!myServed) {
+        myServed = new Map();
+        halloweenState.servedCooldowns.set(userKeyId, myServed);
+    }
+
+    const now = Date.now();
+    const excludeSet = excludeIds instanceof Set
+        ? excludeIds
+        : new Set(Array.isArray(excludeIds) ? excludeIds : String(excludeIds).split(',').map(s => s.trim()).filter(Boolean));
+
+    const numMinFF = Math.max(1.0, Number(minFF) || 1.0);
+    const numMaxFF = Math.max(numMinFF, Number(maxFF) || 2.0);
+    const numMinLvl = Math.max(1, Number(minLevel) || 1);
+    const numMaxLvl = Math.max(numMinLvl, Number(maxLevel) || 100);
+    const numTargetFF = targetFF != null && !isNaN(Number(targetFF)) ? Number(targetFF) : null;
+    const isInactive = inactiveOnly !== false && inactiveOnly !== '0' && inactiveOnly !== 0;
+    const isFactionless = factionless !== false && factionless !== '0' && factionless !== 0;
+
+    const cacheKey = `${numMinFF.toFixed(2)}_${numMaxFF.toFixed(2)}_${numMinLvl}_${numMaxLvl}_${isInactive ? 1 : 0}_${isFactionless ? 1 : 0}`;
+    let candidates = [];
+
+    const cached = halloweenState.targetCache.get(cacheKey);
+    if (cached && now - cached.at < 120000 && Array.isArray(cached.candidates) && cached.candidates.length > 0) {
+        candidates = cached.candidates;
+    } else {
+        const ffKey = (global.marketConfig && global.marketConfig.ffscouterKey) || process.env.FFSCOUTER_KEY || apiKey;
+        const q = new URLSearchParams({
+            key: ffKey,
+            minlevel: numMinLvl,
+            maxlevel: numMaxLvl,
+            minff: numMinFF,
+            maxff: numMaxFF,
+            inactiveonly: isInactive ? 1 : 0,
+            factionless: isFactionless ? 1 : 0,
+            limit: 50
+        });
+
+        try {
+            let res = await fetch(`https://ffscouter.com/api/v1/get-targets?${q.toString()}`, {
+                signal: AbortSignal.timeout(8000),
+                headers: { 'User-Agent': 'FactionOS-Halloween/1.0' }
+            });
+            let data = await res.json();
+
+            if (data && (data.code === 7 || data.code === 8 || /not registered|register|sign ?up/i.test(String(data.error || '')))) {
+                try {
+                    await fetch('https://ffscouter.com/api/v1/register', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'User-Agent': 'FactionOS-Halloween/1.0' },
+                        body: JSON.stringify({ key: ffKey, agree_to_data_policy: true, signup_source: 'FactionOSHalloween' }),
+                        signal: AbortSignal.timeout(6000)
+                    });
+                    res = await fetch(`https://ffscouter.com/api/v1/get-targets?${q.toString()}`, {
+                        signal: AbortSignal.timeout(8000),
+                        headers: { 'User-Agent': 'FactionOS-Halloween/1.0' }
+                    });
+                    data = await res.json();
+                } catch(regErr) {
+                    console.error('[Halloween Target] FFScouter registration error:', regErr.message);
+                }
+            }
+
+            if (data && Array.isArray(data.targets)) {
+                candidates = data.targets.map(x => ({
+                    id: String(x.player_id || x.id),
+                    name: x.name || x.player_name || `Target ${x.player_id || x.id}`,
+                    level: Number(x.level) || 0,
+                    ff: Number(x.fair_fight != null ? x.fair_fight : x.ff) || 1.0,
+                    bs_estimate: x.bs_estimate != null ? Number(x.bs_estimate) : null,
+                    bs_estimate_human: x.bs_estimate_human || null,
+                    last_action: x.last_action || null
+                })).filter(c => c.id && c.id !== '0' && c.id !== String(userId));
+
+                halloweenState.targetCache.set(cacheKey, { candidates, at: now });
+            }
+        } catch(ffErr) {
+            console.error('[Halloween Target] FFScouter fetch error:', ffErr.message);
+        }
+    }
+
+    if (!candidates || candidates.length === 0) {
+        return {
+            success: false,
+            code: 'NO_TARGETS_FOUND',
+            message: `No targets found matching Fair Fight ${numMinFF.toFixed(2)} - ${numMaxFF.toFixed(2)} with current filters.`
+        };
+    }
+
+    let available = candidates.filter(c => {
+        if (excludeSet.has(c.id)) return false;
+        if (myServed.has(c.id)) {
+            const exp = myServed.get(c.id);
+            if (now < exp) return false;
+        }
+        const cachedStatus = halloweenState.playerStatusCache.get(c.id);
+        if (cachedStatus && cachedStatus.state !== 'Okay' && cachedStatus.until && now < cachedStatus.until) {
+            return false;
+        }
+        return true;
+    });
+
+    if (available.length === 0 && candidates.length > 0) {
+        const sortedCooldowns = Array.from(myServed.entries()).sort((a, b) => a[1] - b[1]);
+        const toRemove = sortedCooldowns.slice(0, Math.ceil(sortedCooldowns.length / 2));
+        toRemove.forEach(([id]) => myServed.delete(id));
+
+        available = candidates.filter(c => {
+            if (excludeSet.has(c.id)) return false;
+            if (myServed.has(c.id)) return false;
+            const cachedStatus = halloweenState.playerStatusCache.get(c.id);
+            if (cachedStatus && cachedStatus.state !== 'Okay' && cachedStatus.until && now < cachedStatus.until) {
+                return false;
+            }
+            return true;
+        });
+    }
+
+    if (available.length === 0) {
+        return {
+            success: false,
+            code: 'ALL_TARGETS_EXCLUDED',
+            message: 'All available targets have been visited or are currently in hospital. Refresh or clear exclude list.'
+        };
+    }
+
+    if (numTargetFF !== null) {
+        available.sort((a, b) => Math.abs(a.ff - numTargetFF) - Math.abs(b.ff - numTargetFF));
+    } else {
+        available.sort((a, b) => a.ff - b.ff);
+    }
+
+    let verifiedTarget = null;
+    let checkedCount = 0;
+    let hospCount = 0;
+
+    for (const cand of available.slice(0, 15)) {
+        checkedCount++;
+        const cachedStatus = halloweenState.playerStatusCache.get(cand.id);
+        if (cachedStatus && cachedStatus.state === 'Okay' && (now - cachedStatus.checkedAt < 45000)) {
+            verifiedTarget = {
+                id: cand.id,
+                name: cand.name,
+                level: cand.level,
+                ff: cand.ff,
+                bs_estimate_human: cand.bs_estimate_human,
+                status: 'Okay'
+            };
+            break;
+        }
+
+        try {
+            const statusRes = await fetch(`https://api.torn.com/v2/user/${cand.id}?selections=profile&key=${encodeURIComponent(apiKey)}`, {
+                signal: AbortSignal.timeout(5000)
+            });
+            const statusData = await statusRes.json();
+            const prof = statusData.profile || statusData;
+            const statusObj = prof.status || {};
+            const state = statusObj.state || 'Okay';
+            const until = statusObj.until ? statusObj.until * 1000 : null;
+
+            if (state === 'Okay') {
+                halloweenState.playerStatusCache.set(cand.id, {
+                    state: 'Okay',
+                    until: now + 45000,
+                    checkedAt: now
+                });
+                verifiedTarget = {
+                    id: cand.id,
+                    name: prof.name || cand.name,
+                    level: prof.level || cand.level,
+                    ff: cand.ff,
+                    bs_estimate_human: cand.bs_estimate_human,
+                    status: 'Okay'
+                };
+                break;
+            } else {
+                hospCount++;
+                const expireAt = until && until > now ? until : now + (state === 'Hospital' ? 900000 : 300000);
+                halloweenState.playerStatusCache.set(cand.id, {
+                    state,
+                    until: expireAt,
+                    checkedAt: now
+                });
+            }
+        } catch(statusErr) {
+            console.error(`[Halloween Target] Status check error for ${cand.id}:`, statusErr.message);
+        }
+    }
+
+    if (verifiedTarget) {
+        myServed.set(verifiedTarget.id, now + 180000);
+        return {
+            success: true,
+            target: verifiedTarget,
+            totalAvailable: available.length,
+            targetFF: numTargetFF || verifiedTarget.ff
+        };
+    }
+
+    return {
+        success: false,
+        code: 'ALL_CANDIDATES_INCAPACITATED',
+        message: `Checked ${checkedCount} candidates in range, but they are currently in hospital or traveling. Hospital times expire quickly — try again in a few seconds!`,
+        hospCount
+    };
+}
+
 // GET /api/elim/snipe — Multi-user Elimination Target Finder endpoint
 app.get('/api/elim/snipe', async (req, res) => {
     try {
@@ -11637,6 +11903,87 @@ app.post('/api/user/link-key', async (req, res) => {
         });
     } catch (e) {
         return res.status(500).json({ success: false, error: userKeys.sanitizeErrorMessage(e.message) });
+    }
+});
+
+// GET /api/halloween/snipe & GET /api/halloween/targets — Halloween Target Hunter endpoint
+app.get(['/api/halloween/snipe', '/api/halloween/targets'], async (req, res) => {
+    try {
+        let apiKey = (req.headers['x-api-key'] || req.query.apiKey || '').replace(/[\s\r\n'"]/g, '').trim();
+        const tornId = (req.headers['x-torn-id'] || req.query.tornId || req.query.myId || '').trim();
+        const discordId = (req.headers['x-discord-id'] || req.query.discordId || '').trim();
+
+        let resolvedUser = null;
+        if (!apiKey && tornId) {
+            resolvedUser = userKeys.resolveUserApiKeyByTornId(tornId);
+            if (resolvedUser) apiKey = resolvedUser.key;
+        }
+        if (!apiKey && discordId) {
+            resolvedUser = userKeys.resolveUserApiKey(discordId);
+            if (resolvedUser) apiKey = resolvedUser.key;
+        }
+        if (!apiKey && req.headers['x-session-token']) {
+            const sess = sessionManager.getSession(req.headers['x-session-token']);
+            if (sess && sess.playerId) {
+                resolvedUser = userKeys.resolveUserApiKeyByTornId(sess.playerId);
+                if (resolvedUser) apiKey = resolvedUser.key;
+            }
+        }
+
+        if (!apiKey) {
+            return res.status(401).json({
+                success: false,
+                code: 'ACCOUNT_NOT_CONNECTED',
+                message: 'Torn Limited API Key required. Link your key or provide x-api-key header.'
+            });
+        }
+
+        const targetFF = req.query.targetFF || req.query.ff;
+        const minFF = req.query.minFF || req.query.minff || 1.0;
+        const maxFF = req.query.maxFF || req.query.maxff || 2.0;
+        const minLevel = req.query.minLevel || req.query.minlevel || 1;
+        const maxLevel = req.query.maxLevel || req.query.maxlevel || 100;
+        const inactiveOnly = req.query.inactiveOnly !== '0' && req.query.inactive !== '0';
+        const factionless = req.query.factionless !== '0';
+        const exclude = req.query.exclude || '';
+        const excludeIds = new Set(exclude.split(',').map(s => s.trim()).filter(Boolean));
+        const userId = tornId || discordId || (resolvedUser ? String(resolvedUser.playerId) : '');
+
+        const result = await findHalloweenTarget({
+            apiKey,
+            userId,
+            targetFF,
+            minFF,
+            maxFF,
+            minLevel,
+            maxLevel,
+            inactiveOnly,
+            factionless,
+            excludeIds
+        });
+
+        return res.json(result);
+    } catch(err) {
+        console.error('[Halloween Snipe API] Error:', userKeys.sanitizeErrorMessage(err.message));
+        return res.status(500).json({ success: false, error: userKeys.sanitizeErrorMessage(err.message) });
+    }
+});
+
+// POST /api/halloween/report-status — Invalidate hospitalized/traveling targets across faction
+app.post('/api/halloween/report-status', (req, res) => {
+    try {
+        const { targetId, status, duration } = req.body;
+        if (!targetId) return res.status(400).json({ error: 'targetId required' });
+        const id = String(targetId).trim();
+        const durMs = (Number(duration) || 900) * 1000;
+        halloweenState.playerStatusCache.set(id, {
+            state: status || 'Hospital',
+            until: Date.now() + durMs,
+            checkedAt: Date.now()
+        });
+        return res.json({ success: true, targetId: id, cachedUntil: Date.now() + durMs });
+    } catch(err) {
+        return res.status(500).json({ error: err.message });
     }
 });
 
