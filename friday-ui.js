@@ -465,13 +465,14 @@ const ANSI_CYAN    = '\u001b[0;36m';
 const ANSI_WHITE   = '\u001b[0;37m';
 
 /**
- * Generates the 10-block ANSI bar chart for Battle Stats:
- * STR in Red (0;31m)
- * DEF in Blue (0;34m)
- * SPD in Yellow (0;33m)
- * DEX in Green (0;32m)
- * Empty track in Dark Gray (0;30m)
- * Monospace aligned numbers (0;37m) and build percentages (0;30m)
+ * Generates the cross-platform colored 10-block bar chart for Battle Stats:
+ * STR in Red (🟥)
+ * DEF in Blue (🟦)
+ * SPD in Yellow (🟨)
+ * DEX in Green (🟩)
+ * Empty track in Dark Charcoal (⬛)
+ * Monospace aligned numbers and build percentages in code pills
+ * Fully rendered in color across Discord Desktop, Web, iOS, and Android
  */
 function generateBattleStatsAnsi(stats) {
     if (!stats) stats = {};
@@ -484,10 +485,10 @@ function generateBattleStatsAnsi(stats) {
     const safeTotal = Math.max(total, str + def + spd + dex, 1);
 
     const items = [
-        { label: 'STR', val: str, color: ANSI_RED },
-        { label: 'DEF', val: def, color: ANSI_BLUE },
-        { label: 'SPD', val: spd, color: ANSI_YELLOW },
-        { label: 'DEX', val: dex, color: ANSI_GREEN },
+        { label: 'STR', val: str, emoji: '🟥' },
+        { label: 'DEF', val: def, emoji: '🟦' },
+        { label: 'SPD', val: spd, emoji: '🟨' },
+        { label: 'DEX', val: dex, emoji: '🟩' },
     ];
 
     const maxNumLen = Math.max(...items.map(i => i.val.toLocaleString('en-US').length));
@@ -497,17 +498,17 @@ function generateBattleStatsAnsi(stats) {
         const filledCount = Math.round(ratio * 10);
         const emptyCount = Math.max(0, 10 - filledCount);
 
-        const filledBars = item.color + FILLED_BLOCK.repeat(filledCount);
-        const emptyBars = ANSI_GRAY + EMPTY_BLOCK.repeat(emptyCount) + ANSI_RESET;
+        const filledBars = item.emoji.repeat(filledCount);
+        const emptyBars = '⬛'.repeat(emptyCount);
 
         const pct = ((item.val / safeTotal) * 100).toFixed(1) + '%';
         const numStr = item.val.toLocaleString('en-US').padStart(maxNumLen, ' ');
         const pctStr = pct.padStart(5, ' ');
 
-        return `${item.color}${item.label}${ANSI_RESET} ${filledBars}${emptyBars}  ${ANSI_WHITE}${numStr}${ANSI_RESET}  ${ANSI_GRAY}${pctStr}${ANSI_RESET}`;
+        return `> ${item.emoji} **${item.label}**  ${filledBars}${emptyBars}  \`${numStr}\`  \`${pctStr}\``;
     });
 
-    return '```ansi\n' + lines.join('\n') + '\n```';
+    return lines.join('\n');
 }
 
 /**
