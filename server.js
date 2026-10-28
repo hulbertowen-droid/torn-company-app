@@ -18768,20 +18768,26 @@ function renderMobileAppLauncherHtml({ reqId, amount, tornId, tornName, prefille
     const recipient = tornName || `Player #${tornId}`;
     const tornPathAndQuery = prefilledUrl.replace(/^https?:\/\//i, '');
 
-    // Android Intent schemes:
-    // 1. Torn PDA (dominant community mobile app)
-    const pdaIntent = `intent://${tornPathAndQuery}#Intent;scheme=https;package=com.manuito.tornpda;fallback_url=${encodeURIComponent(prefilledUrl)};end`;
-    // 2. Official Torn App
-    const officialIntent = `intent://${tornPathAndQuery}#Intent;scheme=https;package=com.ionicframework.tornv2301860;fallback_url=${encodeURIComponent(prefilledUrl)};end`;
-    // 3. Generic Intent (routes to whichever app handles torn.com)
-    const genericIntent = `intent://${tornPathAndQuery}#Intent;scheme=https;fallback_url=${encodeURIComponent(prefilledUrl)};end`;
+    // 1. Torn PDA schemes:
+    // Android: uses Intent URL with package com.manuito.tornpda
+    // iOS: uses registered custom URI scheme tornpda://
+    const pdaAndroidIntent = `intent://${tornPathAndQuery}#Intent;scheme=https;package=com.manuito.tornpda;fallback_url=${encodeURIComponent(prefilledUrl)};end`;
+    const pdaIosScheme = `tornpda://${tornPathAndQuery}`;
+    const pdaTargetUrl = isAndroid ? pdaAndroidIntent : pdaIosScheme;
+
+    // 2. Official Torn App schemes:
+    // Android: uses Intent URL with package com.ionicframework.tornv2301860
+    // iOS: uses registered scheme torn://
+    const officialAndroidIntent = `intent://${tornPathAndQuery}#Intent;scheme=https;package=com.ionicframework.tornv2301860;fallback_url=${encodeURIComponent(prefilledUrl)};end`;
+    const officialIosScheme = `torn://${tornPathAndQuery}`;
+    const officialTargetUrl = isAndroid ? officialAndroidIntent : officialIosScheme;
 
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Opening Torn App | Request #${reqId}</title>
+    <title>Open in Torn App | Request #${reqId}</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
         body { background: #0b0f19; color: #f3f4f6; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
@@ -18800,8 +18806,8 @@ function renderMobileAppLauncherHtml({ reqId, amount, tornId, tornName, prefille
         .btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 15px 20px; border-radius: 12px; font-weight: 700; font-size: 16px; text-decoration: none; transition: transform 0.1s, opacity 0.15s; border: none; cursor: pointer; }
         .btn:active { transform: scale(0.98); }
         
-        .btn-pda { background: linear-gradient(135deg, #10b981, #059669); color: #ffffff; box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.4); }
-        .btn-official { background: #1f2937; border: 1px solid rgba(255, 255, 255, 0.12); color: #f3f4f6; }
+        .btn-pda { background: linear-gradient(135deg, #10b981, #059669); color: #ffffff; box-shadow: 0 10px 25px -5px rgba(16, 185, 129, 0.4); font-size: 17px; }
+        .btn-official { background: #1f2937; border: 1px solid rgba(255, 255, 255, 0.15); color: #f3f4f6; }
         .btn-web { background: transparent; color: #9ca3af; font-size: 14px; font-weight: 500; padding: 10px; }
         .btn-web:hover { color: #d1d5db; }
 
@@ -18822,26 +18828,20 @@ function renderMobileAppLauncherHtml({ reqId, amount, tornId, tornName, prefille
         <div class="recipient">Recipient: <strong>${recipient} [${tornId}]</strong></div>
 
         <div class="btn-stack">
-            ${isAndroid ? `
-                <a id="btn-pda" href="${pdaIntent}" class="btn btn-pda">
-                    📱 Open in Torn PDA
-                </a>
-                <a id="btn-official" href="${officialIntent}" class="btn btn-official">
-                    📱 Open in Official Torn App
-                </a>
-            ` : `
-                <a id="btn-ios-app" href="${prefilledUrl}" target="_top" class="btn btn-pda">
-                    📱 Open in Torn App
-                </a>
-            `}
+            <a id="btn-pda" href="${pdaTargetUrl}" class="btn btn-pda">
+                📱 Open in Torn PDA
+            </a>
+            <a id="btn-official" href="${officialTargetUrl}" class="btn btn-official">
+                📱 Open in Official Torn App
+            </a>
             <a href="${prefilledUrl}" class="btn btn-web">
                 🌐 Open in Web Browser Instead
             </a>
         </div>
 
         <div class="note-box">
-            💡 <strong>Opening in Discord?</strong> Tap the button above to launch your app.<br>
-            <em>Pro Tip:</em> In Discord, go to <strong>Profile icon → Settings (Gear) → Web Browser → Select "External Browser"</strong> to always open links in your apps directly!
+            💡 <strong>Opening in Discord?</strong> Tap <strong>"Open in Torn PDA"</strong> above to launch your app.<br>
+            If prompted by your phone, tap <strong>"Open"</strong> to switch into the app.
         </div>
 
         <div class="footer-logo">F.R.I.D.A.Y. Bank Fast-Track • Spider-Verse</div>
@@ -18849,19 +18849,10 @@ function renderMobileAppLauncherHtml({ reqId, amount, tornId, tornName, prefille
 
     <script>
         (function() {
-            var isAndroid = ${isAndroid ? 'true' : 'false'};
-            var isIOS = ${isIOS ? 'true' : 'false'};
-            var pdaIntent = ${JSON.stringify(pdaIntent)};
-            var webUrl = ${JSON.stringify(prefilledUrl)};
-
-            // Attempt instant automatic launch
+            var targetAppUrl = ${JSON.stringify(pdaTargetUrl)};
+            // Attempt automatic launch into Torn PDA
             try {
-                if (isAndroid) {
-                    window.location.replace(pdaIntent);
-                } else if (isIOS) {
-                    // On iOS, attempt to trigger Universal Link
-                    window.location.replace(webUrl);
-                }
+                window.location.href = targetAppUrl;
             } catch(e) {}
         })();
     </script>
