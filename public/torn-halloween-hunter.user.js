@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Halloween Target Hunter
 // @namespace    https://faction-os.duckdns.org/
-// @version      1.0.0
+// @version      1.0.1
 // @description  Zero-latency Halloween Treat Hunter for Torn City. Custom Fair Fight score selector, server-side 'Okay' status verification, hospital cycling, and in-combat spooky finishing weapon highlighter.
 // @author       FactionOS
 // @match        https://www.torn.com/*
@@ -46,7 +46,8 @@
     const KEY_FACTIONLESS  = 'hw_factionless';     // true | false
     const KEY_AUTOLAUNCH   = 'hw_auto_launch';     // true | false
     const KEY_SAMETAB      = 'hw_same_tab';        // true | false
-    const KEY_POS          = 'hw_btn_pos';
+    const KEY_POS_X        = 'hw_widget_pos_x';
+    const KEY_POS_Y        = 'hw_widget_pos_y';
     const SESS_EXCL        = 'hw_exclude';
     const SESS_MYID        = 'hw_my_id';
 
@@ -58,24 +59,12 @@
         'scythe', 'rusty cleaver'
     ];
 
-    // Spooky masks & clothing for "+10% with spooky clothing" (I See Dead People)
-    const SPOOKY_MASKS = [
-        'kabuki mask', 'medieval helmet', "witch's hat", 'straitjacket', 'marauder face mask',
-        "duke's gimp mask", 'ginger kid mask', 'scarred man mask', 'psycho clown mask',
-        'nun mask', 'donald trump mask', 'michael myers mask', 'gronch mask', 'jigsaw mask',
-        'pennywise mask', 'sandworm mask', 'krampus mask', 'hell priest mask', 'evil winnie mask',
-        'hook hand', 'torso bandage', 'head bandage', 'bloody apron', 'devil horns',
-        'elon musk mask', 'greta mask', 'hannibal mask', 'peg leg', 'prince philip mask',
-        'queen elizabeth ii mask', 'kevin mccallister mask', 'tiger king mask', "scream mask '25",
-        "anatoly mask '19", 'young lady mask', 'moustache man mask'
-    ];
-
     // Presets for Fair Fight ranges
     const FF_PRESETS = {
         'very_easy':   { name: '🟢 Very Easy',  min: 1.00, max: 1.20, target: 1.10, desc: 'Easiest targets, virtually guaranteed wins' },
         'easy':        { name: '🟡 Easy',       min: 1.20, max: 1.45, target: 1.30, desc: 'Balanced easy targets with solid treat gain' },
         'standard':    { name: '🟠 Standard',   min: 1.45, max: 1.75, target: 1.55, desc: 'Closer fair fight, strong stats scaling' },
-        'challenging': { name: '🔴 Challenging',min: 1.75, max: 2.50, target: 2.00, desc: 'Higher stat targets for maximum respect & challenge' },
+        'challenging': { name: '🔴 Challenging',min: 1.75, max: 2.50, target: 2.00, desc: 'Higher stat targets for maximum respect' },
         'custom':      { name: '⚙️ Custom',     min: 1.00, max: 2.00, target: 1.25, desc: 'User-specified min and max Fair Fight range' }
     };
 
@@ -140,7 +129,8 @@
     }
 
     // ── State ──────────────────────────────────────────────────────
-    let apiKey       = sanitizeKey(load(KEY_API, ''));
+    // Auto-reuse existing API key if user already linked via elimination hunter
+    let apiKey       = sanitizeKey(load(KEY_API, '')) || sanitizeKey(load('elimv2_api_key', ''));
     let activePreset = load(KEY_PRESET, 'easy');
     let targetFF     = Number(load(KEY_TARGET_FF, FF_PRESETS[activePreset]?.target || 1.30));
     let minFF        = Number(load(KEY_MIN_FF, FF_PRESETS[activePreset]?.min || 1.20));
@@ -177,7 +167,7 @@
 
     async function resolveMyId() {
         if (myId) return myId;
-        myId = sessionStorage.getItem(SESS_MYID) || '';
+        myId = sessionStorage.getItem(SESS_MYID) || sessionStorage.getItem('elimv2_my_id') || '';
         if (myId) return myId;
 
         myId = getMyTornIdFromPage();
@@ -278,7 +268,7 @@
                     return bufferedTarget;
                 }
             } catch (e) {
-                // Background prime failed silently; will retry on click
+                // Background prime failed silently
             } finally {
                 primingPromise = null;
             }
@@ -301,17 +291,19 @@
 
     // ── Core Snipe Logic ───────────────────────────────────────────
     async function executeSnipe() {
-        if (busy) return;
+        if (busy) {
+            showToast('⏳ Snipe in progress, please wait...', true);
+            return;
+        }
         busy = true;
 
-        // If a target is already buffered in memory, launch immediately (0ms wait!)
+        // 1. If a target is already buffered in memory, launch immediately (0ms wait!)
         if (bufferedTarget && bufferedTarget.id) {
             const tgt = bufferedTarget;
             bufferedTarget = null;
             addExclude(tgt.id);
             launchAttack(tgt);
             busy = false;
-            // Immediately prime next target in background
             setTimeout(() => { primeNextTarget(true); }, 500);
             return;
         }
@@ -390,7 +382,6 @@
             if (data && data.success && data.target) {
                 addExclude(data.target.id);
                 launchAttack(data.target);
-                // Pre-prime next target
                 setTimeout(() => { primeNextTarget(true); }, 500);
             } else {
                 const msg = data?.message || 'No Okay targets found in selected range. Retrying...';
@@ -408,7 +399,7 @@
 
     function launchAttack(target) {
         const url = `https://www.torn.com/page.php?sid=attack&user2ID=${target.id}`;
-        showToast(`🎃 Attacking <b>${target.name}</b> (Lvl ${target.level}, FF ${Number(target.ff).toFixed(2)})`);
+        showToast(`🎃 Launching: <b>${target.name}</b> [${target.id}] (Lvl ${target.level}, FF ${Number(target.ff).toFixed(2)})`);
 
         if (sameTab) {
             window.location.href = url;
@@ -418,150 +409,226 @@
         }
     }
 
-    // ── Floating HUD Button & UI Elements ──────────────────────────
-    let buttonContainer = null;
-    let buttonPill = null;
-    let buttonGear = null;
+    // ── Floating HUD Elements ──────────────────────────────────────
+    let wrapEl = null;
+    let rowEl = null;
+    let btnEl = null;
+    let cogBtn = null;
+    let dragHandle = null;
     let drawerEl = null;
+    let drawerOpen = false;
 
     function createFloatingHUD() {
-        if (buttonContainer && document.body.contains(buttonContainer)) return;
+        if (wrapEl && document.body.contains(wrapEl)) return;
 
-        buttonContainer = document.createElement('div');
-        buttonContainer.id = 'torn-hw-hud';
-        const savedPos = load(KEY_POS, null);
+        // Container wrapper
+        wrapEl = document.createElement('div');
+        wrapEl.id = 'torn-hw-wrap';
         const bOffset = getDefaultBottomOffset();
 
-        buttonContainer.style.cssText = `
+        const savedX = localStorage.getItem(KEY_POS_X);
+        const savedY = localStorage.getItem(KEY_POS_Y);
+
+        wrapEl.style.cssText = `
             position: fixed; z-index: 2147483640;
-            ${savedPos && savedPos.left != null ? `left: ${savedPos.left}px;` : `right: 14px;`}
-            ${savedPos && savedPos.top != null ? `top: ${savedPos.top}px;` : `bottom: ${bOffset}px;`}
-            display: flex; align-items: center; gap: 4px;
+            display: flex; flex-direction: column;
+            ${savedX && savedY ? `left:${savedX}px; top:${savedY}px;` : `right:14px; bottom:${bOffset}px;`}
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             user-select: none; -webkit-user-select: none;
-            touch-action: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         `;
 
-        // Main pill
-        buttonPill = document.createElement('button');
-        buttonPill.id = 'torn-hw-btn';
-        buttonPill.style.cssText = `
+        // Row containing drag handle, snipe button, and gear
+        rowEl = document.createElement('div');
+        rowEl.id = 'torn-hw-row';
+        rowEl.style.cssText = 'display:flex; gap:6px; align-items:center;';
+
+        // 1. Drag Handle
+        dragHandle = document.createElement('div');
+        dragHandle.id = 'hw-drag-handle';
+        dragHandle.textContent = '⠿';
+        dragHandle.title = 'Hold & drag anywhere on screen';
+        dragHandle.style.cssText = `
+            cursor: grab;
+            padding: ${isMobile ? '8px 6px' : '6px 4px'};
+            min-width: 20px;
+            color: #ff8a1f;
+            font-size: 18px;
+            user-select: none;
+            touch-action: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.8;
+            transition: opacity 0.15s;
+        `;
+        dragHandle.onmouseover = () => { dragHandle.style.opacity = '1'; };
+        dragHandle.onmouseout  = () => { dragHandle.style.opacity = '0.8'; };
+
+        // 2. Main Snipe Button
+        btnEl = document.createElement('button');
+        btnEl.id = 'torn-hw-snipe-btn';
+        btnEl.style.cssText = `
             background: linear-gradient(135deg, #181124 0%, #29153a 100%);
             border: 1.5px solid #ff8a1f; color: #ffffff;
-            padding: 8px 14px; border-radius: 20px; font-size: 13px; font-weight: 700;
+            padding: 9px 16px; border-radius: 20px; font-size: 13px; font-weight: 800;
             cursor: pointer; display: flex; align-items: center; gap: 6px;
             box-shadow: 0 4px 16px rgba(0,0,0,0.65), 0 0 10px rgba(255,138,31,0.25);
-            transition: transform 0.15s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+            transition: transform 0.1s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+            white-space: nowrap;
         `;
-        buttonPill.innerHTML = `<span>🎃</span> <span id="hw-pill-label">Snipe (FF ${targetFF.toFixed(2)})</span>`;
-
-        // Gear icon
-        buttonGear = document.createElement('button');
-        buttonGear.id = 'torn-hw-gear';
-        buttonGear.title = 'Halloween Hunter Settings';
-        buttonGear.style.cssText = `
-            background: #181124; border: 1.5px solid #ff8a1f; color: #ff8a1f;
-            width: 32px; height: 32px; border-radius: 50%; font-size: 14px;
-            cursor: pointer; display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5); transition: transform 0.2s ease;
-        `;
-        buttonGear.innerHTML = '⚙️';
-
-        buttonContainer.appendChild(buttonPill);
-        buttonContainer.appendChild(buttonGear);
-        document.body.appendChild(buttonContainer);
-
-        // Click handlers
-        buttonPill.addEventListener('click', (e) => {
-            if (dragMoved) { dragMoved = false; return; }
+        btnEl.innerHTML = `<span>🎃</span> <span id="hw-pill-label">Snipe (FF ${targetFF.toFixed(2)})</span>`;
+        btnEl.onmouseover = () => { if (!btnEl.disabled) btnEl.style.transform = 'scale(1.03)'; };
+        btnEl.onmouseout  = () => { btnEl.style.transform = 'scale(1)'; };
+        btnEl.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             executeSnipe();
-        });
-
-        buttonGear.addEventListener('click', (e) => {
-            if (dragMoved) { dragMoved = false; return; }
-            toggleSettingsDrawer();
-        });
-
-        // Draggable functionality
-        let isDragging = false;
-        let dragMoved = false;
-        let startX, startY, origX, origY;
-
-        buttonContainer.addEventListener('pointerdown', (e) => {
-            if (e.button !== 0 && e.pointerType === 'mouse') return;
-            isDragging = true;
-            dragMoved = false;
-            startX = e.clientX;
-            startY = e.clientY;
-            const r = buttonContainer.getBoundingClientRect();
-            origX = r.left;
-            origY = r.top;
-            try { buttonContainer.setPointerCapture(e.pointerId); } catch (err) {}
-        });
-
-        buttonContainer.addEventListener('pointermove', (e) => {
-            if (!isDragging) return;
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            if (Math.hypot(dx, dy) > 5) dragMoved = true;
-            if (dragMoved) {
-                const newX = Math.min(Math.max(4, origX + dx), window.innerWidth - buttonContainer.offsetWidth - 4);
-                const newY = Math.min(Math.max(4, origY + dy), window.innerHeight - buttonContainer.offsetHeight - 4);
-                buttonContainer.style.left = `${newX}px`;
-                buttonContainer.style.top = `${newY}px`;
-                buttonContainer.style.right = 'auto';
-                buttonContainer.style.bottom = 'auto';
-            }
-        });
-
-        const stopDrag = (e) => {
-            if (!isDragging) return;
-            isDragging = false;
-            if (dragMoved) {
-                save(KEY_POS, {
-                    left: parseFloat(buttonContainer.style.left) || 0,
-                    top: parseFloat(buttonContainer.style.top) || 0
-                });
-            }
         };
 
-        buttonContainer.addEventListener('pointerup', stopDrag);
-        buttonContainer.addEventListener('pointercancel', stopDrag);
+        // 3. Settings Gear Button
+        cogBtn = document.createElement('button');
+        cogBtn.id = 'torn-hw-cog-btn';
+        cogBtn.title = 'Halloween Hunter Settings';
+        cogBtn.style.cssText = `
+            background: #181124; border: 1.5px solid #ff8a1f; color: #ff8a1f;
+            width: 34px; height: 34px; border-radius: 50%; font-size: 14px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5); transition: transform 0.15s ease;
+            flex-shrink: 0;
+        `;
+        cogBtn.innerHTML = '⚙️';
+        cogBtn.onmouseover = () => { cogBtn.style.transform = 'scale(1.08)'; };
+        cogBtn.onmouseout  = () => { cogBtn.style.transform = 'scale(1)'; };
+        cogBtn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleSettingsDrawer();
+        };
+
+        // 4. Settings Drawer
+        createSettingsDrawer();
+
+        // Assemble
+        rowEl.appendChild(dragHandle);
+        rowEl.appendChild(btnEl);
+        rowEl.appendChild(cogBtn);
+        wrapEl.appendChild(drawerEl);
+        wrapEl.appendChild(rowEl);
+        document.body.appendChild(wrapEl);
+
+        // Bind Dragging ONLY to dragHandle
+        initDragAndDrop();
 
         updateButtonDisplay();
     }
 
+    function initDragAndDrop() {
+        let isDragging = false;
+        let dragStartX = 0;
+        let dragStartY = 0;
+        let initialLeft = 0;
+        let initialTop = 0;
+
+        function startDrag(e) {
+            isDragging = true;
+            dragHandle.style.cursor = 'grabbing';
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            dragStartX = clientX;
+            dragStartY = clientY;
+
+            const rect = wrapEl.getBoundingClientRect();
+            initialLeft = rect.left;
+            initialTop = rect.top;
+
+            wrapEl.style.left = `${initialLeft}px`;
+            wrapEl.style.top = `${initialTop}px`;
+            wrapEl.style.bottom = 'auto';
+            wrapEl.style.right = 'auto';
+
+            document.addEventListener('mousemove', onDrag);
+            document.addEventListener('mouseup', stopDrag);
+            document.addEventListener('touchmove', onDrag, { passive: false });
+            document.addEventListener('touchend', stopDrag);
+        }
+
+        function onDrag(e) {
+            if (!isDragging) return;
+            if (e.cancelable) e.preventDefault();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            const deltaX = clientX - dragStartX;
+            const deltaY = clientY - dragStartY;
+
+            let newLeft = initialLeft + deltaX;
+            let newTop = initialTop + deltaY;
+
+            const vpW = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+            const vpH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+            const bottomForbiddenZone = isAndroid ? 96 : (isIOS ? 70 : 55);
+
+            const maxLeft = Math.max(5, vpW - wrapEl.offsetWidth - 8);
+            const maxTop = Math.max(5, vpH - wrapEl.offsetHeight - bottomForbiddenZone);
+
+            newLeft = Math.max(5, Math.min(newLeft, maxLeft));
+            newTop = Math.max(5, Math.min(newTop, maxTop));
+
+            wrapEl.style.left = `${newLeft}px`;
+            wrapEl.style.top = `${newTop}px`;
+        }
+
+        function stopDrag() {
+            if (!isDragging) return;
+            isDragging = false;
+            dragHandle.style.cursor = 'grab';
+
+            document.removeEventListener('mousemove', onDrag);
+            document.removeEventListener('mouseup', stopDrag);
+            document.removeEventListener('touchmove', onDrag);
+            document.removeEventListener('touchend', stopDrag);
+
+            const rect = wrapEl.getBoundingClientRect();
+            localStorage.setItem(KEY_POS_X, Math.round(rect.left));
+            localStorage.setItem(KEY_POS_Y, Math.round(rect.top));
+        }
+
+        dragHandle.addEventListener('mousedown', startDrag);
+        dragHandle.addEventListener('touchstart', startDrag, { passive: false });
+    }
+
     function updateButtonDisplay() {
-        if (!buttonPill) return;
-        const labelEl = buttonPill.querySelector('#hw-pill-label');
+        if (!btnEl) return;
+        const labelEl = btnEl.querySelector('#hw-pill-label');
         if (!labelEl) return;
 
         if (bufferedTarget) {
-            buttonPill.style.borderColor = '#5fd37a';
-            buttonPill.style.boxShadow = '0 4px 16px rgba(0,0,0,0.65), 0 0 12px rgba(95,211,122,0.4)';
+            btnEl.style.borderColor = '#5fd37a';
+            btnEl.style.boxShadow = '0 4px 16px rgba(0,0,0,0.65), 0 0 12px rgba(95,211,122,0.4)';
             labelEl.innerHTML = `Hit ${bufferedTarget.name} <span style="font-size:11px;opacity:0.8;">(FF ${Number(bufferedTarget.ff).toFixed(2)})</span>`;
         } else {
-            buttonPill.style.borderColor = '#ff8a1f';
-            buttonPill.style.boxShadow = '0 4px 16px rgba(0,0,0,0.65), 0 0 10px rgba(255,138,31,0.25)';
+            btnEl.style.borderColor = '#ff8a1f';
+            btnEl.style.boxShadow = '0 4px 16px rgba(0,0,0,0.65), 0 0 10px rgba(255,138,31,0.25)';
             labelEl.textContent = `Snipe (FF ${targetFF.toFixed(2)})`;
         }
     }
 
     function setButtonState(state, customText) {
-        if (!buttonPill) return;
-        const labelEl = buttonPill.querySelector('#hw-pill-label');
+        if (!btnEl) return;
+        const labelEl = btnEl.querySelector('#hw-pill-label');
         if (!labelEl) return;
 
         if (state === 'hunting') {
-            buttonPill.style.borderColor = '#9d4edd';
+            btnEl.style.borderColor = '#9d4edd';
             labelEl.textContent = 'Searching FFScouter...';
         } else if (state === 'needkey') {
-            buttonPill.style.borderColor = '#e63946';
+            btnEl.style.borderColor = '#e63946';
             labelEl.textContent = '🔑 Link API Key';
         } else if (state === 'empty') {
-            buttonPill.style.borderColor = '#e63946';
+            btnEl.style.borderColor = '#e63946';
             labelEl.textContent = 'No Okay Targets';
         } else if (state === 'error') {
-            buttonPill.style.borderColor = '#e63946';
+            btnEl.style.borderColor = '#e63946';
             labelEl.textContent = customText || 'Error';
         }
     }
@@ -569,39 +636,55 @@
     // ── Settings Drawer ────────────────────────────────────────────
     function toggleSettingsDrawer() {
         if (!drawerEl) createSettingsDrawer();
-        if (drawerEl.style.display === 'none' || !drawerEl.style.display) {
+        drawerOpen = !drawerOpen;
+
+        if (drawerOpen) {
             drawerEl.style.display = 'block';
+
+            // Flip drawer direction based on widget vertical position
+            if (wrapEl) {
+                const rect = wrapEl.getBoundingClientRect();
+                const vpH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+                const isTopHalf = rect.top < vpH / 2;
+                if (isTopHalf) {
+                    wrapEl.style.flexDirection = 'column-reverse';
+                    drawerEl.style.marginBottom = '0';
+                    drawerEl.style.marginTop = '6px';
+                } else {
+                    wrapEl.style.flexDirection = 'column';
+                    drawerEl.style.marginBottom = '6px';
+                    drawerEl.style.marginTop = '0';
+                }
+            }
         } else {
             drawerEl.style.display = 'none';
         }
     }
 
     function openSettingsDrawer(msg) {
-        if (!drawerEl) createSettingsDrawer();
-        drawerEl.style.display = 'block';
+        if (!drawerOpen) toggleSettingsDrawer();
         if (msg) showToast(msg, true);
     }
 
     function createSettingsDrawer() {
-        if (drawerEl && document.body.contains(drawerEl)) return;
+        if (drawerEl) return;
 
         drawerEl = document.createElement('div');
         drawerEl.id = 'torn-hw-drawer';
         drawerEl.style.cssText = `
-            position: fixed; z-index: 2147483645;
-            bottom: ${getDefaultBottomOffset() + 50}px; right: 14px;
-            width: 320px; max-width: calc(100vw - 28px); max-height: 80vh; overflow-y: auto;
+            width: 320px; max-width: calc(100vw - 28px); max-height: 75vh; overflow-y: auto;
             background: #15101f; border: 1.5px solid #ff8a1f; border-radius: 12px;
             color: #f7ede2; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             box-shadow: 0 8px 32px rgba(0,0,0,0.85); padding: 14px; display: none;
+            box-sizing: border-box;
         `;
 
         drawerEl.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #322544; padding-bottom:8px; margin-bottom:12px;">
                 <div style="font-weight:700; font-size:15px; color:#ff8a1f; display:flex; align-items:center; gap:6px;">
-                    <span>🎃</span> Torn Halloween Hunter
+                    <span>🎃</span> Halloween Hunter Settings
                 </div>
-                <button id="hw-drawer-close" style="background:none; border:none; color:#a29bb0; font-size:18px; cursor:pointer;">✖</button>
+                <button id="hw-drawer-close" style="background:none; border:none; color:#a29bb0; font-size:18px; cursor:pointer; padding:2px 6px;">✖</button>
             </div>
 
             <div style="font-size:11px; color:#a29bb0; margin-bottom:12px;">
@@ -656,7 +739,7 @@
                 </label>
                 <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
                     <input id="hw-opt-autolaunch" type="checkbox" ${autoLaunch ? 'checked' : ''} style="accent-color:#ff8a1f;">
-                    <span>Auto-launch attack page on 1-click</span>
+                    <span>Auto-launch attack on 1-click</span>
                 </label>
                 <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
                     <input id="hw-opt-sametab" type="checkbox" ${sameTab ? 'checked' : ''} style="accent-color:#ff8a1f;">
@@ -689,16 +772,18 @@
             </div>
         `;
 
-        document.body.appendChild(drawerEl);
-
         // Bind Drawer Events
-        drawerEl.querySelector('#hw-drawer-close').addEventListener('click', () => {
-            drawerEl.style.display = 'none';
-        });
+        drawerEl.querySelector('#hw-drawer-close').onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleSettingsDrawer();
+        };
 
         // Preset button clicks
         drawerEl.querySelectorAll('.hw-preset-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 const pKey = btn.dataset.preset;
                 activePreset = pKey;
                 save(KEY_PRESET, activePreset);
@@ -728,7 +813,7 @@
                 bufferedTarget = null;
                 updateButtonDisplay();
                 primeNextTarget(true);
-            });
+            };
         });
 
         // Sliders
@@ -740,65 +825,67 @@
         const tgtVal = drawerEl.querySelector('#hw-tgt-val');
 
         if (minSlider) {
-            minSlider.addEventListener('input', (e) => {
+            minSlider.oninput = (e) => {
                 minFF = parseFloat(e.target.value);
                 if (minVal) minVal.textContent = minFF.toFixed(2);
                 save(KEY_MIN_FF, minFF);
                 bufferedTarget = null;
-            });
-            minSlider.addEventListener('change', () => primeNextTarget(true));
+            };
+            minSlider.onchange = () => primeNextTarget(true);
         }
 
         if (maxSlider) {
-            maxSlider.addEventListener('input', (e) => {
+            maxSlider.oninput = (e) => {
                 maxFF = parseFloat(e.target.value);
                 if (maxVal) maxVal.textContent = maxFF.toFixed(2);
                 save(KEY_MAX_FF, maxFF);
                 bufferedTarget = null;
-            });
-            maxSlider.addEventListener('change', () => primeNextTarget(true));
+            };
+            maxSlider.onchange = () => primeNextTarget(true);
         }
 
         if (tgtSlider) {
-            tgtSlider.addEventListener('input', (e) => {
+            tgtSlider.oninput = (e) => {
                 targetFF = parseFloat(e.target.value);
                 if (tgtVal) tgtVal.textContent = targetFF.toFixed(2);
                 save(KEY_TARGET_FF, targetFF);
                 updateButtonDisplay();
                 bufferedTarget = null;
-            });
-            tgtSlider.addEventListener('change', () => primeNextTarget(true));
+            };
+            tgtSlider.onchange = () => primeNextTarget(true);
         }
 
         // Toggles
-        drawerEl.querySelector('#hw-opt-inactive').addEventListener('change', (e) => {
+        drawerEl.querySelector('#hw-opt-inactive').onchange = (e) => {
             inactiveOnly = e.target.checked;
             save(KEY_INACTIVE, inactiveOnly);
             bufferedTarget = null;
             primeNextTarget(true);
-        });
+        };
 
-        drawerEl.querySelector('#hw-opt-factionless').addEventListener('change', (e) => {
+        drawerEl.querySelector('#hw-opt-factionless').onchange = (e) => {
             factionless = e.target.checked;
             save(KEY_FACTIONLESS, factionless);
             bufferedTarget = null;
             primeNextTarget(true);
-        });
+        };
 
-        drawerEl.querySelector('#hw-opt-autolaunch').addEventListener('change', (e) => {
+        drawerEl.querySelector('#hw-opt-autolaunch').onchange = (e) => {
             autoLaunch = e.target.checked;
             save(KEY_AUTOLAUNCH, autoLaunch);
-        });
+        };
 
-        drawerEl.querySelector('#hw-opt-sametab').addEventListener('change', (e) => {
+        drawerEl.querySelector('#hw-opt-sametab').onchange = (e) => {
             sameTab = e.target.checked;
             save(KEY_SAMETAB, sameTab);
-        });
+        };
 
         // Key Save
         const keyInput = drawerEl.querySelector('#hw-key-input');
         const keySaveBtn = drawerEl.querySelector('#hw-key-save');
-        keySaveBtn.addEventListener('click', async () => {
+        keySaveBtn.onclick = async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             const val = sanitizeKey(keyInput.value);
             if (!val || val.length < 16) {
                 showToast('⚠️ Key must be at least 16 characters', true);
@@ -815,31 +902,36 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ apiKey, tornId: myId })
                 });
-            } catch (e) {}
+            } catch (err) {}
 
             keySaveBtn.textContent = 'Saved!';
             showToast('✅ API Key successfully saved and linked!');
             setTimeout(() => { keySaveBtn.textContent = 'Save'; }, 2000);
             bufferedTarget = null;
             primeNextTarget(true);
-        });
+        };
 
         // Test Snipe
-        drawerEl.querySelector('#hw-btn-test-snipe').addEventListener('click', () => {
+        drawerEl.querySelector('#hw-btn-test-snipe').onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             drawerEl.style.display = 'none';
+            drawerOpen = false;
             executeSnipe();
-        });
+        };
 
         // Reset
-        drawerEl.querySelector('#hw-btn-clear-cache').addEventListener('click', () => {
+        drawerEl.querySelector('#hw-btn-clear-cache').onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             clearExclude();
             bufferedTarget = null;
             showToast('🔄 Exclude cache cleared. Retrying all targets!');
             primeNextTarget(true);
-        });
+        };
     }
 
-    // ── Attack Page Assistant (Spooky Finishers & Mask Alert) ───────
+    // ── Attack Page Assistant (Spooky Finishers) ────────────────────
     let attackPageChecked = false;
     let finishWeaponHighlighted = false;
 

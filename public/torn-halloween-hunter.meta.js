@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn Halloween Target Hunter
 // @namespace    https://faction-os.duckdns.org/
-// @version      1.0.0
+// @version      1.0.1
 // @description  Zero-latency Halloween Treat Hunter for Torn City. Custom Fair Fight score selector, server-side 'Okay' status verification, hospital cycling, and in-combat spooky finishing weapon highlighter.
 // @author       FactionOS
 // @match        https://www.torn.com/*
