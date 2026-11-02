@@ -6268,6 +6268,268 @@ app.get('/api/war-flight-audit', async (req, res) => {
     }
 });
 
+// Rolling cache & helper for faction armory events
+function parseArmoryNews(entries) {
+    if (!entries) {
+        return { byMember: [], byItem: [], recentLog: [], totalDeposited: 0, totalConsumed: 0, netBalance: 0, activeMembersCount: 0 };
+    }
+    const list = Array.isArray(entries) ? entries : Object.values(entries);
+    const memberMap = {};
+    const itemMap = {};
+    const parsedEvents = [];
+
+    list.forEach(entry => {
+        const text = entry.news || '';
+        const pMatch = text.match(/XID=(\d+)[^>]*>([^<]+)<\/a>/i);
+        if (!pMatch) return;
+        const pId = pMatch[1];
+        const pName = pMatch[2];
+        const ts = Number(entry.timestamp || 0);
+
+        let action = '';
+        let type = ''; // 'inflow' vs 'outflow'
+        let itemName = '';
+        let quantity = 1;
+        let targetId = null;
+        let targetName = null;
+
+        if (text.includes("used one of the faction's")) {
+            action = 'used';
+            type = 'outflow';
+            quantity = 1;
+            const m = text.match(/used one of the faction's (.*?) items/i);
+            if (m) itemName = m[1].trim();
+        } else if (text.match(/used (\d+) of the faction's/i)) {
+            action = 'used';
+            type = 'outflow';
+            const m = text.match(/used (\d+) of the faction's (.*?) items/i);
+            if (m) {
+                quantity = parseInt(m[1], 10);
+                itemName = m[2].trim();
+            }
+        } else if (text.includes("filled one of the faction's Empty Blood Bags")) {
+            action = 'filled';
+            type = 'inflow';
+            quantity = 1;
+            const m = text.match(/create a (.*?)$/i);
+            itemName = m ? m[1].trim() : 'Blood Bag';
+        } else if (text.includes("deposited")) {
+            action = 'deposited';
+            type = 'inflow';
+            const m = text.match(/deposited (\d+)x (.*?)(?: into.*)?$/i);
+            if (m) {
+                quantity = parseInt(m[1], 10);
+                itemName = m[2].trim();
+            }
+        } else if (text.includes("returned")) {
+            action = 'returned';
+            type = 'inflow';
+            const m = text.match(/returned (\d+)x (.*?)(?: to.*)?$/i);
+            if (m) {
+                quantity = parseInt(m[1], 10);
+                itemName = m[2].trim();
+            }
+        } else if (text.includes("retrieved")) {
+            action = 'retrieved';
+            type = 'inflow';
+            const m = text.match(/retrieved (\d+)x (.*?) from (?:<a href = "[^"]*XID=(\d+)">([^<]+)<\/a>|(.*?))$/i);
+            if (m) {
+                quantity = parseInt(m[1], 10);
+                itemName = m[2].trim();
+                targetId = m[3] || null;
+                targetName = m[4] || m[5] || null;
+            }
+        } else if (text.includes("loaned")) {
+            action = 'loaned';
+            type = 'outflow';
+            const m = text.match(/loaned (\d+)x (.*?) to (?:themselves|<a href = "[^"]*XID=(\d+)">([^<]+)<\/a>)(?: from.*)?$/i);
+            if (m) {
+                quantity = parseInt(m[1], 10);
+                itemName = m[2].trim();
+                targetId = m[3] || pId;
+                targetName = m[4] || pName;
+            }
+        } else {
+            const m = text.match(/the faction's (.*?) items/i);
+            if (m) {
+                action = 'used';
+                type = 'outflow';
+                itemName = m[1].trim();
+            }
+        }
+
+        if (!itemName || !action) return;
+        itemName = itemName.replace(/\.$/, '').trim();
+
+        // Categorize
+        const nameLower = itemName.toLowerCase();
+        let category = 'Other';
+        if (nameLower.includes('first aid') || nameLower.includes('morphine') || nameLower.includes('blood bag') || nameLower.includes('ipecac')) {
+            category = 'Medical';
+        } else if (nameLower.includes('xanax') || nameLower.includes('vicodin') || nameLower.includes('speed') || nameLower.includes('ketamine') || nameLower.includes('ecstasy') || nameLower.includes('cannabis') || nameLower.includes('lsd') || nameLower.includes('opium') || nameLower.includes('shrooms')) {
+            category = 'Drug';
+        } else if (nameLower.startsWith('can of') || nameLower.includes('bottle of') || nameLower.includes('box of') || nameLower.includes('bag of') || nameLower.includes('energy drink')) {
+            category = 'Booster';
+        } else if (action === 'loaned' || action === 'returned' || action === 'retrieved') {
+            category = 'Arsenal';
+        }
+
+        const cleanNews = text.replace(/<[^>]+>/g, '').trim();
+
+        parsedEvents.push({
+            id: pId,
+            name: pName,
+            action,
+            type,
+            itemName,
+            category,
+            quantity,
+            targetId,
+            targetName,
+            timestamp: ts,
+            rawText: cleanNews
+        });
+
+        // Member ledger
+        const actorId = pId;
+        const actorName = pName;
+        if (!memberMap[actorId]) {
+            memberMap[actorId] = {
+                id: actorId,
+                name: actorName,
+                totalDeposited: 0,
+                totalUsed: 0,
+                netBalance: 0,
+                medsDeposited: 0,
+                drugsDeposited: 0,
+                boostersDeposited: 0,
+                arsenalDeposited: 0,
+                medsUsed: 0,
+                drugsUsed: 0,
+                boostersUsed: 0,
+                arsenalUsed: 0,
+                depositedItems: {},
+                usedItems: {},
+                lastActionTs: ts,
+                actionCount: 0
+            };
+        }
+        const mObj = memberMap[actorId];
+        mObj.actionCount++;
+        if (ts > (mObj.lastActionTs || 0)) mObj.lastActionTs = ts;
+
+        if (type === 'inflow') {
+            mObj.totalDeposited += quantity;
+            if (category === 'Medical') mObj.medsDeposited += quantity;
+            if (category === 'Drug') mObj.drugsDeposited += quantity;
+            if (category === 'Booster') mObj.boostersDeposited += quantity;
+            if (category === 'Arsenal') mObj.arsenalDeposited += quantity;
+            mObj.depositedItems[itemName] = (mObj.depositedItems[itemName] || 0) + quantity;
+        } else {
+            mObj.totalUsed += quantity;
+            if (category === 'Medical') mObj.medsUsed += quantity;
+            if (category === 'Drug') mObj.drugsUsed += quantity;
+            if (category === 'Booster') mObj.boostersUsed += quantity;
+            if (category === 'Arsenal') mObj.arsenalUsed += quantity;
+            mObj.usedItems[itemName] = (mObj.usedItems[itemName] || 0) + quantity;
+        }
+        mObj.netBalance = mObj.totalDeposited - mObj.totalUsed;
+
+        // If loaned to another member, attribute to the target member as well
+        if (action === 'loaned' && targetId && targetId !== actorId) {
+            if (!memberMap[targetId]) {
+                memberMap[targetId] = {
+                    id: targetId,
+                    name: targetName || 'Unknown',
+                    totalDeposited: 0,
+                    totalUsed: 0,
+                    netBalance: 0,
+                    medsDeposited: 0,
+                    drugsDeposited: 0,
+                    boostersDeposited: 0,
+                    arsenalDeposited: 0,
+                    medsUsed: 0,
+                    drugsUsed: 0,
+                    boostersUsed: 0,
+                    arsenalUsed: 0,
+                    depositedItems: {},
+                    usedItems: {},
+                    lastActionTs: ts,
+                    actionCount: 0
+                };
+            }
+            const tObj = memberMap[targetId];
+            tObj.totalUsed += quantity;
+            tObj.arsenalUsed += quantity;
+            tObj.usedItems[itemName] = (tObj.usedItems[itemName] || 0) + quantity;
+            tObj.netBalance = tObj.totalDeposited - tObj.totalUsed;
+            if (ts > (tObj.lastActionTs || 0)) tObj.lastActionTs = ts;
+        }
+
+        // Item ledger
+        if (!itemMap[itemName]) {
+            itemMap[itemName] = {
+                name: itemName,
+                category: category,
+                totalDeposited: 0,
+                totalUsed: 0,
+                netDelta: 0,
+                totalActivity: 0,
+                depositorMap: {},
+                userMap: {},
+                lastActionTs: ts
+            };
+        }
+        const iObj = itemMap[itemName];
+        if (ts > (iObj.lastActionTs || 0)) iObj.lastActionTs = ts;
+        if (type === 'inflow') {
+            iObj.totalDeposited += quantity;
+            if (!iObj.depositorMap[actorId]) {
+                iObj.depositorMap[actorId] = { id: actorId, name: actorName, count: 0 };
+            }
+            iObj.depositorMap[actorId].count += quantity;
+        } else {
+            iObj.totalUsed += quantity;
+            const consumerId = (action === 'loaned' && targetId) ? targetId : actorId;
+            const consumerName = (action === 'loaned' && targetName) ? targetName : actorName;
+            if (!iObj.userMap[consumerId]) {
+                iObj.userMap[consumerId] = { id: consumerId, name: consumerName, count: 0 };
+            }
+            iObj.userMap[consumerId].count += quantity;
+        }
+        iObj.netDelta = iObj.totalDeposited - iObj.totalUsed;
+        iObj.totalActivity = iObj.totalDeposited + iObj.totalUsed;
+    });
+
+    parsedEvents.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    const memberList = Object.values(memberMap).sort((a, b) => (b.totalDeposited + b.totalUsed) - (a.totalDeposited + a.totalUsed));
+    const itemList = Object.values(itemMap).map(item => ({
+        name: item.name,
+        category: item.category,
+        totalDeposited: item.totalDeposited,
+        totalUsed: item.totalUsed,
+        netDelta: item.netDelta,
+        totalActivity: item.totalActivity,
+        topDepositors: Object.values(item.depositorMap).sort((a, b) => b.count - a.count).slice(0, 5),
+        topConsumers: Object.values(item.userMap).sort((a, b) => b.count - a.count).slice(0, 5),
+        lastActionTs: item.lastActionTs
+    })).sort((a, b) => b.totalActivity - a.totalActivity);
+
+    const totalDeposited = memberList.reduce((sum, m) => sum + m.totalDeposited, 0);
+    const totalUsed = memberList.reduce((sum, m) => sum + m.totalUsed, 0);
+
+    return {
+        byMember: memberList,
+        byItem: itemList,
+        recentLog: parsedEvents,
+        totalDeposited: totalDeposited,
+        totalConsumed: totalUsed,
+        netBalance: totalDeposited - totalUsed,
+        activeMembersCount: memberList.length
+    };
+}
+
 const dashboardDataCache = {};
 
 app.get('/api/dashboard-data', async (req, res) => {
@@ -6309,11 +6571,14 @@ app.get('/api/dashboard-data', async (req, res) => {
             return res.json(dashboardDataCache[cacheKey].data);
         }
 
-        // Fetch basic, armory (including medical, drugs, boosters, donations, armorynews), and chain/rankedwars in parallel for maximum speed
+        const nowSec = Math.floor(Date.now() / 1000);
+        const thirtyDaysAgo = nowSec - (86400 * 30);
+
+        // Fetch basic, armory (including medical, drugs, boosters, donations, armorynews with 30-day history), and chain/rankedwars in parallel for maximum speed
         const basicUrl = targetFacId
             ? `https://api.torn.com/faction/${targetFacId}?selections=basic&key=${userKey}`
             : `https://api.torn.com/faction/?selections=basic&key=${userKey}`;
-        const armoryUrl = `https://api.torn.com/faction/?selections=armor,weapons,temporary,medical,drugs,boosters,donations,armorynews&key=${userKey}`;
+        const armoryUrl = `https://api.torn.com/faction/?selections=armor,weapons,temporary,medical,drugs,boosters,donations,armorynews&from=${thirtyDaysAgo}&key=${userKey}`;
         const [basicResp, armoryResp, chainResp] = await Promise.all([
             fetch(basicUrl).catch(e => null),
             fetch(armoryUrl).catch(e => null),
@@ -6348,6 +6613,26 @@ app.get('/api/dashboard-data', async (req, res) => {
         }
 
         if (armoryData.error) { armoryError = true; }
+
+        // Fetch second page of armorynews if first page hit the 100 limit to provide deep 30-day transaction history
+        if (!armoryError && armoryData && armoryData.armorynews && typeof armoryData.armorynews === 'object') {
+            const initialList = Object.values(armoryData.armorynews);
+            if (initialList.length >= 100) {
+                const earliestTs = initialList[initialList.length - 1].timestamp;
+                if (earliestTs && earliestTs > thirtyDaysAgo) {
+                    try {
+                        const page2Url = `https://api.torn.com/faction/?selections=armorynews&from=${thirtyDaysAgo}&to=${earliestTs - 1}&key=${userKey}`;
+                        const page2Resp = await fetch(page2Url).catch(() => null);
+                        if (page2Resp) {
+                            const page2Data = await page2Resp.json().catch(() => ({}));
+                            if (page2Data && page2Data.armorynews && typeof page2Data.armorynews === 'object') {
+                                Object.assign(armoryData.armorynews, page2Data.armorynews);
+                            }
+                        }
+                    } catch (e) {}
+                }
+            }
+        }
 
         const armoryObj = {
             medical: [],
@@ -6548,148 +6833,8 @@ app.get('/api/dashboard-data', async (req, res) => {
                 armoryObj.armoryHealth = `${pct}% Stocked • ${armoryObj.lowStockItems.length} Low`;
             }
 
-            // Track item usage: Who uses what of each item and how much
-            const usageByMember = {};
-            const usageByItem = {};
-            const recentUsageLog = [];
-
-            if (armoryData.armorynews && typeof armoryData.armorynews === 'object') {
-                const newsEntries = Object.values(armoryData.armorynews);
-                newsEntries.forEach(entry => {
-                    const text = entry.news || '';
-                    const pMatch = text.match(/XID=(\d+)[^>]*>([^<]+)<\/a>/i);
-                    if (!pMatch) return;
-                    const pId = pMatch[1];
-                    const pName = pMatch[2];
-                    const ts = Number(entry.timestamp || 0);
-
-                    let action = 'used';
-                    let itemName = '';
-                    let quantity = 1;
-
-                    if (text.includes("used one of the faction's")) {
-                        action = 'used';
-                        quantity = 1;
-                        const m = text.match(/used one of the faction's (.*?) items/i);
-                        if (m) itemName = m[1].trim();
-                    } else if (text.match(/used (\d+) of the faction's/i)) {
-                        action = 'used';
-                        const m = text.match(/used (\d+) of the faction's (.*?) items/i);
-                        if (m) {
-                            quantity = parseInt(m[1], 10);
-                            itemName = m[2].trim();
-                        }
-                    } else if (text.includes("filled one of the faction's Empty Blood Bags")) {
-                        action = 'filled';
-                        quantity = 1;
-                        const m = text.match(/create a (.*?)$/i);
-                        itemName = m ? m[1].trim() : 'Empty Blood Bag';
-                    } else if (text.includes("returned")) {
-                        action = 'returned';
-                        const m = text.match(/returned (\d+)x (.*?)$/i);
-                        if (m) {
-                            quantity = parseInt(m[1], 10);
-                            itemName = m[2].trim();
-                        }
-                    } else if (text.includes("loaned")) {
-                        action = 'loaned';
-                        const m = text.match(/loaned (\d+)x (.*?) to/i);
-                        if (m) {
-                            quantity = parseInt(m[1], 10);
-                            itemName = m[2].trim();
-                        }
-                    } else if (text.includes("deposited")) {
-                        action = 'deposited';
-                        const m = text.match(/deposited (\d+)x (.*?) into/i);
-                        if (m) {
-                            quantity = parseInt(m[1], 10);
-                            itemName = m[2].trim();
-                        }
-                    } else {
-                        const m = text.match(/the faction's (.*?) items/i);
-                        if (m) itemName = m[1].trim();
-                    }
-
-                    if (!itemName) return;
-
-                    // Determine item category
-                    const nameLower = itemName.toLowerCase();
-                    let category = 'Other';
-                    if (nameLower.includes('first aid') || nameLower.includes('morphine') || nameLower.includes('blood bag') || nameLower.includes('ipecac')) {
-                        category = 'Medical';
-                    } else if (nameLower.includes('xanax') || nameLower.includes('vicodin') || nameLower.includes('speed') || nameLower.includes('ketamine') || nameLower.includes('ecstasy') || nameLower.includes('cannabis') || nameLower.includes('lsd') || nameLower.includes('opium') || nameLower.includes('shrooms')) {
-                        category = 'Drug';
-                    } else if (nameLower.startsWith('can of') || nameLower.includes('bottle of') || nameLower.includes('box of') || nameLower.includes('bag of') || nameLower.includes('energy drink')) {
-                        category = 'Booster';
-                    } else if (action === 'loaned' || action === 'returned') {
-                        category = 'Arsenal';
-                    }
-
-                    recentUsageLog.push({
-                        id: pId,
-                        name: pName,
-                        action: action,
-                        itemName: itemName,
-                        category: category,
-                        quantity: quantity,
-                        timestamp: ts
-                    });
-
-                    // Aggregate consumer usage (used, filled, etc.)
-                    if (action === 'used' || action === 'filled') {
-                        if (!usageByMember[pId]) {
-                            usageByMember[pId] = {
-                                id: pId,
-                                name: pName,
-                                totalUsed: 0,
-                                medsUsed: 0,
-                                drugsUsed: 0,
-                                boostersUsed: 0,
-                                items: {},
-                                lastUsedTs: ts
-                            };
-                        }
-                        const mObj = usageByMember[pId];
-                        mObj.totalUsed += quantity;
-                        if (category === 'Medical') mObj.medsUsed += quantity;
-                        if (category === 'Drug') mObj.drugsUsed += quantity;
-                        if (category === 'Booster') mObj.boostersUsed += quantity;
-                        mObj.items[itemName] = (mObj.items[itemName] || 0) + quantity;
-                        if (ts > (mObj.lastUsedTs || 0)) mObj.lastUsedTs = ts;
-
-                        if (!usageByItem[itemName]) {
-                            usageByItem[itemName] = {
-                                name: itemName,
-                                category: category,
-                                totalQuantity: 0,
-                                userMap: {}
-                            };
-                        }
-                        const iObj = usageByItem[itemName];
-                        iObj.totalQuantity += quantity;
-                        iObj.userMap[pId] = (iObj.userMap[pId] || { id: pId, name: pName, count: 0 });
-                        iObj.userMap[pId].count += quantity;
-                    }
-                });
-            }
-
-            recentUsageLog.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-            const memberList = Object.values(usageByMember).sort((a, b) => b.totalUsed - a.totalUsed);
-            const itemList = Object.values(usageByItem).map(item => ({
-                name: item.name,
-                category: item.category,
-                totalQuantity: item.totalQuantity,
-                usersCount: Object.keys(item.userMap).length,
-                topUsers: Object.values(item.userMap).sort((a, b) => b.count - a.count).slice(0, 5)
-            })).sort((a, b) => b.totalQuantity - a.totalQuantity);
-
-            armoryObj.usageStats = {
-                byMember: memberList,
-                byItem: itemList,
-                recentLog: recentUsageLog.slice(0, 100),
-                totalConsumed: memberList.reduce((sum, m) => sum + m.totalUsed, 0)
-            };
+            // Track item usage & deposits: who deposited & who used what, by time, item, and member
+            armoryObj.usageStats = parseArmoryNews(armoryData.armorynews);
         }
 
         let parsedMembers = {};
@@ -6768,6 +6913,46 @@ app.get('/api/dashboard-data', async (req, res) => {
         dashboardDataCache[cacheKey] = { timestamp: Date.now(), data: resultPayload };
         res.json(resultPayload);
     } catch (err) { res.status(403).json({ error: err.message }); }
+});
+
+// Dedicated Armory History & Audit Endpoint with custom day ranges and deep pagination
+app.get('/api/armory-history', async (req, res) => {
+    const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    if (!userKey || userKey === 'null' || userKey.trim() === '') {
+        return res.status(401).json({ error: "Authentication required" });
+    }
+    try {
+        const days = Math.min(90, Math.max(1, parseInt(req.query.days || '30', 10)));
+        const maxPages = Math.min(6, Math.max(1, parseInt(req.query.pages || '3', 10)));
+        const fromTs = Math.floor(Date.now() / 1000) - (86400 * days);
+
+        let allEntries = {};
+        let toTs = null;
+
+        for (let p = 0; p < maxPages; p++) {
+            let url = `https://api.torn.com/faction/?selections=armorynews&from=${fromTs}&key=${userKey}`;
+            if (toTs) url += `&to=${toTs}`;
+            const r = await fetch(url).catch(() => null);
+            if (!r) break;
+            const d = await r.json().catch(() => ({}));
+            if (d.error || !d.armorynews) break;
+            const entries = Object.values(d.armorynews);
+            if (!entries.length) break;
+            Object.assign(allEntries, d.armorynews);
+            const earliest = entries[entries.length - 1].timestamp;
+            if (entries.length < 100 || earliest <= fromTs) break;
+            toTs = earliest - 1;
+        }
+
+        const stats = parseArmoryNews(allEntries);
+        res.json({
+            success: true,
+            days,
+            stats
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Armory Loan Remind Endpoint

@@ -550,6 +550,177 @@
     .usage-item-chip strong {
         color: var(--accent-amber);
     }
+    .usage-item-chip.chip-inflow {
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.28);
+        color: var(--accent-emerald);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+    .usage-item-chip.chip-inflow:hover {
+        background: rgba(16, 185, 129, 0.22);
+        border-color: var(--accent-emerald);
+    }
+    .usage-item-chip.chip-outflow {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.28);
+        color: var(--accent-crimson);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+    }
+    .usage-item-chip.chip-outflow:hover {
+        background: rgba(239, 68, 68, 0.22);
+        border-color: var(--accent-crimson);
+    }
+
+    /* Armory Ledger KPIs */
+    .armory-ledger-kpis {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+    @media (max-width: 768px) {
+        .armory-ledger-kpis {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    .ledger-kpi-card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 10px 14px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        position: relative;
+        overflow: hidden;
+    }
+    .ledger-kpi-card::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+    }
+    .ledger-kpi-card.kpi-inflow::after { background: var(--accent-emerald); }
+    .ledger-kpi-card.kpi-outflow::after { background: var(--accent-crimson); }
+    .ledger-kpi-card.kpi-balance::after { background: var(--accent-cyan); }
+    .ledger-kpi-card.kpi-members::after { background: var(--accent-cobalt); }
+
+    /* Armory Filter Toolbar */
+    .armory-filter-container {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        padding: 10px 14px;
+        margin-bottom: 14px;
+    }
+    .armory-filter-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .filter-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .filter-label {
+        font-size: 0.76em;
+        font-weight: 700;
+        color: var(--text-tertiary);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+    }
+    .filter-pills {
+        display: inline-flex;
+        gap: 4px;
+        background: var(--bg-card);
+        padding: 2px;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-subtle);
+    }
+    .filter-pill {
+        padding: 3px 10px;
+        font-size: 0.74em;
+        font-weight: 700;
+        border-radius: var(--radius-sm);
+        border: none;
+        background: transparent;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        white-space: nowrap;
+        font-family: inherit;
+    }
+    .filter-pill:hover {
+        color: var(--text-primary);
+        background: var(--bg-elevated);
+    }
+    .filter-pill.active {
+        background: var(--accent-cobalt-dim);
+        color: var(--accent-cobalt);
+        border: 1px solid var(--accent-cobalt-border);
+    }
+    .filter-active-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: var(--accent-cobalt-dim);
+        border: 1px solid var(--accent-cobalt-border);
+        color: var(--accent-cobalt);
+        padding: 2px 8px;
+        border-radius: var(--radius-sm);
+        font-size: 0.74em;
+        font-weight: 700;
+    }
+    .filter-active-chip .chip-remove {
+        cursor: pointer;
+        font-weight: 900;
+        margin-left: 2px;
+    }
+    .filter-active-chip .chip-remove:hover {
+        color: var(--accent-crimson);
+    }
+
+    /* Net Balance Badges */
+    .badge-balance-pos {
+        background: rgba(16, 185, 129, 0.15);
+        color: var(--accent-emerald);
+        border: 1px solid rgba(16, 185, 129, 0.35);
+        padding: 3px 8px;
+        border-radius: var(--radius-sm);
+        font-weight: 800;
+        font-family: var(--font-mono);
+        font-size: 0.8em;
+        white-space: nowrap;
+    }
+    .badge-balance-neg {
+        background: rgba(239, 68, 68, 0.15);
+        color: var(--accent-crimson);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        padding: 3px 8px;
+        border-radius: var(--radius-sm);
+        font-weight: 800;
+        font-family: var(--font-mono);
+        font-size: 0.8em;
+        white-space: nowrap;
+    }
+    .badge-balance-zero {
+        background: rgba(148, 163, 184, 0.15);
+        color: var(--text-tertiary);
+        border: 1px solid var(--border-subtle);
+        padding: 3px 8px;
+        border-radius: var(--radius-sm);
+        font-weight: 700;
+        font-family: var(--font-mono);
+        font-size: 0.8em;
+        white-space: nowrap;
+    }
 
     /* Loan Badges */
     .badge-loan {
@@ -1051,76 +1222,182 @@
                 </div>
             </div>
 
-            <!-- WHO USES WHAT & HOW MUCH: MEMBER CONSUMPTION & USAGE TRACKER -->
+            <!-- UNIFIED FACTION ARMORY LEDGER (DEPOSITS, USAGE & CIRCULATION) -->
             <div class="armory-subpanel">
-                <div class="subpanel-hdr">
+                <div class="subpanel-hdr" style="flex-wrap:wrap; gap:12px;">
                     <div class="subpanel-title">
-                        <span>📊 Who Uses What &amp; How Much (Item Consumption Tracker)</span>
-                        <span id="usage-total-badge" class="badge-type" style="background:var(--accent-emerald-dim); color:var(--accent-emerald);">0 items used</span>
+                        <span>📊 Faction Armory &amp; Logistics Ledger</span>
+                        <span id="usage-total-badge" class="badge-type" style="background:var(--accent-emerald-dim); color:var(--accent-emerald);">Syncing activity...</span>
                     </div>
-                    <div class="subpanel-controls">
+                    <div class="subpanel-controls" style="flex-wrap:wrap; gap:8px;">
                         <div class="analyst-tabs" style="padding:0; border:none; gap:6px;">
                             <button class="analyst-tab active" id="btn-view-consumers" onclick="setUsageView('members', this)" style="padding:4px 12px; font-size:0.75em;">👥 By Member</button>
                             <button class="analyst-tab" id="btn-view-items" onclick="setUsageView('items', this)" style="padding:4px 12px; font-size:0.75em;">📦 By Item</button>
-                            <button class="analyst-tab" id="btn-view-feed" onclick="setUsageView('feed', this)" style="padding:4px 12px; font-size:0.75em;">⏱️ Activity Feed</button>
+                            <button class="analyst-tab" id="btn-view-feed" onclick="setUsageView('feed', this)" style="padding:4px 12px; font-size:0.75em;">⏱️ Transaction Feed</button>
                         </div>
-                        <input type="text" id="usage-search" placeholder="🔍 Search member or item..." class="sort-select" style="min-width:170px; padding:6px 12px; font-size:0.82em;" oninput="filterUsageDebounced()">
+                        <button class="refresh-btn" id="btn-fetch-deep-history" onclick="fetchDeepArmoryHistory()" style="padding:4px 10px; font-size:0.74em; display:inline-flex; align-items:center; gap:4px;" title="Fetch up to 90 days of armory logs from Torn API">
+                            <span>📥 Deep History (90d)</span>
+                        </button>
                     </div>
                 </div>
 
-                <!-- USAGE VIEW 1: BY MEMBER (WHO USES WHAT) -->
-                <div id="usage-view-members" class="scrollable" style="max-height:380px;">
+                <!-- 4 COMPACT LEDGER SUMMARY KPI CARDS -->
+                <div class="armory-ledger-kpis">
+                    <div class="ledger-kpi-card kpi-inflow">
+                        <div style="font-size:1.6em;">🟢</div>
+                        <div>
+                            <div style="font-size:0.7em; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); font-weight:700;">Deposited / Inflow</div>
+                            <div id="ledger-kpi-deposited" style="font-size:1.35em; font-weight:900; font-family:var(--font-mono); color:var(--accent-emerald);">+0</div>
+                            <div style="font-size:0.7em; color:var(--text-tertiary);">Donations &amp; Returns</div>
+                        </div>
+                    </div>
+                    <div class="ledger-kpi-card kpi-outflow">
+                        <div style="font-size:1.6em;">🔴</div>
+                        <div>
+                            <div style="font-size:0.7em; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); font-weight:700;">Used / Outflow</div>
+                            <div id="ledger-kpi-used" style="font-size:1.35em; font-weight:900; font-family:var(--font-mono); color:var(--accent-crimson);">-0</div>
+                            <div style="font-size:0.7em; color:var(--text-tertiary);">Consumed &amp; Loaned</div>
+                        </div>
+                    </div>
+                    <div class="ledger-kpi-card kpi-balance">
+                        <div style="font-size:1.6em;">⚖️</div>
+                        <div>
+                            <div style="font-size:0.7em; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); font-weight:700;">Net Armory Delta</div>
+                            <div id="ledger-kpi-net" style="font-size:1.35em; font-weight:900; font-family:var(--font-mono); color:var(--accent-cyan);">0</div>
+                            <div id="ledger-kpi-net-sub" style="font-size:0.7em; color:var(--text-tertiary);">Inventory Flow</div>
+                        </div>
+                    </div>
+                    <div class="ledger-kpi-card kpi-members">
+                        <div style="font-size:1.6em;">👥</div>
+                        <div>
+                            <div style="font-size:0.7em; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); font-weight:700;">Active Members</div>
+                            <div id="ledger-kpi-members" style="font-size:1.35em; font-weight:900; font-family:var(--font-mono); color:var(--accent-cobalt);">0</div>
+                            <div style="font-size:0.7em; color:var(--text-tertiary);">Involved in Window</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MULTI-DIMENSIONAL FILTER CONTROLS BAR -->
+                <div class="armory-filter-container">
+                    <div class="armory-filter-row">
+                        <!-- TIME RANGE SELECTOR -->
+                        <div class="filter-group">
+                            <span class="filter-label">⏱️ Time Window:</span>
+                            <div class="filter-pills" id="time-pills">
+                                <button class="filter-pill" onclick="setArmoryTimeFilter('24h', this)">24 Hours</button>
+                                <button class="filter-pill" onclick="setArmoryTimeFilter('3d', this)">3 Days</button>
+                                <button class="filter-pill" onclick="setArmoryTimeFilter('7d', this)">7 Days</button>
+                                <button class="filter-pill active" onclick="setArmoryTimeFilter('30d', this)">30 Days</button>
+                                <button class="filter-pill" onclick="setArmoryTimeFilter('all', this)">All Loaded</button>
+                            </div>
+                        </div>
+
+                        <!-- ACTION TYPE SELECTOR -->
+                        <div class="filter-group">
+                            <span class="filter-label">⚡ Action:</span>
+                            <div class="filter-pills" id="action-pills">
+                                <button class="filter-pill active" onclick="setArmoryActionFilter('all', this)">All Activity</button>
+                                <button class="filter-pill" onclick="setArmoryActionFilter('inflow', this)">🟢 Deposits (+)</button>
+                                <button class="filter-pill" onclick="setArmoryActionFilter('outflow', this)">🔴 Used (-)</button>
+                                <button class="filter-pill" onclick="setArmoryActionFilter('loans', this)">🪖 Loans/Returns</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="armory-filter-row" style="margin-top:8px;">
+                        <!-- CATEGORY SELECTOR -->
+                        <div class="filter-group">
+                            <span class="filter-label">🏷️ Category:</span>
+                            <select id="armory-cat-filter" class="sort-select" onchange="setArmoryCategoryFilter(this.value)" style="padding:5px 10px; font-size:0.8em;">
+                                <option value="all">All Categories</option>
+                                <option value="Medical">💊 Medical</option>
+                                <option value="Drug">💉 Drugs</option>
+                                <option value="Booster">🥫 Boosters</option>
+                                <option value="Arsenal">🔫 Arsenal (Weapons/Armor)</option>
+                                <option value="Other">📦 Other Items</option>
+                            </select>
+                        </div>
+
+                        <!-- SPECIFIC ITEM SELECTOR -->
+                        <div class="filter-group">
+                            <span class="filter-label">📦 Specific Item:</span>
+                            <select id="armory-item-select" class="sort-select" onchange="setArmoryItemFilter(this.value)" style="padding:5px 10px; font-size:0.8em; max-width:200px;">
+                                <option value="all">All Items</option>
+                            </select>
+                        </div>
+
+                        <!-- SEARCH BOX -->
+                        <div class="filter-group" style="flex-grow:1;">
+                            <input type="text" id="usage-search" placeholder="🔍 Search member name, ID, or item..." class="sort-select" style="width:100%; min-width:180px; padding:5px 12px; font-size:0.82em;" oninput="filterUsageDebounced()">
+                        </div>
+
+                        <!-- RESET BUTTON -->
+                        <button class="reset-filter-btn" id="btn-reset-armory-filters" onclick="resetArmoryFilters()" style="display:none; padding:5px 12px; font-size:0.78em; border-radius:var(--radius-sm); border:1px solid var(--accent-crimson-border); background:rgba(239,68,68,0.12); color:var(--accent-crimson); font-weight:700; cursor:pointer;">
+                            ✕ Reset Filters
+                        </button>
+                    </div>
+
+                    <!-- ACTIVE FILTER BREADCRUMB INDICATOR -->
+                    <div id="armory-active-filter-chips" style="display:none; margin-top:8px; flex-wrap:wrap; gap:6px; align-items:center;">
+                    </div>
+                </div>
+
+                <!-- USAGE VIEW 1: BY MEMBER (WHO DEPOSITED & USED WHAT) -->
+                <div id="usage-view-members" class="scrollable" style="max-height:440px;">
                     <table class="armory-table">
                         <thead>
                             <tr>
                                 <th>Member</th>
-                                <th>Total Used</th>
-                                <th>Meds</th>
-                                <th>Drugs</th>
-                                <th>Boosters</th>
-                                <th>Exact Items Consumed (Item &amp; Count)</th>
-                                <th style="text-align:right;">Last Used</th>
+                                <th>Deposited (+)</th>
+                                <th>Used (-)</th>
+                                <th>Net Armory Delta</th>
+                                <th>Items Deposited</th>
+                                <th>Items Consumed</th>
+                                <th style="text-align:right;">Last Active</th>
                             </tr>
                         </thead>
                         <tbody id="usage-members-tbody">
-                            <tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-tertiary);">Loading member item consumption history...</td></tr>
+                            <tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-tertiary);">Loading member armory ledger...</td></tr>
                         </tbody>
                     </table>
                 </div>
 
-                <!-- USAGE VIEW 2: BY ITEM (WHICH ITEMS ARE MOST CONSUMED) -->
-                <div id="usage-view-items" class="scrollable" style="max-height:380px; display:none;">
+                <!-- USAGE VIEW 2: BY ITEM (WHAT IS INFLOWING VS OUTFLOWING) -->
+                <div id="usage-view-items" class="scrollable" style="max-height:440px; display:none;">
                     <table class="armory-table">
                         <thead>
                             <tr>
                                 <th>Item Name</th>
                                 <th>Category</th>
-                                <th>Total Quantity Used</th>
-                                <th>Unique Members</th>
-                                <th>Top Consumers (Who Used It &amp; How Much)</th>
+                                <th>Deposited (+)</th>
+                                <th>Used (-)</th>
+                                <th>Net Flow</th>
+                                <th>Top Depositors</th>
+                                <th>Top Consumers</th>
                             </tr>
                         </thead>
                         <tbody id="usage-items-tbody">
-                            <tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-tertiary);">Loading item utilization breakdown...</td></tr>
+                            <tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-tertiary);">Loading item utilization breakdown...</td></tr>
                         </tbody>
                     </table>
                 </div>
 
-                <!-- USAGE VIEW 3: LIVE TRANSACTION LOG FEED -->
-                <div id="usage-view-feed" class="scrollable" style="max-height:380px; display:none;">
+                <!-- USAGE VIEW 3: LIVE TRANSACTION AUDIT FEED -->
+                <div id="usage-view-feed" class="scrollable" style="max-height:440px; display:none;">
                     <table class="armory-table">
                         <thead>
                             <tr>
-                                <th>Time</th>
+                                <th>Time (TCT)</th>
                                 <th>Member</th>
                                 <th>Action</th>
                                 <th>Quantity</th>
                                 <th>Item Name</th>
                                 <th>Category</th>
+                                <th>Transaction Detail</th>
                             </tr>
                         </thead>
                         <tbody id="usage-feed-tbody">
-                            <tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-tertiary);">Loading live armory activity feed...</td></tr>
+                            <tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-tertiary);">Loading chronological armory transaction feed...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -2147,13 +2424,48 @@ function renderArmory(d) {
     }
 
     // Populate Subpanels & Item Usage Engine
+    if (d.armory?.usageStats?.recentLog && d.armory.usageStats.recentLog.length) {
+        if (!loadedArmoryEvents.length) {
+            loadedArmoryEvents = [...d.armory.usageStats.recentLog];
+            populateArmoryItemDropdown(loadedArmoryEvents);
+        } else {
+            const existingKeys = new Set(loadedArmoryEvents.map(e => `${e.timestamp}_${e.id}_${e.itemName}_${e.action}`));
+            d.armory.usageStats.recentLog.forEach(e => {
+                const k = `${e.timestamp}_${e.id}_${e.itemName}_${e.action}`;
+                if (!existingKeys.has(k)) {
+                    loadedArmoryEvents.push(e);
+                    existingKeys.add(k);
+                }
+            });
+            loadedArmoryEvents.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            populateArmoryItemDropdown(loadedArmoryEvents);
+        }
+    }
     renderItemUsageTracker();
     filterMeds();
     filterArsenal();
     filterLoans();
 }
 
-// ── Item Usage Tracker ("Who Uses What of Each Item & How Much") ──
+// ── HTML Escape Helper ──
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// ── Unified Armory Ledger State & Filter Handlers ──
+let armoryTimeFilter = '30d'; // '24h', '3d', '7d', '30d', 'all'
+let armoryActionFilter = 'all'; // 'all', 'inflow', 'outflow', 'loans'
+let armoryCategoryFilter = 'all'; // 'all', 'Medical', 'Drug', 'Booster', 'Arsenal', 'Other'
+let armoryItemFilter = 'all'; // 'all' or specific item name
+let armoryMemberFilter = ''; // member id or name
+let loadedArmoryEvents = [];
+
 function setUsageView(viewMode, btn) {
     activeUsageView = viewMode;
     document.querySelectorAll('.subpanel-controls .analyst-tab').forEach(b => b.classList.remove('active'));
@@ -2170,100 +2482,487 @@ function setUsageView(viewMode, btn) {
     renderItemUsageTracker();
 }
 
+function setArmoryTimeFilter(period, btn) {
+    armoryTimeFilter = period;
+    document.querySelectorAll('#time-pills .filter-pill').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderItemUsageTracker();
+}
+
+function setArmoryActionFilter(actionType, btn) {
+    armoryActionFilter = actionType;
+    document.querySelectorAll('#action-pills .filter-pill').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderItemUsageTracker();
+}
+
+function setArmoryCategoryFilter(cat) {
+    armoryCategoryFilter = cat;
+    renderItemUsageTracker();
+}
+
+function setArmoryItemFilter(itemName) {
+    armoryItemFilter = itemName;
+    const select = document.getElementById('armory-item-select');
+    if (select && select.value !== itemName) select.value = itemName;
+    renderItemUsageTracker();
+}
+
+function setArmoryMemberFilter(memberId, memberName) {
+    armoryMemberFilter = String(memberId || memberName || '');
+    renderItemUsageTracker();
+}
+
+function clearArmoryMemberFilter() {
+    armoryMemberFilter = '';
+    renderItemUsageTracker();
+}
+
+function resetArmoryFilters() {
+    armoryTimeFilter = '30d';
+    armoryActionFilter = 'all';
+    armoryCategoryFilter = 'all';
+    armoryItemFilter = 'all';
+    armoryMemberFilter = '';
+    const searchInput = document.getElementById('usage-search');
+    if (searchInput) searchInput.value = '';
+    const catSelect = document.getElementById('armory-cat-filter');
+    if (catSelect) catSelect.value = 'all';
+    const itemSelect = document.getElementById('armory-item-select');
+    if (itemSelect) itemSelect.value = 'all';
+
+    const timePills = document.querySelectorAll('#time-pills .filter-pill');
+    timePills.forEach(b => b.classList.remove('active'));
+    if (timePills[3]) timePills[3].classList.add('active'); // 30 Days
+
+    const actionPills = document.querySelectorAll('#action-pills .filter-pill');
+    actionPills.forEach(b => b.classList.remove('active'));
+    if (actionPills[0]) actionPills[0].classList.add('active'); // All Activity
+
+    renderItemUsageTracker();
+}
+
+function populateArmoryItemDropdown(events) {
+    const itemSelect = document.getElementById('armory-item-select');
+    if (!itemSelect) return;
+    const currentVal = itemSelect.value;
+    const itemCounts = {};
+    events.forEach(e => {
+        if (e.itemName) itemCounts[e.itemName] = (itemCounts[e.itemName] || 0) + 1;
+    });
+
+    const sortedItems = Object.keys(itemCounts).sort((a, b) => a.localeCompare(b));
+    let html = `<option value="all">📦 All Items (${sortedItems.length})</option>`;
+    sortedItems.forEach(item => {
+        const count = itemCounts[item];
+        const selected = item === currentVal ? 'selected' : '';
+        html += `<option value="${escapeHtml(item)}" ${selected}>${escapeHtml(item)} (${count})</option>`;
+    });
+    itemSelect.innerHTML = html;
+}
+
+async function fetchDeepArmoryHistory() {
+    const btn = document.getElementById('btn-fetch-deep-history');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span>⏳ Fetching 90d Logs...</span>`;
+    }
+    try {
+        const userKey = currentArmoryData?.userKey || localStorage.getItem('torn_api_key') || '';
+        const resp = await fetch(`/api/armory-history?days=90&pages=5${userKey ? `&key=${encodeURIComponent(userKey)}` : ''}`);
+        const data = await resp.json();
+        if (data.success && data.stats && data.stats.recentLog) {
+            const existingKeys = new Set(loadedArmoryEvents.map(e => `${e.timestamp}_${e.id}_${e.itemName}_${e.action}`));
+            data.stats.recentLog.forEach(e => {
+                const key = `${e.timestamp}_${e.id}_${e.itemName}_${e.action}`;
+                if (!existingKeys.has(key)) {
+                    loadedArmoryEvents.push(e);
+                    existingKeys.add(key);
+                }
+            });
+            loadedArmoryEvents.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            populateArmoryItemDropdown(loadedArmoryEvents);
+            renderItemUsageTracker();
+            if (btn) btn.innerHTML = `<span>✅ 90d Loaded (${loadedArmoryEvents.length} events)</span>`;
+        } else {
+            if (btn) btn.innerHTML = `<span>⚠️ Could not fetch 90d</span>`;
+        }
+    } catch(err) {
+        console.error('Error fetching deep history:', err);
+        if (btn) btn.innerHTML = `<span>⚠️ Fetch Failed</span>`;
+    } finally {
+        setTimeout(() => {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = `<span>📥 Deep History (90d)</span>`;
+            }
+        }, 4000);
+    }
+}
+
 function renderItemUsageTracker() {
     if (!currentArmoryData?.armory?.usageStats) return;
-    const stats = currentArmoryData.armory.usageStats;
+    const initialStats = currentArmoryData.armory.usageStats;
+    if (!loadedArmoryEvents.length && initialStats.recentLog && initialStats.recentLog.length) {
+        loadedArmoryEvents = [...initialStats.recentLog];
+        populateArmoryItemDropdown(loadedArmoryEvents);
+    }
+
     const query = (document.getElementById('usage-search')?.value || '').toLowerCase().trim();
 
-    const totalBadge = document.getElementById('usage-total-badge');
-    if (totalBadge) totalBadge.textContent = `${fmtNum(stats.totalConsumed || 0)} items consumed`;
+    // 1. Calculate time cutoff
+    const nowSec = Math.floor(Date.now() / 1000);
+    let cutoffSec = 0;
+    if (armoryTimeFilter === '24h') cutoffSec = nowSec - 86400;
+    else if (armoryTimeFilter === '3d') cutoffSec = nowSec - (86400 * 3);
+    else if (armoryTimeFilter === '7d') cutoffSec = nowSec - (86400 * 7);
+    else if (armoryTimeFilter === '30d') cutoffSec = nowSec - (86400 * 30);
 
-    // 1. Render Member Consumption Table
+    // 2. Filter raw events
+    const filteredEvents = loadedArmoryEvents.filter(entry => {
+        // Time filter
+        if (cutoffSec > 0 && (entry.timestamp || 0) < cutoffSec) return false;
+
+        // Action filter
+        if (armoryActionFilter === 'inflow') {
+            if (entry.type !== 'inflow') return false;
+        } else if (armoryActionFilter === 'outflow') {
+            if (entry.type !== 'outflow') return false;
+        } else if (armoryActionFilter === 'loans') {
+            if (entry.action !== 'loaned' && entry.action !== 'returned' && entry.action !== 'retrieved') return false;
+        }
+
+        // Category filter
+        if (armoryCategoryFilter !== 'all' && entry.category !== armoryCategoryFilter) return false;
+
+        // Specific Item filter
+        if (armoryItemFilter !== 'all' && entry.itemName !== armoryItemFilter) return false;
+
+        // Member filter
+        if (armoryMemberFilter) {
+            const matchesActor = String(entry.id) === armoryMemberFilter || entry.name.toLowerCase() === armoryMemberFilter.toLowerCase();
+            const matchesTarget = entry.targetId && (String(entry.targetId) === armoryMemberFilter || (entry.targetName && entry.targetName.toLowerCase() === armoryMemberFilter.toLowerCase()));
+            if (!matchesActor && !matchesTarget) return false;
+        }
+
+        // Search Query
+        if (query) {
+            const inActor = entry.name.toLowerCase().includes(query) || String(entry.id).includes(query);
+            const inItem = entry.itemName.toLowerCase().includes(query);
+            const inAction = (entry.action || '').toLowerCase().includes(query);
+            const inRaw = (entry.rawText || '').toLowerCase().includes(query);
+            const inTarget = entry.targetName ? entry.targetName.toLowerCase().includes(query) : false;
+            if (!inActor && !inItem && !inAction && !inRaw && !inTarget) return false;
+        }
+
+        return true;
+    });
+
+    // 3. Dynamically re-aggregate member and item statistics
+    let totalDeposited = 0;
+    let totalUsed = 0;
+    const memberMap = {};
+    const itemMap = {};
+    const uniqueMembers = new Set();
+
+    filteredEvents.forEach(e => {
+        const pId = e.id;
+        const pName = e.name;
+        const qty = e.quantity || 1;
+        uniqueMembers.add(pId);
+        if (e.targetId) uniqueMembers.add(e.targetId);
+
+        if (e.type === 'inflow') {
+            totalDeposited += qty;
+        } else {
+            totalUsed += qty;
+        }
+
+        // Member tally
+        if (!memberMap[pId]) {
+            memberMap[pId] = {
+                id: pId,
+                name: pName,
+                totalDeposited: 0,
+                totalUsed: 0,
+                netBalance: 0,
+                depositedItems: {},
+                usedItems: {},
+                lastActionTs: e.timestamp
+            };
+        }
+        const m = memberMap[pId];
+        if (e.timestamp > (m.lastActionTs || 0)) m.lastActionTs = e.timestamp;
+        if (e.type === 'inflow') {
+            m.totalDeposited += qty;
+            m.depositedItems[e.itemName] = (m.depositedItems[e.itemName] || 0) + qty;
+        } else {
+            m.totalUsed += qty;
+            m.usedItems[e.itemName] = (m.usedItems[e.itemName] || 0) + qty;
+        }
+        m.netBalance = m.totalDeposited - m.totalUsed;
+
+        if (e.action === 'loaned' && e.targetId && e.targetId !== pId) {
+            if (!memberMap[e.targetId]) {
+                memberMap[e.targetId] = {
+                    id: e.targetId,
+                    name: e.targetName || `Player [${e.targetId}]`,
+                    totalDeposited: 0,
+                    totalUsed: 0,
+                    netBalance: 0,
+                    depositedItems: {},
+                    usedItems: {},
+                    lastActionTs: e.timestamp
+                };
+            }
+            const t = memberMap[e.targetId];
+            t.totalUsed += qty;
+            t.usedItems[e.itemName] = (t.usedItems[e.itemName] || 0) + qty;
+            t.netBalance = t.totalDeposited - t.totalUsed;
+            if (e.timestamp > (t.lastActionTs || 0)) t.lastActionTs = e.timestamp;
+        }
+
+        // Item tally
+        if (!itemMap[e.itemName]) {
+            itemMap[e.itemName] = {
+                name: e.itemName,
+                category: e.category,
+                totalDeposited: 0,
+                totalUsed: 0,
+                netDelta: 0,
+                depositorMap: {},
+                userMap: {},
+                lastActionTs: e.timestamp
+            };
+        }
+        const it = itemMap[e.itemName];
+        if (e.timestamp > (it.lastActionTs || 0)) it.lastActionTs = e.timestamp;
+        if (e.type === 'inflow') {
+            it.totalDeposited += qty;
+            it.depositorMap[pId] = (it.depositorMap[pId] || { id: pId, name: pName, count: 0 });
+            it.depositorMap[pId].count += qty;
+        } else {
+            it.totalUsed += qty;
+            const borrowerId = (e.action === 'loaned' && e.targetId) ? e.targetId : pId;
+            const borrowerName = (e.action === 'loaned' && e.targetName) ? e.targetName : pName;
+            it.userMap[borrowerId] = (it.userMap[borrowerId] || { id: borrowerId, name: borrowerName, count: 0 });
+            it.userMap[borrowerId].count += qty;
+        }
+        it.netDelta = it.totalDeposited - it.totalUsed;
+    });
+
+    const netBalance = totalDeposited - totalUsed;
+    const memberList = Object.values(memberMap).sort((a, b) => (b.totalDeposited + b.totalUsed) - (a.totalDeposited + a.totalUsed));
+    const itemList = Object.values(itemMap).map(i => ({
+        ...i,
+        topDepositors: Object.values(i.depositorMap).sort((a, b) => b.count - a.count).slice(0, 5),
+        topConsumers: Object.values(i.userMap).sort((a, b) => b.count - a.count).slice(0, 5)
+    })).sort((a, b) => (b.totalDeposited + b.totalUsed) - (a.totalDeposited + a.totalUsed));
+
+    // 4. Update Header Badge & 4 KPI Cards
+    const totalBadge = document.getElementById('usage-total-badge');
+    if (totalBadge) {
+        totalBadge.textContent = `${fmtNum(filteredEvents.length)} events • ${fmtNum(totalDeposited)} in / ${fmtNum(totalUsed)} out`;
+    }
+
+    const kpiDep = document.getElementById('ledger-kpi-deposited');
+    if (kpiDep) kpiDep.textContent = `+${fmtNum(totalDeposited)}`;
+
+    const kpiUsed = document.getElementById('ledger-kpi-used');
+    if (kpiUsed) kpiUsed.textContent = `-${fmtNum(totalUsed)}`;
+
+    const kpiNet = document.getElementById('ledger-kpi-net');
+    const kpiNetSub = document.getElementById('ledger-kpi-net-sub');
+    if (kpiNet) {
+        if (netBalance > 0) {
+            kpiNet.textContent = `+${fmtNum(netBalance)}`;
+            kpiNet.style.color = 'var(--accent-emerald)';
+            if (kpiNetSub) kpiNetSub.textContent = '🟢 Net Reserve Surplus';
+        } else if (netBalance < 0) {
+            kpiNet.textContent = `-${fmtNum(Math.abs(netBalance))}`;
+            kpiNet.style.color = 'var(--accent-crimson)';
+            if (kpiNetSub) kpiNetSub.textContent = '🔴 Net Armory Drain';
+        } else {
+            kpiNet.textContent = '0';
+            kpiNet.style.color = 'var(--text-secondary)';
+            if (kpiNetSub) kpiNetSub.textContent = '⚪ Inflow Matches Outflow';
+        }
+    }
+
+    const kpiMem = document.getElementById('ledger-kpi-members');
+    if (kpiMem) kpiMem.textContent = `${uniqueMembers.size}`;
+
+    // 5. Update Active Filter Breadcrumbs & Reset Button
+    const filterChipsEl = document.getElementById('armory-active-filter-chips');
+    const resetBtn = document.getElementById('btn-reset-armory-filters');
+    const hasActiveFilters = armoryTimeFilter !== '30d' || armoryActionFilter !== 'all' || armoryCategoryFilter !== 'all' || armoryItemFilter !== 'all' || armoryMemberFilter !== '' || query !== '';
+
+    if (resetBtn) resetBtn.style.display = hasActiveFilters ? 'inline-block' : 'none';
+
+    if (filterChipsEl) {
+        if (hasActiveFilters) {
+            filterChipsEl.style.display = 'flex';
+            let chipsHtml = `<span style="font-size:0.75em; color:var(--text-tertiary); font-weight:700;">Active Filters:</span>`;
+            if (armoryTimeFilter !== '30d') {
+                const timeLabel = armoryTimeFilter === '24h' ? '24 Hours' : (armoryTimeFilter === '3d' ? '3 Days' : (armoryTimeFilter === '7d' ? '7 Days' : 'All Loaded'));
+                chipsHtml += `<span class="filter-active-chip">Time: ${timeLabel} <span class="chip-remove" onclick="setArmoryTimeFilter('30d', document.querySelectorAll('#time-pills .filter-pill')[3])">✕</span></span>`;
+            }
+            if (armoryActionFilter !== 'all') {
+                const actionLabel = armoryActionFilter === 'inflow' ? 'Deposits Only' : (armoryActionFilter === 'outflow' ? 'Usage Only' : 'Loans & Returns');
+                chipsHtml += `<span class="filter-active-chip">Action: ${actionLabel} <span class="chip-remove" onclick="setArmoryActionFilter('all', document.querySelectorAll('#action-pills .filter-pill')[0])">✕</span></span>`;
+            }
+            if (armoryCategoryFilter !== 'all') {
+                chipsHtml += `<span class="filter-active-chip">Cat: ${armoryCategoryFilter} <span class="chip-remove" onclick="setArmoryCategoryFilter('all')">✕</span></span>`;
+            }
+            if (armoryItemFilter !== 'all') {
+                chipsHtml += `<span class="filter-active-chip">Item: ${escapeHtml(armoryItemFilter)} <span class="chip-remove" onclick="setArmoryItemFilter('all')">✕</span></span>`;
+            }
+            if (armoryMemberFilter) {
+                chipsHtml += `<span class="filter-active-chip">Member: ${escapeHtml(armoryMemberFilter)} <span class="chip-remove" onclick="clearArmoryMemberFilter()">✕</span></span>`;
+            }
+            if (query) {
+                chipsHtml += `<span class="filter-active-chip">Search: "${escapeHtml(query)}" <span class="chip-remove" onclick="document.getElementById('usage-search').value=''; renderItemUsageTracker();">✕</span></span>`;
+            }
+            filterChipsEl.innerHTML = chipsHtml;
+        } else {
+            filterChipsEl.style.display = 'none';
+        }
+    }
+
+    // 6. View 1: Member Ledger Table
     const mBody = document.getElementById('usage-members-tbody');
     if (mBody && activeUsageView === 'members') {
-        let members = (stats.byMember || []).filter(m => {
-            if (!query) return true;
-            if (m.name.toLowerCase().includes(query) || String(m.id).includes(query)) return true;
-            return Object.keys(m.items || {}).some(item => item.toLowerCase().includes(query));
-        });
-
-        if (!members.length) {
-            mBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-tertiary);">No item consumption records found matching search.</td></tr>`;
+        if (!memberList.length) {
+            mBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-tertiary);">No armory records found matching current filters.</td></tr>`;
         } else {
-            mBody.innerHTML = members.map(m => {
-                const itemChips = Object.entries(m.items || {})
+            mBody.innerHTML = memberList.map(m => {
+                const depChips = Object.entries(m.depositedItems || {})
                     .sort((a, b) => b[1] - a[1])
-                    .map(([name, count]) => `<span class="usage-item-chip">${name}: <strong>${count}</strong></span>`)
+                    .map(([name, count]) => `<span class="usage-item-chip chip-inflow" onclick="setArmoryItemFilter('${escapeHtml(name)}')" title="Filter by ${escapeHtml(name)}">+${count} ${escapeHtml(name)}</span>`)
                     .join('');
+
+                const usedChips = Object.entries(m.usedItems || {})
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([name, count]) => `<span class="usage-item-chip chip-outflow" onclick="setArmoryItemFilter('${escapeHtml(name)}')" title="Filter by ${escapeHtml(name)}">-${count} ${escapeHtml(name)}</span>`)
+                    .join('');
+
+                let balanceBadge = `<span class="badge-balance-zero">0 (Balanced)</span>`;
+                if (m.netBalance > 0) {
+                    balanceBadge = `<span class="badge-balance-pos">+${fmtNum(m.netBalance)} (Net Donor)</span>`;
+                } else if (m.netBalance < 0) {
+                    balanceBadge = `<span class="badge-balance-neg">-${fmtNum(Math.abs(m.netBalance))} (Net Consumer)</span>`;
+                }
 
                 return `<tr>
                     <td>
-                        <div style="font-weight:700;"><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${m.name}</a></div>
+                        <div style="font-weight:700;">
+                            <a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${escapeHtml(m.name)}</a>
+                            <span style="cursor:pointer; font-size:0.8em; margin-left:4px;" onclick="setArmoryMemberFilter('${m.id}', '${escapeHtml(m.name)}')" title="Filter to this member">🔍</span>
+                        </div>
                         <div style="font-size:0.75em; color:var(--text-tertiary);">[${m.id}]</div>
                     </td>
-                    <td style="font-family:var(--font-mono); font-weight:800; color:var(--accent-emerald); font-size:1.05em;">${fmtNum(m.totalUsed)}</td>
-                    <td style="font-family:var(--font-mono); font-weight:700; color:var(--accent-cyan);">${fmtNum(m.medsUsed)}</td>
-                    <td style="font-family:var(--font-mono); font-weight:700; color:var(--accent-amber);">${fmtNum(m.drugsUsed)}</td>
-                    <td style="font-family:var(--font-mono); font-weight:700; color:var(--accent-cobalt);">${fmtNum(m.boostersUsed)}</td>
-                    <td style="max-width:340px;">
-                        <div style="display:flex; flex-wrap:wrap; gap:2px;">${itemChips || '<span style="color:var(--text-tertiary);">—</span>'}</div>
+                    <td style="font-family:var(--font-mono); font-weight:800; color:var(--accent-emerald); font-size:1.05em;">+${fmtNum(m.totalDeposited)}</td>
+                    <td style="font-family:var(--font-mono); font-weight:800; color:var(--accent-crimson); font-size:1.05em;">-${fmtNum(m.totalUsed)}</td>
+                    <td>${balanceBadge}</td>
+                    <td style="max-width:280px;">
+                        <div style="display:flex; flex-wrap:wrap; gap:2px;">${depChips || '<span style="color:var(--text-tertiary); font-size:0.8em;">—</span>'}</div>
                     </td>
-                    <td style="text-align:right; font-size:0.82em; color:var(--text-tertiary);">${timeSince(m.lastUsedTs)}</td>
+                    <td style="max-width:280px;">
+                        <div style="display:flex; flex-wrap:wrap; gap:2px;">${usedChips || '<span style="color:var(--text-tertiary); font-size:0.8em;">—</span>'}</div>
+                    </td>
+                    <td style="text-align:right; font-size:0.82em; color:var(--text-tertiary);" title="${m.lastActionTs ? new Date(m.lastActionTs * 1000).toUTCString() : ''}">${timeSince(m.lastActionTs)}</td>
                 </tr>`;
             }).join('');
         }
     }
 
-    // 2. Render By Item Breakdown
+    // 7. View 2: Item Ledger Table
     const iBody = document.getElementById('usage-items-tbody');
     if (iBody && activeUsageView === 'items') {
-        let items = (stats.byItem || []).filter(item => {
-            if (!query) return true;
-            if (item.name.toLowerCase().includes(query)) return true;
-            return (item.topUsers || []).some(u => u.name.toLowerCase().includes(query));
-        });
-
-        if (!items.length) {
-            iBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-tertiary);">No item records matching search.</td></tr>`;
+        if (!itemList.length) {
+            iBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-tertiary);">No item records matching current filters.</td></tr>`;
         } else {
-            iBody.innerHTML = items.map(item => {
-                const userChips = (item.topUsers || []).map(u => `<span class="usage-item-chip"><a href="https://www.torn.com/profiles.php?XID=${u.id}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${u.name}</a>: <strong>${u.count}</strong></span>`).join('');
+            iBody.innerHTML = itemList.map(item => {
+                const depChips = (item.topDepositors || []).map(u => `<span class="usage-item-chip chip-inflow" onclick="setArmoryMemberFilter('${u.id}', '${escapeHtml(u.name)}')" title="Filter by ${escapeHtml(u.name)}">${escapeHtml(u.name)}: <strong>+${u.count}</strong></span>`).join('');
+                const userChips = (item.topConsumers || []).map(u => `<span class="usage-item-chip chip-outflow" onclick="setArmoryMemberFilter('${u.id}', '${escapeHtml(u.name)}')" title="Filter by ${escapeHtml(u.name)}">${escapeHtml(u.name)}: <strong>-${u.count}</strong></span>`).join('');
+
+                let flowBadge = `<span class="badge-balance-zero">0 Balanced</span>`;
+                if (item.netDelta > 0) {
+                    flowBadge = `<span class="badge-balance-pos">+${fmtNum(item.netDelta)} Surplus</span>`;
+                } else if (item.netDelta < 0) {
+                    flowBadge = `<span class="badge-balance-neg">-${fmtNum(Math.abs(item.netDelta))} Deficit</span>`;
+                }
+
                 return `<tr>
-                    <td style="font-weight:700; color:var(--accent-amber);">${item.name}</td>
+                    <td>
+                        <div style="font-weight:700; color:var(--accent-amber); cursor:pointer;" onclick="setArmoryItemFilter('${escapeHtml(item.name)}')" title="Filter by this item">
+                            ${escapeHtml(item.name)} <span style="font-size:0.75em;">🔍</span>
+                        </div>
+                    </td>
                     <td><span class="badge-type">${item.category}</span></td>
-                    <td style="font-family:var(--font-mono); font-weight:800; color:var(--accent-emerald); font-size:1.05em;">${fmtNum(item.totalQuantity)}</td>
-                    <td style="font-family:var(--font-mono); font-weight:700;">${item.usersCount}</td>
-                    <td style="max-width:360px;">
-                        <div style="display:flex; flex-wrap:wrap; gap:2px;">${userChips || '—'}</div>
+                    <td style="font-family:var(--font-mono); font-weight:800; color:var(--accent-emerald); font-size:1.05em;">+${fmtNum(item.totalDeposited)}</td>
+                    <td style="font-family:var(--font-mono); font-weight:800; color:var(--accent-crimson); font-size:1.05em;">-${fmtNum(item.totalUsed)}</td>
+                    <td>${flowBadge}</td>
+                    <td style="max-width:280px;">
+                        <div style="display:flex; flex-wrap:wrap; gap:2px;">${depChips || '<span style="color:var(--text-tertiary); font-size:0.8em;">—</span>'}</div>
+                    </td>
+                    <td style="max-width:280px;">
+                        <div style="display:flex; flex-wrap:wrap; gap:2px;">${userChips || '<span style="color:var(--text-tertiary); font-size:0.8em;">—</span>'}</div>
                     </td>
                 </tr>`;
             }).join('');
         }
     }
 
-    // 3. Render Live Activity Feed
+    // 8. View 3: Transaction Audit Feed
     const fBody = document.getElementById('usage-feed-tbody');
     if (fBody && activeUsageView === 'feed') {
-        let logs = (stats.recentLog || []).filter(entry => {
-            if (!query) return true;
-            return entry.name.toLowerCase().includes(query) || entry.itemName.toLowerCase().includes(query);
-        });
-
-        if (!logs.length) {
-            fBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-tertiary);">No recent transactions matching search.</td></tr>`;
+        if (!filteredEvents.length) {
+            fBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-tertiary);">No armory transactions found in this time window.</td></tr>`;
         } else {
-            fBody.innerHTML = logs.map(entry => {
-                const actionBadge = entry.action === 'used'
-                    ? '<span class="badge-loan active">Used</span>'
-                    : (entry.action === 'filled' ? '<span class="badge-loan inactive">Filled</span>' : `<span class="badge-type">${entry.action}</span>`);
+            fBody.innerHTML = filteredEvents.slice(0, 150).map(entry => {
+                let actionBadge = `<span class="badge-type">${entry.action}</span>`;
+                let flowSymbol = entry.type === 'inflow' ? `+${entry.quantity}` : `-${entry.quantity}`;
+                let flowColor = entry.type === 'inflow' ? 'var(--accent-emerald)' : 'var(--accent-crimson)';
+
+                if (entry.action === 'deposited') {
+                    actionBadge = `<span class="badge-loan active" style="background:rgba(16,185,129,0.18); color:var(--accent-emerald);">🟢 Deposited</span>`;
+                } else if (entry.action === 'used') {
+                    actionBadge = `<span class="badge-loan overdue">🔴 Used</span>`;
+                } else if (entry.action === 'filled') {
+                    actionBadge = `<span class="badge-loan" style="background:rgba(6,182,212,0.18); color:var(--accent-cyan); border:1px solid rgba(6,182,212,0.3);">🩸 Filled Bag</span>`;
+                } else if (entry.action === 'returned') {
+                    actionBadge = `<span class="badge-loan active" style="background:rgba(59,130,246,0.18); color:var(--accent-cobalt);">🔄 Returned</span>`;
+                } else if (entry.action === 'loaned') {
+                    actionBadge = `<span class="badge-loan inactive">🪖 Loaned</span>`;
+                } else if (entry.action === 'retrieved') {
+                    actionBadge = `<span class="badge-loan" style="background:rgba(168,85,247,0.18); color:#a855f7; border:1px solid rgba(168,85,247,0.3);">📦 Retrieved</span>`;
+                }
+
+                const tctTime = new Date(entry.timestamp * 1000).toISOString().replace('T', ' ').substring(0, 19) + ' TCT';
 
                 return `<tr>
-                    <td style="font-size:0.82em; color:var(--text-tertiary);">${timeSince(entry.timestamp)}</td>
-                    <td style="font-weight:700;"><a href="https://www.torn.com/profiles.php?XID=${entry.id}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${entry.name}</a></td>
+                    <td style="white-space:nowrap;">
+                        <div style="font-weight:600; font-size:0.85em; font-family:var(--font-mono);">${timeSince(entry.timestamp)}</div>
+                        <div style="font-size:0.72em; color:var(--text-tertiary);">${tctTime}</div>
+                    </td>
+                    <td>
+                        <div style="font-weight:700;">
+                            <a href="https://www.torn.com/profiles.php?XID=${entry.id}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${escapeHtml(entry.name)}</a>
+                            <span style="cursor:pointer; font-size:0.75em; margin-left:3px;" onclick="setArmoryMemberFilter('${entry.id}', '${escapeHtml(entry.name)}')" title="Filter by member">🔍</span>
+                        </div>
+                    </td>
                     <td>${actionBadge}</td>
-                    <td style="font-family:var(--font-mono); font-weight:800;">${entry.quantity}</td>
-                    <td style="font-weight:600; color:var(--accent-amber);">${entry.itemName}</td>
+                    <td style="font-family:var(--font-mono); font-weight:800; color:${flowColor}; font-size:1.05em;">${flowSymbol}</td>
+                    <td>
+                        <span style="font-weight:700; color:var(--accent-amber); cursor:pointer;" onclick="setArmoryItemFilter('${escapeHtml(entry.itemName)}')" title="Filter by item">
+                            ${escapeHtml(entry.itemName)}
+                        </span>
+                    </td>
                     <td><span class="badge-type">${entry.category}</span></td>
+                    <td style="font-size:0.84em; color:var(--text-secondary); max-width:320px;">
+                        ${escapeHtml(entry.rawText || '')}
+                    </td>
                 </tr>`;
             }).join('');
         }
