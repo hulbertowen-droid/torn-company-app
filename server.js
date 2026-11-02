@@ -6309,13 +6309,14 @@ app.get('/api/dashboard-data', async (req, res) => {
             return res.json(dashboardDataCache[cacheKey].data);
         }
 
-        // Fetch basic, armory, and chain/rankedwars in parallel for maximum speed
+        // Fetch basic, armory (including medical, drugs, boosters, donations), and chain/rankedwars in parallel for maximum speed
         const basicUrl = targetFacId
             ? `https://api.torn.com/faction/${targetFacId}?selections=basic&key=${userKey}`
             : `https://api.torn.com/faction/?selections=basic&key=${userKey}`;
+        const armoryUrl = `https://api.torn.com/faction/?selections=armor,weapons,temporary,medical,drugs,boosters,donations&key=${userKey}`;
         const [basicResp, armoryResp, chainResp] = await Promise.all([
             fetch(basicUrl).catch(e => null),
-            fetch(`https://api.torn.com/faction/?selections=armor,weapons,temporary&key=${userKey}`).catch(e => null),
+            fetch(armoryUrl).catch(e => null),
             fetch(`https://api.torn.com/faction/?selections=chain,rankedwars&key=${userKey}`).catch(e => null)
         ]);
 
@@ -6336,24 +6337,210 @@ app.get('/api/dashboard-data', async (req, res) => {
 
         let loans = [];
         let armoryError = false;
-        const armoryData = armoryResp ? await armoryResp.json().catch(() => ({ error: true })) : { error: true };
+        let armoryData = armoryResp ? await armoryResp.json().catch(() => ({ error: true })) : { error: true };
 
-        if (armoryData.error) { armoryError = true; } 
-        else {
-            const findLoans = (obj, typeName) => {
-                if (!obj || typeof obj !== 'object') return;
-                if (obj.loaned_to) {
+        // Fallback to minimal armory selections if multi-selection returned an error
+        if (armoryData.error) {
+            try {
+                const fallbackResp = await fetch(`https://api.torn.com/faction/?selections=armor,weapons,temporary&key=${userKey}`).catch(e => null);
+                if (fallbackResp) armoryData = await fallbackResp.json().catch(() => ({ error: true }));
+            } catch(e) {}
+        }
+
+        if (armoryData.error) { armoryError = true; }
+
+        const armoryObj = {
+            medical: [],
+            drugs: [],
+            boosters: [],
+            weapons: [],
+            armor: [],
+            temporary: [],
+            vaultCash: 0,
+            vaultPoints: 0,
+            totalMedicalItems: 0,
+            totalDrugs: 0,
+            totalBoosters: 0,
+            totalWeapons: 0,
+            loanedWeaponsCount: 0,
+            totalArmor: 0,
+            loanedArmorCount: 0,
+            lowStockItems: [],
+            armoryHealth: "100% Stocked • Optimal",
+            burnRate: {
+                hourlyMedicalBurn: 0,
+                hoursRemaining: 999,
+                warActive: false
+            }
+        };
+
+        if (!armoryError && armoryData) {
+            const toItemArray = (raw) => {
+                if (!raw) return [];
+                if (Array.isArray(raw)) return raw;
+                if (typeof raw === 'object') return Object.values(raw);
+                return [];
+            };
+
+            armoryObj.medical = toItemArray(armoryData.medical).map(m => ({
+                id: m.ID || m.id,
+                name: m.name || "Unknown Medical",
+                type: m.type || "Medical",
+                quantity: Number(m.quantity || 0)
+            }));
+
+            armoryObj.drugs = toItemArray(armoryData.drugs).map(d => ({
+                id: d.ID || d.id,
+                name: d.name || "Unknown Drug",
+                type: "Drug",
+                quantity: Number(d.quantity || 0)
+            }));
+
+            armoryObj.boosters = toItemArray(armoryData.boosters).map(b => ({
+                id: b.ID || b.id,
+                name: b.name || "Unknown Booster",
+                type: b.type || "Booster",
+                quantity: Number(b.quantity || 0)
+            }));
+
+            armoryObj.weapons = toItemArray(armoryData.weapons).map(w => ({
+                id: w.ID || w.id,
+                name: w.name || "Unknown Weapon",
+                type: w.type || "Weapon",
+                quantity: Number(w.quantity || 0),
+                available: Number(w.available !== undefined ? w.available : (w.quantity || 0)),
+                loaned: Number(w.loaned || 0),
+                loaned_to: String(w.loaned_to || "0")
+            }));
+
+            armoryObj.armor = toItemArray(armoryData.armor).map(a => ({
+                id: a.ID || a.id,
+                name: a.name || "Unknown Armor",
+                type: a.type || "Armor",
+                quantity: Number(a.quantity || 0),
+                available: Number(a.available !== undefined ? a.available : (a.quantity || 0)),
+                loaned: Number(a.loaned || 0),
+                loaned_to: String(a.loaned_to || "0")
+            }));
+
+            armoryObj.temporary = toItemArray(armoryData.temporary).map(t => ({
+                id: t.ID || t.id,
+                name: t.name || "Unknown Temp",
+                type: t.type || "Temporary",
+                quantity: Number(t.quantity || 0),
+                available: Number(t.available !== undefined ? t.available : (t.quantity || 0)),
+                loaned: Number(t.loaned || 0),
+                loaned_to: String(t.loaned_to || "0")
+            }));
+
+            // Vault donations sum
+            if (armoryData.donations && typeof armoryData.donations === 'object') {
+                Object.values(armoryData.donations).forEach(donor => {
+                    armoryObj.vaultCash += Number(donor.money_balance || 0);
+                    armoryObj.vaultPoints += Number(donor.points_balance || 0);
+                });
+            }
+
+            armoryObj.totalMedicalItems = armoryObj.medical.reduce((acc, m) => acc + m.quantity, 0);
+            armoryObj.totalDrugs = armoryObj.drugs.reduce((acc, d) => acc + d.quantity, 0);
+            armoryObj.totalBoosters = armoryObj.boosters.reduce((acc, b) => acc + b.quantity, 0);
+            armoryObj.totalWeapons = armoryObj.weapons.reduce((acc, w) => acc + w.quantity, 0);
+            armoryObj.loanedWeaponsCount = armoryObj.weapons.reduce((acc, w) => acc + w.loaned, 0);
+            armoryObj.totalArmor = armoryObj.armor.reduce((acc, a) => acc + a.quantity, 0);
+            armoryObj.loanedArmorCount = armoryObj.armor.reduce((acc, a) => acc + a.loaned, 0);
+
+            // Extract enhanced loans with member details
+            const extractLoans = (items, category) => {
+                items.forEach(obj => {
+                    if (!obj || !obj.loaned_to) return;
                     let loanStr = String(obj.loaned_to).trim();
                     if (loanStr !== "0" && loanStr !== "null" && loanStr !== "") {
-                        loanStr.split(',').forEach(l => { loans.push({ name: obj.name || "Unknown Item", loaned_to: l.trim(), type: typeName }); });
+                        loanStr.split(',').forEach(rawId => {
+                            const pId = rawId.trim();
+                            if (!pId) return;
+                            const mInfo = basicData.members ? basicData.members[pId] : null;
+                            const lastActionTs = mInfo?.last_action?.timestamp || 0;
+                            const now = Math.floor(Date.now() / 1000);
+                            const isInactive24h = lastActionTs > 0 && (now - lastActionTs) > 86400;
+                            const isHospitalized = mInfo?.status?.state === 'Hospital';
+                            let loanStatus = 'active';
+                            if (lastActionTs > 0 && (now - lastActionTs) > 3 * 86400) {
+                                loanStatus = 'overdue';
+                            } else if (isInactive24h || isHospitalized) {
+                                loanStatus = 'inactive';
+                            }
+                            loans.push({
+                                id: obj.id,
+                                name: obj.name || "Unknown Item",
+                                type: category,
+                                itemCategory: obj.type || category,
+                                loaned_to: pId,
+                                borrowerId: pId,
+                                borrowerName: mInfo?.name || `Player [${pId}]`,
+                                borrowerStatus: mInfo?.last_action?.status || 'Offline',
+                                borrowerState: mInfo?.status?.state || 'Okay',
+                                lastActionTs: lastActionTs,
+                                loanStatus: loanStatus
+                            });
+                        });
                     }
-                    return; 
-                }
-                Object.values(obj).forEach(val => findLoans(val, typeName));
+                });
             };
-            findLoans(armoryData.armor, "Armor");
-            findLoans(armoryData.weapons, "Weapon");
-            findLoans(armoryData.temporary, "Temporary");
+
+            extractLoans(armoryObj.armor, "Armor");
+            extractLoans(armoryObj.weapons, "Weapon");
+            extractLoans(armoryObj.temporary, "Temporary");
+
+            // Evaluate low stock items against standard reserve minimums
+            const stockCheck = [
+                { match: 'Xanax', type: 'drug', min: 50, icon: '💊' },
+                { match: 'Small First Aid Kit', type: 'medical', min: 40, icon: '🩹' },
+                { match: 'First Aid Kit', type: 'medical', min: 60, icon: '📦' },
+                { match: 'Morphine', type: 'medical', min: 40, icon: '💉' },
+                { match: 'Blood Bag', type: 'medical', min: 100, isTotalBlood: true, icon: '🩸' },
+                { match: 'Can of', type: 'booster', min: 30, isTotalCans: true, icon: '🥫' }
+            ];
+
+            let bloodTotal = 0;
+            let canTotal = 0;
+            armoryObj.medical.forEach(m => {
+                if (m.name.toLowerCase().includes('blood bag')) bloodTotal += m.quantity;
+            });
+            armoryObj.boosters.forEach(b => {
+                if (b.name.toLowerCase().startsWith('can of')) canTotal += b.quantity;
+            });
+
+            stockCheck.forEach(rule => {
+                let current = 0;
+                if (rule.isTotalBlood) {
+                    current = bloodTotal;
+                } else if (rule.isTotalCans) {
+                    current = canTotal;
+                } else if (rule.type === 'drug') {
+                    const item = armoryObj.drugs.find(d => d.name.toLowerCase() === rule.match.toLowerCase());
+                    current = item ? item.quantity : 0;
+                } else if (rule.type === 'medical') {
+                    const item = armoryObj.medical.find(m => m.name.toLowerCase() === rule.match.toLowerCase());
+                    current = item ? item.quantity : 0;
+                }
+
+                if (current < rule.min) {
+                    armoryObj.lowStockItems.push({
+                        name: rule.isTotalBlood ? 'Blood Bags' : (rule.isTotalCans ? 'Energy Cans' : rule.match),
+                        current: current,
+                        min: rule.min,
+                        icon: rule.icon,
+                        severity: current === 0 ? 'critical' : 'warning'
+                    });
+                }
+            });
+
+            if (armoryObj.lowStockItems.length === 0) {
+                armoryObj.armoryHealth = "100% Stocked • Optimal";
+            } else {
+                const pct = Math.max(20, Math.min(99, 100 - armoryObj.lowStockItems.length * 8));
+                armoryObj.armoryHealth = `${pct}% Stocked • ${armoryObj.lowStockItems.length} Low`;
+            }
         }
 
         let parsedMembers = {};
@@ -6394,6 +6581,29 @@ app.get('/api/dashboard-data', async (req, res) => {
             }
         } catch(e) {}
 
+        // Calculate war & chain medical burn rate
+        if (!armoryError && armoryObj) {
+            const totalMeds = armoryObj.totalMedicalItems || 0;
+            if (activeWar) {
+                const nowSec = Math.floor(Date.now() / 1000);
+                const warHours = Math.max(0.5, (nowSec - (activeWar.start || nowSec)) / 3600);
+                const enemyHitsEst = Math.max(5, (activeWar.enemyScore || 0) * 0.4);
+                const hourlyBurn = Math.max(12, Math.round(enemyHitsEst / warHours));
+                const hoursRemaining = Math.max(1, Math.round(totalMeds / hourlyBurn));
+                armoryObj.burnRate = {
+                    hourlyMedicalBurn: hourlyBurn,
+                    hoursRemaining: hoursRemaining,
+                    warActive: true
+                };
+            } else {
+                armoryObj.burnRate = {
+                    hourlyMedicalBurn: 2,
+                    hoursRemaining: Math.round(totalMeds / 2),
+                    warActive: false
+                };
+            }
+        }
+
         const faction = {
             name: basicData.name,
             ID: basicData.ID,
@@ -6405,10 +6615,22 @@ app.get('/api/dashboard-data', async (req, res) => {
             capacity: basicData.capacity
         };
 
-        const resultPayload = { success: true, members: parsedMembers, loans, armoryError, premiumActive: isPremium, chain, activeWar, faction };
+        const resultPayload = { success: true, members: parsedMembers, loans, armory: armoryObj, armoryError, premiumActive: isPremium, chain, activeWar, faction };
         dashboardDataCache[cacheKey] = { timestamp: Date.now(), data: resultPayload };
         res.json(resultPayload);
     } catch (err) { res.status(403).json({ error: err.message }); }
+});
+
+// Armory Loan Remind Endpoint
+app.post('/api/armory/remind', async (req, res) => {
+    const { borrowerId, borrowerName, itemName } = req.body || {};
+    if (!borrowerId) return res.status(400).json({ error: "Missing borrowerId" });
+    const tornMsgUrl = `https://www.torn.com/messages.php#/p=compose&XID=${borrowerId}`;
+    res.json({
+        success: true,
+        message: `Reminder link generated for ${borrowerName || borrowerId}`,
+        tornUrl: tornMsgUrl
+    });
 });
 
 const companyApiCache = {};

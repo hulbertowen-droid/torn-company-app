@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flight & Sentinel | FactionOS</title>
-    <meta name="description" content="War flight tracking, ghost aviator audits, personal combat stats, and real-time faction telemetry.">
+    <title>Faction Dashboard &amp; Armory | FactionOS</title>
+    <meta name="description" content="Executive faction command center: Live war &amp; chain monitoring, armory supply ledger, loaner gear tracking, and war flight sentinel.">
     
     <!-- Fonts & Core Design System -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,12 +18,12 @@
     <script src="/global-topbar.js?v=3.2.0"></script>
 
     <style>
-    /* ─── Page-Specific Dashboard & Sentinel Styling ─── */
+    /* ─── Page-Specific Dashboard, Armory & Sentinel Styling ─── */
     .faction-hero {
         background: linear-gradient(135deg, rgba(18, 24, 36, 0.95) 0%, rgba(12, 16, 23, 0.98) 50%, rgba(15, 25, 35, 0.95) 100%);
         border: 1px solid var(--border-default);
         border-radius: var(--radius-lg);
-        padding: 24px 28px;
+        padding: 22px 28px;
         margin-bottom: 20px;
         display: flex;
         align-items: center;
@@ -72,13 +72,13 @@
     }
     .faction-hero-stats {
         display: flex;
-        gap: 28px;
+        gap: 24px;
     }
     .hero-stat {
         text-align: center;
     }
     .hero-stat .val {
-        font-size: 1.85em;
+        font-size: 1.75em;
         font-weight: 900;
         color: var(--text-primary);
         line-height: 1;
@@ -99,7 +99,88 @@
     .faction-divider {
         width: 1px;
         background: var(--border-subtle);
-        height: 50px;
+        height: 44px;
+    }
+
+    /* Balanced 6-Card Responsive KPI Strip */
+    .kpi-row-6 {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+    @media (max-width: 1280px) {
+        .kpi-row-6 { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 680px) {
+        .kpi-row-6 { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    /* Modular Navigation Tabs */
+    .ops-nav-tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 22px;
+        border-bottom: 1px solid var(--border-default);
+        padding-bottom: 0px;
+        overflow-x: auto;
+        scrollbar-width: thin;
+    }
+    .ops-tab-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 22px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-default);
+        border-bottom: none;
+        border-radius: var(--radius-md) var(--radius-md) 0 0;
+        color: var(--text-secondary);
+        font-weight: 700;
+        font-size: 0.88em;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        user-select: none;
+    }
+    .ops-tab-btn:hover {
+        color: var(--text-primary);
+        background: var(--bg-hover);
+        border-color: var(--accent-cobalt-border);
+    }
+    .ops-tab-btn.active {
+        color: var(--text-primary);
+        background: linear-gradient(180deg, var(--bg-card) 0%, rgba(59, 130, 246, 0.08) 100%);
+        border-color: var(--accent-cobalt);
+        border-bottom: 2px solid var(--accent-cobalt);
+        box-shadow: 0 -2px 10px rgba(59, 130, 246, 0.12);
+    }
+    .tab-badge {
+        background: rgba(239, 68, 68, 0.18);
+        color: var(--accent-crimson);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        padding: 2px 7px;
+        border-radius: var(--radius-full);
+        font-size: 0.72em;
+        font-weight: 800;
+    }
+    .tab-badge.green {
+        background: rgba(16, 185, 129, 0.18);
+        color: var(--accent-emerald);
+        border-color: rgba(16, 185, 129, 0.35);
+    }
+
+    /* Tab Panes */
+    .tab-pane {
+        display: none;
+    }
+    .tab-pane.active {
+        display: block;
+        animation: fadeInTab 0.22s ease-out;
+    }
+    @keyframes fadeInTab {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
     }
 
     /* War Score Card */
@@ -179,6 +260,127 @@
     .chain-timeout.danger { color: var(--accent-crimson); animation: pulseDot 1s infinite; }
     .chain-timeout.ok { color: var(--accent-emerald); }
 
+    /* Armory Snapshot Monitor Card */
+    .armory-snapshot-card {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+    .low-stock-ticker {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding: 10px 16px;
+        background: rgba(0, 0, 0, 0.25);
+        border-bottom: 1px solid var(--border-subtle);
+        scrollbar-width: thin;
+        align-items: center;
+    }
+    .stock-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px;
+        border-radius: var(--radius-full);
+        font-size: 0.74em;
+        font-weight: 700;
+        white-space: nowrap;
+        user-select: none;
+    }
+    .stock-pill.warning {
+        background: rgba(245, 158, 11, 0.15);
+        color: var(--accent-amber);
+        border: 1px solid var(--accent-amber-border);
+    }
+    .stock-pill.critical {
+        background: rgba(239, 68, 68, 0.16);
+        color: var(--accent-crimson);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        animation: pulseDot 1.5s infinite;
+    }
+    .stock-pill.optimal {
+        background: rgba(16, 185, 129, 0.14);
+        color: var(--accent-emerald);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .supply-tiles-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        padding: 16px;
+    }
+    .supply-tile {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 12px 14px;
+        transition: border-color 0.2s ease, transform 0.15s ease;
+    }
+    .supply-tile:hover {
+        border-color: var(--accent-cobalt-border);
+        transform: translateY(-1px);
+    }
+    .supply-tile-hdr {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.72em;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: var(--text-tertiary);
+        letter-spacing: 0.5px;
+    }
+    .supply-tile-val {
+        font-size: 1.5em;
+        font-weight: 900;
+        font-family: var(--font-mono);
+        color: var(--text-primary);
+        margin: 4px 0 2px;
+    }
+    .supply-tile-sub {
+        font-size: 0.74em;
+        color: var(--text-secondary);
+    }
+    .quick-action-bar {
+        display: flex;
+        gap: 8px;
+        padding: 12px 16px;
+        border-top: 1px solid var(--border-subtle);
+        background: rgba(0, 0, 0, 0.15);
+        margin-top: auto;
+    }
+    .quick-action-btn {
+        flex: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px 12px;
+        border-radius: var(--radius-sm);
+        font-size: 0.78em;
+        font-weight: 700;
+        text-decoration: none;
+        border: 1px solid var(--border-default);
+        background: var(--bg-elevated);
+        color: var(--text-secondary);
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+    .quick-action-btn:hover {
+        color: var(--text-primary);
+        background: var(--bg-hover);
+        border-color: var(--accent-cobalt-border);
+    }
+    .quick-action-btn.primary {
+        background: var(--accent-cobalt-dim);
+        color: var(--accent-cobalt);
+        border-color: var(--accent-cobalt-border);
+    }
+    .quick-action-btn.primary:hover {
+        background: var(--accent-cobalt);
+        color: white;
+    }
+
     /* Member Row */
     .member-row {
         display: grid;
@@ -206,28 +408,135 @@
     .m-name { font-weight: 700; color: var(--text-primary); text-decoration: none; }
     .m-name:hover { color: var(--accent-cobalt); }
 
-    /* Loan Row */
-    .loan-row {
+    /* Armory & Logistics Tab Styles */
+    .armory-kpis {
         display: grid;
-        grid-template-columns: 2fr 2fr 1fr;
-        gap: 8px;
-        padding: 10px 20px;
-        border-bottom: 1px solid var(--border-subtle);
-        align-items: center;
-        font-size: 0.88em;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-bottom: 20px;
     }
-    .loan-row:last-child { border-bottom: none; }
-    .badge-type {
+    @media (max-width: 900px) {
+        .armory-kpis { grid-template-columns: repeat(2, 1fr); }
+    }
+    .armory-subpanel {
+        background: var(--bg-card);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        margin-bottom: 20px;
+        overflow: hidden;
+    }
+    .subpanel-hdr {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border-subtle);
+        background: var(--bg-elevated);
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .subpanel-title {
+        font-size: 1.05em;
+        font-weight: 800;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .subpanel-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .armory-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.84em;
+        text-align: left;
+    }
+    .armory-table th {
+        padding: 10px 14px;
+        color: var(--text-tertiary);
+        font-weight: 800;
+        font-size: 0.74em;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        background: rgba(0, 0, 0, 0.2);
+        border-bottom: 1px solid var(--border-subtle);
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+    .armory-table td {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border-subtle);
+        color: var(--text-primary);
+    }
+    .armory-table tr:hover td {
+        background: var(--bg-hover);
+    }
+
+    /* Live Burn Rate Banner */
+    .burn-rate-banner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 16px 20px;
+        background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, rgba(245, 158, 11, 0.05) 100%);
+        border-bottom: 1px solid var(--border-subtle);
+        flex-wrap: wrap;
+    }
+    .burn-rate-banner.peace {
+        background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(59, 130, 246, 0.05) 100%);
+    }
+    .burn-stat-group {
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        flex-wrap: wrap;
+    }
+    .burn-stat {
+        display: flex;
+        flex-direction: column;
+    }
+    .burn-stat .b-lbl {
+        font-size: 0.72em;
+        text-transform: uppercase;
+        font-weight: 800;
+        color: var(--text-tertiary);
+        letter-spacing: 0.5px;
+    }
+    .burn-stat .b-val {
+        font-size: 1.4em;
+        font-weight: 900;
+        font-family: var(--font-mono);
+        color: var(--text-primary);
+    }
+
+    /* Loan Badges */
+    .badge-loan {
         padding: 2px 8px;
         border-radius: var(--radius-sm);
         font-size: 0.74em;
         font-weight: 800;
-        background: var(--accent-cobalt-dim);
-        color: var(--accent-cobalt);
-        border: 1px solid var(--accent-cobalt-border);
     }
-    .badge-type.armor { background: var(--accent-amber-dim); color: var(--accent-amber); border-color: var(--accent-amber-border); }
-    .badge-type.temp { background: var(--accent-purple-dim); color: var(--accent-purple); border-color: rgba(139, 92, 246, 0.3); }
+    .badge-loan.active {
+        background: rgba(16, 185, 129, 0.15);
+        color: var(--accent-emerald);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .badge-loan.inactive {
+        background: rgba(245, 158, 11, 0.15);
+        color: var(--accent-amber);
+        border: 1px solid var(--accent-amber-border);
+    }
+    .badge-loan.overdue {
+        background: rgba(239, 68, 68, 0.16);
+        color: var(--accent-crimson);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+    }
 
     /* War Analyst Tabs & Output */
     .analyst-tabs {
@@ -307,6 +616,16 @@
         color: var(--text-secondary);
         font-family: var(--font-mono);
     }
+
+    /* Card accent pulse animation */
+    @keyframes cardPulseAccent {
+        0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+        70% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+    }
+    .card-pulse {
+        animation: cardPulseAccent 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
     </style>
 </head>
 <body>
@@ -325,26 +644,34 @@
             <div class="nav-section-title">Live Operations</div>
             <a href="/" class="nav-link"><span class="nav-icon">📡</span> <span class="nav-text">Live Warboard</span></a>
             <a href="/chain.html" class="nav-link"><span class="nav-icon">🔗</span> <span class="nav-text">Chain Sentinel</span></a>
+            <a href="#armory" onclick="switchOpsTab('armory')" class="nav-link" id="nav-link-armory">
+                <span class="nav-icon">🛡️</span> 
+                <span class="nav-text">Armory Tracker</span>
+                <span class="tab-badge" id="nav-armory-badge" style="display:none; margin-left:auto;">0 Low</span>
+            </a>
             <a href="/payout.html" class="nav-link"><span class="nav-icon">💰</span> <span class="nav-text">War Payouts</span></a>
             <a href="/members.html" class="nav-link"><span class="nav-icon">👥</span> <span class="nav-text">Faction Roster</span></a>
             <a href="/oc.html" class="nav-link"><span class="nav-icon">💼</span> <span class="nav-text">OC Manager</span></a>
 
             <div class="nav-section-title">Tactical Desk</div>
-            <a href="/dashboard.html" class="nav-link active"><span class="nav-icon">🛡️</span> <span class="nav-text">Flight & Sentinel</span></a>
+            <a href="#sentinel" onclick="switchOpsTab('sentinel')" class="nav-link" id="nav-link-sentinel">
+                <span class="nav-icon">✈️</span> 
+                <span class="nav-text">Flight &amp; Sentinel</span>
+            </a>
             <a href="/travel.html" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Travel Profit Desk</span></a>
-            <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market & Bazaar</span></a>
+            <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market &amp; Bazaar</span></a>
             <a href="/company.html" class="nav-link"><span class="nav-icon">🏢</span> <span class="nav-text">Company Hub</span></a>
             <a href="/gamble.html" class="nav-link"><span class="nav-icon">🎰</span> <span class="nav-text">Casino Analytics</span></a>
             <a href="/recruit/" class="nav-link" title="Recruit Engine is currently in early development and not usable"><span class="nav-icon">🎯</span> <span class="nav-text">Recruit Engine</span> <span class="nav-badge-dev">Early Dev</span></a>
 
-            <div class="nav-section-title">Intelligence & Alerts</div>
+            <div class="nav-section-title">Intelligence &amp; Alerts</div>
             <a href="/ai-sandbox.html" class="nav-link"><span class="nav-icon">🤖</span> <span class="nav-text">F.R.I.D.A.Y. Intel</span></a>
             <a href="/discord.html" class="nav-link"><span class="nav-icon">📢</span> <span class="nav-text">Discord Sentinel</span></a>
             <a href="/bugs.html" class="nav-link"><span class="nav-icon">🐛</span> <span class="nav-text">Bug Tracker</span></a>
             <a onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" class="nav-link" style="cursor:pointer; margin-top:4px;"><span class="nav-icon">⚙️</span> <span class="nav-text">Settings</span></a>
         </div>
         <div class="sidebar-footer" id="sidebar-user-footer">
-            <div class="sidebar-user-chip" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" style="cursor:pointer;" title="Account & API Settings">
+            <div class="sidebar-user-chip" onclick="openGlobalSettings ? openGlobalSettings() : openSettings()" style="cursor:pointer;" title="Account &amp; API Settings">
                 <div class="sidebar-user-avatar" id="nav-user-avatar">🕷️</div>
                 <div class="sidebar-user-info">
                     <span class="sidebar-user-name" id="nav-user-name">Tactical Operative</span>
@@ -354,15 +681,21 @@
             </div>
         </div>
     </nav>
+
     <div class="main-wrapper">
         <header class="app-topbar">
             <div class="topbar-left">
                 <button class="toggle-btn" onclick="toggleSidebar()" title="Toggle Sidebar" id="mobile-nav-toggle" style="display:none;">☰</button>
-                <div class="topbar-crumb">
-                    <span>TACTICAL DESK</span> / <strong style="color:var(--text-primary);">FLIGHT & SENTINEL</strong>
+                <div class="topbar-crumb" id="topbar-breadcrumb">
+                    <span>OPERATIONS</span> / <span>FACTION DASHBOARD</span> / <strong id="crumb-active-sub" style="color:var(--text-primary);">OVERVIEW</strong>
                 </div>
             </div>
             <div class="topbar-right">
+                <!-- Consolidated Unified API Key Status Indicator -->
+                <div id="header-api-status" class="telemetry-chip" onclick="openSettings()" style="cursor:pointer;" title="Click to configure Torn &amp; FF Scouter API keys">
+                    <span class="pulse-indicator" id="header-api-dot" style="background:var(--accent-emerald);"></span>
+                    <span id="header-api-text" style="font-weight:700; font-size:0.85em;">🟢 API Key Synced</span>
+                </div>
                 <div class="tct-clock-chip" title="Torn City Time (TCT)">
                     <span class="tct-label">TCT</span>
                     <span id="global-tct-clock">--:--:--</span>
@@ -388,247 +721,641 @@
         <!-- FACTION HERO -->
         <div class="faction-hero" id="faction-hero">
             <div class="faction-name-block">
-                <div class="loading-shimmer" style="width:200px;height:28px;"></div>
-                <div class="loading-shimmer" style="width:120px;height:14px;margin-top:8px;"></div>
+                <h2>Loading Faction...</h2>
+                <div class="faction-id">ID: — &nbsp;|&nbsp; Respect: —</div>
             </div>
             <div class="faction-hero-stats" id="hero-stats">
-                <div class="loading-shimmer" style="width:280px;height:50px;"></div>
+                <div class="hero-stat"><div class="val">—</div><div class="lbl">Members</div></div>
+                <div class="faction-divider"></div>
+                <div class="hero-stat"><div class="val green">—</div><div class="lbl">Online</div></div>
+                <div class="faction-divider"></div>
+                <div class="hero-stat"><div class="val red">—</div><div class="lbl">Hospital</div></div>
+                <div class="faction-divider"></div>
+                <div class="hero-stat"><div class="val" style="color:var(--accent-cobalt);">—</div><div class="lbl">Traveling</div></div>
             </div>
         </div>
 
-        <!-- KPI ROW -->
-        <div class="kpi-row" id="kpi-row">
-            <div class="kpi-card"><div class="kpi-icon">👥</div><div><div class="kpi-label">Total Members</div><div class="kpi-value" id="kpi-members">—</div><div class="kpi-sub" id="kpi-online-sub">Loading...</div></div></div>
-            <div class="kpi-card"><div class="kpi-icon">🏆</div><div><div class="kpi-label">Faction Respect</div><div class="kpi-value" id="kpi-respect">—</div><div class="kpi-sub" id="kpi-respect-sub"></div></div></div>
-            <div class="kpi-card"><div class="kpi-icon">🔗</div><div><div class="kpi-label">Active Chain</div><div class="kpi-value" id="kpi-chain">—</div><div class="kpi-sub" id="kpi-chain-timeout">—</div></div></div>
-            <div class="kpi-card"><div class="kpi-icon">⚔️</div><div><div class="kpi-label">War Status</div><div class="kpi-value" id="kpi-war-status">—</div><div class="kpi-sub" id="kpi-war-sub">—</div></div></div>
-            <div class="kpi-card"><div class="kpi-icon">⚡</div><div><div class="kpi-label">Best Chain</div><div class="kpi-value" id="kpi-best-chain">—</div><div class="kpi-sub" id="kpi-age">—</div></div></div>
-        </div>
-
-        <!-- WAR SCORE + CHAIN DETAILS -->
-        <div class="dash-grid" id="war-chain-row">
-            <!-- WAR SCORE CARD -->
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title">⚔️ Active War Score</div>
-                    <span id="war-live-badge"></span>
-                </div>
-                <div id="war-score-body">
-                    <div class="empty-state">No active ranked war detected.</div>
-                </div>
-            </div>
-
-            <!-- CHAIN CARD -->
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title">🔗 Chain Monitor</div>
-                    <span id="chain-status-badge"></span>
-                </div>
-                <div class="chain-section" id="chain-body">
-                    <div class="empty-state">No active chain detected.</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- WAR FLIGHT & FARM SENTINEL (PAST WARS AIRTIME & DEFENSE AUDIT) -->
-        <div class="card span-full" id="war-sentinel-card" style="margin-bottom:18px; border: 1px solid rgba(0,206,201,0.25);">
-            <div class="card-header" style="flex-wrap:wrap; gap:12px;">
+        <!-- BALANCED 6-CARD RESPONSIVE KPI STRIP -->
+        <div class="kpi-row-6" id="kpi-row">
+            <div class="kpi-card">
+                <div class="kpi-icon">👥</div>
                 <div>
-                    <div class="card-title" style="color:var(--teal); display:flex; align-items:center; gap:8px;">
-                        <span>✈️ War Flight &amp; Farm Sentinel</span>
-                        <span style="font-size:0.68em; background:rgba(0,206,201,0.12); color:var(--teal); border:1px solid rgba(0,206,201,0.3); padding:2px 8px; border-radius:12px; font-weight:700;">FF Scouter &amp; Attack Audit</span>
-                    </div>
-                    <div style="font-size:0.78em; color:var(--text-dim); margin-top:2px;">Scan past or active wars to see which members consistently flew and who sat in Torn City and got farmed.</div>
-                </div>
-                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                    <div style="display:flex; align-items:center; gap:6px;">
-                        <span style="font-size:0.75em; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Select War:</span>
-                        <select id="sentinel-war-select" aria-label="Select War" class="sort-select" onchange="runWarFlightAudit()" style="min-width:220px; background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 10px; border-radius:6px; font-size:0.82em;">
-                            <option value="">Loading wars...</option>
-                        </select>
-                    </div>
-                    <button class="refresh-btn" onclick="runWarFlightAudit(true)" id="btn-refresh-audit" style="padding:6px 12px; font-size:0.8em;">↻ Re-Scan</button>
+                    <div class="kpi-label">Total Members</div>
+                    <div class="kpi-value" id="kpi-members">—</div>
+                    <div class="kpi-sub" id="kpi-online-sub">Loading...</div>
                 </div>
             </div>
-
-            <!-- War Info & Scouter Status Ribbon -->
-            <div id="sentinel-status-ribbon" style="background:rgba(0,0,0,0.2); padding:10px 18px; border-top:1px solid var(--border); border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; font-size:0.82em;">
-                <div id="sentinel-war-summary" style="color:var(--text-main); font-weight:600;">
-                    Select a war to analyze flight uptime and defensive performance.
-                </div>
-                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                    <div id="sentinel-ff-badge" style="font-size:0.78em; color:var(--text-dim);">
-                        ⚡ Scouter Status: Checking...
-                    </div>
-                    <button class="filter-chip" onclick="openFFKeyModal()" style="background:rgba(0,206,201,0.12); border-color:var(--teal); color:var(--teal); padding:3px 10px; font-size:0.75em; cursor:pointer;">
-                        🔑 Configure FF Key
-                    </button>
+            <div class="kpi-card">
+                <div class="kpi-icon">⭐</div>
+                <div>
+                    <div class="kpi-label">Faction Respect</div>
+                    <div class="kpi-value" id="kpi-respect">—</div>
+                    <div class="kpi-sub" id="kpi-respect-sub">—</div>
                 </div>
             </div>
-
-            <div class="card-body" style="padding:16px 18px;">
-                <!-- 5 HIGH IMPACT KPI CARDS -->
-                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; margin-bottom:16px;">
-                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
-                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">✈️ Faction Airtime</div>
-                        <div style="font-size:1.55em; font-weight:900; color:var(--teal); margin-top:2px;" id="kpi-audit-airtime">—</div>
-                        <div style="font-size:0.72em; color:var(--text-dim);" id="kpi-audit-airtime-sub">Total verified flight</div>
-                    </div>
-                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
-                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">⚔️ Hits Made (Us)</div>
-                        <div style="font-size:1.55em; font-weight:900; color:var(--blue); margin-top:2px;" id="kpi-audit-hits">—</div>
-                        <div style="font-size:0.72em; color:var(--green);" id="kpi-audit-earned">+0 pts earned</div>
-                    </div>
-                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
-                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">🚨 Hits Taken (Enemy)</div>
-                        <div style="font-size:1.55em; font-weight:900; color:var(--red); margin-top:2px;" id="kpi-audit-farmed">—</div>
-                        <div style="font-size:0.72em; color:var(--gold);" id="kpi-audit-leaked">-0 pts conceded</div>
-                    </div>
-                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
-                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">🛡️ Ghost Aviators</div>
-                        <div style="font-size:1.55em; font-weight:900; color:var(--green); margin-top:2px;" id="kpi-audit-ghosts">—</div>
-                        <div style="font-size:0.72em; color:var(--text-dim);">&le; 10 hits &bull; 15h+ air</div>
-                    </div>
-                    <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center;">
-                        <div style="font-size:0.72em; color:var(--text-dim); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">⚖️ Net War Score</div>
-                        <div style="font-size:1.55em; font-weight:900; color:var(--green); margin-top:2px;" id="kpi-audit-net">—</div>
-                        <div style="font-size:0.72em; color:var(--text-dim);" id="kpi-audit-actions">1,680 war actions</div>
-                    </div>
+            <div class="kpi-card">
+                <div class="kpi-icon">🔗</div>
+                <div>
+                    <div class="kpi-label">Active Chain</div>
+                    <div class="kpi-value" id="kpi-chain">—</div>
+                    <div class="kpi-sub" id="kpi-chain-timeout">—</div>
                 </div>
-
-                <!-- Controls & Filter Tabs -->
-                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
-                    <div style="display:flex; gap:6px; flex-wrap:wrap;" id="sentinel-filter-tabs">
-                        <button class="filter-chip active" onclick="setSentinelFilter('all', this)">All Members (<span id="cnt-audit-all">0</span>)</button>
-                        <button class="filter-chip" onclick="setSentinelFilter('air', this)">✈️ Top Airtime (<span id="cnt-audit-air">0</span>)</button>
-                        <button class="filter-chip" onclick="setSentinelFilter('ghost', this)">👻 Ghost Aviators (<span id="cnt-audit-ghost">0</span>)</button>
-                        <button class="filter-chip" onclick="setSentinelFilter('pos', this)">⚔️ Positive Net (<span id="cnt-audit-pos">0</span>)</button>
-                        <button class="filter-chip" onclick="setSentinelFilter('farmed', this)">🚨 Most Hit (<span id="cnt-audit-farmed">0</span>)</button>
-                        <button class="filter-chip" onclick="setSentinelFilter('zero', this)">💤 0 Hits Made (<span id="cnt-audit-zero">0</span>)</button>
-                    </div>
-                    <div style="display:flex; gap:8px; align-items:center;">
-                        <input type="text" id="sentinel-search" aria-label="Search member" placeholder="🔍 Search member..." oninput="renderSentinelTable()" style="background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 12px; border-radius:6px; font-size:0.82em; width:160px;">
-                        <select id="sentinel-sort" aria-label="Sort members" onchange="renderSentinelTable()" style="background:var(--bg); border:1px solid var(--border); color:var(--text-main); padding:6px 10px; border-radius:6px; font-size:0.82em;">
-                            <option value="mostAir">✈️ Highest Airtime</option>
-                            <option value="netScore">⚖️ Highest Net Impact (+Score)</option>
-                            <option value="hitsMade">⚔️ Most War Hits Made</option>
-                            <option value="leastFarmed">🛡️ Safest (Least Times Hit)</option>
-                            <option value="mostFarmed">🚨 Most Times Hit (Farmed)</option>
-                            <option value="trips">🛫 Most Flight Trips</option>
-                            <option value="grade">🏅 Best Grade (S &rarr; A &rarr; B)</option>
-                            <option value="name">🔤 Member Name</option>
-                        </select>
-                    </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon">⚔️</div>
+                <div>
+                    <div class="kpi-label">War Status</div>
+                    <div class="kpi-value" id="kpi-war-status">—</div>
+                    <div class="kpi-sub" id="kpi-war-sub">—</div>
                 </div>
-
-                <!-- Table Container -->
-                <div class="scrollable" style="max-height:420px; overflow-x:auto; border:1px solid var(--border); border-radius:8px;">
-                    <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.82em;" id="sentinel-table">
-                        <thead style="background:var(--card, #0d1117); position:sticky; top:0; z-index:2; border-bottom:1px solid var(--border);">
-                            <tr style="border-bottom:1px solid var(--border); color:var(--text-dim); font-size:0.9em; text-transform:uppercase; letter-spacing:0.5px; user-select:none;">
-                                <th style="padding:10px 14px; cursor:pointer;" onclick="toggleSort('name')" title="Sort by Name">Member <span id="th-sort-name"></span></th>
-                                <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('grade')" title="Sort by Grade">Grade <span id="th-sort-grade"></span></th>
-                                <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('mostAir')" title="Sort by Airtime">War Airtime <span id="th-sort-mostAir">▼</span></th>
-                                <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('trips')" title="Sort by Trips">Trips <span id="th-sort-trips"></span></th>
-                                <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('mostFarmed')" title="Sort by Times Hit">Times Hit <span id="th-sort-mostFarmed"></span></th>
-                                <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('leaked')" title="Sort by Respect Leaked">Respect Leaked <span id="th-sort-leaked"></span></th>
-                                <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('hitsMade')" title="Sort by Hits Made">Hits Made <span id="th-sort-hitsMade"></span></th>
-                                <th style="padding:10px 14px; cursor:pointer;" onclick="toggleSort('netScore')" title="Sort by Net Impact">Net Impact <span id="th-sort-netScore"></span></th>
-                            </tr>
-                        </thead>
-                        <tbody id="sentinel-tbody">
-                            <tr><td colspan="8" style="text-align:center; padding:24px; color:var(--text-dim);">Loading war flight &amp; defense records...</td></tr>
-                        </tbody>
-                    </table>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon">🏦</div>
+                <div>
+                    <div class="kpi-label">Vault Cash</div>
+                    <div class="kpi-value" id="kpi-vault-cash" style="color:var(--accent-emerald);">—</div>
+                    <div class="kpi-sub" id="kpi-vault-sub">Faction Treasury</div>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-icon">🛡️</div>
+                <div>
+                    <div class="kpi-label">Armory Health</div>
+                    <div class="kpi-value" id="kpi-armory-health" style="color:var(--accent-cyan);">—</div>
+                    <div class="kpi-sub" id="kpi-armory-sub">Reserves Status</div>
                 </div>
             </div>
         </div>
 
-        <!-- WAR ANALYST FULL WIDTH -->
-        <div class="card span-full" style="margin-bottom:18px;">
-            <div class="card-header">
-                <div class="card-title">🧠 War Analyst</div>
-                <div style="font-size:0.8em;color:var(--text-dim);">Uses your live faction + war data</div>
-            </div>
-            <div class="analyst-tabs">
-                <button class="analyst-tab" id="tab-past" onclick="runAnalysis('past')">📊 Analyze Last War</button>
-                <button class="analyst-tab live" id="tab-live" onclick="runAnalysis('live')">💥 Analyze LIVE War</button>
-                <button class="analyst-tab" id="tab-members" onclick="runAnalysis('members')">👥 Member Health Report</button>
-                <button class="analyst-tab" id="tab-recommend" onclick="runAnalysis('recommend')">🎯 Tactical Recommendations</button>
-            </div>
-            <div class="analyst-output loading" id="analyst-output">
-                Select an analysis above to generate a real-time report from your faction data.
-            </div>
+        <!-- MODULAR OPERATIONAL TAB NAVIGATION -->
+        <div class="ops-nav-tabs">
+            <button class="ops-tab-btn active" id="tab-btn-overview" onclick="switchOpsTab('overview')">
+                <span>📊</span> Operations Overview
+            </button>
+            <button class="ops-tab-btn" id="tab-btn-armory" onclick="switchOpsTab('armory')">
+                <span>🪖</span> Armory &amp; Logistics
+                <span class="tab-badge" id="tab-armory-badge" style="display:none;">0 Low</span>
+            </button>
+            <button class="ops-tab-btn" id="tab-btn-sentinel" onclick="switchOpsTab('sentinel')">
+                <span>⚔️</span> War Flight &amp; Sentinel
+            </button>
         </div>
 
-        <!-- MEMBERS + LOANS -->
-        <div class="dash-grid">
-            <!-- MEMBER ACTIVITY -->
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title">👥 Member Activity</div>
-                    <span id="member-count-badge" style="font-size:0.8em;color:var(--text-dim);">Loading...</span>
-                </div>
-                <div class="card-body scrollable">
-                    <div class="member-row member-row-header">
-                        <div>Player</div>
-                        <div>Status</div>
-                        <div>Last Action</div>
+        <!-- ========================================== -->
+        <!-- TAB 1: OPERATIONS OVERVIEW                -->
+        <!-- ========================================== -->
+        <div class="tab-pane active" id="pane-overview">
+            <!-- WAR SCORE + CHAIN DETAILS -->
+            <div class="dash-grid" id="war-chain-row">
+                <!-- WAR SCORE CARD -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">⚔️ Active War Score</div>
+                        <span id="war-live-badge"></span>
                     </div>
-                    <div id="member-list">
-                        <div class="loading-shimmer" style="margin:12px 20px;"></div>
-                        <div class="loading-shimmer" style="margin:12px 20px;"></div>
-                        <div class="loading-shimmer" style="margin:12px 20px;"></div>
+                    <div id="war-score-body">
+                        <div class="empty-state">No active ranked war detected.</div>
+                    </div>
+                </div>
+
+                <!-- CHAIN CARD -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">🔗 Chain Monitor</div>
+                        <span id="chain-status-badge"></span>
+                    </div>
+                    <div class="chain-section" id="chain-body">
+                        <div class="empty-state">No active chain detected.</div>
                     </div>
                 </div>
             </div>
 
-            <!-- TOP RESPECT + LOANS -->
-            <div style="display:flex;flex-direction:column;gap:18px;">
+            <!-- MIDDLE 2-COLUMN OPERATIONAL GRID: MEMBER ACTIVITY & ARMORY MONITOR -->
+            <div class="dash-grid" style="margin-top:18px;">
+                <!-- MEMBER ACTIVITY -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">👥 Member Activity</div>
+                        <span id="member-count-badge" style="font-size:0.8em;color:var(--text-tertiary);">Loading...</span>
+                    </div>
+                    <div class="card-body scrollable" style="max-height:360px;">
+                        <div class="member-row member-row-header">
+                            <div>Player</div>
+                            <div>Status</div>
+                            <div>Last Action</div>
+                        </div>
+                        <div id="member-list">
+                            <div class="empty-state">Loading members...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FACTION ARMORY & SUPPLY MONITOR (SNAPSHOT WIDGET) -->
+                <div class="card armory-snapshot-card">
+                    <div class="card-header">
+                        <div class="card-title" style="display:flex;align-items:center;gap:8px;">
+                            <span>🪖 Faction Armory &amp; Supply Monitor</span>
+                            <span id="snapshot-status-pill" class="stock-pill optimal" style="font-size:0.7em;">Checking...</span>
+                        </div>
+                        <a href="#armory" onclick="switchOpsTab('armory')" style="font-size:0.78em;color:var(--accent-cobalt);text-decoration:none;font-weight:700;">Full Tracker →</a>
+                    </div>
+
+                    <!-- Critical Low-Stock Ticker -->
+                    <div class="low-stock-ticker" id="snapshot-low-ticker">
+                        <span class="stock-pill optimal">✅ Armory Reserves Fully Stocked</span>
+                    </div>
+
+                    <!-- 4 Quick Supply Status Tiles -->
+                    <div class="supply-tiles-grid">
+                        <div class="supply-tile">
+                            <div class="supply-tile-hdr">
+                                <span>💊 Meds &amp; Drugs</span>
+                                <span id="tile-meds-badge" class="stock-pill optimal" style="padding:1px 6px;">OK</span>
+                            </div>
+                            <div class="supply-tile-val" id="tile-meds-val">—</div>
+                            <div class="supply-tile-sub" id="tile-meds-sub">Calculating reserves...</div>
+                        </div>
+                        <div class="supply-tile">
+                            <div class="supply-tile-hdr">
+                                <span>🥫 Boosters &amp; Cans</span>
+                                <span id="tile-boosters-badge" class="stock-pill optimal" style="padding:1px 6px;">OK</span>
+                            </div>
+                            <div class="supply-tile-val" id="tile-boosters-val">—</div>
+                            <div class="supply-tile-sub" id="tile-boosters-sub">Energy &amp; Nerve Items</div>
+                        </div>
+                        <div class="supply-tile">
+                            <div class="supply-tile-hdr">
+                                <span>🔫 Loaned Weapons</span>
+                                <span style="color:var(--text-tertiary); font-family:var(--font-mono);" id="tile-weapons-sub">0 / 0</span>
+                            </div>
+                            <div class="supply-tile-val" id="tile-weapons-val" style="color:var(--accent-amber);">0</div>
+                            <div class="supply-tile-sub">Weapons in field circulation</div>
+                        </div>
+                        <div class="supply-tile">
+                            <div class="supply-tile-hdr">
+                                <span>🛡️ Loaned Armor</span>
+                                <span style="color:var(--text-tertiary); font-family:var(--font-mono);" id="tile-armor-sub">0 / 0</span>
+                            </div>
+                            <div class="supply-tile-val" id="tile-armor-val" style="color:var(--accent-cyan);">0</div>
+                            <div class="supply-tile-sub">Armor sets in combat use</div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Action Bar -->
+                    <div class="quick-action-bar">
+                        <a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=weapons" target="_blank" class="quick-action-btn">
+                            <span>➕</span> Issue Loaner
+                        </a>
+                        <a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=donator" target="_blank" class="quick-action-btn">
+                            <span>📦</span> Deposit Supplies
+                        </a>
+                        <button onclick="switchOpsTab('armory')" class="quick-action-btn primary">
+                            <span>📊</span> Full Armory Ledger →
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RESPECT EARNERS & FACTION STATS -->
+            <div class="dash-grid" style="margin-top:18px;">
                 <!-- TOP RESPECT EARNERS -->
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title">🏆 Top Respect Earners</div>
-                        <span style="font-size:0.8em;color:var(--text-dim);">War contributions</span>
+                        <span style="font-size:0.8em;color:var(--text-tertiary);">War contributions</span>
                     </div>
                     <div class="card-body" id="respect-list">
                         <div class="empty-state">Loading respect data...</div>
                     </div>
                 </div>
 
-                <!-- ARMORY LOANS -->
+                <!-- FACTION STATS -->
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">🔫 Armory Loans</div>
-                        <span id="loan-count-badge" style="font-size:0.8em;color:var(--text-dim);">Loading...</span>
+                        <div class="card-title">📊 Faction Stats</div>
+                        <span id="stats-level-badge" style="font-size:0.8em;color:var(--text-tertiary);">Overview</span>
                     </div>
-                    <div class="card-body scrollable" style="max-height:200px;">
-                        <div id="loan-list">
-                            <div class="loading-shimmer" style="margin:12px 20px;"></div>
+                    <div class="card-body" id="faction-stats-body">
+                        <div class="empty-state">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- STATUS BREAKDOWN & RECENT WARS -->
+            <div class="dash-grid" style="margin-top:18px;">
+                <div class="card">
+                    <div class="card-header"><div class="card-title">🗺️ Member Status Breakdown</div></div>
+                    <div class="card-body" id="status-breakdown-body">
+                        <div class="empty-state">Loading...</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header"><div class="card-title">📅 Recent Wars</div></div>
+                    <div class="card-body scrollable" style="max-height:240px;" id="recent-wars-body">
+                        <div class="empty-state">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WAR ANALYST FULL WIDTH -->
+            <div class="card span-full" style="margin-top:18px;">
+                <div class="card-header">
+                    <div class="card-title">🧠 War Analyst</div>
+                    <div style="font-size:0.8em;color:var(--text-tertiary);">Live combat recommendations &amp; tactical insights</div>
+                </div>
+                <div class="analyst-tabs">
+                    <button class="analyst-tab" id="tab-past" onclick="runAnalysis('past')">📊 Analyze Last War</button>
+                    <button class="analyst-tab live" id="tab-live" onclick="runAnalysis('live')">💥 Analyze LIVE War</button>
+                    <button class="analyst-tab" id="tab-members" onclick="runAnalysis('members')">👥 Member Health Report</button>
+                    <button class="analyst-tab" id="tab-recommend" onclick="runAnalysis('recommend')">🎯 Tactical Recommendations</button>
+                </div>
+                <div class="analyst-output loading" id="analyst-output">
+                    Select an analysis above to generate a real-time report from your faction data.
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- TAB 2: ARMORY & LOGISTICS COMMAND CENTER  -->
+        <!-- ========================================== -->
+        <div class="tab-pane" id="pane-armory">
+            <!-- TOP ARMORY KPIS -->
+            <div class="armory-kpis">
+                <div class="kpi-card">
+                    <div class="kpi-icon">🏦</div>
+                    <div>
+                        <div class="kpi-label">Accessible Vault Cash</div>
+                        <div class="kpi-value" id="armory-kpi-cash" style="color:var(--accent-emerald);">$0</div>
+                        <div class="kpi-sub" id="armory-kpi-points">0 Faction Points</div>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon">💊</div>
+                    <div>
+                        <div class="kpi-label">Total Medical Stock</div>
+                        <div class="kpi-value" id="armory-kpi-meds">0</div>
+                        <div class="kpi-sub">Kits, Morphine, Blood Bags</div>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon">🪖</div>
+                    <div>
+                        <div class="kpi-label">Active Member Loans</div>
+                        <div class="kpi-value" id="armory-kpi-loans" style="color:var(--accent-amber);">0</div>
+                        <div class="kpi-sub" id="armory-kpi-loans-sub">0 Overdue</div>
+                    </div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-icon">🚨</div>
+                    <div>
+                        <div class="kpi-label">Low-Stock Warnings</div>
+                        <div class="kpi-value" id="armory-kpi-low" style="color:var(--accent-crimson);">0</div>
+                        <div class="kpi-sub" id="armory-kpi-health">100% Stocked</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SUB-PANEL 1: MEDICAL SUPPLIES & DRUGS LEDGER -->
+            <div class="armory-subpanel">
+                <div class="subpanel-hdr">
+                    <div class="subpanel-title">
+                        <span>💊 Medical Supplies &amp; Drugs Ledger</span>
+                        <span id="meds-count-badge" class="badge-type" style="background:var(--accent-cobalt-dim); color:var(--accent-cobalt);">0 items</span>
+                    </div>
+                    <div class="subpanel-controls">
+                        <input type="text" id="meds-search" placeholder="🔍 Search medical / drugs..." class="sort-select" style="min-width:180px; padding:6px 12px; font-size:0.82em;" oninput="filterMedsDebounced()">
+                        <select id="meds-cat-filter" class="sort-select" onchange="filterMeds()" style="padding:6px 10px; font-size:0.82em;">
+                            <option value="all">All Supplies</option>
+                            <option value="medical">Medical Only</option>
+                            <option value="drugs">Drugs Only</option>
+                            <option value="boosters">Boosters &amp; Cans</option>
+                            <option value="low">⚠️ Low Reserves Only</option>
+                        </select>
+                        <a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=donator" target="_blank" class="refresh-btn" style="text-decoration:none; padding:6px 12px; font-size:0.8em;">+ Deposit Supplies</a>
+                    </div>
+                </div>
+
+                <!-- LIVE BURN RATE CALCULATOR BANNER -->
+                <div class="burn-rate-banner" id="burn-rate-banner">
+                    <div class="burn-stat-group">
+                        <div class="burn-stat">
+                            <span class="b-lbl">⚡ War Burn Rate</span>
+                            <span class="b-val" id="burn-rate-val">~0 meds/hr</span>
                         </div>
+                        <div class="burn-stat">
+                            <span class="b-lbl">⏳ Estimated Reserves</span>
+                            <span class="b-val" id="burn-hours-val" style="color:var(--accent-emerald);">Optimal</span>
+                        </div>
+                        <div class="burn-stat">
+                            <span class="b-lbl">🎯 Combat Pacing</span>
+                            <span class="b-val" id="burn-pacing-val" style="font-size:1.05em; font-weight:700;">Peacetime Mode</span>
+                        </div>
+                    </div>
+                    <div style="font-size:0.82em; color:var(--text-secondary); max-width:400px;" id="burn-desc">
+                        Calculates hours of medical stock remaining based on live combat hits and hospital turnaround rate.
+                    </div>
+                </div>
+
+                <div class="scrollable" style="max-height:360px;">
+                    <table class="armory-table">
+                        <thead>
+                            <tr>
+                                <th>Item Name</th>
+                                <th>Category</th>
+                                <th>In Stock</th>
+                                <th>Reserve Minimum</th>
+                                <th>Status</th>
+                                <th style="text-align:right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="meds-table-body">
+                            <tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-tertiary);">Loading medical &amp; drug reserves...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SUB-PANEL 2: WEAPONS & DEFENSIVE ARMOR ARSENAL -->
+            <div class="armory-subpanel">
+                <div class="subpanel-hdr">
+                    <div class="subpanel-title">
+                        <span>🔫 Weapons &amp; Defensive Armor Arsenal</span>
+                        <span id="arsenal-count-badge" class="badge-type" style="background:var(--accent-amber-dim); color:var(--accent-amber);">0 pieces</span>
+                    </div>
+                    <div class="subpanel-controls">
+                        <input type="text" id="arsenal-search" placeholder="🔍 Search arsenal gear..." class="sort-select" style="min-width:180px; padding:6px 12px; font-size:0.82em;" oninput="filterArsenalDebounced()">
+                        <select id="arsenal-cat-filter" class="sort-select" onchange="filterArsenal()" style="padding:6px 10px; font-size:0.82em;">
+                            <option value="all">All Arsenal</option>
+                            <option value="weapons">Weapons Only</option>
+                            <option value="armor">Defensive Armor</option>
+                            <option value="temporary">Temporary / Grenades</option>
+                            <option value="loaned">Currently Loaned Out</option>
+                            <option value="available">Available in Vault</option>
+                        </select>
+                        <a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=weapons" target="_blank" class="refresh-btn" style="text-decoration:none; padding:6px 12px; font-size:0.8em;">Issue Loan on Torn</a>
+                    </div>
+                </div>
+                <div class="scrollable" style="max-height:380px;">
+                    <table class="armory-table">
+                        <thead>
+                            <tr>
+                                <th>Equipment Name</th>
+                                <th>Category / Class</th>
+                                <th>Available in Vault</th>
+                                <th>Loaned Out</th>
+                                <th>Total Owned</th>
+                                <th>Circulation</th>
+                                <th style="text-align:right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="arsenal-table-body">
+                            <tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-tertiary);">Loading weapons and armor inventory...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SUB-PANEL 3: MEMBER LOANER GEAR LEDGER -->
+            <div class="armory-subpanel">
+                <div class="subpanel-hdr">
+                    <div class="subpanel-title">
+                        <span>🪖 Member Loaner Gear Ledger</span>
+                        <span id="loaner-count-badge" class="badge-type" style="background:rgba(239, 68, 68, 0.15); color:var(--accent-crimson);">0 Active Loans</span>
+                    </div>
+                    <div class="subpanel-controls">
+                        <input type="text" id="loans-search" placeholder="🔍 Search borrower or item..." class="sort-select" style="min-width:180px; padding:6px 12px; font-size:0.82em;" oninput="filterLoansDebounced()">
+                        <select id="loans-status-filter" class="sort-select" onchange="filterLoans()" style="padding:6px 10px; font-size:0.82em;">
+                            <option value="all">All Loans</option>
+                            <option value="active">Active Members</option>
+                            <option value="inactive">⚠️ Inactive (&gt;24h)</option>
+                            <option value="overdue">🚨 Overdue (&gt;3d)</option>
+                        </select>
+                        <a href="https://www.torn.com/factions.php?step=your#/tab=armoury" target="_blank" class="refresh-btn" style="text-decoration:none; padding:6px 12px; font-size:0.8em;">Manage Loans on Torn</a>
+                    </div>
+                </div>
+                <div class="scrollable" style="max-height:380px;">
+                    <table class="armory-table">
+                        <thead>
+                            <tr>
+                                <th>Borrower</th>
+                                <th>Item Name</th>
+                                <th>Category</th>
+                                <th>Borrower Activity</th>
+                                <th>Loan Status</th>
+                                <th style="text-align:right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="loans-table-body">
+                            <tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-tertiary);">Loading member loan records...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SUB-PANEL 4: LOW-STOCK & AUTO-ALERT RULES -->
+            <div class="armory-subpanel">
+                <div class="subpanel-hdr">
+                    <div class="subpanel-title">
+                        <span>⚙️ Low-Stock Reserves &amp; Alert Rules</span>
+                    </div>
+                    <div style="font-size:0.8em; color:var(--text-tertiary);">Configure minimum inventory safety thresholds</div>
+                </div>
+                <div style="padding:20px;">
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:18px;">
+                        <div>
+                            <label style="display:block; font-size:0.76em; font-weight:800; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:6px;">💊 Xanax Minimum</label>
+                            <input type="number" id="cfg-thresh-xanax" value="50" class="sort-select" style="width:100%; box-sizing:border-box; padding:8px 12px;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.76em; font-weight:800; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:6px;">🩹 Small First Aid Minimum</label>
+                            <input type="number" id="cfg-thresh-sfak" value="40" class="sort-select" style="width:100%; box-sizing:border-box; padding:8px 12px;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.76em; font-weight:800; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:6px;">📦 First Aid Kit Minimum</label>
+                            <input type="number" id="cfg-thresh-fak" value="60" class="sort-select" style="width:100%; box-sizing:border-box; padding:8px 12px;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.76em; font-weight:800; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:6px;">💉 Morphine Minimum</label>
+                            <input type="number" id="cfg-thresh-morph" value="40" class="sort-select" style="width:100%; box-sizing:border-box; padding:8px 12px;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.76em; font-weight:800; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:6px;">🩸 Blood Bags Total Min</label>
+                            <input type="number" id="cfg-thresh-blood" value="100" class="sort-select" style="width:100%; box-sizing:border-box; padding:8px 12px;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.76em; font-weight:800; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:6px;">🥫 Energy Cans Total Min</label>
+                            <input type="number" id="cfg-thresh-cans" value="30" class="sort-select" style="width:100%; box-sizing:border-box; padding:8px 12px;">
+                        </div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; border-top:1px solid var(--border-subtle); padding-top:14px;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <input type="checkbox" id="cfg-discord-dispatch" checked style="accent-color:var(--accent-cobalt);">
+                            <label for="cfg-discord-dispatch" style="font-size:0.84em; color:var(--text-secondary); cursor:pointer;">
+                                Automatically dispatch Discord Sentinel alert when any reserve dips below emergency levels
+                            </label>
+                        </div>
+                        <button class="btn btn-primary" onclick="saveArmoryThresholds()" style="padding:8px 20px; font-weight:800; font-size:0.85em;">💾 Save &amp; Apply Thresholds</button>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- FACTION STATS -->
-        <div class="dash-grid-3" style="margin-top:18px;">
-            <div class="card">
-                <div class="card-header"><div class="card-title">📊 Faction Stats</div></div>
-                <div class="card-body" id="faction-stats-body">
-                    <div class="empty-state">Loading...</div>
+        <!-- ========================================== -->
+        <!-- TAB 3: WAR FLIGHT & FARM SENTINEL         -->
+        <!-- ========================================== -->
+        <div class="tab-pane" id="pane-sentinel">
+            <!-- WAR FLIGHT & FARM SENTINEL (PAST WARS AIRTIME & DEFENSE AUDIT) -->
+            <div class="card span-full" id="war-sentinel-card" style="margin-bottom:18px; border: 1px solid rgba(0,206,201,0.25);">
+                <div class="card-header" style="flex-wrap:wrap; gap:12px;">
+                    <div>
+                        <div class="card-title" style="color:var(--teal, #00cec9); display:flex; align-items:center; gap:8px;">
+                            <span>✈️ War Flight &amp; Farm Sentinel</span>
+                            <span style="font-size:0.68em; background:rgba(0,206,201,0.12); color:var(--teal, #00cec9); border:1px solid rgba(0,206,201,0.3); padding:2px 8px; border-radius:12px; font-weight:700;">FF Scouter &amp; Attack Audit</span>
+                        </div>
+                        <div style="font-size:0.78em; color:var(--text-tertiary); margin-top:2px;">Scan past or active wars to see which members consistently flew and who sat in Torn City and got farmed.</div>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span style="font-size:0.75em; color:var(--text-tertiary); text-transform:uppercase; font-weight:700;">Select War:</span>
+                            <select id="sentinel-war-select" aria-label="Select War" class="sort-select" onchange="runWarFlightAudit()" style="min-width:220px; padding:6px 10px; font-size:0.82em;">
+                                <option value="">Loading wars...</option>
+                            </select>
+                        </div>
+                        <button class="refresh-btn" onclick="runWarFlightAudit(true)" id="btn-refresh-audit" style="padding:6px 12px; font-size:0.8em;">↻ Re-Scan</button>
+                    </div>
+                </div>
+
+                <!-- War Info & Scouter Status Ribbon -->
+                <div id="sentinel-status-ribbon" style="background:rgba(0,0,0,0.2); padding:10px 18px; border-top:1px solid var(--border-default); border-bottom:1px solid var(--border-default); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; font-size:0.82em;">
+                    <div id="sentinel-war-summary" style="color:var(--text-primary); font-weight:600;">
+                        Select a war to analyze flight uptime and defensive performance.
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <div id="sentinel-ff-badge" style="font-size:0.78em; color:var(--text-secondary);">
+                            ⚡ Scouter Status: Checking...
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-body" style="padding:16px 18px;">
+                    <!-- 5 HIGH IMPACT KPI CARDS -->
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; margin-bottom:16px;">
+                        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-default); border-radius:8px; padding:12px; text-align:center;">
+                            <div style="font-size:0.72em; color:var(--text-tertiary); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">✈️ Faction Airtime</div>
+                            <div style="font-size:1.55em; font-weight:900; color:var(--teal, #00cec9); margin-top:2px;" id="kpi-audit-airtime">—</div>
+                            <div style="font-size:0.72em; color:var(--text-tertiary);" id="kpi-audit-airtime-sub">Total verified flight</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-default); border-radius:8px; padding:12px; text-align:center;">
+                            <div style="font-size:0.72em; color:var(--text-tertiary); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">⚔️ Hits Made (Us)</div>
+                            <div style="font-size:1.55em; font-weight:900; color:var(--accent-cobalt); margin-top:2px;" id="kpi-audit-hits">—</div>
+                            <div style="font-size:0.72em; color:var(--accent-emerald);" id="kpi-audit-earned">+0 pts earned</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-default); border-radius:8px; padding:12px; text-align:center;">
+                            <div style="font-size:0.72em; color:var(--text-tertiary); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">🚨 Hits Taken (Enemy)</div>
+                            <div style="font-size:1.55em; font-weight:900; color:var(--accent-crimson); margin-top:2px;" id="kpi-audit-farmed">—</div>
+                            <div style="font-size:0.72em; color:var(--accent-amber);" id="kpi-audit-leaked">-0 pts conceded</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-default); border-radius:8px; padding:12px; text-align:center;">
+                            <div style="font-size:0.72em; color:var(--text-tertiary); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">🛡️ Ghost Aviators</div>
+                            <div style="font-size:1.55em; font-weight:900; color:var(--accent-emerald); margin-top:2px;" id="kpi-audit-ghosts">—</div>
+                            <div style="font-size:0.72em; color:var(--text-tertiary);">&le; 10 hits &bull; 15h+ air</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-default); border-radius:8px; padding:12px; text-align:center;">
+                            <div style="font-size:0.72em; color:var(--text-tertiary); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">⚖️ Net War Score</div>
+                            <div style="font-size:1.55em; font-weight:900; color:var(--accent-emerald); margin-top:2px;" id="kpi-audit-net">—</div>
+                            <div style="font-size:0.72em; color:var(--text-tertiary);" id="kpi-audit-actions">0 combat events</div>
+                        </div>
+                    </div>
+
+                    <!-- Controls & Filter Tabs -->
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+                        <div style="display:flex; gap:6px; flex-wrap:wrap;" id="sentinel-filter-tabs">
+                            <button class="filter-chip active" onclick="setSentinelFilter('all', this)">All Members (<span id="cnt-audit-all">0</span>)</button>
+                            <button class="filter-chip" onclick="setSentinelFilter('air', this)">✈️ Top Airtime (<span id="cnt-audit-air">0</span>)</button>
+                            <button class="filter-chip" onclick="setSentinelFilter('ghost', this)">👻 Ghost Aviators (<span id="cnt-audit-ghost">0</span>)</button>
+                            <button class="filter-chip" onclick="setSentinelFilter('pos', this)">⚔️ Positive Net (<span id="cnt-audit-pos">0</span>)</button>
+                            <button class="filter-chip" onclick="setSentinelFilter('farmed', this)">🚨 Most Hit (<span id="cnt-audit-farmed">0</span>)</button>
+                            <button class="filter-chip" onclick="setSentinelFilter('zero', this)">💤 0 Hits Made (<span id="cnt-audit-zero">0</span>)</button>
+                        </div>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <input type="text" id="sentinel-search" aria-label="Search member" placeholder="🔍 Search member..." oninput="renderSentinelTableDebounced()" class="sort-select" style="padding:6px 12px; font-size:0.82em; width:160px;">
+                            <select id="sentinel-sort" aria-label="Sort members" onchange="renderSentinelTable()" class="sort-select" style="padding:6px 10px; font-size:0.82em;">
+                                <option value="mostAir">✈️ Highest Airtime</option>
+                                <option value="netScore">⚖️ Highest Net Impact (+Score)</option>
+                                <option value="hitsMade">⚔️ Most War Hits Made</option>
+                                <option value="leastFarmed">🛡️ Safest (Least Times Hit)</option>
+                                <option value="mostFarmed">🚨 Most Times Hit (Farmed)</option>
+                                <option value="trips">🛫 Most Flight Trips</option>
+                                <option value="grade">🏅 Best Grade (S &rarr; A &rarr; B)</option>
+                                <option value="name">🔤 Member Name</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Table Container -->
+                    <div class="scrollable" style="max-height:420px; overflow-x:auto; border:1px solid var(--border-default); border-radius:8px;">
+                        <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.82em;" id="sentinel-table">
+                            <thead style="background:var(--bg-elevated); position:sticky; top:0; z-index:2; border-bottom:1px solid var(--border-default);">
+                                <tr style="color:var(--text-tertiary); font-size:0.9em; text-transform:uppercase; letter-spacing:0.5px; user-select:none;">
+                                    <th style="padding:10px 14px; cursor:pointer;" onclick="toggleSort('name')" title="Sort by Name">Member <span id="th-sort-name"></span></th>
+                                    <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('grade')" title="Sort by Grade">Grade <span id="th-sort-grade"></span></th>
+                                    <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('mostAir')" title="Sort by Airtime">War Airtime <span id="th-sort-mostAir">▼</span></th>
+                                    <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('trips')" title="Sort by Trips">Trips <span id="th-sort-trips"></span></th>
+                                    <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('mostFarmed')" title="Sort by Times Hit">Times Hit <span id="th-sort-mostFarmed"></span></th>
+                                    <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('leaked')" title="Sort by Respect Leaked">Respect Leaked <span id="th-sort-leaked"></span></th>
+                                    <th style="padding:10px 10px; cursor:pointer;" onclick="toggleSort('hitsMade')" title="Sort by Hits Made">Hits Made <span id="th-sort-hitsMade"></span></th>
+                                    <th style="padding:10px 14px; cursor:pointer;" onclick="toggleSort('netScore')" title="Sort by Net Impact">Net Impact <span id="th-sort-netScore"></span></th>
+                                </tr>
+                            </thead>
+                            <tbody id="sentinel-tbody">
+                                <tr><td colspan="8" style="text-align:center; padding:24px; color:var(--text-tertiary);">Loading war flight &amp; defense records...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
-            <div class="card">
-                <div class="card-header"><div class="card-title">🗺️ Member Status Breakdown</div></div>
-                <div class="card-body" id="status-breakdown-body">
-                    <div class="empty-state">Loading...</div>
+
+            <!-- CROSS-FACTION ARMORY & COMBAT LOADOUTS INTELLIGENCE -->
+            <div class="card span-full" style="margin-bottom:18px;">
+                <div class="card-header">
+                    <div class="card-title">🛡️ Cross-Faction Armory &amp; Combat Loadouts</div>
+                    <div style="font-size:0.8em;color:var(--text-tertiary);">Track member loadouts and faction armory gear utilization in combat</div>
                 </div>
-            </div>
-            <div class="card">
-                <div class="card-header"><div class="card-title">📅 Recent Wars</div></div>
-                <div class="card-body scrollable" style="max-height:220px;" id="recent-wars-body">
-                    <div class="empty-state">Loading...</div>
+                <div class="card-body" style="padding:18px;">
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:16px;">
+                        <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:14px;">
+                            <div style="font-size:0.74em; color:var(--text-tertiary); text-transform:uppercase; font-weight:800;">🪖 Faction Gear in Combat</div>
+                            <div style="font-size:1.6em; font-weight:900; color:var(--accent-cobalt); margin-top:2px;" id="cf-gear-deployed">—</div>
+                            <div style="font-size:0.74em; color:var(--text-secondary);" id="cf-gear-deployed-sub">Loaned items held by combatants</div>
+                        </div>
+                        <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:14px;">
+                            <div style="font-size:0.74em; color:var(--text-tertiary); text-transform:uppercase; font-weight:800;">⚡ Equipment Coverage</div>
+                            <div style="font-size:1.6em; font-weight:900; color:var(--accent-emerald); margin-top:2px;" id="cf-coverage-pct">—%</div>
+                            <div style="font-size:0.74em; color:var(--text-secondary);" id="cf-coverage-sub">War hitters carrying armory gear</div>
+                        </div>
+                        <div style="background:var(--bg-elevated); border:1px solid var(--border-subtle); border-radius:8px; padding:14px;">
+                            <div style="font-size:0.74em; color:var(--text-tertiary); text-transform:uppercase; font-weight:800;">🛡️ Combat Readiness</div>
+                            <div style="font-size:1.6em; font-weight:900; color:var(--accent-cyan); margin-top:2px;" id="cf-readiness-index">High</div>
+                            <div style="font-size:0.74em; color:var(--text-secondary);">Defensive armor &amp; weapon coverage</div>
+                        </div>
+                    </div>
+
+                    <div class="scrollable" style="max-height:280px; border:1px solid var(--border-default); border-radius:8px;">
+                        <table class="armory-table">
+                            <thead>
+                                <tr>
+                                    <th>Combatant</th>
+                                    <th>War Status</th>
+                                    <th>Weapon Loadout Status</th>
+                                    <th>Defensive Armor Assigned</th>
+                                    <th>Combat Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cf-loadouts-tbody">
+                                <tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-tertiary);">Load a war above to audit cross-faction loadouts...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -636,31 +1363,22 @@
     </main>
     </div>
 
-    <!-- FF Scouter Key Setup Modal -->
-    <div id="ffkey-modal" class="global-modal-overlay" style="display:none;" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:100000; justify-content:center; align-items:center; backdrop-filter:blur(4px);">
-        <div style="background:var(--card, #11141d); border:1px solid var(--border, #2f3542); padding:24px; border-radius:12px; width:460px; max-width:92vw; color:white; position:relative;">
-            <button style="position:absolute; right:15px; top:15px; color:var(--text-dim); font-size:1.5em; cursor:pointer; border:none; background:none;" onclick="closeFFKeyModal()">&times;</button>
-            <h3 style="margin-top:0; color:var(--teal); display:flex; align-items:center; gap:8px;">✈️ FF Scouter Premium Key</h3>
-            <p style="font-size:0.84em; color:var(--text-dim); line-height:1.5;">
-                Enter your 16-character FF Scouter API key. An active <b>Premium</b> subscription unlocks live and historical flight tracking, arrival ETAs, and war airtime analytics.
-            </p>
-            <div style="margin:16px 0;">
-                <label style="display:block; font-size:0.78em; text-transform:uppercase; font-weight:700; color:var(--text-dim); margin-bottom:6px;">FF Scouter API Key</label>
-                <input type="text" id="modal-ff-key-input" aria-label="FF Scouter API Key" placeholder="e.g. abc123def456ghi7" style="width:100%; box-sizing:border-box; padding:10px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:white; font-size:0.95em; font-family:monospace;">
-            </div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px;">
-                <a href="https://ffscouter.com/premium" target="_blank" style="font-size:0.8em; color:var(--blue); text-decoration:none;">Get FF Scouter Premium &rarr;</a>
-                <div style="display:flex; gap:8px;">
-                    <button class="refresh-btn" onclick="closeFFKeyModal()" style="background:transparent; border-color:var(--border);">Cancel</button>
-                    <button class="btn-discord-save" onclick="saveFFKeyFromModal()" style="background:var(--teal); color:#000; font-weight:800; padding:8px 18px; border:none; border-radius:6px; cursor:pointer;">Save &amp; Scan</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
 <script>
 let myKey = localStorage.getItem("warboard_apikey") || "";
+let dashData = null;
+let currentArmoryData = null;
+let activeOpsTab = 'overview';
 
+// ─── Debounce Utility (200ms) ───
+function debounce(func, wait = 200) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
+
+// ─── Sidebar & Theme Controls ───
 function toggleSidebar() {
     const s = document.getElementById('app-sidebar');
     if (window.innerWidth <= 900) {
@@ -679,15 +1397,17 @@ function toggleTheme() {
 }
 if (localStorage.getItem('theme') === 'light') document.body.classList.add('light-mode');
 
-function fmtNum(n) { return Number(n).toLocaleString(); }
+// ─── Formatters ───
+function fmtNum(n) { return Number(n || 0).toLocaleString(); }
 function fmtMoney(n) {
-    n = Number(n);
+    n = Number(n || 0);
     if (n >= 1e9) return '$' + (n/1e9).toFixed(2) + 'B';
     if (n >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M';
     if (n >= 1e3) return '$' + (n/1e3).toFixed(0) + 'K';
-    return '$' + n;
+    return '$' + fmtNum(n);
 }
 function timeSince(ts) {
+    if (!ts) return '—';
     const s = Math.floor(Date.now()/1000) - ts;
     if (s < 60) return s + 's ago';
     if (s < 3600) return Math.floor(s/60) + 'm ago';
@@ -695,19 +1415,108 @@ function timeSince(ts) {
     return Math.floor(s/86400) + 'd ago';
 }
 function fmtDuration(s) {
+    s = Number(s || 0);
     const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
     if (h > 0) return `${h}h ${m}m`;
     if (m > 0) return `${m}m ${sec}s`;
     return `${sec}s`;
 }
 
-let dashData = null;
+// ─── Tab Navigation with Hash Routing ───
+function switchOpsTab(tabId) {
+    activeOpsTab = tabId;
+    window.location.hash = '#' + tabId;
 
+    // Update active tab buttons
+    document.querySelectorAll('.ops-tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('id') === `tab-btn-${tabId}`);
+    });
+
+    // Update active panes
+    document.querySelectorAll('.tab-pane').forEach(pane => {
+        pane.classList.toggle('active', pane.getAttribute('id') === `pane-${tabId}`);
+    });
+
+    // Update breadcrumb dynamically
+    const crumbMap = {
+        'overview': 'OVERVIEW',
+        'armory': 'ARMORY & LOGISTICS',
+        'sentinel': 'WAR SENTINEL'
+    };
+    const crumbEl = document.getElementById('crumb-active-sub');
+    if (crumbEl) crumbEl.textContent = crumbMap[tabId] || 'OVERVIEW';
+
+    // Update sidebar active link highlights
+    const navArmory = document.getElementById('nav-link-armory');
+    const navSentinel = document.getElementById('nav-link-sentinel');
+    if (navArmory) navArmory.classList.toggle('active', tabId === 'armory');
+    if (navSentinel) navSentinel.classList.toggle('active', tabId === 'sentinel');
+
+    // Tab-specific initialization
+    if (tabId === 'sentinel') {
+        initSentinel();
+    }
+}
+
+// Check initial hash on load
+function handleInitialHash() {
+    const hash = window.location.hash.replace('#', '').toLowerCase();
+    if (hash === 'armory' || hash === 'sentinel' || hash === 'war-audit') {
+        switchOpsTab(hash === 'war-audit' ? 'sentinel' : hash);
+    } else {
+        switchOpsTab('overview');
+    }
+}
+window.addEventListener('hashchange', () => {
+    const hash = window.location.hash.replace('#', '').toLowerCase();
+    if (hash && (hash === 'overview' || hash === 'armory' || hash === 'sentinel')) {
+        switchOpsTab(hash);
+    }
+});
+
+// ─── Unified API Key Status Management ───
+function updateUnifiedApiKeyStatus() {
+    myKey = localStorage.getItem("warboard_apikey") || "";
+    const statusChip = document.getElementById('header-api-status');
+    const dot = document.getElementById('header-api-dot');
+    const text = document.getElementById('header-api-text');
+    if (!statusChip || !dot || !text) return;
+
+    if (myKey && myKey.trim().length > 5) {
+        dot.style.background = 'var(--accent-emerald)';
+        text.textContent = '🟢 API Key Synced';
+        statusChip.title = 'Torn API Key is active and synced. Click to open Settings.';
+    } else {
+        dot.style.background = 'var(--accent-amber)';
+        text.textContent = '🔑 Connect Key';
+        statusChip.title = 'No Torn API Key found. Click to enter your key.';
+    }
+}
+
+window.openSettings = function() {
+    if (typeof openGlobalSettings === 'function') {
+        openGlobalSettings();
+    } else {
+        const key = prompt("Enter your Torn API Key:", localStorage.getItem("warboard_apikey") || "");
+        if (key !== null) {
+            localStorage.setItem("warboard_apikey", key.trim());
+            updateUnifiedApiKeyStatus();
+            loadAll();
+        }
+    }
+};
+
+// ─── Main Data Fetch & Render ───
 async function loadAll() {
     myKey = localStorage.getItem("warboard_apikey") || "";
+    updateUnifiedApiKeyStatus();
+
     if (!myKey && !localStorage.getItem("sv_session_token")) {
-        document.getElementById('analyst-output').innerHTML = '<span style="color:var(--red)">⚠️ No API key set. Open Settings (⚙️) to add your Torn API key.</span>';
-        document.getElementById('analyst-output').classList.remove('loading');
+        const analyst = document.getElementById('analyst-output');
+        if (analyst) {
+            analyst.innerHTML = '<span style="color:var(--accent-amber)">⚠️ No API key set. Connect your Torn API key above to load dashboard data.</span>';
+            analyst.classList.remove('loading');
+        }
         return;
     }
 
@@ -725,7 +1534,9 @@ async function loadAll() {
         }
     } catch(e) {}
 
-    document.getElementById('last-updated').innerText = 'Refreshing...';
+    const lastUpdatedEl = document.getElementById('last-updated');
+    if (lastUpdatedEl) lastUpdatedEl.innerText = 'Refreshing...';
+
     try {
         const [dashRes, warRes] = await Promise.all([
             fetch(`/api/dashboard-data`, { headers: { 'x-api-key': myKey } }),
@@ -735,7 +1546,9 @@ async function loadAll() {
         const wars = await warRes.json();
 
         if (dash.error) {
-            document.getElementById('analyst-output').innerHTML = `<span style="color:var(--red)">Error: ${dash.error}</span>`;
+            const analyst = document.getElementById('analyst-output');
+            if (analyst) analyst.innerHTML = `<span style="color:var(--accent-crimson)">Error: ${dash.error}</span>`;
+            if (lastUpdatedEl) lastUpdatedEl.innerText = 'Sync error';
             return;
         }
 
@@ -744,14 +1557,693 @@ async function loadAll() {
             sessionStorage.setItem('sv_cache_dashboard', JSON.stringify(dash));
             sessionStorage.setItem('sv_cache_wars', JSON.stringify(wars));
         } catch(e) {}
+
         renderAll(dash, wars);
-        initSentinel();
-        document.getElementById('last-updated').innerText = 'Updated ' + new Date().toLocaleTimeString();
+        if (lastUpdatedEl) lastUpdatedEl.innerText = 'Updated ' + new Date().toLocaleTimeString();
     } catch(e) {
-        document.getElementById('analyst-output').innerHTML = `<span style="color:var(--red)">Connection failed. Check server is running.</span>`;
+        if (lastUpdatedEl) lastUpdatedEl.innerText = 'Connection error';
     }
 }
 
+function renderAll(d, wars) {
+    renderFactionHero(d);
+    renderKPIs(d);
+    renderWarScore(d);
+    renderChain(d);
+    renderMembers(d);
+    renderRespect(d);
+    renderFactionStats(d);
+    renderStatusBreakdown(d);
+    renderRecentWars(wars);
+    renderArmory(d);
+}
+
+// ─── Render Faction Hero ───
+function renderFactionHero(d) {
+    const f = d.faction || {};
+    const members = Object.values(d.members || {});
+    const online = members.filter(m => m.last_action?.status === 'Online').length;
+    const hosp = members.filter(m => m.status?.state === 'Hospital').length;
+    const travel = members.filter(m => m.status?.state === 'Traveling').length;
+
+    const heroEl = document.getElementById('faction-hero');
+    if (!heroEl) return;
+    heroEl.innerHTML = `
+        <div class="faction-name-block">
+            <h2>${f.name || 'Your Faction'}</h2>
+            <div class="faction-id">ID: ${f.ID || '—'} &nbsp;|&nbsp; Respect: ${fmtNum(f.respect || 0)}</div>
+            ${f.tag ? `<span class="faction-tag">[${f.tag}]</span>` : ''}
+        </div>
+        <div class="faction-hero-stats">
+            <div class="hero-stat"><div class="val">${members.length}</div><div class="lbl">Members</div></div>
+            <div class="faction-divider"></div>
+            <div class="hero-stat"><div class="val green">${online}</div><div class="lbl">Online</div></div>
+            <div class="faction-divider"></div>
+            <div class="hero-stat"><div class="val red">${hosp}</div><div class="lbl">Hospital</div></div>
+            <div class="faction-divider"></div>
+            <div class="hero-stat"><div class="val" style="color:var(--accent-cobalt)">${travel}</div><div class="lbl">Traveling</div></div>
+            <div class="faction-divider"></div>
+            <div class="hero-stat"><div class="val gold">${members.length} / ${f.capacity || 40}</div><div class="lbl">Capacity</div></div>
+        </div>
+    `;
+}
+
+// ─── Render 6-Card KPI Strip ───
+function renderKPIs(d) {
+    const f = d.faction || {};
+    const members = Object.values(d.members || {});
+    const online = members.filter(m => m.last_action?.status === 'Online').length;
+    const idle = members.filter(m => m.last_action?.status === 'Idle').length;
+    const chain = d.chain || {};
+    const war = d.activeWar;
+    const armory = d.armory || {};
+
+    // 1. Members
+    const kpiMembers = document.getElementById('kpi-members');
+    const kpiOnlineSub = document.getElementById('kpi-online-sub');
+    if (kpiMembers) kpiMembers.innerText = `${members.length} / ${f.capacity || 40}`;
+    if (kpiOnlineSub) kpiOnlineSub.innerHTML = `<span style="color:var(--accent-emerald)">${online} online</span>, <span style="color:var(--accent-amber)">${idle} idle</span>`;
+
+    // 2. Respect
+    const kpiRespect = document.getElementById('kpi-respect');
+    const kpiRespectSub = document.getElementById('kpi-respect-sub');
+    if (kpiRespect) kpiRespect.innerText = fmtNum(f.respect || 0);
+    if (kpiRespectSub) kpiRespectSub.innerText = f.age ? `${Math.floor(f.age/365)}y old faction` : 'Active Faction';
+
+    // 3. Chain
+    const kpiChain = document.getElementById('kpi-chain');
+    const kpiChainTimeout = document.getElementById('kpi-chain-timeout');
+    if (chain && chain.current > 0) {
+        if (kpiChain) kpiChain.innerText = `${fmtNum(chain.current)} • ${chain.modifier || 1}x`;
+        if (kpiChainTimeout) kpiChainTimeout.innerText = `${fmtDuration(chain.timeout)} remaining`;
+    } else {
+        if (kpiChain) kpiChain.innerText = '0';
+        if (kpiChainTimeout) kpiChainTimeout.innerText = 'No active chain';
+    }
+
+    // 4. War Status
+    const kpiWarStatus = document.getElementById('kpi-war-status');
+    const kpiWarSub = document.getElementById('kpi-war-sub');
+    if (war) {
+        if (kpiWarStatus) kpiWarStatus.innerHTML = `<span style="color:var(--accent-crimson)">⚔️ AT WAR</span>`;
+        if (kpiWarSub) kpiWarSub.innerText = `${fmtNum(war.myScore)} vs ${fmtNum(war.enemyScore)}`;
+    } else {
+        if (kpiWarStatus) kpiWarStatus.innerHTML = `<span style="color:var(--accent-emerald)">🟢 Standby</span>`;
+        if (kpiWarSub) kpiWarSub.innerText = 'Peace (No Active War)';
+    }
+
+    // 5. Vault Cash
+    const kpiVaultCash = document.getElementById('kpi-vault-cash');
+    const kpiVaultSub = document.getElementById('kpi-vault-sub');
+    if (kpiVaultCash) kpiVaultCash.innerText = fmtMoney(armory.vaultCash || 0);
+    if (kpiVaultSub) kpiVaultSub.innerText = armory.vaultPoints ? `${fmtNum(armory.vaultPoints)} Points In Vault` : 'Faction Treasury';
+
+    // 6. Armory Health
+    const kpiArmoryHealth = document.getElementById('kpi-armory-health');
+    const kpiArmorySub = document.getElementById('kpi-armory-sub');
+    const lowCount = armory.lowStockItems?.length || 0;
+    if (kpiArmoryHealth) {
+        kpiArmoryHealth.innerText = armory.armoryHealth || (lowCount === 0 ? "100% Stocked" : `${lowCount} Low`);
+        kpiArmoryHealth.style.color = lowCount === 0 ? 'var(--accent-cyan)' : 'var(--accent-amber)';
+    }
+    if (kpiArmorySub) {
+        kpiArmorySub.innerText = lowCount === 0 ? 'Optimal Reserves' : `${lowCount} supplies under threshold`;
+    }
+}
+
+// ─── Render War Score & Chain ───
+function renderWarScore(d) {
+    const war = d.activeWar;
+    const badge = document.getElementById('war-live-badge');
+    const body = document.getElementById('war-score-body');
+    if (!badge || !body) return;
+
+    if (!war) {
+        badge.innerHTML = `<span class="war-no-badge">✅ Peace</span>`;
+        body.innerHTML = `<div class="empty-state">Your faction is not currently in a ranked war. Use peacetime to train, recruit, and stockpile armory reserves.</div>`;
+        return;
+    }
+
+    badge.innerHTML = `<span class="war-active-badge">🔴 LIVE WAR</span>`;
+    const myScore = war.myScore || 0;
+    const theirScore = war.enemyScore || 0;
+    const total = myScore + theirScore || 1;
+    const myPct = (myScore / total * 100).toFixed(1);
+    const winning = myScore >= theirScore;
+
+    body.innerHTML = `
+        <div class="war-score-row">
+            <div class="war-faction-name" style="color:var(--accent-cobalt);">🔵 ${war.myFaction || 'Your Faction'}</div>
+            <div class="war-score-num ${winning ? 'winning' : 'losing'}">${fmtNum(myScore)}</div>
+            <div class="war-vs">VS</div>
+            <div class="war-score-num ${!winning ? 'winning' : 'losing'}">${fmtNum(theirScore)}</div>
+            <div class="war-faction-name" style="text-align:right;color:var(--accent-crimson);">🔴 ${war.enemyFaction || 'Enemy'}</div>
+        </div>
+        <div class="war-bar-wrap">
+            <div class="war-bar-fill ${!winning ? 'danger' : ''}" style="width:${myPct}%"></div>
+        </div>
+        <div style="padding:0 20px 16px;display:flex;justify-content:space-between;font-size:0.82em;color:var(--text-secondary);">
+            <span>${myPct}% score share</span>
+            <span>${winning ? '✅ Currently winning' : '❌ Currently losing'}</span>
+            <span>Target: ${fmtNum(war.target || 0)}</span>
+        </div>
+    `;
+}
+
+function renderChain(d) {
+    const chain = d.chain;
+    const body = document.getElementById('chain-body');
+    const badge = document.getElementById('chain-status-badge');
+    if (!body || !badge) return;
+
+    if (!chain || chain.current === 0) {
+        badge.innerHTML = '';
+        body.innerHTML = `<div class="empty-state">No active chain. Start hitting targets to begin one!</div>`;
+        return;
+    }
+
+    const timeout = chain.timeout || 0;
+    const current = chain.current || 0;
+    const dangerClass = timeout <= 90 ? 'danger' : 'ok';
+
+    badge.innerHTML = timeout <= 90 
+        ? `<span class="war-active-badge" style="border-color:var(--accent-crimson);color:var(--accent-crimson);">⚠️ DROPPING</span>`
+        : `<span class="war-no-badge">🟢 Active</span>`;
+
+    body.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div>
+                <div style="font-size:0.8em;color:var(--text-tertiary);text-transform:uppercase;font-weight:700;">Current Chain</div>
+                <div style="font-size:2em;font-weight:900;color:var(--accent-emerald)">${fmtNum(current)}</div>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:0.8em;color:var(--text-tertiary);text-transform:uppercase;font-weight:700;">Time Left</div>
+                <div class="chain-timeout ${dangerClass}">${fmtDuration(timeout)}</div>
+            </div>
+        </div>
+        <div class="chain-progress-wrap">
+            <div class="chain-progress-fill" style="width:${Math.min(100, timeout/300*100)}%"></div>
+        </div>
+        <div class="chain-meta">
+            <span>Timeout: ${fmtDuration(timeout)}</span>
+            <span>Modifier: ${chain.modifier ? chain.modifier + 'x' : '—'}</span>
+            <span>Cooldown: ${chain.cooldown ? fmtDuration(chain.cooldown) : 'None'}</span>
+        </div>
+    `;
+}
+
+// ─── Render Member Activity ───
+function renderMembers(d) {
+    const members = Object.entries(d.members || {});
+    const count = document.getElementById('member-count-badge');
+    const list = document.getElementById('member-list');
+    if (!list) return;
+
+    const online = members.filter(([,m]) => m.last_action?.status === 'Online').length;
+    if (count) count.innerText = `${members.length} members · ${online} online`;
+
+    members.sort((a, b) => {
+        const order = { 'Online': 0, 'Idle': 1, 'Offline': 2, 'Hospital': 3, 'Traveling': 4 };
+        return (order[a[1].last_action?.status] ?? 5) - (order[b[1].last_action?.status] ?? 5);
+    });
+
+    if (!members.length) { list.innerHTML = `<div class="empty-state">No members found.</div>`; return; }
+
+    list.innerHTML = members.map(([id, m]) => {
+        const s = m.last_action?.status || 'Offline';
+        const stateMap = { 'Online': 'online', 'Idle': 'idle', 'Offline': 'offline', 'Hospital': 'hospital', 'Traveling': 'traveling' };
+        const pillClass = stateMap[s] || 'offline';
+        const lastTs = m.last_action?.timestamp ? timeSince(m.last_action.timestamp) : '—';
+        const now = Math.floor(Date.now() / 1000);
+        const isInactive1d = m.last_action?.timestamp && (now - m.last_action.timestamp) >= 86400;
+        return `<div class="member-row">
+            <div><a class="m-name" href="https://www.torn.com/profiles.php?XID=${id}" target="_blank">${m.name}</a><div style="font-size:0.72em;color:var(--text-tertiary);">[${id}]</div></div>
+            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
+                <span class="status-pill ${pillClass}"><span class="status-dot"></span>${s}</span>
+                ${isInactive1d ? '<span style="font-size:0.7em;background:rgba(255,165,2,0.15);color:var(--accent-amber);padding:2px 6px;border-radius:4px;border:1px solid rgba(255,165,2,0.3);font-weight:700;">💤 1d+</span>' : ''}
+            </div>
+            <div style="font-size:0.82em;color:${isInactive1d ? 'var(--accent-amber)' : 'var(--text-tertiary)'};font-weight:${isInactive1d ? '700' : 'normal'};">${lastTs}</div>
+        </div>`;
+    }).join('');
+}
+
+// ─── Render Respect Leaders ───
+function renderRespect(d) {
+    const members = Object.entries(d.members || {});
+    const el = document.getElementById('respect-list');
+    if (!el) return;
+
+    const sorted = members
+        .map(([id, m]) => ({ name: m.name, id, score: m.score || 0 }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 8);
+
+    if (!sorted.length || sorted[0].score === 0) {
+        el.innerHTML = `<div class="empty-state" style="padding:18px;">
+            Faction is currently at peace.<br>
+            <span style="font-size:0.85em;color:var(--text-tertiary);margin-top:4px;display:inline-block;">See <a href="/payout.html" style="color:var(--accent-cobalt);font-weight:700;">Payouts</a> or <a href="#sentinel" onclick="switchOpsTab('sentinel')" style="color:var(--teal, #00cec9);font-weight:700;">War Sentinel</a> for past war respect contributions.</span>
+        </div>`;
+        return;
+    }
+
+    const max = sorted[0].score || 1;
+    el.innerHTML = sorted.map((m, i) => `
+        <div class="respect-row">
+            <div style="font-size:0.8em;color:var(--text-tertiary);width:16px;">${i+1}</div>
+            <div class="respect-name"><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-primary);text-decoration:none;font-weight:600;">${m.name}</a></div>
+            <div class="respect-bar-wrap"><div class="respect-bar-fill" style="width:${(m.score/max*100).toFixed(0)}%"></div></div>
+            <div class="respect-val">${fmtNum(m.score)}</div>
+        </div>
+    `).join('');
+}
+
+// ─── Render Faction Stats & Status Breakdown ───
+function renderFactionStats(d) {
+    const f = d.faction || {};
+    const el = document.getElementById('faction-stats-body');
+    if (!el) return;
+    const members = Object.values(d.members || {});
+    const ok = members.filter(m => m.status?.state === 'Okay').length;
+    const hosp = members.filter(m => m.status?.state === 'Hospital').length;
+
+    el.innerHTML = [
+        ['Faction Name', f.name || '—'],
+        ['Tag', f.tag ? `[${f.tag}]` : '—'],
+        ['ID', f.ID || '—'],
+        ['Capacity', `${members.length} / ${f.capacity || 40}`],
+        ['Respect', fmtNum(f.respect || 0)],
+        ['Best Chain', fmtNum(f.best_chain || 0)],
+        ['Age', f.age ? `${Math.floor(f.age/365)} years` : '—'],
+        ['Members OK', ok],
+        ['In Hospital', hosp],
+    ].map(([k, v]) => `<div class="stat-row"><span class="stat-label">${k}</span><span class="stat-val">${v}</span></div>`).join('');
+}
+
+function renderStatusBreakdown(d) {
+    const members = Object.values(d.members || {});
+    const el = document.getElementById('status-breakdown-body');
+    if (!el) return;
+
+    const counts = {};
+    members.forEach(m => {
+        const s = m.status?.state || 'Unknown';
+        counts[s] = (counts[s] || 0) + 1;
+    });
+
+    const colorMap = { 'Okay': 'var(--accent-emerald)', 'Hospital': 'var(--accent-crimson)', 'Traveling': 'var(--accent-cobalt)', 'Jail': 'var(--accent-purple)', 'Federal': 'var(--accent-crimson)', 'Unknown': 'var(--text-tertiary)' };
+    const total = members.length || 1;
+
+    el.innerHTML = Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([state, count]) => {
+            const pct = (count / total * 100).toFixed(0);
+            return `<div class="stat-row">
+                <span class="stat-label" style="color:${colorMap[state] || 'var(--text-tertiary)'}">${state}</span>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="width:80px;background:var(--bg-elevated);border-radius:4px;height:6px;overflow:hidden;">
+                        <div style="width:${pct}%;height:100%;border-radius:4px;background:${colorMap[state] || '#666'};"></div>
+                    </div>
+                    <span class="stat-val">${count} <span style="color:var(--text-tertiary);font-size:0.8em;">(${pct}%)</span></span>
+                </div>
+            </div>`;
+        }).join('') || '<div class="empty-state">No data.</div>';
+}
+
+function renderRecentWars(wars) {
+    const el = document.getElementById('recent-wars-body');
+    if (!el) return;
+    const list = wars?.wars || [];
+
+    if (!list.length) {
+        el.innerHTML = `<div class="empty-state">No recent wars found in faction history.</div>`;
+        return;
+    }
+
+    el.innerHTML = list.slice(0, 10).map(w => {
+        const date = new Date(w.start * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        return `<div class="stat-row" style="padding:10px 0;">
+            <div><div style="font-weight:600;font-size:0.88em;">${w.enemy || 'Unknown'}</div><div style="font-size:0.75em;color:var(--text-tertiary);">${date}</div></div>
+            <a href="/payout.html${w.id ? `?warId=${w.id}` : ''}" style="font-size:0.78em;color:var(--accent-cobalt);text-decoration:none;font-weight:600;">View →</a>
+        </div>`;
+    }).join('');
+}
+
+// ─── ARMORY & SUPPLY MONITOR ENGINE ───
+function renderArmory(d) {
+    currentArmoryData = d;
+    const armory = d.armory || {};
+    const loans = d.loans || [];
+    const lowStock = armory.lowStockItems || [];
+    const lowCount = lowStock.length;
+
+    // Update Badges across navbar and tabs
+    const navBadge = document.getElementById('nav-armory-badge');
+    const tabBadge = document.getElementById('tab-armory-badge');
+    if (navBadge) {
+        if (lowCount > 0) {
+            navBadge.style.display = 'inline-block';
+            navBadge.textContent = `${lowCount} Low`;
+            navBadge.className = 'tab-badge';
+        } else {
+            navBadge.style.display = 'none';
+        }
+    }
+    if (tabBadge) {
+        if (lowCount > 0) {
+            tabBadge.style.display = 'inline-block';
+            tabBadge.textContent = `${lowCount} Low`;
+            tabBadge.className = 'tab-badge';
+        } else {
+            tabBadge.style.display = 'inline-block';
+            tabBadge.textContent = 'Stocked';
+            tabBadge.className = 'tab-badge green';
+        }
+    }
+
+    // ── 1. Snapshot Widget (Tab 1) ──
+    const snapshotPill = document.getElementById('snapshot-status-pill');
+    if (snapshotPill) {
+        if (lowCount === 0) {
+            snapshotPill.className = 'stock-pill optimal';
+            snapshotPill.textContent = '100% Stocked';
+        } else {
+            snapshotPill.className = 'stock-pill warning';
+            snapshotPill.textContent = `${lowCount} Low Reserves`;
+        }
+    }
+
+    const tickerEl = document.getElementById('snapshot-low-ticker');
+    if (tickerEl) {
+        if (lowCount === 0) {
+            tickerEl.innerHTML = `<span class="stock-pill optimal">✅ All Supplies Above Reserve Thresholds</span>`;
+        } else {
+            tickerEl.innerHTML = lowStock.map(item => `
+                <span class="stock-pill ${item.severity === 'critical' ? 'critical' : 'warning'}">
+                    ${item.severity === 'critical' ? '🚨' : '⚠️'} ${item.name}: <strong>${fmtNum(item.current)}</strong> (Min: ${item.min})
+                </span>
+            `).join('');
+        }
+    }
+
+    // Supply Tiles
+    const tileMedsVal = document.getElementById('tile-meds-val');
+    const tileMedsSub = document.getElementById('tile-meds-sub');
+    const tileMedsBadge = document.getElementById('tile-meds-badge');
+    const tileBoostersVal = document.getElementById('tile-boosters-val');
+    const tileBoostersSub = document.getElementById('tile-boosters-sub');
+    const tileBoostersBadge = document.getElementById('tile-boosters-badge');
+    const tileWeaponsVal = document.getElementById('tile-weapons-val');
+    const tileWeaponsSub = document.getElementById('tile-weapons-sub');
+    const tileArmorVal = document.getElementById('tile-armor-val');
+    const tileArmorSub = document.getElementById('tile-armor-sub');
+
+    const totalMeds = (armory.totalMedicalItems || 0) + (armory.totalDrugs || 0);
+    const medLow = lowStock.filter(i => i.name.includes('First Aid') || i.name.includes('Morphine') || i.name.includes('Blood') || i.name.includes('Xanax'));
+    if (tileMedsVal) tileMedsVal.textContent = fmtNum(totalMeds);
+    if (tileMedsSub) tileMedsSub.textContent = medLow.length ? `${medLow.length} items low` : 'Reserves optimal';
+    if (tileMedsBadge) {
+        tileMedsBadge.className = medLow.length ? 'stock-pill warning' : 'stock-pill optimal';
+        tileMedsBadge.textContent = medLow.length ? `${medLow.length} Low` : 'OK';
+    }
+
+    const canLow = lowStock.filter(i => i.name.includes('Cans'));
+    if (tileBoostersVal) tileBoostersVal.textContent = fmtNum(armory.totalBoosters || 0);
+    if (tileBoostersSub) tileBoostersSub.textContent = `${armory.boosters?.length || 0} unique types`;
+    if (tileBoostersBadge) {
+        tileBoostersBadge.className = canLow.length ? 'stock-pill warning' : 'stock-pill optimal';
+        tileBoostersBadge.textContent = canLow.length ? 'Low' : 'OK';
+    }
+
+    const totalWeap = armory.totalWeapons || 0;
+    const loanedWeap = armory.loanedWeaponsCount || 0;
+    if (tileWeaponsVal) tileWeaponsVal.textContent = fmtNum(loanedWeap);
+    if (tileWeaponsSub) tileWeaponsSub.textContent = `${loanedWeap} / ${totalWeap}`;
+
+    const totalArmor = armory.totalArmor || 0;
+    const loanedArmor = armory.loanedArmorCount || 0;
+    if (tileArmorVal) tileArmorVal.textContent = fmtNum(loanedArmor);
+    if (tileArmorSub) tileArmorSub.textContent = `${loanedArmor} / ${totalArmor}`;
+
+    // ── 2. Full Armory & Logistics (Tab 2) ──
+    const kpiCash = document.getElementById('armory-kpi-cash');
+    const kpiPoints = document.getElementById('armory-kpi-points');
+    const kpiMeds = document.getElementById('armory-kpi-meds');
+    const kpiLoans = document.getElementById('armory-kpi-loans');
+    const kpiLoansSub = document.getElementById('armory-kpi-loans-sub');
+    const kpiLow = document.getElementById('armory-kpi-low');
+    const kpiHealth = document.getElementById('armory-kpi-health');
+
+    if (kpiCash) kpiCash.textContent = fmtMoney(armory.vaultCash || 0);
+    if (kpiPoints) kpiPoints.textContent = `${fmtNum(armory.vaultPoints || 0)} Faction Points`;
+    if (kpiMeds) kpiMeds.textContent = fmtNum(armory.totalMedicalItems || 0);
+
+    const overdueCount = loans.filter(l => l.loanStatus === 'overdue').length;
+    if (kpiLoans) kpiLoans.textContent = fmtNum(loans.length);
+    if (kpiLoansSub) kpiLoansSub.textContent = overdueCount > 0 ? `${overdueCount} Overdue (>3d)` : 'All borrowers active';
+    if (kpiLow) kpiLow.textContent = lowCount;
+    if (kpiHealth) kpiHealth.textContent = armory.armoryHealth || "100% Stocked";
+
+    // Burn Rate Banner
+    const burnBanner = document.getElementById('burn-rate-banner');
+    const burnRateVal = document.getElementById('burn-rate-val');
+    const burnHoursVal = document.getElementById('burn-hours-val');
+    const burnPacingVal = document.getElementById('burn-pacing-val');
+    const burnDesc = document.getElementById('burn-desc');
+
+    if (armory.burnRate && burnRateVal && burnHoursVal && burnPacingVal) {
+        const br = armory.burnRate;
+        if (br.warActive) {
+            burnBanner?.classList.remove('peace');
+            burnRateVal.textContent = `~${br.hourlyMedicalBurn} meds/hr`;
+            burnHoursVal.textContent = `${br.hoursRemaining}h remaining`;
+            burnHoursVal.style.color = br.hoursRemaining < 24 ? 'var(--accent-crimson)' : 'var(--accent-emerald)';
+            burnPacingVal.textContent = 'Ranked War Pacing';
+            if (burnDesc) burnDesc.textContent = `Active war consumption rate based on incoming hits and revives. Sustained reserves for ~${br.hoursRemaining} hours.`;
+        } else {
+            burnBanner?.classList.add('peace');
+            burnRateVal.textContent = `~${br.hourlyMedicalBurn} meds/hr`;
+            burnHoursVal.textContent = `200h+ (Optimal)`;
+            burnHoursVal.style.color = 'var(--accent-emerald)';
+            burnPacingVal.textContent = 'Peacetime Mode';
+            if (burnDesc) burnDesc.textContent = `Faction is currently at peace. Medical burn is minimal; reserves are ready for upcoming wars.`;
+        }
+    }
+
+    // Populate Subpanels
+    filterMeds();
+    filterArsenal();
+    filterLoans();
+}
+
+// ── Medical & Drugs Table Filter ──
+function filterMeds() {
+    if (!currentArmoryData) return;
+    const tbody = document.getElementById('meds-table-body');
+    const badge = document.getElementById('meds-count-badge');
+    const query = (document.getElementById('meds-search')?.value || '').toLowerCase().trim();
+    const cat = document.getElementById('meds-cat-filter')?.value || 'all';
+    const armory = currentArmoryData.armory || {};
+
+    let list = [];
+    if (cat === 'all' || cat === 'medical') {
+        (armory.medical || []).forEach(m => list.push({ ...m, itemCat: 'Medical' }));
+    }
+    if (cat === 'all' || cat === 'drugs') {
+        (armory.drugs || []).forEach(d => list.push({ ...d, itemCat: 'Drug' }));
+    }
+    if (cat === 'all' || cat === 'boosters') {
+        (armory.boosters || []).forEach(b => list.push({ ...b, itemCat: 'Booster' }));
+    }
+
+    // Threshold lookup
+    const threshMap = {
+        'xanax': 50,
+        'small first aid kit': 40,
+        'first aid kit': 60,
+        'morphine': 40
+    };
+
+    list = list.filter(item => {
+        const nameLower = item.name.toLowerCase();
+        let minThresh = threshMap[nameLower] || 25;
+        if (nameLower.includes('blood bag')) minThresh = 20;
+        if (nameLower.startsWith('can of')) minThresh = 15;
+        item.minThresh = minThresh;
+
+        const isLow = item.quantity < minThresh;
+        item.isLow = isLow;
+
+        if (cat === 'low' && !isLow) return false;
+        if (query && !nameLower.includes(query)) return false;
+        return true;
+    });
+
+    if (badge) badge.textContent = `${list.length} items`;
+    if (!tbody) return;
+
+    if (!list.length) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-tertiary);">No supplies match the current filters.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = list.map(item => {
+        const statusBadge = item.quantity === 0
+            ? `<span class="stock-pill critical">🚨 Empty</span>`
+            : (item.isLow ? `<span class="stock-pill warning">⚠️ Low Stock</span>` : `<span class="stock-pill optimal">🟢 Stocked</span>`);
+        
+        return `<tr>
+            <td style="font-weight:700;">${item.name}</td>
+            <td><span class="badge-type">${item.itemCat || item.type}</span></td>
+            <td style="font-family:var(--font-mono); font-weight:800; color:${item.isLow ? 'var(--accent-amber)' : 'var(--text-primary)'};">${fmtNum(item.quantity)}</td>
+            <td style="font-family:var(--font-mono); color:var(--text-tertiary);">${item.minThresh}</td>
+            <td>${statusBadge}</td>
+            <td style="text-align:right;">
+                <a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=donator" target="_blank" class="refresh-btn" style="text-decoration:none; padding:3px 10px; font-size:0.75em;">Deposit</a>
+            </td>
+        </tr>`;
+    }).join('');
+}
+const filterMedsDebounced = debounce(filterMeds, 200);
+
+// ── Weapons & Armor Arsenal Filter ──
+function filterArsenal() {
+    if (!currentArmoryData) return;
+    const tbody = document.getElementById('arsenal-table-body');
+    const badge = document.getElementById('arsenal-count-badge');
+    const query = (document.getElementById('arsenal-search')?.value || '').toLowerCase().trim();
+    const cat = document.getElementById('arsenal-cat-filter')?.value || 'all';
+    const armory = currentArmoryData.armory || {};
+
+    let list = [];
+    if (cat === 'all' || cat === 'weapons') {
+        (armory.weapons || []).forEach(w => list.push({ ...w, itemCat: 'Weapon' }));
+    }
+    if (cat === 'all' || cat === 'armor') {
+        (armory.armor || []).forEach(a => list.push({ ...a, itemCat: 'Armor' }));
+    }
+    if (cat === 'all' || cat === 'temporary') {
+        (armory.temporary || []).forEach(t => list.push({ ...t, itemCat: 'Temporary' }));
+    }
+
+    list = list.filter(item => {
+        if (cat === 'loaned' && (item.loaned || 0) === 0) return false;
+        if (cat === 'available' && (item.available || 0) === 0) return false;
+        if (query && !item.name.toLowerCase().includes(query) && !item.type.toLowerCase().includes(query)) return false;
+        return true;
+    });
+
+    if (badge) badge.textContent = `${list.length} pieces`;
+    if (!tbody) return;
+
+    if (!list.length) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-tertiary);">No arsenal equipment matches the filter.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = list.map(item => {
+        const total = item.quantity || (item.available + item.loaned) || 1;
+        const pct = Math.min(100, Math.round(((item.loaned || 0) / total) * 100));
+
+        return `<tr>
+            <td style="font-weight:700;">${item.name}</td>
+            <td><span class="badge-type ${item.itemCat === 'Armor' ? 'armor' : ''}">${item.type || item.itemCat}</span></td>
+            <td style="font-family:var(--font-mono); color:var(--accent-emerald); font-weight:800;">${fmtNum(item.available || 0)}</td>
+            <td style="font-family:var(--font-mono); color:var(--accent-amber); font-weight:800;">${fmtNum(item.loaned || 0)}</td>
+            <td style="font-family:var(--font-mono);">${fmtNum(total)}</td>
+            <td style="min-width:110px;">
+                <div style="font-size:0.75em; color:var(--text-tertiary); margin-bottom:2px;">${pct}% in field</div>
+                <div style="height:4px; background:var(--bg-elevated); border-radius:2px; overflow:hidden;">
+                    <div style="width:${pct}%; height:100%; background:var(--accent-cobalt);"></div>
+                </div>
+            </td>
+            <td style="text-align:right;">
+                <a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=weapons" target="_blank" class="refresh-btn" style="text-decoration:none; padding:3px 10px; font-size:0.75em;">Issue</a>
+            </td>
+        </tr>`;
+    }).join('');
+}
+const filterArsenalDebounced = debounce(filterArsenal, 200);
+
+// ── Member Loaner Ledger Filter ──
+function filterLoans() {
+    if (!currentArmoryData) return;
+    const tbody = document.getElementById('loans-table-body');
+    const badge = document.getElementById('loaner-count-badge');
+    const query = (document.getElementById('loans-search')?.value || '').toLowerCase().trim();
+    const statusFilter = document.getElementById('loans-status-filter')?.value || 'all';
+    const loans = currentArmoryData.loans || [];
+
+    let list = loans.filter(l => {
+        if (statusFilter === 'active' && l.loanStatus !== 'active') return false;
+        if (statusFilter === 'inactive' && l.loanStatus !== 'inactive') return false;
+        if (statusFilter === 'overdue' && l.loanStatus !== 'overdue') return false;
+        if (query) {
+            const bName = (l.borrowerName || '').toLowerCase();
+            const iName = (l.name || '').toLowerCase();
+            const bId = String(l.borrowerId || '');
+            if (!bName.includes(query) && !iName.includes(query) && !bId.includes(query)) return false;
+        }
+        return true;
+    });
+
+    if (badge) badge.textContent = `${list.length} Loans`;
+    if (!tbody) return;
+
+    if (!list.length) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-tertiary);">No loans match the selected filter.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = list.map(l => {
+        const statusMap = {
+            'active': '<span class="badge-loan active">🟢 Active</span>',
+            'inactive': '<span class="badge-loan inactive">⚠️ Inactive (&gt;24h)</span>',
+            'overdue': '<span class="badge-loan overdue">🚨 Overdue (&gt;3d)</span>'
+        };
+        const statusBadge = statusMap[l.loanStatus] || statusMap['active'];
+        const relativeTime = l.lastActionTs ? timeSince(l.lastActionTs) : 'Unknown';
+
+        return `<tr>
+            <td>
+                <div style="font-weight:700;"><a href="https://www.torn.com/profiles.php?XID=${l.borrowerId}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${l.borrowerName}</a></div>
+                <div style="font-size:0.75em; color:var(--text-tertiary);">[${l.borrowerId}]</div>
+            </td>
+            <td style="font-weight:700; color:var(--accent-amber);">${l.name}</td>
+            <td><span class="badge-type ${l.type === 'Armor' ? 'armor' : ''}">${l.itemCategory || l.type}</span></td>
+            <td>
+                <div style="font-size:0.85em;">${l.borrowerStatus || 'Offline'}</div>
+                <div style="font-size:0.72em; color:var(--text-tertiary);">${relativeTime}</div>
+            </td>
+            <td>${statusBadge}</td>
+            <td style="text-align:right;">
+                <div style="display:flex; justify-content:flex-end; gap:6px;">
+                    <a href="https://www.torn.com/messages.php#/p=compose&XID=${l.borrowerId}" target="_blank" class="refresh-btn" style="text-decoration:none; padding:3px 8px; font-size:0.75em;" title="Message borrower on Torn">💬 Remind</a>
+                    <a href="https://www.torn.com/factions.php?step=your#/tab=armoury" target="_blank" class="refresh-btn" style="text-decoration:none; padding:3px 8px; font-size:0.75em;" title="Manage loans on Torn">🔄 Return</a>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+const filterLoansDebounced = debounce(filterLoans, 200);
+
+// ── Save Low Stock Thresholds ──
+async function saveArmoryThresholds() {
+    const thresholds = {
+        xanax: Number(document.getElementById('cfg-thresh-xanax')?.value || 50),
+        sfak: Number(document.getElementById('cfg-thresh-sfak')?.value || 40),
+        fak: Number(document.getElementById('cfg-thresh-fak')?.value || 60),
+        morphine: Number(document.getElementById('cfg-thresh-morph')?.value || 40),
+        blood: Number(document.getElementById('cfg-thresh-blood')?.value || 100),
+        cans: Number(document.getElementById('cfg-thresh-cans')?.value || 30),
+        dispatchDiscord: document.getElementById('cfg-discord-dispatch')?.checked || false
+    };
+
+    localStorage.setItem('faction_armory_thresholds', JSON.stringify(thresholds));
+    alert("✅ Armory safety thresholds and auto-alert rules saved!");
+    if (dashData) renderArmory(dashData.dash);
+}
+
+// ─── TAB 3: WAR FLIGHT & FARM SENTINEL ENGINE ───
 let sentinelData = null;
 let activeSentinelFilter = 'all';
 let sentinelInitialized = false;
@@ -766,7 +2258,7 @@ async function initSentinel() {
         if (data.wars && data.wars.length > 0) {
             select.innerHTML = data.wars.map(w => {
                 const dateStr = w.start ? new Date(w.start * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-                const isWon = (dashData?.faction?.ID && w.winner === dashData.faction.ID) || w.winner === Number(localStorage.getItem('warboard_factionid') || 0) || (w.ourScore > w.theirScore);
+                const isWon = (dashData?.dash?.faction?.ID && w.winner === dashData.dash.faction.ID) || (w.ourScore > w.theirScore);
                 const tag = w.isOngoing ? '💥 ACTIVE' : (isWon ? '🏆 WON' : '💀 LOST');
                 return `<option value="${w.id}">[${tag}] vs ${w.enemy} (${dateStr})</option>`;
             }).join('');
@@ -787,11 +2279,11 @@ async function runWarFlightAudit(force = false) {
     const ffKey = localStorage.getItem('warboard_ffkey') || '';
 
     if (!myKey) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--red);">API Key required. Go to Settings first.</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--accent-crimson);">Torn API Key required. Connect your key in Settings.</td></tr>`;
         return;
     }
 
-    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color:var(--teal);">⚡ Auditing attack records &amp; FF Scouter flight logs for selected war...</td></tr>`;
+    if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color:var(--teal, #00cec9);">⚡ Auditing attack records &amp; FF Scouter flight logs for selected war...</td></tr>`;
 
     try {
         const url = `/api/war-flight-audit?warId=${encodeURIComponent(warId || '')}&apiKey=${encodeURIComponent(myKey)}&ffKey=${encodeURIComponent(ffKey)}${force ? '&force=true' : ''}`;
@@ -799,41 +2291,33 @@ async function runWarFlightAudit(force = false) {
         const data = await res.json();
 
         if (!data.success) {
-            if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--red);">⚠️ Audit failed: ${data.error || 'Unknown error'}</td></tr>`;
+            if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--accent-crimson);">⚠️ Audit failed: ${data.error || 'Unknown error'}</td></tr>`;
             return;
         }
 
         sentinelData = data;
 
-        // Render Ribbon
+        // Render Status Ribbon
         const warSummary = document.getElementById('sentinel-war-summary');
         if (warSummary) {
-            const outcome = data.war.isOngoing ? '<span style="color:var(--gold); font-weight:700;">💥 Ongoing War</span>' : (data.war.ourScore > data.war.theirScore ? '<span style="color:var(--green); font-weight:700;">🏆 Victory</span>' : '<span style="color:var(--red); font-weight:700;">Defeat</span>');
-            warSummary.innerHTML = `<strong>vs ${data.war.enemyName}</strong> • ${outcome} • Score: <strong>${data.war.ourScore.toLocaleString()}</strong> to ${data.war.theirScore.toLocaleString()} • Duration: <strong>${data.war.durationHours}h</strong>`;
+            const outcome = data.war.isOngoing ? '<span style="color:var(--accent-amber); font-weight:700;">💥 Ongoing War</span>' : (data.war.ourScore > data.war.theirScore ? '<span style="color:var(--accent-emerald); font-weight:700;">🏆 Victory</span>' : '<span style="color:var(--accent-crimson); font-weight:700;">Defeat</span>');
+            warSummary.innerHTML = `<strong>vs ${data.war.enemyName}</strong> • ${outcome} • Score: <strong>${fmtNum(data.war.ourScore)}</strong> to ${fmtNum(data.war.theirScore)} • Duration: <strong>${data.war.durationHours}h</strong>`;
         }
 
         const ffBadge = document.getElementById('sentinel-ff-badge');
         if (ffBadge) {
-            const isSameKey = ffKey && myKey && ffKey.trim() === myKey.trim();
             if (data.ffScouter?.premium) {
-                ffBadge.innerHTML = `<span style="color:var(--green); font-weight:700;">✨ FF Scouter Premium: Active</span> (${data.kpis.totalAirHours}h in flight matched across ${data.members.length} members)`;
+                ffBadge.innerHTML = `<span style="color:var(--accent-emerald); font-weight:700;">✨ FF Scouter Premium: Active</span> (${data.kpis.totalAirHours}h matched flight time)`;
             } else if (data.kpis.totalAirHours > 0) {
-                ffBadge.innerHTML = `<span style="color:var(--teal); font-weight:700;">🛡️ Combat &amp; Flight Sentinel: Active</span> <span style="color:var(--text-dim);">(${data.kpis.totalAirHours}h verified flight time across ${data.members.length} members)</span>`;
-            } else if (isSameKey) {
-                ffBadge.innerHTML = `<span style="color:var(--gold); font-weight:700;">⚠️ Scouter Key is set to Torn API Key</span> <span style="color:var(--text-dim);">(Requires separate key from <a href="https://ffscouter.com" target="_blank" style="color:var(--teal);text-decoration:underline;">ffscouter.com</a>)</span>`;
-            } else if (data.ffScouter?.enabled) {
-                ffBadge.innerHTML = `<span style="color:var(--gold); font-weight:700;">⚠️ FF Scouter: Free / Non-Premium</span> <span style="color:var(--text-dim);">(Torn defense logs active; flight history requires Scouter Premium)</span>`;
+                ffBadge.innerHTML = `<span style="color:var(--teal, #00cec9); font-weight:700;">🛡️ Combat Sentinel: Active</span> <span style="color:var(--text-tertiary);">(${data.kpis.totalAirHours}h flight time across ${data.members.length} members)</span>`;
             } else {
-                ffBadge.innerHTML = `<span style="color:var(--teal); font-weight:700;">🛡️ Defense &amp; Combat Sentinel: Active</span> <span style="color:var(--text-dim);">(${data.members.length} members monitored)</span>`;
+                ffBadge.innerHTML = `<span style="color:var(--teal, #00cec9); font-weight:700;">🛡️ Combat Defense Sentinel: Active</span> <span style="color:var(--text-tertiary);">(${data.members.length} members audited)</span>`;
             }
         }
 
-        // Render KPIs with bulletproof fallbacks for older cached records
+        // Render Sentinel KPIs
         const hitsMade = data.kpis.totalHitsMade || 0;
         const farmedHits = data.kpis.totalFarmedHits || 0;
-        const warHitsTaken = data.kpis.totalWarHitsTaken !== undefined ? data.kpis.totalWarHitsTaken : farmedHits;
-        const outHitsTaken = data.kpis.totalOutsideHitsTaken !== undefined ? data.kpis.totalOutsideHitsTaken : 0;
-        const totalActions = data.kpis.totalWarActions || (hitsMade + farmedHits);
         const earned = data.kpis.totalRespectEarned !== undefined ? data.kpis.totalRespectEarned : (data.war.ourScore || 0);
         const leaked = data.kpis.totalRespectLeaked !== undefined ? data.kpis.totalRespectLeaked : (data.war.theirScore || 0);
         const netScore = data.kpis.netWarScore !== undefined ? data.kpis.netWarScore : parseFloat((earned - leaked).toFixed(1));
@@ -843,18 +2327,15 @@ async function runWarFlightAudit(force = false) {
         document.getElementById('kpi-audit-hits').textContent = `${hitsMade}`;
         document.getElementById('kpi-audit-earned').textContent = `+${earned} pts earned`;
         document.getElementById('kpi-audit-farmed').textContent = `${farmedHits}`;
-        document.getElementById('kpi-audit-leaked').textContent = outHitsTaken > 0 ? `${warHitsTaken} war • ${outHitsTaken} out (-${leaked} pts)` : `-${leaked} pts conceded`;
+        document.getElementById('kpi-audit-leaked').textContent = `-${leaked} pts conceded`;
         document.getElementById('kpi-audit-ghosts').textContent = `${data.kpis.ghostCount || 0}`;
         document.getElementById('kpi-audit-net').textContent = `${netScore > 0 ? '+' : ''}${netScore} pts`;
-        document.getElementById('kpi-audit-actions').textContent = `${totalActions} combat events (${hitsMade} made + ${farmedHits} defended)`;
+        document.getElementById('kpi-audit-actions').textContent = `${hitsMade + farmedHits} combat actions`;
 
-        // Filter counts
+        // Filter Counts
         const all = data.members || [];
         const airCount = all.filter(m => m.airHours > 0 || m.flightTrips > 0).length;
-        const ghostCount = all.filter(m => {
-            const th = m.timesHit || m.timesFarmed || 0;
-            return th <= 10 && (m.airHours >= 15 || m.grade === 'S' || (m.airHours > 0 && m.hitsMade > 0));
-        }).length;
+        const ghostCount = all.filter(m => (m.timesHit || m.timesFarmed || 0) <= 10 && (m.airHours >= 15 || m.grade === 'S')).length;
         const posCount = all.filter(m => m.netScore > 0).length;
         const farmedCount = all.filter(m => (m.timesHit || m.timesFarmed || 0) > 0).length;
         const zeroCount = all.filter(m => m.hitsMade === 0).length;
@@ -867,8 +2348,9 @@ async function runWarFlightAudit(force = false) {
         document.getElementById('cnt-audit-zero').textContent = zeroCount;
 
         renderSentinelTable();
+        renderCrossFactionLoadouts(data);
     } catch(e) {
-        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--red);">⚠️ Request error: ${e.message}</td></tr>`;
+        if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:20px; color:var(--accent-crimson);">⚠️ Request error: ${e.message}</td></tr>`;
     }
 }
 
@@ -895,7 +2377,7 @@ function updateSortHeaderIndicators() {
         if (span) {
             if (sentinelSortKey === h) {
                 span.textContent = sentinelSortAsc ? ' ▲' : ' ▼';
-                span.style.color = 'var(--teal)';
+                span.style.color = 'var(--teal, #00cec9)';
             } else {
                 span.textContent = '';
             }
@@ -934,468 +2416,124 @@ function renderSentinelTable() {
     });
 
     const gradeOrder = { 'S': 5, 'A': 4, 'B': 3, 'C': 2, 'D': 1, 'F': 0, '—': -1 };
-
     list.sort((a, b) => {
         const aHit = a.timesHit || a.timesFarmed || 0;
         const bHit = b.timesHit || b.timesFarmed || 0;
         let diff = 0;
 
         switch (sentinelSortKey) {
-            case 'mostAir':
-                diff = (b.flightSec || 0) - (a.flightSec || 0);
-                break;
-            case 'leastFarmed':
-                diff = aHit - bHit;
-                if (diff === 0) diff = (b.flightSec || 0) - (a.flightSec || 0);
-                break;
-            case 'mostFarmed':
-                diff = bHit - aHit;
-                break;
-            case 'hitsMade':
-                diff = (b.hitsMade || 0) - (a.hitsMade || 0);
-                break;
-            case 'netScore':
-                diff = (b.netScore || 0) - (a.netScore || 0);
-                break;
-            case 'leaked':
-                diff = (b.respectLeaked || 0) - (a.respectLeaked || 0);
-                break;
-            case 'trips':
-                diff = (b.flightTrips || 0) - (a.flightTrips || 0);
-                break;
-            case 'grade':
-                diff = (gradeOrder[b.grade] || 0) - (gradeOrder[a.grade] || 0);
-                break;
-            case 'name':
-                return sentinelSortAsc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
-            default:
-                diff = (b.flightSec || 0) - (a.flightSec || 0);
+            case 'mostAir': diff = (b.flightSec || 0) - (a.flightSec || 0); break;
+            case 'leastFarmed': diff = aHit - bHit; if (diff === 0) diff = (b.flightSec || 0) - (a.flightSec || 0); break;
+            case 'mostFarmed': diff = bHit - aHit; break;
+            case 'hitsMade': diff = (b.hitsMade || 0) - (a.hitsMade || 0); break;
+            case 'netScore': diff = (b.netScore || 0) - (a.netScore || 0); break;
+            case 'leaked': diff = (b.respectLeaked || 0) - (a.respectLeaked || 0); break;
+            case 'trips': diff = (b.flightTrips || 0) - (a.flightTrips || 0); break;
+            case 'grade': diff = (gradeOrder[b.grade] || 0) - (gradeOrder[a.grade] || 0); break;
+            case 'name': return sentinelSortAsc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+            default: diff = (b.flightSec || 0) - (a.flightSec || 0);
         }
-
         return sentinelSortAsc ? -diff : diff;
     });
 
     if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color:var(--text-dim);">No members match this filter.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color:var(--text-tertiary);">No members match this filter.</td></tr>`;
         return;
     }
 
     tbody.innerHTML = list.map(m => {
         const timesHit = m.timesHit || m.timesFarmed || 0;
-        const warHits = m.warHitsTaken !== undefined ? m.warHitsTaken : timesHit;
-        const outHits = m.outsideHitsTaken !== undefined ? m.outsideHitsTaken : 0;
-        const breakdown = (warHits > 0 && outHits > 0) 
-            ? ` (${warHits} war • ${outHits} out)` 
-            : (outHits > 0 ? ` (${outHits} outside)` : (m.timesDefended > 0 ? ` (${m.timesDefended} def)` : ''));
         const farmedBadge = timesHit === 0
-            ? `<span style="color:var(--green); font-weight:700;">🛡️ 0 (Untouchable)</span>`
-            : `<span style="color:var(--red); font-weight:700; background:rgba(255,71,87,0.12); padding:2px 6px; border-radius:4px;">⚠️ ${timesHit}x hit<span style="font-size:0.82em; opacity:0.85;">${breakdown}</span></span>`;
+            ? `<span style="color:var(--accent-emerald); font-weight:700;">🛡️ 0 (Untouchable)</span>`
+            : `<span style="color:var(--accent-crimson); font-weight:700; background:rgba(255,71,87,0.12); padding:2px 6px; border-radius:4px;">⚠️ ${timesHit}x hit</span>`;
 
         const netStr = m.netScore > 0 ? `+${m.netScore}` : `${m.netScore}`;
-        const netColor = m.netScore > 0 ? 'var(--green)' : (m.netScore < 0 ? 'var(--red)' : 'var(--text-dim)');
+        const netColor = m.netScore > 0 ? 'var(--accent-emerald)' : (m.netScore < 0 ? 'var(--accent-crimson)' : 'var(--text-tertiary)');
 
-        return `<tr style="border-bottom:1px solid rgba(255,255,255,0.03); transition:0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+        return `<tr style="border-bottom:1px solid var(--border-subtle); transition:0.15s;">
             <td style="padding:10px 14px;">
-                <div style="font-weight:700;"><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-main); text-decoration:none;">${m.name}</a></div>
-                <div style="font-size:0.75em; color:var(--text-dim);">[${m.id}] • Lv ${m.level || '—'}</div>
+                <div style="font-weight:700;"><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${m.name}</a></div>
+                <div style="font-size:0.75em; color:var(--text-tertiary);">[${m.id}] • Lv ${m.level || '—'}</div>
             </td>
             <td style="padding:10px 10px;">
                 <span style="background:${m.gradeColor}20; color:${m.gradeColor}; border:1px solid ${m.gradeColor}40; padding:2px 8px; border-radius:6px; font-weight:800; font-size:0.85em;">
                     ${m.grade}
                 </span>
-                <div style="font-size:0.72em; color:var(--text-dim); margin-top:2px;">${m.gradeLabel}</div>
+                <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;">${m.gradeLabel}</div>
             </td>
             <td style="padding:10px 10px;">
-                <div style="font-weight:700; color:${m.airHours > 0 ? 'var(--teal)' : 'var(--text-dim)'};">${m.airtimeFormatted}</div>
+                <div style="font-weight:700; color:${m.airHours > 0 ? 'var(--teal, #00cec9)' : 'var(--text-tertiary)'};">${m.airtimeFormatted}</div>
                 <div style="width:70px; background:rgba(255,255,255,0.05); height:4px; border-radius:2px; margin-top:4px; overflow:hidden;">
-                    <div style="width:${m.flightPct}%; background:var(--teal); height:100%;"></div>
+                    <div style="width:${m.flightPct}%; background:var(--teal, #00cec9); height:100%;"></div>
                 </div>
-                <div style="font-size:0.7em; color:var(--text-dim);">${m.flightPct}% of war</div>
+                <div style="font-size:0.7em; color:var(--text-tertiary);">${m.flightPct}% of war</div>
             </td>
-            <td style="padding:10px 10px; font-weight:700; color:var(--text-main);">${m.flightTrips || 0}</td>
+            <td style="padding:10px 10px; font-weight:700;">${m.flightTrips || 0}</td>
             <td style="padding:10px 10px;">${farmedBadge}</td>
-            <td style="padding:10px 10px; font-weight:700; color:${m.respectLeaked > 0 ? 'var(--red)' : 'var(--text-dim)'};">-${m.respectLeaked} pts</td>
-            <td style="padding:10px 10px; font-weight:700; color:var(--blue);">${m.hitsMade}</td>
+            <td style="padding:10px 10px; font-weight:700; color:${m.respectLeaked > 0 ? 'var(--accent-crimson)' : 'var(--text-tertiary)'};">-${m.respectLeaked} pts</td>
+            <td style="padding:10px 10px; font-weight:700; color:var(--accent-cobalt);">${m.hitsMade}</td>
             <td style="padding:10px 14px; font-weight:800; color:${netColor};">${netStr} pts</td>
         </tr>`;
     }).join('');
 }
+const renderSentinelTableDebounced = debounce(renderSentinelTable, 200);
 
-function openFFKeyModal() {
-    const modal = document.getElementById('ffkey-modal');
-    if (modal) {
-        modal.style.display = 'flex';
-        const cur = localStorage.getItem('warboard_ffkey') || '';
-        document.getElementById('modal-ff-key-input').value = cur;
-        document.getElementById('modal-ff-key-input').focus();
-    }
-}
+// ── Render Cross-Faction Armory & Combat Loadouts ──
+function renderCrossFactionLoadouts(data) {
+    const members = data.members || [];
+    const loans = dashData?.dash?.loans || [];
+    const loanBorrowers = new Set(loans.map(l => String(l.borrowerId || l.loaned_to)));
 
-function closeFFKeyModal() {
-    const modal = document.getElementById('ffkey-modal');
-    if (modal) modal.style.display = 'none';
-}
+    // Calculate armory loadout stats
+    const activeCombatants = members.filter(m => m.hitsMade > 0);
+    const combatantsWithLoans = activeCombatants.filter(m => loanBorrowers.has(String(m.id)));
+    const coveragePct = activeCombatants.length > 0 ? Math.round((combatantsWithLoans.length / activeCombatants.length) * 100) : 0;
 
-async function saveFFKeyFromModal() {
-    const input = document.getElementById('modal-ff-key-input');
-    const val = (input?.value || '').trim();
-    localStorage.setItem('warboard_ffkey', val);
+    const cfGearDeployed = document.getElementById('cf-gear-deployed');
+    const cfCoveragePct = document.getElementById('cf-coverage-pct');
+    const cfCoverageSub = document.getElementById('cf-coverage-sub');
+    const cfReadiness = document.getElementById('cf-readiness-index');
+    const cfTbody = document.getElementById('cf-loadouts-tbody');
 
-    try {
-        let master = {};
-        try { master = JSON.parse(localStorage.getItem('master_faction_config') || '{}'); } catch(e) {}
-        master.ffKey = val;
-        localStorage.setItem('master_faction_config', JSON.stringify(master));
+    if (cfGearDeployed) cfGearDeployed.textContent = `${loans.length} pieces`;
+    if (cfCoveragePct) cfCoveragePct.textContent = `${coveragePct}%`;
+    if (cfCoverageSub) cfCoverageSub.textContent = `${combatantsWithLoans.length} of ${activeCombatants.length} hitters armed`;
+    if (cfReadiness) cfReadiness.textContent = coveragePct >= 70 ? 'High' : (coveragePct >= 40 ? 'Moderate' : 'Under-Equipped');
 
-        await fetch('/api/save-discord-config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ffKey: val })
-        });
-        await fetch('/api/sync-configs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ discord: { ffKey: val } })
-        });
-    } catch(e) {}
+    if (!cfTbody) return;
 
-    closeFFKeyModal();
-    runWarFlightAudit(true);
-}
-
-window.openSettings = function() {
-    if (typeof openGlobalSettings === 'function') {
-        openGlobalSettings();
-    } else {
-        openFFKeyModal();
-    }
-};
-
-window.addEventListener('DOMContentLoaded', () => {
-    const factionSync = localStorage.getItem('master_faction_config');
-    if (factionSync) {
-        try {
-            fetch('/api/sync-configs', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ discord: JSON.parse(factionSync) })
-            }).catch(() => {});
-        } catch(e) {}
-    }
-});
-
-function renderAll(d, wars) {
-    renderFactionHero(d);
-    renderKPIs(d);
-    renderWarScore(d);
-    renderChain(d);
-    renderMembers(d);
-    renderRespect(d);
-    renderLoans(d);
-    renderFactionStats(d);
-    renderStatusBreakdown(d);
-    renderRecentWars(wars);
-}
-
-function renderFactionHero(d) {
-    const f = d.faction || {};
-    const members = Object.values(d.members || {});
-    const online = members.filter(m => m.last_action?.status === 'Online').length;
-    const hosp = members.filter(m => m.status?.state === 'Hospital').length;
-    const travel = members.filter(m => m.status?.state === 'Traveling').length;
-
-    document.getElementById('faction-hero').innerHTML = `
-        <div class="faction-name-block">
-            <h2>${f.name || 'Your Faction'}</h2>
-            <div class="faction-id">ID: ${f.ID || '—'} &nbsp;|&nbsp; Respect: ${fmtNum(f.respect || 0)}</div>
-            ${f.tag ? `<span class="faction-tag">[${f.tag}]</span>` : ''}
-        </div>
-        <div class="faction-hero-stats">
-            <div class="hero-stat"><div class="val">${members.length}</div><div class="lbl">Members</div></div>
-            <div class="faction-divider"></div>
-            <div class="hero-stat"><div class="val green">${online}</div><div class="lbl">Online</div></div>
-            <div class="faction-divider"></div>
-            <div class="hero-stat"><div class="val red">${hosp}</div><div class="lbl">Hospital</div></div>
-            <div class="faction-divider"></div>
-            <div class="hero-stat"><div class="val" style="color:var(--blue)">${travel}</div><div class="lbl">Traveling</div></div>
-            <div class="faction-divider"></div>
-            <div class="hero-stat"><div class="val gold">${members.length} / ${f.capacity || 40}</div><div class="lbl">Capacity</div></div>
-        </div>
-    `;
-}
-
-function renderKPIs(d) {
-    const f = d.faction || {};
-    const members = Object.values(d.members || {});
-    const online = members.filter(m => m.last_action?.status === 'Online').length;
-    const idle = members.filter(m => m.last_action?.status === 'Idle').length;
-    const chain = d.chain || {};
-    const war = d.activeWar;
-
-    document.getElementById('kpi-members').innerText = members.length;
-    document.getElementById('kpi-online-sub').innerHTML = `<span style="color:var(--green)">${online} online</span>, <span style="color:var(--gold)">${idle} idle</span>`;
-    document.getElementById('kpi-respect').innerText = fmtNum(f.respect || 0);
-    document.getElementById('kpi-respect-sub').innerText = `${f.capacity || 40} member capacity`;
-
-    if (chain && chain.current > 0) {
-        document.getElementById('kpi-chain').innerText = fmtNum(chain.current);
-        document.getElementById('kpi-chain-timeout').innerText = `${fmtDuration(chain.timeout)} remaining`;
-    } else {
-        document.getElementById('kpi-chain').innerText = '0';
-        document.getElementById('kpi-chain-timeout').innerText = 'No active chain';
-    }
-
-    if (war) {
-        document.getElementById('kpi-war-status').innerHTML = `<span style="color:var(--red)">⚔️ AT WAR</span>`;
-        const myScore = war.myScore || 0;
-        const theirScore = war.enemyScore || 0;
-        document.getElementById('kpi-war-sub').innerText = `${fmtNum(myScore)} vs ${fmtNum(theirScore)}`;
-    } else {
-        document.getElementById('kpi-war-status').innerHTML = `<span style="color:var(--green)">Peace</span>`;
-        document.getElementById('kpi-war-sub').innerText = 'No active war';
-    }
-
-    const bestChainEl = document.getElementById('kpi-best-chain') || document.getElementById('kpi-level');
-    if (bestChainEl) bestChainEl.innerText = fmtNum(f.best_chain || 0);
-    document.getElementById('kpi-age').innerText = f.age ? `${Math.floor(f.age/365)}y ${Math.floor((f.age%365)/30)}m old` : '—';
-}
-
-function renderWarScore(d) {
-    const war = d.activeWar;
-    const badge = document.getElementById('war-live-badge');
-    const body = document.getElementById('war-score-body');
-
-    if (!war) {
-        badge.innerHTML = `<span class="war-no-badge">✅ No Active War</span>`;
-        body.innerHTML = `<div class="empty-state">Your faction is not currently in a ranked war. Enjoy the peace.</div>`;
+    if (!activeCombatants.length) {
+        cfTbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-tertiary);">No combat actions recorded for this war.</td></tr>`;
         return;
     }
 
-    badge.innerHTML = `<span class="war-active-badge">🔴 LIVE WAR</span>`;
+    cfTbody.innerHTML = activeCombatants.slice(0, 15).map(m => {
+        const memberLoans = loans.filter(l => String(l.borrowerId || l.loaned_to) === String(m.id));
+        const weaponLoans = memberLoans.filter(l => l.type === 'Weapon' || l.itemCategory === 'Weapon');
+        const armorLoans = memberLoans.filter(l => l.type === 'Armor' || l.itemCategory === 'Armor');
 
-    const myScore = war.myScore || 0;
-    const theirScore = war.enemyScore || 0;
-    const total = myScore + theirScore || 1;
-    const myPct = (myScore / total * 100).toFixed(1);
-    const winning = myScore >= theirScore;
+        const weaponStatus = weaponLoans.length > 0 
+            ? `<span style="color:var(--accent-amber); font-weight:700;">🔫 ${weaponLoans.map(w => w.name).join(', ')}</span>`
+            : `<span style="color:var(--text-tertiary);">Personal Weapons</span>`;
+        
+        const armorStatus = armorLoans.length > 0
+            ? `<span style="color:var(--accent-cyan); font-weight:700;">🛡️ ${armorLoans.map(a => a.name).join(', ')}</span>`
+            : `<span style="color:var(--text-tertiary);">Standard Gear</span>`;
 
-    body.innerHTML = `
-        <div class="war-score-row">
-            <div class="war-faction-name" style="color:var(--blue);">🔵 ${war.myFaction || 'Your Faction'}</div>
-            <div class="war-score-num ${winning ? 'winning' : 'losing'}">${fmtNum(myScore)}</div>
-            <div class="war-vs">VS</div>
-            <div class="war-score-num ${!winning ? 'winning' : 'losing'}">${fmtNum(theirScore)}</div>
-            <div class="war-faction-name" style="text-align:right;color:var(--red);">🔴 ${war.enemyFaction || 'Enemy'}</div>
-        </div>
-        <div class="war-bar-wrap">
-            <div class="war-bar-fill ${!winning ? 'danger' : ''}" style="width:${myPct}%"></div>
-        </div>
-        <div style="padding:0 20px 16px;display:flex;justify-content:space-between;font-size:0.82em;color:var(--text-dim);">
-            <span>${myPct}% score share</span>
-            <span>${winning ? '✅ Currently winning' : '❌ Currently losing'}</span>
-            <span>Target: ${fmtNum(war.target || 0)}</span>
-        </div>
-    `;
-}
-
-function renderChain(d) {
-    const chain = d.chain;
-    const body = document.getElementById('chain-body');
-    const badge = document.getElementById('chain-status-badge');
-
-    if (!chain || chain.current === 0) {
-        badge.innerHTML = '';
-        body.innerHTML = `<div class="empty-state">No active chain. Start hitting to begin one!</div>`;
-        return;
-    }
-
-    const timeout = chain.timeout;
-    const current = chain.current;
-    const nextBonus = chain.modifier ? chain.modifier : 10;
-    const dangerClass = timeout <= 90 ? 'danger' : 'ok';
-    const pct = Math.min((current / nextBonus) * 100, 100);
-
-    badge.innerHTML = timeout <= 90 
-        ? `<span class="war-active-badge" style="border-color:var(--red);color:var(--red);">⚠️ DROPPING</span>`
-        : `<span class="war-no-badge">🟢 Active</span>`;
-
-    body.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <div>
-                <div style="font-size:0.8em;color:var(--text-dim);text-transform:uppercase;font-weight:700;">Current Chain</div>
-                <div style="font-size:2em;font-weight:900;color:var(--green)">${fmtNum(current)}</div>
-            </div>
-            <div style="text-align:right;">
-                <div style="font-size:0.8em;color:var(--text-dim);text-transform:uppercase;font-weight:700;">Time Left</div>
-                <div class="chain-timeout ${dangerClass}">${fmtDuration(timeout)}</div>
-            </div>
-        </div>
-        <div class="chain-progress-wrap">
-            <div class="chain-progress-fill" style="width:${timeout/300*100}%"></div>
-        </div>
-        <div class="chain-meta">
-            <span>Timeout: ${fmtDuration(timeout)}</span>
-            <span>Modifier: ${chain.modifier ? chain.modifier + 'x' : '—'}</span>
-            <span>Cooldown: ${chain.cooldown ? fmtDuration(chain.cooldown) : 'None'}</span>
-        </div>
-    `;
-}
-
-function renderMembers(d) {
-    const members = Object.entries(d.members || {});
-    const count = document.getElementById('member-count-badge');
-    const list = document.getElementById('member-list');
-
-    const online = members.filter(([,m]) => m.last_action?.status === 'Online').length;
-    count.innerText = `${members.length} members · ${online} online`;
-
-    members.sort((a, b) => {
-        const order = { 'Online': 0, 'Idle': 1, 'Offline': 2, 'Hospital': 3, 'Traveling': 4 };
-        return (order[a[1].last_action?.status] ?? 5) - (order[b[1].last_action?.status] ?? 5);
-    });
-
-    if (!members.length) { list.innerHTML = `<div class="empty-state">No members found.</div>`; return; }
-
-    list.innerHTML = members.map(([id, m]) => {
-        const s = m.last_action?.status || 'Offline';
-        const stateMap = { 'Online': 'online', 'Idle': 'idle', 'Offline': 'offline', 'Hospital': 'hospital', 'Traveling': 'traveling' };
-        const pillClass = stateMap[s] || 'offline';
-        const lastTs = m.last_action?.timestamp ? timeSince(m.last_action.timestamp) : '—';
-        const now = Math.floor(Date.now() / 1000);
-        const isInactive1d = m.last_action?.timestamp && (now - m.last_action.timestamp) >= 86400;
-        return `<div class="member-row">
-            <div><a class="m-name" href="https://www.torn.com/profiles.php?XID=${id}" target="_blank">${m.name}</a><div style="font-size:0.72em;color:var(--text-dim);">[${id}]</div></div>
-            <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
-                <span class="status-pill ${pillClass}"><span class="status-dot"></span>${s}</span>
-                ${isInactive1d ? '<span style="font-size:0.7em;background:rgba(255,165,2,0.15);color:var(--gold);padding:2px 6px;border-radius:4px;border:1px solid rgba(255,165,2,0.3);font-weight:700;">💤 1d+ Inactive</span>' : ''}
-            </div>
-            <div style="font-size:0.82em;color:${isInactive1d ? 'var(--gold)' : 'var(--text-dim)'};font-weight:${isInactive1d ? '700' : 'normal'};">${lastTs}</div>
-        </div>`;
+        return `<tr>
+            <td style="font-weight:700;">
+                <a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${m.name}</a>
+                <div style="font-size:0.75em; color:var(--text-tertiary);">[${m.id}] • Grade ${m.grade}</div>
+            </td>
+            <td><span class="badge-loan active">Active Combatant</span></td>
+            <td>${weaponStatus}</td>
+            <td>${armorStatus}</td>
+            <td><strong>${m.hitsMade}</strong> hits &bull; <strong>${m.timesHit || 0}</strong> def</td>
+        </tr>`;
     }).join('');
 }
 
-function renderRespect(d) {
-    const members = Object.entries(d.members || {});
-    const el = document.getElementById('respect-list');
-
-    const sorted = members
-        .map(([id, m]) => ({ name: m.name, id, score: m.score || 0 }))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 8);
-
-    if (!sorted.length || sorted[0].score === 0) {
-        el.innerHTML = `<div class="empty-state" style="padding:18px;">
-            Faction is currently at peace.<br>
-            <span style="font-size:0.85em;color:var(--text-dim);margin-top:4px;display:inline-block;">See <a href="/payout.html" style="color:var(--blue);font-weight:700;">Payouts</a> or the <a href="#war-sentinel-card" style="color:var(--teal);font-weight:700;">War Sentinel</a> for recent war respect contributions.</span>
-        </div>`;
-        return;
-    }
-
-    const max = sorted[0].score || 1;
-    el.innerHTML = sorted.map((m, i) => `
-        <div class="respect-row">
-            <div style="font-size:0.8em;color:var(--text-dim);width:16px;">${i+1}</div>
-            <div class="respect-name"><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-main);text-decoration:none;font-weight:600;">${m.name}</a></div>
-            <div class="respect-bar-wrap"><div class="respect-bar-fill" style="width:${(m.score/max*100).toFixed(0)}%"></div></div>
-            <div class="respect-val">${fmtNum(m.score)}</div>
-        </div>
-    `).join('');
-}
-
-function renderLoans(d) {
-    const loans = d.loans || [];
-    const el = document.getElementById('loan-list');
-    const badge = document.getElementById('loan-count-badge');
-
-    badge.innerText = `${loans.length} active`;
-
-    if (d.armoryError) {
-        el.innerHTML = `<div class="empty-state" style="color:var(--gold);">⚠️ Armory access requires the faction API key to have "Armory" permissions enabled.</div>`;
-        return;
-    }
-    if (!loans.length) {
-        el.innerHTML = `<div class="empty-state">No active armory loans.</div>`;
-        return;
-    }
-
-    const typeMap = { 'Armor': 'armor', 'Weapon': '', 'Temporary': 'temp' };
-    el.innerHTML = `<div style="display:grid;grid-template-columns:2fr 2fr 1fr;gap:8px;padding:8px 20px;font-size:0.75em;font-weight:700;text-transform:uppercase;color:var(--text-dim);border-bottom:1px solid var(--border)"><div>Item</div><div>Loaned To</div><div>Type</div></div>` +
-        loans.map(l => `<div class="loan-row">
-            <div style="font-weight:600;color:var(--gold);">${l.name}</div>
-            <div style="color:var(--text-dim);">ID: <span style="color:var(--text-main);font-weight:600;">${l.loaned_to}</span></div>
-            <div><span class="badge-type ${typeMap[l.type] || ''}">${l.type}</span></div>
-        </div>`).join('');
-}
-
-function renderFactionStats(d) {
-    const f = d.faction || {};
-    const el = document.getElementById('faction-stats-body');
-    const members = Object.values(d.members || {});
-    const ok = members.filter(m => m.status?.state === 'Okay').length;
-    const hosp = members.filter(m => m.status?.state === 'Hospital').length;
-
-    el.innerHTML = [
-        ['Faction Name', f.name || '—'],
-        ['Tag', f.tag ? `[${f.tag}]` : '—'],
-        ['ID', f.ID || '—'],
-        ['Capacity', `${members.length} / ${f.capacity || 40}`],
-        ['Respect', fmtNum(f.respect || 0)],
-        ['Best Chain', fmtNum(f.best_chain || 0)],
-        ['Age', f.age ? `${Math.floor(f.age/365)} years` : '—'],
-        ['Members', members.length],
-        ['Members OK', ok],
-        ['In Hospital', hosp],
-    ].map(([k, v]) => `<div class="stat-row"><span class="stat-label">${k}</span><span class="stat-val">${v}</span></div>`).join('');
-}
-
-function renderStatusBreakdown(d) {
-    const members = Object.values(d.members || {});
-    const el = document.getElementById('status-breakdown-body');
-
-    const counts = {};
-    members.forEach(m => {
-        const s = m.status?.state || 'Unknown';
-        counts[s] = (counts[s] || 0) + 1;
-    });
-
-    const colorMap = { 'Okay': 'var(--green)', 'Hospital': 'var(--red)', 'Traveling': 'var(--blue)', 'Jail': 'var(--purple)', 'Federal': 'var(--red)', 'Unknown': 'var(--text-dim)' };
-    const total = members.length || 1;
-
-    el.innerHTML = Object.entries(counts)
-        .sort((a, b) => b[1] - a[1])
-        .map(([state, count]) => {
-            const pct = (count / total * 100).toFixed(0);
-            return `<div class="stat-row">
-                <span class="stat-label" style="color:${colorMap[state] || 'var(--text-dim)'}">${state}</span>
-                <div style="display:flex;align-items:center;gap:10px;">
-                    <div style="width:80px;background:var(--item);border-radius:4px;height:6px;overflow:hidden;">
-                        <div style="width:${pct}%;height:100%;border-radius:4px;background:${colorMap[state] || '#666'};"></div>
-                    </div>
-                    <span class="stat-val">${count} <span style="color:var(--text-dim);font-size:0.8em;">(${pct}%)</span></span>
-                </div>
-            </div>`;
-        }).join('') || '<div class="empty-state">No data.</div>';
-}
-
-function renderRecentWars(wars) {
-    const el = document.getElementById('recent-wars-body');
-    const list = wars?.wars || [];
-
-    if (!list.length) {
-        el.innerHTML = `<div class="empty-state">No recent wars found in faction history.</div>`;
-        return;
-    }
-
-    el.innerHTML = list.slice(0, 10).map(w => {
-        const date = new Date(w.start * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        return `<div class="stat-row" style="padding:10px 0;">
-            <div><div style="font-weight:600;font-size:0.88em;">${w.enemy || 'Unknown'}</div><div style="font-size:0.75em;color:var(--text-dim);">${date}</div></div>
-            <a href="/payout.html${w.id ? `?warId=${w.id}` : ''}" style="font-size:0.78em;color:var(--blue);text-decoration:none;font-weight:600;">View →</a>
-        </div>`;
-    }).join('');
-}
-
-// WAR ANALYST — uses existing data, no Gemini API needed
+// ─── War Analyst Functions ───
 function runAnalysis(mode) {
     ['past', 'live', 'members', 'recommend'].forEach(t => {
         document.getElementById(`tab-${t}`)?.classList.remove('active');
@@ -1403,12 +2541,13 @@ function runAnalysis(mode) {
     document.getElementById(`tab-${mode}`)?.classList.add('active');
 
     const el = document.getElementById('analyst-output');
+    if (!el) return;
     el.className = 'analyst-output loading';
-    el.innerText = 'Analyzing faction data...';
+    el.innerText = 'Analyzing live faction telemetry...';
 
     if (!dashData) {
         el.className = 'analyst-output error';
-        el.innerText = '⚠️ No data loaded yet. Wait for the dashboard to finish loading.';
+        el.innerText = '⚠️ No data loaded yet. Connect your API key and refresh.';
         return;
     }
 
@@ -1423,7 +2562,7 @@ function runAnalysis(mode) {
 
         if (mode === 'live') {
             if (!war) {
-                el.innerHTML = `<b>🟢 No Active War</b><br><br>Your faction is currently at peace. Use this time to:<br>• <b>Build your chain</b> for bonus respect<br>• <b>Train stats</b> before the next ranked war<br>• <b>Scout</b> potential opponents to identify optimal matchmaking targets`;
+                el.innerHTML = `<b>🟢 No Active War</b><br><br>Your faction is currently at peace. Recommended actions:<br>• <b>Build your chain</b> for multiplier respect bonuses.<br>• <b>Maintain armory reserves</b> (ensure Xanax &ge; 50, FAKs &ge; 60).<br>• <b>Monitor Flight Sentinel</b> to practice overseas travel safety.`;
                 return;
             }
             const myScore = war.myScore || 0;
@@ -1439,18 +2578,16 @@ function runAnalysis(mode) {
 <b>Score:</b> ${fmtNum(myScore)} vs ${fmtNum(theirScore)} &nbsp;(${winning ? '✅ You are winning' : '❌ You are losing'})<br>
 <b>Target Score:</b> ${fmtNum(target)} &nbsp;|&nbsp; <b>Your Progress:</b> ${myPct}%<br>
 <b>Score Gap:</b> ${winning ? '+' : ''}${fmtNum(diff)} in your ${winning ? 'favor' : "enemy's favor"}<br><br>
-<b>🚨 Urgent Actions:</b><br>
-${hosp > 3 ? `• <span style="color:var(--red)">⚠️ ${hosp} members are hospitalized</span> — prioritize medding them out<br>` : ''}
-${online < 5 ? `• <span style="color:var(--gold)">⚠️ Only ${online} members are online</span> — call in off-duty members immediately<br>` : ''}
-${!winning ? `• <span style="color:var(--red)">You are behind by ${fmtNum(Math.abs(diff))} points</span> — all active members must focus war hits NOW<br>` : ''}
-${winning ? `• <span style="color:var(--green)">Maintain pressure</span> — keep pushing and hospitalize their online members to prevent them catching up<br>` : ''}
-• Focus highest-respect enemies (check Live Warboard for targets)`;
-        }
-
-        else if (mode === 'past') {
+<b>🚨 Tactical Actions:</b><br>
+${hosp > 3 ? `• <span style="color:var(--accent-crimson)">⚠️ ${hosp} members are hospitalized</span> — prioritize medding them out from faction armory<br>` : ''}
+${online < 5 ? `• <span style="color:var(--accent-amber)">⚠️ Only ${online} members are online</span> — call in off-duty members immediately<br>` : ''}
+${!winning ? `• <span style="color:var(--accent-crimson)">You are behind by ${fmtNum(Math.abs(diff))} points</span> — all active members must focus war hits NOW<br>` : ''}
+${winning ? `• <span style="color:var(--accent-emerald)">Maintain pressure</span> — keep pushing and hospitalize their online members<br>` : ''}
+• Ensure all combatants draw appropriate weapons from Armory Tracker (#armory).`;
+        } else if (mode === 'past') {
             const wars = dashData.wars?.wars || [];
             if (!wars.length) {
-                el.innerHTML = `<b>📊 No Past Wars Found</b><br><br>Your faction doesn't appear to have any recently finished ranked wars, or the API key doesn't have ranked war history access.`;
+                el.innerHTML = `<b>📊 No Past Wars Found</b><br><br>No recently finished ranked wars were detected in faction history.`;
                 return;
             }
             const lastWar = wars[0];
@@ -1458,12 +2595,10 @@ ${winning ? `• <span style="color:var(--green)">Maintain pressure</span> — k
             el.innerHTML = `<b>📊 LAST WAR SUMMARY</b><br><br>
 <b>Opponent:</b> ${lastWar.enemy || 'Unknown'}<br>
 <b>Date:</b> ${date}<br><br>
-To get a full breakdown of member performance, hits, assists, and payouts from this war:<br><br>
-→ <a href="/payout.html" style="color:var(--blue);font-weight:700;">Open the Payout Calculator →</a><br><br>
-The Payout Calculator scrapes your full attack log and calculates per-member stats including attacks, assists, outside clears, and exact payout amounts.`;
-        }
-
-        else if (mode === 'members') {
+To see complete member attack audits, airtime ratings, and payouts:<br><br>
+→ <a href="/payout.html" style="color:var(--accent-cobalt);font-weight:700;">Open the Payout Calculator →</a><br>
+→ <a href="#sentinel" onclick="switchOpsTab('sentinel')" style="color:var(--teal, #00cec9);font-weight:700;">Open War Flight &amp; Farm Sentinel →</a>`;
+        } else if (mode === 'members') {
             const memberEntries = Object.entries(d.members || {});
             const total = memberEntries.length;
             const online = memberEntries.filter(([,m]) => m.last_action?.status === 'Online').length;
@@ -1474,7 +2609,7 @@ The Payout Calculator scrapes your full attack log and calculates per-member sta
             const now = Math.floor(Date.now()/1000);
             const inactive = memberEntries.filter(([,m]) => {
                 const lastSeen = m.last_action?.timestamp || 0;
-                return (now - lastSeen) > 7 * 86400; // 7 days
+                return (now - lastSeen) > 7 * 86400;
             });
 
             el.innerHTML = `<b>👥 MEMBER HEALTH REPORT</b><br><br>
@@ -1482,33 +2617,25 @@ The Payout Calculator scrapes your full attack log and calculates per-member sta
 <b>Online Right Now:</b> ${online} (${(online/total*100).toFixed(0)}%)<br>
 <b>Idle:</b> ${idle} &nbsp;|&nbsp; <b>In Hospital:</b> ${hosp} &nbsp;|&nbsp; <b>Traveling:</b> ${travel} &nbsp;|&nbsp; <b>OK:</b> ${ok}<br><br>
 <b>⚠️ Inactive Members (&gt;7 days):</b> ${inactive.length}<br>
-${inactive.slice(0,5).map(([id, m]) => `&nbsp;&nbsp;• <a href="https://www.torn.com/profiles.php?XID=${id}" target="_blank" style="color:var(--gold);font-weight:700;text-decoration:none;">${m.name}</a> — last seen ${timeSince(m.last_action?.timestamp)}`).join('<br>')}<br>
-${inactive.length > 5 ? `<span style="color:var(--text-dim)">&nbsp;&nbsp;...and ${inactive.length - 5} more</span><br>` : ''}
-<br><b>💡 Recommendation:</b> ${inactive.length > 5 ? `Consider recruiting actively. ${inactive.length} members haven't logged in within 7 days.` : 'Member activity looks healthy. Keep up engagement!'}`;
-        }
-
-        else if (mode === 'recommend') {
-            const total = members.length;
-            const online = members.filter(m => m.last_action?.status === 'Online').length;
-            const hosp = members.filter(m => m.status?.state === 'Hospital').length;
+${inactive.slice(0,5).map(([id, m]) => `&nbsp;&nbsp;• <a href="https://www.torn.com/profiles.php?XID=${id}" target="_blank" style="color:var(--accent-amber);font-weight:700;text-decoration:none;">${m.name}</a> — last seen ${timeSince(m.last_action?.timestamp)}`).join('<br>')}<br>
+${inactive.length > 5 ? `<span style="color:var(--text-tertiary)">&nbsp;&nbsp;...and ${inactive.length - 5} more</span><br>` : ''}`;
+        } else if (mode === 'recommend') {
             const chainActive = chain && chain.current > 0;
             const chainDanger = chainActive && chain.timeout <= 90;
-
             el.innerHTML = `<b>🎯 TACTICAL RECOMMENDATIONS</b><br><br>
-${chainDanger ? `<b style="color:var(--red)">🚨 URGENT: Chain is about to drop (${fmtDuration(chain.timeout)} left)! Someone needs to hit NOW.</b><br><br>` : ''}
-${chainActive ? `✅ <b>Keep the chain alive</b> — at ${fmtNum(chain.current)} hits<br>` : '🔴 <b>Start a chain</b> — you currently have no active chain. Chaining earns bonus respect.<br>'}
-${war ? `⚔️ <b>War is active</b> — prioritize war hits over all else. Every point counts.<br>` : ''}
-${hosp > 0 ? `💊 <b>${hosp} members in hospital</b> — if it's your own members, consider medding them.<br>` : ''}
-${(f.capacity && total < f.capacity) ? `👥 <b>Recruiting opportunity</b> — you have ${f.capacity - total} open slot${(f.capacity - total) > 1 ? 's' : ''}. Fill them for war strength.<br>` : ''}
-${online < 10 ? `📢 <b>Low online count (${online})</b> — consider pinging members in Discord to be online during wars.<br>` : ''}
-<br>→ Check <a href="/payout.html" style="color:var(--blue)">Payouts</a> to reward your members after wars.<br>
-→ Check <a href="/discord.html" style="color:var(--blue)">Discord Alerts</a> for automated notifications.`;
+${chainDanger ? `<b style="color:var(--accent-crimson)">🚨 URGENT: Chain is about to drop (${fmtDuration(chain.timeout)} left)! Someone needs to hit NOW.</b><br><br>` : ''}
+${chainActive ? `✅ <b>Chain Active:</b> Currently at ${fmtNum(chain.current)} hits.<br>` : '🔴 <b>Start a chain:</b> No active chain. Chaining earns bonus respect.<br>'}
+• <b>Armory Safety:</b> Check Armory Tracker regularly to avoid running out of Xanax or medical supplies during wars.<br>
+• <b>Loan Management:</b> Reclaim loaner weapons from members who have been inactive for over 24 hours.`;
         }
-    }, 600);
+    }, 300);
 }
 
-document.addEventListener('DOMContentLoaded', loadAll);
+// ─── Initialization on DOMContentLoaded ───
+document.addEventListener('DOMContentLoaded', () => {
+    handleInitialHash();
+    loadAll();
+});
 </script>
-<script src="/global_settings.js?v=3.2.1"></script>
 </body>
 </html>
