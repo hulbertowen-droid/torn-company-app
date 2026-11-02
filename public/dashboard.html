@@ -272,6 +272,11 @@
         justify-content: space-between;
         gap: 12px;
         flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+    .armory-widget-header .card-title {
+        min-width: 0;
+        flex: 1 1 auto;
     }
     .armory-widget-header-actions {
         display: flex;
@@ -279,6 +284,15 @@
         gap: 8px;
         white-space: nowrap;
         flex-shrink: 0;
+        min-width: fit-content;
+    }
+    .armory-widget-header-actions a {
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 13px;
+        text-decoration: none;
     }
     .low-stock-ticker {
         display: flex;
@@ -833,6 +847,465 @@
     .card-pulse {
         animation: cardPulseAccent 1.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
+
+    /* ── Standard Button System (Bug 1.3) ── */
+    .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-family: inherit;
+        font-weight: 700;
+        border-radius: var(--radius-sm);
+        border: 1px solid transparent;
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        text-decoration: none;
+        line-height: 1.2;
+        user-select: none;
+        white-space: nowrap;
+    }
+    .btn-sm {
+        padding: 5px 12px;
+        font-size: 0.78em;
+    }
+    .btn-primary {
+        background: var(--accent-cobalt);
+        color: #fff;
+        border-color: var(--accent-cobalt);
+    }
+    .btn-primary:hover {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: #fff;
+    }
+    .btn-outline {
+        background: transparent;
+        border-color: var(--border-default);
+        color: var(--text-secondary);
+    }
+    .btn-outline:hover {
+        border-color: var(--accent-cobalt-border);
+        color: var(--text-primary);
+        background: var(--bg-hover);
+    }
+    .btn-outline-primary {
+        background: rgba(59, 130, 246, 0.08);
+        border-color: rgba(59, 130, 246, 0.35);
+        color: var(--accent-cobalt);
+    }
+    .btn-outline-primary:hover {
+        background: var(--accent-cobalt);
+        color: #fff;
+        border-color: var(--accent-cobalt);
+    }
+    .btn-outline-warning {
+        background: rgba(245, 158, 11, 0.08);
+        border-color: rgba(245, 158, 11, 0.35);
+        color: var(--accent-amber);
+    }
+    .btn-outline-warning:hover {
+        background: var(--accent-amber);
+        color: #000;
+        border-color: var(--accent-amber);
+    }
+    .btn-outline-danger {
+        background: rgba(239, 68, 68, 0.08);
+        border-color: rgba(239, 68, 68, 0.35);
+        color: var(--accent-crimson);
+    }
+    .btn-outline-danger:hover {
+        background: var(--accent-crimson);
+        color: #fff;
+        border-color: var(--accent-crimson);
+    }
+    .armory-section-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    /* ── Standard Badges (Bug 1.4) ── */
+    .badge-primary {
+        background: rgba(59, 130, 246, 0.15);
+        color: var(--accent-cobalt);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        padding: 3px 10px;
+        border-radius: var(--radius-full);
+        font-size: 0.72em;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .badge-warning {
+        background: rgba(245, 158, 11, 0.15);
+        color: var(--accent-amber);
+        border: 1px solid rgba(245, 158, 11, 0.35);
+        padding: 3px 10px;
+        border-radius: var(--radius-full);
+        font-size: 0.72em;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .badge-danger {
+        background: rgba(239, 68, 68, 0.15);
+        color: var(--accent-crimson);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        padding: 3px 10px;
+        border-radius: var(--radius-full);
+        font-size: 0.72em;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .badge-neutral {
+        background: rgba(148, 163, 184, 0.12);
+        color: var(--text-tertiary);
+        border: 1px solid var(--border-subtle);
+        padding: 3px 10px;
+        border-radius: var(--radius-full);
+        font-size: 0.72em;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    /* ── Low-Stock Threshold Polish (Bug 1.5) ── */
+    .thresh-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+    .thresh-input-wrap {
+        background: var(--bg-card);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 12px 14px;
+        transition: border-color 0.2s;
+    }
+    .thresh-input-wrap:focus-within {
+        border-color: var(--accent-cobalt-border);
+    }
+    .thresh-label {
+        display: block;
+        font-size: 0.74em;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+        margin-bottom: 8px;
+        letter-spacing: 0.5px;
+    }
+    .thresh-input-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .thresh-input {
+        flex: 1;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-sm);
+        padding: 6px 10px;
+        font-family: var(--font-mono);
+        font-size: 0.9em;
+        font-weight: 700;
+        color: var(--text-primary);
+        box-sizing: border-box;
+    }
+    .thresh-input:focus {
+        outline: none;
+        border-color: var(--accent-cobalt);
+    }
+    .thresh-unit {
+        font-size: 0.78em;
+        color: var(--text-tertiary);
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .thresh-toggle-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 14px;
+        border-top: 1px solid var(--border-subtle);
+        padding-top: 16px;
+    }
+
+    /* ── Armory Sub-Tab Navigation (Part 3) ── */
+    .armory-sub-nav {
+        display: flex;
+        gap: 6px;
+        padding: 0 4px 12px 4px;
+        border-bottom: 1px solid var(--border-default);
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+    }
+    .armory-sub-tab {
+        padding: 8px 18px;
+        font-size: 0.82em;
+        font-weight: 700;
+        border-radius: var(--radius-sm);
+        border: 1px solid transparent;
+        background: var(--bg-card);
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all var(--transition-fast);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+        font-family: inherit;
+    }
+    .armory-sub-tab:hover {
+        background: var(--bg-elevated);
+        color: var(--text-primary);
+        border-color: var(--border-subtle);
+    }
+    .armory-sub-tab.active {
+        background: var(--accent-cobalt-dim);
+        color: var(--accent-cobalt);
+        border-color: var(--accent-cobalt-border);
+    }
+
+    /* ── Jimidy-Style Member Consumption & Deposit Tracker (Part 2) ── */
+    .tracker-date-bar {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 12px 16px;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .date-presets {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+    .date-range-inputs {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .date-input-field {
+        background: var(--bg-card);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-sm);
+        padding: 6px 10px;
+        font-size: 0.82em;
+        color: var(--text-primary);
+        font-family: inherit;
+        color-scheme: dark;
+    }
+    .date-input-field:focus {
+        outline: none;
+        border-color: var(--accent-cobalt);
+    }
+
+    /* 5 KPI Summary Strip */
+    .tracker-kpi-strip {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+    @media (max-width: 1024px) {
+        .tracker-kpi-strip { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 640px) {
+        .tracker-kpi-strip { grid-template-columns: repeat(2, 1fr); }
+    }
+    .tracker-kpi-card {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        position: relative;
+        overflow: hidden;
+    }
+    .tracker-kpi-card::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+    }
+    .tracker-kpi-card.kpi-card-xanax::after { background: var(--accent-purple); }
+    .tracker-kpi-card.kpi-card-meds::after { background: var(--accent-cobalt); }
+    .tracker-kpi-card.kpi-card-boosters::after { background: var(--accent-amber); }
+    .tracker-kpi-card.kpi-card-donor::after { background: var(--accent-emerald); }
+    .tracker-kpi-card.kpi-card-consumer::after { background: var(--accent-crimson); }
+    .t-kpi-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .t-kpi-icon {
+        font-size: 1.2em;
+    }
+    .t-kpi-label {
+        font-size: 0.7em;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: var(--text-tertiary);
+        letter-spacing: 0.5px;
+    }
+    .t-kpi-val {
+        font-size: 1.35em;
+        font-weight: 900;
+        font-family: var(--font-mono);
+        color: var(--text-primary);
+        line-height: 1.2;
+    }
+    .t-kpi-sub {
+        font-size: 0.72em;
+        color: var(--text-tertiary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Sortable TH */
+    .sortable-th {
+        cursor: pointer;
+        user-select: none;
+        transition: color 0.15s;
+    }
+    .sortable-th:hover {
+        color: var(--accent-cobalt) !important;
+    }
+
+    /* Modal System */
+    .modal-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        padding: 20px;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+    }
+    .modal-backdrop.open {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .modal-dialog {
+        background: var(--bg-card);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        width: 100%;
+        max-width: 820px;
+        max-height: 85vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        transform: translateY(12px) scale(0.98);
+        transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        overflow: hidden;
+    }
+    .modal-backdrop.open .modal-dialog {
+        transform: translateY(0) scale(1);
+    }
+    .modal-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border-subtle);
+        background: var(--bg-elevated);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .modal-title {
+        font-size: 1.05em;
+        font-weight: 800;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .modal-close {
+        background: transparent;
+        border: none;
+        color: var(--text-tertiary);
+        font-size: 1.2em;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: var(--radius-sm);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .modal-close:hover {
+        color: var(--text-primary);
+        background: var(--bg-hover);
+    }
+    .modal-body {
+        padding: 20px;
+        overflow-y: auto;
+        max-height: calc(85vh - 70px);
+    }
+
+    /* Toast Notification System */
+    .toast-container {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 10001;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        pointer-events: none;
+    }
+    .toast-msg {
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        padding: 10px 18px;
+        font-size: 0.85em;
+        font-weight: 600;
+        color: var(--text-primary);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        pointer-events: auto;
+        animation: toastIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .toast-msg.success { border-color: rgba(16, 185, 129, 0.5); }
+    .toast-msg.error { border-color: rgba(239, 68, 68, 0.5); color: var(--accent-crimson); }
+    .toast-msg.warn { border-color: rgba(245, 158, 11, 0.5); color: var(--accent-amber); }
+    @keyframes toastIn {
+        from { opacity: 0; transform: translateY(10px) scale(0.95); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+    }
     </style>
 </head>
 <body>
@@ -1222,367 +1695,509 @@
                 </div>
             </div>
 
-            <!-- UNIFIED FACTION ARMORY LEDGER (DEPOSITS, USAGE & CIRCULATION) -->
-            <div class="armory-subpanel">
-                <div class="subpanel-hdr" style="flex-wrap:wrap; gap:12px;">
-                    <div class="subpanel-title">
-                        <span>📊 Faction Armory &amp; Logistics Ledger</span>
-                        <span id="usage-total-badge" class="badge-type" style="background:var(--accent-emerald-dim); color:var(--accent-emerald);">Syncing activity...</span>
+            <!-- ARMORY SUB-TAB NAVIGATION (PART 3) -->
+            <div class="armory-sub-nav" id="armory-sub-nav">
+                <button class="armory-sub-tab active" id="asub-tab-usage" onclick="switchArmorySubTab('usage', this)">
+                    <span>📊</span> Usage &amp; Deposits
+                </button>
+                <button class="armory-sub-tab" id="asub-tab-stock" onclick="switchArmorySubTab('stock', this)">
+                    <span>💊</span> Current Stock &amp; Meds Burn Rate
+                </button>
+                <button class="armory-sub-tab" id="asub-tab-arsenal" onclick="switchArmorySubTab('arsenal', this)">
+                    <span>🔫</span> Weapons, Armor &amp; Loans
+                </button>
+                <button class="armory-sub-tab" id="asub-tab-thresholds" onclick="switchArmorySubTab('thresholds', this)">
+                    <span>⚙️</span> Safety Thresholds &amp; Alerts
+                </button>
+            </div>
+
+            <!-- SUB-PANE 1: USAGE & DEPOSITS (JIMIDY-STYLE TRACKER) -->
+            <div class="armory-sub-pane" id="asub-pane-usage">
+                <!-- DATE RANGE SELECTOR & QUICK PRESETS BAR -->
+                <div class="tracker-date-bar">
+                    <div class="date-presets">
+                        <button class="filter-pill active" data-preset="today" onclick="setTrackerPreset('today', this)">📅 Today</button>
+                        <button class="filter-pill" data-preset="3d" onclick="setTrackerPreset('3d', this)">📅 Last 3 Days</button>
+                        <button class="filter-pill" data-preset="7d" onclick="setTrackerPreset('7d', this)">📅 Last 7 Days</button>
+                        <button class="filter-pill" data-preset="month" onclick="setTrackerPreset('month', this)">📅 Current Month</button>
+                        <button class="filter-pill" data-preset="lastwar" onclick="setTrackerPreset('lastwar', this)">⚔️ Last Ranked War</button>
                     </div>
-                    <div class="subpanel-controls" style="flex-wrap:wrap; gap:8px;">
-                        <div class="analyst-tabs" style="padding:0; border:none; gap:6px;">
-                            <button class="analyst-tab active" id="btn-view-consumers" onclick="setUsageView('members', this)" style="padding:4px 12px; font-size:0.75em;">👥 By Member</button>
-                            <button class="analyst-tab" id="btn-view-items" onclick="setUsageView('items', this)" style="padding:4px 12px; font-size:0.75em;">📦 By Item</button>
-                            <button class="analyst-tab" id="btn-view-feed" onclick="setUsageView('feed', this)" style="padding:4px 12px; font-size:0.75em;">⏱️ Transaction Feed</button>
-                        </div>
-                        <button class="refresh-btn" id="btn-fetch-deep-history" onclick="fetchDeepArmoryHistory()" style="padding:4px 10px; font-size:0.74em; display:inline-flex; align-items:center; gap:4px;" title="Fetch up to 90 days of armory logs from Torn API">
-                            <span>📥 Deep History (90d)</span>
+                    <div class="date-range-inputs">
+                        <input type="date" id="tracker-date-from" class="date-input-field" title="Start Date">
+                        <span style="color:var(--text-tertiary); font-weight:700;">→</span>
+                        <input type="date" id="tracker-date-to" class="date-input-field" title="End Date">
+                        <button class="btn btn-sm btn-primary" id="btn-fetch-tracker" onclick="fetchConsumptionData()" style="padding:6px 14px;">
+                            <span id="tracker-fetch-icon">📥</span> Fetch / Query Ledger
                         </button>
                     </div>
                 </div>
 
-                <!-- 4 COMPACT LEDGER SUMMARY KPI CARDS -->
-                <div class="armory-ledger-kpis">
-                    <div class="ledger-kpi-card kpi-inflow">
-                        <div style="font-size:1.6em;">🟢</div>
-                        <div>
-                            <div style="font-size:0.7em; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); font-weight:700;">Deposited / Inflow</div>
-                            <div id="ledger-kpi-deposited" style="font-size:1.35em; font-weight:900; font-family:var(--font-mono); color:var(--accent-emerald);">+0</div>
-                            <div style="font-size:0.7em; color:var(--text-tertiary);">Donations &amp; Returns</div>
+                <!-- 5 LEDGER SUMMARY KPI CARDS STRIP -->
+                <div class="tracker-kpi-strip">
+                    <div class="tracker-kpi-card kpi-card-xanax">
+                        <div class="t-kpi-top">
+                            <span class="t-kpi-label">Total Xanax Used</span>
+                            <span class="t-kpi-icon">💊</span>
                         </div>
+                        <div class="t-kpi-val" id="tkpi-xanax" style="color:var(--accent-purple);">—</div>
+                        <div class="t-kpi-sub" id="tkpi-xanax-sub">Drugs Consumed</div>
                     </div>
-                    <div class="ledger-kpi-card kpi-outflow">
-                        <div style="font-size:1.6em;">🔴</div>
-                        <div>
-                            <div style="font-size:0.7em; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); font-weight:700;">Used / Outflow</div>
-                            <div id="ledger-kpi-used" style="font-size:1.35em; font-weight:900; font-family:var(--font-mono); color:var(--accent-crimson);">-0</div>
-                            <div style="font-size:0.7em; color:var(--text-tertiary);">Consumed &amp; Loaned</div>
+                    <div class="tracker-kpi-card kpi-card-meds">
+                        <div class="t-kpi-top">
+                            <span class="t-kpi-label">Total Medical Used</span>
+                            <span class="t-kpi-icon">🩹</span>
                         </div>
+                        <div class="t-kpi-val" id="tkpi-medical" style="color:var(--accent-cobalt);">—</div>
+                        <div class="t-kpi-sub" id="tkpi-medical-sub">SFAK, FAK, Morphine, Blood</div>
                     </div>
-                    <div class="ledger-kpi-card kpi-balance">
-                        <div style="font-size:1.6em;">⚖️</div>
-                        <div>
-                            <div style="font-size:0.7em; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); font-weight:700;">Net Armory Delta</div>
-                            <div id="ledger-kpi-net" style="font-size:1.35em; font-weight:900; font-family:var(--font-mono); color:var(--accent-cyan);">0</div>
-                            <div id="ledger-kpi-net-sub" style="font-size:0.7em; color:var(--text-tertiary);">Inventory Flow</div>
+                    <div class="tracker-kpi-card kpi-card-boosters">
+                        <div class="t-kpi-top">
+                            <span class="t-kpi-label">Total Boosters Used</span>
+                            <span class="t-kpi-icon">🥫</span>
                         </div>
+                        <div class="t-kpi-val" id="tkpi-boosters" style="color:var(--accent-amber);">—</div>
+                        <div class="t-kpi-sub" id="tkpi-boosters-sub">Cans, FHCs, Energy Items</div>
                     </div>
-                    <div class="ledger-kpi-card kpi-members">
-                        <div style="font-size:1.6em;">👥</div>
-                        <div>
-                            <div style="font-size:0.7em; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); font-weight:700;">Active Members</div>
-                            <div id="ledger-kpi-members" style="font-size:1.35em; font-weight:900; font-family:var(--font-mono); color:var(--accent-cobalt);">0</div>
-                            <div style="font-size:0.7em; color:var(--text-tertiary);">Involved in Window</div>
+                    <div class="tracker-kpi-card kpi-card-donor">
+                        <div class="t-kpi-top">
+                            <span class="t-kpi-label">Top Contributor</span>
+                            <span class="t-kpi-icon">🏆</span>
                         </div>
+                        <div class="t-kpi-val" id="tkpi-top-donor" style="color:var(--accent-emerald); font-size:1.1em; overflow:hidden; text-overflow:ellipsis;">—</div>
+                        <div class="t-kpi-sub" id="tkpi-top-donor-sub">+0 deposited</div>
+                    </div>
+                    <div class="tracker-kpi-card kpi-card-consumer">
+                        <div class="t-kpi-top">
+                            <span class="t-kpi-label">Top Consumer</span>
+                            <span class="t-kpi-icon">🔥</span>
+                        </div>
+                        <div class="t-kpi-val" id="tkpi-top-user" style="color:var(--accent-crimson); font-size:1.1em; overflow:hidden; text-overflow:ellipsis;">—</div>
+                        <div class="t-kpi-sub" id="tkpi-top-user-sub">-0 consumed</div>
                     </div>
                 </div>
 
-                <!-- MULTI-DIMENSIONAL FILTER CONTROLS BAR -->
-                <div class="armory-filter-container">
-                    <div class="armory-filter-row">
-                        <!-- TIME RANGE SELECTOR -->
-                        <div class="filter-group">
-                            <span class="filter-label">⏱️ Time Window:</span>
-                            <div class="filter-pills" id="time-pills">
-                                <button class="filter-pill" onclick="setArmoryTimeFilter('24h', this)">24 Hours</button>
-                                <button class="filter-pill" onclick="setArmoryTimeFilter('3d', this)">3 Days</button>
-                                <button class="filter-pill" onclick="setArmoryTimeFilter('7d', this)">7 Days</button>
-                                <button class="filter-pill active" onclick="setArmoryTimeFilter('30d', this)">30 Days</button>
-                                <button class="filter-pill" onclick="setArmoryTimeFilter('all', this)">All Loaded</button>
+                <!-- UNIFIED LEDGER SUBPANEL -->
+                <div class="armory-subpanel">
+                    <div class="subpanel-hdr" style="flex-wrap:wrap; gap:12px;">
+                        <div class="subpanel-title">
+                            <span>👥 Member Consumption &amp; Deposit Ledger</span>
+                            <span id="usage-total-badge" class="badge-primary">Syncing activity...</span>
+                        </div>
+                        <div class="armory-section-toolbar">
+                            <div class="analyst-tabs" style="padding:0; border:none; gap:6px;">
+                                <button class="analyst-tab active" id="btn-view-consumers" onclick="setUsageView('members', this)" style="padding:4px 12px; font-size:0.75em;">👥 By Member</button>
+                                <button class="analyst-tab" id="btn-view-items" onclick="setUsageView('items', this)" style="padding:4px 12px; font-size:0.75em;">📦 By Item</button>
+                                <button class="analyst-tab" id="btn-view-feed" onclick="setUsageView('feed', this)" style="padding:4px 12px; font-size:0.75em;">⏱️ Transaction Feed</button>
+                            </div>
+                            <button class="btn btn-sm btn-outline" id="btn-fetch-deep-history" onclick="fetchDeepArmoryHistory()" title="Fetch up to 90 days of armory logs from Torn API">
+                                <span>📥 Deep History (90d)</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 4 COMPACT LEDGER FLOW KPIS -->
+                    <div class="armory-ledger-kpis" style="margin: 12px 16px 0;">
+                        <div class="ledger-kpi-card kpi-inflow">
+                            <div style="font-size:1.6em;">🟢</div>
+                            <div>
+                                <div style="font-size:0.7em; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); font-weight:700;">Deposited / Inflow</div>
+                                <div id="ledger-kpi-deposited" style="font-size:1.35em; font-weight:900; font-family:var(--font-mono); color:var(--accent-emerald);">+0</div>
+                                <div style="font-size:0.7em; color:var(--text-tertiary);">Donations &amp; Returns</div>
+                            </div>
+                        </div>
+                        <div class="ledger-kpi-card kpi-outflow">
+                            <div style="font-size:1.6em;">🔴</div>
+                            <div>
+                                <div style="font-size:0.7em; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); font-weight:700;">Used / Outflow</div>
+                                <div id="ledger-kpi-used" style="font-size:1.35em; font-weight:900; font-family:var(--font-mono); color:var(--accent-crimson);">-0</div>
+                                <div style="font-size:0.7em; color:var(--text-tertiary);">Consumed &amp; Loaned</div>
+                            </div>
+                        </div>
+                        <div class="ledger-kpi-card kpi-balance">
+                            <div style="font-size:1.6em;">⚖️</div>
+                            <div>
+                                <div style="font-size:0.7em; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); font-weight:700;">Net Armory Delta</div>
+                                <div id="ledger-kpi-net" style="font-size:1.35em; font-weight:900; font-family:var(--font-mono); color:var(--accent-cyan);">0</div>
+                                <div id="ledger-kpi-net-sub" style="font-size:0.7em; color:var(--text-tertiary);">Inventory Flow</div>
+                            </div>
+                        </div>
+                        <div class="ledger-kpi-card kpi-members">
+                            <div style="font-size:1.6em;">👥</div>
+                            <div>
+                                <div style="font-size:0.7em; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-tertiary); font-weight:700;">Active Members</div>
+                                <div id="ledger-kpi-members" style="font-size:1.35em; font-weight:900; font-family:var(--font-mono); color:var(--accent-cobalt);">0</div>
+                                <div style="font-size:0.7em; color:var(--text-tertiary);">Involved in Window</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- MULTI-DIMENSIONAL FILTER CONTROLS & EXPORT BAR -->
+                    <div class="armory-filter-container" style="margin: 12px 16px;">
+                        <!-- FILTER TABS ROW -->
+                        <div class="armory-filter-row" style="margin-bottom:8px;">
+                            <div class="filter-group">
+                                <span class="filter-label">👥 Member Segment:</span>
+                                <div class="filter-pills" id="tracker-segment-pills">
+                                    <button class="filter-pill active" onclick="setTrackerTab('all', this)">All Members</button>
+                                    <button class="filter-pill" onclick="setTrackerTab('deficit', this)">🔴 Net Consumers (Net &lt; 0)</button>
+                                    <button class="filter-pill" onclick="setTrackerTab('donors', this)">🟢 Net Donors (Net &gt; 0)</button>
+                                    <button class="filter-pill" onclick="setTrackerTab('xanax', this)">💊 Xanax Users</button>
+                                    <button class="filter-pill" onclick="setTrackerTab('freeload', this)">😴 0 Deposited</button>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- ACTION TYPE SELECTOR -->
-                        <div class="filter-group">
-                            <span class="filter-label">⚡ Action:</span>
-                            <div class="filter-pills" id="action-pills">
-                                <button class="filter-pill active" onclick="setArmoryActionFilter('all', this)">All Activity</button>
-                                <button class="filter-pill" onclick="setArmoryActionFilter('inflow', this)">🟢 Deposits (+)</button>
-                                <button class="filter-pill" onclick="setArmoryActionFilter('outflow', this)">🔴 Used (-)</button>
-                                <button class="filter-pill" onclick="setArmoryActionFilter('loans', this)">🪖 Loans/Returns</button>
+                        <!-- TIME & ACTION ROW -->
+                        <div class="armory-filter-row">
+                            <!-- TIME RANGE SELECTOR -->
+                            <div class="filter-group">
+                                <span class="filter-label">⏱️ Window:</span>
+                                <div class="filter-pills" id="time-pills">
+                                    <button class="filter-pill" onclick="setArmoryTimeFilter('24h', this)">24 Hours</button>
+                                    <button class="filter-pill" onclick="setArmoryTimeFilter('3d', this)">3 Days</button>
+                                    <button class="filter-pill" onclick="setArmoryTimeFilter('7d', this)">7 Days</button>
+                                    <button class="filter-pill active" onclick="setArmoryTimeFilter('30d', this)">30 Days</button>
+                                    <button class="filter-pill" onclick="setArmoryTimeFilter('all', this)">All Loaded</button>
+                                </div>
+                            </div>
+
+                            <!-- ACTION TYPE SELECTOR -->
+                            <div class="filter-group">
+                                <span class="filter-label">⚡ Action:</span>
+                                <div class="filter-pills" id="action-pills">
+                                    <button class="filter-pill active" onclick="setArmoryActionFilter('all', this)">All Activity</button>
+                                    <button class="filter-pill" onclick="setArmoryActionFilter('inflow', this)">🟢 Deposits (+)</button>
+                                    <button class="filter-pill" onclick="setArmoryActionFilter('outflow', this)">🔴 Used (-)</button>
+                                    <button class="filter-pill" onclick="setArmoryActionFilter('loans', this)">🪖 Loans/Returns</button>
+                                </div>
                             </div>
                         </div>
+
+                        <div class="armory-filter-row" style="margin-top:8px;">
+                            <!-- CATEGORY SELECTOR -->
+                            <div class="filter-group">
+                                <span class="filter-label">🏷️ Category:</span>
+                                <select id="armory-cat-filter" class="sort-select" onchange="setArmoryCategoryFilter(this.value)" style="padding:5px 10px; font-size:0.8em;">
+                                    <option value="all">All Categories</option>
+                                    <option value="Medical">💊 Medical</option>
+                                    <option value="Drug">💉 Drugs</option>
+                                    <option value="Booster">🥫 Boosters</option>
+                                    <option value="Arsenal">🔫 Arsenal (Weapons/Armor)</option>
+                                    <option value="Other">📦 Other Items</option>
+                                </select>
+                            </div>
+
+                            <!-- SPECIFIC ITEM SELECTOR -->
+                            <div class="filter-group">
+                                <span class="filter-label">📦 Item:</span>
+                                <select id="armory-item-select" class="sort-select" onchange="setArmoryItemFilter(this.value)" style="padding:5px 10px; font-size:0.8em; max-width:180px;">
+                                    <option value="all">All Items</option>
+                                </select>
+                            </div>
+
+                            <!-- SEARCH BOX -->
+                            <div class="filter-group" style="flex-grow:1;">
+                                <input type="text" id="usage-search" placeholder="🔍 Search member name, ID, or item..." class="sort-select" style="width:100%; min-width:180px; padding:5px 12px; font-size:0.82em;" oninput="filterUsageDebounced()">
+                            </div>
+
+                            <!-- EXPORT ACTIONS -->
+                            <div class="filter-group" style="margin-left:auto; gap:6px;">
+                                <button class="btn btn-sm btn-outline" onclick="copyTrackerDiscord()" title="Copy formatted markdown summary table to clipboard">
+                                    <span>💬</span> Copy Discord Table
+                                </button>
+                                <button class="btn btn-sm btn-outline" onclick="exportTrackerCSV()" title="Download CSV ledger of member armory usage">
+                                    <span>📊</span> Export CSV
+                                </button>
+                                <button class="reset-filter-btn" id="btn-reset-armory-filters" onclick="resetArmoryFilters()" style="display:none; padding:5px 12px; font-size:0.78em; border-radius:var(--radius-sm); border:1px solid var(--accent-crimson-border); background:rgba(239,68,68,0.12); color:var(--accent-crimson); font-weight:700; cursor:pointer;">
+                                    ✕ Reset Filters
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- ACTIVE FILTER BREADCRUMB INDICATOR -->
+                        <div id="armory-active-filter-chips" style="display:none; margin-top:8px; flex-wrap:wrap; gap:6px; align-items:center;"></div>
                     </div>
 
-                    <div class="armory-filter-row" style="margin-top:8px;">
-                        <!-- CATEGORY SELECTOR -->
-                        <div class="filter-group">
-                            <span class="filter-label">🏷️ Category:</span>
-                            <select id="armory-cat-filter" class="sort-select" onchange="setArmoryCategoryFilter(this.value)" style="padding:5px 10px; font-size:0.8em;">
-                                <option value="all">All Categories</option>
-                                <option value="Medical">💊 Medical</option>
-                                <option value="Drug">💉 Drugs</option>
-                                <option value="Booster">🥫 Boosters</option>
-                                <option value="Arsenal">🔫 Arsenal (Weapons/Armor)</option>
-                                <option value="Other">📦 Other Items</option>
+                    <!-- USAGE VIEW 1: BY MEMBER (WHO DEPOSITED & USED WHAT) -->
+                    <div id="usage-view-members" class="scrollable" style="max-height:480px;">
+                        <table class="armory-table" id="tracker-member-table">
+                            <thead>
+                                <tr>
+                                    <th class="sortable-th" onclick="sortUsageMembers('name')">Member <span id="sort-ind-name">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('deposited')">Deposited (+) <span id="sort-ind-deposited">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('used')">Used (-) <span id="sort-ind-used">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('loaned')">Loaned Out <span id="sort-ind-loaned">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('returned')">Returned <span id="sort-ind-returned">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('net')">Net Armory Balance <span id="sort-ind-net">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('xanax')">Xanax <span id="sort-ind-xanax">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('medical')">Medical <span id="sort-ind-medical">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('boosters')">Boosters <span id="sort-ind-boosters">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('lastActive')" style="text-align:right;">Last Active <span id="sort-ind-lastActive">↕</span></th>
+                                    <th style="text-align:center;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usage-members-tbody">
+                                <tr><td colspan="11" style="text-align:center; padding:24px; color:var(--text-tertiary);">Loading member armory ledger...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- USAGE VIEW 2: BY ITEM (WHAT IS INFLOWING VS OUTFLOWING) -->
+                    <div id="usage-view-items" class="scrollable" style="max-height:480px; display:none;">
+                        <table class="armory-table">
+                            <thead>
+                                <tr>
+                                    <th>Item Name</th>
+                                    <th>Category</th>
+                                    <th>Deposited (+)</th>
+                                    <th>Used (-)</th>
+                                    <th>Net Flow</th>
+                                    <th>Top Depositors</th>
+                                    <th>Top Consumers</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usage-items-tbody">
+                                <tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-tertiary);">Loading item utilization breakdown...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- USAGE VIEW 3: LIVE TRANSACTION AUDIT FEED -->
+                    <div id="usage-view-feed" class="scrollable" style="max-height:480px; display:none;">
+                        <table class="armory-table">
+                            <thead>
+                                <tr>
+                                    <th>Time (TCT)</th>
+                                    <th>Member</th>
+                                    <th>Action</th>
+                                    <th>Quantity</th>
+                                    <th>Item Name</th>
+                                    <th>Category</th>
+                                    <th>Transaction Detail</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usage-feed-tbody">
+                                <tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-tertiary);">Loading chronological armory transaction feed...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SUB-PANE 2: MEDICAL SUPPLIES & DRUGS STOCK WITH BURN RATE -->
+            <div class="armory-sub-pane" id="asub-pane-stock" style="display:none;">
+                <div class="armory-subpanel">
+                    <div class="subpanel-hdr">
+                        <div class="subpanel-title">
+                            <span>💊 Medical Supplies &amp; Drugs Ledger</span>
+                            <span id="meds-count-badge" class="badge-primary">0 items</span>
+                        </div>
+                        <div class="armory-section-toolbar">
+                            <input type="text" id="meds-search" placeholder="🔍 Search medical / drugs..." class="sort-select" style="min-width:180px; padding:6px 12px; font-size:0.82em;" oninput="filterMedsDebounced()">
+                            <select id="meds-cat-filter" class="sort-select" onchange="filterMeds()" style="padding:6px 10px; font-size:0.82em;">
+                                <option value="all">All Supplies</option>
+                                <option value="medical">Medical Only</option>
+                                <option value="drugs">Drugs Only</option>
+                                <option value="boosters">Boosters &amp; Cans</option>
+                                <option value="low">⚠️ Low Reserves Only</option>
                             </select>
+                            <a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=donator" target="_blank" class="btn btn-sm btn-outline-primary">
+                                <span>📦</span> Deposit Supplies
+                            </a>
                         </div>
+                    </div>
 
-                        <!-- SPECIFIC ITEM SELECTOR -->
-                        <div class="filter-group">
-                            <span class="filter-label">📦 Specific Item:</span>
-                            <select id="armory-item-select" class="sort-select" onchange="setArmoryItemFilter(this.value)" style="padding:5px 10px; font-size:0.8em; max-width:200px;">
-                                <option value="all">All Items</option>
+                    <!-- LIVE BURN RATE CALCULATOR BANNER -->
+                    <div class="burn-rate-banner" id="burn-rate-banner">
+                        <div class="burn-stat-group">
+                            <div class="burn-stat">
+                                <span class="b-lbl">⚡ War Burn Rate</span>
+                                <span class="b-val" id="burn-rate-val">~0 meds/hr</span>
+                            </div>
+                            <div class="burn-stat">
+                                <span class="b-lbl">⏳ Estimated Reserves</span>
+                                <span class="b-val" id="burn-hours-val" style="color:var(--accent-emerald);">Optimal</span>
+                            </div>
+                            <div class="burn-stat">
+                                <span class="b-lbl">🎯 Combat Pacing</span>
+                                <span class="b-val" id="burn-pacing-val" style="font-size:1.05em; font-weight:700;">Peacetime Mode</span>
+                            </div>
+                        </div>
+                        <div style="font-size:0.82em; color:var(--text-secondary); max-width:400px;" id="burn-desc">
+                            Calculates hours of medical stock remaining based on live combat hits and hospital turnaround rate.
+                        </div>
+                    </div>
+
+                    <div class="scrollable" style="max-height:460px;">
+                        <table class="armory-table">
+                            <thead>
+                                <tr>
+                                    <th>Item Name</th>
+                                    <th>Category</th>
+                                    <th>In Stock</th>
+                                    <th>Reserve Minimum</th>
+                                    <th>Status</th>
+                                    <th style="text-align:right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="meds-table-body">
+                                <tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-tertiary);">Loading medical &amp; drug reserves...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SUB-PANE 3: WEAPONS, ARMOR & LOANS -->
+            <div class="armory-sub-pane" id="asub-pane-arsenal" style="display:none;">
+                <!-- WEAPONS & DEFENSIVE ARMOR ARSENAL -->
+                <div class="armory-subpanel">
+                    <div class="subpanel-hdr">
+                        <div class="subpanel-title">
+                            <span>🔫 Weapons &amp; Defensive Armor Arsenal</span>
+                            <span id="arsenal-count-badge" class="badge-warning">0 pieces</span>
+                        </div>
+                        <div class="armory-section-toolbar">
+                            <input type="text" id="arsenal-search" placeholder="🔍 Search arsenal gear..." class="sort-select" style="min-width:180px; padding:6px 12px; font-size:0.82em;" oninput="filterArsenalDebounced()">
+                            <select id="arsenal-cat-filter" class="sort-select" onchange="filterArsenal()" style="padding:6px 10px; font-size:0.82em;">
+                                <option value="all">All Arsenal</option>
+                                <option value="weapons">Weapons Only</option>
+                                <option value="armor">Defensive Armor</option>
+                                <option value="temporary">Temporary / Grenades</option>
+                                <option value="loaned">Currently Loaned Out</option>
+                                <option value="available">Available in Vault</option>
                             </select>
+                            <a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=weapons" target="_blank" class="btn btn-sm btn-outline-warning">
+                                <span>➕</span> Issue Loan on Torn
+                            </a>
                         </div>
+                    </div>
+                    <div class="scrollable" style="max-height:380px;">
+                        <table class="armory-table">
+                            <thead>
+                                <tr>
+                                    <th>Equipment Name</th>
+                                    <th>Category / Class</th>
+                                    <th>Available in Vault</th>
+                                    <th>Loaned Out</th>
+                                    <th>Total Owned</th>
+                                    <th>Circulation</th>
+                                    <th style="text-align:right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="arsenal-table-body">
+                                <tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-tertiary);">Loading weapons and armor inventory...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
 
-                        <!-- SEARCH BOX -->
-                        <div class="filter-group" style="flex-grow:1;">
-                            <input type="text" id="usage-search" placeholder="🔍 Search member name, ID, or item..." class="sort-select" style="width:100%; min-width:180px; padding:5px 12px; font-size:0.82em;" oninput="filterUsageDebounced()">
+                <!-- MEMBER LOANER GEAR LEDGER -->
+                <div class="armory-subpanel">
+                    <div class="subpanel-hdr">
+                        <div class="subpanel-title">
+                            <span>🪖 Member Loaner Gear Ledger</span>
+                            <span id="loaner-count-badge" class="badge-danger">0 Active Loans</span>
                         </div>
-
-                        <!-- RESET BUTTON -->
-                        <button class="reset-filter-btn" id="btn-reset-armory-filters" onclick="resetArmoryFilters()" style="display:none; padding:5px 12px; font-size:0.78em; border-radius:var(--radius-sm); border:1px solid var(--accent-crimson-border); background:rgba(239,68,68,0.12); color:var(--accent-crimson); font-weight:700; cursor:pointer;">
-                            ✕ Reset Filters
-                        </button>
+                        <div class="armory-section-toolbar">
+                            <input type="text" id="loans-search" placeholder="🔍 Search borrower or item..." class="sort-select" style="min-width:180px; padding:6px 12px; font-size:0.82em;" oninput="filterLoansDebounced()">
+                            <select id="loans-status-filter" class="sort-select" onchange="filterLoans()" style="padding:6px 10px; font-size:0.82em;">
+                                <option value="all">All Loans</option>
+                                <option value="active">Active Members</option>
+                                <option value="inactive">⚠️ Inactive (&gt;24h)</option>
+                                <option value="overdue">🚨 Overdue (&gt;3d)</option>
+                            </select>
+                            <a href="https://www.torn.com/factions.php?step=your#/tab=armoury" target="_blank" class="btn btn-sm btn-outline-danger">
+                                <span>🪖</span> Manage Loans on Torn
+                            </a>
+                        </div>
                     </div>
-
-                    <!-- ACTIVE FILTER BREADCRUMB INDICATOR -->
-                    <div id="armory-active-filter-chips" style="display:none; margin-top:8px; flex-wrap:wrap; gap:6px; align-items:center;">
+                    <div class="scrollable" style="max-height:380px;">
+                        <table class="armory-table">
+                            <thead>
+                                <tr>
+                                    <th>Borrower</th>
+                                    <th>Item Name</th>
+                                    <th>Category</th>
+                                    <th>Borrower Activity</th>
+                                    <th>Loan Status</th>
+                                    <th style="text-align:right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="loans-table-body">
+                                <tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-tertiary);">Loading member loan records...</td></tr>
+                            </tbody>
+                        </table>
                     </div>
-                </div>
-
-                <!-- USAGE VIEW 1: BY MEMBER (WHO DEPOSITED & USED WHAT) -->
-                <div id="usage-view-members" class="scrollable" style="max-height:440px;">
-                    <table class="armory-table">
-                        <thead>
-                            <tr>
-                                <th>Member</th>
-                                <th>Deposited (+)</th>
-                                <th>Used (-)</th>
-                                <th>Net Armory Delta</th>
-                                <th>Items Deposited</th>
-                                <th>Items Consumed</th>
-                                <th style="text-align:right;">Last Active</th>
-                            </tr>
-                        </thead>
-                        <tbody id="usage-members-tbody">
-                            <tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-tertiary);">Loading member armory ledger...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- USAGE VIEW 2: BY ITEM (WHAT IS INFLOWING VS OUTFLOWING) -->
-                <div id="usage-view-items" class="scrollable" style="max-height:440px; display:none;">
-                    <table class="armory-table">
-                        <thead>
-                            <tr>
-                                <th>Item Name</th>
-                                <th>Category</th>
-                                <th>Deposited (+)</th>
-                                <th>Used (-)</th>
-                                <th>Net Flow</th>
-                                <th>Top Depositors</th>
-                                <th>Top Consumers</th>
-                            </tr>
-                        </thead>
-                        <tbody id="usage-items-tbody">
-                            <tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-tertiary);">Loading item utilization breakdown...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- USAGE VIEW 3: LIVE TRANSACTION AUDIT FEED -->
-                <div id="usage-view-feed" class="scrollable" style="max-height:440px; display:none;">
-                    <table class="armory-table">
-                        <thead>
-                            <tr>
-                                <th>Time (TCT)</th>
-                                <th>Member</th>
-                                <th>Action</th>
-                                <th>Quantity</th>
-                                <th>Item Name</th>
-                                <th>Category</th>
-                                <th>Transaction Detail</th>
-                            </tr>
-                        </thead>
-                        <tbody id="usage-feed-tbody">
-                            <tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-tertiary);">Loading chronological armory transaction feed...</td></tr>
-                        </tbody>
-                    </table>
                 </div>
             </div>
 
-            <!-- SUB-PANEL 1: MEDICAL SUPPLIES & DRUGS LEDGER -->
-            <div class="armory-subpanel">
-                <div class="subpanel-hdr">
-                    <div class="subpanel-title">
-                        <span>💊 Medical Supplies &amp; Drugs Ledger</span>
-                        <span id="meds-count-badge" class="badge-type" style="background:var(--accent-cobalt-dim); color:var(--accent-cobalt);">0 items</span>
-                    </div>
-                    <div class="subpanel-controls">
-                        <input type="text" id="meds-search" placeholder="🔍 Search medical / drugs..." class="sort-select" style="min-width:180px; padding:6px 12px; font-size:0.82em;" oninput="filterMedsDebounced()">
-                        <select id="meds-cat-filter" class="sort-select" onchange="filterMeds()" style="padding:6px 10px; font-size:0.82em;">
-                            <option value="all">All Supplies</option>
-                            <option value="medical">Medical Only</option>
-                            <option value="drugs">Drugs Only</option>
-                            <option value="boosters">Boosters &amp; Cans</option>
-                            <option value="low">⚠️ Low Reserves Only</option>
-                        </select>
-                        <a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=donator" target="_blank" class="refresh-btn" style="text-decoration:none; padding:6px 12px; font-size:0.8em;">+ Deposit Supplies</a>
-                    </div>
-                </div>
-
-                <!-- LIVE BURN RATE CALCULATOR BANNER -->
-                <div class="burn-rate-banner" id="burn-rate-banner">
-                    <div class="burn-stat-group">
-                        <div class="burn-stat">
-                            <span class="b-lbl">⚡ War Burn Rate</span>
-                            <span class="b-val" id="burn-rate-val">~0 meds/hr</span>
+            <!-- SUB-PANE 4: SAFETY THRESHOLDS & ALERTS -->
+            <div class="armory-sub-pane" id="asub-pane-thresholds" style="display:none;">
+                <div class="armory-subpanel">
+                    <div class="subpanel-hdr">
+                        <div class="subpanel-title">
+                            <span>⚙️ Low-Stock Reserves &amp; Alert Rules</span>
                         </div>
-                        <div class="burn-stat">
-                            <span class="b-lbl">⏳ Estimated Reserves</span>
-                            <span class="b-val" id="burn-hours-val" style="color:var(--accent-emerald);">Optimal</span>
-                        </div>
-                        <div class="burn-stat">
-                            <span class="b-lbl">🎯 Combat Pacing</span>
-                            <span class="b-val" id="burn-pacing-val" style="font-size:1.05em; font-weight:700;">Peacetime Mode</span>
-                        </div>
+                        <div style="font-size:0.8em; color:var(--text-tertiary);">Configure minimum inventory safety thresholds</div>
                     </div>
-                    <div style="font-size:0.82em; color:var(--text-secondary); max-width:400px;" id="burn-desc">
-                        Calculates hours of medical stock remaining based on live combat hits and hospital turnaround rate.
-                    </div>
-                </div>
-
-                <div class="scrollable" style="max-height:360px;">
-                    <table class="armory-table">
-                        <thead>
-                            <tr>
-                                <th>Item Name</th>
-                                <th>Category</th>
-                                <th>In Stock</th>
-                                <th>Reserve Minimum</th>
-                                <th>Status</th>
-                                <th style="text-align:right;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="meds-table-body">
-                            <tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-tertiary);">Loading medical &amp; drug reserves...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- SUB-PANEL 2: WEAPONS & DEFENSIVE ARMOR ARSENAL -->
-            <div class="armory-subpanel">
-                <div class="subpanel-hdr">
-                    <div class="subpanel-title">
-                        <span>🔫 Weapons &amp; Defensive Armor Arsenal</span>
-                        <span id="arsenal-count-badge" class="badge-type" style="background:var(--accent-amber-dim); color:var(--accent-amber);">0 pieces</span>
-                    </div>
-                    <div class="subpanel-controls">
-                        <input type="text" id="arsenal-search" placeholder="🔍 Search arsenal gear..." class="sort-select" style="min-width:180px; padding:6px 12px; font-size:0.82em;" oninput="filterArsenalDebounced()">
-                        <select id="arsenal-cat-filter" class="sort-select" onchange="filterArsenal()" style="padding:6px 10px; font-size:0.82em;">
-                            <option value="all">All Arsenal</option>
-                            <option value="weapons">Weapons Only</option>
-                            <option value="armor">Defensive Armor</option>
-                            <option value="temporary">Temporary / Grenades</option>
-                            <option value="loaned">Currently Loaned Out</option>
-                            <option value="available">Available in Vault</option>
-                        </select>
-                        <a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=weapons" target="_blank" class="refresh-btn" style="text-decoration:none; padding:6px 12px; font-size:0.8em;">Issue Loan on Torn</a>
-                    </div>
-                </div>
-                <div class="scrollable" style="max-height:380px;">
-                    <table class="armory-table">
-                        <thead>
-                            <tr>
-                                <th>Equipment Name</th>
-                                <th>Category / Class</th>
-                                <th>Available in Vault</th>
-                                <th>Loaned Out</th>
-                                <th>Total Owned</th>
-                                <th>Circulation</th>
-                                <th style="text-align:right;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="arsenal-table-body">
-                            <tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-tertiary);">Loading weapons and armor inventory...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- SUB-PANEL 3: MEMBER LOANER GEAR LEDGER -->
-            <div class="armory-subpanel">
-                <div class="subpanel-hdr">
-                    <div class="subpanel-title">
-                        <span>🪖 Member Loaner Gear Ledger</span>
-                        <span id="loaner-count-badge" class="badge-type" style="background:rgba(239, 68, 68, 0.15); color:var(--accent-crimson);">0 Active Loans</span>
-                    </div>
-                    <div class="subpanel-controls">
-                        <input type="text" id="loans-search" placeholder="🔍 Search borrower or item..." class="sort-select" style="min-width:180px; padding:6px 12px; font-size:0.82em;" oninput="filterLoansDebounced()">
-                        <select id="loans-status-filter" class="sort-select" onchange="filterLoans()" style="padding:6px 10px; font-size:0.82em;">
-                            <option value="all">All Loans</option>
-                            <option value="active">Active Members</option>
-                            <option value="inactive">⚠️ Inactive (&gt;24h)</option>
-                            <option value="overdue">🚨 Overdue (&gt;3d)</option>
-                        </select>
-                        <a href="https://www.torn.com/factions.php?step=your#/tab=armoury" target="_blank" class="refresh-btn" style="text-decoration:none; padding:6px 12px; font-size:0.8em;">Manage Loans on Torn</a>
-                    </div>
-                </div>
-                <div class="scrollable" style="max-height:380px;">
-                    <table class="armory-table">
-                        <thead>
-                            <tr>
-                                <th>Borrower</th>
-                                <th>Item Name</th>
-                                <th>Category</th>
-                                <th>Borrower Activity</th>
-                                <th>Loan Status</th>
-                                <th style="text-align:right;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="loans-table-body">
-                            <tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-tertiary);">Loading member loan records...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- SUB-PANEL 4: LOW-STOCK & AUTO-ALERT RULES -->
-            <div class="armory-subpanel">
-                <div class="subpanel-hdr">
-                    <div class="subpanel-title">
-                        <span>⚙️ Low-Stock Reserves &amp; Alert Rules</span>
-                    </div>
-                    <div style="font-size:0.8em; color:var(--text-tertiary);">Configure minimum inventory safety thresholds</div>
-                </div>
-                <div style="padding:20px;">
-                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:18px;">
-                        <div>
-                            <label style="display:block; font-size:0.76em; font-weight:800; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:6px;">💊 Xanax Minimum</label>
-                            <input type="number" id="cfg-thresh-xanax" value="50" class="sort-select" style="width:100%; box-sizing:border-box; padding:8px 12px;">
+                    <div style="padding:20px;">
+                        <div class="thresh-grid">
+                            <div class="thresh-input-wrap">
+                                <label class="thresh-label">💊 Xanax Minimum</label>
+                                <div class="thresh-input-group">
+                                    <input type="number" id="cfg-thresh-xanax" value="50" min="0" class="thresh-input">
+                                    <span class="thresh-unit">units</span>
+                                </div>
+                            </div>
+                            <div class="thresh-input-wrap">
+                                <label class="thresh-label">🩹 Small First Aid Minimum</label>
+                                <div class="thresh-input-group">
+                                    <input type="number" id="cfg-thresh-sfak" value="40" min="0" class="thresh-input">
+                                    <span class="thresh-unit">units</span>
+                                </div>
+                            </div>
+                            <div class="thresh-input-wrap">
+                                <label class="thresh-label">📦 First Aid Kit Minimum</label>
+                                <div class="thresh-input-group">
+                                    <input type="number" id="cfg-thresh-fak" value="60" min="0" class="thresh-input">
+                                    <span class="thresh-unit">units</span>
+                                </div>
+                            </div>
+                            <div class="thresh-input-wrap">
+                                <label class="thresh-label">💉 Morphine Minimum</label>
+                                <div class="thresh-input-group">
+                                    <input type="number" id="cfg-thresh-morph" value="40" min="0" class="thresh-input">
+                                    <span class="thresh-unit">units</span>
+                                </div>
+                            </div>
+                            <div class="thresh-input-wrap">
+                                <label class="thresh-label">🩸 Blood Bags Total Min</label>
+                                <div class="thresh-input-group">
+                                    <input type="number" id="cfg-thresh-blood" value="100" min="0" class="thresh-input">
+                                    <span class="thresh-unit">units</span>
+                                </div>
+                            </div>
+                            <div class="thresh-input-wrap">
+                                <label class="thresh-label">🥫 Energy Cans Total Min</label>
+                                <div class="thresh-input-group">
+                                    <input type="number" id="cfg-thresh-cans" value="30" min="0" class="thresh-input">
+                                    <span class="thresh-unit">units</span>
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <label style="display:block; font-size:0.76em; font-weight:800; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:6px;">🩹 Small First Aid Minimum</label>
-                            <input type="number" id="cfg-thresh-sfak" value="40" class="sort-select" style="width:100%; box-sizing:border-box; padding:8px 12px;">
+                        <div class="thresh-toggle-row">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <input type="checkbox" id="cfg-discord-dispatch" checked style="accent-color:var(--accent-cobalt); width:18px; height:18px; cursor:pointer;">
+                                <label for="cfg-discord-dispatch" style="font-size:0.85em; color:var(--text-secondary); cursor:pointer;">
+                                    Automatically dispatch Discord Sentinel alert when any reserve dips below emergency levels
+                                </label>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <button class="btn btn-sm btn-outline" onclick="resetArmoryThresholds()" style="padding:8px 16px;">↩ Reset Defaults</button>
+                                <button class="btn btn-sm btn-primary" onclick="saveArmoryThresholds()" style="padding:8px 20px;">💾 Save &amp; Apply Thresholds</button>
+                            </div>
                         </div>
-                        <div>
-                            <label style="display:block; font-size:0.76em; font-weight:800; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:6px;">📦 First Aid Kit Minimum</label>
-                            <input type="number" id="cfg-thresh-fak" value="60" class="sort-select" style="width:100%; box-sizing:border-box; padding:8px 12px;">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.76em; font-weight:800; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:6px;">💉 Morphine Minimum</label>
-                            <input type="number" id="cfg-thresh-morph" value="40" class="sort-select" style="width:100%; box-sizing:border-box; padding:8px 12px;">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.76em; font-weight:800; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:6px;">🩸 Blood Bags Total Min</label>
-                            <input type="number" id="cfg-thresh-blood" value="100" class="sort-select" style="width:100%; box-sizing:border-box; padding:8px 12px;">
-                        </div>
-                        <div>
-                            <label style="display:block; font-size:0.76em; font-weight:800; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:6px;">🥫 Energy Cans Total Min</label>
-                            <input type="number" id="cfg-thresh-cans" value="30" class="sort-select" style="width:100%; box-sizing:border-box; padding:8px 12px;">
-                        </div>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; border-top:1px solid var(--border-subtle); padding-top:14px;">
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <input type="checkbox" id="cfg-discord-dispatch" checked style="accent-color:var(--accent-cobalt);">
-                            <label for="cfg-discord-dispatch" style="font-size:0.84em; color:var(--text-secondary); cursor:pointer;">
-                                Automatically dispatch Discord Sentinel alert when any reserve dips below emergency levels
-                            </label>
-                        </div>
-                        <button class="btn btn-primary" onclick="saveArmoryThresholds()" style="padding:8px 20px; font-weight:800; font-size:0.85em;">💾 Save &amp; Apply Thresholds</button>
                     </div>
                 </div>
             </div>
@@ -1843,6 +2458,9 @@ function switchOpsTab(tabId) {
 
     if (tabId === 'sentinel') {
         initSentinel();
+    }
+    if (tabId === 'armory') {
+        if (typeof initTrackerDates === 'function') initTrackerDates();
     }
 }
 
@@ -2282,12 +2900,16 @@ function renderArmory(d) {
     const lowStock = armory.lowStockItems || [];
     const lowCount = lowStock.length;
     const isDataLoaded = Boolean(d.success && d.armory);
+    const hasKey = Boolean(localStorage.getItem('torn_api_key') || currentArmoryData?.userKey || (typeof myKey !== 'undefined' && myKey));
+    const totalMeds = (armory.totalMedicalItems || 0) + (armory.totalDrugs || 0);
 
     // Update Badges across navbar and tabs
     const navBadge = document.getElementById('nav-armory-badge');
     const tabBadge = document.getElementById('tab-armory-badge');
     if (navBadge) {
-        if (lowCount > 0) {
+        if (!hasKey || !isDataLoaded || totalMeds === 0) {
+            navBadge.style.display = 'none';
+        } else if (lowCount > 0) {
             navBadge.style.display = 'inline-block';
             navBadge.textContent = `${lowCount} Low`;
             navBadge.className = 'tab-badge';
@@ -2296,7 +2918,9 @@ function renderArmory(d) {
         }
     }
     if (tabBadge) {
-        if (lowCount > 0) {
+        if (!hasKey || !isDataLoaded || totalMeds === 0) {
+            tabBadge.style.display = 'none';
+        } else if (lowCount > 0) {
             tabBadge.style.display = 'inline-block';
             tabBadge.textContent = `${lowCount} Low`;
             tabBadge.className = 'tab-badge';
@@ -2310,7 +2934,10 @@ function renderArmory(d) {
     // ── 1. Snapshot Widget (Tab 1) ──
     const snapshotPill = document.getElementById('snapshot-status-pill');
     if (snapshotPill) {
-        if (!isDataLoaded) {
+        if (!hasKey) {
+            snapshotPill.className = 'stock-pill neutral';
+            snapshotPill.textContent = 'No Key / Offline';
+        } else if (!isDataLoaded || totalMeds === 0) {
             snapshotPill.className = 'stock-pill neutral';
             snapshotPill.textContent = '⏳ Syncing...';
         } else if (lowCount === 0) {
@@ -2324,10 +2951,12 @@ function renderArmory(d) {
 
     const tickerEl = document.getElementById('snapshot-low-ticker');
     if (tickerEl) {
-        if (!isDataLoaded) {
+        if (!hasKey) {
+            tickerEl.innerHTML = `<span class="stock-pill neutral">⚠️ Connect API key to calculate reserves</span>`;
+        } else if (!isDataLoaded || totalMeds === 0) {
             tickerEl.innerHTML = `<span class="stock-pill neutral">⏳ Awaiting armory sync...</span>`;
         } else if (lowCount === 0) {
-            tickerEl.innerHTML = `<span class="stock-pill optimal">✅ All Supplies Above Reserve Thresholds</span>`;
+            tickerEl.innerHTML = `<span class="stock-pill optimal">✅ Armory Reserves Fully Stocked</span>`;
         } else {
             tickerEl.innerHTML = lowStock.map(item => `
                 <span class="stock-pill ${item.severity === 'critical' ? 'critical' : 'warning'}">
@@ -2349,8 +2978,7 @@ function renderArmory(d) {
     const tileArmorVal = document.getElementById('tile-armor-val');
     const tileArmorSub = document.getElementById('tile-armor-sub');
 
-    if (isDataLoaded) {
-        const totalMeds = (armory.totalMedicalItems || 0) + (armory.totalDrugs || 0);
+    if (isDataLoaded && totalMeds > 0) {
         const medLow = lowStock.filter(i => i.name.includes('First Aid') || i.name.includes('Morphine') || i.name.includes('Blood') || i.name.includes('Xanax'));
         if (tileMedsVal) tileMedsVal.textContent = fmtNum(totalMeds);
         if (tileMedsSub) tileMedsSub.textContent = medLow.length ? `${medLow.length} items low` : 'Reserves optimal';
@@ -2376,6 +3004,9 @@ function renderArmory(d) {
         const loanedArmor = armory.loanedArmorCount || 0;
         if (tileArmorVal) tileArmorVal.textContent = fmtNum(loanedArmor);
         if (tileArmorSub) tileArmorSub.textContent = `${loanedArmor} / ${totalArmor}`;
+    } else {
+        if (tileMedsBadge) { tileMedsBadge.className = 'stock-pill neutral'; tileMedsBadge.textContent = '—'; }
+        if (tileBoostersBadge) { tileBoostersBadge.className = 'stock-pill neutral'; tileBoostersBadge.textContent = '—'; }
     }
 
     // ── 2. Full Armory & Logistics (Tab 2) ──
@@ -2395,7 +3026,17 @@ function renderArmory(d) {
     if (kpiLoans) kpiLoans.textContent = fmtNum(loans.length);
     if (kpiLoansSub) kpiLoansSub.textContent = overdueCount > 0 ? `${overdueCount} Overdue (>3d)` : 'All borrowers active';
     if (kpiLow) kpiLow.textContent = lowCount;
-    if (kpiHealth) kpiHealth.textContent = armory.armoryHealth || "100% Stocked";
+    if (kpiHealth) {
+        if (!hasKey) {
+            kpiHealth.innerHTML = `<span class="badge-neutral" style="font-size:0.75em;">No Key / Offline</span>`;
+        } else if (!isDataLoaded || totalMeds === 0) {
+            kpiHealth.innerHTML = `<span class="badge-neutral" style="font-size:0.75em;">⏳ Syncing...</span>`;
+        } else if (lowCount === 0) {
+            kpiHealth.textContent = '100% Stocked (Optimal)';
+        } else {
+            kpiHealth.textContent = `${lowCount} Low-Stock Warnings`;
+        }
+    }
 
     // Burn Rate Banner
     const burnBanner = document.getElementById('burn-rate-banner');
@@ -2458,6 +3099,33 @@ function escapeHtml(str) {
         .replace(/'/g, '&#39;');
 }
 
+// ── Toast Notification Helper ──
+function showToast(msg, type = 'success') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `toast-msg ${type}`;
+    const icon = type === 'success' ? '✅' : (type === 'error' ? '🚨' : '⚠️');
+    toast.innerHTML = `<span>${icon}</span> <span>${escapeHtml(msg)}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(10px) scale(0.95)';
+        setTimeout(() => toast.remove(), 250);
+    }, 3500);
+}
+
+// ── Armory Sub-Tab Switcher (Part 3) ──
+function switchArmorySubTab(tabName, btn) {
+    const tabs = ['usage', 'stock', 'arsenal', 'thresholds'];
+    tabs.forEach(t => {
+        const pane = document.getElementById(`asub-pane-${t}`);
+        if (pane) pane.style.display = (t === tabName) ? 'block' : 'none';
+        const b = document.getElementById(`asub-tab-${t}`);
+        if (b) b.classList.toggle('active', t === tabName);
+    });
+}
+
 // ── Unified Armory Ledger State & Filter Handlers ──
 let armoryTimeFilter = '30d'; // '24h', '3d', '7d', '30d', 'all'
 let armoryActionFilter = 'all'; // 'all', 'inflow', 'outflow', 'loans'
@@ -2465,10 +3133,152 @@ let armoryCategoryFilter = 'all'; // 'all', 'Medical', 'Drug', 'Booster', 'Arsen
 let armoryItemFilter = 'all'; // 'all' or specific item name
 let armoryMemberFilter = ''; // member id or name
 let loadedArmoryEvents = [];
+let trackerPreset = 'today';
+let trackerSortCol = 'net';
+let trackerSortAsc = false;
+let trackerSegmentFilter = 'all';
+let currentFilteredMemberList = [];
+
+function initTrackerDates() {
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const fromInput = document.getElementById('tracker-date-from');
+    const toInput = document.getElementById('tracker-date-to');
+    if (fromInput && !fromInput.value) fromInput.value = todayStr;
+    if (toInput && !toInput.value) toInput.value = todayStr;
+}
+
+function setTrackerPreset(preset, btn) {
+    trackerPreset = preset;
+    document.querySelectorAll('.date-presets .filter-pill').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    let fromStr = todayStr;
+    let toStr = todayStr;
+
+    if (preset === 'today') {
+        fromStr = todayStr;
+        toStr = todayStr;
+    } else if (preset === '3d') {
+        const d = new Date(now.getTime() - (86400000 * 3));
+        fromStr = d.toISOString().split('T')[0];
+    } else if (preset === '7d') {
+        const d = new Date(now.getTime() - (86400000 * 7));
+        fromStr = d.toISOString().split('T')[0];
+    } else if (preset === 'month') {
+        const d = new Date(now.getFullYear(), now.getMonth(), 1);
+        fromStr = d.toISOString().split('T')[0];
+    } else if (preset === 'lastwar') {
+        const activeWar = currentArmoryData?.activeWar || (dashData?.wars || []).find(w => w.ranked || w.isOngoing);
+        if (activeWar && activeWar.start) {
+            fromStr = new Date(activeWar.start * 1000).toISOString().split('T')[0];
+            if (activeWar.end) {
+                toStr = new Date(activeWar.end * 1000).toISOString().split('T')[0];
+            } else {
+                toStr = todayStr;
+            }
+            showToast(`Loaded ranked war dates: ${fromStr} → ${toStr}`, 'success');
+        } else {
+            const d = new Date(now.getTime() - (86400000 * 7));
+            fromStr = d.toISOString().split('T')[0];
+            showToast('No ranked war found, defaulting to 7 days', 'warn');
+        }
+    }
+
+    const fromInput = document.getElementById('tracker-date-from');
+    const toInput = document.getElementById('tracker-date-to');
+    if (fromInput) fromInput.value = fromStr;
+    if (toInput) toInput.value = toStr;
+}
+
+async function fetchConsumptionData() {
+    const fromInput = document.getElementById('tracker-date-from')?.value;
+    const toInput = document.getElementById('tracker-date-to')?.value;
+    const btn = document.getElementById('btn-fetch-tracker');
+    const icon = document.getElementById('tracker-fetch-icon');
+
+    if (!fromInput || !toInput) {
+        showToast('Please select both Start and End dates', 'warn');
+        return;
+    }
+
+    const fromTs = Math.floor(new Date(fromInput + 'T00:00:00Z').getTime() / 1000);
+    const toTs = Math.floor(new Date(toInput + 'T23:59:59Z').getTime() / 1000);
+
+    if (fromTs > toTs) {
+        showToast('Start Date cannot be after End Date', 'error');
+        return;
+    }
+
+    const userKey = currentArmoryData?.userKey || localStorage.getItem('torn_api_key') || (typeof myKey !== 'undefined' ? myKey : '');
+    if (!userKey) {
+        showToast('Please connect an API key first', 'error');
+        return;
+    }
+
+    if (btn) btn.disabled = true;
+    if (icon) icon.textContent = '⏳';
+
+    try {
+        const resp = await fetch(`/api/armory-history?from=${fromTs}&to=${toTs}&pages=8&key=${encodeURIComponent(userKey)}`);
+        const data = await resp.json();
+        if (data.error) throw new Error(data.error);
+
+        if (data.success && data.stats && data.stats.recentLog) {
+            const fetched = data.stats.recentLog;
+            const existingKeys = new Set(loadedArmoryEvents.map(e => `${e.timestamp}_${e.id}_${e.itemName}_${e.action}`));
+            fetched.forEach(e => {
+                const k = `${e.timestamp}_${e.id}_${e.itemName}_${e.action}`;
+                if (!existingKeys.has(k)) {
+                    loadedArmoryEvents.push(e);
+                    existingKeys.add(k);
+                }
+            });
+            loadedArmoryEvents.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+            // Set time filter to 'all' so all fetched entries render
+            armoryTimeFilter = 'all';
+            document.querySelectorAll('#time-pills .filter-pill').forEach(b => b.classList.remove('active'));
+            const allPills = document.querySelectorAll('#time-pills .filter-pill');
+            if (allPills.length) allPills[allPills.length - 1].classList.add('active');
+
+            populateArmoryItemDropdown(loadedArmoryEvents);
+            renderItemUsageTracker();
+            showToast(`Loaded ${fetched.length} events for ${fromInput} → ${toInput}!`, 'success');
+        } else {
+            showToast('No armory events found for this range.', 'warn');
+        }
+    } catch (err) {
+        console.error('fetchConsumptionData error:', err);
+        showToast(`Failed to fetch ledger: ${err.message}`, 'error');
+    } finally {
+        if (btn) btn.disabled = false;
+        if (icon) icon.textContent = '📥';
+    }
+}
+
+function setTrackerTab(segment, btn) {
+    trackerSegmentFilter = segment;
+    document.querySelectorAll('#tracker-segment-pills .filter-pill').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    renderItemUsageTracker();
+}
+
+function sortUsageMembers(col) {
+    if (trackerSortCol === col) {
+        trackerSortAsc = !trackerSortAsc;
+    } else {
+        trackerSortCol = col;
+        trackerSortAsc = (col === 'name');
+    }
+    renderItemUsageTracker();
+}
 
 function setUsageView(viewMode, btn) {
     activeUsageView = viewMode;
-    document.querySelectorAll('.subpanel-controls .analyst-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.subpanel-controls .analyst-tab, .armory-section-toolbar .analyst-tab').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
 
     const vMembers = document.getElementById('usage-view-members');
@@ -2568,8 +3378,8 @@ async function fetchDeepArmoryHistory() {
         btn.innerHTML = `<span>⏳ Fetching 90d Logs...</span>`;
     }
     try {
-        const userKey = currentArmoryData?.userKey || localStorage.getItem('torn_api_key') || '';
-        const resp = await fetch(`/api/armory-history?days=90&pages=5${userKey ? `&key=${encodeURIComponent(userKey)}` : ''}`);
+        const userKey = currentArmoryData?.userKey || localStorage.getItem('torn_api_key') || (typeof myKey !== 'undefined' ? myKey : '');
+        const resp = await fetch(`/api/armory-history?days=90&pages=6${userKey ? `&key=${encodeURIComponent(userKey)}` : ''}`);
         const data = await resp.json();
         if (data.success && data.stats && data.stats.recentLog) {
             const existingKeys = new Set(loadedArmoryEvents.map(e => `${e.timestamp}_${e.id}_${e.itemName}_${e.action}`));
@@ -2584,6 +3394,7 @@ async function fetchDeepArmoryHistory() {
             populateArmoryItemDropdown(loadedArmoryEvents);
             renderItemUsageTracker();
             if (btn) btn.innerHTML = `<span>✅ 90d Loaded (${loadedArmoryEvents.length} events)</span>`;
+            showToast(`90-day history synchronized (${loadedArmoryEvents.length} total events)`, 'success');
         } else {
             if (btn) btn.innerHTML = `<span>⚠️ Could not fetch 90d</span>`;
         }
@@ -2601,8 +3412,8 @@ async function fetchDeepArmoryHistory() {
 }
 
 function renderItemUsageTracker() {
-    if (!currentArmoryData?.armory?.usageStats) return;
-    const initialStats = currentArmoryData.armory.usageStats;
+    if (!currentArmoryData?.armory?.usageStats && !loadedArmoryEvents.length) return;
+    const initialStats = currentArmoryData?.armory?.usageStats || {};
     if (!loadedArmoryEvents.length && initialStats.recentLog && initialStats.recentLog.length) {
         loadedArmoryEvents = [...initialStats.recentLog];
         populateArmoryItemDropdown(loadedArmoryEvents);
@@ -2640,15 +3451,15 @@ function renderItemUsageTracker() {
 
         // Member filter
         if (armoryMemberFilter) {
-            const matchesActor = String(entry.id) === armoryMemberFilter || entry.name.toLowerCase() === armoryMemberFilter.toLowerCase();
+            const matchesActor = String(entry.id) === armoryMemberFilter || (entry.name && entry.name.toLowerCase() === armoryMemberFilter.toLowerCase());
             const matchesTarget = entry.targetId && (String(entry.targetId) === armoryMemberFilter || (entry.targetName && entry.targetName.toLowerCase() === armoryMemberFilter.toLowerCase()));
             if (!matchesActor && !matchesTarget) return false;
         }
 
         // Search Query
         if (query) {
-            const inActor = entry.name.toLowerCase().includes(query) || String(entry.id).includes(query);
-            const inItem = entry.itemName.toLowerCase().includes(query);
+            const inActor = (entry.name || '').toLowerCase().includes(query) || String(entry.id).includes(query);
+            const inItem = (entry.itemName || '').toLowerCase().includes(query);
             const inAction = (entry.action || '').toLowerCase().includes(query);
             const inRaw = (entry.rawText || '').toLowerCase().includes(query);
             const inTarget = entry.targetName ? entry.targetName.toLowerCase().includes(query) : false;
@@ -2661,6 +3472,10 @@ function renderItemUsageTracker() {
     // 3. Dynamically re-aggregate member and item statistics
     let totalDeposited = 0;
     let totalUsed = 0;
+    let globalXanaxUsed = 0;
+    let globalMedsUsed = 0;
+    let globalBoostersUsed = 0;
+
     const memberMap = {};
     const itemMap = {};
     const uniqueMembers = new Set();
@@ -2669,6 +3484,8 @@ function renderItemUsageTracker() {
         const pId = e.id;
         const pName = e.name;
         const qty = e.quantity || 1;
+        const nameLower = (e.itemName || '').toLowerCase();
+
         uniqueMembers.add(pId);
         if (e.targetId) uniqueMembers.add(e.targetId);
 
@@ -2676,6 +3493,9 @@ function renderItemUsageTracker() {
             totalDeposited += qty;
         } else {
             totalUsed += qty;
+            if (nameLower.includes('xanax') || e.category === 'Drug') globalXanaxUsed += qty;
+            if (e.category === 'Medical') globalMedsUsed += qty;
+            if (e.category === 'Booster') globalBoostersUsed += qty;
         }
 
         // Member tally
@@ -2685,7 +3505,12 @@ function renderItemUsageTracker() {
                 name: pName,
                 totalDeposited: 0,
                 totalUsed: 0,
+                itemsLoaned: 0,
+                itemsReturned: 0,
                 netBalance: 0,
+                xanaxTaken: 0,
+                medsTaken: 0,
+                boostersTaken: 0,
                 depositedItems: {},
                 usedItems: {},
                 lastActionTs: e.timestamp
@@ -2696,9 +3521,14 @@ function renderItemUsageTracker() {
         if (e.type === 'inflow') {
             m.totalDeposited += qty;
             m.depositedItems[e.itemName] = (m.depositedItems[e.itemName] || 0) + qty;
+            if (e.action === 'returned' || e.action === 'retrieved') m.itemsReturned += qty;
         } else {
             m.totalUsed += qty;
             m.usedItems[e.itemName] = (m.usedItems[e.itemName] || 0) + qty;
+            if (e.action === 'loaned') m.itemsLoaned += qty;
+            if (nameLower.includes('xanax') || e.category === 'Drug') m.xanaxTaken += qty;
+            if (e.category === 'Medical') m.medsTaken += qty;
+            if (e.category === 'Booster') m.boostersTaken += qty;
         }
         m.netBalance = m.totalDeposited - m.totalUsed;
 
@@ -2709,7 +3539,12 @@ function renderItemUsageTracker() {
                     name: e.targetName || `Player [${e.targetId}]`,
                     totalDeposited: 0,
                     totalUsed: 0,
+                    itemsLoaned: 0,
+                    itemsReturned: 0,
                     netBalance: 0,
+                    xanaxTaken: 0,
+                    medsTaken: 0,
+                    boostersTaken: 0,
                     depositedItems: {},
                     usedItems: {},
                     lastActionTs: e.timestamp
@@ -2717,6 +3552,7 @@ function renderItemUsageTracker() {
             }
             const t = memberMap[e.targetId];
             t.totalUsed += qty;
+            t.itemsLoaned += qty;
             t.usedItems[e.itemName] = (t.usedItems[e.itemName] || 0) + qty;
             t.netBalance = t.totalDeposited - t.totalUsed;
             if (e.timestamp > (t.lastActionTs || 0)) t.lastActionTs = e.timestamp;
@@ -2752,17 +3588,54 @@ function renderItemUsageTracker() {
     });
 
     const netBalance = totalDeposited - totalUsed;
-    const memberList = Object.values(memberMap).sort((a, b) => (b.totalDeposited + b.totalUsed) - (a.totalDeposited + a.totalUsed));
+    const memberList = Object.values(memberMap);
     const itemList = Object.values(itemMap).map(i => ({
         ...i,
         topDepositors: Object.values(i.depositorMap).sort((a, b) => b.count - a.count).slice(0, 5),
         topConsumers: Object.values(i.userMap).sort((a, b) => b.count - a.count).slice(0, 5)
     })).sort((a, b) => (b.totalDeposited + b.totalUsed) - (a.totalDeposited + a.totalUsed));
 
-    // 4. Update Header Badge & 4 KPI Cards
+    // Top Contributor and Top Consumer
+    const sortedByDep = [...memberList].sort((a, b) => b.totalDeposited - a.totalDeposited);
+    const topDonor = sortedByDep.length && sortedByDep[0].totalDeposited > 0 ? sortedByDep[0] : null;
+    const sortedByUse = [...memberList].sort((a, b) => b.totalUsed - a.totalUsed);
+    const topUser = sortedByUse.length && sortedByUse[0].totalUsed > 0 ? sortedByUse[0] : null;
+
+    // 4. Update Header Badge & 5 Top KPI Cards & 4 Flow KPI Cards
     const totalBadge = document.getElementById('usage-total-badge');
     if (totalBadge) {
         totalBadge.textContent = `${fmtNum(filteredEvents.length)} events • ${fmtNum(totalDeposited)} in / ${fmtNum(totalUsed)} out`;
+    }
+
+    const kpiXanax = document.getElementById('tkpi-xanax');
+    if (kpiXanax) kpiXanax.textContent = fmtNum(globalXanaxUsed);
+    const kpiMeds = document.getElementById('tkpi-medical');
+    if (kpiMeds) kpiMeds.textContent = fmtNum(globalMedsUsed);
+    const kpiBoost = document.getElementById('tkpi-boosters');
+    if (kpiBoost) kpiBoost.textContent = fmtNum(globalBoostersUsed);
+
+    const kpiDonor = document.getElementById('tkpi-top-donor');
+    const kpiDonorSub = document.getElementById('tkpi-top-donor-sub');
+    if (kpiDonor) {
+        if (topDonor) {
+            kpiDonor.innerHTML = `<a href="https://www.torn.com/profiles.php?XID=${topDonor.id}" target="_blank" style="color:var(--accent-emerald); text-decoration:none;">${escapeHtml(topDonor.name)}</a>`;
+            if (kpiDonorSub) kpiDonorSub.textContent = `+${fmtNum(topDonor.totalDeposited)} items deposited`;
+        } else {
+            kpiDonor.textContent = '—';
+            if (kpiDonorSub) kpiDonorSub.textContent = '+0 deposited';
+        }
+    }
+
+    const kpiUser = document.getElementById('tkpi-top-user');
+    const kpiUserSub = document.getElementById('tkpi-top-user-sub');
+    if (kpiUser) {
+        if (topUser) {
+            kpiUser.innerHTML = `<a href="https://www.torn.com/profiles.php?XID=${topUser.id}" target="_blank" style="color:var(--accent-crimson); text-decoration:none;">${escapeHtml(topUser.name)}</a>`;
+            if (kpiUserSub) kpiUserSub.textContent = `-${fmtNum(topUser.totalUsed)} items consumed`;
+        } else {
+            kpiUser.textContent = '—';
+            if (kpiUserSub) kpiUserSub.textContent = '-0 consumed';
+        }
     }
 
     const kpiDep = document.getElementById('ledger-kpi-deposited');
@@ -2795,7 +3668,7 @@ function renderItemUsageTracker() {
     // 5. Update Active Filter Breadcrumbs & Reset Button
     const filterChipsEl = document.getElementById('armory-active-filter-chips');
     const resetBtn = document.getElementById('btn-reset-armory-filters');
-    const hasActiveFilters = armoryTimeFilter !== '30d' || armoryActionFilter !== 'all' || armoryCategoryFilter !== 'all' || armoryItemFilter !== 'all' || armoryMemberFilter !== '' || query !== '';
+    const hasActiveFilters = armoryTimeFilter !== '30d' || armoryActionFilter !== 'all' || armoryCategoryFilter !== 'all' || armoryItemFilter !== 'all' || armoryMemberFilter !== '' || query !== '' || trackerSegmentFilter !== 'all';
 
     if (resetBtn) resetBtn.style.display = hasActiveFilters ? 'inline-block' : 'none';
 
@@ -2803,6 +3676,10 @@ function renderItemUsageTracker() {
         if (hasActiveFilters) {
             filterChipsEl.style.display = 'flex';
             let chipsHtml = `<span style="font-size:0.75em; color:var(--text-tertiary); font-weight:700;">Active Filters:</span>`;
+            if (trackerSegmentFilter !== 'all') {
+                const segMap = { 'deficit': 'Net Consumers', 'donors': 'Net Donors', 'xanax': 'Xanax Users', 'freeload': '0 Deposited' };
+                chipsHtml += `<span class="filter-active-chip">Segment: ${segMap[trackerSegmentFilter] || trackerSegmentFilter} <span class="chip-remove" onclick="setTrackerTab('all', document.querySelectorAll('#tracker-segment-pills .filter-pill')[0])">✕</span></span>`;
+            }
             if (armoryTimeFilter !== '30d') {
                 const timeLabel = armoryTimeFilter === '24h' ? '24 Hours' : (armoryTimeFilter === '3d' ? '3 Days' : (armoryTimeFilter === '7d' ? '7 Days' : 'All Loaded'));
                 chipsHtml += `<span class="filter-active-chip">Time: ${timeLabel} <span class="chip-remove" onclick="setArmoryTimeFilter('30d', document.querySelectorAll('#time-pills .filter-pill')[3])">✕</span></span>`;
@@ -2829,48 +3706,85 @@ function renderItemUsageTracker() {
         }
     }
 
-    // 6. View 1: Member Ledger Table
+    // 6. View 1: Member Ledger Table (11 Columns, Sortable, Segment Filtered)
     const mBody = document.getElementById('usage-members-tbody');
+    let displayMembers = memberList.filter(m => {
+        if (trackerSegmentFilter === 'deficit') return m.netBalance < 0;
+        if (trackerSegmentFilter === 'donors') return m.netBalance > 0;
+        if (trackerSegmentFilter === 'xanax') return m.xanaxTaken > 0;
+        if (trackerSegmentFilter === 'freeload') return m.totalUsed > 0 && m.totalDeposited === 0;
+        return true;
+    });
+
+    displayMembers.sort((a, b) => {
+        let va, vb;
+        switch (trackerSortCol) {
+            case 'name': return trackerSortAsc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+            case 'deposited': va = a.totalDeposited; vb = b.totalDeposited; break;
+            case 'used': va = a.totalUsed; vb = b.totalUsed; break;
+            case 'loaned': va = a.itemsLoaned; vb = b.itemsLoaned; break;
+            case 'returned': va = a.itemsReturned; vb = b.itemsReturned; break;
+            case 'net': va = a.netBalance; vb = b.netBalance; break;
+            case 'xanax': va = a.xanaxTaken; vb = b.xanaxTaken; break;
+            case 'medical': va = a.medsTaken; vb = b.medsTaken; break;
+            case 'boosters': va = a.boostersTaken; vb = b.boostersTaken; break;
+            case 'lastActive': va = a.lastActionTs || 0; vb = b.lastActionTs || 0; break;
+            default: va = a.netBalance; vb = b.netBalance; break;
+        }
+        return trackerSortAsc ? (va - vb) : (vb - va);
+    });
+
+    currentFilteredMemberList = displayMembers;
+
+    // Update Sort Indicators
+    const sortCols = ['name', 'deposited', 'used', 'loaned', 'returned', 'net', 'xanax', 'medical', 'boosters', 'lastActive'];
+    sortCols.forEach(col => {
+        const ind = document.getElementById(`sort-ind-${col}`);
+        if (ind) {
+            if (trackerSortCol === col) {
+                ind.textContent = trackerSortAsc ? '↑' : '↓';
+                ind.style.color = 'var(--accent-cobalt)';
+            } else {
+                ind.textContent = '↕';
+                ind.style.color = 'var(--text-tertiary)';
+            }
+        }
+    });
+
     if (mBody && activeUsageView === 'members') {
-        if (!memberList.length) {
-            mBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:24px; color:var(--text-tertiary);">No armory records found matching current filters.</td></tr>`;
+        if (!displayMembers.length) {
+            mBody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding:28px; color:var(--text-tertiary);">No armory records found matching current segment and filters.</td></tr>`;
         } else {
-            mBody.innerHTML = memberList.map(m => {
-                const depChips = Object.entries(m.depositedItems || {})
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([name, count]) => `<span class="usage-item-chip chip-inflow" onclick="setArmoryItemFilter('${escapeHtml(name)}')" title="Filter by ${escapeHtml(name)}">+${count} ${escapeHtml(name)}</span>`)
-                    .join('');
-
-                const usedChips = Object.entries(m.usedItems || {})
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([name, count]) => `<span class="usage-item-chip chip-outflow" onclick="setArmoryItemFilter('${escapeHtml(name)}')" title="Filter by ${escapeHtml(name)}">-${count} ${escapeHtml(name)}</span>`)
-                    .join('');
-
-                let balanceBadge = `<span class="badge-balance-zero">0 (Balanced)</span>`;
+            mBody.innerHTML = displayMembers.map(m => {
+                let balanceBadge = `<span class="badge-balance-zero">0</span>`;
                 if (m.netBalance > 0) {
-                    balanceBadge = `<span class="badge-balance-pos">+${fmtNum(m.netBalance)} (Net Donor)</span>`;
+                    balanceBadge = `<span class="badge-balance-pos">+${fmtNum(m.netBalance)}</span>`;
                 } else if (m.netBalance < 0) {
-                    balanceBadge = `<span class="badge-balance-neg">-${fmtNum(Math.abs(m.netBalance))} (Net Consumer)</span>`;
+                    balanceBadge = `<span class="badge-balance-neg">-${fmtNum(Math.abs(m.netBalance))}</span>`;
                 }
 
                 return `<tr>
                     <td>
                         <div style="font-weight:700;">
                             <a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${escapeHtml(m.name)}</a>
-                            <span style="cursor:pointer; font-size:0.8em; margin-left:4px;" onclick="setArmoryMemberFilter('${m.id}', '${escapeHtml(m.name)}')" title="Filter to this member">🔍</span>
+                            <span style="cursor:pointer; font-size:0.78em; margin-left:4px;" onclick="setArmoryMemberFilter('${m.id}', '${escapeHtml(m.name)}')" title="Filter table to this member">🔍</span>
                         </div>
-                        <div style="font-size:0.75em; color:var(--text-tertiary);">[${m.id}]</div>
+                        <div style="font-size:0.74em; color:var(--text-tertiary);">[${m.id}]</div>
                     </td>
-                    <td style="font-family:var(--font-mono); font-weight:800; color:var(--accent-emerald); font-size:1.05em;">+${fmtNum(m.totalDeposited)}</td>
-                    <td style="font-family:var(--font-mono); font-weight:800; color:var(--accent-crimson); font-size:1.05em;">-${fmtNum(m.totalUsed)}</td>
+                    <td style="font-family:var(--font-mono); font-weight:800; color:var(--accent-emerald);">+${fmtNum(m.totalDeposited)}</td>
+                    <td style="font-family:var(--font-mono); font-weight:800; color:var(--accent-crimson);">-${fmtNum(m.totalUsed)}</td>
+                    <td style="font-family:var(--font-mono); font-weight:700; color:var(--accent-amber);">${fmtNum(m.itemsLoaned || 0)}</td>
+                    <td style="font-family:var(--font-mono); font-weight:700; color:var(--accent-cyan);">${fmtNum(m.itemsReturned || 0)}</td>
                     <td>${balanceBadge}</td>
-                    <td style="max-width:280px;">
-                        <div style="display:flex; flex-wrap:wrap; gap:2px;">${depChips || '<span style="color:var(--text-tertiary); font-size:0.8em;">—</span>'}</div>
-                    </td>
-                    <td style="max-width:280px;">
-                        <div style="display:flex; flex-wrap:wrap; gap:2px;">${usedChips || '<span style="color:var(--text-tertiary); font-size:0.8em;">—</span>'}</div>
-                    </td>
+                    <td style="font-family:var(--font-mono); font-weight:700; color:${m.xanaxTaken > 0 ? 'var(--accent-purple)' : 'var(--text-tertiary)'};">${fmtNum(m.xanaxTaken || 0)}</td>
+                    <td style="font-family:var(--font-mono); font-weight:700; color:${m.medsTaken > 0 ? 'var(--accent-cobalt)' : 'var(--text-tertiary)'};">${fmtNum(m.medsTaken || 0)}</td>
+                    <td style="font-family:var(--font-mono); font-weight:700; color:${m.boostersTaken > 0 ? 'var(--accent-amber)' : 'var(--text-tertiary)'};">${fmtNum(m.boostersTaken || 0)}</td>
                     <td style="text-align:right; font-size:0.82em; color:var(--text-tertiary);" title="${m.lastActionTs ? new Date(m.lastActionTs * 1000).toUTCString() : ''}">${timeSince(m.lastActionTs)}</td>
+                    <td style="text-align:center;">
+                        <button class="btn btn-sm btn-outline" onclick="openMemberLogModal('${m.id}', '${escapeHtml(m.name)}')" title="View item-by-item audit log" style="padding:3px 8px; font-size:0.75em;">
+                            <span>📋</span> Log
+                        </button>
+                    </td>
                 </tr>`;
             }).join('');
         }
@@ -2969,6 +3883,163 @@ function renderItemUsageTracker() {
     }
 }
 const filterUsageDebounced = debounce(renderItemUsageTracker, 200);
+
+// ── Member Detail Log Modal ──
+function openMemberLogModal(memberId, memberName) {
+    const mIdStr = String(memberId);
+    const events = loadedArmoryEvents.filter(e => String(e.id) === mIdStr || (e.targetId && String(e.targetId) === mIdStr));
+    const modal = document.getElementById('member-log-modal');
+    const title = document.getElementById('modal-title');
+    const body = document.getElementById('modal-body');
+    if (!modal || !body) return;
+
+    title.innerHTML = `📋 <strong>${escapeHtml(memberName || 'Member')}</strong> [${memberId}] — Transaction History (${events.length} records)`;
+    if (!events.length) {
+        body.innerHTML = `<div style="text-align:center; padding:36px; color:var(--text-tertiary);">No individual transactions recorded for this member in the current dataset.</div>`;
+    } else {
+        body.innerHTML = `
+        <div style="margin-bottom:12px; font-size:0.82em; color:var(--text-tertiary);">Showing chronological armory actions recorded for this member:</div>
+        <div class="scrollable" style="max-height:60vh;">
+            <table class="armory-table">
+                <thead>
+                    <tr>
+                        <th>Time (TCT)</th>
+                        <th>Action</th>
+                        <th>Qty</th>
+                        <th>Item</th>
+                        <th>Category</th>
+                        <th>Transaction Summary</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${events.map(e => `
+                        <tr>
+                            <td style="font-family:var(--font-mono); font-size:0.8em; color:var(--text-tertiary); white-space:nowrap;">
+                                ${new Date((e.timestamp || 0) * 1000).toISOString().replace('T', ' ').substring(0, 19)}
+                            </td>
+                            <td><span class="badge-type">${e.action}</span></td>
+                            <td style="font-family:var(--font-mono); font-weight:800; color:${e.type === 'inflow' ? 'var(--accent-emerald)' : 'var(--accent-crimson)'};">
+                                ${e.type === 'inflow' ? '+' : '-'}${e.quantity || 1}
+                            </td>
+                            <td style="font-weight:700;">${escapeHtml(e.itemName)}</td>
+                            <td><span class="badge-type">${e.category || 'Other'}</span></td>
+                            <td style="font-size:0.82em; color:var(--text-secondary); max-width:280px;">${escapeHtml(e.rawText || '')}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>`;
+    }
+    modal.classList.add('open');
+}
+
+function closeMemberLogModal() {
+    const modal = document.getElementById('member-log-modal');
+    if (modal) modal.classList.remove('open');
+}
+
+function handleModalBackdropClick(event) {
+    if (event.target.id === 'member-log-modal') {
+        closeMemberLogModal();
+    }
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMemberLogModal();
+});
+
+// ── Export CSV & Copy Discord Summary ──
+function exportTrackerCSV() {
+    if (!currentFilteredMemberList || !currentFilteredMemberList.length) {
+        showToast('No member data available to export', 'warn');
+        return;
+    }
+    const headers = ['Member Name', 'Torn ID', 'Deposited (+)', 'Consumed (-)', 'Items Loaned', 'Items Returned', 'Net Balance', 'Xanax Taken', 'Medical Taken', 'Boosters Taken', 'Last Active UTC'];
+    const rows = currentFilteredMemberList.map(m => [
+        `"${(m.name || '').replace(/"/g, '""')}"`,
+        m.id,
+        m.totalDeposited,
+        m.totalUsed,
+        m.itemsLoaned,
+        m.itemsReturned,
+        m.netBalance,
+        m.xanaxTaken,
+        m.medsTaken,
+        m.boostersTaken,
+        m.lastActionTs ? `"${new Date(m.lastActionTs * 1000).toISOString()}"` : '""'
+    ]);
+    const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `faction_armory_ledger_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast('Exported armory ledger to CSV!', 'success');
+}
+
+function copyTrackerDiscord() {
+    if (!currentFilteredMemberList || !currentFilteredMemberList.length) {
+        showToast('No member data to copy', 'warn');
+        return;
+    }
+    const topConsumers = [...currentFilteredMemberList].sort((a, b) => b.totalUsed - a.totalUsed).slice(0, 10);
+    const topDonors = [...currentFilteredMemberList].sort((a, b) => b.totalDeposited - a.totalDeposited).slice(0, 10);
+
+    let md = `**📊 Faction Armory Audit Summary**\n`;
+    md += `*Period: ${armoryTimeFilter} | Active Members: ${currentFilteredMemberList.length}*\n\n`;
+    md += `**🔥 Top Consumers (Outflow)**\n`;
+    md += '```\n';
+    md += `${'Member'.padEnd(20)} | ${'Used'.padStart(6)} | ${'Net'.padStart(6)} | ${'Xan'.padStart(4)} | Meds\n`;
+    md += `${'-'.repeat(21)}+${'-'.repeat(8)}+${'-'.repeat(8)}+${'-'.repeat(6)}+${'-'.repeat(6)}\n`;
+    topConsumers.forEach(m => {
+        const name = (m.name || 'Unknown').substring(0, 20).padEnd(20);
+        const used = String(m.totalUsed).padStart(6);
+        const net = String(m.netBalance >= 0 ? '+' + m.netBalance : m.netBalance).padStart(6);
+        const xan = String(m.xanaxTaken).padStart(4);
+        const meds = String(m.medsTaken).padStart(4);
+        md += `${name} | ${used} | ${net} | ${xan} | ${meds}\n`;
+    });
+    md += '```\n';
+
+    md += `**🟢 Top Donors (Inflow)**\n`;
+    md += '```\n';
+    md += `${'Member'.padEnd(20)} | ${'Dep'.padStart(6)} | ${'Net'.padStart(6)}\n`;
+    md += `${'-'.repeat(21)}+${'-'.repeat(8)}+${'-'.repeat(8)}\n`;
+    topDonors.forEach(m => {
+        const name = (m.name || 'Unknown').substring(0, 20).padEnd(20);
+        const dep = String(m.totalDeposited).padStart(6);
+        const net = String(m.netBalance >= 0 ? '+' + m.netBalance : m.netBalance).padStart(6);
+        md += `${name} | ${dep} | ${net}\n`;
+    });
+    md += '```\n';
+
+    navigator.clipboard.writeText(md).then(() => {
+        showToast('Discord summary table copied to clipboard!', 'success');
+    }).catch(err => {
+        console.error('Clipboard copy failed:', err);
+        showToast('Failed to copy to clipboard', 'error');
+    });
+}
+
+function resetArmoryThresholds() {
+    const defaults = {
+        'cfg-thresh-xanax': 50,
+        'cfg-thresh-sfak': 40,
+        'cfg-thresh-fak': 60,
+        'cfg-thresh-morph': 40,
+        'cfg-thresh-blood': 100,
+        'cfg-thresh-cans': 30
+    };
+    for (const [id, val] of Object.entries(defaults)) {
+        const input = document.getElementById(id);
+        if (input) input.value = val;
+    }
+    const toggle = document.getElementById('cfg-discord-dispatch');
+    if (toggle) toggle.checked = true;
+    showToast('Thresholds reset to factory defaults (click Save to apply)', 'warn');
+}
 
 // ── Medical & Drugs Table Filter ──
 function filterMeds() {
@@ -3173,7 +4244,7 @@ async function saveArmoryThresholds() {
     };
 
     localStorage.setItem('faction_armory_thresholds', JSON.stringify(thresholds));
-    alert("✅ Armory safety thresholds and auto-alert rules saved!");
+    showToast("✅ Armory safety thresholds and auto-alert rules saved!", "success");
     if (dashData) renderArmory(dashData.dash);
 }
 
@@ -3575,8 +4646,25 @@ ${chainActive ? `✅ <b>Chain Active:</b> Currently at ${fmtNum(chain.current)} 
 // ─── Initialization on DOMContentLoaded ───
 document.addEventListener('DOMContentLoaded', () => {
     handleInitialHash();
+    if (typeof initTrackerDates === 'function') initTrackerDates();
     loadAll();
 });
 </script>
+
+    <!-- Modal Dialog System -->
+    <div id="member-log-modal" class="modal-backdrop" onclick="handleModalBackdropClick(event)">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <div class="modal-title" id="modal-title">📋 Member Armory Log</div>
+                <button class="modal-close" onclick="closeMemberLogModal()" title="Close (Esc)">✕</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <!-- Injected Log Table -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container"></div>
 </body>
 </html>

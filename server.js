@@ -6917,17 +6917,23 @@ app.get('/api/dashboard-data', async (req, res) => {
 
 // Dedicated Armory History & Audit Endpoint with custom day ranges and deep pagination
 app.get('/api/armory-history', async (req, res) => {
-    const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey || req.query.key;
     if (!userKey || userKey === 'null' || userKey.trim() === '') {
         return res.status(401).json({ error: "Authentication required" });
     }
     try {
-        const days = Math.min(90, Math.max(1, parseInt(req.query.days || '30', 10)));
-        const maxPages = Math.min(6, Math.max(1, parseInt(req.query.pages || '3', 10)));
-        const fromTs = Math.floor(Date.now() / 1000) - (86400 * days);
+        let fromTs, toTs = null;
+        let days = 30;
+        if (req.query.from) {
+            fromTs = parseInt(req.query.from, 10);
+            if (req.query.to) toTs = parseInt(req.query.to, 10);
+        } else {
+            days = Math.min(90, Math.max(1, parseInt(req.query.days || '30', 10)));
+            fromTs = Math.floor(Date.now() / 1000) - (86400 * days);
+        }
+        const maxPages = Math.min(10, Math.max(1, parseInt(req.query.pages || '6', 10)));
 
         let allEntries = {};
-        let toTs = null;
 
         for (let p = 0; p < maxPages; p++) {
             let url = `https://api.torn.com/faction/?selections=armorynews&from=${fromTs}&key=${userKey}`;
@@ -6948,6 +6954,9 @@ app.get('/api/armory-history', async (req, res) => {
         res.json({
             success: true,
             days,
+            fromTs,
+            toTs,
+            eventsCount: (stats.recentLog || []).length,
             stats
         });
     } catch (err) {
