@@ -266,6 +266,20 @@
         flex-direction: column;
         height: 100%;
     }
+    .armory-widget-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .armory-widget-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
     .low-stock-ticker {
         display: flex;
         gap: 8px;
@@ -286,6 +300,11 @@
         font-weight: 700;
         white-space: nowrap;
         user-select: none;
+    }
+    .stock-pill.neutral {
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--text-tertiary);
+        border: 1px solid var(--border-subtle);
     }
     .stock-pill.warning {
         background: rgba(245, 158, 11, 0.15);
@@ -515,6 +534,23 @@
         color: var(--text-primary);
     }
 
+    /* Item Usage Chips */
+    .usage-item-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        padding: 2px 8px;
+        border-radius: var(--radius-sm);
+        font-size: 0.74em;
+        margin: 2px;
+        white-space: nowrap;
+    }
+    .usage-item-chip strong {
+        color: var(--accent-amber);
+    }
+
     /* Loan Badges */
     .badge-loan {
         padding: 2px 8px;
@@ -656,7 +692,7 @@
             <div class="nav-section-title">Tactical Desk</div>
             <a href="#sentinel" onclick="switchOpsTab('sentinel')" class="nav-link" id="nav-link-sentinel">
                 <span class="nav-icon">✈️</span> 
-                <span class="nav-text">Flight &amp; Sentinel</span>
+                <span class="nav-text">Flight &amp; War Sentinel</span>
             </a>
             <a href="/travel.html" class="nav-link"><span class="nav-icon">✈️</span> <span class="nav-text">Travel Profit Desk</span></a>
             <a href="/bazaar.html" class="nav-link"><span class="nav-icon">🛒</span> <span class="nav-text">Market &amp; Bazaar</span></a>
@@ -691,11 +727,7 @@
                 </div>
             </div>
             <div class="topbar-right">
-                <!-- Consolidated Unified API Key Status Indicator -->
-                <div id="header-api-status" class="telemetry-chip" onclick="openSettings()" style="cursor:pointer;" title="Click to configure Torn &amp; FF Scouter API keys">
-                    <span class="pulse-indicator" id="header-api-dot" style="background:var(--accent-emerald);"></span>
-                    <span id="header-api-text" style="font-weight:700; font-size:0.85em;">🟢 API Key Synced</span>
-                </div>
+                <!-- Single Primary CTA Managed By Auth-Gate (No Duplicates) -->
                 <div class="tct-clock-chip" title="Torn City Time (TCT)">
                     <span class="tct-label">TCT</span>
                     <span id="global-tct-clock">--:--:--</span>
@@ -718,71 +750,73 @@
             </div>
         </div>
 
-        <!-- FACTION HERO -->
+        <!-- FACTION HERO BANNER (WITH CLEAN UNAUTHENTICATED STATE) -->
         <div class="faction-hero" id="faction-hero">
             <div class="faction-name-block">
-                <h2>Loading Faction...</h2>
-                <div class="faction-id">ID: — &nbsp;|&nbsp; Respect: —</div>
+                <h2 id="hero-title">Torn Faction Operations Hub</h2>
+                <div class="faction-id" id="hero-subtitle" style="color:var(--accent-amber); font-weight:600;">
+                    ⚠️ Connect your Torn API key above to load live faction statistics, armory reserves, and combat telemetry.
+                </div>
             </div>
             <div class="faction-hero-stats" id="hero-stats">
-                <div class="hero-stat"><div class="val">—</div><div class="lbl">Members</div></div>
+                <div class="hero-stat"><div class="val" id="hero-stat-members">—</div><div class="lbl">Members</div></div>
                 <div class="faction-divider"></div>
-                <div class="hero-stat"><div class="val green">—</div><div class="lbl">Online</div></div>
+                <div class="hero-stat"><div class="val green" id="hero-stat-online">—</div><div class="lbl">Online</div></div>
                 <div class="faction-divider"></div>
-                <div class="hero-stat"><div class="val red">—</div><div class="lbl">Hospital</div></div>
+                <div class="hero-stat"><div class="val red" id="hero-stat-hosp">—</div><div class="lbl">Hospital</div></div>
                 <div class="faction-divider"></div>
-                <div class="hero-stat"><div class="val" style="color:var(--accent-cobalt);">—</div><div class="lbl">Traveling</div></div>
+                <div class="hero-stat"><div class="val" style="color:var(--accent-cobalt);" id="hero-stat-travel">—</div><div class="lbl">Traveling</div></div>
             </div>
         </div>
 
-        <!-- BALANCED 6-CARD RESPONSIVE KPI STRIP -->
+        <!-- HARMONIZED 6-CARD RESPONSIVE KPI STRIP (UNIFORM ANATOMY & THEMED ACCENTS) -->
         <div class="kpi-row-6" id="kpi-row">
-            <div class="kpi-card">
+            <div class="kpi-card kpi-cobalt">
                 <div class="kpi-icon">👥</div>
-                <div>
+                <div class="kpi-content">
                     <div class="kpi-label">Total Members</div>
                     <div class="kpi-value" id="kpi-members">—</div>
-                    <div class="kpi-sub" id="kpi-online-sub">Loading...</div>
+                    <div class="kpi-sub" id="kpi-online-sub">—</div>
                 </div>
             </div>
-            <div class="kpi-card">
+            <div class="kpi-card kpi-amber">
                 <div class="kpi-icon">⭐</div>
-                <div>
+                <div class="kpi-content">
                     <div class="kpi-label">Faction Respect</div>
                     <div class="kpi-value" id="kpi-respect">—</div>
                     <div class="kpi-sub" id="kpi-respect-sub">—</div>
                 </div>
             </div>
-            <div class="kpi-card">
+            <div class="kpi-card kpi-cyan">
                 <div class="kpi-icon">🔗</div>
-                <div>
+                <div class="kpi-content">
                     <div class="kpi-label">Active Chain</div>
                     <div class="kpi-value" id="kpi-chain">—</div>
                     <div class="kpi-sub" id="kpi-chain-timeout">—</div>
                 </div>
             </div>
-            <div class="kpi-card">
+            <div class="kpi-card kpi-crimson">
                 <div class="kpi-icon">⚔️</div>
-                <div>
+                <div class="kpi-content">
                     <div class="kpi-label">War Status</div>
                     <div class="kpi-value" id="kpi-war-status">—</div>
                     <div class="kpi-sub" id="kpi-war-sub">—</div>
                 </div>
             </div>
-            <div class="kpi-card">
+            <div class="kpi-card kpi-emerald">
                 <div class="kpi-icon">🏦</div>
-                <div>
+                <div class="kpi-content">
                     <div class="kpi-label">Vault Cash</div>
                     <div class="kpi-value" id="kpi-vault-cash" style="color:var(--accent-emerald);">—</div>
-                    <div class="kpi-sub" id="kpi-vault-sub">Faction Treasury</div>
+                    <div class="kpi-sub" id="kpi-vault-sub">—</div>
                 </div>
             </div>
-            <div class="kpi-card">
+            <div class="kpi-card kpi-cyan">
                 <div class="kpi-icon">🛡️</div>
-                <div>
+                <div class="kpi-content">
                     <div class="kpi-label">Armory Health</div>
                     <div class="kpi-value" id="kpi-armory-health" style="color:var(--accent-cyan);">—</div>
-                    <div class="kpi-sub" id="kpi-armory-sub">Reserves Status</div>
+                    <div class="kpi-sub" id="kpi-armory-sub">—</div>
                 </div>
             </div>
         </div>
@@ -797,7 +831,7 @@
                 <span class="tab-badge" id="tab-armory-badge" style="display:none;">0 Low</span>
             </button>
             <button class="ops-tab-btn" id="tab-btn-sentinel" onclick="switchOpsTab('sentinel')">
-                <span>⚔️</span> War Flight &amp; Sentinel
+                <span>✈️</span> Flight &amp; War Sentinel
             </button>
         </div>
 
@@ -836,7 +870,7 @@
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title">👥 Member Activity</div>
-                        <span id="member-count-badge" style="font-size:0.8em;color:var(--text-tertiary);">Loading...</span>
+                        <span id="member-count-badge" style="font-size:0.8em;color:var(--text-tertiary);">Awaiting data...</span>
                     </div>
                     <div class="card-body scrollable" style="max-height:360px;">
                         <div class="member-row member-row-header">
@@ -845,24 +879,26 @@
                             <div>Last Action</div>
                         </div>
                         <div id="member-list">
-                            <div class="empty-state">Loading members...</div>
+                            <div class="empty-state">Connect API key to view member status.</div>
                         </div>
                     </div>
                 </div>
 
                 <!-- FACTION ARMORY & SUPPLY MONITOR (SNAPSHOT WIDGET) -->
                 <div class="card armory-snapshot-card">
-                    <div class="card-header">
+                    <div class="card-header armory-widget-header">
                         <div class="card-title" style="display:flex;align-items:center;gap:8px;">
                             <span>🪖 Faction Armory &amp; Supply Monitor</span>
-                            <span id="snapshot-status-pill" class="stock-pill optimal" style="font-size:0.7em;">Checking...</span>
                         </div>
-                        <a href="#armory" onclick="switchOpsTab('armory')" style="font-size:0.78em;color:var(--accent-cobalt);text-decoration:none;font-weight:700;">Full Tracker →</a>
+                        <div class="armory-widget-header-actions">
+                            <span id="snapshot-status-pill" class="stock-pill neutral" style="font-size:0.7em;">⏳ Syncing...</span>
+                            <a href="#armory" onclick="switchOpsTab('armory')" style="font-size:0.78em;color:var(--accent-cobalt);text-decoration:none;font-weight:700;white-space:nowrap;">Full Tracker →</a>
+                        </div>
                     </div>
 
-                    <!-- Critical Low-Stock Ticker -->
+                    <!-- Critical Low-Stock Ticker (Neutral Initial State) -->
                     <div class="low-stock-ticker" id="snapshot-low-ticker">
-                        <span class="stock-pill optimal">✅ Armory Reserves Fully Stocked</span>
+                        <span class="stock-pill neutral">⏳ Awaiting armory sync...</span>
                     </div>
 
                     <!-- 4 Quick Supply Status Tiles -->
@@ -870,15 +906,15 @@
                         <div class="supply-tile">
                             <div class="supply-tile-hdr">
                                 <span>💊 Meds &amp; Drugs</span>
-                                <span id="tile-meds-badge" class="stock-pill optimal" style="padding:1px 6px;">OK</span>
+                                <span id="tile-meds-badge" class="stock-pill neutral" style="padding:1px 6px;">—</span>
                             </div>
                             <div class="supply-tile-val" id="tile-meds-val">—</div>
-                            <div class="supply-tile-sub" id="tile-meds-sub">Calculating reserves...</div>
+                            <div class="supply-tile-sub" id="tile-meds-sub">Medical reserves</div>
                         </div>
                         <div class="supply-tile">
                             <div class="supply-tile-hdr">
                                 <span>🥫 Boosters &amp; Cans</span>
-                                <span id="tile-boosters-badge" class="stock-pill optimal" style="padding:1px 6px;">OK</span>
+                                <span id="tile-boosters-badge" class="stock-pill neutral" style="padding:1px 6px;">—</span>
                             </div>
                             <div class="supply-tile-val" id="tile-boosters-val">—</div>
                             <div class="supply-tile-sub" id="tile-boosters-sub">Energy &amp; Nerve Items</div>
@@ -886,17 +922,17 @@
                         <div class="supply-tile">
                             <div class="supply-tile-hdr">
                                 <span>🔫 Loaned Weapons</span>
-                                <span style="color:var(--text-tertiary); font-family:var(--font-mono);" id="tile-weapons-sub">0 / 0</span>
+                                <span style="color:var(--text-tertiary); font-family:var(--font-mono);" id="tile-weapons-sub">—</span>
                             </div>
-                            <div class="supply-tile-val" id="tile-weapons-val" style="color:var(--accent-amber);">0</div>
-                            <div class="supply-tile-sub">Weapons in field circulation</div>
+                            <div class="supply-tile-val" id="tile-weapons-val" style="color:var(--accent-amber);">—</div>
+                            <div class="supply-tile-sub">Weapons in circulation</div>
                         </div>
                         <div class="supply-tile">
                             <div class="supply-tile-hdr">
                                 <span>🛡️ Loaned Armor</span>
-                                <span style="color:var(--text-tertiary); font-family:var(--font-mono);" id="tile-armor-sub">0 / 0</span>
+                                <span style="color:var(--text-tertiary); font-family:var(--font-mono);" id="tile-armor-sub">—</span>
                             </div>
-                            <div class="supply-tile-val" id="tile-armor-val" style="color:var(--accent-cyan);">0</div>
+                            <div class="supply-tile-val" id="tile-armor-val" style="color:var(--accent-cyan);">—</div>
                             <div class="supply-tile-sub">Armor sets in combat use</div>
                         </div>
                     </div>
@@ -909,7 +945,7 @@
                         <a href="https://www.torn.com/factions.php?step=your#/tab=armoury&sub=donator" target="_blank" class="quick-action-btn">
                             <span>📦</span> Deposit Supplies
                         </a>
-                        <button onclick="switchOpsTab('armory')" class="quick-action-btn primary">
+                        <button onclick="switchOpsTab('armory')" class="quick-action-btn primary" style="white-space:nowrap;">
                             <span>📊</span> Full Armory Ledger →
                         </button>
                     </div>
@@ -981,37 +1017,112 @@
         <div class="tab-pane" id="pane-armory">
             <!-- TOP ARMORY KPIS -->
             <div class="armory-kpis">
-                <div class="kpi-card">
+                <div class="kpi-card kpi-emerald">
                     <div class="kpi-icon">🏦</div>
-                    <div>
+                    <div class="kpi-content">
                         <div class="kpi-label">Accessible Vault Cash</div>
                         <div class="kpi-value" id="armory-kpi-cash" style="color:var(--accent-emerald);">$0</div>
                         <div class="kpi-sub" id="armory-kpi-points">0 Faction Points</div>
                     </div>
                 </div>
-                <div class="kpi-card">
+                <div class="kpi-card kpi-cyan">
                     <div class="kpi-icon">💊</div>
-                    <div>
+                    <div class="kpi-content">
                         <div class="kpi-label">Total Medical Stock</div>
                         <div class="kpi-value" id="armory-kpi-meds">0</div>
                         <div class="kpi-sub">Kits, Morphine, Blood Bags</div>
                     </div>
                 </div>
-                <div class="kpi-card">
+                <div class="kpi-card kpi-amber">
                     <div class="kpi-icon">🪖</div>
-                    <div>
+                    <div class="kpi-content">
                         <div class="kpi-label">Active Member Loans</div>
                         <div class="kpi-value" id="armory-kpi-loans" style="color:var(--accent-amber);">0</div>
                         <div class="kpi-sub" id="armory-kpi-loans-sub">0 Overdue</div>
                     </div>
                 </div>
-                <div class="kpi-card">
+                <div class="kpi-card kpi-crimson">
                     <div class="kpi-icon">🚨</div>
-                    <div>
+                    <div class="kpi-content">
                         <div class="kpi-label">Low-Stock Warnings</div>
                         <div class="kpi-value" id="armory-kpi-low" style="color:var(--accent-crimson);">0</div>
-                        <div class="kpi-sub" id="armory-kpi-health">100% Stocked</div>
+                        <div class="kpi-sub" id="armory-kpi-health">Syncing...</div>
                     </div>
+                </div>
+            </div>
+
+            <!-- WHO USES WHAT & HOW MUCH: MEMBER CONSUMPTION & USAGE TRACKER -->
+            <div class="armory-subpanel">
+                <div class="subpanel-hdr">
+                    <div class="subpanel-title">
+                        <span>📊 Who Uses What &amp; How Much (Item Consumption Tracker)</span>
+                        <span id="usage-total-badge" class="badge-type" style="background:var(--accent-emerald-dim); color:var(--accent-emerald);">0 items used</span>
+                    </div>
+                    <div class="subpanel-controls">
+                        <div class="analyst-tabs" style="padding:0; border:none; gap:6px;">
+                            <button class="analyst-tab active" id="btn-view-consumers" onclick="setUsageView('members', this)" style="padding:4px 12px; font-size:0.75em;">👥 By Member</button>
+                            <button class="analyst-tab" id="btn-view-items" onclick="setUsageView('items', this)" style="padding:4px 12px; font-size:0.75em;">📦 By Item</button>
+                            <button class="analyst-tab" id="btn-view-feed" onclick="setUsageView('feed', this)" style="padding:4px 12px; font-size:0.75em;">⏱️ Activity Feed</button>
+                        </div>
+                        <input type="text" id="usage-search" placeholder="🔍 Search member or item..." class="sort-select" style="min-width:170px; padding:6px 12px; font-size:0.82em;" oninput="filterUsageDebounced()">
+                    </div>
+                </div>
+
+                <!-- USAGE VIEW 1: BY MEMBER (WHO USES WHAT) -->
+                <div id="usage-view-members" class="scrollable" style="max-height:380px;">
+                    <table class="armory-table">
+                        <thead>
+                            <tr>
+                                <th>Member</th>
+                                <th>Total Used</th>
+                                <th>Meds</th>
+                                <th>Drugs</th>
+                                <th>Boosters</th>
+                                <th>Exact Items Consumed (Item &amp; Count)</th>
+                                <th style="text-align:right;">Last Used</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usage-members-tbody">
+                            <tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-tertiary);">Loading member item consumption history...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- USAGE VIEW 2: BY ITEM (WHICH ITEMS ARE MOST CONSUMED) -->
+                <div id="usage-view-items" class="scrollable" style="max-height:380px; display:none;">
+                    <table class="armory-table">
+                        <thead>
+                            <tr>
+                                <th>Item Name</th>
+                                <th>Category</th>
+                                <th>Total Quantity Used</th>
+                                <th>Unique Members</th>
+                                <th>Top Consumers (Who Used It &amp; How Much)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usage-items-tbody">
+                            <tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-tertiary);">Loading item utilization breakdown...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- USAGE VIEW 3: LIVE TRANSACTION LOG FEED -->
+                <div id="usage-view-feed" class="scrollable" style="max-height:380px; display:none;">
+                    <table class="armory-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Member</th>
+                                <th>Action</th>
+                                <th>Quantity</th>
+                                <th>Item Name</th>
+                                <th>Category</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usage-feed-tbody">
+                            <tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-tertiary);">Loading live armory activity feed...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -1201,15 +1312,15 @@
         </div>
 
         <!-- ========================================== -->
-        <!-- TAB 3: WAR FLIGHT & FARM SENTINEL         -->
+        <!-- TAB 3: FLIGHT & WAR SENTINEL              -->
         <!-- ========================================== -->
         <div class="tab-pane" id="pane-sentinel">
-            <!-- WAR FLIGHT & FARM SENTINEL (PAST WARS AIRTIME & DEFENSE AUDIT) -->
+            <!-- FLIGHT & WAR SENTINEL AUDIT CARD -->
             <div class="card span-full" id="war-sentinel-card" style="margin-bottom:18px; border: 1px solid rgba(0,206,201,0.25);">
                 <div class="card-header" style="flex-wrap:wrap; gap:12px;">
                     <div>
                         <div class="card-title" style="color:var(--teal, #00cec9); display:flex; align-items:center; gap:8px;">
-                            <span>✈️ War Flight &amp; Farm Sentinel</span>
+                            <span>✈️ Flight &amp; War Sentinel</span>
                             <span style="font-size:0.68em; background:rgba(0,206,201,0.12); color:var(--teal, #00cec9); border:1px solid rgba(0,206,201,0.3); padding:2px 8px; border-radius:12px; font-weight:700;">FF Scouter &amp; Attack Audit</span>
                         </div>
                         <div style="font-size:0.78em; color:var(--text-tertiary); margin-top:2px;">Scan past or active wars to see which members consistently flew and who sat in Torn City and got farmed.</div>
@@ -1368,6 +1479,7 @@ let myKey = localStorage.getItem("warboard_apikey") || "";
 let dashData = null;
 let currentArmoryData = null;
 let activeOpsTab = 'overview';
+let activeUsageView = 'members';
 
 // ─── Debounce Utility (200ms) ───
 function debounce(func, wait = 200) {
@@ -1437,28 +1549,26 @@ function switchOpsTab(tabId) {
         pane.classList.toggle('active', pane.getAttribute('id') === `pane-${tabId}`);
     });
 
-    // Update breadcrumb dynamically
+    // Standardize breadcrumb display name
     const crumbMap = {
         'overview': 'OVERVIEW',
         'armory': 'ARMORY & LOGISTICS',
-        'sentinel': 'WAR SENTINEL'
+        'sentinel': 'FLIGHT & WAR SENTINEL'
     };
     const crumbEl = document.getElementById('crumb-active-sub');
     if (crumbEl) crumbEl.textContent = crumbMap[tabId] || 'OVERVIEW';
 
-    // Update sidebar active link highlights
+    // Sidebar active link highlights
     const navArmory = document.getElementById('nav-link-armory');
     const navSentinel = document.getElementById('nav-link-sentinel');
     if (navArmory) navArmory.classList.toggle('active', tabId === 'armory');
     if (navSentinel) navSentinel.classList.toggle('active', tabId === 'sentinel');
 
-    // Tab-specific initialization
     if (tabId === 'sentinel') {
         initSentinel();
     }
 }
 
-// Check initial hash on load
 function handleInitialHash() {
     const hash = window.location.hash.replace('#', '').toLowerCase();
     if (hash === 'armory' || hash === 'sentinel' || hash === 'war-audit') {
@@ -1474,25 +1584,6 @@ window.addEventListener('hashchange', () => {
     }
 });
 
-// ─── Unified API Key Status Management ───
-function updateUnifiedApiKeyStatus() {
-    myKey = localStorage.getItem("warboard_apikey") || "";
-    const statusChip = document.getElementById('header-api-status');
-    const dot = document.getElementById('header-api-dot');
-    const text = document.getElementById('header-api-text');
-    if (!statusChip || !dot || !text) return;
-
-    if (myKey && myKey.trim().length > 5) {
-        dot.style.background = 'var(--accent-emerald)';
-        text.textContent = '🟢 API Key Synced';
-        statusChip.title = 'Torn API Key is active and synced. Click to open Settings.';
-    } else {
-        dot.style.background = 'var(--accent-amber)';
-        text.textContent = '🔑 Connect Key';
-        statusChip.title = 'No Torn API Key found. Click to enter your key.';
-    }
-}
-
 window.openSettings = function() {
     if (typeof openGlobalSettings === 'function') {
         openGlobalSettings();
@@ -1500,7 +1591,6 @@ window.openSettings = function() {
         const key = prompt("Enter your Torn API Key:", localStorage.getItem("warboard_apikey") || "");
         if (key !== null) {
             localStorage.setItem("warboard_apikey", key.trim());
-            updateUnifiedApiKeyStatus();
             loadAll();
         }
     }
@@ -1509,12 +1599,12 @@ window.openSettings = function() {
 // ─── Main Data Fetch & Render ───
 async function loadAll() {
     myKey = localStorage.getItem("warboard_apikey") || "";
-    updateUnifiedApiKeyStatus();
 
     if (!myKey && !localStorage.getItem("sv_session_token")) {
+        renderUnauthenticatedHero();
         const analyst = document.getElementById('analyst-output');
         if (analyst) {
-            analyst.innerHTML = '<span style="color:var(--accent-amber)">⚠️ No API key set. Connect your Torn API key above to load dashboard data.</span>';
+            analyst.innerHTML = '<span style="color:var(--accent-amber)">⚠️ No API key set. Connect your Torn API key above to load live faction statistics, armory reserves, and combat telemetry.</span>';
             analyst.classList.remove('loading');
         }
         return;
@@ -1546,6 +1636,7 @@ async function loadAll() {
         const wars = await warRes.json();
 
         if (dash.error) {
+            renderUnauthenticatedHero();
             const analyst = document.getElementById('analyst-output');
             if (analyst) analyst.innerHTML = `<span style="color:var(--accent-crimson)">Error: ${dash.error}</span>`;
             if (lastUpdatedEl) lastUpdatedEl.innerText = 'Sync error';
@@ -1563,6 +1654,24 @@ async function loadAll() {
     } catch(e) {
         if (lastUpdatedEl) lastUpdatedEl.innerText = 'Connection error';
     }
+}
+
+function renderUnauthenticatedHero() {
+    const titleEl = document.getElementById('hero-title');
+    const subEl = document.getElementById('hero-subtitle');
+    if (titleEl) titleEl.innerText = 'Torn Faction Operations Hub';
+    if (subEl) {
+        subEl.innerHTML = '⚠️ Connect your Torn API key above to load live faction statistics, armory reserves, and combat telemetry.';
+        subEl.style.color = 'var(--accent-amber)';
+    }
+    const statMembers = document.getElementById('hero-stat-members');
+    const statOnline = document.getElementById('hero-stat-online');
+    const statHosp = document.getElementById('hero-stat-hosp');
+    const statTravel = document.getElementById('hero-stat-travel');
+    if (statMembers) statMembers.innerText = '—';
+    if (statOnline) statOnline.innerText = '—';
+    if (statHosp) statHosp.innerText = '—';
+    if (statTravel) statTravel.innerText = '—';
 }
 
 function renderAll(d, wars) {
@@ -1608,7 +1717,7 @@ function renderFactionHero(d) {
     `;
 }
 
-// ─── Render 6-Card KPI Strip ───
+// ─── Render 6-Card KPI Strip (Harmonized Anatomy & Subtext) ───
 function renderKPIs(d) {
     const f = d.faction || {};
     const members = Object.values(d.members || {});
@@ -1801,7 +1910,7 @@ function renderRespect(d) {
     if (!sorted.length || sorted[0].score === 0) {
         el.innerHTML = `<div class="empty-state" style="padding:18px;">
             Faction is currently at peace.<br>
-            <span style="font-size:0.85em;color:var(--text-tertiary);margin-top:4px;display:inline-block;">See <a href="/payout.html" style="color:var(--accent-cobalt);font-weight:700;">Payouts</a> or <a href="#sentinel" onclick="switchOpsTab('sentinel')" style="color:var(--teal, #00cec9);font-weight:700;">War Sentinel</a> for past war respect contributions.</span>
+            <span style="font-size:0.85em;color:var(--text-tertiary);margin-top:4px;display:inline-block;">See <a href="/payout.html" style="color:var(--accent-cobalt);font-weight:700;">Payouts</a> or <a href="#sentinel" onclick="switchOpsTab('sentinel')" style="color:var(--teal, #00cec9);font-weight:700;">Flight &amp; War Sentinel</a> for past war respect contributions.</span>
         </div>`;
         return;
     }
@@ -1895,6 +2004,7 @@ function renderArmory(d) {
     const loans = d.loans || [];
     const lowStock = armory.lowStockItems || [];
     const lowCount = lowStock.length;
+    const isDataLoaded = Boolean(d.success && d.armory);
 
     // Update Badges across navbar and tabs
     const navBadge = document.getElementById('nav-armory-badge');
@@ -1923,18 +2033,23 @@ function renderArmory(d) {
     // ── 1. Snapshot Widget (Tab 1) ──
     const snapshotPill = document.getElementById('snapshot-status-pill');
     if (snapshotPill) {
-        if (lowCount === 0) {
+        if (!isDataLoaded) {
+            snapshotPill.className = 'stock-pill neutral';
+            snapshotPill.textContent = '⏳ Syncing...';
+        } else if (lowCount === 0) {
             snapshotPill.className = 'stock-pill optimal';
-            snapshotPill.textContent = '100% Stocked';
+            snapshotPill.textContent = '🟢 100% Stocked';
         } else {
-            snapshotPill.className = 'stock-pill warning';
-            snapshotPill.textContent = `${lowCount} Low Reserves`;
+            snapshotPill.className = 'stock-pill critical';
+            snapshotPill.textContent = `🔴 Low Stock (${lowCount})`;
         }
     }
 
     const tickerEl = document.getElementById('snapshot-low-ticker');
     if (tickerEl) {
-        if (lowCount === 0) {
+        if (!isDataLoaded) {
+            tickerEl.innerHTML = `<span class="stock-pill neutral">⏳ Awaiting armory sync...</span>`;
+        } else if (lowCount === 0) {
             tickerEl.innerHTML = `<span class="stock-pill optimal">✅ All Supplies Above Reserve Thresholds</span>`;
         } else {
             tickerEl.innerHTML = lowStock.map(item => `
@@ -1957,32 +2072,34 @@ function renderArmory(d) {
     const tileArmorVal = document.getElementById('tile-armor-val');
     const tileArmorSub = document.getElementById('tile-armor-sub');
 
-    const totalMeds = (armory.totalMedicalItems || 0) + (armory.totalDrugs || 0);
-    const medLow = lowStock.filter(i => i.name.includes('First Aid') || i.name.includes('Morphine') || i.name.includes('Blood') || i.name.includes('Xanax'));
-    if (tileMedsVal) tileMedsVal.textContent = fmtNum(totalMeds);
-    if (tileMedsSub) tileMedsSub.textContent = medLow.length ? `${medLow.length} items low` : 'Reserves optimal';
-    if (tileMedsBadge) {
-        tileMedsBadge.className = medLow.length ? 'stock-pill warning' : 'stock-pill optimal';
-        tileMedsBadge.textContent = medLow.length ? `${medLow.length} Low` : 'OK';
+    if (isDataLoaded) {
+        const totalMeds = (armory.totalMedicalItems || 0) + (armory.totalDrugs || 0);
+        const medLow = lowStock.filter(i => i.name.includes('First Aid') || i.name.includes('Morphine') || i.name.includes('Blood') || i.name.includes('Xanax'));
+        if (tileMedsVal) tileMedsVal.textContent = fmtNum(totalMeds);
+        if (tileMedsSub) tileMedsSub.textContent = medLow.length ? `${medLow.length} items low` : 'Reserves optimal';
+        if (tileMedsBadge) {
+            tileMedsBadge.className = medLow.length ? 'stock-pill warning' : 'stock-pill optimal';
+            tileMedsBadge.textContent = medLow.length ? `${medLow.length} Low` : 'OK';
+        }
+
+        const canLow = lowStock.filter(i => i.name.includes('Cans'));
+        if (tileBoostersVal) tileBoostersVal.textContent = fmtNum(armory.totalBoosters || 0);
+        if (tileBoostersSub) tileBoostersSub.textContent = `${armory.boosters?.length || 0} unique types`;
+        if (tileBoostersBadge) {
+            tileBoostersBadge.className = canLow.length ? 'stock-pill warning' : 'stock-pill optimal';
+            tileBoostersBadge.textContent = canLow.length ? 'Low' : 'OK';
+        }
+
+        const totalWeap = armory.totalWeapons || 0;
+        const loanedWeap = armory.loanedWeaponsCount || 0;
+        if (tileWeaponsVal) tileWeaponsVal.textContent = fmtNum(loanedWeap);
+        if (tileWeaponsSub) tileWeaponsSub.textContent = `${loanedWeap} / ${totalWeap}`;
+
+        const totalArmor = armory.totalArmor || 0;
+        const loanedArmor = armory.loanedArmorCount || 0;
+        if (tileArmorVal) tileArmorVal.textContent = fmtNum(loanedArmor);
+        if (tileArmorSub) tileArmorSub.textContent = `${loanedArmor} / ${totalArmor}`;
     }
-
-    const canLow = lowStock.filter(i => i.name.includes('Cans'));
-    if (tileBoostersVal) tileBoostersVal.textContent = fmtNum(armory.totalBoosters || 0);
-    if (tileBoostersSub) tileBoostersSub.textContent = `${armory.boosters?.length || 0} unique types`;
-    if (tileBoostersBadge) {
-        tileBoostersBadge.className = canLow.length ? 'stock-pill warning' : 'stock-pill optimal';
-        tileBoostersBadge.textContent = canLow.length ? 'Low' : 'OK';
-    }
-
-    const totalWeap = armory.totalWeapons || 0;
-    const loanedWeap = armory.loanedWeaponsCount || 0;
-    if (tileWeaponsVal) tileWeaponsVal.textContent = fmtNum(loanedWeap);
-    if (tileWeaponsSub) tileWeaponsSub.textContent = `${loanedWeap} / ${totalWeap}`;
-
-    const totalArmor = armory.totalArmor || 0;
-    const loanedArmor = armory.loanedArmorCount || 0;
-    if (tileArmorVal) tileArmorVal.textContent = fmtNum(loanedArmor);
-    if (tileArmorSub) tileArmorSub.textContent = `${loanedArmor} / ${totalArmor}`;
 
     // ── 2. Full Armory & Logistics (Tab 2) ──
     const kpiCash = document.getElementById('armory-kpi-cash');
@@ -2029,11 +2146,130 @@ function renderArmory(d) {
         }
     }
 
-    // Populate Subpanels
+    // Populate Subpanels & Item Usage Engine
+    renderItemUsageTracker();
     filterMeds();
     filterArsenal();
     filterLoans();
 }
+
+// ── Item Usage Tracker ("Who Uses What of Each Item & How Much") ──
+function setUsageView(viewMode, btn) {
+    activeUsageView = viewMode;
+    document.querySelectorAll('.subpanel-controls .analyst-tab').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+
+    const vMembers = document.getElementById('usage-view-members');
+    const vItems = document.getElementById('usage-view-items');
+    const vFeed = document.getElementById('usage-view-feed');
+
+    if (vMembers) vMembers.style.display = viewMode === 'members' ? 'block' : 'none';
+    if (vItems) vItems.style.display = viewMode === 'items' ? 'block' : 'none';
+    if (vFeed) vFeed.style.display = viewMode === 'feed' ? 'block' : 'none';
+
+    renderItemUsageTracker();
+}
+
+function renderItemUsageTracker() {
+    if (!currentArmoryData?.armory?.usageStats) return;
+    const stats = currentArmoryData.armory.usageStats;
+    const query = (document.getElementById('usage-search')?.value || '').toLowerCase().trim();
+
+    const totalBadge = document.getElementById('usage-total-badge');
+    if (totalBadge) totalBadge.textContent = `${fmtNum(stats.totalConsumed || 0)} items consumed`;
+
+    // 1. Render Member Consumption Table
+    const mBody = document.getElementById('usage-members-tbody');
+    if (mBody && activeUsageView === 'members') {
+        let members = (stats.byMember || []).filter(m => {
+            if (!query) return true;
+            if (m.name.toLowerCase().includes(query) || String(m.id).includes(query)) return true;
+            return Object.keys(m.items || {}).some(item => item.toLowerCase().includes(query));
+        });
+
+        if (!members.length) {
+            mBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px; color:var(--text-tertiary);">No item consumption records found matching search.</td></tr>`;
+        } else {
+            mBody.innerHTML = members.map(m => {
+                const itemChips = Object.entries(m.items || {})
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([name, count]) => `<span class="usage-item-chip">${name}: <strong>${count}</strong></span>`)
+                    .join('');
+
+                return `<tr>
+                    <td>
+                        <div style="font-weight:700;"><a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${m.name}</a></div>
+                        <div style="font-size:0.75em; color:var(--text-tertiary);">[${m.id}]</div>
+                    </td>
+                    <td style="font-family:var(--font-mono); font-weight:800; color:var(--accent-emerald); font-size:1.05em;">${fmtNum(m.totalUsed)}</td>
+                    <td style="font-family:var(--font-mono); font-weight:700; color:var(--accent-cyan);">${fmtNum(m.medsUsed)}</td>
+                    <td style="font-family:var(--font-mono); font-weight:700; color:var(--accent-amber);">${fmtNum(m.drugsUsed)}</td>
+                    <td style="font-family:var(--font-mono); font-weight:700; color:var(--accent-cobalt);">${fmtNum(m.boostersUsed)}</td>
+                    <td style="max-width:340px;">
+                        <div style="display:flex; flex-wrap:wrap; gap:2px;">${itemChips || '<span style="color:var(--text-tertiary);">—</span>'}</div>
+                    </td>
+                    <td style="text-align:right; font-size:0.82em; color:var(--text-tertiary);">${timeSince(m.lastUsedTs)}</td>
+                </tr>`;
+            }).join('');
+        }
+    }
+
+    // 2. Render By Item Breakdown
+    const iBody = document.getElementById('usage-items-tbody');
+    if (iBody && activeUsageView === 'items') {
+        let items = (stats.byItem || []).filter(item => {
+            if (!query) return true;
+            if (item.name.toLowerCase().includes(query)) return true;
+            return (item.topUsers || []).some(u => u.name.toLowerCase().includes(query));
+        });
+
+        if (!items.length) {
+            iBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text-tertiary);">No item records matching search.</td></tr>`;
+        } else {
+            iBody.innerHTML = items.map(item => {
+                const userChips = (item.topUsers || []).map(u => `<span class="usage-item-chip"><a href="https://www.torn.com/profiles.php?XID=${u.id}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${u.name}</a>: <strong>${u.count}</strong></span>`).join('');
+                return `<tr>
+                    <td style="font-weight:700; color:var(--accent-amber);">${item.name}</td>
+                    <td><span class="badge-type">${item.category}</span></td>
+                    <td style="font-family:var(--font-mono); font-weight:800; color:var(--accent-emerald); font-size:1.05em;">${fmtNum(item.totalQuantity)}</td>
+                    <td style="font-family:var(--font-mono); font-weight:700;">${item.usersCount}</td>
+                    <td style="max-width:360px;">
+                        <div style="display:flex; flex-wrap:wrap; gap:2px;">${userChips || '—'}</div>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+    }
+
+    // 3. Render Live Activity Feed
+    const fBody = document.getElementById('usage-feed-tbody');
+    if (fBody && activeUsageView === 'feed') {
+        let logs = (stats.recentLog || []).filter(entry => {
+            if (!query) return true;
+            return entry.name.toLowerCase().includes(query) || entry.itemName.toLowerCase().includes(query);
+        });
+
+        if (!logs.length) {
+            fBody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-tertiary);">No recent transactions matching search.</td></tr>`;
+        } else {
+            fBody.innerHTML = logs.map(entry => {
+                const actionBadge = entry.action === 'used'
+                    ? '<span class="badge-loan active">Used</span>'
+                    : (entry.action === 'filled' ? '<span class="badge-loan inactive">Filled</span>' : `<span class="badge-type">${entry.action}</span>`);
+
+                return `<tr>
+                    <td style="font-size:0.82em; color:var(--text-tertiary);">${timeSince(entry.timestamp)}</td>
+                    <td style="font-weight:700;"><a href="https://www.torn.com/profiles.php?XID=${entry.id}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${entry.name}</a></td>
+                    <td>${actionBadge}</td>
+                    <td style="font-family:var(--font-mono); font-weight:800;">${entry.quantity}</td>
+                    <td style="font-weight:600; color:var(--accent-amber);">${entry.itemName}</td>
+                    <td><span class="badge-type">${entry.category}</span></td>
+                </tr>`;
+            }).join('');
+        }
+    }
+}
+const filterUsageDebounced = debounce(renderItemUsageTracker, 200);
 
 // ── Medical & Drugs Table Filter ──
 function filterMeds() {
@@ -2055,7 +2291,6 @@ function filterMeds() {
         (armory.boosters || []).forEach(b => list.push({ ...b, itemCat: 'Booster' }));
     }
 
-    // Threshold lookup
     const threshMap = {
         'xanax': 50,
         'small first aid kit': 40,
@@ -2243,7 +2478,7 @@ async function saveArmoryThresholds() {
     if (dashData) renderArmory(dashData.dash);
 }
 
-// ─── TAB 3: WAR FLIGHT & FARM SENTINEL ENGINE ───
+// ─── TAB 3: FLIGHT & WAR SENTINEL ENGINE ───
 let sentinelData = null;
 let activeSentinelFilter = 'all';
 let sentinelInitialized = false;
@@ -2482,6 +2717,10 @@ const renderSentinelTableDebounced = debounce(renderSentinelTable, 200);
 function renderCrossFactionLoadouts(data) {
     const members = data.members || [];
     const loans = dashData?.dash?.loans || [];
+    const usageByMember = dashData?.dash?.armory?.usageStats?.byMember || [];
+    const usageMap = {};
+    usageByMember.forEach(u => { usageMap[String(u.id)] = u; });
+
     const loanBorrowers = new Set(loans.map(l => String(l.borrowerId || l.loaned_to)));
 
     // Calculate armory loadout stats
@@ -2520,6 +2759,9 @@ function renderCrossFactionLoadouts(data) {
             ? `<span style="color:var(--accent-cyan); font-weight:700;">🛡️ ${armorLoans.map(a => a.name).join(', ')}</span>`
             : `<span style="color:var(--text-tertiary);">Standard Gear</span>`;
 
+        const uData = usageMap[String(m.id)];
+        const usageSnippet = uData ? `<span style="font-size:0.75em; color:var(--accent-emerald);"> (${uData.totalUsed} armory items used)</span>` : '';
+
         return `<tr>
             <td style="font-weight:700;">
                 <a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${m.name}</a>
@@ -2528,7 +2770,7 @@ function renderCrossFactionLoadouts(data) {
             <td><span class="badge-loan active">Active Combatant</span></td>
             <td>${weaponStatus}</td>
             <td>${armorStatus}</td>
-            <td><strong>${m.hitsMade}</strong> hits &bull; <strong>${m.timesHit || 0}</strong> def</td>
+            <td><strong>${m.hitsMade}</strong> hits &bull; <strong>${m.timesHit || 0}</strong> def${usageSnippet}</td>
         </tr>`;
     }).join('');
 }
@@ -2562,7 +2804,7 @@ function runAnalysis(mode) {
 
         if (mode === 'live') {
             if (!war) {
-                el.innerHTML = `<b>🟢 No Active War</b><br><br>Your faction is currently at peace. Recommended actions:<br>• <b>Build your chain</b> for multiplier respect bonuses.<br>• <b>Maintain armory reserves</b> (ensure Xanax &ge; 50, FAKs &ge; 60).<br>• <b>Monitor Flight Sentinel</b> to practice overseas travel safety.`;
+                el.innerHTML = `<b>🟢 No Active War</b><br><br>Your faction is currently at peace. Recommended actions:<br>• <b>Build your chain</b> for multiplier respect bonuses.<br>• <b>Maintain armory reserves</b> (ensure Xanax &ge; 50, FAKs &ge; 60).<br>• <b>Monitor Flight &amp; War Sentinel</b> to practice overseas travel safety.`;
                 return;
             }
             const myScore = war.myScore || 0;
@@ -2597,7 +2839,7 @@ ${winning ? `• <span style="color:var(--accent-emerald)">Maintain pressure</sp
 <b>Date:</b> ${date}<br><br>
 To see complete member attack audits, airtime ratings, and payouts:<br><br>
 → <a href="/payout.html" style="color:var(--accent-cobalt);font-weight:700;">Open the Payout Calculator →</a><br>
-→ <a href="#sentinel" onclick="switchOpsTab('sentinel')" style="color:var(--teal, #00cec9);font-weight:700;">Open War Flight &amp; Farm Sentinel →</a>`;
+→ <a href="#sentinel" onclick="switchOpsTab('sentinel')" style="color:var(--teal, #00cec9);font-weight:700;">Open Flight &amp; War Sentinel →</a>`;
         } else if (mode === 'members') {
             const memberEntries = Object.entries(d.members || {});
             const total = memberEntries.length;

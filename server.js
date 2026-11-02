@@ -6309,11 +6309,11 @@ app.get('/api/dashboard-data', async (req, res) => {
             return res.json(dashboardDataCache[cacheKey].data);
         }
 
-        // Fetch basic, armory (including medical, drugs, boosters, donations), and chain/rankedwars in parallel for maximum speed
+        // Fetch basic, armory (including medical, drugs, boosters, donations, armorynews), and chain/rankedwars in parallel for maximum speed
         const basicUrl = targetFacId
             ? `https://api.torn.com/faction/${targetFacId}?selections=basic&key=${userKey}`
             : `https://api.torn.com/faction/?selections=basic&key=${userKey}`;
-        const armoryUrl = `https://api.torn.com/faction/?selections=armor,weapons,temporary,medical,drugs,boosters,donations&key=${userKey}`;
+        const armoryUrl = `https://api.torn.com/faction/?selections=armor,weapons,temporary,medical,drugs,boosters,donations,armorynews&key=${userKey}`;
         const [basicResp, armoryResp, chainResp] = await Promise.all([
             fetch(basicUrl).catch(e => null),
             fetch(armoryUrl).catch(e => null),
@@ -6371,6 +6371,12 @@ app.get('/api/dashboard-data', async (req, res) => {
                 hourlyMedicalBurn: 0,
                 hoursRemaining: 999,
                 warActive: false
+            },
+            usageStats: {
+                byMember: [],
+                byItem: [],
+                recentLog: [],
+                totalConsumed: 0
             }
         };
 
@@ -6541,6 +6547,149 @@ app.get('/api/dashboard-data', async (req, res) => {
                 const pct = Math.max(20, Math.min(99, 100 - armoryObj.lowStockItems.length * 8));
                 armoryObj.armoryHealth = `${pct}% Stocked • ${armoryObj.lowStockItems.length} Low`;
             }
+
+            // Track item usage: Who uses what of each item and how much
+            const usageByMember = {};
+            const usageByItem = {};
+            const recentUsageLog = [];
+
+            if (armoryData.armorynews && typeof armoryData.armorynews === 'object') {
+                const newsEntries = Object.values(armoryData.armorynews);
+                newsEntries.forEach(entry => {
+                    const text = entry.news || '';
+                    const pMatch = text.match(/XID=(\d+)[^>]*>([^<]+)<\/a>/i);
+                    if (!pMatch) return;
+                    const pId = pMatch[1];
+                    const pName = pMatch[2];
+                    const ts = Number(entry.timestamp || 0);
+
+                    let action = 'used';
+                    let itemName = '';
+                    let quantity = 1;
+
+                    if (text.includes("used one of the faction's")) {
+                        action = 'used';
+                        quantity = 1;
+                        const m = text.match(/used one of the faction's (.*?) items/i);
+                        if (m) itemName = m[1].trim();
+                    } else if (text.match(/used (\d+) of the faction's/i)) {
+                        action = 'used';
+                        const m = text.match(/used (\d+) of the faction's (.*?) items/i);
+                        if (m) {
+                            quantity = parseInt(m[1], 10);
+                            itemName = m[2].trim();
+                        }
+                    } else if (text.includes("filled one of the faction's Empty Blood Bags")) {
+                        action = 'filled';
+                        quantity = 1;
+                        const m = text.match(/create a (.*?)$/i);
+                        itemName = m ? m[1].trim() : 'Empty Blood Bag';
+                    } else if (text.includes("returned")) {
+                        action = 'returned';
+                        const m = text.match(/returned (\d+)x (.*?)$/i);
+                        if (m) {
+                            quantity = parseInt(m[1], 10);
+                            itemName = m[2].trim();
+                        }
+                    } else if (text.includes("loaned")) {
+                        action = 'loaned';
+                        const m = text.match(/loaned (\d+)x (.*?) to/i);
+                        if (m) {
+                            quantity = parseInt(m[1], 10);
+                            itemName = m[2].trim();
+                        }
+                    } else if (text.includes("deposited")) {
+                        action = 'deposited';
+                        const m = text.match(/deposited (\d+)x (.*?) into/i);
+                        if (m) {
+                            quantity = parseInt(m[1], 10);
+                            itemName = m[2].trim();
+                        }
+                    } else {
+                        const m = text.match(/the faction's (.*?) items/i);
+                        if (m) itemName = m[1].trim();
+                    }
+
+                    if (!itemName) return;
+
+                    // Determine item category
+                    const nameLower = itemName.toLowerCase();
+                    let category = 'Other';
+                    if (nameLower.includes('first aid') || nameLower.includes('morphine') || nameLower.includes('blood bag') || nameLower.includes('ipecac')) {
+                        category = 'Medical';
+                    } else if (nameLower.includes('xanax') || nameLower.includes('vicodin') || nameLower.includes('speed') || nameLower.includes('ketamine') || nameLower.includes('ecstasy') || nameLower.includes('cannabis') || nameLower.includes('lsd') || nameLower.includes('opium') || nameLower.includes('shrooms')) {
+                        category = 'Drug';
+                    } else if (nameLower.startsWith('can of') || nameLower.includes('bottle of') || nameLower.includes('box of') || nameLower.includes('bag of') || nameLower.includes('energy drink')) {
+                        category = 'Booster';
+                    } else if (action === 'loaned' || action === 'returned') {
+                        category = 'Arsenal';
+                    }
+
+                    recentUsageLog.push({
+                        id: pId,
+                        name: pName,
+                        action: action,
+                        itemName: itemName,
+                        category: category,
+                        quantity: quantity,
+                        timestamp: ts
+                    });
+
+                    // Aggregate consumer usage (used, filled, etc.)
+                    if (action === 'used' || action === 'filled') {
+                        if (!usageByMember[pId]) {
+                            usageByMember[pId] = {
+                                id: pId,
+                                name: pName,
+                                totalUsed: 0,
+                                medsUsed: 0,
+                                drugsUsed: 0,
+                                boostersUsed: 0,
+                                items: {},
+                                lastUsedTs: ts
+                            };
+                        }
+                        const mObj = usageByMember[pId];
+                        mObj.totalUsed += quantity;
+                        if (category === 'Medical') mObj.medsUsed += quantity;
+                        if (category === 'Drug') mObj.drugsUsed += quantity;
+                        if (category === 'Booster') mObj.boostersUsed += quantity;
+                        mObj.items[itemName] = (mObj.items[itemName] || 0) + quantity;
+                        if (ts > (mObj.lastUsedTs || 0)) mObj.lastUsedTs = ts;
+
+                        if (!usageByItem[itemName]) {
+                            usageByItem[itemName] = {
+                                name: itemName,
+                                category: category,
+                                totalQuantity: 0,
+                                userMap: {}
+                            };
+                        }
+                        const iObj = usageByItem[itemName];
+                        iObj.totalQuantity += quantity;
+                        iObj.userMap[pId] = (iObj.userMap[pId] || { id: pId, name: pName, count: 0 });
+                        iObj.userMap[pId].count += quantity;
+                    }
+                });
+            }
+
+            recentUsageLog.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+            const memberList = Object.values(usageByMember).sort((a, b) => b.totalUsed - a.totalUsed);
+            const itemList = Object.values(usageByItem).map(item => ({
+                name: item.name,
+                category: item.category,
+                totalQuantity: item.totalQuantity,
+                usersCount: Object.keys(item.userMap).length,
+                topUsers: Object.values(item.userMap).sort((a, b) => b.count - a.count).slice(0, 5)
+            })).sort((a, b) => b.totalQuantity - a.totalQuantity);
+
+            armoryObj.usageStats = {
+                byMember: memberList,
+                byItem: itemList,
+                recentLog: recentUsageLog.slice(0, 100),
+                totalConsumed: memberList.reduce((sum, m) => sum + m.totalUsed, 0)
+            };
         }
 
         let parsedMembers = {};
