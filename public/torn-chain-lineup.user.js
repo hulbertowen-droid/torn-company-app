@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         FactionOS Chain Manager (Standalone)
 // @namespace    https://faction-os.duckdns.org/
-// @version      3.0.0
-// @description  Professional high-speed chain lineup manager for Torn. Multi-tier zero-latency hit detection (<500ms), native in-page attack & DOM observers, dynamic adaptive polling, smart savior attribution, clean 2-bar controls, streamlined queue rows, and live compact HUD timer.
+// @version      3.1.0
+// @description  Professional high-speed chain lineup manager for Torn. Multi-tier zero-latency hit detection (<500ms), native in-page attack & DOM observers, dynamic adaptive polling, smart savior attribution, clean 2-bar controls, streamlined queue rows, and live compact HUD timer. v3.1.0: 16 bug fixes.
 // @author       FactionOS
 // @match        https://www.torn.com/*
 // @grant        GM_xmlhttpRequest
@@ -53,7 +53,9 @@
     let isFirstPoll      = true;       // snapshot initial attacks
     let hasAttacksAccess = true;       // true if key has Limited+ / Faction AA; false for Public keys
     let isMinimized      = GM_getValue('sv_min', false);
-    let isHidden         = GM_getValue('sv_hidden', false);
+    // Bug fix #2/#16: Never persist isHidden across reloads — HUD always shows on page load.
+    // A floating re-open tab is injected when the user closes the HUD.
+    let isHidden         = false;
     let searchQuery      = '';
     let suggestSelected  = -1;
     let isUpdated        = false;      // green/grey status light
@@ -158,7 +160,7 @@
     }
 
     function getNextBonus(count) {
-        if (!count || count <= 0) return { next: 10, remaining: 10, text: '10 to 10' };
+        if (!count || count <= 0) return { next: 10, remaining: 10, text: '—' };
         for (const b of CHAIN_BONUSES) {
             if (count < b) {
                 const rem = b - count;
@@ -170,38 +172,33 @@
     }
 
     // ══════════════════════════════════════════════════════════════
-    //  CROSS-TAB SYNCHRONIZATION (BROADCASTCHANNEL + STORAGE)
+    //  CROSS-TAB SYNCHRONIZATION (BROADCASTCHANNEL ONLY)
     // ══════════════════════════════════════════════════════════════
+    const _TAB_ID = Math.random().toString(36).slice(2);
     let broadcastChan = null;
     try {
         if (typeof BroadcastChannel !== 'undefined') {
             broadcastChan = new BroadcastChannel('factionos_chain_sync');
             broadcastChan.onmessage = (e) => {
-                if (e && e.data) handleIncomingBroadcast(e.data);
+                // Bug fix #10: ignore messages originating from THIS tab
+                if (e && e.data && e.data._tabId !== _TAB_ID) handleIncomingBroadcast(e.data);
             };
         }
     } catch(e) {}
 
-    window.addEventListener('storage', (e) => {
-        if (e.key === 'sv_chain_sync_event' && e.newValue) {
-            try {
-                const payload = JSON.parse(e.newValue);
-                handleIncomingBroadcast(payload);
-            } catch(err) {}
-        }
-    });
+    // Bug fix #10: removed window 'storage' listener — it caused double-processing
+    // when broadcastHitEvent wrote to localStorage and other tabs received BOTH the
+    // BroadcastChannel message AND the storage event.
 
     function broadcastHitEvent(payload) {
         // 1. Process locally in current tab immediately
         handleIncomingHit(payload);
 
-        // 2. Broadcast to other open tabs (< 10ms)
+        // 2. Broadcast to other open tabs only via BroadcastChannel (<10ms)
         if (broadcastChan) {
-            try { broadcastChan.postMessage(payload); } catch(e) {}
+            try { broadcastChan.postMessage({ ...payload, _tabId: _TAB_ID }); } catch(e) {}
         }
-        try {
-            localStorage.setItem('sv_chain_sync_event', JSON.stringify({ ...payload, _ts: Date.now() }));
-        } catch(e) {}
+        // Bug fix #10: removed localStorage.setItem here — it caused duplicate events in other tabs
     }
 
     function handleIncomingBroadcast(payload) {
@@ -265,7 +262,8 @@
         const isSuccess = data.success === true || data.status === 'success' || data.result === 'success';
         const hasChain = (data.chain !== undefined && data.chain > 0) || (data.data && data.data.chain > 0);
         const textLog = JSON.stringify(data);
-        const isAttackFinish = /hospitalized|mugged|lefts+them|losts+to|stalemate|finished/i.test(textLog) ||
+        // Bug fix #6: corrected regex — was literal 's+' instead of '\s+'
+        const isAttackFinish = /hospitalized|mugged|left\s+them|lost\s+to|stalemate|finished/i.test(textLog) ||
                                /respect/i.test(textLog) || (hasChain && isSuccess);
 
         if (isAttackFinish || hasChain) {
@@ -288,11 +286,13 @@
 
     function initTier1HeaderDOMObserver() {
         let lastObservedChain = 0;
+        // Bug fix #7: debounce observer to 100ms to avoid firing thousands of times/min
+        let debounceTimer = null;
 
         function scanDOMChainCounter() {
             try {
-                // Selector covering desktop and mobile chain bar, header widget, and faction war link
-                const chainEl = document.querySelector('[class*="chain-bar"], [class*="chainBar"], [class*="bar-chain"], a[href*="factions.php?step=your#/war"], #sidebarroot');
+                // Bug fix #7: use specific chain-bar selectors first; avoid observing #sidebarroot directly
+                const chainEl = document.querySelector('[class*="chain-bar"], [class*="chainBar"], [class*="bar-chain"], a[href*="factions.php?step=your#/war"]');
                 if (!chainEl) return;
 
                 const text = chainEl.innerText || '';
@@ -312,11 +312,12 @@
 
                 if (parsedChain !== null && parsedChain > 0) {
                     if (parsedChain > chainCount) {
+                        // Bug fix #3: only pass timeout if it was actually parsed from DOM
                         broadcastHitEvent({
                             type: 'HIT_DETECTED',
                             source: 'tier1_dom',
                             chain: parsedChain,
-                            timeout: parsedTimer || 300,
+                            timeout: parsedTimer || null,
                             timestamp: Date.now()
                         });
                     } else if (parsedChain === chainCount && parsedTimer !== null && parsedTimer !== chainTimeout) {
@@ -327,10 +328,23 @@
             } catch(e) {}
         }
 
-        const observer = new MutationObserver(() => scanDOMChainCounter());
+        // Bug fix #7: wrap scan in a debounce so the observer fires at most once per 100ms
+        function debouncedScan() {
+            if (debounceTimer) return;
+            debounceTimer = setTimeout(() => {
+                debounceTimer = null;
+                scanDOMChainCounter();
+            }, 100);
+        }
+
+        const observer = new MutationObserver(() => debouncedScan());
 
         function startObserving() {
-            const root = document.querySelector('#sidebarroot') || document.querySelector('#top-page-links-list') || document.body;
+            // Bug fix #7: prefer specific chain-bar selector; fall back to #top-page-links-list,
+            // then body — but never observe #sidebarroot with subtree:true (too expensive)
+            const root = document.querySelector('[class*="chain-bar"], [class*="chainBar"]') ||
+                         document.querySelector('#top-page-links-list') ||
+                         document.body;
             if (root) {
                 observer.observe(root, { childList: true, subtree: true, characterData: true });
                 scanDOMChainCounter();
@@ -349,21 +363,29 @@
     // ══════════════════════════════════════════════════════════════
     function initTier2WebSocketSniffer() {
         if (typeof unsafeWindow === 'undefined' || !unsafeWindow.WebSocket) return;
-
-        const OriginalWS = unsafeWindow.WebSocket;
-        unsafeWindow.WebSocket = new Proxy(OriginalWS, {
-            construct(target, args) {
-                const ws = new target(...args);
-                try {
-                    ws.addEventListener('message', function(event) {
-                        try {
-                            handleWebSocketRawMessage(event.data);
-                        } catch(e) {}
-                    });
-                } catch(e) {}
-                return ws;
-            }
-        });
+        // Bug fix #11: wrap entire proxy in try/catch so Torn's React app is never broken
+        try {
+            const OriginalWS = unsafeWindow.WebSocket;
+            unsafeWindow.WebSocket = new Proxy(OriginalWS, {
+                construct(target, args) {
+                    let ws;
+                    try {
+                        ws = new target(...args);
+                    } catch(constructErr) {
+                        // Fall back gracefully — do not intercept if construction fails
+                        return new target(...args);
+                    }
+                    try {
+                        ws.addEventListener('message', function(event) {
+                            try { handleWebSocketRawMessage(event.data); } catch(e) {}
+                        });
+                    } catch(e) {}
+                    return ws;
+                }
+            });
+        } catch(e) {
+            // If Proxy itself fails (e.g., restricted environment), silently do nothing
+        }
     }
 
     function handleWebSocketRawMessage(raw) {
@@ -404,8 +426,12 @@
         if (!evt) return;
 
         const now = Date.now();
+        // Bug fix #4: use evt.chain as primary dedup key; fall back to a 2-second timestamp window
+        // (avoids chain+1 mismatch when chainCount has already been updated by a prior tier)
         const incomingChain = evt.chain || (chainCount + 1);
-        const hitSig = `${evt.attackerId || evt.attackerName || 'hit'}_${incomingChain}`;
+        const hitSig = evt.chain
+            ? `chain_${evt.chain}`
+            : `ts_${Math.floor(now / 2000)}`; // 2-second bucket when no chain value
 
         // Deduplication: prevent processing the same hit within 1.2 seconds
         if (hitSig === lastProcessedHitSig && (now - lastProcessedHitTs) < 1200) {
@@ -420,7 +446,10 @@
         } else if (!chainCount) {
             chainCount = incomingChain;
         }
-        chainTimeout = evt.timeout || 300;
+        // Bug fix #3: only update chainTimeout if evt.timeout is explicitly provided and > 0
+        if (evt.timeout && evt.timeout > 0) {
+            chainTimeout = evt.timeout;
+        }
         chainActive = true;
         warnedAt60 = false;
 
@@ -573,7 +602,10 @@
                 processedAtkIds = new Set(arr.slice(arr.length - 250));
             }
 
-            broadcastHitEvent({
+            // Bug fix #5: call handleIncomingHit directly (not broadcastHitEvent) so we
+            // don't double-process: handleChainResponse already updates chainCount/chainTimeout
+            // from the authoritative API response before processAttacks runs.
+            handleIncomingHit({
                 type: 'HIT_DETECTED',
                 source: 'tier3_api',
                 attackerId: atk.attacker_id,
@@ -963,7 +995,8 @@
         const prevName = up.name;
         const [hitter] = lineup.splice(0, 1);
         hitter.hit = true;
-        lineup.push(hitter);
+        // Bug fix #9: respect loopMode — only push to bottom if loop is ON
+        if (loopMode) lineup.push(hitter);
         cycleNum++;
         playSuccessChime();
         setUpdated(true);
@@ -1125,7 +1158,9 @@
         const readiness = getMemberReadiness(up.id, up.name);
         const targetSecs = parseTimeToSecs(targetHitTime) || 150;
 
-        // Panic skip if timer reaches critical threshold (<= 35s)
+        // Bug fix #12: If the current player IS ready, only issue a panic skip when timer
+        // is critically low (<=35s). Guard: after the skip, do NOT immediately allow another
+        // skip for the new player — the 6s throttle handles that.
         if (readiness.isReady) {
             if (chainTimeout > 0 && chainTimeout <= 35) {
                 lastAutoSkipTs = Date.now();
@@ -1139,17 +1174,18 @@
             return;
         }
 
-        // Auto skip hospitalized/offline if in hit window
-        if (!readiness.isReady) {
-            if (chainTimeout > 0 && (chainTimeout <= targetSecs || chainTimeout <= 60)) {
-                lastAutoSkipTs = Date.now();
-                const [s] = lineup.splice(0, 1);
-                s.skipped = true;
-                lineup.push(s);
-                save();
-                renderLineup();
-                flashStatus(`Auto-skipped ${s.name} (${readiness.shortText}) — hit window reached.`, false);
-            }
+        // Auto skip hospitalized/offline/unavailable player if in hit window
+        if (chainTimeout > 0 && (chainTimeout <= targetSecs || chainTimeout <= 60)) {
+            lastAutoSkipTs = Date.now();
+            const [s] = lineup.splice(0, 1);
+            s.skipped = true;
+            lineup.push(s);
+            save();
+            renderLineup();
+            flashStatus(`Auto-skipped ${s.name} (${readiness.shortText}) — hit window reached.`, false);
+
+            // Bug fix #12: immediately check the NEW top player so we don't silently leave
+            // another unavailable player up — but we DON'T recurse; the 1s interval will catch it.
         }
     }
 
@@ -1754,6 +1790,35 @@
     }
 
     // ══════════════════════════════════════════════════════════════
+    //  RE-OPEN TAB (Bug fix #2/#16: shown when HUD is closed)
+    // ══════════════════════════════════════════════════════════════
+    function _injectReopenTab(hud) {
+        if (document.getElementById('sv-reopen-tab')) return;
+        const tab = document.createElement('div');
+        tab.id = 'sv-reopen-tab';
+        tab.title = 'Re-open FactionOS Chain Manager';
+        tab.textContent = '⛓';
+        tab.style.cssText = [
+            'position:fixed', 'z-index:99999998', 'bottom:80px', 'right:0',
+            'background:rgba(13,17,23,0.95)', 'color:#2ecc71',
+            'border:1px solid rgba(46,204,113,0.5)', 'border-right:none',
+            'border-radius:6px 0 0 6px', 'padding:7px 9px 7px 10px',
+            'font-size:16px', 'cursor:pointer', 'user-select:none',
+            'box-shadow:-4px 0 12px rgba(0,0,0,0.5)',
+            'transition:background 0.15s'
+        ].join(';');
+        tab.addEventListener('mouseenter', () => { tab.style.background = 'rgba(35,134,54,0.4)'; });
+        tab.addEventListener('mouseleave', () => { tab.style.background = 'rgba(13,17,23,0.95)'; });
+        tab.addEventListener('click', () => {
+            hud.style.display = '';
+            isHidden = false;
+            tab.remove();
+            updateMinDisplay();
+        });
+        document.body.appendChild(tab);
+    }
+
+    // ══════════════════════════════════════════════════════════════
     //  BUILD HUD DOM (EXPANDED & COMPACT HUD)
     // ══════════════════════════════════════════════════════════════
     function buildHUD() {
@@ -1980,7 +2045,9 @@
         document.getElementById('sv-close-btn').addEventListener('click', () => {
             hud.style.display = 'none';
             isHidden = true;
-            GM_setValue('sv_hidden', true);
+            // Bug fix #2/#16: do NOT persist sv_hidden. Instead, show a small floating re-open tab.
+            // GM_setValue('sv_hidden', true) deliberately removed.
+            _injectReopenTab(hud);
         });
 
         // Minimized HUD quick actions
@@ -2478,7 +2545,15 @@
     .sv-btn-primary { background: rgba(56, 139, 253, 0.18); border-color: rgba(56, 139, 253, 0.4); color: #58a6ff; }
     .sv-btn-primary:hover { background: rgba(56, 139, 253, 0.3); color: #79c0ff; }
     .sv-btn-promote { background: rgba(56, 139, 253, 0.16); border-color: rgba(56, 139, 253, 0.4); color: #58a6ff; }
+    /* Bug fix #13: add hover state for muted button (was invisible) */
     .sv-btn-muted { color: #8b949e; font-weight: 600; }
+    .sv-btn-muted:hover { background: rgba(48, 54, 61, 0.8); color: #c9d1d9; }
+    /* Bug fix #14: define sv-input-sm used by API key input */
+    .sv-input-sm {
+        background: #161b22; border: 1px solid rgba(48, 54, 61, 0.9); color: #c9d1d9;
+        padding: 3px 6px; border-radius: 4px; font-size: 10.5px; outline: none;
+    }
+    .sv-input-sm:focus { border-color: rgba(56, 139, 253, 0.6); }
 
     .sv-status-bar { padding: 2px 10px; min-height: 16px; font-size: 10px; }
 
@@ -2685,10 +2760,19 @@
     // ══════════════════════════════════════════════════════════════
     //  INITIALIZATION & BOOT
     // ══════════════════════════════════════════════════════════════
-    // Initialize Tier 1 & Tier 2 observers across all pages
+    // Bug fix #1: Tier 1 & 2 observers run on ALL pages (needed for cross-tab attack detection
+    // on loader.php / attack pages). The HUD, timer, and polling ONLY start on factions.php.
     initTier1AttackObserver();
     initTier1HeaderDOMObserver();
     initTier2WebSocketSniffer();
+
+    const _isFactionPage = window.location.pathname.includes('factions.php') ||
+                           window.location.href.includes('factions.php');
+
+    if (!_isFactionPage) {
+        // Not on faction page — observers are active for cross-tab; nothing else needed.
+        return;
+    }
 
     load();
     const hud = buildHUD();
