@@ -3929,6 +3929,13 @@ app.get('/api/get-discord-config', (req, res) => {
 });
 
 app.post('/api/save-discord-config', async (req, res) => { 
+    const callerKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    const isOwner = callerKey && (callerKey === discordConfig.apiKey || callerKey === ADMIN_API_KEY || callerKey === TORN_API_KEY);
+    const isAdmin = Boolean(req.userSession && req.userSession.isSpiderVerse);
+    if (!isOwner && !isAdmin) {
+        return res.status(403).json({ error: "Administrator authorization required to update server configuration." });
+    }
+
     const payload = { ...req.body };
 
     // SANITIZATION: Protect against bot tokens being placed into channel ID fields
@@ -5682,9 +5689,9 @@ const warAuditCache = {};
 const warListCache = {};
 
 app.get('/api/war-list', async (req, res) => {
-    const userKey = req.headers['x-api-key'] || req.query.apiKey || discordConfig.apiKey || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
+    const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
     try {
-        if (!userKey || userKey === "null" || userKey.trim() === "") return res.status(401).json({ error: "Missing API key" });
+        if (!userKey || userKey === "null" || userKey.trim() === "") return res.status(401).json({ error: "Authentication required" });
         const userInfo = await getUserFactionInfo(userKey);
         let targetFacId = (req.query.factionId || req.headers['x-faction-id'])
             || userInfo?.facId
@@ -7484,7 +7491,7 @@ app.get('/api/past-war', async (req, res) => {
             } catch(e) {}
         }
     }
-    const apiKey = req.headers['x-api-key'] || req.query.apiKey || discordConfig.apiKey || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
+    const apiKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
     if (!apiKey) return res.status(401).json({ error: "No API Key provided. Please configure an API key in Settings." });
     try {
         await verifySubscription(apiKey);
@@ -7687,7 +7694,8 @@ const warBountyReimbursementsCache = new Map(); // key -> { timestamp, data }
 const WAR_BOUNTY_REIMBURSE_TTL_MS = 30 * 1000;
 
 app.get('/api/war-bounty-reimbursements', async (req, res) => {
-    const apiKey = req.headers['x-api-key'] || req.query.apiKey || discordConfig.apiKey;
+    const apiKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    if (!apiKey || apiKey === 'null' || apiKey.trim() === '') return res.status(401).json({ error: 'Authentication required' });
     const reportId = req.query.reportId ? String(req.query.reportId).trim() : '';
     let warStart = req.query.warStart ? Number(req.query.warStart) : 0;
     let warEnd = req.query.warEnd ? Number(req.query.warEnd) : 0;
@@ -8094,13 +8102,17 @@ function sendWarboardResponse(req, res, payload) {
 app.get('/api/warboard', async (req, res) => {
     if (global.isTurboMining) return res.json({ error: "Turbo Mining Mode is active. Live Warboard is paused." });
 
+    const userKeyProvided = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    if (!userKeyProvided || userKeyProvided === "null" || userKeyProvided.trim() === "") {
+        return res.status(401).json({ error: "Authentication required. Connect your Torn API key." });
+    }
+
     // ── Fast path: Serve background-built cache instantly (eliminates multi-API-call latency) ──
     // The background refresher (refreshWarboardBackground) builds the full payload every 45s.
     // Only fall through to the live API path if no cache exists or it's very stale.
     const requestedFacIdFast = req.headers['x-faction-id'] || req.query.myFactionId;
     const sessionFacId = (req.userSession?.factionId && String(req.userSession.factionId) !== '0') ? String(req.userSession.factionId) : null;
-    const userKeyProvided = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
-    let isServerKey = !userKeyProvided || userKeyProvided === discordConfig.apiKey || userKeyProvided === TORN_API_KEY;
+    let isServerKey = userKeyProvided === discordConfig.apiKey || userKeyProvided === TORN_API_KEY;
     const hostFacId = String(discordConfig.factionId || dynamicFactionId || '52355');
 
     // Only assume the host faction cache if using the server's own key pool and no other faction is requested
@@ -8774,6 +8786,13 @@ app.post('/api/master-config', (req, res) => {
 });
 
 app.post('/api/sync-configs', (req, res) => {
+    const callerKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    const isOwner = callerKey && (callerKey === discordConfig.apiKey || callerKey === ADMIN_API_KEY || callerKey === TORN_API_KEY);
+    const isAdmin = Boolean(req.userSession && req.userSession.isSpiderVerse);
+    if (!isOwner && !isAdmin) {
+        return res.status(403).json({ error: "Administrator authorization required to update server configuration." });
+    }
+
     const { company, discord, oc, market, apiKey, globalBotToken, globalChannelId, ffKey, tsKey, enemyFacId, myName, cpm } = req.body;
     if (company) { companyConfig = { ...companyConfig, ...company }; saveCompanyConfig(); }
     if (discord) {
@@ -8812,14 +8831,10 @@ app.post('/api/sync-configs', (req, res) => {
 });
 
 app.get('/api/global-settings', (req, res) => {
+    // SECURITY HARDENING: Never leak server master keys or private bot/channel tokens
     res.json({
         success: true,
-        apiKey: discordConfig.apiKey || "",
-        ffKey: discordConfig.ffKey || "",
-        tsKey: discordConfig.tsKey || "",
         enemyFacId: discordConfig.enemyFacId || "",
-        myName: discordConfig.myName || "",
-        discord: discordConfig.globalChannelId || "",
         cpm: discordConfig.cpm || "12"
     });
 });
@@ -8832,7 +8847,7 @@ app.get('/api/company-config', (req, res) => {
 app.get('/api/debug-ffscouter', async (req, res) => {
     const targetId = req.query.target || req.query.id;
     const ffKey = req.query.key || getGlobalFFKey();
-    if (!ffKey) return res.json({ error: "No FF Scouter key configured. Add it in Settings.", savedKey: discordConfig.ffKey || "(none)" });
+    if (!ffKey) return res.json({ error: "No FF Scouter key configured. Add it in Settings.", savedKey: discordConfig.ffKey ? "configured" : "(none)" });
     if (!targetId) return res.json({ error: "Add ?target=PLAYER_ID to the URL", ffKeyPresent: !!ffKey, ffKeyPreview: ffKey.substring(0, 4) + "****" });
 
     const url = `https://ffscouter.com/api/v1/player-flights?key=${encodeURIComponent(ffKey)}&target=${encodeURIComponent(targetId)}`;
@@ -9797,11 +9812,8 @@ function saveWarBountiesHistory(data) {
 }
 
 app.get('/api/war-bounties', async (req, res) => {
-    let apiKey = req.headers['x-api-key'] || req.query.apiKey;
-    if (!apiKey || apiKey === "null" || apiKey.trim() === "") {
-        apiKey = TORN_API_KEY || discordConfig.apiKey || getNextApiKey();
-    }
-    if (!apiKey || apiKey === "null" || apiKey.trim() === "") return res.status(503).json({ error: "No API Key configured on server" });
+    let apiKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    if (!apiKey || apiKey === "null" || apiKey.trim() === "") return res.status(401).json({ error: "Authentication required" });
 
     try {
         // 1. Fetch current ranked war details
@@ -10041,7 +10053,7 @@ const memberBountyStatsCache = new Map(); // `${tornId}_${warId}` -> { timestamp
 const MEMBER_BOUNTY_STATS_TTL_MS = 90 * 1000; // 90s cache
 
 app.get('/api/faction-bounties-sentinel', async (req, res) => {
-    const primaryKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey || discordConfig.apiKey;
+    const primaryKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
     if (!primaryKey || primaryKey === 'null' || primaryKey.trim() === '') {
         return res.status(401).json({ success: false, error: "Torn API key required" });
     }
@@ -27138,12 +27150,11 @@ app.get('/api/chain/members', async (req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
     if (req.method === 'OPTIONS') return res.sendStatus(200);
 
-    const serverKey = (discordConfig && discordConfig.apiKey) || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
     const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
-    const cleanKey = (userKey && userKey !== 'null' && userKey.trim()) ? userKey.trim() : serverKey;
-    if (!cleanKey) {
-        return res.status(401).json({ error: 'No API key provided and no server key configured.' });
+    if (!userKey || userKey === 'null' || userKey.trim() === '') {
+        return res.status(401).json({ error: 'Authentication required. Torn API key required.' });
     }
+    const cleanKey = userKey.trim();
     const cacheKey = cleanKey.slice(-8);
     const cached = chainMembersCache.get(cacheKey);
     if (cached && (Date.now() - cached.ts) < 30000) {
@@ -27154,12 +27165,6 @@ app.get('/api/chain/members', async (req, res) => {
             signal: AbortSignal.timeout(8000)
         });
         let data = await r.json();
-        if (data && data.error && (data.error.code === 2 || data.error.code === 7 || data.error.code === 16) && serverKey && serverKey !== cleanKey) {
-            r = await fetch(`https://api.torn.com/faction/?selections=basic&key=${serverKey}`, {
-                signal: AbortSignal.timeout(8000)
-            });
-            data = await r.json();
-        }
         if (data && data.error) {
             return res.status(400).json({ error: data.error.error || 'Torn API error', code: data.error.code });
         }
@@ -27183,12 +27188,11 @@ app.get('/api/chain/attacks', async (req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-key, Authorization');
     if (req.method === 'OPTIONS') return res.sendStatus(200);
 
-    const serverKey = (discordConfig && discordConfig.apiKey) || TORN_API_KEY || (typeof getNextApiKey === 'function' ? getNextApiKey() : null);
     const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
-    const cleanKey = (userKey && userKey !== 'null' && userKey.trim()) ? userKey.trim() : serverKey;
-    if (!cleanKey) {
-        return res.status(401).json({ error: 'No API key provided and no server key configured.' });
+    if (!userKey || userKey === 'null' || userKey.trim() === '') {
+        return res.status(401).json({ error: 'Authentication required. Torn API key required.' });
     }
+    const cleanKey = userKey.trim();
     const cacheKey = cleanKey.slice(-8);
     const cached = chainAtksCache.get(cacheKey);
     if (cached && (Date.now() - cached.ts) < 1000) {

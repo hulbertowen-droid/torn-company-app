@@ -188,19 +188,8 @@ const globalSettingsHTML = `
         </div>
 
         <div class="global-form-row">
-            <label for="gs-discord-webhook">Global Discord Webhook</label>
+            <label for="gs-discord-webhook">Personal Discord Webhook (Alerts)</label>
             <input type="text" id="gs-discord-webhook" aria-label="Discord Webhook URL" placeholder="https://discord.com/api/webhooks/...">
-        </div>
-
-        <div class="global-form-row">
-            <label for="gs-discord-bot-token">Faction Discord Bot Token</label>
-            <input type="password" id="gs-discord-bot-token" aria-label="Discord Bot Token" placeholder="Paste Discord Bot Token from Developer Portal">
-            <div class="helper-text">Powers F.R.I.D.A.Y. Sentinel alerts & slash commands in your server.</div>
-        </div>
-
-        <div class="global-form-row">
-            <label for="gs-discord-channel-id">Faction Alert Channel ID</label>
-            <input type="text" id="gs-discord-channel-id" aria-label="Discord Channel ID" placeholder="Numeric Discord Channel ID (e.g. 1234567890...)">
         </div>
 
         <div class="global-form-row">
@@ -254,6 +243,7 @@ window.openGlobalSettings = async function() {
     const modal = document.getElementById('global-settings-modal');
     modal.style.display = 'flex';
 
+    // Client-side preferences only — never auto-populated with server credentials
     let apiKey = localStorage.getItem('warboard_apikey') || "";
     let ffKey = localStorage.getItem('warboard_ffkey') || "";
     let tsKey = localStorage.getItem('warboard_tskey') || "";
@@ -262,30 +252,6 @@ window.openGlobalSettings = async function() {
     let discord = localStorage.getItem('warboard_discord') || "";
     let cpm = localStorage.getItem('warboard_cpm') || "12";
 
-    // Restore from server if client localStorage is empty (e.g. mobile or new browser session)
-    try {
-        const sRes = await fetch('/api/global-settings');
-        if (sRes.ok) {
-            const sData = await sRes.json();
-            if (!apiKey && sData.apiKey) {
-                apiKey = sData.apiKey;
-                localStorage.setItem('warboard_apikey', apiKey);
-            }
-            if (!ffKey && sData.ffKey) {
-                ffKey = sData.ffKey;
-                localStorage.setItem('warboard_ffkey', ffKey);
-            }
-            if (!tsKey && sData.tsKey) {
-                tsKey = sData.tsKey;
-                localStorage.setItem('warboard_tskey', tsKey);
-            }
-            if (!enemyFacId && sData.enemyFacId) {
-                enemyFacId = sData.enemyFacId;
-                localStorage.setItem('warboard_enemyId', enemyFacId);
-            }
-        }
-    } catch(e) {}
-
     document.getElementById('gs-api-key').value = apiKey;
     document.getElementById('gs-ff-key').value = ffKey;
     document.getElementById('gs-ts-key').value = tsKey;
@@ -293,22 +259,6 @@ window.openGlobalSettings = async function() {
     document.getElementById('gs-my-name').value = myName;
     document.getElementById('gs-discord-webhook').value = discord;
     document.getElementById('gs-api-cpm').value = cpm;
-
-    let botToken = localStorage.getItem('factionos_discord_bot_token') || localStorage.getItem('warboard_bottoken') || '';
-    let botChan = localStorage.getItem('warboard_channelid') || '';
-    const botTokenEl = document.getElementById('gs-discord-bot-token');
-    const botChanEl = document.getElementById('gs-discord-channel-id');
-    if (botTokenEl) botTokenEl.value = botToken;
-    if (botChanEl) botChanEl.value = botChan;
-
-    fetch('/api/get-discord-config').then(r => r.json()).then(cfg => {
-        if (cfg.hasBotToken && botTokenEl && !botTokenEl.value) {
-            botTokenEl.placeholder = '•••••••••••••••••••••••• (Saved on Server' + (cfg.botTokenTail ? ' ...' + cfg.botTokenTail : '') + ')';
-        }
-        if (cfg.globalChannelId && botChanEl && !botChanEl.value) {
-            botChanEl.value = cfg.globalChannelId;
-        }
-    }).catch(() => {});
 
     const statusText = document.getElementById('gs-status-text');
     const token = localStorage.getItem('sv_session_token');
@@ -363,19 +313,6 @@ window.saveGlobalSettings = async function() {
     const myName = document.getElementById('gs-my-name').value.trim();
     const discord = document.getElementById('gs-discord-webhook').value.trim();
     const cpm = document.getElementById('gs-api-cpm').value.trim() || "12";
-    const rawBotToken = document.getElementById('gs-discord-bot-token')?.value || '';
-    const cleanedBotToken = rawBotToken.trim().replace(/^Bot\s+/i, '').replace(/^["']|["']$/g, '');
-    const isBotTokenMaskedOrEmpty = !cleanedBotToken || /^[.•*]+$/.test(cleanedBotToken);
-    const rawChanId = document.getElementById('gs-discord-channel-id')?.value || '';
-    const cleanedChanId = rawChanId.trim().replace(/[^0-9]/g, '');
-
-    if (!isBotTokenMaskedOrEmpty && cleanedBotToken.length > 20) {
-        localStorage.setItem('factionos_discord_bot_token', cleanedBotToken);
-        localStorage.setItem('warboard_bottoken', cleanedBotToken);
-    }
-    if (cleanedChanId) {
-        localStorage.setItem('warboard_channelid', cleanedChanId);
-    }
 
     if (apiKey) {
         localStorage.setItem('warboard_apikey', apiKey);
@@ -399,40 +336,21 @@ window.saveGlobalSettings = async function() {
         } catch(e) {
             console.warn('Failed to connect API key to session vault:', e.message);
         }
+    } else {
+        localStorage.removeItem('warboard_apikey');
+        localStorage.removeItem('sv_session_token');
+        sessionStorage.clear();
     }
 
-    // Save client preferences
-    if (ffKey) localStorage.setItem('warboard_ffkey', ffKey);
-    if (tsKey) localStorage.setItem('warboard_tskey', tsKey);
-    if (enemyFacId) localStorage.setItem('warboard_enemyId', enemyFacId);
-    if (myName) localStorage.setItem('warboard_myname', myName);
-    if (discord) localStorage.setItem('warboard_discord', discord);
+    // Save client preferences locally
+    if (ffKey) localStorage.setItem('warboard_ffkey', ffKey); else localStorage.removeItem('warboard_ffkey');
+    if (tsKey) localStorage.setItem('warboard_tskey', tsKey); else localStorage.removeItem('warboard_tskey');
+    if (enemyFacId) localStorage.setItem('warboard_enemyId', enemyFacId); else localStorage.removeItem('warboard_enemyId');
+    if (myName) localStorage.setItem('warboard_myname', myName); else localStorage.removeItem('warboard_myname');
+    if (discord) localStorage.setItem('warboard_discord', discord); else localStorage.removeItem('warboard_discord');
     if (cpm) localStorage.setItem('warboard_cpm', cpm);
 
-    // Sync to backend server so discordConfig and other tools always preserve the keys
-    try {
-        await fetch('/api/sync-configs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ apiKey, ffKey, tsKey, enemyFacId, myName, cpm })
-        });
-        const discordPayload = { apiKey, ffKey, enemyFacId };
-        if (!isBotTokenMaskedOrEmpty && cleanedBotToken.length > 20) {
-            discordPayload.globalBotToken = cleanedBotToken;
-        }
-        if (cleanedChanId) {
-            discordPayload.globalChannelId = cleanedChanId;
-        }
-        await fetch('/api/save-discord-config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(discordPayload)
-        });
-    } catch(e) {
-        console.warn('Backend sync warning:', e.message);
-    }
-
-    showGlobalToast('✅ Settings Saved & Synchronized!');
+    showGlobalToast('✅ Settings Saved Successfully!');
     closeGlobalSettings();
     setTimeout(() => { window.location.reload(); }, 600);
 };

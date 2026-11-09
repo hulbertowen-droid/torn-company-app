@@ -441,18 +441,32 @@
     }
 
     function handleUnauthenticated() {
-        const isRestricted = isSpiderVerseRestrictedPage();
-        if (isRestricted) {
-            // Prompt modal on restricted modules with close button available
-            showConnectModal(true);
-        } else {
-            // For public & live warboard tools, inject a clean "Connect Torn Key" button in sidebar/header
-            injectConnectButton();
-            // Automatically trigger live warboard polling and page initialization
+        // Clear any stale cached data from previous users on this browser
+        try {
+            sessionStorage.removeItem('sv_cache_dashboard');
+            sessionStorage.removeItem('sv_cache_wars');
+            sessionStorage.removeItem('sv_cache_discord_cfg');
+            sessionStorage.removeItem('sv_user');
+        } catch(e) {}
+
+        // Inject a clean "Connect Torn Key" button in sidebar/header
+        injectConnectButton();
+
+        // Immediately prompt the user with the Connect Account modal upon entry
+        showConnectModal(true);
+
+        const path = getCurrentPath();
+        const requiresAuthPages = ['/dashboard.html', '/index.html', '/members.html', '/oc.html', '/payout.html', '/discord.html', '/chain.html', '/company.html'];
+        const isAuthRequired = requiresAuthPages.some(rp => path === rp || path.endsWith(rp.replace('/', '')));
+
+        if (!isAuthRequired) {
+            // Only trigger initialization on public non-faction pages (e.g. travel, gamble)
             if (typeof window.startPolling === 'function') window.startPolling();
             if (typeof window.initPage === 'function') window.initPage();
-            if (typeof window.loadAll === 'function') window.loadAll();
             if (typeof window.loadRoster === 'function') window.loadRoster();
+        } else {
+            // For dashboard, ensure unauthenticated state is displayed cleanly without broken fetches
+            if (typeof window.renderUnauthenticatedHero === 'function') window.renderUnauthenticatedHero();
         }
     }
 
@@ -690,6 +704,7 @@
     }
 
     // Public API
+    window.showConnectModal = showConnectModal;
     window.svAuth = {
         getUser: () => currentUser,
         getToken: () => localStorage.getItem('sv_session_token'),

@@ -5584,34 +5584,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         initialConfigSnapshot = JSON.parse(JSON.stringify(cfg));
         try { sessionStorage.setItem('sv_cache_discord_cfg', JSON.stringify(cfg)); } catch(e) {}
         applyConfigToDOM(cfg);
-
-        // Restore keys into localStorage if missing
-        if (cfg.apiKey && !localStorage.getItem('warboard_apikey')) localStorage.setItem('warboard_apikey', cfg.apiKey);
-        if (cfg.ffKey && !localStorage.getItem('warboard_ffkey')) localStorage.setItem('warboard_ffkey', cfg.ffKey);
-        if (cfg.enemyFacId && !localStorage.getItem('warboard_enemyId')) localStorage.setItem('warboard_enemyId', cfg.enemyFacId);
-
-        if (!localStorage.getItem('warboard_apikey') || !localStorage.getItem('warboard_ffkey')) {
-            try {
-                const gRes = await fetch('/api/global-settings');
-                const gData = await gRes.json();
-                if (gData && gData.success) {
-                    if (gData.apiKey && !localStorage.getItem('warboard_apikey')) localStorage.setItem('warboard_apikey', gData.apiKey);
-                    if (gData.ffKey && !localStorage.getItem('warboard_ffkey')) localStorage.setItem('warboard_ffkey', gData.ffKey);
-                    if (gData.enemyFacId && !localStorage.getItem('warboard_enemyId')) localStorage.setItem('warboard_enemyId', gData.enemyFacId);
-                }
-            } catch(ge) {}
-        }
-
-        const localFfKey = localStorage.getItem('warboard_ffkey') || '';
-        const localEnemyId = localStorage.getItem('warboard_enemyId') || '';
-        const localApiKey = localStorage.getItem('warboard_apikey') || '';
-        const syncPayload = {};
-        if (localApiKey) syncPayload.apiKey = localApiKey;
-        if (localFfKey) syncPayload.ffKey = localFfKey;
-        if (localEnemyId) syncPayload.enemyFacId = localEnemyId;
-        if (Object.keys(syncPayload).length > 0) {
-            fetch('/api/save-discord-config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(syncPayload) }).catch(() => {});
-        }
     } catch (e) {
         setConnectionStatus(false);
     }

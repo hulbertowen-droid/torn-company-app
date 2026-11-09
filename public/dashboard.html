@@ -2484,6 +2484,11 @@ async function loadAll() {
     myKey = localStorage.getItem("warboard_apikey") || "";
 
     if (!myKey && !localStorage.getItem("sv_session_token")) {
+        try {
+            sessionStorage.removeItem('sv_cache_dashboard');
+            sessionStorage.removeItem('sv_cache_wars');
+            sessionStorage.removeItem('sv_user');
+        } catch(e) {}
         renderUnauthenticatedHero();
         const analyst = document.getElementById('analyst-output');
         if (analyst) {
@@ -2544,7 +2549,10 @@ function renderUnauthenticatedHero() {
     const subEl = document.getElementById('hero-subtitle');
     if (titleEl) titleEl.innerText = 'Torn Faction Operations Hub';
     if (subEl) {
-        subEl.innerHTML = '⚠️ Connect your Torn API key above to load live faction statistics, armory reserves, and combat telemetry.';
+        subEl.innerHTML = `⚠️ Connect your Torn API key to load live faction statistics, armory reserves, and combat telemetry.<br>
+        <button onclick="window.showConnectModal ? window.showConnectModal(true) : (window.openGlobalSettings ? window.openGlobalSettings() : openSettings())" class="btn btn-primary btn-sm" style="margin-top:10px; cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+            <span>🔑 Connect Torn API Key</span>
+        </button>`;
         subEl.style.color = 'var(--accent-amber)';
     }
     const statMembers = document.getElementById('hero-stat-members');
