@@ -197,7 +197,8 @@ const globalSettingsHTML = `
             <input type="number" id="gs-api-cpm" aria-label="API Calls Per Minute" min="1" max="60" placeholder="12 calls/min">
         </div>
 
-        <button class="global-btn-save" id="gs-btn-save" onclick="saveGlobalSettings()">Save & Synchronize</button>
+        <button class="global-btn-save" id="gs-btn-save" onclick="saveGlobalSettings()">Save Preferences</button>
+        <button type="button" class="global-btn-logout" id="gs-btn-logout" onclick="window.svAuth ? window.svAuth.logout() : (window.svLogout ? window.svLogout() : location.reload())" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.45); color: #ef4444; padding: 11px; width: 100%; border-radius: var(--radius-sm, 6px); cursor: pointer; font-weight: 800; font-size: 0.88em; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 8px; transition: all 0.15s; font-family: inherit;">🚪 Disconnect Account &amp; Log Out</button>
     </div>
 </div>
 `;
@@ -244,7 +245,6 @@ window.openGlobalSettings = async function() {
     modal.style.display = 'flex';
 
     // Client-side preferences only — never auto-populated with server credentials
-    let apiKey = localStorage.getItem('warboard_apikey') || "";
     let ffKey = localStorage.getItem('warboard_ffkey') || "";
     let tsKey = localStorage.getItem('warboard_tskey') || "";
     let enemyFacId = localStorage.getItem('warboard_enemyId') || "";
@@ -252,7 +252,10 @@ window.openGlobalSettings = async function() {
     let discord = localStorage.getItem('warboard_discord') || "";
     let cpm = localStorage.getItem('warboard_cpm') || "12";
 
-    document.getElementById('gs-api-key').value = apiKey;
+    // SECURITY ENFORCEMENT: Never display raw API keys in input values
+    const keyInput = document.getElementById('gs-api-key');
+    if (keyInput) keyInput.value = "";
+
     document.getElementById('gs-ff-key').value = ffKey;
     document.getElementById('gs-ts-key').value = tsKey;
     document.getElementById('gs-enemy-id').value = enemyFacId;
@@ -262,40 +265,30 @@ window.openGlobalSettings = async function() {
 
     const statusText = document.getElementById('gs-status-text');
     const token = localStorage.getItem('sv_session_token');
-    const savedKey = localStorage.getItem('warboard_apikey') || apiKey;
+    const logoutBtn = document.getElementById('gs-btn-logout');
+
     if (token) {
         try {
             const res = await fetch('/api/auth/me');
             const data = await res.json();
             if (data.authenticated && data.user) {
+                if (keyInput) keyInput.placeholder = `•••••••••••••••• (Verified: ${data.user.playerName} — paste new key to switch)`;
                 statusText.innerHTML = `<strong style="color:var(--accent-emerald, #10b981);">Verified Key: ${data.user.playerName} [${data.user.playerId}]</strong> (${data.user.factionName || 'Factionless'})`;
+                if (logoutBtn) logoutBtn.style.display = 'block';
             } else {
+                if (keyInput) keyInput.placeholder = "Paste Torn API Key to authenticate";
                 statusText.innerHTML = '<span style="color:var(--accent-amber, #f59e0b);">Unauthenticated</span>';
+                if (logoutBtn) logoutBtn.style.display = 'none';
             }
         } catch(e) {
+            if (keyInput) keyInput.placeholder = "•••••••••••••••• (Active Session — paste new key to switch)";
             statusText.innerHTML = '<span style="color:var(--accent-emerald, #10b981);">Active Session</span>';
-        }
-    } else if (savedKey) {
-        statusText.innerHTML = '<span style="color:var(--accent-amber, #f59e0b);">Verifying Key...</span>';
-        try {
-            const res = await fetch('/api/auth/connect', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ apiKey: savedKey })
-            });
-            const data = await res.json();
-            if (data.success && data.user) {
-                if (data.sessionToken) localStorage.setItem('sv_session_token', data.sessionToken);
-                sessionStorage.setItem('sv_user', JSON.stringify(data.user));
-                statusText.innerHTML = `<strong style="color:var(--accent-emerald, #10b981);">Verified Key: ${data.user.playerName} [${data.user.playerId}]</strong> (${data.user.factionName || 'Factionless'})`;
-            } else {
-                statusText.innerHTML = `<span style="color:var(--accent-emerald, #10b981);">Key Saved (${savedKey.slice(0,4)}...)</span>`;
-            }
-        } catch(e) {
-            statusText.innerHTML = `<span style="color:var(--accent-emerald, #10b981);">Key Saved (${savedKey.slice(0,4)}...)</span>`;
+            if (logoutBtn) logoutBtn.style.display = 'block';
         }
     } else {
+        if (keyInput) keyInput.placeholder = "Paste Torn API Key to authenticate";
         statusText.innerHTML = '<span style="color:var(--text-tertiary, #64748b);">Not connected (Enter Key below)</span>';
+        if (logoutBtn) logoutBtn.style.display = 'none';
     }
 };
 
@@ -315,7 +308,6 @@ window.saveGlobalSettings = async function() {
     const cpm = document.getElementById('gs-api-cpm').value.trim() || "12";
 
     if (apiKey) {
-        localStorage.setItem('warboard_apikey', apiKey);
         if (saveBtn) {
             saveBtn.disabled = true;
             saveBtn.textContent = 'Authenticating Key...';
@@ -331,16 +323,19 @@ window.saveGlobalSettings = async function() {
                 localStorage.setItem('sv_session_token', data.sessionToken);
                 sessionStorage.setItem('sv_user', JSON.stringify(data.user));
             } else if (data.error) {
-                console.warn('API Key authentication notice:', data.error);
+                alert('Authentication Notice: ' + data.error);
             }
         } catch(e) {
             console.warn('Failed to connect API key to session vault:', e.message);
         }
-    } else {
-        localStorage.removeItem('warboard_apikey');
-        localStorage.removeItem('sv_session_token');
-        sessionStorage.clear();
     }
+
+    // Ensure raw API keys are never left in client localStorage
+    try {
+        localStorage.removeItem('warboard_apikey');
+        localStorage.removeItem('torn_api_key');
+        localStorage.removeItem('tornApiKey');
+    } catch(e) {}
 
     // Save client preferences locally
     if (ffKey) localStorage.setItem('warboard_ffkey', ffKey); else localStorage.removeItem('warboard_ffkey');

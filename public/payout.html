@@ -10,12 +10,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/global.css?v=3.2.0">
+    <link rel="stylesheet" href="/global.css?v=3.5.0">
     
     <!-- Scripts & Auth -->
-    <script src="/auth-gate.js?v=3.2.1"></script>
-    <script src="/global_settings.js?v=3.2.1"></script>
-    <script src="/global-topbar.js?v=3.2.0"></script>
+    <script src="/auth-gate.js?v=3.5.0"></script>
+    <script src="/global_settings.js?v=3.5.0"></script>
+    <script src="/global-topbar.js?v=3.5.0"></script>
 
     <style>
     /* ─── Page-Specific War Payout Styling ─── */
@@ -1608,34 +1608,9 @@
 
         // ─── Settings Modal (Fixing Page-Freezing Bug) ─────────────────────
         function openSettings() {
+            if (typeof openGlobalSettings === 'function') return openGlobalSettings();
             const modal = document.getElementById("settings-modal");
-            if (!modal) return;
-            
-            const key = localStorage.getItem('warboard_apikey') || '';
-            const ff = localStorage.getItem('warboard_ffkey') || '';
-            const ts = localStorage.getItem('warboard_tskey') || '';
-            const stats = localStorage.getItem('warboard_my_stats') || '';
-            const enemy = localStorage.getItem('warboard_enemyId') || '';
-
-            if (document.getElementById("api-key")) document.getElementById("api-key").value = key;
-            if (document.getElementById("ff-key")) document.getElementById("ff-key").value = ff;
-            if (document.getElementById("ts-key")) document.getElementById("ts-key").value = ts;
-            if (document.getElementById("my-stats-input")) document.getElementById("my-stats-input").value = stats;
-            if (document.getElementById("enemy-id")) document.getElementById("enemy-id").value = enemy;
-
-            const statusEl = document.getElementById("settings-status-text");
-            if (statusEl) {
-                if (key) {
-                    statusEl.innerText = `Key Saved (${key.slice(0, 4)}...)`;
-                    statusEl.style.color = 'var(--accent-emerald)';
-                } else {
-                    statusEl.innerText = "No API Key (Enter below)";
-                    statusEl.style.color = "var(--text-muted)";
-                }
-            }
-
-            modal.classList.add("active");
-            modal.style.display = "flex";
+            if (modal) modal.style.display = "flex";
         }
 
         function closeSettings() {

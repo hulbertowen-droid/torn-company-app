@@ -526,22 +526,16 @@ app.use(express.static('public', {
     maxAge: 0,
     setHeaders: (res, filePath) => {
         const p = filePath.toLowerCase();
-        if (p.endsWith('.user.js')) {
-            // Tampermonkey userscripts: immediate fresh delivery (never stale)
+        if (p.endsWith('.user.js') || p.endsWith('.html') || p.endsWith('.js') || p.endsWith('.css')) {
+            // Immediate fresh delivery for scripts, pages, and styles — never stale
             res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
             res.setHeader('Pragma', 'no-cache');
             res.setHeader('Expires', '0');
-        } else if (p.endsWith('.html')) {
-            // HTML files: fast tab switching with 15s browser cache + 300s background revalidation
-            res.setHeader('Cache-Control', 'public, max-age=15, stale-while-revalidate=300');
-        } else if (p.endsWith('.css') || p.endsWith('.js')) {
-            // Static styles and shared scripts: cache 24h, background revalidate
-            res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
         } else if (p.endsWith('.png') || p.endsWith('.jpg') || p.endsWith('.svg') || p.endsWith('.ico') || p.endsWith('.webp')) {
             // Media assets: long-lived cache
             res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
         } else {
-            res.setHeader('Cache-Control', 'public, max-age=86400');
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         }
     }
 })); 

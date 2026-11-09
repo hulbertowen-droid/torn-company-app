@@ -10,6 +10,14 @@
 (function() {
     'use strict';
 
+    // SECURITY ENFORCEMENT: Never retain raw Torn API keys in client localStorage.
+    // Clean up any legacy plaintext keys immediately so they cannot be inspected or leaked.
+    try {
+        localStorage.removeItem('warboard_apikey');
+        localStorage.removeItem('torn_api_key');
+        localStorage.removeItem('tornApiKey');
+    } catch(e) {}
+
     const SPIDERVERSE_PAGES = [
         '/discord.html'
     ];
@@ -325,7 +333,6 @@
 
     async function checkAuth() {
         let token = localStorage.getItem('sv_session_token');
-        const savedApiKey = localStorage.getItem('warboard_apikey');
 
         // FAST-PATH: If user is already authenticated in this session, authorize immediately (0ms delay)
         const cachedUserStr = sessionStorage.getItem('sv_user');
@@ -354,28 +361,6 @@
             } catch(e) {}
         }
 
-        // If no token but saved key exists, restore session seamlessly
-        if (!token && savedApiKey) {
-            try {
-                const autoRes = await fetch('/api/auth/connect', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ apiKey: savedApiKey })
-                });
-                const autoData = await autoRes.json();
-                if (autoData && autoData.success && autoData.sessionToken) {
-                    token = autoData.sessionToken;
-                    localStorage.setItem('sv_session_token', token);
-                    currentUser = autoData.user;
-                    sessionStorage.setItem('sv_user', JSON.stringify(currentUser));
-                    handleAuthenticated(currentUser);
-                    return;
-                }
-            } catch(e) {
-                console.warn('[Torn Auth] Auto-session restoration failed:', e);
-            }
-        }
-
         if (!token) {
             handleUnauthenticated();
             return;
@@ -392,24 +377,6 @@
                 sessionStorage.setItem('sv_user', JSON.stringify(currentUser));
                 handleAuthenticated(currentUser);
             } else {
-                // If token expired, try re-authenticating with saved key before giving up
-                if (savedApiKey) {
-                    try {
-                        const reRes = await fetch('/api/auth/connect', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ apiKey: savedApiKey })
-                        });
-                        const reData = await reRes.json();
-                        if (reData && reData.success && reData.sessionToken) {
-                            localStorage.setItem('sv_session_token', reData.sessionToken);
-                            currentUser = reData.user;
-                            sessionStorage.setItem('sv_user', JSON.stringify(currentUser));
-                            handleAuthenticated(currentUser);
-                            return;
-                        }
-                    } catch(e) {}
-                }
                 localStorage.removeItem('sv_session_token');
                 sessionStorage.removeItem('sv_user');
                 handleUnauthenticated();
@@ -452,12 +419,12 @@
         // Inject a clean "Connect Torn Key" button in sidebar/header
         injectConnectButton();
 
-        // Immediately prompt the user with the Connect Account modal upon entry
-        showConnectModal(true);
-
         const path = getCurrentPath();
         const requiresAuthPages = ['/dashboard.html', '/index.html', '/members.html', '/oc.html', '/payout.html', '/discord.html', '/chain.html', '/company.html'];
         const isAuthRequired = requiresAuthPages.some(rp => path === rp || path.endsWith(rp.replace('/', '')));
+
+        // Immediately prompt with the Connect Account modal. For required pages, disallow closing (strict gate).
+        showConnectModal(!isAuthRequired);
 
         if (!isAuthRequired) {
             // Only trigger initialization on public non-faction pages (e.g. travel, gamble)
@@ -629,7 +596,7 @@
 
         const input = document.getElementById('sv-modal-key-input');
         if (input) {
-            input.value = localStorage.getItem('warboard_apikey') || '';
+            input.value = ''; // Always clean — never pre-fill stored keys
         }
         const submitBtn = document.getElementById('sv-modal-connect-btn');
         const alertBox = document.getElementById('sv-modal-alert');
@@ -659,9 +626,13 @@
                     throw new Error(data.error || 'Authentication failed');
                 }
 
-                // Success! Store session token and API key
+                // Success! Store session token ONLY — NEVER store plaintext keys in localStorage!
                 localStorage.setItem('sv_session_token', data.sessionToken);
-                localStorage.setItem('warboard_apikey', key);
+                try {
+                    localStorage.removeItem('warboard_apikey');
+                    localStorage.removeItem('torn_api_key');
+                    localStorage.removeItem('tornApiKey');
+                } catch(e) {}
                 sessionStorage.setItem('sv_user', JSON.stringify(data.user));
                 currentUser = data.user;
 
@@ -699,6 +670,8 @@
         localStorage.removeItem('sv_session_token');
         localStorage.removeItem('sv_session');
         localStorage.removeItem('warboard_apikey');
+        localStorage.removeItem('torn_api_key');
+        localStorage.removeItem('tornApiKey');
         sessionStorage.clear();
         window.location.reload();
     }

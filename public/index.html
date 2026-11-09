@@ -10,13 +10,13 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/global.css?v=3.2.1">
+    <link rel="stylesheet" href="/global.css?v=3.5.0">
     
     <!-- Scripts & Core Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="/auth-gate.js?v=3.2.2"></script>
-    <script src="/global_settings.js?v=3.2.2"></script>
-    <script src="/global-topbar.js?v=3.2.1"></script>
+    <script src="/auth-gate.js?v=3.5.0"></script>
+    <script src="/global_settings.js?v=3.5.0"></script>
+    <script src="/global-topbar.js?v=3.5.0"></script>
 
     <style>
     /* ══════════════════════════════════════════════════════════════════════════
@@ -2880,12 +2880,17 @@ function toggleTheme() {
 }
 
 function openSettings() {
-    document.getElementById("api-key").value = myKey || "";
-    document.getElementById("ff-key").value = ffKey || "";
-    document.getElementById("ts-key").value = tsKey || "";
-    document.getElementById("my-stats-input").value = localStorage.getItem("warboard_my_stats") || "";
-    document.getElementById("enemy-id").value = enemyFacId || "";
-    document.getElementById("settings-modal").style.display = "flex";
+    if (typeof openGlobalSettings === 'function') {
+        return openGlobalSettings();
+    }
+    const keyInput = document.getElementById("api-key");
+    if (keyInput) keyInput.value = "";
+    if (document.getElementById("ff-key")) document.getElementById("ff-key").value = ffKey || "";
+    if (document.getElementById("ts-key")) document.getElementById("ts-key").value = tsKey || "";
+    if (document.getElementById("my-stats-input")) document.getElementById("my-stats-input").value = localStorage.getItem("warboard_my_stats") || "";
+    if (document.getElementById("enemy-id")) document.getElementById("enemy-id").value = enemyFacId || "";
+    const modal = document.getElementById("settings-modal");
+    if (modal) modal.style.display = "flex";
 }
 
 function closeSettings() {
