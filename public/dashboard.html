@@ -1912,8 +1912,8 @@
                             <thead>
                                 <tr>
                                     <th class="sortable-th" onclick="sortUsageMembers('name')">Member <span id="sort-ind-name">↕</span></th>
-                                    <th class="sortable-th" onclick="sortUsageMembers('deposited')">Deposited (+) <span id="sort-ind-deposited">↕</span></th>
-                                    <th class="sortable-th" onclick="sortUsageMembers('used')">Used (-) <span id="sort-ind-used">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('deposited')" style="min-width:180px;">Deposited (+) <span id="sort-ind-deposited">↕</span></th>
+                                    <th class="sortable-th" onclick="sortUsageMembers('used')" style="min-width:180px;">Used (-) <span id="sort-ind-used">↕</span></th>
                                     <th class="sortable-th" onclick="sortUsageMembers('loaned')">Loaned Out <span id="sort-ind-loaned">↕</span></th>
                                     <th class="sortable-th" onclick="sortUsageMembers('returned')">Returned <span id="sort-ind-returned">↕</span></th>
                                     <th class="sortable-th" onclick="sortUsageMembers('net')">Net Armory Balance <span id="sort-ind-net">↕</span></th>
@@ -3136,7 +3136,7 @@ function initTrackerDates() {
     if (toInput && !toInput.value) toInput.value = todayStr;
 }
 
-function setTrackerPreset(preset, btn) {
+async function setTrackerPreset(preset, btn) {
     trackerPreset = preset;
     document.querySelectorAll('.date-presets .filter-pill').forEach(b => b.classList.remove('active'));
     if (btn) btn.classList.add('active');
@@ -3159,15 +3159,43 @@ function setTrackerPreset(preset, btn) {
         const d = new Date(now.getFullYear(), now.getMonth(), 1);
         fromStr = d.toISOString().split('T')[0];
     } else if (preset === 'lastwar') {
-        const activeWar = currentArmoryData?.activeWar || (dashData?.wars || []).find(w => w.ranked || w.isOngoing);
-        if (activeWar && activeWar.start) {
-            fromStr = new Date(activeWar.start * 1000).toISOString().split('T')[0];
-            if (activeWar.end) {
-                toStr = new Date(activeWar.end * 1000).toISOString().split('T')[0];
+        let warsList = [];
+        if (dashData?.wars?.wars && Array.isArray(dashData.wars.wars)) {
+            warsList = dashData.wars.wars;
+        } else if (dashData?.wars && Array.isArray(dashData.wars)) {
+            warsList = dashData.wars;
+        }
+
+        if (!warsList.length) {
+            try {
+                const userKey = currentArmoryData?.userKey || localStorage.getItem('torn_api_key') || (typeof myKey !== 'undefined' ? myKey : '');
+                if (userKey) {
+                    const res = await fetch('/api/war-list', { headers: { 'x-api-key': userKey } });
+                    const wd = await res.json();
+                    if (wd && wd.wars && Array.isArray(wd.wars)) {
+                        warsList = wd.wars;
+                        if (!dashData) dashData = {};
+                        dashData.wars = wd;
+                    }
+                }
+            } catch(e) {
+                console.warn('Failed to fetch war list for preset:', e);
+            }
+        }
+
+        // Sort wars by start timestamp descending so the most recent war is first
+        const sortedWars = [...warsList].sort((a, b) => (b.start || 0) - (a.start || 0));
+        const targetWar = sortedWars[0] || dashData?.dash?.activeWar || currentArmoryData?.activeWar;
+
+        if (targetWar && targetWar.start) {
+            fromStr = new Date(targetWar.start * 1000).toISOString().split('T')[0];
+            if (targetWar.end && targetWar.end > 0 && !targetWar.isOngoing) {
+                toStr = new Date(targetWar.end * 1000).toISOString().split('T')[0];
             } else {
                 toStr = todayStr;
             }
-            showToast(`Loaded ranked war dates: ${fromStr} → ${toStr}`, 'success');
+            const enemy = targetWar.enemy || targetWar.enemyFaction || targetWar.enemyName || 'Enemy';
+            showToast(`⚔️ Last Ranked War vs ${enemy}: ${fromStr} → ${toStr}`, 'success');
         } else {
             const d = new Date(now.getTime() - (86400000 * 7));
             fromStr = d.toISOString().split('T')[0];
@@ -3179,6 +3207,8 @@ function setTrackerPreset(preset, btn) {
     const toInput = document.getElementById('tracker-date-to');
     if (fromInput) fromInput.value = fromStr;
     if (toInput) toInput.value = toStr;
+
+    await fetchConsumptionData();
 }
 
 async function fetchConsumptionData() {
@@ -3390,6 +3420,35 @@ async function fetchDeepArmoryHistory() {
     }
 }
 
+function formatMemberItemChips(itemsMap, type) {
+    if (!itemsMap || typeof itemsMap !== 'object') {
+        return '<span style="color:var(--text-tertiary); font-size:0.75em;">—</span>';
+    }
+    const entries = Object.entries(itemsMap).filter(([_, qty]) => qty > 0).sort((a, b) => b[1] - a[1]);
+    if (!entries.length) {
+        return '<span style="color:var(--text-tertiary); font-size:0.75em;">—</span>';
+    }
+
+    const cls = type === 'inflow' ? 'chip-inflow' : 'chip-outflow';
+    const sign = type === 'inflow' ? '+' : '-';
+
+    const maxShow = 6;
+    const shown = entries.slice(0, maxShow);
+    const extra = entries.length - maxShow;
+
+    let html = `<div style="display:flex; flex-wrap:wrap; gap:3px; margin-top:3px; max-width:240px;">`;
+    html += shown.map(([name, qty]) => {
+        return `<span class="usage-item-chip ${cls}" onclick="setArmoryItemFilter('${escapeHtml(name)}')" title="Filter table to ${escapeHtml(name)}" style="font-size:0.74em; padding:2px 6px; cursor:pointer; line-height:1.2;">${escapeHtml(name)}: <strong>${sign}${fmtNum(qty)}</strong></span>`;
+    }).join('');
+
+    if (extra > 0) {
+        const remainingStr = entries.slice(maxShow).map(([n, q]) => `${n} (${sign}${q})`).join(', ');
+        html += `<span class="usage-item-chip" title="${escapeHtml(remainingStr)}" style="font-size:0.72em; color:var(--text-tertiary); padding:2px 5px; line-height:1.2;">+${extra} more</span>`;
+    }
+    html += `</div>`;
+    return html;
+}
+
 function renderItemUsageTracker() {
     if (!currentArmoryData?.armory?.usageStats && !loadedArmoryEvents.length) return;
     const initialStats = currentArmoryData?.armory?.usageStats || {};
@@ -3408,10 +3467,26 @@ function renderItemUsageTracker() {
     else if (armoryTimeFilter === '7d') cutoffSec = nowSec - (86400 * 7);
     else if (armoryTimeFilter === '30d') cutoffSec = nowSec - (86400 * 30);
 
+    // Date range inputs cutoff
+    const fromInputVal = document.getElementById('tracker-date-from')?.value;
+    const toInputVal = document.getElementById('tracker-date-to')?.value;
+    let rangeFromTs = 0;
+    let rangeToTs = 0;
+    if (fromInputVal) {
+        rangeFromTs = Math.floor(new Date(fromInputVal + 'T00:00:00Z').getTime() / 1000);
+    }
+    if (toInputVal) {
+        rangeToTs = Math.floor(new Date(toInputVal + 'T23:59:59Z').getTime() / 1000);
+    }
+
     // 2. Filter raw events
     const filteredEvents = loadedArmoryEvents.filter(entry => {
         // Time filter
         if (cutoffSec > 0 && (entry.timestamp || 0) < cutoffSec) return false;
+
+        // Date range filter
+        if (rangeFromTs > 0 && (entry.timestamp || 0) < rangeFromTs) return false;
+        if (rangeToTs > 0 && (entry.timestamp || 0) > rangeToTs) return false;
 
         // Action filter
         if (armoryActionFilter === 'inflow') {
@@ -3497,13 +3572,14 @@ function renderItemUsageTracker() {
         }
         const m = memberMap[pId];
         if (e.timestamp > (m.lastActionTs || 0)) m.lastActionTs = e.timestamp;
+        const itemKey = e.itemName || 'Unknown Item';
         if (e.type === 'inflow') {
             m.totalDeposited += qty;
-            m.depositedItems[e.itemName] = (m.depositedItems[e.itemName] || 0) + qty;
+            m.depositedItems[itemKey] = (m.depositedItems[itemKey] || 0) + qty;
             if (e.action === 'returned' || e.action === 'retrieved') m.itemsReturned += qty;
         } else {
             m.totalUsed += qty;
-            m.usedItems[e.itemName] = (m.usedItems[e.itemName] || 0) + qty;
+            m.usedItems[itemKey] = (m.usedItems[itemKey] || 0) + qty;
             if (e.action === 'loaned') m.itemsLoaned += qty;
             if (nameLower.includes('xanax') || e.category === 'Drug') m.xanaxTaken += qty;
             if (e.category === 'Medical') m.medsTaken += qty;
@@ -3738,24 +3814,33 @@ function renderItemUsageTracker() {
                     balanceBadge = `<span class="badge-balance-neg">-${fmtNum(Math.abs(m.netBalance))}</span>`;
                 }
 
+                const depChips = formatMemberItemChips(m.depositedItems, 'inflow');
+                const usedChips = formatMemberItemChips(m.usedItems, 'outflow');
+
                 return `<tr>
-                    <td>
+                    <td style="vertical-align:top;">
                         <div style="font-weight:700;">
                             <a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${escapeHtml(m.name)}</a>
                             <span style="cursor:pointer; font-size:0.78em; margin-left:4px;" onclick="setArmoryMemberFilter('${m.id}', '${escapeHtml(m.name)}')" title="Filter table to this member">🔍</span>
                         </div>
                         <div style="font-size:0.74em; color:var(--text-tertiary);">[${m.id}]</div>
                     </td>
-                    <td style="font-family:var(--font-mono); font-weight:800; color:var(--accent-emerald);">+${fmtNum(m.totalDeposited)}</td>
-                    <td style="font-family:var(--font-mono); font-weight:800; color:var(--accent-crimson);">-${fmtNum(m.totalUsed)}</td>
-                    <td style="font-family:var(--font-mono); font-weight:700; color:var(--accent-amber);">${fmtNum(m.itemsLoaned || 0)}</td>
-                    <td style="font-family:var(--font-mono); font-weight:700; color:var(--accent-cyan);">${fmtNum(m.itemsReturned || 0)}</td>
-                    <td>${balanceBadge}</td>
-                    <td style="font-family:var(--font-mono); font-weight:700; color:${m.xanaxTaken > 0 ? 'var(--accent-purple)' : 'var(--text-tertiary)'};">${fmtNum(m.xanaxTaken || 0)}</td>
-                    <td style="font-family:var(--font-mono); font-weight:700; color:${m.medsTaken > 0 ? 'var(--accent-cobalt)' : 'var(--text-tertiary)'};">${fmtNum(m.medsTaken || 0)}</td>
-                    <td style="font-family:var(--font-mono); font-weight:700; color:${m.boostersTaken > 0 ? 'var(--accent-amber)' : 'var(--text-tertiary)'};">${fmtNum(m.boostersTaken || 0)}</td>
-                    <td style="text-align:right; font-size:0.82em; color:var(--text-tertiary);" title="${m.lastActionTs ? new Date(m.lastActionTs * 1000).toUTCString() : ''}">${timeSince(m.lastActionTs)}</td>
-                    <td style="text-align:center;">
+                    <td style="vertical-align:top;">
+                        <div style="font-family:var(--font-mono); font-weight:800; color:var(--accent-emerald); font-size:1.05em;">+${fmtNum(m.totalDeposited)}</div>
+                        ${depChips}
+                    </td>
+                    <td style="vertical-align:top;">
+                        <div style="font-family:var(--font-mono); font-weight:800; color:var(--accent-crimson); font-size:1.05em;">-${fmtNum(m.totalUsed)}</div>
+                        ${usedChips}
+                    </td>
+                    <td style="vertical-align:top; font-family:var(--font-mono); font-weight:700; color:var(--accent-amber);">${fmtNum(m.itemsLoaned || 0)}</td>
+                    <td style="vertical-align:top; font-family:var(--font-mono); font-weight:700; color:var(--accent-cyan);">${fmtNum(m.itemsReturned || 0)}</td>
+                    <td style="vertical-align:top;">${balanceBadge}</td>
+                    <td style="vertical-align:top; font-family:var(--font-mono); font-weight:700; color:${m.xanaxTaken > 0 ? 'var(--accent-purple)' : 'var(--text-tertiary)'};">${fmtNum(m.xanaxTaken || 0)}</td>
+                    <td style="vertical-align:top; font-family:var(--font-mono); font-weight:700; color:${m.medsTaken > 0 ? 'var(--accent-cobalt)' : 'var(--text-tertiary)'};">${fmtNum(m.medsTaken || 0)}</td>
+                    <td style="vertical-align:top; font-family:var(--font-mono); font-weight:700; color:${m.boostersTaken > 0 ? 'var(--accent-amber)' : 'var(--text-tertiary)'};">${fmtNum(m.boostersTaken || 0)}</td>
+                    <td style="vertical-align:top; text-align:right; font-size:0.82em; color:var(--text-tertiary);" title="${m.lastActionTs ? new Date(m.lastActionTs * 1000).toUTCString() : ''}">${timeSince(m.lastActionTs)}</td>
+                    <td style="vertical-align:top; text-align:center;">
                         <button class="btn btn-sm btn-outline" onclick="openMemberLogModal('${m.id}', '${escapeHtml(m.name)}')" title="View item-by-item audit log" style="padding:3px 8px; font-size:0.75em;">
                             <span>📋</span> Log
                         </button>
