@@ -318,8 +318,11 @@
 
     // Identify current page path
     function getCurrentPath() {
-        const path = window.location.pathname.toLowerCase();
+        let path = window.location.pathname.toLowerCase();
         if (path === '' || path === '/') return '/index.html';
+        if (!path.endsWith('.html') && !path.endsWith('/')) {
+            path += '.html';
+        }
         return path;
     }
 

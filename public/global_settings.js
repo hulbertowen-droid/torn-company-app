@@ -245,12 +245,13 @@ window.openGlobalSettings = async function() {
     modal.style.display = 'flex';
 
     // Client-side preferences only — never auto-populated with server credentials
-    let ffKey = localStorage.getItem('warboard_ffkey') || "";
-    let tsKey = localStorage.getItem('warboard_tskey') || "";
-    let enemyFacId = localStorage.getItem('warboard_enemyId') || "";
-    let myName = localStorage.getItem('warboard_myname') || "";
-    let discord = localStorage.getItem('warboard_discord') || "";
-    let cpm = localStorage.getItem('warboard_cpm') || "12";
+    const token = localStorage.getItem('sv_session_token');
+    let ffKey = token ? (localStorage.getItem('warboard_ffkey') || "") : "";
+    let tsKey = token ? (localStorage.getItem('warboard_tskey') || "") : "";
+    let enemyFacId = token ? (localStorage.getItem('warboard_enemyId') || "") : "";
+    let myName = token ? (localStorage.getItem('warboard_myname') || "") : "";
+    let discord = token ? (localStorage.getItem('warboard_discord') || "") : "";
+    let cpm = token ? (localStorage.getItem('warboard_cpm') || "12") : "12";
 
     // SECURITY ENFORCEMENT: Never display raw API keys in input values
     const keyInput = document.getElementById('gs-api-key');
@@ -264,7 +265,6 @@ window.openGlobalSettings = async function() {
     document.getElementById('gs-api-cpm').value = cpm;
 
     const statusText = document.getElementById('gs-status-text');
-    const token = localStorage.getItem('sv_session_token');
     const logoutBtn = document.getElementById('gs-btn-logout');
 
     if (token) {

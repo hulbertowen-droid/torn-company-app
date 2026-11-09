@@ -10,12 +10,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/global.css?v=3.5.0">
+    <link rel="stylesheet" href="/global.css?v=4.0.0">
     
     <!-- Scripts & Auth -->
-    <script src="/auth-gate.js?v=3.5.0"></script>
-    <script src="/global_settings.js?v=3.5.0"></script>
-    <script src="/global-topbar.js?v=3.5.0"></script>
+    <script src="/auth-gate.js?v=4.0.0"></script>
+    <script src="/global_settings.js?v=4.0.0"></script>
+    <script src="/global-topbar.js?v=4.0.0"></script>
 
     <style>
     /* ─── Page-Specific Dashboard, Armory & Sentinel Styling ─── */
@@ -3176,15 +3176,12 @@ async function setTrackerPreset(preset, btn) {
 
         if (!warsList.length) {
             try {
-                const userKey = currentArmoryData?.userKey || localStorage.getItem('torn_api_key') || (typeof myKey !== 'undefined' ? myKey : '');
-                if (userKey) {
-                    const res = await fetch('/api/war-list', { headers: { 'x-api-key': userKey } });
-                    const wd = await res.json();
-                    if (wd && wd.wars && Array.isArray(wd.wars)) {
-                        warsList = wd.wars;
-                        if (!dashData) dashData = {};
-                        dashData.wars = wd;
-                    }
+                const res = await fetch('/api/war-list');
+                const wd = await res.json();
+                if (wd && wd.wars && Array.isArray(wd.wars)) {
+                    warsList = wd.wars;
+                    if (!dashData) dashData = {};
+                    dashData.wars = wd;
                 }
             } catch(e) {
                 console.warn('Failed to fetch war list for preset:', e);
@@ -3197,7 +3194,7 @@ async function setTrackerPreset(preset, btn) {
 
         if (targetWar && targetWar.start) {
             fromStr = new Date(targetWar.start * 1000).toISOString().split('T')[0];
-            if (targetWar.end && targetWar.end > 0 && !targetWar.isOngoing) {
+            if (targetWar.end && targetWar.end > 0) {
                 toStr = new Date(targetWar.end * 1000).toISOString().split('T')[0];
             } else {
                 toStr = todayStr;
@@ -3238,8 +3235,9 @@ async function fetchConsumptionData() {
         return;
     }
 
-    const userKey = currentArmoryData?.userKey || localStorage.getItem('torn_api_key') || (typeof myKey !== 'undefined' ? myKey : '');
-    if (!userKey) {
+    const userKey = currentArmoryData?.userKey || localStorage.getItem('torn_api_key') || (typeof myKey !== 'undefined' ? myKey : '') || '';
+    const hasToken = !!localStorage.getItem('sv_session_token');
+    if (!userKey && !hasToken) {
         showToast('Please connect an API key first', 'error');
         return;
     }
@@ -3248,7 +3246,8 @@ async function fetchConsumptionData() {
     if (icon) icon.textContent = '⏳';
 
     try {
-        const resp = await fetch(`/api/armory-history?from=${fromTs}&to=${toTs}&pages=8&key=${encodeURIComponent(userKey)}`);
+        const keyParam = userKey ? `&key=${encodeURIComponent(userKey)}` : '';
+        const resp = await fetch(`/api/armory-history?from=${fromTs}&to=${toTs}&pages=8${keyParam}`);
         const data = await resp.json();
         if (data.error) throw new Error(data.error);
 
@@ -3428,11 +3427,14 @@ async function fetchDeepArmoryHistory() {
     }
 }
 
-function formatMemberItemChips(itemsMap, type) {
-    if (!itemsMap || typeof itemsMap !== 'object') {
-        return '<span style="color:var(--text-tertiary); font-size:0.75em;">—</span>';
+function formatMemberItemChips(itemsMap, type, fallbackCategoryCounts = null) {
+    let entries = [];
+    if (itemsMap && typeof itemsMap === 'object') {
+        entries = Object.entries(itemsMap).filter(([_, qty]) => qty > 0).sort((a, b) => b[1] - a[1]);
     }
-    const entries = Object.entries(itemsMap).filter(([_, qty]) => qty > 0).sort((a, b) => b[1] - a[1]);
+    if (!entries.length && fallbackCategoryCounts) {
+        entries = Object.entries(fallbackCategoryCounts).filter(([_, qty]) => qty > 0);
+    }
     if (!entries.length) {
         return '<span style="color:var(--text-tertiary); font-size:0.75em;">—</span>';
     }
@@ -3444,9 +3446,9 @@ function formatMemberItemChips(itemsMap, type) {
     const shown = entries.slice(0, maxShow);
     const extra = entries.length - maxShow;
 
-    let html = `<div style="display:flex; flex-wrap:wrap; gap:3px; margin-top:3px; max-width:240px;">`;
+    let html = `<div style="display:flex; flex-wrap:wrap; gap:3px; margin-top:4px; max-width:250px;">`;
     html += shown.map(([name, qty]) => {
-        return `<span class="usage-item-chip ${cls}" onclick="setArmoryItemFilter('${escapeHtml(name)}')" title="Filter table to ${escapeHtml(name)}" style="font-size:0.74em; padding:2px 6px; cursor:pointer; line-height:1.2;">${escapeHtml(name)}: <strong>${sign}${fmtNum(qty)}</strong></span>`;
+        return `<span class="usage-item-chip ${cls}" onclick="setArmoryItemFilter('${escapeHtml(name)}')" title="Filter table to ${escapeHtml(name)}" style="font-size:0.73em; padding:2px 6px; cursor:pointer; line-height:1.2; border-radius:4px; background:${type === 'inflow' ? 'rgba(46,213,115,0.12)' : 'rgba(255,71,87,0.12)'}; color:${type === 'inflow' ? 'var(--accent-emerald, #2ed573)' : 'var(--accent-crimson, #ff4757)'}; border:1px solid ${type === 'inflow' ? 'rgba(46,213,115,0.3)' : 'rgba(255,71,87,0.3)'}; font-family:var(--font-mono, monospace);">${escapeHtml(name)}: <strong>${sign}${fmtNum(qty)}</strong></span>`;
     }).join('');
 
     if (extra > 0) {
@@ -3822,8 +3824,29 @@ function renderItemUsageTracker() {
                     balanceBadge = `<span class="badge-balance-neg">-${fmtNum(Math.abs(m.netBalance))}</span>`;
                 }
 
-                const depChips = formatMemberItemChips(m.depositedItems, 'inflow');
-                const usedChips = formatMemberItemChips(m.usedItems, 'outflow');
+                const depFallback = m.totalDeposited > 0 ? { 'Deposited Items': m.totalDeposited } : null;
+                const usedFallback = m.totalUsed > 0 ? { 'Used Items': m.totalUsed } : null;
+                const depChips = formatMemberItemChips(m.depositedItems, 'inflow', depFallback);
+                const usedChips = formatMemberItemChips(m.usedItems, 'outflow', usedFallback);
+
+                // Specific breakdowns for Meds, Xanax, and Boosters
+                const medSubChips = Object.entries(m.usedItems || {})
+                    .filter(([n]) => {
+                        const nl = n.toLowerCase();
+                        return nl.includes('first aid') || nl.includes('morphine') || nl.includes('blood') || nl.includes('ipecac');
+                    })
+                    .slice(0, 3)
+                    .map(([n, q]) => `<span style="display:inline-block; font-size:0.7em; background:rgba(59,130,246,0.12); color:var(--accent-cobalt, #3b82f6); border-radius:3px; padding:1px 4px; margin:1px 2px 0 0;">${escapeHtml(n)}: ${q}</span>`)
+                    .join('');
+
+                const boosterSubChips = Object.entries(m.usedItems || {})
+                    .filter(([n]) => {
+                        const nl = n.toLowerCase();
+                        return nl.startsWith('can of') || nl.includes('bottle of') || nl.includes('energy drink') || nl.includes('box of') || nl.includes('bag of') || nl.includes('feathery');
+                    })
+                    .slice(0, 3)
+                    .map(([n, q]) => `<span style="display:inline-block; font-size:0.7em; background:rgba(245,158,11,0.12); color:var(--accent-amber, #f59e0b); border-radius:3px; padding:1px 4px; margin:1px 2px 0 0;">${escapeHtml(n)}: ${q}</span>`)
+                    .join('');
 
                 return `<tr>
                     <td style="vertical-align:top;">
@@ -3844,9 +3867,17 @@ function renderItemUsageTracker() {
                     <td style="vertical-align:top; font-family:var(--font-mono); font-weight:700; color:var(--accent-amber);">${fmtNum(m.itemsLoaned || 0)}</td>
                     <td style="vertical-align:top; font-family:var(--font-mono); font-weight:700; color:var(--accent-cyan);">${fmtNum(m.itemsReturned || 0)}</td>
                     <td style="vertical-align:top;">${balanceBadge}</td>
-                    <td style="vertical-align:top; font-family:var(--font-mono); font-weight:700; color:${m.xanaxTaken > 0 ? 'var(--accent-purple)' : 'var(--text-tertiary)'};">${fmtNum(m.xanaxTaken || 0)}</td>
-                    <td style="vertical-align:top; font-family:var(--font-mono); font-weight:700; color:${m.medsTaken > 0 ? 'var(--accent-cobalt)' : 'var(--text-tertiary)'};">${fmtNum(m.medsTaken || 0)}</td>
-                    <td style="vertical-align:top; font-family:var(--font-mono); font-weight:700; color:${m.boostersTaken > 0 ? 'var(--accent-amber)' : 'var(--text-tertiary)'};">${fmtNum(m.boostersTaken || 0)}</td>
+                    <td style="vertical-align:top;">
+                        <div style="font-family:var(--font-mono); font-weight:700; color:${m.xanaxTaken > 0 ? 'var(--accent-purple)' : 'var(--text-tertiary)'}; font-size:1.05em;">${fmtNum(m.xanaxTaken || 0)}</div>
+                    </td>
+                    <td style="vertical-align:top;">
+                        <div style="font-family:var(--font-mono); font-weight:700; color:${m.medsTaken > 0 ? 'var(--accent-cobalt)' : 'var(--text-tertiary)'}; font-size:1.05em;">${fmtNum(m.medsTaken || 0)}</div>
+                        ${medSubChips ? `<div style="margin-top:2px; max-width:140px;">${medSubChips}</div>` : ''}
+                    </td>
+                    <td style="vertical-align:top;">
+                        <div style="font-family:var(--font-mono); font-weight:700; color:${m.boostersTaken > 0 ? 'var(--accent-amber)' : 'var(--text-tertiary)'}; font-size:1.05em;">${fmtNum(m.boostersTaken || 0)}</div>
+                        ${boosterSubChips ? `<div style="margin-top:2px; max-width:140px;">${boosterSubChips}</div>` : ''}
+                    </td>
                     <td style="vertical-align:top; text-align:right; font-size:0.82em; color:var(--text-tertiary);" title="${m.lastActionTs ? new Date(m.lastActionTs * 1000).toUTCString() : ''}">${timeSince(m.lastActionTs)}</td>
                     <td style="vertical-align:top; text-align:center;">
                         <button class="btn btn-sm btn-outline" onclick="openMemberLogModal('${m.id}', '${escapeHtml(m.name)}')" title="View item-by-item audit log" style="padding:3px 8px; font-size:0.75em;">

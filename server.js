@@ -524,18 +524,19 @@ app.post('/api/sync-recruits-now', async (req, res) => {
 
 app.use(express.static('public', {
     maxAge: 0,
+    etag: false,
     setHeaders: (res, filePath) => {
         const p = filePath.toLowerCase();
         if (p.endsWith('.user.js') || p.endsWith('.html') || p.endsWith('.js') || p.endsWith('.css')) {
             // Immediate fresh delivery for scripts, pages, and styles — never stale
-            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
             res.setHeader('Pragma', 'no-cache');
             res.setHeader('Expires', '0');
         } else if (p.endsWith('.png') || p.endsWith('.jpg') || p.endsWith('.svg') || p.endsWith('.ico') || p.endsWith('.webp')) {
             // Media assets: long-lived cache
             res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
         } else {
-            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
         }
     }
 })); 
@@ -3907,8 +3908,11 @@ app.get('/api/get-discord-config', (req, res) => {
         welcomeRulesTitle: discordConfig.welcomeRulesTitle || "📜 Welcome to the Faction & Server Rules",
         welcomeRulesContent: discordConfig.welcomeRulesContent || DEFAULT_WELCOME_RULES
     };
-    // Scrub sensitive credentials from client response
+    // Scrub sensitive credentials and external keys from client response
     delete fullConfig.apiKey;
+    delete fullConfig.ffKey;
+    delete fullConfig.tsKey;
+    delete fullConfig.githubToken;
     delete fullConfig.globalBotToken;
     delete fullConfig.personalDiscordId;
     delete fullConfig.geminiApiKey;
@@ -5683,9 +5687,15 @@ const warAuditCache = {};
 const warListCache = {};
 
 app.get('/api/war-list', async (req, res) => {
-    const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    let userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    if (!userKey || userKey === "null" || userKey.trim() === "") {
+        if (req.userSession || req.headers['x-session-token']) {
+            userKey = discordConfig.apiKey;
+        } else {
+            return res.status(401).json({ error: "Authentication required" });
+        }
+    }
     try {
-        if (!userKey || userKey === "null" || userKey.trim() === "") return res.status(401).json({ error: "Authentication required" });
         const userInfo = await getUserFactionInfo(userKey);
         let targetFacId = (req.query.factionId || req.headers['x-faction-id'])
             || userInfo?.facId
@@ -6534,9 +6544,13 @@ function parseArmoryNews(entries) {
 const dashboardDataCache = {};
 
 app.get('/api/dashboard-data', async (req, res) => {
-    const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
+    let userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;
     if (!userKey || userKey === 'null' || userKey.trim() === '') {
-        return res.status(401).json({ error: "Authentication required" });
+        if (req.userSession || req.headers['x-session-token']) {
+            userKey = discordConfig.apiKey;
+        } else {
+            return res.status(401).json({ error: "Authentication required" });
+        }
     }
     const ffKey = (req.headers['x-ff-key'] || req.query.ffKey) || null;
     try {
@@ -6918,9 +6932,14 @@ app.get('/api/dashboard-data', async (req, res) => {
 
 // Dedicated Armory History & Audit Endpoint with custom day ranges and deep pagination
 app.get('/api/armory-history', async (req, res) => {
-    const userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey || req.query.key;
+    let userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey || req.query.key;
     if (!userKey || userKey === 'null' || userKey.trim() === '') {
-        return res.status(401).json({ error: "Authentication required" });
+        // Fall back to server's configured faction key if user is in an active session
+        if (req.userSession || req.headers['x-session-token']) {
+            userKey = discordConfig.apiKey;
+        } else {
+            return res.status(401).json({ error: "Authentication required" });
+        }
     }
     try {
         let fromTs, toTs = null;
@@ -6935,13 +6954,23 @@ app.get('/api/armory-history', async (req, res) => {
         const maxPages = Math.min(10, Math.max(1, parseInt(req.query.pages || '6', 10)));
 
         let allEntries = {};
+        let activeKey = userKey;
 
         for (let p = 0; p < maxPages; p++) {
-            let url = `https://api.torn.com/faction/?selections=armorynews&from=${fromTs}&key=${userKey}`;
+            let url = `https://api.torn.com/faction/?selections=armorynews&from=${fromTs}&key=${activeKey}`;
             if (toTs) url += `&to=${toTs}`;
-            const r = await fetch(url).catch(() => null);
+            let r = await fetch(url).catch(() => null);
             if (!r) break;
-            const d = await r.json().catch(() => ({}));
+            let d = await r.json().catch(() => ({}));
+            // If user's personal key lacks faction permissions (code 7) or is invalid (code 2), retry with server faction key
+            if (d.error && (d.error.code === 7 || d.error.code === 2) && discordConfig.apiKey && activeKey !== discordConfig.apiKey) {
+                activeKey = discordConfig.apiKey;
+                url = `https://api.torn.com/faction/?selections=armorynews&from=${fromTs}&key=${activeKey}`;
+                if (toTs) url += `&to=${toTs}`;
+                r = await fetch(url).catch(() => null);
+                if (!r) break;
+                d = await r.json().catch(() => ({}));
+            }
             if (d.error || !d.armorynews) break;
             const entries = Object.values(d.armorynews);
             if (!entries.length) break;
