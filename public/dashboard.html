@@ -1847,20 +1847,8 @@
                             </div>
                         </div>
 
-                        <!-- TIME & ACTION ROW -->
+                        <!-- ACTION ROW -->
                         <div class="armory-filter-row">
-                            <!-- TIME RANGE SELECTOR -->
-                            <div class="filter-group">
-                                <span class="filter-label">⏱️ Window:</span>
-                                <div class="filter-pills" id="time-pills">
-                                    <button class="filter-pill" onclick="setArmoryTimeFilter('24h', this)">24 Hours</button>
-                                    <button class="filter-pill" onclick="setArmoryTimeFilter('3d', this)">3 Days</button>
-                                    <button class="filter-pill" onclick="setArmoryTimeFilter('7d', this)">7 Days</button>
-                                    <button class="filter-pill active" onclick="setArmoryTimeFilter('30d', this)">30 Days</button>
-                                    <button class="filter-pill" onclick="setArmoryTimeFilter('all', this)">All Loaded</button>
-                                </div>
-                            </div>
-
                             <!-- ACTION TYPE SELECTOR -->
                             <div class="filter-group">
                                 <span class="filter-label">⚡ Action:</span>
@@ -3127,7 +3115,7 @@ function switchArmorySubTab(tabName, btn) {
 }
 
 // ── Unified Armory Ledger State & Filter Handlers ──
-let armoryTimeFilter = '30d'; // '24h', '3d', '7d', '30d', 'all'
+let armoryTimeFilter = 'all'; // all loaded events by default
 let armoryActionFilter = 'all'; // 'all', 'inflow', 'outflow', 'loans'
 let armoryCategoryFilter = 'all'; // 'all', 'Medical', 'Drug', 'Booster', 'Arsenal', 'Other'
 let armoryItemFilter = 'all'; // 'all' or specific item name
@@ -3240,9 +3228,6 @@ async function fetchConsumptionData() {
 
             // Set time filter to 'all' so all fetched entries render
             armoryTimeFilter = 'all';
-            document.querySelectorAll('#time-pills .filter-pill').forEach(b => b.classList.remove('active'));
-            const allPills = document.querySelectorAll('#time-pills .filter-pill');
-            if (allPills.length) allPills[allPills.length - 1].classList.add('active');
 
             populateArmoryItemDropdown(loadedArmoryEvents);
             renderItemUsageTracker();
@@ -3292,10 +3277,8 @@ function setUsageView(viewMode, btn) {
     renderItemUsageTracker();
 }
 
-function setArmoryTimeFilter(period, btn) {
+function setArmoryTimeFilter(period) {
     armoryTimeFilter = period;
-    document.querySelectorAll('#time-pills .filter-pill').forEach(b => b.classList.remove('active'));
-    if (btn) btn.classList.add('active');
     renderItemUsageTracker();
 }
 
@@ -3329,7 +3312,7 @@ function clearArmoryMemberFilter() {
 }
 
 function resetArmoryFilters() {
-    armoryTimeFilter = '30d';
+    armoryTimeFilter = 'all';
     armoryActionFilter = 'all';
     armoryCategoryFilter = 'all';
     armoryItemFilter = 'all';
@@ -3340,10 +3323,6 @@ function resetArmoryFilters() {
     if (catSelect) catSelect.value = 'all';
     const itemSelect = document.getElementById('armory-item-select');
     if (itemSelect) itemSelect.value = 'all';
-
-    const timePills = document.querySelectorAll('#time-pills .filter-pill');
-    timePills.forEach(b => b.classList.remove('active'));
-    if (timePills[3]) timePills[3].classList.add('active'); // 30 Days
 
     const actionPills = document.querySelectorAll('#action-pills .filter-pill');
     actionPills.forEach(b => b.classList.remove('active'));
@@ -3668,7 +3647,7 @@ function renderItemUsageTracker() {
     // 5. Update Active Filter Breadcrumbs & Reset Button
     const filterChipsEl = document.getElementById('armory-active-filter-chips');
     const resetBtn = document.getElementById('btn-reset-armory-filters');
-    const hasActiveFilters = armoryTimeFilter !== '30d' || armoryActionFilter !== 'all' || armoryCategoryFilter !== 'all' || armoryItemFilter !== 'all' || armoryMemberFilter !== '' || query !== '' || trackerSegmentFilter !== 'all';
+    const hasActiveFilters = armoryActionFilter !== 'all' || armoryCategoryFilter !== 'all' || armoryItemFilter !== 'all' || armoryMemberFilter !== '' || query !== '' || trackerSegmentFilter !== 'all';
 
     if (resetBtn) resetBtn.style.display = hasActiveFilters ? 'inline-block' : 'none';
 
@@ -3679,10 +3658,6 @@ function renderItemUsageTracker() {
             if (trackerSegmentFilter !== 'all') {
                 const segMap = { 'deficit': 'Net Consumers', 'donors': 'Net Donors', 'xanax': 'Xanax Users', 'freeload': '0 Deposited' };
                 chipsHtml += `<span class="filter-active-chip">Segment: ${segMap[trackerSegmentFilter] || trackerSegmentFilter} <span class="chip-remove" onclick="setTrackerTab('all', document.querySelectorAll('#tracker-segment-pills .filter-pill')[0])">✕</span></span>`;
-            }
-            if (armoryTimeFilter !== '30d') {
-                const timeLabel = armoryTimeFilter === '24h' ? '24 Hours' : (armoryTimeFilter === '3d' ? '3 Days' : (armoryTimeFilter === '7d' ? '7 Days' : 'All Loaded'));
-                chipsHtml += `<span class="filter-active-chip">Time: ${timeLabel} <span class="chip-remove" onclick="setArmoryTimeFilter('30d', document.querySelectorAll('#time-pills .filter-pill')[3])">✕</span></span>`;
             }
             if (armoryActionFilter !== 'all') {
                 const actionLabel = armoryActionFilter === 'inflow' ? 'Deposits Only' : (armoryActionFilter === 'outflow' ? 'Usage Only' : 'Loans & Returns');
