@@ -4511,6 +4511,12 @@ async function performBattleStatsSnapshot() {
                         total: curTotal,
                         modifiers: uData.battlestats.modifiers || { strength: 0, defense: 0, speed: 0, dexterity: 0 }
                     };
+                    bRec.personalStats = {
+                        xantaken: Number(uData.personalstats?.xantaken || 0),
+                        refills: Number(uData.personalstats?.refills || 0),
+                        energydrinkused: Number(uData.personalstats?.energydrinkused || 0)
+                    };
+                    if (uData.level) bRec.level = Number(uData.level);
                     bRec.playerName = member.playerName || uData.playerName;
                     bRec.lastUpdated = now;
                     updatedCount++;
@@ -7235,6 +7241,7 @@ function parseArmoryNews(entries) {
 }
 
 const dashboardDataCache = {};
+global.dashboardDataCache = dashboardDataCache;
 
 app.get('/api/dashboard-data', async (req, res) => {
     let userKey = req.userTornKey || req.headers['x-api-key'] || req.query.apiKey;

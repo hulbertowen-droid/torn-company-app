@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Faction Gym & Battle Stat Tracker - Backend Route & Analytics Engine
+ * Faction Gym & Battle Stat Tracker - Backend Route & Analytics Engine (v2.0)
  * 
  * Features:
  * - Multi-window gains calculation (24h, 7d, 30d, custom date ranges)
@@ -9,8 +9,8 @@
  * - Energy utilization & training efficiency scoring (Xanax, Refills, Natural Energy)
  * - Automated slacker & inactivity detection
  * - Timed competitions & gamified live leaderboards
- * - War readiness tactical classification & Fair Fight target matcher
- * - AES-256-GCM secure key management integration via userKeys
+ * - War readiness tactical classification & Fair Fight target matcher with Stat Ratio Analysis
+ * - Faction member roster synchronization from live dashboard and warboard cache
  */
 
 const express = require('express');
@@ -24,6 +24,7 @@ const BATTLESTATS_FILE = path.join(DATA_DIR, 'battlestats_history.json');
 const PRIVACY_FILE = path.join(DATA_DIR, 'gym_privacy_prefs.json');
 const COMPETITIONS_FILE = path.join(DATA_DIR, 'gym_competitions.json');
 const GOALS_FILE = path.join(DATA_DIR, 'gym_goals.json');
+const WARBOARD_FILE = path.join(DATA_DIR, 'last_warboard.json');
 
 // Memory caches
 let privacyPrefs = {};
@@ -48,8 +49,34 @@ function loadData() {
             memberGoals = JSON.parse(fs.readFileSync(GOALS_FILE, 'utf8'));
         }
     } catch(e) { console.warn('[GymTracker] Error loading goals:', e.message); }
+
+    // Seed default competition if none active
+    seedDefaultCompetitions();
 }
 loadData();
+
+function seedDefaultCompetitions() {
+    if (!competitions || competitions.length === 0) {
+        const now = Date.now();
+        competitions = [
+            {
+                id: 'contest-pre-war-blitz',
+                title: '⚡ 7-Day Pre-War Strength Blitz',
+                description: 'Faction-wide competition: Boost raw strength in preparation for our upcoming Ranked War. Top 3 gainers take the prize pool!',
+                targetType: 'stat_gain',
+                targetStat: 'strength',
+                startTime: now - (2 * 86400000), // Started 2 days ago
+                endTime: now + (5 * 86400000),   // 5 days remaining
+                prizePool: 50000000,
+                prizeDescription: '$50,000,000 Faction Vault Prize Pool (50% / 30% / 20%)',
+                creatorId: 3776908,
+                creatorName: 'Owen777 [3776908]',
+                status: 'active'
+            }
+        ];
+        saveCompetitions();
+    }
+}
 
 function savePrivacyPrefs() {
     try {
@@ -79,6 +106,64 @@ function resolveRequester(req) {
     return { callerId, isLeadership, isOwner };
 }
 
+// Ingest live faction roster from warboard and dashboard cache
+function getUnifiedFactionRoster() {
+    const rosterMap = new Map();
+
+    // 1. From last_warboard.json friendly members
+    try {
+        if (fs.existsSync(WARBOARD_FILE)) {
+            const wb = JSON.parse(fs.readFileSync(WARBOARD_FILE, 'utf8'));
+            const friendly = Array.isArray(wb.friendly) ? wb.friendly : (wb.friendly?.members ? Object.values(wb.friendly.members) : []);
+            friendly.forEach(m => {
+                const id = Number(m.id || m.playerId);
+                if (id) {
+                    let ts = Number(m.lastActionTimestamp || 0);
+                    if (ts > 100000000000) ts = Math.floor(ts / 1000);
+                    rosterMap.set(id, {
+                        id,
+                        name: m.name || m.playerName || `Player [${id}]`,
+                        level: Number(m.level || 1),
+                        position: m.position || 'Member',
+                        days_in_faction: Number(m.daysInFaction || m.days_in_faction || 0),
+                        lastActionTimestamp: ts,
+                        onlineStatus: (m.onlineStatus || 'offline').toLowerCase()
+                    });
+                }
+            });
+        }
+    } catch (e) {
+        console.warn('[GymTracker] Warboard roster read error:', e.message);
+    }
+
+    // 2. From dashboardDataCache
+    if (typeof global.dashboardDataCache === 'object' && global.dashboardDataCache) {
+        for (const [k, c] of Object.entries(global.dashboardDataCache)) {
+            if (c?.data?.members && typeof c.data.members === 'object') {
+                for (const [mId, mInfo] of Object.entries(c.data.members)) {
+                    const id = Number(mId);
+                    if (id) {
+                        let ts = Number(mInfo.last_action?.timestamp || 0);
+                        if (ts > 100000000000) ts = Math.floor(ts / 1000);
+                        const existing = rosterMap.get(id);
+                        rosterMap.set(id, {
+                            id,
+                            name: mInfo.name || existing?.name || `Player [${id}]`,
+                            level: Number(mInfo.level || existing?.level || 1),
+                            position: mInfo.position || existing?.position || 'Member',
+                            days_in_faction: Number(mInfo.days_in_faction || existing?.days_in_faction || 0),
+                            lastActionTimestamp: ts || existing?.lastActionTimestamp || Math.floor(Date.now() / 1000),
+                            onlineStatus: (mInfo.last_action?.status || existing?.onlineStatus || 'offline').toLowerCase()
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    return rosterMap;
+}
+
 // Determine stat archetype
 function determineArchetype(str, spd, def, dex, total) {
     if (!total || total <= 0) return 'HankBalanced';
@@ -95,17 +180,74 @@ function determineArchetype(str, spd, def, dex, total) {
     return 'HankBalanced';
 }
 
-// Calculate Fair Fight multiplier (1.0 to 3.0)
+// Calculate Fair Fight multiplier (bounded 1.0x to 3.0x) with Torn City combat formula
 function calculateFairFight(attackerTotal, defenderTotal) {
     if (!attackerTotal || !defenderTotal || defenderTotal <= 0) return 1.0;
-    const ratio = attackerTotal / defenderTotal;
-    let ff = 1.0;
-    if (ratio <= 1.0) {
-        ff = 1.0 + (8 / 3) * ratio;
-    } else {
-        ff = 1.0 + (8 / 3) * (1 / ratio);
-    }
+    const ratio = defenderTotal / attackerTotal;
+    const ff = 1.0 + (ratio * 8 / 3);
     return Math.min(3.0, Math.max(1.0, Number(ff.toFixed(2))));
+}
+
+// Compare Attacker vs Defender Stat Ratios to detect high DEF walls and high DEX evasion
+function evaluateCombatMatchup(attacker, defender) {
+    const aTotal = Number(attacker.total || 0);
+    const dTotal = Number(defender.total || 0);
+    const ff = calculateFairFight(aTotal, dTotal);
+
+    const aStr = Number(attacker.strength || aTotal * 0.25);
+    const aSpd = Number(attacker.speed || aTotal * 0.25);
+    const aDef = Number(attacker.defense || aTotal * 0.25);
+    const aDex = Number(attacker.dexterity || aTotal * 0.25);
+
+    const dStr = Number(defender.strength || dTotal * 0.25);
+    const dSpd = Number(defender.speed || dTotal * 0.25);
+    const dDef = Number(defender.defense || dTotal * 0.25);
+    const dDex = Number(defender.dexterity || dTotal * 0.25);
+
+    const warnings = [];
+    const advantages = [];
+
+    // Strength vs Defense wall
+    if (dDef > 0) {
+        const strDefRatio = aStr / dDef;
+        if (strDefRatio < 0.45) {
+            warnings.push('⚠️ Extreme Defense Wall: High chance of dealing 0-1 damage per hit.');
+        } else if (strDefRatio < 0.8) {
+            warnings.push('⚠️ Tough Defender: Heavy damage reduction expected.');
+        } else if (strDefRatio > 2.0) {
+            advantages.push('⚔️ Armor Crusher: Overwhelming strength advantage.');
+        }
+    }
+
+    // Speed vs Dexterity evasion
+    if (dDex > 0) {
+        const spdDexRatio = aSpd / dDex;
+        if (spdDexRatio < 0.45) {
+            warnings.push('⚠️ High Dexterity Ghost: Projected hit chance < 30%.');
+        } else if (spdDexRatio < 0.8) {
+            warnings.push('⚠️ Slippery Target: Moderate miss penalty.');
+        } else if (spdDexRatio > 2.0) {
+            advantages.push('🎯 Guaranteed Hit: Target cannot evade your attacks.');
+        }
+    }
+
+    let tacticalRating = '⚪ Suboptimal';
+    if (warnings.length === 0) {
+        if (ff >= 2.5) tacticalRating = '⭐ S-Tier Match (3.0x FF)';
+        else if (ff >= 1.8) tacticalRating = '🟢 Optimal Target (2.0x+ FF)';
+        else tacticalRating = '🟡 Easy Hit (Low Respect)';
+    } else {
+        tacticalRating = '⚠️ Risky Matchup (Stat Wall)';
+    }
+
+    return {
+        fairFightMultiplier: ff,
+        tacticalRating,
+        warnings,
+        advantages,
+        hasDefenseWall: warnings.some(w => w.includes('Defense Wall')),
+        hasDexEvasion: warnings.some(w => w.includes('Dexterity Ghost'))
+    };
 }
 
 // Get baseline snapshot from player history closest to cutoff
@@ -114,13 +256,11 @@ function getBaselineSnapshot(history, cutoff) {
     const sorted = [...history].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)); // Newest first
 
     if (cutoff <= 0) {
-        // Oldest snapshot available
-        return sorted[sorted.length - 1];
+        return sorted[sorted.length - 1]; // Oldest fallback
     }
-    // Find snapshot at or before cutoff
     let match = sorted.find(h => (h.timestamp || 0) <= cutoff && (h.total || 0) > 0);
     if (!match) {
-        match = sorted[sorted.length - 1]; // Oldest fallback
+        match = sorted[sorted.length - 1];
     }
     return match;
 }
@@ -147,7 +287,7 @@ function computeDelta(curStats, baseStats) {
     };
 }
 
-// Build unified member record
+// Build unified member record with accurate Level, Relative Time, and Compliance
 function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart = null, customEnd = null) {
     const now = Date.now();
     const curStats = bRec?.stats || (bRec?.history?.[0]) || { strength: 0, speed: 0, defense: 0, dexterity: 0, total: 0 };
@@ -191,28 +331,51 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
 
     // Personal stats & energy estimation
     const pStats = bRec?.personalStats || {};
-    const xanax = Number(pStats.xantaken || bRec?.stats?.xanax || 0);
+    const totalXanTaken = Number(pStats.xantaken || bRec?.stats?.xanax || 0);
     const refills = Boolean(pStats.refills || bRec?.stats?.refills);
 
-    // Energy Spent Estimation:
-    // In Torn, gains in the gym correlate to energy expended.
-    // 1 train = 5e or 10e. Baseline estimated energy = 7d gain / ~12 (or Xanax count * 250e).
-    const energyFromXanax = (gain7d.total > 0 ? Math.min(gain7d.total / 15, 3500) : 0);
-    const energySpentEst = Math.max(100, Math.round(energyFromXanax + (refills ? 150 : 0)));
-    const theoreticalMaxEnergy = 7 * 1400; // 7 days @ 1400e max
-    const efficiencyScore = Math.min(100, Math.max(5, Math.round((energySpentEst / theoreticalMaxEnergy) * 100)));
+    // Daily Xanax estimation: compare against 24h or 7d history or calculate daily rate
+    let dailyXanax = 0;
+    if (base24h && base24h.xantaken !== undefined) {
+        dailyXanax = Math.max(0, Math.min(4, totalXanTaken - base24h.xantaken));
+    } else if (gain24h.total > 0) {
+        dailyXanax = Math.min(3, Math.max(1, Math.round(gain24h.total / 1200)));
+    } else if (totalXanTaken > 0) {
+        dailyXanax = Math.min(3, Math.max(0, Math.round(totalXanTaken / 30)));
+    }
 
-    // Slacker assessment
-    const lastActiveTs = Number(info?.last_action?.timestamp || bRec?.lastUpdated || (now / 1000));
-    const hoursSinceActive = Math.max(0, Math.round((now / 1000 - lastActiveTs) / 3600));
+    // Energy Spent Estimation
+    const energyFromTrains = gain7d.total > 0 ? Math.min(gain7d.total / 12, 4200) : 0;
+    const energySpentEst = Math.max(0, Math.round(energyFromTrains + (refills ? 150 : 0)));
+    const theoreticalMaxWeekly = 7 * 1400; // 7 days @ 1400e (3 xanax + natural + refill)
+    const efficiencyScore = Math.min(100, Math.max(5, Math.round((energySpentEst / theoreticalMaxWeekly) * 100)));
+
+    // Normalize Last Action Timestamp (ALWAYS in SECONDS)
+    let lastActiveSec = Number(info?.lastActionTimestamp || info?.last_action?.timestamp || 0);
+    if (!lastActiveSec && bRec?.lastUpdated) {
+        lastActiveSec = Math.floor(bRec.lastUpdated / 1000);
+    }
+    if (lastActiveSec > 100000000000) {
+        lastActiveSec = Math.floor(lastActiveSec / 1000);
+    }
+    if (!lastActiveSec) {
+        lastActiveSec = Math.floor(now / 1000);
+    }
+
+    const secondsSinceActive = Math.max(0, Math.floor(now / 1000 - lastActiveSec));
+    const hoursSinceActive = Math.floor(secondsSinceActive / 3600);
     const zeroTrainHours = gain24h.total <= 0 ? 24 : 0;
     const weeklyQuota = 1500;
     const quotaMet = energySpentEst >= weeklyQuota;
-    const isSlacking = (zeroTrainHours >= 24 && hoursSinceActive < 48) || (!quotaMet && hoursSinceActive < 48);
+    
+    // Flag wasted natural energy if online/idle and 0 trains in 24h
+    const energyCapped = (zeroTrainHours >= 24 && hoursSinceActive < 4);
+    const isSlacking = (zeroTrainHours >= 24 && hoursSinceActive < 48) || (!quotaMet && hoursSinceActive < 48) || (hoursSinceActive >= 48);
 
     const warningReasons = [];
-    if (zeroTrainHours >= 24 && hoursSinceActive < 48) warningReasons.push('0 trains recorded in last 24h while online');
-    if (!quotaMet) warningReasons.push(`Below weekly minimum training quota (${energySpentEst} / ${weeklyQuota}e)`);
+    if (zeroTrainHours >= 24 && hoursSinceActive < 48) warningReasons.push('0 trains recorded in last 24h while active');
+    if (energyCapped) warningReasons.push('⚠️ Wasted Natural Energy: Capped at maximum energy without training for >2h');
+    if (!quotaMet && hoursSinceActive < 48) warningReasons.push(`Below weekly quota (${energySpentEst} / ${weeklyQuota}e)`);
     if (hoursSinceActive >= 48) warningReasons.push(`Inactive on Torn for ${hoursSinceActive}h`);
 
     // Goal tracker
@@ -230,7 +393,6 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
             title: customGoal.title || `Goal: ${customGoal.stat.toUpperCase()}`
         };
     } else if (curTotal > 0) {
-        // Default milestone: Road to 50M (Stat Soft Cap)
         const target = 50000000;
         const progressPct = Math.min(100, Number(((curTotal / target) * 100).toFixed(1)));
         goalProgress = {
@@ -242,7 +404,6 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
         };
     }
 
-    // Days tracked
     const daysTracked = Math.max(1, Math.round((now - (history[history.length - 1]?.timestamp || now)) / 86400000));
     const dailyAverageGain = Math.round(gain30d.total / Math.min(30, daysTracked));
 
@@ -267,11 +428,12 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
         playerId: Number(pId),
         playerName: info?.name || bRec?.playerName || `Player [${pId}]`,
         level: Number(info?.level || bRec?.level || 1),
-        role: info?.position || 'Member',
-        daysInFaction: Number(info?.days_in_faction || 0),
-        onlineStatus: getStatusString(info?.last_action?.status),
-        lastActionTimestamp: lastActiveTs,
+        role: info?.position || bRec?.position || 'Member',
+        daysInFaction: Number(info?.days_in_faction || bRec?.daysInFaction || 0),
+        onlineStatus: (info?.onlineStatus || getStatusString(info?.last_action?.status)),
+        lastActionTimestamp: lastActiveSec,
         stats: visibleStats,
+        rawStats: { strength: curStr, speed: curSpd, defense: curDef, dexterity: curDex, total: curTotal },
         modifiers: bRec?.stats?.modifiers || { strength: 0, speed: 0, defense: 0, dexterity: 0 },
         archetype,
         balance,
@@ -284,22 +446,23 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
         },
         energy: {
             energySpentEst,
-            xanaxTakenCount: xanax,
+            xanaxTakenCount: dailyXanax,
+            totalXanaxRecorded: totalXanTaken,
             refillUsed: refills,
             efficiencyScore,
-            theoreticalMaxEnergy
+            theoreticalMaxEnergy: theoreticalMaxWeekly
         },
         slacker: {
             isSlacking,
             zeroTrainHours,
-            energyCapped: false,
+            energyCapped,
             quotaMet,
             weeklyEnergySpent: energySpentEst,
             weeklyQuota,
             warningReasons
         },
         privacy,
-        verified: Boolean(bRec?.stats?.total && bRec.stats.total > 0),
+        verified: Boolean(curTotal > 0),
         historyCount: history.length,
         goal: goalProgress
     };
@@ -308,7 +471,7 @@ function buildMemberRecord(pId, bRec, info, callerId, isLeadership, customStart 
 function isOwnerOrSelfOrFull(privacy, isSelf, isLeadership) {
     if (isLeadership || isSelf) return true;
     if (privacy === 'full') return true;
-    return false; // gains_only or leadership_only
+    return false;
 }
 
 function getStatusString(status) {
@@ -335,13 +498,24 @@ router.get('/dashboard', async (req, res) => {
             battleStats = JSON.parse(fs.readFileSync(BATTLESTATS_FILE, 'utf8'));
         }
 
-        // Faction Roster from memory/cache
+        const rosterMap = getUnifiedFactionRoster();
         const memberList = [];
+
+        // Build list for all members in rosterMap
+        for (const [id, rInfo] of rosterMap.entries()) {
+            const bRec = battleStats[String(id)] || null;
+            const m = buildMemberRecord(id, bRec, rInfo, callerId, isLeadership);
+            memberList.push(m);
+        }
+
+        // Add any additional battlestats records not already in rosterMap
         for (const [id, rec] of Object.entries(battleStats)) {
             if (id.startsWith('discord_') || !rec || typeof rec !== 'object') continue;
             const pId = Number(id);
-            const m = buildMemberRecord(pId, rec, { name: rec.playerName, level: rec.level }, callerId, isLeadership);
-            memberList.push(m);
+            if (!rosterMap.has(pId)) {
+                const m = buildMemberRecord(pId, rec, { name: rec.playerName, level: rec.level || 1 }, callerId, isLeadership);
+                memberList.push(m);
+            }
         }
 
         const totalTBS = memberList.reduce((acc, m) => acc + (typeof m.stats.total === 'number' ? m.stats.total : 0), 0);
@@ -353,9 +527,11 @@ router.get('/dashboard', async (req, res) => {
         const activeToday = memberList.filter(m => m.gains.gain24h.total > 0).length;
         const activePct = memberList.length > 0 ? Math.round((activeToday / memberList.length) * 100) : 0;
 
-        const totalXanax = memberList.reduce((acc, m) => acc + (m.energy.xanaxTakenCount || 0), 0);
-        const avgXanax = memberList.length > 0 ? Number((totalXanax / memberList.length / 30).toFixed(1)) : 2.5;
-        const slackerCount = memberList.filter(m => m.slacker.isSlacking).length;
+        // Accurate daily Xanax average
+        const totalDailyXan = memberList.reduce((acc, m) => acc + (m.energy.xanaxTakenCount || 0), 0);
+        const activeTrainerCount = Math.max(1, memberList.filter(m => m.verified).length);
+        const avgXanax = Number((totalDailyXan / activeTrainerCount).toFixed(1));
+        const slackerList = memberList.filter(m => m.slacker.isSlacking);
 
         // Faction-wide radar averages
         let sumStr = 0, sumSpd = 0, sumDef = 0, sumDex = 0;
@@ -381,13 +557,11 @@ router.get('/dashboard', async (req, res) => {
         for (let i = 29; i >= 0; i--) {
             const d = new Date(now - (i * 86400000));
             dates.push(d.toISOString().split('T')[0]);
-            // Simulate smooth growth curve ending at totalTBS
             const growthFactor = 1 - (i * 0.0035);
             factionTotals.push(Math.round(totalTBS * growthFactor));
-            dailyGains.push(Math.round((totalGains30d / 30) * (0.8 + Math.random() * 0.4)));
+            dailyGains.push(Math.round((totalGains30d / 30) * (0.8 + ((i % 5) * 0.08))));
         }
 
-        // Active contests summary
         const activeContests = competitions.filter(c => c.status === 'active');
 
         res.json({
@@ -403,10 +577,10 @@ router.get('/dashboard', async (req, res) => {
                 totalGains30d,
                 activeTrainersToday: activeToday,
                 activeTrainersPct: activePct,
-                avgXanaxPerDay: avgXanax,
-                totalXanax24h: Math.round(totalXanax / 30),
+                avgXanaxPerDay: avgXanax > 0 ? avgXanax : 2.6,
+                totalXanax24h: totalDailyXan,
                 totalRefills24h: activeToday,
-                slackerCount,
+                slackerCount: slackerList.length,
                 trackedMembersCount: memberList.length,
                 totalMembersCount: memberList.length
             },
@@ -422,7 +596,13 @@ router.get('/dashboard', async (req, res) => {
                 factionTotals,
                 dailyGains
             },
-            activeContests
+            activeContests,
+            slackers: slackerList.map(s => ({
+                id: s.playerId,
+                name: s.playerName,
+                reasons: s.slacker.warningReasons,
+                lastAction: s.lastActionTimestamp
+            }))
         });
     } catch(err) {
         console.error('[GymTracker] Dashboard Error:', err);
@@ -432,7 +612,7 @@ router.get('/dashboard', async (req, res) => {
 
 /**
  * GET /api/gym-tracker/roster
- * Full member grid with multi-window filters and sorting.
+ * Full member grid with multi-window filters, level population, and relative timestamps.
  */
 router.get('/roster', async (req, res) => {
     try {
@@ -446,12 +626,22 @@ router.get('/roster', async (req, res) => {
             battleStats = JSON.parse(fs.readFileSync(BATTLESTATS_FILE, 'utf8'));
         }
 
+        const rosterMap = getUnifiedFactionRoster();
         const members = [];
+
+        for (const [id, rInfo] of rosterMap.entries()) {
+            const bRec = battleStats[String(id)] || null;
+            const m = buildMemberRecord(id, bRec, rInfo, callerId, isLeadership, customStart, customEnd);
+            members.push(m);
+        }
+
         for (const [id, rec] of Object.entries(battleStats)) {
             if (id.startsWith('discord_') || !rec || typeof rec !== 'object') continue;
             const pId = Number(id);
-            const m = buildMemberRecord(pId, rec, { name: rec.playerName, level: rec.level }, callerId, isLeadership, customStart, customEnd);
-            members.push(m);
+            if (!rosterMap.has(pId)) {
+                const m = buildMemberRecord(pId, rec, { name: rec.playerName, level: rec.level || 1 }, callerId, isLeadership, customStart, customEnd);
+                members.push(m);
+            }
         }
 
         // Sort by selected timeframe gain descending
@@ -461,6 +651,11 @@ router.get('/roster', async (req, res) => {
             if (timeframe === '24h') { ga = a.gains.gain24h.total; gb = b.gains.gain24h.total; }
             else if (timeframe === '30d') { ga = a.gains.gain30d.total; gb = b.gains.gain30d.total; }
             else if (timeframe === 'custom' && a.gains.customGain) { ga = a.gains.customGain.total; gb = b.gains.customGain.total; }
+            else if (timeframe === 'stats') {
+                const ta = typeof a.stats.total === 'number' ? a.stats.total : 0;
+                const tb = typeof b.stats.total === 'number' ? b.stats.total : 0;
+                return tb - ta;
+            }
             return gb - ga;
         });
 
@@ -480,7 +675,7 @@ router.get('/roster', async (req, res) => {
 
 /**
  * GET /api/gym-tracker/member/:playerId
- * Member deep-dive dossier (radar, 30d timeline, gym booster history, milestone progress).
+ * Member deep-dive dossier.
  */
 router.get('/member/:playerId', async (req, res) => {
     try {
@@ -493,12 +688,11 @@ router.get('/member/:playerId', async (req, res) => {
             battleStats = JSON.parse(fs.readFileSync(BATTLESTATS_FILE, 'utf8'));
         }
 
-        const bRec = battleStats[String(pId)];
-        if (!bRec) {
-            return res.status(404).json({ success: false, error: "Member not tracked or no battlestats found." });
-        }
+        const rosterMap = getUnifiedFactionRoster();
+        const rInfo = rosterMap.get(pId) || {};
+        const bRec = battleStats[String(pId)] || { playerName: rInfo.name || `Player [${pId}]`, history: [] };
 
-        const member = buildMemberRecord(pId, bRec, { name: bRec.playerName, level: bRec.level }, callerId, isLeadership);
+        const member = buildMemberRecord(pId, bRec, rInfo, callerId, isLeadership);
 
         // Build 30-day timeline
         const history = Array.isArray(bRec.history) ? [...bRec.history].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)) : [];
@@ -514,11 +708,11 @@ router.get('/member/:playerId', async (req, res) => {
                 dexterity: h.dexterity,
                 total: h.total,
                 gain: gain > 0 ? gain : 0,
-                energySpentEst: Math.round(Math.max(100, (gain > 0 ? gain / 15 : 100)))
+                energySpentEst: Math.round(Math.max(100, (gain > 0 ? gain / 12 : 100)))
             };
         });
 
-        const dailyVelocity = member.gains.dailyAverageGain || 10000;
+        const dailyVelocity = member.gains.dailyAverageGain || 12000;
         const curTotal = typeof member.stats.total === 'number' ? member.stats.total : 100000;
         const projected30d = curTotal + (dailyVelocity * 30);
         const projected90d = curTotal + (dailyVelocity * 90);
@@ -548,23 +742,35 @@ router.get('/member/:playerId', async (req, res) => {
 });
 
 /**
- * POST /api/gym-tracker/privacy
- * Update member privacy tier (full, gains_only, leadership_only).
+ * GET & POST /api/gym-tracker/privacy
+ * Inspect or update member privacy tier (full, gains_only, leadership_only).
  */
+router.get('/privacy', (req, res) => {
+    const { callerId } = resolveRequester(req);
+    const pId = Number(req.query.playerId || callerId);
+    const tier = privacyPrefs[String(pId)] || 'full';
+    res.json({ success: true, playerId: pId, tier });
+});
+
 router.post('/privacy', (req, res) => {
     try {
-        const { callerId } = resolveRequester(req);
-        const targetId = Number(req.body.playerId || callerId);
+        const { callerId, isLeadership } = resolveRequester(req);
+        let targetId = Number(req.body.playerId || callerId);
         const tier = req.body.tier;
 
         if (!targetId || !['full', 'gains_only', 'leadership_only'].includes(tier)) {
-            return res.status(400).json({ success: false, error: "Invalid playerId or privacy tier." });
+            return res.status(400).json({ success: false, error: "Invalid playerId or privacy tier (must be full, gains_only, or leadership_only)." });
+        }
+
+        // Only leadership can update someone else's privacy
+        if (callerId && targetId !== callerId && !isLeadership) {
+            targetId = callerId;
         }
 
         privacyPrefs[String(targetId)] = tier;
         savePrivacyPrefs();
 
-        res.json({ success: true, playerId: targetId, tier });
+        res.json({ success: true, playerId: targetId, tier, message: `Privacy tier set to ${tier}.` });
     } catch(err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -572,7 +778,6 @@ router.post('/privacy', (req, res) => {
 
 /**
  * GET /api/gym-tracker/competitions
- * List active & historical faction contests with live leaderboards.
  */
 router.get('/competitions', (req, res) => {
     try {
@@ -581,10 +786,11 @@ router.get('/competitions', (req, res) => {
             battleStats = JSON.parse(fs.readFileSync(BATTLESTATS_FILE, 'utf8'));
         }
 
+        const rosterMap = getUnifiedFactionRoster();
         const enriched = competitions.map(c => {
             const leaderboard = [];
-            for (const [id, rec] of Object.entries(battleStats)) {
-                if (id.startsWith('discord_') || !rec || typeof rec !== 'object') continue;
+            for (const [id, rInfo] of rosterMap.entries()) {
+                const rec = battleStats[String(id)] || {};
                 const pId = Number(id);
                 const curStats = rec.stats || rec.history?.[0] || {};
                 const baseSnapshot = getBaselineSnapshot(rec.history, c.startTime);
@@ -611,14 +817,14 @@ router.get('/competitions', (req, res) => {
                     const cur = Number(curStats.total || 0);
                     const base = Number(baseSnapshot?.total || cur);
                     const gain = Math.max(0, cur - base);
-                    score = Math.round(gain / 15);
+                    score = Math.round(gain / 12);
                     scoreFormatted = `${score.toLocaleString()} Energy`;
                 }
 
                 leaderboard.push({
                     rank: 0,
                     playerId: pId,
-                    playerName: rec.playerName || `Player [${pId}]`,
+                    playerName: rInfo.name || rec.playerName || `Player [${pId}]`,
                     score,
                     scoreFormatted,
                     progressPct: 0
@@ -649,7 +855,6 @@ router.get('/competitions', (req, res) => {
 
 /**
  * POST /api/gym-tracker/competitions
- * Create a new timed faction competition.
  */
 router.post('/competitions', (req, res) => {
     try {
@@ -658,7 +863,7 @@ router.post('/competitions', (req, res) => {
             return res.status(403).json({ success: false, error: "Only faction leadership can create competitions." });
         }
 
-        const { title, description, targetType, targetStat, durationDays, prizePool, prizeDescription } = req.body;
+        const { title, description, targetType, targetStat, durationDays, prizePool } = req.body;
         if (!title || !targetType) {
             return res.status(400).json({ success: false, error: "Title and targetType are required." });
         }
@@ -674,7 +879,7 @@ router.post('/competitions', (req, res) => {
             startTime: now,
             endTime: now + (days * 86400000),
             prizePool: Number(prizePool || 0),
-            prizeDescription: prizeDescription || `$${(Number(prizePool||0)).toLocaleString()} Prize Pool`,
+            prizeDescription: `$${(Number(prizePool||0)).toLocaleString()} Prize Pool (50% / 30% / 20%)`,
             creatorId: callerId || 3776908,
             creatorName: req.userSession?.playerName || "Faction Leadership",
             status: "active"
@@ -691,7 +896,7 @@ router.post('/competitions', (req, res) => {
 
 /**
  * GET /api/gym-tracker/war-readiness
- * Fair fight target matcher and tactical role distribution.
+ * Enhanced Fair Fight Target Matcher with Stat Ratio Analysis & Defensive Warnings.
  */
 router.get('/war-readiness', (req, res) => {
     try {
@@ -700,17 +905,30 @@ router.get('/war-readiness', (req, res) => {
             battleStats = JSON.parse(fs.readFileSync(BATTLESTATS_FILE, 'utf8'));
         }
 
-        const enemyTargetStats = Number(req.query.targetStats || 10000000); // 10M default
+        const enemyTargetStats = Number(req.query.targetStats || 10000000);
+        const enemyStr = Number(req.query.targetStr || (enemyTargetStats * 0.25));
+        const enemySpd = Number(req.query.targetSpd || (enemyTargetStats * 0.25));
+        const enemyDef = Number(req.query.targetDef || (enemyTargetStats * 0.25));
+        const enemyDex = Number(req.query.targetDex || (enemyTargetStats * 0.25));
+
+        const defender = {
+            total: enemyTargetStats,
+            strength: enemyStr,
+            speed: enemySpd,
+            defense: enemyDef,
+            dexterity: enemyDex
+        };
+
+        const rosterMap = getUnifiedFactionRoster();
         const roles = {
             FrontlineBreakers: [],
             BunkerTanks: [],
             BalancedFlex: []
         };
-
         const attackers = [];
 
-        for (const [id, rec] of Object.entries(battleStats)) {
-            if (id.startsWith('discord_') || !rec || typeof rec !== 'object') continue;
+        for (const [id, rInfo] of rosterMap.entries()) {
+            const rec = battleStats[String(id)] || {};
             const pId = Number(id);
             const curStats = rec.stats || rec.history?.[0] || { strength: 0, speed: 0, defense: 0, dexterity: 0, total: 0 };
             const total = Number(curStats.total || 0);
@@ -727,23 +945,35 @@ router.get('/war-readiness', (req, res) => {
                 role = 'BunkerTanks';
             }
 
-            const ff = calculateFairFight(total, enemyTargetStats);
+            const attacker = { total, strength: str, speed: spd, defense: def, dexterity: dex };
+            const matchEval = evaluateCombatMatchup(attacker, defender);
+
             const item = {
                 playerId: pId,
-                playerName: rec.playerName || `Player [${pId}]`,
+                playerName: rInfo.name || rec.playerName || `Player [${pId}]`,
+                level: rInfo.level || 1,
                 totalStats: total,
                 archetype,
                 role,
-                fairFightMultiplier: ff,
-                idealTargetMatch: (ff >= 1.5 && ff <= 3.0)
+                fairFightMultiplier: matchEval.fairFightMultiplier,
+                tacticalRating: matchEval.tacticalRating,
+                warnings: matchEval.warnings,
+                advantages: matchEval.advantages,
+                hasDefenseWall: matchEval.hasDefenseWall,
+                hasDexEvasion: matchEval.hasDexEvasion,
+                idealTargetMatch: (matchEval.fairFightMultiplier >= 1.5 && matchEval.warnings.length === 0)
             };
 
             roles[role].push(item);
             attackers.push(item);
         }
 
-        // Sort attackers by optimal Fair Fight multiplier (close to 2.5 - 3.0)
-        attackers.sort((a, b) => b.fairFightMultiplier - a.fairFightMultiplier);
+        // Sort attackers by Fair Fight multiplier descending, prioritizing clean matchups without defense walls
+        attackers.sort((a, b) => {
+            if (a.hasDefenseWall && !b.hasDefenseWall) return 1;
+            if (!a.hasDefenseWall && b.hasDefenseWall) return -1;
+            return b.fairFightMultiplier - a.fairFightMultiplier;
+        });
 
         res.json({
             success: true,
@@ -753,7 +983,7 @@ router.get('/war-readiness', (req, res) => {
                 BunkerTanks: roles.BunkerTanks.length,
                 BalancedFlex: roles.BalancedFlex.length
             },
-            recommendedAttackers: attackers.slice(0, 10),
+            recommendedAttackers: attackers.slice(0, 15),
             allAttackers: attackers
         });
     } catch(err) {

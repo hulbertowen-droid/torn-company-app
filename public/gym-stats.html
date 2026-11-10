@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
     <!-- PWA & Mobile Web Capabilities -->
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#0d1117">
@@ -13,70 +14,70 @@
     <meta name="application-name" content="FactionOS">
     <meta name="format-detection" content="telephone=no">
 
-    <!-- PWA Icons & Apple Touch Icons -->
+    <!-- PWA Icons & Apple Touch Icons (F.R.I.D.A.Y. AI Tactical Core) -->
     <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
     <link rel="apple-touch-icon" href="/icons/icon-180.png">
     <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png">
-    <title>Faction Gym &amp; Battle Stat Tracker | FactionOS</title>
+    <title>Faction Gym &amp; Battle Stat Command | FactionOS</title>
     <meta name="description" content="Production-grade Torn City Faction Gym &amp; Battle Stat Tracker: Real-time stat sync, multi-window gains analytics, energy utilization, slacker detection, competitions, and war readiness.">
 
     <!-- Fonts & Core Design System -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/global.css?v=4.2.0">
+    <link rel="stylesheet" href="/global.css?v=4.3.0">
 
     <!-- Chart.js for Velocity & Radar Visualizations -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <!-- Scripts & Authentication -->
-    <script src="/auth-gate.js?v=4.2.0"></script>
-    <script src="/global_settings.js?v=4.2.0"></script>
-    <script src="/global-topbar.js?v=4.2.0"></script>
+    <script src="/auth-gate.js?v=4.3.0"></script>
+    <script src="/global_settings.js?v=4.3.0"></script>
+    <script src="/global-topbar.js?v=4.3.0"></script>
     <script src="/pwa-helper.js?v=1.0.0" defer></script>
 
     <style>
     :root {
-        --bg-base: #0D1117;
-        --bg-surface: #161B22;
-        --border-subtle: #30363D;
-        --accent-amber: #FF9800;
-        --accent-amber-light: #FFA726;
-        --stat-str: #E53935;
-        --stat-spd: #00B0FF;
-        --stat-def: #00E676;
-        --stat-dex: #AB47BC;
-        --status-active: #00E676;
-        --status-warning: #FFD600;
-        --status-danger: #FF1744;
+        --bg-base: #0B0F17;
+        --bg-surface: #131B2A;
+        --border-subtle: #1E293B;
+        --accent-amber: #F59E0B;
+        --accent-amber-light: #FBBF24;
+        --stat-str: #EF4444;
+        --stat-spd: #0EA5E9;
+        --stat-def: #10B981;
+        --stat-dex: #8B5CF6;
+        --status-active: #10B981;
+        --status-warning: #F59E0B;
+        --status-danger: #EF4444;
     }
 
     body {
         background-color: var(--bg-base);
-        color: var(--text-primary, #E6EDF3);
+        color: var(--text-primary, #F8FAFC);
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
     .font-mono {
-        font-family: 'JetBrains Mono', monospace;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
     }
 
     /* Gym Tracker Hero & Ribbon */
     .gym-hero {
-        background: linear-gradient(135deg, rgba(22, 27, 34, 0.98) 0%, rgba(13, 17, 23, 0.98) 50%, rgba(26, 32, 44, 0.95) 100%);
+        background: linear-gradient(135deg, rgba(19, 27, 42, 0.98) 0%, rgba(11, 15, 23, 0.98) 50%, rgba(20, 29, 47, 0.95) 100%);
         border: 1px solid var(--border-subtle);
-        border-radius: var(--radius-lg, 12px);
-        padding: 24px 28px;
-        margin-bottom: 22px;
+        border-radius: var(--radius-lg, 14px);
+        padding: 22px 26px;
+        margin-bottom: 20px;
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 20px;
         position: relative;
         overflow: hidden;
-        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
     }
     .gym-hero::before {
         content: '';
@@ -85,15 +86,15 @@
         right: -10%;
         width: 380px;
         height: 380px;
-        background: radial-gradient(circle, rgba(255, 152, 0, 0.08) 0%, transparent 70%);
+        background: radial-gradient(circle, rgba(245, 158, 11, 0.08) 0%, transparent 70%);
         pointer-events: none;
     }
 
     /* 4-Stat Color Badges */
-    .stat-badge-str { background: rgba(229, 57, 53, 0.15); color: var(--stat-str); border: 1px solid rgba(229, 57, 53, 0.35); }
-    .stat-badge-spd { background: rgba(0, 176, 255, 0.15); color: var(--stat-spd); border: 1px solid rgba(0, 176, 255, 0.35); }
-    .stat-badge-def { background: rgba(0, 230, 118, 0.15); color: var(--stat-def); border: 1px solid rgba(0, 230, 118, 0.35); }
-    .stat-badge-dex { background: rgba(171, 71, 188, 0.15); color: var(--stat-dex); border: 1px solid rgba(171, 71, 188, 0.35); }
+    .stat-badge-str { background: rgba(239, 68, 68, 0.15); color: var(--stat-str); border: 1px solid rgba(239, 68, 68, 0.35); }
+    .stat-badge-spd { background: rgba(14, 165, 233, 0.15); color: var(--stat-spd); border: 1px solid rgba(14, 165, 233, 0.35); }
+    .stat-badge-def { background: rgba(16, 185, 129, 0.15); color: var(--stat-def); border: 1px solid rgba(16, 185, 129, 0.35); }
+    .stat-badge-dex { background: rgba(139, 92, 246, 0.15); color: var(--stat-dex); border: 1px solid rgba(139, 92, 246, 0.35); }
 
     /* Time Window Selector Pills */
     .stat-window-pill {
@@ -109,37 +110,38 @@
         user-select: none;
     }
     .stat-window-pill:hover {
-        color: #F1F5F9;
+        color: #F8FAFC;
         background: rgba(255, 255, 255, 0.06);
     }
     .stat-window-pill.active {
-        background: rgba(255, 152, 0, 0.18);
+        background: rgba(245, 158, 11, 0.18);
         border: 1px solid var(--accent-amber);
         color: var(--accent-amber-light);
         font-weight: 700;
-        box-shadow: 0 0 10px rgba(255, 152, 0, 0.3);
+        box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
     }
 
     /* Slacker Warning Banner */
     .slacker-strip {
-        background: rgba(255, 23, 68, 0.08);
-        border: 1px solid rgba(255, 23, 68, 0.3);
-        border-radius: 8px;
-        padding: 10px 16px;
+        background: rgba(239, 68, 68, 0.09);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        border-radius: 10px;
+        padding: 12px 18px;
         margin-bottom: 20px;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 12px;
-        font-size: 0.82em;
+        gap: 14px;
+        font-size: 0.84em;
+        box-shadow: 0 2px 12px rgba(239, 68, 68, 0.12);
     }
 
     /* Steadfast Perks Ribbon */
     .steadfast-strip {
-        background: rgba(0, 0, 0, 0.25);
+        background: rgba(19, 27, 42, 0.7);
         border: 1px solid var(--border-subtle);
-        border-radius: 8px;
-        padding: 10px 16px;
+        border-radius: 10px;
+        padding: 10px 18px;
         margin-bottom: 20px;
         display: flex;
         align-items: center;
@@ -161,19 +163,34 @@
         to { opacity: 1; transform: translateY(0); }
     }
 
-    /* Xanax Pill Icons */
-    .xan-pill {
+    /* Xanax Pill Icons (Visual compliance indicator) */
+    .xan-pill-group {
         display: inline-flex;
         align-items: center;
-        justify-content: center;
-        width: 14px;
-        height: 14px;
-        border-radius: 50%;
-        margin-right: 2px;
-        font-size: 9px;
+        gap: 3px;
+        padding: 2px 5px;
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 6px;
     }
-    .xan-pill.active { background: var(--status-active); color: #000; }
-    .xan-pill.inactive { background: rgba(255, 255, 255, 0.1); color: transparent; border: 1px solid rgba(255,255,255,0.2); }
+    .xan-pill {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        transition: transform 0.15s ease;
+    }
+    .xan-pill.pill-green {
+        background: #10B981;
+        box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+    }
+    .xan-pill.pill-yellow {
+        background: #F59E0B;
+        box-shadow: 0 0 5px rgba(245, 158, 11, 0.4);
+    }
+    .xan-pill.pill-dim {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
 
     /* Detail Drawer */
     .drawer-overlay {
@@ -207,23 +224,56 @@
 
     /* Podium Styles */
     .podium-card {
-        background: rgba(0, 0, 0, 0.3);
+        background: rgba(19, 27, 42, 0.85);
         border: 1px solid var(--border-subtle);
-        border-radius: 10px;
-        padding: 16px;
+        border-radius: 12px;
+        padding: 18px;
         text-align: center;
         position: relative;
         overflow: hidden;
     }
-    .podium-gold { border-color: rgba(255, 215, 0, 0.5); box-shadow: 0 0 16px rgba(255, 215, 0, 0.15); }
-    .podium-silver { border-color: rgba(192, 192, 192, 0.4); }
-    .podium-bronze { border-color: rgba(205, 127, 50, 0.4); }
+    .podium-gold { border-color: rgba(255, 215, 0, 0.5); box-shadow: 0 0 20px rgba(255, 215, 0, 0.18); }
+    .podium-silver { border-color: rgba(203, 213, 225, 0.5); box-shadow: 0 0 16px rgba(203, 213, 225, 0.12); }
+    .podium-bronze { border-color: rgba(217, 119, 6, 0.5); box-shadow: 0 0 16px rgba(217, 119, 6, 0.12); }
 
     /* Custom Table High Density */
     .tracker-table th, .tracker-table td {
         padding: 10px 12px;
         vertical-align: middle;
         font-size: 0.84em;
+    }
+
+    /* Mobile Sticky First Column */
+    @media (max-width: 768px) {
+        .sticky-col {
+            position: sticky;
+            left: 0;
+            background: #131B2A !important;
+            z-index: 2;
+            box-shadow: 2px 0 6px rgba(0, 0, 0, 0.4);
+        }
+    }
+
+    /* Privacy Tier Card Options */
+    .privacy-tier-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--border-subtle);
+        border-radius: 10px;
+        padding: 14px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    .privacy-tier-card:hover {
+        border-color: var(--accent-amber);
+        background: rgba(245, 158, 11, 0.04);
+    }
+    .privacy-tier-card.selected {
+        border-color: var(--accent-amber);
+        background: rgba(245, 158, 11, 0.08);
+        box-shadow: 0 0 12px rgba(245, 158, 11, 0.15);
     }
     </style>
 </head>
@@ -300,10 +350,10 @@
             <div class="gym-hero">
                 <div>
                     <div style="display:flex; align-items:center; gap:10px;">
-                        <h1 style="margin:0; font-size:1.7em; font-weight:900; letter-spacing:-0.5px; color:#FFF; display:flex; align-items:center; gap:8px;">
+                        <h1 style="margin:0; font-size:1.6em; font-weight:900; letter-spacing:-0.5px; color:#FFF; display:flex; align-items:center; gap:8px;">
                             <span>🏋️ Faction Gym &amp; Battle Stat Command</span>
                         </h1>
-                        <span class="badge" style="background:rgba(255,152,0,0.15); color:var(--accent-amber); border:1px solid rgba(255,152,0,0.35); font-weight:700;">Torn v1 &amp; v2 Engine</span>
+                        <span class="badge" style="background:rgba(245,158,11,0.15); color:var(--accent-amber); border:1px solid rgba(245,158,11,0.35); font-weight:700;">Torn v1 &amp; v2 Engine</span>
                     </div>
                     <div style="font-size:0.86em; color:var(--text-secondary); margin-top:6px; max-width:720px; line-height:1.4;">
                         Track real battle stat deltas, energy utilization velocity, Xanax compliance, slacker detection, and tactical war readiness across customizable training windows.
@@ -322,21 +372,29 @@
                 </div>
             </div>
 
-            <!-- SLACKER ALERTS STRIP (Conditionally displayed when slackers exist) -->
+            <!-- SLACKER & ENERGY WASTE ALERT BANNER (Interactive Quick Actions) -->
             <div class="slacker-strip" id="slacker-banner" style="display:none;">
-                <div style="display:flex; align-items:center; gap:8px;">
-                    <span style="font-size:1.4em;">🚨</span>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:1.5em;">🚨</span>
                     <div>
                         <strong style="color:var(--status-danger);">Slacker &amp; Energy Waste Alert:</strong>
-                        <span id="slacker-banner-text">3 members have logged 0 trains over 24h or fallen below weekly quota.</span>
+                        <span id="slacker-banner-text">Members flagged for zero gains or energy waste.</span>
                     </div>
                 </div>
-                <button class="btn btn-xs btn-outline" onclick="switchTrackerView('roster', 'slacker')" style="border-color:rgba(255,23,68,0.5); color:var(--status-danger);">
-                    Inspect Slackers →
-                </button>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button class="btn btn-xs btn-outline" onclick="switchTrackerView('roster', 'slacker')" style="border-color:rgba(239,68,68,0.5); color:var(--status-danger); font-weight:700;">
+                        Filter Slackers →
+                    </button>
+                    <button class="btn btn-xs btn-outline" onclick="copySlackerDiscordPings()" style="border-color:var(--border-subtle); color:var(--text-secondary);">
+                        📋 Copy Discord Pings
+                    </button>
+                    <button class="btn btn-xs btn-outline" onclick="composeSlackerMail()" style="border-color:var(--border-subtle); color:var(--text-secondary);">
+                        ✉️ Torn Mail Template
+                    </button>
+                </div>
             </div>
 
-            <!-- STEADFAST FACTION PERKS BAR -->
+            <!-- STEADFAST FACTION PERKS & MULTIPLIER BAR -->
             <div class="steadfast-strip">
                 <div style="display:flex; align-items:center; gap:8px;">
                     <span style="font-size:1.1em;">🏛️</span>
@@ -348,8 +406,13 @@
                     <span class="stat-badge-def badge" id="perk-def">🛡️ Defense: +18%</span>
                     <span class="stat-badge-dex badge" id="perk-dex">🎯 Dexterity: +12%</span>
                 </div>
-                <div style="font-size:0.75em; color:var(--text-tertiary);" id="last-midnight-sync">
-                    Daily Snapshot: Torn Midnight (00:00 TCT)
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <button class="btn btn-xs btn-outline" onclick="openModifierCalculatorModal()" style="font-size:0.75em; padding:3px 8px; border-color:var(--accent-amber); color:var(--accent-amber);">
+                        🧮 Net Perk Calculator
+                    </button>
+                    <div style="font-size:0.75em; color:var(--text-tertiary);" id="last-midnight-sync">
+                        Daily Snapshot: Torn Midnight (00:00 TCT)
+                    </div>
                 </div>
             </div>
 
@@ -376,7 +439,7 @@
                         <span style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--text-tertiary);">Active Trainers Today</span>
                         <span>🏃</span>
                     </div>
-                    <div class="font-mono" style="font-size:1.75em; font-weight:900; color:#00B0FF; margin-top:4px;" id="kpi-active-trainers">0%</div>
+                    <div class="font-mono" style="font-size:1.75em; font-weight:900; color:#0EA5E9; margin-top:4px;" id="kpi-active-trainers">0%</div>
                     <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;" id="kpi-active-sub">0 of 0 trained today</div>
                 </div>
                 <div class="card" style="padding:16px; background:var(--bg-surface); border:1px solid var(--border-subtle);">
@@ -384,7 +447,7 @@
                         <span style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--text-tertiary);">Average Xanax / Day</span>
                         <span>💊</span>
                     </div>
-                    <div class="font-mono" style="font-size:1.75em; font-weight:900; color:#AB47BC; margin-top:4px;" id="kpi-avg-xanax">0.0 / 3.0</div>
+                    <div class="font-mono" style="font-size:1.75em; font-weight:900; color:#8B5CF6; margin-top:4px;" id="kpi-avg-xanax">2.6 / 3.0</div>
                     <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;" id="kpi-xanax-sub">Target: 2 to 3 pills daily</div>
                 </div>
             </div>
@@ -470,7 +533,7 @@
                     <!-- Roster Controls & Filters Bar -->
                     <div style="padding:16px 20px; border-bottom:1px solid var(--border-subtle); display:flex; flex-wrap:wrap; gap:12px; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.15);">
                         <!-- Left: Time Window Pills -->
-                        <div style="display:inline-flex; align-items:center; background:#0c1017; border:1px solid var(--border-subtle); border-radius:8px; padding:4px 6px; gap:4px;">
+                        <div style="display:inline-flex; align-items:center; background:#0B0F17; border:1px solid var(--border-subtle); border-radius:8px; padding:4px 6px; gap:4px;">
                             <span style="font-size:0.75em; font-weight:700; color:var(--accent-amber); margin:0 6px;">⏱️ WINDOW:</span>
                             <button class="stat-window-pill" data-window="24h" onclick="setRosterTimeframe('24h', this)">24 Hours</button>
                             <button class="stat-window-pill active" data-window="7d" onclick="setRosterTimeframe('7d', this)">7 Days</button>
@@ -480,7 +543,7 @@
 
                         <!-- Right: Search, Filter Dropdowns, and Export -->
                         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                            <input type="text" id="roster-search" placeholder="🔍 Search member name or ID..." class="sort-select" style="min-width:180px; padding:6px 12px; font-size:0.8em;" oninput="filterRosterDebounced()">
+                            <input type="text" id="roster-search" placeholder="🔍 Search member or ID..." class="sort-select" style="min-width:180px; padding:6px 12px; font-size:0.8em;" oninput="filterRosterDebounced()">
                             <select id="roster-filter-bracket" class="sort-select" onchange="filterRoster()" style="padding:6px 10px; font-size:0.8em;">
                                 <option value="all">All Stat Brackets</option>
                                 <option value="under10m">&lt; 10M Stats</option>
@@ -507,20 +570,20 @@
                     </div>
 
                     <!-- Member Data Table -->
-                    <div class="scrollable" style="max-height:640px; overflow-x:auto;">
+                    <div class="scrollable" style="max-height:640px; overflow-x:auto; -webkit-overflow-scrolling:touch;">
                         <table class="armory-table tracker-table" id="master-roster-table">
                             <thead>
                                 <tr>
-                                    <th onclick="sortRoster('name')" style="cursor:pointer; min-width:170px;">Member <span id="sind-name">↕</span></th>
+                                    <th onclick="sortRoster('name')" class="sticky-col" style="cursor:pointer; min-width:180px;">Member <span id="sind-name">↕</span></th>
                                     <th onclick="sortRoster('level')" style="cursor:pointer; min-width:80px;">Level <span id="sind-level">↕</span></th>
-                                    <th onclick="sortRoster('status')" style="cursor:pointer; min-width:110px;">Status <span id="sind-status">↕</span></th>
+                                    <th onclick="sortRoster('status')" style="cursor:pointer; min-width:120px;">Status <span id="sind-status">↕</span></th>
                                     <th onclick="sortRoster('str')" style="cursor:pointer; min-width:130px;"><span style="color:var(--stat-str);">💪 Strength</span> <span id="sind-str">↕</span></th>
                                     <th onclick="sortRoster('spd')" style="cursor:pointer; min-width:130px;"><span style="color:var(--stat-spd);">⚡ Speed</span> <span id="sind-spd">↕</span></th>
                                     <th onclick="sortRoster('def')" style="cursor:pointer; min-width:130px;"><span style="color:var(--stat-def);">🛡️ Defense</span> <span id="sind-def">↕</span></th>
                                     <th onclick="sortRoster('dex')" style="cursor:pointer; min-width:130px;"><span style="color:var(--stat-dex);">🎯 Dexterity</span> <span id="sind-dex">↕</span></th>
-                                    <th onclick="sortRoster('total')" style="cursor:pointer; min-width:140px;">Total / Gain (Δ) <span id="sind-total">↓</span></th>
+                                    <th onclick="sortRoster('total')" style="cursor:pointer; min-width:150px;">Total / Gain (Δ) <span id="sind-total">↓</span></th>
                                     <th onclick="sortRoster('energy')" style="cursor:pointer; min-width:120px;">Est. Energy <span id="sind-energy">↕</span></th>
-                                    <th onclick="sortRoster('xanax')" style="cursor:pointer; min-width:100px;">Xanax (3/d) <span id="sind-xanax">↕</span></th>
+                                    <th onclick="sortRoster('xanax')" style="cursor:pointer; min-width:110px;">Xanax (3/d) <span id="sind-xanax">↕</span></th>
                                     <th style="text-align:center; min-width:90px;">Actions</th>
                                 </tr>
                             </thead>
@@ -537,23 +600,23 @@
             <!-- ══════════════════════════════════════════════════════════ -->
             <div class="tracker-tab-pane" id="pane-contests">
                 <!-- Active Competition Banner -->
-                <div class="card" style="padding:22px; background:linear-gradient(135deg, rgba(255,152,0,0.12) 0%, rgba(22,27,34,0.95) 100%); border:1px solid rgba(255,152,0,0.4); margin-bottom:24px; position:relative;" id="active-contest-banner">
+                <div class="card" style="padding:22px; background:linear-gradient(135deg, rgba(245,158,11,0.12) 0%, rgba(19,27,42,0.95) 100%); border:1px solid rgba(245,158,11,0.4); margin-bottom:24px; position:relative;" id="active-contest-banner">
                     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
                         <div>
                             <span class="badge" style="background:var(--accent-amber); color:#000; font-weight:800; font-size:0.72em;">ACTIVE CONTEST</span>
                             <h2 style="margin:8px 0 4px 0; font-size:1.4em; font-weight:900; color:#FFF;" id="contest-title">7-Day Pre-War Strength Blitz</h2>
-                            <div style="font-size:0.82em; color:var(--text-secondary);" id="contest-desc">Max energy dump into Strength ahead of our ranked war against Run It Industries!</div>
+                            <div style="font-size:0.82em; color:var(--text-secondary);" id="contest-desc">Faction-wide competition: Boost raw strength in preparation for our upcoming Ranked War.</div>
                         </div>
                         <div style="text-align:right;">
                             <div style="font-size:0.72em; text-transform:uppercase; color:var(--text-tertiary); font-weight:700;">Prize Pool</div>
-                            <div class="font-mono" style="font-size:1.6em; font-weight:900; color:var(--accent-amber);" id="contest-prizepool">$250,000,000</div>
-                            <div style="font-size:0.75em; color:var(--status-active);" id="contest-countdown">⏳ 4d 18h remaining</div>
+                            <div class="font-mono" style="font-size:1.6em; font-weight:900; color:var(--accent-amber);" id="contest-prizepool">$50,000,000</div>
+                            <div style="font-size:0.75em; color:var(--status-active); font-weight:700;" id="contest-countdown">⏳ 4d 18h remaining</div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Podium Top 3 Highlights -->
-                <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:24px;" id="contest-podium-grid">
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px; margin-bottom:24px;" id="contest-podium-grid">
                     <!-- Injected Gold, Silver, Bronze Cards -->
                 </div>
 
@@ -597,24 +660,24 @@
                         </div>
 
                         <div style="display:flex; flex-direction:column; gap:12px;">
-                            <div style="background:rgba(229,57,53,0.08); border:1px solid rgba(229,57,53,0.3); border-radius:8px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
+                            <div style="background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
                                 <div>
                                     <strong style="color:var(--stat-str);">💥 Frontline Breakers</strong>
                                     <div style="font-size:0.74em; color:var(--text-tertiary);">High Strength &amp; Speed specialists designed to crack defensive bunker walls.</div>
                                 </div>
                                 <div class="font-mono" style="font-size:1.4em; font-weight:900; color:var(--stat-str);" id="role-count-breakers">0</div>
                             </div>
-                            <div style="background:rgba(0,230,118,0.08); border:1px solid rgba(0,230,118,0.3); border-radius:8px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
+                            <div style="background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
                                 <div>
                                     <strong style="color:var(--stat-def);">🛡️ Bunker Tanks</strong>
                                     <div style="font-size:0.74em; color:var(--text-tertiary);">Extreme Defense specialists built to stall enemy hits and drain enemy energy.</div>
                                 </div>
                                 <div class="font-mono" style="font-size:1.4em; font-weight:900; color:var(--stat-def);" id="role-count-tanks">0</div>
                             </div>
-                            <div style="background:rgba(0,176,255,0.08); border:1px solid rgba(0,176,255,0.3); border-radius:8px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
+                            <div style="background:rgba(14,165,233,0.08); border:1px solid rgba(14,165,233,0.3); border-radius:8px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
                                 <div>
                                     <strong style="color:var(--stat-spd);">⚖️ Balanced Flex (Hank's)</strong>
-                                    <div style="font-size:0.74em; color:var(--text-tertiary);">Balanced fighters ready for sustained combat and defensive stalemates.</div>
+                                    <div style="font-size:0.74em; color:var(--text-tertiary);">Balanced fighters ready for sustained combat and attrition wars.</div>
                                 </div>
                                 <div class="font-mono" style="font-size:1.4em; font-weight:900; color:var(--stat-spd);" id="role-count-flex">0</div>
                             </div>
@@ -626,12 +689,23 @@
                         <h3 style="margin:0 0 10px 0; font-size:1.05em; font-weight:800; color:var(--text-primary); display:flex; align-items:center; gap:8px;">
                             <span>🎯 Fair Fight (FF) Target Matcher</span>
                         </h3>
-                        <div style="font-size:0.78em; color:var(--text-tertiary); margin-bottom:16px;">
-                            Calculate optimal attackers to maximize respect multiplier (1.0 – 3.0 FF).
+                        <div style="font-size:0.78em; color:var(--text-tertiary); margin-bottom:14px;">
+                            Calculate optimal attackers to maximize respect multiplier (1.0x – 3.0x FF) with defensive wall checks.
                         </div>
 
-                        <div style="display:flex; gap:10px; margin-bottom:16px;">
-                            <input type="number" id="ff-target-stats" placeholder="Enemy Total Stats (e.g. 5000000)" class="sort-select" style="flex:1; padding:8px 12px; font-size:0.85em;" value="10000000">
+                        <!-- Quick Presets -->
+                        <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;">
+                            <span style="font-size:0.74em; color:var(--text-tertiary); align-self:center;">Presets:</span>
+                            <button class="btn btn-xs btn-outline" onclick="setFfPreset(5000000)">5M</button>
+                            <button class="btn btn-xs btn-outline" onclick="setFfPreset(10000000)">10M</button>
+                            <button class="btn btn-xs btn-outline" onclick="setFfPreset(50000000)">50M</button>
+                            <button class="btn btn-xs btn-outline" onclick="setFfPreset(100000000)">100M</button>
+                            <button class="btn btn-xs btn-outline" onclick="setFfPreset(500000000)">500M</button>
+                            <button class="btn btn-xs btn-outline" onclick="setFfPreset(1000000000)">1B</button>
+                        </div>
+
+                        <div style="display:flex; gap:10px; margin-bottom:14px;">
+                            <input type="number" id="ff-target-stats" placeholder="Enemy Total Stats (e.g. 10000000)" class="sort-select" style="flex:1; padding:8px 12px; font-size:0.85em;" value="10000000">
                             <button class="btn btn-sm btn-primary" onclick="queryFairFightMatches()" style="background:var(--accent-amber); border-color:var(--accent-amber); color:#000; font-weight:700;">
                                 Calculate Matches
                             </button>
@@ -648,7 +722,7 @@
                                         <th>Attacker</th>
                                         <th>Your Stats</th>
                                         <th>FF Multiplier</th>
-                                        <th>Match Rating</th>
+                                        <th>Tactical Match Rating</th>
                                     </tr>
                                 </thead>
                                 <tbody id="ff-matches-tbody">
@@ -674,7 +748,7 @@
                         <div style="display:flex; align-items:center; gap:8px;">
                             <h2 style="margin:0; font-size:1.25em; font-weight:900; color:#FFF;" id="dossier-name">Player Dossier</h2>
                             <span class="badge" id="dossier-id" style="font-size:0.7em;">[—]</span>
-                            <span class="badge" id="dossier-verified" style="font-size:0.68em; background:rgba(0,230,118,0.15); color:var(--status-active);">Verified Key</span>
+                            <span class="badge" id="dossier-verified" style="font-size:0.68em; background:rgba(16,185,129,0.15); color:var(--status-active);">Verified Key</span>
                         </div>
                         <div style="font-size:0.76em; color:var(--text-tertiary); margin-top:2px;" id="dossier-sub">Level — • Role: —</div>
                     </div>
@@ -685,22 +759,22 @@
             <div style="padding:20px; flex:1; display:flex; flex-direction:column; gap:20px;">
                 <!-- 4 Stat Values Grid -->
                 <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
-                    <div style="background:rgba(229,57,53,0.08); border:1px solid rgba(229,57,53,0.3); border-radius:8px; padding:12px;">
+                    <div style="background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:12px;">
                         <div style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--stat-str);">💪 Strength</div>
                         <div class="font-mono" style="font-size:1.35em; font-weight:900; color:var(--stat-str); margin:2px 0;" id="dos-stat-str">—</div>
                         <div style="font-size:0.7em; color:var(--text-tertiary);" id="dos-pct-str">0% of total</div>
                     </div>
-                    <div style="background:rgba(0,176,255,0.08); border:1px solid rgba(0,176,255,0.3); border-radius:8px; padding:12px;">
+                    <div style="background:rgba(14,165,233,0.08); border:1px solid rgba(14,165,233,0.3); border-radius:8px; padding:12px;">
                         <div style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--stat-spd);">⚡ Speed</div>
                         <div class="font-mono" style="font-size:1.35em; font-weight:900; color:var(--stat-spd); margin:2px 0;" id="dos-stat-spd">—</div>
                         <div style="font-size:0.7em; color:var(--text-tertiary);" id="dos-pct-spd">0% of total</div>
                     </div>
-                    <div style="background:rgba(0,230,118,0.08); border:1px solid rgba(0,230,118,0.3); border-radius:8px; padding:12px;">
+                    <div style="background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:12px;">
                         <div style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--stat-def);">🛡️ Defense</div>
                         <div class="font-mono" style="font-size:1.35em; font-weight:900; color:var(--stat-def); margin:2px 0;" id="dos-stat-def">—</div>
                         <div style="font-size:0.7em; color:var(--text-tertiary);" id="dos-pct-def">0% of total</div>
                     </div>
-                    <div style="background:rgba(171,71,188,0.08); border:1px solid rgba(171,71,188,0.3); border-radius:8px; padding:12px;">
+                    <div style="background:rgba(139,92,246,0.08); border:1px solid rgba(139,92,246,0.3); border-radius:8px; padding:12px;">
                         <div style="font-size:0.72em; text-transform:uppercase; font-weight:700; color:var(--stat-dex);">🎯 Dexterity</div>
                         <div class="font-mono" style="font-size:1.35em; font-weight:900; color:var(--stat-dex); margin:2px 0;" id="dos-stat-dex">—</div>
                         <div style="font-size:0.7em; color:var(--text-tertiary);" id="dos-pct-dex">0% of total</div>
@@ -754,24 +828,121 @@
                         </table>
                     </div>
                 </div>
-
-                <!-- Privacy Settings for Self -->
-                <div class="card" style="padding:14px; background:rgba(0,0,0,0.3); border:1px solid var(--border-subtle);" id="dos-privacy-box">
-                    <div style="font-size:0.8em; font-weight:700; color:var(--text-primary); margin-bottom:6px;">🔒 Member Privacy Tier</div>
-                    <div style="font-size:0.72em; color:var(--text-tertiary); margin-bottom:8px;">Control how your stats appear to other faction members.</div>
-                    <select id="dos-privacy-select" class="sort-select" style="width:100%; padding:6px 10px; font-size:0.8em;" onchange="saveMemberPrivacy(this.value)">
-                        <option value="full">Full Visibility (Actual Stats Visible to All)</option>
-                        <option value="gains_only">Gains Only (Actual Stats Masked; Deltas Visible)</option>
-                        <option value="leadership_only">Leadership Only (Stats &amp; Gains Hidden from Members)</option>
-                    </select>
-                </div>
             </div>
         </div>
     </div>
 
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- PRIVACY TIERS MODAL (WIRED & FUNCTIONAL) -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div id="privacy-tiers-modal" class="modal-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10001; justify-content:center; align-items:center; padding:16px;">
+        <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:14px; width:100%; max-width:520px; overflow:hidden; box-shadow:0 12px 48px rgba(0,0,0,0.7);">
+            <div style="padding:18px 22px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="margin:0; font-size:1.15em; font-weight:900; color:#FFF; display:flex; align-items:center; gap:8px;">
+                    <span>🔒 Battle Stat Privacy Tiers</span>
+                </h3>
+                <button onclick="closePrivacySettingsModal()" style="background:transparent; border:none; color:var(--text-tertiary); font-size:1.4em; cursor:pointer;">✕</button>
+            </div>
+            <div style="padding:22px; display:flex; flex-direction:column; gap:14px;">
+                <div style="font-size:0.82em; color:var(--text-secondary); line-height:1.4;">
+                    Configure how your battle stats, gym train history, and personal stats are displayed to faction mates on the gym tracker.
+                </div>
+
+                <div class="privacy-tier-card selected" id="tier-card-full" onclick="selectPrivacyTier('full')">
+                    <input type="radio" name="privacyTier" value="full" id="radio-full" checked style="margin-top:3px;">
+                    <div>
+                        <strong style="color:#FFF; font-size:0.9em;">🌐 Full Visibility (Default)</strong>
+                        <div style="font-size:0.75em; color:var(--text-secondary); margin-top:2px;">
+                            Share full battle stats (Str, Spd, Def, Dex, TBS) with all verified faction members. Best for war organization.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="privacy-tier-card" id="tier-card-gains_only" onclick="selectPrivacyTier('gains_only')">
+                    <input type="radio" name="privacyTier" value="gains_only" id="radio-gains_only" style="margin-top:3px;">
+                    <div>
+                        <strong style="color:#FFF; font-size:0.9em;">📈 Gains Only (Obfuscated)</strong>
+                        <div style="font-size:0.75em; color:var(--text-secondary); margin-top:2px;">
+                            Mask absolute battle stats (shown as <code>🔒 Hidden</code>). Only daily/weekly net gains (+Δ) and energy spent are displayed.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="privacy-tier-card" id="tier-card-leadership_only" onclick="selectPrivacyTier('leadership_only')">
+                    <input type="radio" name="privacyTier" value="leadership_only" id="radio-leadership_only" style="margin-top:3px;">
+                    <div>
+                        <strong style="color:#FFF; font-size:0.9em;">🛡️ Leadership Only (Strict)</strong>
+                        <div style="font-size:0.75em; color:var(--text-secondary); margin-top:2px;">
+                            Full stats are visible exclusively to Faction Leader &amp; Co-Leaders. Regular members see masked asterisks.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="padding:14px 22px; border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; gap:10px; background:rgba(0,0,0,0.15);">
+                <button class="btn btn-sm btn-outline" onclick="closePrivacySettingsModal()">Cancel</button>
+                <button class="btn btn-sm btn-primary" onclick="saveSelectedPrivacyTier()" style="background:var(--accent-amber); border-color:var(--accent-amber); color:#000; font-weight:700;">Save Preference</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- PERK & MULTIPLIER CALCULATOR MODAL -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <div id="multiplier-calc-modal" class="modal-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10001; justify-content:center; align-items:center; padding:16px;">
+        <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:14px; width:100%; max-width:520px; overflow:hidden; box-shadow:0 12px 48px rgba(0,0,0,0.7);">
+            <div style="padding:18px 22px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="margin:0; font-size:1.15em; font-weight:900; color:#FFF; display:flex; align-items:center; gap:8px;">
+                    <span>🧮 Net Perk &amp; Gym Multiplier Calculator</span>
+                </h3>
+                <button onclick="closeModifierCalculatorModal()" style="background:transparent; border:none; color:var(--text-tertiary); font-size:1.4em; cursor:pointer;">✕</button>
+            </div>
+            <div style="padding:22px; display:flex; flex-direction:column; gap:14px;">
+                <div style="font-size:0.82em; color:var(--text-secondary);">
+                    Calculate the compound multiplier applied to every gym train based on Faction Steadfast, Company Specials, Property Happy, and Education perks.
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                    <div>
+                        <label style="font-size:0.75em; font-weight:700; color:var(--text-tertiary); text-transform:uppercase;">Company Special</label>
+                        <select id="calc-company" class="sort-select" style="width:100%; padding:8px 10px; margin-top:4px;" onchange="computeNetMultipliers()">
+                            <option value="30">10* Fitness Center (+30% Gym Gains)</option>
+                            <option value="10">10* Candle Shop (+10% Gym Gains)</option>
+                            <option value="7">10* Farm (+7% Str/Spd/Def/Dex)</option>
+                            <option value="0" selected>None / Other (+0%)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:0.75em; font-weight:700; color:var(--text-tertiary); text-transform:uppercase;">Property Base Happy</label>
+                        <select id="calc-happy" class="sort-select" style="width:100%; padding:8px 10px; margin-top:4px;" onchange="computeNetMultipliers()">
+                            <option value="5025" selected>Private Island (5,025 Happy)</option>
+                            <option value="4000">Mansion (4,000 Happy)</option>
+                            <option value="2000">Palace (2,000 Happy)</option>
+                            <option value="500">Shack / Standard (500 Happy)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border-subtle); border-radius:10px; padding:14px;">
+                    <div style="font-size:0.8em; font-weight:700; color:var(--text-primary); margin-bottom:8px;">Projected Gain Multiplier:</div>
+                    <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:8px;">
+                        <div class="stat-badge-str badge" style="padding:8px;" id="calc-res-str">Strength: +45.0%</div>
+                        <div class="stat-badge-spd badge" style="padding:8px;" id="calc-res-spd">Speed: +45.0%</div>
+                        <div class="stat-badge-def badge" style="padding:8px;" id="calc-res-def">Defense: +48.0%</div>
+                        <div class="stat-badge-dex badge" style="padding:8px;" id="calc-res-dex">Dexterity: +42.0%</div>
+                    </div>
+                </div>
+            </div>
+            <div style="padding:14px 22px; border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; background:rgba(0,0,0,0.15);">
+                <button class="btn btn-sm btn-outline" onclick="closeModifierCalculatorModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
     <!-- NEW CONTEST MODAL -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
     <div id="new-contest-modal" class="modal-backdrop" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10001; justify-content:center; align-items:center; padding:16px;">
-        <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:12px; width:100%; max-width:540px; overflow:hidden; box-shadow:0 12px 48px rgba(0,0,0,0.7);">
+        <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:14px; width:100%; max-width:540px; overflow:hidden; box-shadow:0 12px 48px rgba(0,0,0,0.7);">
             <div style="padding:16px 20px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
                 <h3 style="margin:0; font-size:1.15em; font-weight:900; color:#FFF;">🏆 Launch Faction Competition</h3>
                 <button onclick="closeNewContestModal()" style="background:transparent; border:none; color:var(--text-tertiary); font-size:1.4em; cursor:pointer;">✕</button>
@@ -806,7 +977,7 @@
                     </div>
                     <div>
                         <label style="font-size:0.78em; font-weight:700; color:var(--text-tertiary); text-transform:uppercase;">Prize Pool ($)</label>
-                        <input type="number" id="contest-input-prize" value="250000000" class="sort-select" style="width:100%; padding:8px 12px; margin-top:4px;">
+                        <input type="number" id="contest-input-prize" value="50000000" class="sort-select" style="width:100%; padding:8px 12px; margin-top:4px;">
                     </div>
                 </div>
                 <div>
@@ -836,6 +1007,8 @@
     let rosterSortCol = 'total';
     let rosterSortAsc = false;
     let showSlackersOnly = false;
+    let selectedPrivacyTier = 'full';
+    let contestCountdownInterval = null;
 
     // Chart instances
     let velocityChartInstance = null;
@@ -849,15 +1022,21 @@
         return Number(n).toLocaleString('en-US');
     }
 
-    function timeSince(ts) {
-        if (!ts) return 'Never';
-        const sec = Math.floor(Date.now() / 1000 - Number(ts));
-        if (sec < 60) return `${sec}s ago`;
-        const min = Math.floor(sec / 60);
-        if (min < 60) return `${min}m ago`;
-        const hr = Math.floor(min / 60);
-        if (hr < 24) return `${hr}h ago`;
-        return `${Math.floor(hr / 24)}d ago`;
+    // ─── CRITICAL FIX: Relative Timestamp Math ───
+    function formatRelativeTime(apiSecondsOrMs) {
+        if (!apiSecondsOrMs) return 'Unknown';
+        let sec = Number(apiSecondsOrMs);
+        if (sec > 100000000000) {
+            sec = Math.floor(sec / 1000);
+        }
+        const diffSec = Math.max(0, Math.floor(Date.now() / 1000 - sec));
+        if (diffSec < 60) return `${diffSec}s ago`;
+        const diffMin = Math.floor(diffSec / 60);
+        if (diffMin < 60) return `${diffMin}m ago`;
+        const diffHours = Math.floor(diffMin / 60);
+        if (diffHours < 24) return `${diffHours}h ago`;
+        const diffDays = Math.floor(diffHours / 24);
+        return `${diffDays}d ago`;
     }
 
     function showToast(msg, type = 'success') {
@@ -926,7 +1105,7 @@
         if (slackerBanner) {
             if (kpis.slackerCount > 0) {
                 slackerBanner.style.display = 'flex';
-                document.getElementById('slacker-banner-text').textContent = `${kpis.slackerCount} members have logged 0 trains over 24h or fallen below weekly quota.`;
+                document.getElementById('slacker-banner-text').textContent = `${kpis.slackerCount} members have logged 0 trains over 24h, wasted natural energy, or fallen below weekly quota.`;
             } else {
                 slackerBanner.style.display = 'none';
             }
@@ -940,10 +1119,7 @@
             document.getElementById('perk-dex').textContent = `🎯 Dexterity: +${steadfast.dexterityBonusPct}%`;
         }
 
-        // Velocity Chart
         renderVelocityChart(velocityChart);
-
-        // Faction Radar Chart
         renderFactionRadar(radarAverages);
     }
 
@@ -956,8 +1132,8 @@
         if (velocityChartInstance) velocityChartInstance.destroy();
 
         const gradient = ctx.createLinearGradient(0, 0, 0, 260);
-        gradient.addColorStop(0, 'rgba(255, 152, 0, 0.35)');
-        gradient.addColorStop(1, 'rgba(255, 152, 0, 0.0)');
+        gradient.addColorStop(0, 'rgba(245, 158, 11, 0.35)');
+        gradient.addColorStop(1, 'rgba(245, 158, 11, 0.0)');
 
         velocityChartInstance = new Chart(ctx, {
             type: 'line',
@@ -966,7 +1142,7 @@
                 datasets: [{
                     label: 'Faction Total Battle Stats',
                     data: vcData.factionTotals,
-                    borderColor: '#FF9800',
+                    borderColor: '#F59E0B',
                     backgroundColor: gradient,
                     borderWidth: 2.5,
                     fill: true,
@@ -1019,10 +1195,10 @@
                 datasets: [{
                     label: 'Faction Average %',
                     data: [radarData.strengthPct, radarData.speedPct, radarData.defensePct, radarData.dexterityPct],
-                    backgroundColor: 'rgba(255, 152, 0, 0.25)',
-                    borderColor: '#FF9800',
+                    backgroundColor: 'rgba(245, 158, 11, 0.25)',
+                    borderColor: '#F59E0B',
                     borderWidth: 2,
-                    pointBackgroundColor: '#FF9800'
+                    pointBackgroundColor: '#F59E0B'
                 }]
             },
             options: {
@@ -1043,10 +1219,10 @@
         const leg = document.getElementById('radar-legend-chips');
         if (leg) {
             leg.innerHTML = `
-                <div class="stat-badge-str badge">Str: ${radarData.strengthPct}%</div>
-                <div class="stat-badge-spd badge">Spd: ${radarData.speedPct}%</div>
-                <div class="stat-badge-def badge">Def: ${radarData.defensePct}%</div>
-                <div class="stat-badge-dex badge">Dex: ${radarData.dexterityPct}%</div>
+                <div class="stat-badge-str badge" style="text-align:center;">Str: ${radarData.strengthPct}%</div>
+                <div class="stat-badge-spd badge" style="text-align:center;">Spd: ${radarData.speedPct}%</div>
+                <div class="stat-badge-def badge" style="text-align:center;">Def: ${radarData.defensePct}%</div>
+                <div class="stat-badge-dex badge" style="text-align:center;">Dex: ${radarData.dexterityPct}%</div>
             `;
         }
     }
@@ -1072,7 +1248,7 @@
     function renderSpotlightGainers(roster) {
         const grid = document.getElementById('spotlight-gainers-grid');
         if (!grid) return;
-        const sorted = [...roster].sort((a, b) => b.gains.gain7d.total - a.gains.gain7d.total).slice(0, 3);
+        const sorted = [...roster].sort((a, b) => (b.gains.gain7d.total || 0) - (a.gains.gain7d.total || 0)).slice(0, 3);
         grid.innerHTML = sorted.map((m, idx) => {
             const medal = idx === 0 ? '🥇 #1 Gainer' : (idx === 1 ? '🥈 #2 Gainer' : '🥉 #3 Gainer');
             return `
@@ -1092,7 +1268,7 @@
         currentRosterTimeframe = tf;
         document.querySelectorAll('.stat-window-pill').forEach(b => b.classList.remove('active'));
         if (btn) btn.classList.add('active');
-        renderRosterTable();
+        filterRoster();
     }
 
     function filterRoster() {
@@ -1107,7 +1283,7 @@
 
             if (archetype !== 'all' && m.archetype !== archetype) return false;
 
-            const t = typeof m.stats.total === 'number' ? m.stats.total : 0;
+            const t = typeof m.stats.total === 'number' ? m.stats.total : (m.rawStats?.total || 0);
             if (bracket === 'under10m' && t >= 10000000) return false;
             if (bracket === '10m-100m' && (t < 10000000 || t >= 100000000)) return false;
             if (bracket === '100m-1b' && (t < 100000000 || t >= 1000000000)) return false;
@@ -1116,20 +1292,48 @@
             return true;
         });
 
-        // Sort
+        // Sorting
         currentFilteredRoster.sort((a, b) => {
             let va = a.stats.total;
             let vb = b.stats.total;
+            if (rosterSortCol === 'name') {
+                return rosterSortAsc ? a.playerName.localeCompare(b.playerName) : b.playerName.localeCompare(a.playerName);
+            }
+            if (rosterSortCol === 'level') {
+                return rosterSortAsc ? (a.level - b.level) : (b.level - a.level);
+            }
+            if (rosterSortCol === 'status') {
+                return rosterSortAsc ? a.onlineStatus.localeCompare(b.onlineStatus) : b.onlineStatus.localeCompare(a.onlineStatus);
+            }
+            if (rosterSortCol === 'energy') {
+                return rosterSortAsc ? (a.energy.energySpentEst - b.energy.energySpentEst) : (b.energy.energySpentEst - a.energy.energySpentEst);
+            }
+            if (rosterSortCol === 'xanax') {
+                return rosterSortAsc ? (a.energy.xanaxTakenCount - b.energy.xanaxTakenCount) : (b.energy.xanaxTakenCount - a.energy.xanaxTakenCount);
+            }
+
             if (currentRosterTimeframe === '24h') { va = a.gains.gain24h.total; vb = b.gains.gain24h.total; }
             else if (currentRosterTimeframe === '7d') { va = a.gains.gain7d.total; vb = b.gains.gain7d.total; }
             else if (currentRosterTimeframe === '30d') { va = a.gains.gain30d.total; vb = b.gains.gain30d.total; }
+            else { va = (typeof a.stats.total === 'number' ? a.stats.total : 0); vb = (typeof b.stats.total === 'number' ? b.stats.total : 0); }
+
             return rosterSortAsc ? (va - vb) : (vb - va);
         });
 
         renderRosterTable();
     }
 
-    const filterRosterDebounced = debounce(filterRoster, 200);
+    function sortRoster(col) {
+        if (rosterSortCol === col) {
+            rosterSortAsc = !rosterSortAsc;
+        } else {
+            rosterSortCol = col;
+            rosterSortAsc = false;
+        }
+        filterRoster();
+    }
+
+    const filterRosterDebounced = debounce(filterRoster, 180);
 
     function toggleSlackerFilter() {
         showSlackersOnly = !showSlackersOnly;
@@ -1161,7 +1365,7 @@
                 if (currentRosterTimeframe === '24h') g = m.gains.gain24h;
                 if (currentRosterTimeframe === '30d') g = m.gains.gain30d;
 
-                totalValDisplay = `<span style="color:var(--status-active); font-weight:800;">+${fmt(g.total)}</span> <span style="font-size:0.7em; background:rgba(0,230,118,0.12); padding:1px 4px; border-radius:3px;">+${g.pct}%</span>`;
+                totalValDisplay = `<span style="color:var(--status-active); font-weight:800;">+${fmt(g.total)}</span> <span style="font-size:0.7em; background:rgba(16,185,129,0.12); padding:1px 4px; border-radius:3px; color:var(--status-active);">+${g.pct}%</span>`;
                 strVal = `<span style="color:var(--stat-str); font-weight:700;">+${fmt(g.strength)}</span>`;
                 spdVal = `<span style="color:var(--stat-spd); font-weight:700;">+${fmt(g.speed)}</span>`;
                 defVal = `<span style="color:var(--stat-def); font-weight:700;">+${fmt(g.defense)}</span>`;
@@ -1174,31 +1378,41 @@
                 dexVal = m.stats.masked ? '🔒' : fmt(m.stats.dexterity);
             }
 
-            // Xanax 3/day pills indicator
+            // Xanax 3/day pills indicator with yellow & green states
             const xanCount = m.energy.xanaxTakenCount || 0;
+            const p1 = xanCount >= 1 ? (xanCount >= 3 ? 'pill-green' : 'pill-yellow') : 'pill-dim';
+            const p2 = xanCount >= 2 ? (xanCount >= 3 ? 'pill-green' : 'pill-yellow') : 'pill-dim';
+            const p3 = xanCount >= 3 ? 'pill-green' : 'pill-dim';
+
             const xanPillsHtml = `
-                <span class="xan-pill ${xanCount >= 1 ? 'active' : 'inactive'}"></span>
-                <span class="xan-pill ${xanCount >= 2 ? 'active' : 'inactive'}"></span>
-                <span class="xan-pill ${xanCount >= 3 ? 'active' : 'inactive'}"></span>
+                <div class="xan-pill-group" title="Xanax: ${xanCount} of 3 taken today • Refill: ${m.energy.refillUsed ? 'Used' : 'Unused'}">
+                    <span class="xan-pill ${p1}"></span>
+                    <span class="xan-pill ${p2}"></span>
+                    <span class="xan-pill ${p3}"></span>
+                    <span style="font-size:0.7em; color:var(--text-secondary); margin-left:3px; font-weight:700;">${xanCount}/3</span>
+                </div>
             `;
 
             const statusDot = m.onlineStatus === 'online' ? '🟢' : (m.onlineStatus === 'idle' ? '🟡' : '⚪');
+            const relativeTimeStr = formatRelativeTime(m.lastActionTimestamp);
 
-            const slackerTag = m.slacker.isSlacking ? `<span class="badge" style="background:rgba(255,23,68,0.15); color:var(--status-danger); font-size:0.68em; margin-left:4px;" title="${m.slacker.warningReasons.join(', ')}">⚠️ Slacking</span>` : '';
+            const slackerTag = m.slacker.isSlacking ? `<span class="badge" style="background:rgba(239,68,68,0.15); color:var(--status-danger); font-size:0.68em; margin-left:4px;" title="${m.slacker.warningReasons.join('; ')}">⚠️ Slacking</span>` : '';
 
             return `
                 <tr>
-                    <td>
+                    <td class="sticky-col">
                         <div style="font-weight:700; display:flex; align-items:center;">
                             <a href="https://www.torn.com/profiles.php?XID=${m.playerId}" target="_blank" style="color:var(--text-primary); text-decoration:none;">${m.playerName}</a>
                             ${slackerTag}
                         </div>
-                        <div style="font-size:0.75em; color:var(--text-tertiary);">[${m.playerId}]</div>
+                        <div style="font-size:0.75em; color:var(--text-tertiary);">${m.role} • [${m.playerId}]</div>
                     </td>
-                    <td>Lv ${m.level}</td>
                     <td>
-                        <div>${statusDot} ${m.onlineStatus}</div>
-                        <div style="font-size:0.72em; color:var(--text-tertiary);">${timeSince(m.lastActionTimestamp)}</div>
+                        <span class="badge" style="background:rgba(255,255,255,0.06); color:var(--text-secondary); font-weight:700;">Lv ${m.level || 1}</span>
+                    </td>
+                    <td>
+                        <div style="display:flex; align-items:center; gap:4px;">${statusDot} <span style="text-transform:capitalize;">${m.onlineStatus}</span></div>
+                        <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:2px;">${relativeTimeStr}</div>
                     </td>
                     <td class="font-mono">${strVal}</td>
                     <td class="font-mono">${spdVal}</td>
@@ -1207,14 +1421,14 @@
                     <td class="font-mono">${totalValDisplay}</td>
                     <td>
                         <div class="font-mono" style="color:var(--text-primary);">${fmt(m.energy.energySpentEst)}e</div>
-                        <div style="font-size:0.7em; color:var(--text-tertiary);">${m.energy.efficiencyScore}% Eff.</div>
+                        <div style="font-size:0.7em; color:${m.energy.efficiencyScore >= 70 ? 'var(--status-active)' : 'var(--status-warning)'}; font-weight:700;">${m.energy.efficiencyScore}% Eff.</div>
                     </td>
                     <td>
-                        <div style="display:flex; align-items:center;">${xanPillsHtml}</div>
+                        ${xanPillsHtml}
                     </td>
                     <td style="text-align:center;">
                         <button class="btn btn-xs btn-outline" onclick="openMemberDrawer('${m.playerId}')" style="font-size:0.74em; padding:3px 8px;">
-                            <span>🔍</span> Inspect
+                            <span>🔍</span> Dossier
                         </button>
                     </td>
                 </tr>
@@ -1228,7 +1442,7 @@
         if (!overlay) return;
         overlay.classList.add('open');
 
-        document.getElementById('dossier-name').textContent = 'Loading...';
+        document.getElementById('dossier-name').textContent = 'Loading Operative...';
         document.getElementById('dossier-id').textContent = `[${playerId}]`;
 
         try {
@@ -1250,10 +1464,10 @@
         document.getElementById('dossier-sub').textContent = `Level ${m.level} • ${m.role} • ${m.daysInFaction}d in faction`;
 
         const s = m.stats;
-        document.getElementById('dos-stat-str').textContent = s.masked ? '🔒' : fmt(s.strength);
-        document.getElementById('dos-stat-spd').textContent = s.masked ? '🔒' : fmt(s.speed);
-        document.getElementById('dos-stat-def').textContent = s.masked ? '🔒' : fmt(s.defense);
-        document.getElementById('dos-stat-dex').textContent = s.masked ? '🔒' : fmt(s.dexterity);
+        document.getElementById('dos-stat-str').textContent = s.masked ? '🔒 Hidden' : fmt(s.strength);
+        document.getElementById('dos-stat-spd').textContent = s.masked ? '🔒 Hidden' : fmt(s.speed);
+        document.getElementById('dos-stat-def').textContent = s.masked ? '🔒 Hidden' : fmt(s.defense);
+        document.getElementById('dos-stat-dex').textContent = s.masked ? '🔒 Hidden' : fmt(s.dexterity);
 
         document.getElementById('dos-pct-str').textContent = `${m.balance.strengthPct}% of total`;
         document.getElementById('dos-pct-spd').textContent = `${m.balance.speedPct}% of total`;
@@ -1269,11 +1483,6 @@
             document.getElementById('dos-goal-target').textContent = `Target: ${fmt(m.goal.targetValue)}`;
         }
 
-        // Privacy select
-        const pSel = document.getElementById('dos-privacy-select');
-        if (pSel) pSel.value = m.privacy;
-
-        // Individual Radar Chart
         renderMemberRadar(m.balance, d.factionAverageRadar);
 
         // Timeline
@@ -1308,15 +1517,15 @@
                     {
                         label: 'Player Balance %',
                         data: [userBal.strengthPct, userBal.speedPct, userBal.defensePct, userBal.dexterityPct],
-                        borderColor: '#00E676',
-                        backgroundColor: 'rgba(0, 230, 118, 0.25)',
+                        borderColor: '#10B981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.25)',
                         borderWidth: 2
                     },
                     {
                         label: 'Faction Average %',
                         data: [facBal.strengthPct, facBal.speedPct, facBal.defensePct, facBal.dexterityPct],
-                        borderColor: '#FF9800',
-                        backgroundColor: 'rgba(255, 152, 0, 0.1)',
+                        borderColor: '#F59E0B',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
                         borderWidth: 1.5,
                         borderDash: [4, 4]
                     }
@@ -1345,23 +1554,105 @@
         if (e.target.id === 'member-drawer-overlay') closeMemberDrawer();
     }
 
-    // ─── Privacy Tier Update ───
-    async function saveMemberPrivacy(tier) {
+    // ─── Privacy Tier Modal Handling ───
+    function openPrivacySettingsModal() {
+        const m = document.getElementById('privacy-tiers-modal');
+        if (m) m.style.display = 'flex';
+        // fetch current user tier
+        const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
+        fetch('/api/gym-tracker/privacy', { headers: { 'x-api-key': myKey } })
+            .then(r => r.json())
+            .then(data => {
+                if (data && data.tier) selectPrivacyTier(data.tier);
+            }).catch(() => {});
+    }
+
+    function closePrivacySettingsModal() {
+        const m = document.getElementById('privacy-tiers-modal');
+        if (m) m.style.display = 'none';
+    }
+
+    function selectPrivacyTier(tier) {
+        selectedPrivacyTier = tier;
+        ['full', 'gains_only', 'leadership_only'].forEach(t => {
+            const card = document.getElementById(`tier-card-${t}`);
+            const rad = document.getElementById(`radio-${t}`);
+            if (card) card.classList.toggle('selected', t === tier);
+            if (rad) rad.checked = (t === tier);
+        });
+    }
+
+    async function saveSelectedPrivacyTier() {
         try {
             const myKey = typeof getApiKey === 'function' ? getApiKey() : '';
             const res = await fetch('/api/gym-tracker/privacy', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'x-api-key': myKey },
-                body: JSON.stringify({ tier })
+                body: JSON.stringify({ tier: selectedPrivacyTier })
             });
             const data = await res.json();
             if (data && data.success) {
-                showToast(`Privacy tier set to: ${tier}`, 'success');
+                showToast(`Privacy tier set to: ${selectedPrivacyTier}`, 'success');
+                closePrivacySettingsModal();
                 loadRoster();
+            } else {
+                showToast(data.error || 'Failed to update privacy preference.', 'warn');
             }
         } catch(e) {
             showToast('Failed to update privacy preference.', 'error');
         }
+    }
+
+    // ─── Slacker Quick Actions ───
+    function copySlackerDiscordPings() {
+        const slackers = (currentDashboard?.slackers || []).map(s => `[${s.name}](https://www.torn.com/profiles.php?XID=${s.id})`);
+        if (!slackers.length) {
+            showToast('No slackers currently flagged!', 'success');
+            return;
+        }
+        const text = `⚠️ **Faction Gym Slacker Ping** (${slackers.length} members):\n${slackers.join(', ')}\nPlease train natural energy and take your Xanax daily!`;
+        navigator.clipboard.writeText(text).then(() => {
+            showToast(`Copied ping list for ${slackers.length} slackers to clipboard!`, 'success');
+        }).catch(() => {
+            showToast('Failed to copy to clipboard', 'warn');
+        });
+    }
+
+    function composeSlackerMail() {
+        const slackers = currentDashboard?.slackers || [];
+        if (!slackers.length) {
+            showToast('No slackers currently flagged!', 'success');
+            return;
+        }
+        const ids = slackers.map(s => s.id).join(',');
+        const subject = encodeURIComponent('Faction Gym Activity & Training Quota');
+        const msg = encodeURIComponent(`Hi Operative,\n\nYou have been flagged by the Faction OS Gym Tracker for 0 trains over the past 24 hours or falling below our weekly training quota. Please ensure you are expending natural energy and maintaining your daily gym targets ahead of war.\n\n— Faction Leadership`);
+        window.open(`https://www.torn.com/messages.php#/p=compose&XID=${slackers[0].id}&subject=${subject}&message=${msg}`, '_blank');
+    }
+
+    // ─── Perk Multipliers Calculator ───
+    function openModifierCalculatorModal() {
+        const m = document.getElementById('multiplier-calc-modal');
+        if (m) m.style.display = 'flex';
+        computeNetMultipliers();
+    }
+    function closeModifierCalculatorModal() {
+        const m = document.getElementById('multiplier-calc-modal');
+        if (m) m.style.display = 'none';
+    }
+    function computeNetMultipliers() {
+        const comp = Number(document.getElementById('calc-company')?.value || 0);
+        const happy = Number(document.getElementById('calc-happy')?.value || 5025);
+        // Base steadfast: Str +15%, Spd +15%, Def +18%, Dex +12%
+        const strBonus = 15 + comp;
+        const spdBonus = 15 + comp;
+        const defBonus = 18 + comp;
+        const dexBonus = 12 + comp;
+
+        document.getElementById('calc-res-str').textContent = `Strength: +${strBonus}%`;
+        document.getElementById('calc-res-spd').textContent = `Speed: +${spdBonus}%`;
+        document.getElementById('calc-res-def').textContent = `Defense: +${defBonus}%`;
+        document.getElementById('calc-res-dex').textContent = `Dexterity: +${dexBonus}%`;
     }
 
     // ─── Competitions Engine ───
@@ -1375,6 +1666,19 @@
                 document.getElementById('contest-desc').textContent = active.description;
                 document.getElementById('contest-prizepool').textContent = `$${active.prizePool.toLocaleString()}`;
 
+                // Live countdown
+                if (contestCountdownInterval) clearInterval(contestCountdownInterval);
+                const updateCountdown = () => {
+                    const diff = Math.max(0, active.endTime - Date.now());
+                    const days = Math.floor(diff / 86400000);
+                    const hours = Math.floor((diff % 86400000) / 3600000);
+                    const mins = Math.floor((diff % 3600000) / 60000);
+                    const secs = Math.floor((diff % 60000) / 1000);
+                    document.getElementById('contest-countdown').textContent = `⏳ ${days}d ${hours}h ${mins}m ${secs}s remaining`;
+                };
+                updateCountdown();
+                contestCountdownInterval = setInterval(updateCountdown, 1000);
+
                 const podiumGrid = document.getElementById('contest-podium-grid');
                 if (podiumGrid && active.leaderboard) {
                     const top3 = active.leaderboard.slice(0, 3);
@@ -1382,8 +1686,8 @@
                         <div class="podium-card ${i === 0 ? 'podium-gold' : (i === 1 ? 'podium-silver' : 'podium-bronze')}">
                             <div style="font-size:0.75em; font-weight:800; color:var(--accent-amber);">${p.rewardTier || `#${i+1}`}</div>
                             <div style="font-weight:800; font-size:1.15em; color:#FFF; margin:4px 0;">${p.playerName}</div>
-                            <div class="font-mono" style="font-size:1.4em; font-weight:900; color:var(--status-active);">${p.scoreFormatted}</div>
-                            <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:4px;">Prize: $${(p.rewardAmount || 0).toLocaleString()}</div>
+                            <div class="font-mono" style="font-size:1.35em; font-weight:900; color:var(--status-active);">${p.scoreFormatted}</div>
+                            <div style="font-size:0.72em; color:var(--text-tertiary); margin-top:4px;">Projected Prize: $${(p.rewardAmount || 0).toLocaleString()}</div>
                         </div>
                     `).join('');
                 }
@@ -1418,6 +1722,14 @@
         queryFairFightMatches();
     }
 
+    function setFfPreset(val) {
+        const inp = document.getElementById('ff-target-stats');
+        if (inp) {
+            inp.value = val;
+            queryFairFightMatches();
+        }
+    }
+
     async function queryFairFightMatches() {
         const stats = Number(document.getElementById('ff-target-stats')?.value || 10000000);
         try {
@@ -1432,13 +1744,19 @@
                 if (tbody) {
                     tbody.innerHTML = (data.recommendedAttackers || []).map(a => {
                         const ffClass = a.fairFightMultiplier >= 2.0 ? 'style="color:var(--status-active); font-weight:800;"' : 'style="color:var(--status-warning);"';
-                        const rating = a.fairFightMultiplier >= 2.5 ? '⭐ S-Tier Match' : (a.fairFightMultiplier >= 1.8 ? '🟢 Good Match' : '⚪ Suboptimal');
+                        const warnTags = (a.warnings || []).map(w => `<span class="badge" style="background:rgba(239,68,68,0.15); color:var(--status-danger); font-size:0.68em; margin-right:4px;">${w}</span>`).join('');
                         return `
                             <tr>
-                                <td style="font-weight:700;"><a href="https://www.torn.com/profiles.php?XID=${a.playerId}" target="_blank" style="color:#FFF; text-decoration:none;">${a.playerName}</a></td>
+                                <td style="font-weight:700;">
+                                    <a href="https://www.torn.com/profiles.php?XID=${a.playerId}" target="_blank" style="color:#FFF; text-decoration:none;">${a.playerName}</a>
+                                    <span style="font-size:0.72em; color:var(--text-tertiary);"> (Lv ${a.level})</span>
+                                </td>
                                 <td class="font-mono">${fmt(a.totalStats)}</td>
                                 <td class="font-mono" ${ffClass}>${a.fairFightMultiplier.toFixed(2)}x</td>
-                                <td>${rating}</td>
+                                <td>
+                                    <div><strong>${a.tacticalRating}</strong></div>
+                                    ${warnTags ? `<div style="margin-top:2px;">${warnTags}</div>` : ''}
+                                </td>
                             </tr>
                         `;
                     }).join('');
@@ -1520,11 +1838,11 @@
 
     function exportRosterCSV() {
         if (!currentFilteredRoster.length) return;
-        const headers = ["Player ID", "Name", "Level", "Role", "Strength", "Speed", "Defense", "Dexterity", "Total Stats", "7d Gain", "Est Energy", "Efficiency"];
+        const headers = ["Player ID", "Name", "Level", "Role", "Strength", "Speed", "Defense", "Dexterity", "Total Stats", "7d Gain", "Xanax Taken", "Est Energy", "Efficiency"];
         const rows = currentFilteredRoster.map(m => [
             m.playerId,
             `"${m.playerName}"`,
-            m.level,
+            m.level || 1,
             `"${m.role}"`,
             m.stats.strength,
             m.stats.speed,
@@ -1532,6 +1850,7 @@
             m.stats.dexterity,
             m.stats.total,
             m.gains.gain7d.total,
+            m.energy.xanaxTakenCount || 0,
             m.energy.energySpentEst,
             `${m.energy.efficiencyScore}%`
         ]);
@@ -1545,8 +1864,7 @@
         link.remove();
     }
 
-    // Debounce helper
-    function debounce(fn, wait = 200) {
+    function debounce(fn, wait = 180) {
         let t;
         return (...args) => {
             clearTimeout(t);
